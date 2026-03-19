@@ -1,16 +1,41 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from 'react';
+import { BottomNav, TabId } from '@/components/BottomNav';
+import { Header } from '@/components/Header';
+import { ResumoTab } from './ResumoTab';
+import { MovimentacaoTab } from './MovimentacaoTab';
+import { LancamentosTab } from './LancamentosTab';
+import { EvolucaoTab } from './EvolucaoTab';
+import { useLancamentos } from '@/hooks/useLancamentos';
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+const TITLES: Record<TabId, string> = {
+  resumo: 'Controle de Rebanho',
+  movimentacao: 'Fluxo Mensal',
+  lancamentos: 'Lançamentos',
+  evolucao: 'Evolução por Categoria',
+};
+
+const Index = () => {
+  const [activeTab, setActiveTab] = useState<TabId>('resumo');
+  const { lancamentos, adicionarLancamento, removerLancamento } = useLancamentos();
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
+    <div className="min-h-screen bg-background">
+      <Header title={TITLES[activeTab]} />
+
+      {activeTab === 'resumo' && <ResumoTab lancamentos={lancamentos} />}
+      {activeTab === 'movimentacao' && <MovimentacaoTab lancamentos={lancamentos} />}
+      {activeTab === 'lancamentos' && (
+        <LancamentosTab
+          lancamentos={lancamentos}
+          onAdicionar={adicionarLancamento}
+          onRemover={removerLancamento}
+        />
+      )}
+      {activeTab === 'evolucao' && <EvolucaoTab lancamentos={lancamentos} />}
+
+      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
