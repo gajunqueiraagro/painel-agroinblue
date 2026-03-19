@@ -1,0 +1,66 @@
+export type Categoria =
+  | 'mamotes_m'
+  | 'desmama_m'
+  | 'garrotes'
+  | 'bois'
+  | 'touros'
+  | 'mamotes_f'
+  | 'desmama_f'
+  | 'novilhas'
+  | 'vacas';
+
+export const CATEGORIAS: { value: Categoria; label: string }[] = [
+  { value: 'mamotes_m', label: 'Mamotes M' },
+  { value: 'desmama_m', label: 'Desmama M' },
+  { value: 'garrotes', label: 'Garrotes' },
+  { value: 'bois', label: 'Bois' },
+  { value: 'touros', label: 'Touros' },
+  { value: 'mamotes_f', label: 'Mamotes F' },
+  { value: 'desmama_f', label: 'Desmama F' },
+  { value: 'novilhas', label: 'Novilhas' },
+  { value: 'vacas', label: 'Vacas' },
+];
+
+export type TipoEntrada = 'nascimento' | 'compra' | 'transferencia_entrada';
+export type TipoSaida = 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
+export type TipoMovimentacao = TipoEntrada | TipoSaida;
+
+export const TIPOS_ENTRADA: { value: TipoEntrada; label: string; icon: string }[] = [
+  { value: 'nascimento', label: 'Nascimento', icon: '🐄' },
+  { value: 'compra', label: 'Compra', icon: '🛒' },
+  { value: 'transferencia_entrada', label: 'Transferência (entrada)', icon: '📥' },
+];
+
+export const TIPOS_SAIDA: { value: TipoSaida; label: string; icon: string }[] = [
+  { value: 'abate', label: 'Abate', icon: '🔪' },
+  { value: 'venda', label: 'Venda em Pé', icon: '💰' },
+  { value: 'transferencia_saida', label: 'Transferência (saída)', icon: '📤' },
+  { value: 'consumo', label: 'Consumo', icon: '🍖' },
+  { value: 'morte', label: 'Morte', icon: '💀' },
+];
+
+export interface Lancamento {
+  id: string;
+  data: string;
+  tipo: TipoMovimentacao;
+  quantidade: number;
+  categoria: Categoria;
+  fazendaOrigem?: string;
+  fazendaDestino?: string;
+  pesoMedioKg?: number;
+  pesoMedioArrobas?: number;
+  precoMedioCabeca?: number;
+  observacao?: string;
+}
+
+export function isEntrada(tipo: TipoMovimentacao): tipo is TipoEntrada {
+  return ['nascimento', 'compra', 'transferencia_entrada'].includes(tipo);
+}
+
+export function kgToArrobas(kg: number): number {
+  return Number((kg / 15).toFixed(2));
+}
+
+export function arrobasToKg(arrobas: number): number {
+  return Number((arrobas * 15).toFixed(2));
+}
