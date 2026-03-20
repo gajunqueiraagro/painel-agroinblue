@@ -5,6 +5,7 @@ import { ResumoTab } from './ResumoTab';
 import { MovimentacaoTab } from './MovimentacaoTab';
 import { LancamentosTab } from './LancamentosTab';
 import { EvolucaoTab } from './EvolucaoTab';
+import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { useLancamentos } from '@/hooks/useLancamentos';
 
 const TITLES: Record<TabId, string> = {
@@ -16,18 +17,26 @@ const TITLES: Record<TabId, string> = {
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState<TabId>('resumo');
-  const { lancamentos, adicionarLancamento, removerLancamento } = useLancamentos();
+  const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial } = useLancamentos();
 
   return (
     <div className="min-h-screen bg-background">
-      <Header title={TITLES[activeTab]} />
+      <Header
+        title={TITLES[activeTab]}
+        rightAction={
+          activeTab === 'resumo' ? (
+            <SaldoInicialForm saldosIniciais={saldosIniciais} onSetSaldo={setSaldoInicial} />
+          ) : undefined
+        }
+      />
 
-      {activeTab === 'resumo' && <ResumoTab lancamentos={lancamentos} />}
+      {activeTab === 'resumo' && <ResumoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
       {activeTab === 'movimentacao' && <MovimentacaoTab lancamentos={lancamentos} />}
       {activeTab === 'lancamentos' && (
         <LancamentosTab
           lancamentos={lancamentos}
           onAdicionar={adicionarLancamento}
+          onEditar={editarLancamento}
           onRemover={removerLancamento}
         />
       )}
