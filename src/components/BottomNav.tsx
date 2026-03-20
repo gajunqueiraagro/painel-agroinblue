@@ -1,4 +1,4 @@
-import { BarChart3, ArrowLeftRight, PlusCircle, LayoutGrid } from 'lucide-react';
+import { BarChart3, ArrowLeftRight, PlusCircle, LayoutGrid, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'evolucao' | 'evolucao_categoria';
