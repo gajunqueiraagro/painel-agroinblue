@@ -166,6 +166,7 @@ function CompraVendaTable({ lancamentos, onEdit, tipo }: { lancamentos: Lancamen
 }
 
 export function FinanceiroTab({ lancamentos, onEditar }: Props) {
+  const { fazendaAtual } = useFazenda();
   const [subAba, setSubAba] = useState<SubAba>('abate');
   const [editando, setEditando] = useState<Lancamento | null>(null);
 
