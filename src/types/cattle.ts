@@ -40,6 +40,7 @@ export const TIPOS_SAIDA: { value: TipoSaida; label: string; icon: string }[] = 
 
 export const TODOS_TIPOS = [
   ...TIPOS_ENTRADA,
+  { value: 'transferencia_entrada' as const, label: 'Transferência (entrada)', icon: '📥' },
   ...TIPOS_SAIDA,
   { value: 'reclassificacao' as const, label: 'Reclassificação', icon: '🔄' },
 ];
