@@ -52,11 +52,28 @@ export function ResumoTab({ lancamentos, saldosIniciais }: Props) {
     });
   }, [lancamentos, anoFiltro, mesFiltro]);
 
-  const saldoInicialTotal = useMemo(() => {
+  const saldoInicialAno = useMemo(() => {
     return saldosIniciais
       .filter(s => s.ano === Number(anoFiltro))
       .reduce((sum, s) => sum + s.quantidade, 0);
   }, [saldosIniciais, anoFiltro]);
+
+  // Saldo início do mês: saldo ano + acumulado meses anteriores
+  const saldoInicialPeriodo = useMemo(() => {
+    if (mesFiltro === 'todos') return saldoInicialAno;
+    const mesNum = Number(mesFiltro);
+    const acumulado = lancamentos.filter(l => {
+      try {
+        const d = parseISO(l.data);
+        return format(d, 'yyyy') === anoFiltro && Number(format(d, 'MM')) < mesNum;
+      } catch { return false; }
+    }).reduce((sum, l) => {
+      if (isEntrada(l.tipo)) return sum + l.quantidade;
+      if (!isReclassificacao(l.tipo)) return sum - l.quantidade;
+      return sum;
+    }, 0);
+    return saldoInicialAno + acumulado;
+  }, [lancamentos, saldosIniciais, anoFiltro, mesFiltro, saldoInicialAno]);
 
   const totalEntradas = filtrados
     .filter(l => isEntrada(l.tipo))
@@ -66,26 +83,42 @@ export function ResumoTab({ lancamentos, saldosIniciais }: Props) {
     .filter(l => !isEntrada(l.tipo) && !isReclassificacao(l.tipo))
     .reduce((sum, l) => sum + l.quantidade, 0);
 
-  const saldo = saldoInicialTotal + totalEntradas - totalSaidas;
+  const saldo = saldoInicialPeriodo + totalEntradas - totalSaidas;
 
   const porCategoria = CATEGORIAS.map(cat => {
-    const saldoIni = saldosIniciais
+    const saldoIniAno = saldosIniciais
       .filter(s => s.ano === Number(anoFiltro) && s.categoria === cat.value)
       .reduce((sum, s) => sum + s.quantidade, 0);
+    // Acumulado de meses anteriores por categoria
+    let saldoIniCat = saldoIniAno;
+    if (mesFiltro !== 'todos') {
+      const mesNum = Number(mesFiltro);
+      const anteriores = lancamentos.filter(l => {
+        try {
+          const d = parseISO(l.data);
+          return format(d, 'yyyy') === anoFiltro && Number(format(d, 'MM')) < mesNum;
+        } catch { return false; }
+      });
+      anteriores.forEach(l => {
+        if (l.categoria === cat.value && isEntrada(l.tipo)) saldoIniCat += l.quantidade;
+        if (l.categoria === cat.value && !isEntrada(l.tipo) && !isReclassificacao(l.tipo)) saldoIniCat -= l.quantidade;
+        if (l.tipo === 'reclassificacao' && l.categoria === cat.value) saldoIniCat -= l.quantidade;
+        if (l.tipo === 'reclassificacao' && l.categoriaDestino === cat.value) saldoIniCat += l.quantidade;
+      });
+    }
     const entradas = filtrados
       .filter(l => l.categoria === cat.value && isEntrada(l.tipo))
       .reduce((s, l) => s + l.quantidade, 0);
     const saidas = filtrados
       .filter(l => l.categoria === cat.value && !isEntrada(l.tipo) && !isReclassificacao(l.tipo))
       .reduce((s, l) => s + l.quantidade, 0);
-    // Reclassificações: saem da categoria origem, entram na categoria destino
     const reclassSaida = filtrados
       .filter(l => l.tipo === 'reclassificacao' && l.categoria === cat.value)
       .reduce((s, l) => s + l.quantidade, 0);
     const reclassEntrada = filtrados
       .filter(l => l.tipo === 'reclassificacao' && l.categoriaDestino === cat.value)
       .reduce((s, l) => s + l.quantidade, 0);
-    return { ...cat, saldo: saldoIni + entradas - saidas - reclassSaida + reclassEntrada };
+    return { ...cat, saldo: saldoIniCat + entradas - saidas - reclassSaida + reclassEntrada };
   }).filter(c => c.saldo !== 0);
 
   return (
@@ -126,7 +159,7 @@ export function ResumoTab({ lancamentos, saldosIniciais }: Props) {
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">Saldo Inicial</p>
-          <p className="text-xl font-extrabold text-foreground">{saldoInicialTotal}</p>
+          <p className="text-xl font-extrabold text-foreground">{saldoInicialPeriodo}</p>
         </div>
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <TrendingUp className="h-5 w-5 mx-auto text-success mb-1" />
@@ -155,7 +188,7 @@ export function ResumoTab({ lancamentos, saldosIniciais }: Props) {
         </div>
       )}
 
-      {filtrados.length === 0 && saldoInicialTotal === 0 && (
+      {filtrados.length === 0 && saldoInicialPeriodo === 0 && (
         <div className="text-center py-10">
           <p className="text-muted-foreground text-lg font-semibold">Nenhum lançamento neste período</p>
           <p className="text-muted-foreground text-sm mt-1">Toque em "Lançar" para começar</p>
