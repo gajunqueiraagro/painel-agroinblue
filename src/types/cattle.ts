@@ -23,7 +23,7 @@ export const CATEGORIAS: { value: Categoria; label: string }[] = [
 
 export type TipoEntrada = 'nascimento' | 'compra' | 'transferencia_entrada';
 export type TipoSaida = 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
-export type TipoMovimentacao = TipoEntrada | TipoSaida;
+export type TipoMovimentacao = TipoEntrada | TipoSaida | 'reclassificacao';
 
 export const TIPOS_ENTRADA: { value: TipoEntrada; label: string; icon: string }[] = [
   { value: 'nascimento', label: 'Nascimento', icon: '🐄' },
@@ -39,12 +39,19 @@ export const TIPOS_SAIDA: { value: TipoSaida; label: string; icon: string }[] = 
   { value: 'morte', label: 'Morte', icon: '💀' },
 ];
 
+export const TODOS_TIPOS = [
+  ...TIPOS_ENTRADA,
+  ...TIPOS_SAIDA,
+  { value: 'reclassificacao' as const, label: 'Reclassificação', icon: '🔄' },
+];
+
 export interface Lancamento {
   id: string;
   data: string;
   tipo: TipoMovimentacao;
   quantidade: number;
   categoria: Categoria;
+  categoriaDestino?: Categoria; // for reclassificacao
   fazendaOrigem?: string;
   fazendaDestino?: string;
   pesoMedioKg?: number;
@@ -53,8 +60,18 @@ export interface Lancamento {
   observacao?: string;
 }
 
+export interface SaldoInicial {
+  ano: number;
+  categoria: Categoria;
+  quantidade: number;
+}
+
 export function isEntrada(tipo: TipoMovimentacao): tipo is TipoEntrada {
   return ['nascimento', 'compra', 'transferencia_entrada'].includes(tipo);
+}
+
+export function isReclassificacao(tipo: TipoMovimentacao): boolean {
+  return tipo === 'reclassificacao';
 }
 
 export function kgToArrobas(kg: number): number {

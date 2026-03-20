@@ -1,0 +1,91 @@
+import { useState } from 'react';
+import { CATEGORIAS, Categoria, SaldoInicial } from '@/types/cattle';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Settings } from 'lucide-react';
+
+interface Props {
+  saldosIniciais: SaldoInicial[];
+  onSetSaldo: (ano: number, categoria: Categoria, quantidade: number) => void;
+}
+
+export function SaldoInicialForm({ saldosIniciais, onSetSaldo }: Props) {
+  const [open, setOpen] = useState(false);
+  const [ano, setAno] = useState(String(new Date().getFullYear()));
+  const [valores, setValores] = useState<Record<string, string>>(() => {
+    const v: Record<string, string> = {};
+    CATEGORIAS.forEach(c => {
+      const s = saldosIniciais.find(s => s.ano === Number(ano) && s.categoria === c.value);
+      v[c.value] = s ? String(s.quantidade) : '';
+    });
+    return v;
+  });
+
+  const handleAnoChange = (novoAno: string) => {
+    setAno(novoAno);
+    const v: Record<string, string> = {};
+    CATEGORIAS.forEach(c => {
+      const s = saldosIniciais.find(s => s.ano === Number(novoAno) && s.categoria === c.value);
+      v[c.value] = s ? String(s.quantidade) : '';
+    });
+    setValores(v);
+  };
+
+  const handleSalvar = () => {
+    CATEGORIAS.forEach(c => {
+      const qtd = valores[c.value] ? Number(valores[c.value]) : 0;
+      onSetSaldo(Number(ano), c.value, qtd);
+    });
+    setOpen(false);
+  };
+
+  const anosOpcoes = Array.from({ length: 5 }, (_, i) => String(new Date().getFullYear() - i));
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="touch-target">
+          <Settings className="h-4 w-4 mr-1" /> Saldo Inicial
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Saldo Inicial do Ano</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label className="font-bold text-foreground">Ano</Label>
+            <Select value={ano} onValueChange={handleAnoChange}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {anosOpcoes.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="text-xs text-muted-foreground">Informe a quantidade de cabeças no início do ano por categoria:</p>
+          <div className="space-y-2">
+            {CATEGORIAS.map(c => (
+              <div key={c.value} className="flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-foreground flex-1">{c.label}</span>
+                <Input
+                  type="number"
+                  value={valores[c.value] || ''}
+                  onChange={e => setValores(v => ({ ...v, [c.value]: e.target.value }))}
+                  placeholder="0"
+                  min="0"
+                  className="w-24 text-center font-bold"
+                />
+              </div>
+            ))}
+          </div>
+          <Button className="w-full touch-target font-bold" onClick={handleSalvar}>
+            Salvar Saldo Inicial
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
