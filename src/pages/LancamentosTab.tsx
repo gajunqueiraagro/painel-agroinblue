@@ -135,6 +135,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover }
   const lancamentoDetalhe = detalheId ? lancamentos.find(l => l.id === detalheId) : null;
   const campos = useMemo(() => getCamposFazenda(tipo, nomeFazenda), [tipo, nomeFazenda]);
 
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!quantidade || Number(quantidade) <= 0) return;
 
