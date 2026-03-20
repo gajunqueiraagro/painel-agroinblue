@@ -52,11 +52,28 @@ export function ResumoTab({ lancamentos, saldosIniciais }: Props) {
     });
   }, [lancamentos, anoFiltro, mesFiltro]);
 
-  const saldoInicialTotal = useMemo(() => {
+  const saldoInicialAno = useMemo(() => {
     return saldosIniciais
       .filter(s => s.ano === Number(anoFiltro))
       .reduce((sum, s) => sum + s.quantidade, 0);
   }, [saldosIniciais, anoFiltro]);
+
+  // Saldo início do mês: saldo ano + acumulado meses anteriores
+  const saldoInicialPeriodo = useMemo(() => {
+    if (mesFiltro === 'todos') return saldoInicialAno;
+    const mesNum = Number(mesFiltro);
+    const acumulado = lancamentos.filter(l => {
+      try {
+        const d = parseISO(l.data);
+        return format(d, 'yyyy') === anoFiltro && Number(format(d, 'MM')) < mesNum;
+      } catch { return false; }
+    }).reduce((sum, l) => {
+      if (isEntrada(l.tipo)) return sum + l.quantidade;
+      if (!isReclassificacao(l.tipo)) return sum - l.quantidade;
+      return sum;
+    }, 0);
+    return saldoInicialAno + acumulado;
+  }, [lancamentos, saldosIniciais, anoFiltro, mesFiltro, saldoInicialAno]);
 
   const totalEntradas = filtrados
     .filter(l => isEntrada(l.tipo))
@@ -66,7 +83,7 @@ export function ResumoTab({ lancamentos, saldosIniciais }: Props) {
     .filter(l => !isEntrada(l.tipo) && !isReclassificacao(l.tipo))
     .reduce((sum, l) => sum + l.quantidade, 0);
 
-  const saldo = saldoInicialTotal + totalEntradas - totalSaidas;
+  const saldo = saldoInicialPeriodo + totalEntradas - totalSaidas;
 
   const porCategoria = CATEGORIAS.map(cat => {
     const saldoIni = saldosIniciais
