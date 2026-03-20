@@ -34,7 +34,9 @@ const Index = () => {
   const { fazendaAtual, fazendas } = useFazenda();
   const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial } = useLancamentos();
 
+  const papel = fazendaAtual?.papel;
   const isDono = fazendaAtual?.owner_id === user?.id;
+  const isDonoOuGerente = isDono || papel === 'gerente';
 
   return (
     <div className="min-h-screen bg-background">
