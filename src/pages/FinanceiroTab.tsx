@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { parseISO, format } from 'date-fns';
 import { DollarSign, Pencil } from 'lucide-react';
 import { FinanceiroEditDialog } from '@/components/FinanceiroEditDialog';
+import { FinanceiroExportMenu } from '@/components/FinanceiroExportMenu';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -219,10 +220,11 @@ export function FinanceiroTab({ lancamentos, onEditar }: Props) {
 
       <div className="bg-card rounded-lg p-3 shadow-sm border flex items-center gap-3">
         <DollarSign className="h-5 w-5 text-primary" />
-        <div>
+        <div className="flex-1">
           <p className="text-xs text-muted-foreground font-semibold">{filtrados.length} registros</p>
           <p className="text-sm font-bold text-foreground">{filtrados.reduce((s, l) => s + l.quantidade, 0)} cabeças</p>
         </div>
+        <FinanceiroExportMenu lancamentos={filtrados} subAba={subAba} ano={anoFiltro} />
       </div>
 
       <div className="bg-card rounded-lg shadow-sm border overflow-hidden">
