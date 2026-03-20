@@ -33,6 +33,9 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const tipoInfo = TODOS_TIPOS.find(t => t.value === lancamento.tipo);
   const catInfo = CATEGORIAS.find(c => c.value === lancamento.categoria);
 
+  // Transferências de entrada são somente leitura (criadas automaticamente)
+  const isTransferenciaEntrada = lancamento.tipo === 'transferencia_entrada';
+
   const handleSalvar = () => {
     onEditar(lancamento.id, {
       data: form.data,
@@ -128,13 +131,24 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 </div>
               )}
             </div>
+            {isTransferenciaEntrada && (
+              <div className="col-span-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+                  🔒 Transferência automática — só pode ser editada/removida na fazenda de origem.
+                </p>
+              </div>
+            )}
             <div className="flex gap-2 pt-2">
-              <Button variant="outline" className="flex-1 touch-target" onClick={() => { setForm({ ...lancamento }); setEditando(true); }}>
-                <Pencil className="h-4 w-4 mr-1" /> Editar
-              </Button>
-              <Button variant="destructive" className="flex-1 touch-target" onClick={handleRemover}>
-                <Trash2 className="h-4 w-4 mr-1" /> Apagar
-              </Button>
+              {!isTransferenciaEntrada && (
+                <>
+                  <Button variant="outline" className="flex-1 touch-target" onClick={() => { setForm({ ...lancamento }); setEditando(true); }}>
+                    <Pencil className="h-4 w-4 mr-1" /> Editar
+                  </Button>
+                  <Button variant="destructive" className="flex-1 touch-target" onClick={handleRemover}>
+                    <Trash2 className="h-4 w-4 mr-1" /> Apagar
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </DialogContent>

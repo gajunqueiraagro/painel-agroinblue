@@ -95,6 +95,7 @@ export type Database = {
           quantidade: number
           tipo: string
           tipo_peso: string | null
+          transferencia_par_id: string | null
           updated_at: string
           valor_total: number | null
         }
@@ -125,6 +126,7 @@ export type Database = {
           quantidade: number
           tipo: string
           tipo_peso?: string | null
+          transferencia_par_id?: string | null
           updated_at?: string
           valor_total?: number | null
         }
@@ -155,6 +157,7 @@ export type Database = {
           quantidade?: number
           tipo?: string
           tipo_peso?: string | null
+          transferencia_par_id?: string | null
           updated_at?: string
           valor_total?: number | null
         }
@@ -164,6 +167,13 @@ export type Database = {
             columns: ["fazenda_id"]
             isOneToOne: false
             referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lancamentos_transferencia_par_id_fkey"
+            columns: ["transferencia_par_id"]
+            isOneToOne: false
+            referencedRelation: "lancamentos"
             referencedColumns: ["id"]
           },
         ]
