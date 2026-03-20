@@ -1,7 +1,7 @@
 import { BarChart3, ArrowLeftRight, PlusCircle, LayoutGrid } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'evolucao';
+export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'evolucao' | 'evolucao_categoria';
 
 interface BottomNavProps {
   activeTab: TabId;
