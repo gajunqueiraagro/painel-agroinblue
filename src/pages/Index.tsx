@@ -25,8 +25,8 @@ const TITLES: Record<TabId, string> = {
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState<TabId>('resumo');
-  const { fazendaAtual } = useFazenda();
-  const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial } = useLancamentos();
+  const { fazendaAtual, fazendas } = useFazenda();
+  const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento } = useLancamentos();
 
   return (
     <div className="min-h-screen bg-background">
