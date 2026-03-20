@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Lancamento,
   CATEGORIAS,
@@ -17,9 +17,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Trash2, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
+import { useFazenda } from '@/contexts/FazendaContext';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -30,7 +31,61 @@ interface Props {
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
 
+/** Returns field config per movement type */
+function getCamposFazenda(tipo: TipoMovimentacao, nomeFazenda: string) {
+  switch (tipo) {
+    case 'nascimento':
+      return {
+        origem: { show: false },
+        destino: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Destino' },
+      };
+    case 'compra':
+      return {
+        origem: { show: true, auto: false, label: 'Fazenda Origem' },
+        destino: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Destino' },
+      };
+    case 'transferencia_entrada':
+      return {
+        origem: { show: true, auto: false, label: 'Fazenda Origem' },
+        destino: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Destino' },
+      };
+    case 'abate':
+      return {
+        origem: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Origem' },
+        destino: { show: true, auto: false, label: 'Fazenda Destino' },
+      };
+    case 'venda':
+      return {
+        origem: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Origem' },
+        destino: { show: true, auto: false, label: 'Fazenda Destino' },
+      };
+    case 'transferencia_saida':
+      return {
+        origem: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Origem' },
+        destino: { show: true, auto: false, label: 'Fazenda Destino' },
+      };
+    case 'consumo':
+      return {
+        origem: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Origem' },
+        destino: { show: false },
+      };
+    case 'morte':
+      return {
+        origem: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Origem' },
+        destino: { show: true, auto: false, label: 'Motivo da Morte', placeholder: 'Ex: Raio, Picada de cobra' },
+      };
+    default:
+      return {
+        origem: { show: true, auto: false, label: 'Fazenda Origem' },
+        destino: { show: true, auto: false, label: 'Fazenda Destino' },
+      };
+  }
+}
+
 export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover }: Props) {
+  const { fazendaAtual } = useFazenda();
+  const nomeFazenda = fazendaAtual?.nome || '';
+
   const [aba, setAba] = useState<Aba>('entrada');
   const [tipo, setTipo] = useState<TipoMovimentacao>('nascimento');
   const [categoria, setCategoria] = useState<Categoria>('bois');
@@ -43,18 +98,27 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover }
   const [detalheId, setDetalheId] = useState<string | null>(null);
 
   const lancamentoDetalhe = detalheId ? lancamentos.find(l => l.id === detalheId) : null;
+  const campos = useMemo(() => getCamposFazenda(tipo, nomeFazenda), [tipo, nomeFazenda]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!quantidade || Number(quantidade) <= 0) return;
+
+    const origemFinal = campos.origem.show
+      ? (campos.origem.auto ? campos.origem.value : fazendaOrigem) || undefined
+      : undefined;
+
+    const destinoFinal = campos.destino.show
+      ? (campos.destino.auto ? campos.destino.value : fazendaDestino) || undefined
+      : undefined;
 
     onAdicionar({
       data,
       tipo,
       quantidade: Number(quantidade),
       categoria,
-      fazendaOrigem: fazendaOrigem || undefined,
-      fazendaDestino: fazendaDestino || undefined,
+      fazendaOrigem: origemFinal,
+      fazendaDestino: destinoFinal,
       pesoMedioKg: pesoKg ? Number(pesoKg) : undefined,
       pesoMedioArrobas: pesoKg ? kgToArrobas(Number(pesoKg)) : undefined,
       precoMedioCabeca: preco ? Number(preco) : undefined,
@@ -111,7 +175,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover }
                 <button
                   key={t.value}
                   type="button"
-                  onClick={() => setTipo(t.value)}
+                  onClick={() => { setTipo(t.value); setFazendaOrigem(''); setFazendaDestino(''); }}
                   className={`p-3 rounded-lg text-sm font-bold border-2 transition-all touch-target ${
                     tipo === t.value
                       ? 'border-primary bg-primary/10 text-foreground'
@@ -145,15 +209,38 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover }
             </Select>
           </div>
 
+          {/* Fazenda Origem / Destino - dinâmico por tipo */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="font-bold text-foreground">Fazenda Origem</Label>
-              <Input value={fazendaOrigem} onChange={e => setFazendaOrigem(e.target.value)} placeholder="Ex: Faz. Boa Vista" className="mt-1 touch-target text-base" />
-            </div>
-            <div>
-              <Label className="font-bold text-foreground">Fazenda Destino</Label>
-              <Input value={fazendaDestino} onChange={e => setFazendaDestino(e.target.value)} placeholder="Ex: Faz. Santa Cruz" className="mt-1 touch-target text-base" />
-            </div>
+            {campos.origem.show && (
+              <div>
+                <Label className="font-bold text-foreground">{campos.origem.label}</Label>
+                {campos.origem.auto ? (
+                  <Input value={campos.origem.value} readOnly className="mt-1 touch-target text-base bg-muted cursor-not-allowed" />
+                ) : (
+                  <Input
+                    value={fazendaOrigem}
+                    onChange={e => setFazendaOrigem(e.target.value)}
+                    placeholder="Ex: Faz. Boa Vista"
+                    className="mt-1 touch-target text-base"
+                  />
+                )}
+              </div>
+            )}
+            {campos.destino.show && (
+              <div>
+                <Label className="font-bold text-foreground">{campos.destino.label}</Label>
+                {campos.destino.auto ? (
+                  <Input value={campos.destino.value} readOnly className="mt-1 touch-target text-base bg-muted cursor-not-allowed" />
+                ) : (
+                  <Input
+                    value={fazendaDestino}
+                    onChange={e => setFazendaDestino(e.target.value)}
+                    placeholder={campos.destino.placeholder || 'Ex: Faz. Santa Cruz'}
+                    className="mt-1 touch-target text-base"
+                  />
+                )}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
