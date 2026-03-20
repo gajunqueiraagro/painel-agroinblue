@@ -47,7 +47,7 @@ const Index = () => {
             {activeTab === 'resumo' && (
               <>
                 <ExportMenu lancamentos={lancamentos} saldosIniciais={saldosIniciais} />
-                {isDono && <SaldoInicialForm saldosIniciais={saldosIniciais} onSetSaldo={setSaldoInicial} />}
+                {isDonoOuGerente && <SaldoInicialForm saldosIniciais={saldosIniciais} onSetSaldo={setSaldoInicial} />}
               </>
             )}
             {fazendas.length > 1 && <FazendaSelector />}
