@@ -10,7 +10,9 @@ import { FluxoAnualTab } from './FluxoAnualTab';
 
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { ExportMenu } from '@/components/ExportMenu';
+import { FazendaSelector } from '@/components/FazendaSelector';
 import { useLancamentos } from '@/hooks/useLancamentos';
+import { useFazenda } from '@/contexts/FazendaContext';
 
 const TITLES: Record<TabId, string> = {
   resumo: 'Controle de Rebanho',
@@ -23,19 +25,23 @@ const TITLES: Record<TabId, string> = {
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState<TabId>('resumo');
+  const { fazendaAtual } = useFazenda();
   const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial } = useLancamentos();
 
   return (
     <div className="min-h-screen bg-background">
       <Header
-        title={TITLES[activeTab]}
+        title={fazendaAtual?.nome || TITLES[activeTab]}
         rightAction={
-          activeTab === 'resumo' ? (
-            <div className="flex items-center gap-2">
-              <ExportMenu lancamentos={lancamentos} saldosIniciais={saldosIniciais} />
-              <SaldoInicialForm saldosIniciais={saldosIniciais} onSetSaldo={setSaldoInicial} />
-            </div>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {activeTab === 'resumo' && (
+              <>
+                <ExportMenu lancamentos={lancamentos} saldosIniciais={saldosIniciais} />
+                <SaldoInicialForm saldosIniciais={saldosIniciais} onSetSaldo={setSaldoInicial} />
+              </>
+            )}
+            <FazendaSelector />
+          </div>
         }
       />
 
