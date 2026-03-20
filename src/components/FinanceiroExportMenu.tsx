@@ -374,7 +374,7 @@ export function FinanceiroExportMenu({ lancamentos, subAba, ano, fazendaNome }: 
 export function LancamentoShareButtons({ lancamento, fazendaNome }: { lancamento: Lancamento; fazendaNome?: string }) {
   return (
     <div className="flex gap-2">
-      <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { gerarPDFIndividual(lancamento, fazendaNome); toast.success('PDF exportado!'); }}>
+      <Button variant="outline" size="sm" className="gap-1.5" onClick={async () => { await gerarPDFIndividual(lancamento, fazendaNome); toast.success('PDF exportado!'); }}>
         <FileText className="h-4 w-4 text-destructive" />
         PDF
       </Button>
