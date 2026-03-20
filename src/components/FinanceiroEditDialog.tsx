@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { parseISO, format } from 'date-fns';
+import { LancamentoShareButtons } from '@/components/FinanceiroExportMenu';
 
 interface Props {
   lancamento: Lancamento | null;
