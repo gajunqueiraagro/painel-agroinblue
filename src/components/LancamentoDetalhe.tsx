@@ -33,6 +33,9 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const tipoInfo = TODOS_TIPOS.find(t => t.value === lancamento.tipo);
   const catInfo = CATEGORIAS.find(c => c.value === lancamento.categoria);
 
+  // Transferências de entrada são somente leitura (criadas automaticamente)
+  const isTransferenciaEntrada = lancamento.tipo === 'transferencia_entrada';
+
   const handleSalvar = () => {
     onEditar(lancamento.id, {
       data: form.data,
