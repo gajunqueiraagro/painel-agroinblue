@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Lancamento, SaldoInicial, CATEGORIAS, isEntrada, isReclassificacao, Categoria } from '@/types/cattle';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -9,25 +10,36 @@ interface Props {
 }
 
 export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
-  const { meses, dados } = useMemo(() => {
-    if (lancamentos.length === 0 && saldosIniciais.length === 0) return { meses: [], dados: {} };
-
-    // Collect all months
-    const mesesSet = new Set<string>();
+  const anosDisponiveis = useMemo(() => {
+    const anos = new Set<string>();
+    anos.add(String(new Date().getFullYear()));
     lancamentos.forEach(l => {
-      try {
-        const d = parseISO(l.data);
-        mesesSet.add(format(d, 'yyyy-MM'));
-      } catch { /* skip */ }
+      try { anos.add(format(parseISO(l.data), 'yyyy')); } catch {}
+    });
+    saldosIniciais.forEach(s => anos.add(String(s.ano)));
+    return Array.from(anos).sort().reverse();
+  }, [lancamentos, saldosIniciais]);
+
+  const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
+
+  const { meses, dados } = useMemo(() => {
+    const lancFiltrados = lancamentos.filter(l => {
+      try { return format(parseISO(l.data), 'yyyy') === anoFiltro; } catch { return false; }
+    });
+
+    if (lancFiltrados.length === 0 && saldosIniciais.filter(s => String(s.ano) === anoFiltro).length === 0)
+      return { meses: [], dados: {} };
+
+    const mesesSet = new Set<string>();
+    lancFiltrados.forEach(l => {
+      try { mesesSet.add(format(parseISO(l.data), 'yyyy-MM')); } catch {}
     });
 
     const mesesArr = Array.from(mesesSet).sort();
     if (mesesArr.length === 0) return { meses: [], dados: {} };
 
-    // Get the year of the first month to find saldo inicial
-    const primeiroAno = Number(mesesArr[0].split('-')[0]);
+    const primeiroAno = Number(anoFiltro);
 
-    // Build cumulative saldo per category per month
     const dados: Record<Categoria, { saldoInicial: number; meses: Record<string, number> }> = {} as any;
     CATEGORIAS.forEach(c => {
       const saldoIni = saldosIniciais
@@ -38,25 +50,25 @@ export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
       let acum = saldoIni;
 
       mesesArr.forEach(mes => {
-        const entradasMes = lancamentos
+        const entradasMes = lancFiltrados
           .filter(l => {
             try { return format(parseISO(l.data), 'yyyy-MM') === mes && l.categoria === c.value && isEntrada(l.tipo); }
             catch { return false; }
           })
           .reduce((s, l) => s + l.quantidade, 0);
-        const saidasMes = lancamentos
+        const saidasMes = lancFiltrados
           .filter(l => {
             try { return format(parseISO(l.data), 'yyyy-MM') === mes && l.categoria === c.value && !isEntrada(l.tipo) && !isReclassificacao(l.tipo); }
             catch { return false; }
           })
           .reduce((s, l) => s + l.quantidade, 0);
-        const reclassEntMes = lancamentos
+        const reclassEntMes = lancFiltrados
           .filter(l => {
             try { return format(parseISO(l.data), 'yyyy-MM') === mes && l.tipo === 'reclassificacao' && l.categoriaDestino === c.value; }
             catch { return false; }
           })
           .reduce((s, l) => s + l.quantidade, 0);
-        const reclassSaiMes = lancamentos
+        const reclassSaiMes = lancFiltrados
           .filter(l => {
             try { return format(parseISO(l.data), 'yyyy-MM') === mes && l.tipo === 'reclassificacao' && l.categoria === c.value; }
             catch { return false; }
@@ -69,7 +81,7 @@ export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
     });
 
     return { meses: mesesArr, dados };
-  }, [lancamentos, saldosIniciais]);
+  }, [lancamentos, saldosIniciais, anoFiltro]);
 
   if (meses.length === 0) {
     return (
