@@ -243,6 +243,10 @@ export type Database = {
         Args: { _fazenda_id: string; _user_id: string }
         Returns: boolean
       }
+      resolve_transfer_destination_fazenda: {
+        Args: { _destino_nome: string; _origem_fazenda_id: string }
+        Returns: string
+      }
       shares_fazenda: {
         Args: { _target_user_id: string; _viewer_id: string }
         Returns: boolean
