@@ -25,6 +25,7 @@ const TITLES: Record<TabId, string> = {
   evolucao: 'Categorias por Mês',
   evolucao_categoria: 'Evolução por Categoria',
   fluxo_anual: 'Fluxo Anual',
+  acessos: 'Acessos',
 };
 
 const Index = () => {
