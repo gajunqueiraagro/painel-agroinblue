@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import logo from '@/assets/logo.png';
 
 export default function AuthPage() {
   const { signIn, signUp } = useAuth();
@@ -35,7 +36,7 @@ export default function AuthPage() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <span className="text-5xl">🐂</span>
+          <img src={logo} alt="AgroInBlue" className="h-20 mx-auto" />
           <h1 className="text-2xl font-extrabold text-foreground mt-2">Controle de Rebanho</h1>
           <p className="text-muted-foreground text-sm mt-1">
             {isLogin ? 'Entre na sua conta' : 'Crie sua conta'}
