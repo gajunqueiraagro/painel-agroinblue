@@ -46,7 +46,7 @@ function getCamposFazenda(tipo: TipoMovimentacao, nomeFazenda: string) {
       };
     case 'transferencia_entrada':
       return {
-        origem: { show: true, auto: false, label: 'Fazenda Origem' },
+        origem: { show: true, auto: false, label: 'Fazenda Origem', useSelect: true },
         destino: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Destino' },
       };
     case 'abate':
@@ -62,7 +62,7 @@ function getCamposFazenda(tipo: TipoMovimentacao, nomeFazenda: string) {
     case 'transferencia_saida':
       return {
         origem: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Origem' },
-        destino: { show: true, auto: false, label: 'Fazenda Destino' },
+        destino: { show: true, auto: false, label: 'Fazenda Destino', useSelect: true },
       };
     case 'consumo':
       return {
