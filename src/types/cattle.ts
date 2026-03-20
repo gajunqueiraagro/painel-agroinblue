@@ -58,6 +58,18 @@ export interface Lancamento {
   pesoMedioArrobas?: number;
   precoMedioCabeca?: number;
   observacao?: string;
+  // Financial fields
+  precoArroba?: number;
+  pesoCarcacaKg?: number;
+  bonusPrecoce?: number;
+  bonusQualidade?: number;
+  bonusListaTrace?: number;
+  descontoQualidade?: number;
+  descontoFunrural?: number;
+  outrosDescontos?: number;
+  acrescimos?: number;
+  deducoes?: number;
+  valorTotal?: number;
 }
 
 export interface SaldoInicial {
