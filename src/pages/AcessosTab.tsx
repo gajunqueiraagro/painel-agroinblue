@@ -57,13 +57,21 @@ export function AcessosTab() {
     setLoading(true);
     const { data } = await supabase
       .from('fazenda_membros')
-      .select('id, user_id, papel, profiles:profiles!fazenda_membros_user_id_fkey(nome)')
+      .select('id, user_id, papel')
       .eq('fazenda_id', fazendaSelecionada);
 
     if (data) {
+      // Load profiles separately
+      const userIds = data.map(m => m.user_id);
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('user_id, nome')
+        .in('user_id', userIds);
+
+      const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
       setMembros(data.map(m => ({
         ...m,
-        profiles: Array.isArray(m.profiles) ? m.profiles[0] || null : m.profiles,
+        profiles: profileMap.get(m.user_id) || null,
       })));
     }
     setLoading(false);
