@@ -143,7 +143,7 @@ export function ResumoTab({ lancamentos, saldosIniciais }: Props) {
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">Saldo Inicial</p>
-          <p className="text-xl font-extrabold text-foreground">{saldoInicialTotal}</p>
+          <p className="text-xl font-extrabold text-foreground">{saldoInicialPeriodo}</p>
         </div>
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <TrendingUp className="h-5 w-5 mx-auto text-success mb-1" />
