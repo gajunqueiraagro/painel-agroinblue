@@ -8,7 +8,7 @@ import { EvolucaoTab } from './EvolucaoTab';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import { FluxoAnualTab } from './FluxoAnualTab';
 
-import { SaldoInicialForm } from '@/components/SaldoInicialForm';
+
 import { ExportMenu } from '@/components/ExportMenu';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { useLancamentos } from '@/hooks/useLancamentos';
@@ -25,8 +25,8 @@ const TITLES: Record<TabId, string> = {
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState<TabId>('resumo');
-  const { fazendaAtual } = useFazenda();
-  const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial } = useLancamentos();
+  const { fazendaAtual, fazendas } = useFazenda();
+  const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento } = useLancamentos();
 
   return (
     <div className="min-h-screen bg-background">
@@ -35,12 +35,9 @@ const Index = () => {
         rightAction={
           <div className="flex items-center gap-2">
             {activeTab === 'resumo' && (
-              <>
-                <ExportMenu lancamentos={lancamentos} saldosIniciais={saldosIniciais} />
-                <SaldoInicialForm saldosIniciais={saldosIniciais} onSetSaldo={setSaldoInicial} />
-              </>
+              <ExportMenu lancamentos={lancamentos} saldosIniciais={saldosIniciais} />
             )}
-            <FazendaSelector />
+            {fazendas.length > 1 && <FazendaSelector />}
           </div>
         }
       />
