@@ -11,6 +11,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 interface Props {
   lancamentos: Lancamento[];
   onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
+  onRemover: (id: string) => void;
 }
 
 type SubAba = 'abate' | 'compra' | 'venda';
@@ -181,7 +182,7 @@ const MESES = [
   { value: '12', label: 'Dezembro' },
 ];
 
-export function FinanceiroTab({ lancamentos, onEditar }: Props) {
+export function FinanceiroTab({ lancamentos, onEditar, onRemover }: Props) {
   const { fazendaAtual } = useFazenda();
   const [subAba, setSubAba] = useState<SubAba>('abate');
   const [editando, setEditando] = useState<Lancamento | null>(null);
@@ -272,6 +273,7 @@ export function FinanceiroTab({ lancamentos, onEditar }: Props) {
         open={!!editando}
         onClose={() => setEditando(null)}
         onSave={onEditar}
+        onDelete={onRemover}
       />
     </div>
   );
