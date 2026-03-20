@@ -22,13 +22,18 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    if (!supabaseUrl || !serviceRoleKey) {
+      return new Response(JSON.stringify({ error: "Configuração ausente no backend" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    // Verify caller with anon client
-    const anonClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user: caller }, error: authError } = await anonClient.auth.getUser();
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+    // Verify caller JWT with admin client
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+    const { data: { user: caller }, error: authError } = await adminClient.auth.getUser(token);
     if (authError || !caller) {
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
         status: 401,
@@ -46,8 +51,6 @@ Deno.serve(async (req) => {
     }
 
     // Verify caller is owner or gerente of the fazenda
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
-    
     const { data: callerMembro } = await adminClient
       .from("fazenda_membros")
       .select("papel")
@@ -120,6 +123,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
+    console.error("criar-usuario error:", err);
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
