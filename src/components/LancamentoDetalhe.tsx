@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Lancamento,
   CATEGORIAS,
@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Pencil, Trash2 } from 'lucide-react';
+import { useFazenda } from '@/contexts/FazendaContext';
 
 interface Props {
   lancamento: Lancamento;
@@ -27,6 +28,10 @@ interface Props {
 }
 
 export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover }: Props) {
+  const { fazendaAtual, fazendas } = useFazenda();
+  const nomeFazenda = fazendaAtual?.nome || '';
+  const outrasFazendas = useMemo(() => fazendas.filter(f => f.id !== fazendaAtual?.id), [fazendas, fazendaAtual]);
+
   const [editando, setEditando] = useState(false);
   const [form, setForm] = useState({ ...lancamento });
 
@@ -37,14 +42,18 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const isTransferenciaEntrada = lancamento.tipo === 'transferencia_entrada';
 
   const handleSalvar = () => {
+    const isTransSaida = form.tipo === 'transferencia_saida';
+    const isSaidaAuto = ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'].includes(form.tipo);
+    const isEntradaAuto = ['nascimento', 'compra', 'transferencia_entrada'].includes(form.tipo);
+
     onEditar(lancamento.id, {
       data: form.data,
       tipo: form.tipo,
       quantidade: Number(form.quantidade),
       categoria: form.categoria,
       categoriaDestino: form.categoriaDestino,
-      fazendaOrigem: form.fazendaOrigem || undefined,
-      fazendaDestino: form.fazendaDestino || undefined,
+      fazendaOrigem: isSaidaAuto ? nomeFazenda : (form.fazendaOrigem || undefined),
+      fazendaDestino: isEntradaAuto ? nomeFazenda : (form.fazendaDestino || undefined),
       pesoMedioKg: form.pesoMedioKg ? Number(form.pesoMedioKg) : undefined,
       pesoMedioArrobas: form.pesoMedioKg ? kgToArrobas(Number(form.pesoMedioKg)) : undefined,
       precoMedioCabeca: form.precoMedioCabeca ? Number(form.precoMedioCabeca) : undefined,
@@ -156,6 +165,13 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     );
   }
 
+  // --- Edit mode ---
+  const isTransSaida = form.tipo === 'transferencia_saida';
+  const isNascimento = form.tipo === 'nascimento';
+  const isSaidaAuto = ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'].includes(form.tipo);
+  const isEntradaAuto = ['nascimento', 'compra', 'transferencia_entrada'].includes(form.tipo);
+  const showOrigem = !isNascimento;
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
@@ -203,16 +219,45 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
               <Input type="number" value={form.precoMedioCabeca || ''} onChange={e => setForm(f => ({ ...f, precoMedioCabeca: e.target.value ? Number(e.target.value) : undefined }))} className="mt-1" />
             </div>
           </div>
+
+          {/* Fazenda Origem / Destino com mesmas regras do formulário de criação */}
           <div className="grid grid-cols-2 gap-3">
+            {showOrigem && (
+              <div>
+                <Label className="font-bold text-foreground">Faz. Origem</Label>
+                {isSaidaAuto ? (
+                  <Input value={nomeFazenda} readOnly className="mt-1 bg-muted cursor-not-allowed" />
+                ) : (
+                  <Input value={form.fazendaOrigem || ''} onChange={e => setForm(f => ({ ...f, fazendaOrigem: e.target.value }))} className="mt-1" />
+                )}
+              </div>
+            )}
             <div>
-              <Label className="font-bold text-foreground">Faz. Origem</Label>
-              <Input value={form.fazendaOrigem || ''} onChange={e => setForm(f => ({ ...f, fazendaOrigem: e.target.value }))} className="mt-1" />
-            </div>
-            <div>
-              <Label className="font-bold text-foreground">Faz. Destino</Label>
-              <Input value={form.fazendaDestino || ''} onChange={e => setForm(f => ({ ...f, fazendaDestino: e.target.value }))} className="mt-1" />
+              <Label className="font-bold text-foreground">
+                {form.tipo === 'morte' ? 'Motivo da Morte' : form.tipo === 'consumo' ? 'Motivo' : 'Faz. Destino'}
+              </Label>
+              {isEntradaAuto ? (
+                <Input value={nomeFazenda} readOnly className="mt-1 bg-muted cursor-not-allowed" />
+              ) : isTransSaida && outrasFazendas.length > 0 ? (
+                <Select value={form.fazendaDestino || ''} onValueChange={v => setForm(f => ({ ...f, fazendaDestino: v }))}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a fazenda" /></SelectTrigger>
+                  <SelectContent>
+                    {outrasFazendas.map(f => (
+                      <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  value={form.fazendaDestino || ''}
+                  onChange={e => setForm(f => ({ ...f, fazendaDestino: e.target.value }))}
+                  placeholder={form.tipo === 'morte' ? 'Ex: Raio, Picada de cobra' : form.tipo === 'consumo' ? 'Ex: Consumo interno' : 'Ex: Faz. Santa Cruz'}
+                  className="mt-1"
+                />
+              )}
             </div>
           </div>
+
           <div className="flex gap-2 pt-2">
             <Button variant="outline" className="flex-1 touch-target" onClick={() => setEditando(false)}>Cancelar</Button>
             <Button className="flex-1 touch-target" onClick={handleSalvar}>Salvar</Button>
