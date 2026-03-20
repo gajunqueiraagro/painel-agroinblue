@@ -1,0 +1,2 @@
+ALTER TABLE public.fazenda_membros DROP CONSTRAINT IF EXISTS fazenda_membros_papel_check;
+ALTER TABLE public.fazenda_membros ADD CONSTRAINT fazenda_membros_papel_check CHECK (papel IN ('dono', 'gerente', 'capataz', 'membro'));
