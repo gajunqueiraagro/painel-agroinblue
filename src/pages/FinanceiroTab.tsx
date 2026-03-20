@@ -6,6 +6,7 @@ import { parseISO, format } from 'date-fns';
 import { DollarSign, Pencil } from 'lucide-react';
 import { FinanceiroEditDialog } from '@/components/FinanceiroEditDialog';
 import { FinanceiroExportMenu } from '@/components/FinanceiroExportMenu';
+import { useFazenda } from '@/contexts/FazendaContext';
 
 interface Props {
   lancamentos: Lancamento[];
