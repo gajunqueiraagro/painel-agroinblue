@@ -12,7 +12,9 @@ const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
   { id: 'resumo', label: 'Resumo', icon: BarChart3 },
   { id: 'movimentacao', label: 'Fluxo', icon: ArrowLeftRight },
   { id: 'lancamentos', label: 'Lançar', icon: PlusCircle },
-  { id: 'evolucao', label: 'Categorias', icon: LayoutGrid },
+  { id: 'evolucao', label: 'Cat/Mês', icon: LayoutGrid },
+  { id: 'evolucao_categoria', label: 'Evolução', icon: TrendingUp },
+
 ];
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {

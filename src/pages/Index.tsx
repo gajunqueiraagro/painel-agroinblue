@@ -14,7 +14,9 @@ const TITLES: Record<TabId, string> = {
   resumo: 'Controle de Rebanho',
   movimentacao: 'Fluxo Mensal',
   lancamentos: 'Lançamentos',
-  evolucao: 'Evolução por Categoria',
+  evolucao: 'Categorias por Mês',
+  evolucao_categoria: 'Evolução por Categoria',
+
 };
 
 const Index = () => {
