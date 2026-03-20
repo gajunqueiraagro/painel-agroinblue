@@ -35,12 +35,9 @@ const Index = () => {
         rightAction={
           <div className="flex items-center gap-2">
             {activeTab === 'resumo' && (
-              <>
-                <ExportMenu lancamentos={lancamentos} saldosIniciais={saldosIniciais} />
-                <SaldoInicialForm saldosIniciais={saldosIniciais} onSetSaldo={setSaldoInicial} />
-              </>
+              <ExportMenu lancamentos={lancamentos} saldosIniciais={saldosIniciais} />
             )}
-            <FazendaSelector />
+            {fazendas.length > 1 && <FazendaSelector />}
           </div>
         }
       />
