@@ -9,6 +9,7 @@ import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import { FluxoAnualTab } from './FluxoAnualTab';
 
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
+import { ExportMenu } from '@/components/ExportMenu';
 import { useLancamentos } from '@/hooks/useLancamentos';
 
 const TITLES: Record<TabId, string> = {
@@ -30,7 +31,10 @@ const Index = () => {
         title={TITLES[activeTab]}
         rightAction={
           activeTab === 'resumo' ? (
-            <SaldoInicialForm saldosIniciais={saldosIniciais} onSetSaldo={setSaldoInicial} />
+            <div className="flex items-center gap-2">
+              <ExportMenu lancamentos={lancamentos} saldosIniciais={saldosIniciais} />
+              <SaldoInicialForm saldosIniciais={saldosIniciais} onSetSaldo={setSaldoInicial} />
+            </div>
           ) : undefined
         }
       />
