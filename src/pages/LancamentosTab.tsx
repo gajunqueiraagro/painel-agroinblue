@@ -219,6 +219,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover }
                 <Label className="font-bold text-foreground">{campos.origem.label}</Label>
                 {campos.origem.auto ? (
                   <Input value={campos.origem.value} readOnly className="mt-1 touch-target text-base bg-muted cursor-not-allowed" />
+                ) : (campos.origem as any).useSelect && outrasFazendas.length > 0 ? (
+                  <Select value={fazendaOrigem} onValueChange={setFazendaOrigem}>
+                    <SelectTrigger className="mt-1 touch-target text-base"><SelectValue placeholder="Selecione a fazenda" /></SelectTrigger>
+                    <SelectContent>
+                      {outrasFazendas.map(f => (
+                        <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 ) : (
                   <Input
                     value={fazendaOrigem}
@@ -234,6 +243,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover }
                 <Label className="font-bold text-foreground">{campos.destino.label}</Label>
                 {campos.destino.auto ? (
                   <Input value={campos.destino.value} readOnly className="mt-1 touch-target text-base bg-muted cursor-not-allowed" />
+                ) : (campos.destino as any).useSelect && outrasFazendas.length > 0 ? (
+                  <Select value={fazendaDestino} onValueChange={setFazendaDestino}>
+                    <SelectTrigger className="mt-1 touch-target text-base"><SelectValue placeholder="Selecione a fazenda" /></SelectTrigger>
+                    <SelectContent>
+                      {outrasFazendas.map(f => (
+                        <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 ) : (
                   <Input
                     value={fazendaDestino}
