@@ -7,6 +7,7 @@ import { LancamentosTab } from './LancamentosTab';
 import { EvolucaoTab } from './EvolucaoTab';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import { FluxoAnualTab } from './FluxoAnualTab';
+import { FinanceiroTab } from './FinanceiroTab';
 
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { ExportMenu } from '@/components/ExportMenu';
@@ -19,6 +20,7 @@ const TITLES: Record<TabId, string> = {
   resumo: 'Controle de Rebanho',
   movimentacao: 'Fluxo Mensal',
   lancamentos: 'Lançamentos',
+  financeiro: 'Financeiro',
   evolucao: 'Categorias por Mês',
   evolucao_categoria: 'Evolução por Categoria',
   fluxo_anual: 'Fluxo Anual',
