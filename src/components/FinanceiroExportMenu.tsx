@@ -279,7 +279,7 @@ async function gerarPDFIndividual(l: Lancamento, fazendaNome?: string) {
     info.push(['Tipo de Peso', l.tipoPeso === 'morto' ? 'Peso Morto' : 'Peso Vivo']);
   }
 
-  autoTable(doc, { startY: 28, body: info, theme: 'plain', bodyStyles: { fontSize: 11 }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 50 } }, margin: { left: 20, right: 20 } });
+  autoTable(doc, { startY: infoStartY, body: info, theme: 'plain', bodyStyles: { fontSize: 11 }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 50 } }, margin: { left: 20, right: 20 } });
 
   let detalhes: string[][] = [];
   if (l.tipo === 'abate') {
