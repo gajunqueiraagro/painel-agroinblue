@@ -41,6 +41,7 @@ const Index = () => {
         />
       )}
       {activeTab === 'evolucao' && <EvolucaoTab lancamentos={lancamentos} />}
+      {activeTab === 'evolucao_categoria' && <EvolucaoCategoriaTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
 
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
