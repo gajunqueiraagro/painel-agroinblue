@@ -99,9 +99,38 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover }
   const [pesoKg, setPesoKg] = useState('');
   const [preco, setPreco] = useState('');
   const [detalheId, setDetalheId] = useState<string | null>(null);
+  const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
+  const [mesFiltro, setMesFiltro] = useState('todos');
 
-  const lancamentoDetalhe = detalheId ? lancamentos.find(l => l.id === detalheId) : null;
-  const campos = useMemo(() => getCamposFazenda(tipo, nomeFazenda), [tipo, nomeFazenda]);
+  const anosDisponiveis = useMemo(() => {
+    const anos = new Set<string>();
+    anos.add(String(new Date().getFullYear()));
+    lancamentos.forEach(l => {
+      try { anos.add(format(parseISO(l.data), 'yyyy')); } catch {}
+    });
+    return Array.from(anos).sort().reverse();
+  }, [lancamentos]);
+
+  const MESES = [
+    { value: 'todos', label: 'Todos' },
+    { value: '01', label: 'Jan' }, { value: '02', label: 'Fev' },
+    { value: '03', label: 'Mar' }, { value: '04', label: 'Abr' },
+    { value: '05', label: 'Mai' }, { value: '06', label: 'Jun' },
+    { value: '07', label: 'Jul' }, { value: '08', label: 'Ago' },
+    { value: '09', label: 'Set' }, { value: '10', label: 'Out' },
+    { value: '11', label: 'Nov' }, { value: '12', label: 'Dez' },
+  ];
+
+  const historicoFiltrado = useMemo(() => {
+    return lancamentos.filter(l => {
+      try {
+        const d = parseISO(l.data);
+        if (format(d, 'yyyy') !== anoFiltro) return false;
+        if (mesFiltro !== 'todos' && format(d, 'MM') !== mesFiltro) return false;
+        return true;
+      } catch { return false; }
+    });
+  }, [lancamentos, anoFiltro, mesFiltro]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
