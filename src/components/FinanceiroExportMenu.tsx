@@ -356,7 +356,7 @@ export function FinanceiroExportMenu({ lancamentos, subAba, ano, fazendaNome }: 
           <DialogTitle>Exportar {SUB_ABA_LABELS[subAba]}</DialogTitle>
         </DialogHeader>
         <div className="space-y-2">
-          <Button className="w-full justify-start gap-2" variant="outline" onClick={() => { gerarPDFTabela(lancamentos, subAba, ano, fazendaNome); setOpen(false); toast.success('PDF exportado!'); }}>
+          <Button className="w-full justify-start gap-2" variant="outline" onClick={async () => { await gerarPDFTabela(lancamentos, subAba, ano, fazendaNome); setOpen(false); toast.success('PDF exportado!'); }}>
             <FileText className="h-5 w-5 text-destructive" />
             Exportar PDF
           </Button>
