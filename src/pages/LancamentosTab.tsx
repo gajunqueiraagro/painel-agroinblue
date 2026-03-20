@@ -316,10 +316,32 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover }
         </form>
       ) : (
         <div className="space-y-2">
-          {lancamentos.length === 0 ? (
-            <p className="text-center text-muted-foreground py-10">Nenhum lançamento registrado</p>
+          <div className="flex gap-2">
+            <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+              <SelectTrigger className="touch-target text-base font-bold w-28">
+                <SelectValue placeholder="Ano" />
+              </SelectTrigger>
+              <SelectContent>
+                {anosDisponiveis.map(a => (
+                  <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={mesFiltro} onValueChange={setMesFiltro}>
+              <SelectTrigger className="touch-target text-base font-bold flex-1">
+                <SelectValue placeholder="Mês" />
+              </SelectTrigger>
+              <SelectContent>
+                {MESES.map(m => (
+                  <SelectItem key={m.value} value={m.value} className="text-base">{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {historicoFiltrado.length === 0 ? (
+            <p className="text-center text-muted-foreground py-10">Nenhum lançamento no período</p>
           ) : (
-            lancamentos.slice(0, 50).map(l => {
+            historicoFiltrado.slice(0, 50).map(l => {
               const entrada = isEntrada(l.tipo);
               const reclass = isReclassificacao(l.tipo);
               const catLabel = CATEGORIAS.find(c => c.value === l.categoria)?.label;
