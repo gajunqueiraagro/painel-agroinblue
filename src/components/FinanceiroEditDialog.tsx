@@ -5,8 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { parseISO, format } from 'date-fns';
 import { LancamentoShareButtons } from '@/components/FinanceiroExportMenu';
+import { useFazenda } from '@/contexts/FazendaContext';
 
 interface Props {
   lancamento: Lancamento | null;
@@ -31,6 +33,7 @@ function pct(v?: number) {
 }
 
 export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Props) {
+  const { fazendaAtual } = useFazenda();
   const [pesoMedioKg, setPesoMedioKg] = useState('');
   const [pesoCarcacaKg, setPesoCarcacaKg] = useState('');
   const [precoArroba, setPrecoArroba] = useState('');
@@ -42,6 +45,8 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Prop
   const [outrosDescontos, setOutrosDescontos] = useState('');
   const [acrescimos, setAcrescimos] = useState('');
   const [deducoes, setDeducoes] = useState('');
+  const [notaFiscal, setNotaFiscal] = useState('');
+  const [tipoPeso, setTipoPeso] = useState<'vivo' | 'morto'>('vivo');
 
   useEffect(() => {
     if (lancamento) {
@@ -56,6 +61,8 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Prop
       setOutrosDescontos(lancamento.outrosDescontos?.toString() ?? '');
       setAcrescimos(lancamento.acrescimos?.toString() ?? '');
       setDeducoes(lancamento.deducoes?.toString() ?? '');
+      setNotaFiscal(lancamento.notaFiscal ?? '');
+      setTipoPeso(lancamento.tipoPeso ?? 'vivo');
     }
   }, [lancamento]);
 
@@ -69,7 +76,6 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Prop
     const pesoCarcaca = num(pesoCarcacaKg) ?? 0;
     const preco = num(precoArroba) ?? 0;
 
-    // Calculated fields
     const pesoTotalKg = pesoVivo * qtd;
     let pesoArroba = 0;
     let rendimentoCarcaca: number | undefined;
@@ -110,11 +116,14 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Prop
   if (!lancamento || !calc) return null;
 
   const cat = CATEGORIAS.find(c => c.value === lancamento.categoria)?.label ?? lancamento.categoria;
+  const fazendaNome = fazendaAtual?.nome ?? '';
 
   const handleSave = () => {
     const dados: Partial<Omit<Lancamento, 'id'>> = {
       pesoMedioKg: num(pesoMedioKg) ?? null as any,
       precoArroba: num(precoArroba) ?? null as any,
+      notaFiscal: notaFiscal || null as any,
+      tipoPeso,
     };
     if (isAbate) {
       Object.assign(dados, {
@@ -147,6 +156,9 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Prop
 
         {/* Info fixa */}
         <div className="grid grid-cols-2 gap-2 text-sm bg-muted/50 rounded-lg p-3">
+          {fazendaNome && (
+            <div className="col-span-2"><span className="text-muted-foreground">Fazenda:</span> <strong>{fazendaNome}</strong></div>
+          )}
           <div><span className="text-muted-foreground">Data:</span> <strong>{format(parseISO(lancamento.data), 'dd/MM/yyyy')}</strong></div>
           <div><span className="text-muted-foreground">Qtd:</span> <strong>{lancamento.quantidade} cab</strong></div>
           <div><span className="text-muted-foreground">Categoria:</span> <strong>{cat}</strong></div>
@@ -157,7 +169,28 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Prop
 
         {/* Campos editáveis */}
         <div className="space-y-3">
+          <h4 className="text-xs font-bold text-muted-foreground uppercase">Nota Fiscal</h4>
+          <Input value={notaFiscal} onChange={e => setNotaFiscal(e.target.value)} placeholder="Nº da nota fiscal" className="h-9" />
+
+          <Separator />
+
           <h4 className="text-xs font-bold text-muted-foreground uppercase">Pesos</h4>
+
+          {isAbate && (
+            <div>
+              <Label className="text-xs">Tipo de Peso Negociado</Label>
+              <Select value={tipoPeso} onValueChange={(v: 'vivo' | 'morto') => setTipoPeso(v)}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="vivo">Peso Vivo</SelectItem>
+                  <SelectItem value="morto">Peso Morto</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Peso Vivo (kg)</Label>
@@ -176,7 +209,7 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Prop
           <h4 className="text-xs font-bold text-muted-foreground uppercase">Preço</h4>
           <div>
             <Label className="text-xs">Preço por arroba (R$)</Label>
-            <Input type="number" value={precoArroba} onChange={e => setPrecoArroba(e.target.value)} placeholder="0.00" className="h-9" />
+            <Input type="number" value={precoArroba} onChange={e => setPrecoArroba(e.target.value)} placeholder="0,00" className="h-9" />
           </div>
 
           <Separator />
@@ -299,7 +332,10 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Prop
 
         <div className="flex gap-2">
           <Button onClick={handleSave} className="flex-1">Salvar</Button>
-          <LancamentoShareButtons lancamento={{...lancamento, pesoMedioKg: num(pesoMedioKg), pesoCarcacaKg: num(pesoCarcacaKg), precoArroba: num(precoArroba), bonusPrecoce: num(bonusPrecoce), bonusQualidade: num(bonusQualidade), bonusListaTrace: num(bonusListaTrace), descontoQualidade: num(descontoQualidade), descontoFunrural: num(descontoFunrural), outrosDescontos: num(outrosDescontos), acrescimos: num(acrescimos), deducoes: num(deducoes)}} />
+          <LancamentoShareButtons
+            lancamento={{...lancamento, pesoMedioKg: num(pesoMedioKg), pesoCarcacaKg: num(pesoCarcacaKg), precoArroba: num(precoArroba), bonusPrecoce: num(bonusPrecoce), bonusQualidade: num(bonusQualidade), bonusListaTrace: num(bonusListaTrace), descontoQualidade: num(descontoQualidade), descontoFunrural: num(descontoFunrural), outrosDescontos: num(outrosDescontos), acrescimos: num(acrescimos), deducoes: num(deducoes), notaFiscal, tipoPeso}}
+            fazendaNome={fazendaNome}
+          />
         </div>
       </DialogContent>
     </Dialog>
