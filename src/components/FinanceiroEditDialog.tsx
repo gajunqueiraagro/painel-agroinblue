@@ -1,0 +1,303 @@
+import { useState, useMemo, useEffect } from 'react';
+import { Lancamento, CATEGORIAS } from '@/types/cattle';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { parseISO, format } from 'date-fns';
+
+interface Props {
+  lancamento: Lancamento | null;
+  open: boolean;
+  onClose: () => void;
+  onSave: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
+}
+
+function num(v: string): number | undefined {
+  const n = parseFloat(v);
+  return isNaN(n) ? undefined : n;
+}
+
+function fmt(v?: number, decimals = 2) {
+  if (v === undefined || v === null || isNaN(v)) return '-';
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
+function pct(v?: number) {
+  if (v === undefined || v === null || isNaN(v)) return '-';
+  return (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+}
+
+export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Props) {
+  const [pesoMedioKg, setPesoMedioKg] = useState('');
+  const [pesoCarcacaKg, setPesoCarcacaKg] = useState('');
+  const [precoArroba, setPrecoArroba] = useState('');
+  const [bonusPrecoce, setBonusPrecoce] = useState('');
+  const [bonusQualidade, setBonusQualidade] = useState('');
+  const [bonusListaTrace, setBonusListaTrace] = useState('');
+  const [descontoQualidade, setDescontoQualidade] = useState('');
+  const [descontoFunrural, setDescontoFunrural] = useState('');
+  const [outrosDescontos, setOutrosDescontos] = useState('');
+  const [acrescimos, setAcrescimos] = useState('');
+  const [deducoes, setDeducoes] = useState('');
+
+  useEffect(() => {
+    if (lancamento) {
+      setPesoMedioKg(lancamento.pesoMedioKg?.toString() ?? '');
+      setPesoCarcacaKg(lancamento.pesoCarcacaKg?.toString() ?? '');
+      setPrecoArroba(lancamento.precoArroba?.toString() ?? '');
+      setBonusPrecoce(lancamento.bonusPrecoce?.toString() ?? '');
+      setBonusQualidade(lancamento.bonusQualidade?.toString() ?? '');
+      setBonusListaTrace(lancamento.bonusListaTrace?.toString() ?? '');
+      setDescontoQualidade(lancamento.descontoQualidade?.toString() ?? '');
+      setDescontoFunrural(lancamento.descontoFunrural?.toString() ?? '');
+      setOutrosDescontos(lancamento.outrosDescontos?.toString() ?? '');
+      setAcrescimos(lancamento.acrescimos?.toString() ?? '');
+      setDeducoes(lancamento.deducoes?.toString() ?? '');
+    }
+  }, [lancamento]);
+
+  const isAbate = lancamento?.tipo === 'abate';
+  const isCompraVenda = lancamento?.tipo === 'compra' || lancamento?.tipo === 'venda';
+
+  const calc = useMemo(() => {
+    if (!lancamento) return null;
+    const qtd = lancamento.quantidade;
+    const pesoVivo = num(pesoMedioKg) ?? 0;
+    const pesoCarcaca = num(pesoCarcacaKg) ?? 0;
+    const preco = num(precoArroba) ?? 0;
+
+    // Calculated fields
+    const pesoTotalKg = pesoVivo * qtd;
+    let pesoArroba = 0;
+    let rendimentoCarcaca: number | undefined;
+
+    if (isAbate) {
+      pesoArroba = pesoCarcaca > 0 ? pesoCarcaca / 15 : 0;
+      rendimentoCarcaca = pesoVivo > 0 && pesoCarcaca > 0 ? pesoCarcaca / pesoVivo : undefined;
+    } else {
+      pesoArroba = pesoVivo > 0 ? pesoVivo / 30 : 0;
+    }
+
+    const pesoTotalArrobas = pesoArroba * qtd;
+    const valorBruto = pesoTotalArrobas * preco;
+
+    let totalAcrescimos = 0;
+    let totalDescontos = 0;
+
+    if (isAbate) {
+      totalAcrescimos = (num(bonusPrecoce) ?? 0) + (num(bonusQualidade) ?? 0) + (num(bonusListaTrace) ?? 0);
+      totalDescontos = (num(descontoQualidade) ?? 0) + (num(descontoFunrural) ?? 0) + (num(outrosDescontos) ?? 0);
+    } else {
+      totalAcrescimos = num(acrescimos) ?? 0;
+      totalDescontos = num(deducoes) ?? 0;
+    }
+
+    const valorTotal = valorBruto + totalAcrescimos - totalDescontos;
+    const liqArroba = pesoTotalArrobas > 0 ? valorTotal / pesoTotalArrobas : 0;
+    const liqCabeca = qtd > 0 ? valorTotal / qtd : 0;
+    const liqKgVivo = pesoTotalKg > 0 ? valorTotal / pesoTotalKg : 0;
+
+    return {
+      pesoArroba, pesoTotalKg, pesoTotalArrobas, rendimentoCarcaca,
+      valorBruto, totalAcrescimos, totalDescontos, valorTotal,
+      liqArroba, liqCabeca, liqKgVivo,
+    };
+  }, [lancamento, pesoMedioKg, pesoCarcacaKg, precoArroba, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, descontoFunrural, outrosDescontos, acrescimos, deducoes, isAbate]);
+
+  if (!lancamento || !calc) return null;
+
+  const cat = CATEGORIAS.find(c => c.value === lancamento.categoria)?.label ?? lancamento.categoria;
+
+  const handleSave = () => {
+    const dados: Partial<Omit<Lancamento, 'id'>> = {
+      pesoMedioKg: num(pesoMedioKg) ?? null as any,
+      precoArroba: num(precoArroba) ?? null as any,
+    };
+    if (isAbate) {
+      Object.assign(dados, {
+        pesoCarcacaKg: num(pesoCarcacaKg) ?? null,
+        bonusPrecoce: num(bonusPrecoce) ?? null,
+        bonusQualidade: num(bonusQualidade) ?? null,
+        bonusListaTrace: num(bonusListaTrace) ?? null,
+        descontoQualidade: num(descontoQualidade) ?? null,
+        descontoFunrural: num(descontoFunrural) ?? null,
+        outrosDescontos: num(outrosDescontos) ?? null,
+      });
+    } else {
+      Object.assign(dados, {
+        acrescimos: num(acrescimos) ?? null,
+        deducoes: num(deducoes) ?? null,
+      });
+    }
+    onSave(lancamento.id, dados);
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-base">
+            Editar {isAbate ? 'Abate' : lancamento.tipo === 'compra' ? 'Compra' : 'Venda'}
+          </DialogTitle>
+        </DialogHeader>
+
+        {/* Info fixa */}
+        <div className="grid grid-cols-2 gap-2 text-sm bg-muted/50 rounded-lg p-3">
+          <div><span className="text-muted-foreground">Data:</span> <strong>{format(parseISO(lancamento.data), 'dd/MM/yyyy')}</strong></div>
+          <div><span className="text-muted-foreground">Qtd:</span> <strong>{lancamento.quantidade} cab</strong></div>
+          <div><span className="text-muted-foreground">Categoria:</span> <strong>{cat}</strong></div>
+          <div><span className="text-muted-foreground">{isAbate || lancamento.tipo === 'venda' ? 'Destino' : 'Origem'}:</span> <strong>{(isAbate || lancamento.tipo === 'venda' ? lancamento.fazendaDestino : lancamento.fazendaOrigem) || '-'}</strong></div>
+        </div>
+
+        <Separator />
+
+        {/* Campos editáveis */}
+        <div className="space-y-3">
+          <h4 className="text-xs font-bold text-muted-foreground uppercase">Pesos</h4>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Peso Vivo (kg)</Label>
+              <Input type="number" value={pesoMedioKg} onChange={e => setPesoMedioKg(e.target.value)} placeholder="0" className="h-9" />
+            </div>
+            {isAbate && (
+              <div>
+                <Label className="text-xs">Peso Carcaça (kg)</Label>
+                <Input type="number" value={pesoCarcacaKg} onChange={e => setPesoCarcacaKg(e.target.value)} placeholder="0" className="h-9" />
+              </div>
+            )}
+          </div>
+
+          <Separator />
+
+          <h4 className="text-xs font-bold text-muted-foreground uppercase">Preço</h4>
+          <div>
+            <Label className="text-xs">Preço por arroba (R$)</Label>
+            <Input type="number" value={precoArroba} onChange={e => setPrecoArroba(e.target.value)} placeholder="0.00" className="h-9" />
+          </div>
+
+          <Separator />
+
+          {isAbate ? (
+            <>
+              <h4 className="text-xs font-bold text-muted-foreground uppercase">Bônus (R$)</h4>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <Label className="text-xs">Precoce</Label>
+                  <Input type="number" value={bonusPrecoce} onChange={e => setBonusPrecoce(e.target.value)} placeholder="0" className="h-9" />
+                </div>
+                <div>
+                  <Label className="text-xs">Qualidade</Label>
+                  <Input type="number" value={bonusQualidade} onChange={e => setBonusQualidade(e.target.value)} placeholder="0" className="h-9" />
+                </div>
+                <div>
+                  <Label className="text-xs">Lista Trace</Label>
+                  <Input type="number" value={bonusListaTrace} onChange={e => setBonusListaTrace(e.target.value)} placeholder="0" className="h-9" />
+                </div>
+              </div>
+
+              <h4 className="text-xs font-bold text-muted-foreground uppercase">Descontos (R$)</h4>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <Label className="text-xs">Qualidade</Label>
+                  <Input type="number" value={descontoQualidade} onChange={e => setDescontoQualidade(e.target.value)} placeholder="0" className="h-9" />
+                </div>
+                <div>
+                  <Label className="text-xs">Funrural</Label>
+                  <Input type="number" value={descontoFunrural} onChange={e => setDescontoFunrural(e.target.value)} placeholder="0" className="h-9" />
+                </div>
+                <div>
+                  <Label className="text-xs">Outros</Label>
+                  <Input type="number" value={outrosDescontos} onChange={e => setOutrosDescontos(e.target.value)} placeholder="0" className="h-9" />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <h4 className="text-xs font-bold text-muted-foreground uppercase">Ajustes (R$)</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Acréscimos</Label>
+                  <Input type="number" value={acrescimos} onChange={e => setAcrescimos(e.target.value)} placeholder="0" className="h-9" />
+                </div>
+                <div>
+                  <Label className="text-xs">Deduções</Label>
+                  <Input type="number" value={deducoes} onChange={e => setDeducoes(e.target.value)} placeholder="0" className="h-9" />
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        <Separator />
+
+        {/* Campos calculados automaticamente */}
+        <div className="space-y-2">
+          <h4 className="text-xs font-bold text-muted-foreground uppercase">Valores Calculados</h4>
+          <div className="bg-muted/30 rounded-lg p-3 space-y-1.5 text-sm">
+            {isAbate && calc.rendimentoCarcaca !== undefined && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Rendimento carcaça</span>
+                <strong>{pct(calc.rendimentoCarcaca)}</strong>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Peso em @ (por cab)</span>
+              <strong>{fmt(calc.pesoArroba)}</strong>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Peso total (kg)</span>
+              <strong>{fmt(calc.pesoTotalKg, 0)}</strong>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Peso total (@)</span>
+              <strong>{fmt(calc.pesoTotalArrobas)}</strong>
+            </div>
+
+            <Separator className="my-2" />
+
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Valor bruto</span>
+              <span>R$ {fmt(calc.valorBruto)}</span>
+            </div>
+            {calc.totalAcrescimos > 0 && (
+              <div className="flex justify-between text-green-600">
+                <span>+ Acréscimos/Bônus</span>
+                <span>R$ {fmt(calc.totalAcrescimos)}</span>
+              </div>
+            )}
+            {calc.totalDescontos > 0 && (
+              <div className="flex justify-between text-red-500">
+                <span>- Descontos</span>
+                <span>R$ {fmt(calc.totalDescontos)}</span>
+              </div>
+            )}
+
+            <Separator className="my-2" />
+
+            <div className="flex justify-between text-base font-bold">
+              <span>Valor Total Líquido</span>
+              <span className="text-primary">R$ {fmt(calc.valorTotal)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Líquido por @</span>
+              <strong>R$ {fmt(calc.liqArroba)}</strong>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Líquido por cabeça</span>
+              <strong>R$ {fmt(calc.liqCabeca)}</strong>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Líquido por kg vivo</span>
+              <strong>R$ {fmt(calc.liqKgVivo)}</strong>
+            </div>
+          </div>
+        </div>
+
+        <Button onClick={handleSave} className="w-full">Salvar</Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
