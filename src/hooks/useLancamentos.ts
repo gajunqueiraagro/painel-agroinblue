@@ -38,6 +38,17 @@ export function useLancamentos() {
         pesoMedioArrobas: l.peso_medio_arrobas ?? undefined,
         precoMedioCabeca: l.preco_medio_cabeca ?? undefined,
         observacao: l.observacao ?? undefined,
+        precoArroba: (l as any).preco_arroba ?? undefined,
+        pesoCarcacaKg: (l as any).peso_carcaca_kg ?? undefined,
+        bonusPrecoce: (l as any).bonus_precoce ?? undefined,
+        bonusQualidade: (l as any).bonus_qualidade ?? undefined,
+        bonusListaTrace: (l as any).bonus_lista_trace ?? undefined,
+        descontoQualidade: (l as any).desconto_qualidade ?? undefined,
+        descontoFunrural: (l as any).desconto_funrural ?? undefined,
+        outrosDescontos: (l as any).outros_descontos ?? undefined,
+        acrescimos: (l as any).acrescimos ?? undefined,
+        deducoes: (l as any).deducoes ?? undefined,
+        valorTotal: (l as any).valor_total ?? undefined,
       })));
     }
 
