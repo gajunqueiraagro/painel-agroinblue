@@ -14,13 +14,186 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      fazenda_membros: {
+        Row: {
+          created_at: string
+          fazenda_id: string
+          id: string
+          papel: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          fazenda_id: string
+          id?: string
+          papel?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          fazenda_id?: string
+          id?: string
+          papel?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fazenda_membros_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fazendas: {
+        Row: {
+          created_at: string
+          id: string
+          nome: string
+          owner_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nome: string
+          owner_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nome?: string
+          owner_id?: string
+        }
+        Relationships: []
+      }
+      lancamentos: {
+        Row: {
+          categoria: string
+          categoria_destino: string | null
+          created_at: string
+          data: string
+          fazenda_destino: string | null
+          fazenda_id: string
+          fazenda_origem: string | null
+          id: string
+          observacao: string | null
+          peso_medio_arrobas: number | null
+          peso_medio_kg: number | null
+          preco_medio_cabeca: number | null
+          quantidade: number
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          categoria: string
+          categoria_destino?: string | null
+          created_at?: string
+          data: string
+          fazenda_destino?: string | null
+          fazenda_id: string
+          fazenda_origem?: string | null
+          id?: string
+          observacao?: string | null
+          peso_medio_arrobas?: number | null
+          peso_medio_kg?: number | null
+          preco_medio_cabeca?: number | null
+          quantidade: number
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          categoria?: string
+          categoria_destino?: string | null
+          created_at?: string
+          data?: string
+          fazenda_destino?: string | null
+          fazenda_id?: string
+          fazenda_origem?: string | null
+          id?: string
+          observacao?: string | null
+          peso_medio_arrobas?: number | null
+          peso_medio_kg?: number | null
+          preco_medio_cabeca?: number | null
+          quantidade?: number
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lancamentos_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          id: string
+          nome: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nome?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nome?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      saldos_iniciais: {
+        Row: {
+          ano: number
+          categoria: string
+          created_at: string
+          fazenda_id: string
+          id: string
+          quantidade: number
+        }
+        Insert: {
+          ano: number
+          categoria: string
+          created_at?: string
+          fazenda_id: string
+          id?: string
+          quantidade?: number
+        }
+        Update: {
+          ano?: number
+          categoria?: string
+          created_at?: string
+          fazenda_id?: string
+          id?: string
+          quantidade?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saldos_iniciais_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_fazenda_member: {
+        Args: { _fazenda_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
