@@ -1,20 +1,21 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Lancamento, CATEGORIAS } from '@/types/cattle';
+import { Lancamento, CATEGORIAS, Categoria } from '@/types/cattle';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { parseISO, format } from 'date-fns';
 import { LancamentoShareButtons } from '@/components/FinanceiroExportMenu';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { Trash2 } from 'lucide-react';
 
 interface Props {
   lancamento: Lancamento | null;
   open: boolean;
   onClose: () => void;
   onSave: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
+  onDelete: (id: string) => void;
 }
 
 function num(v: string): number | undefined {
@@ -32,8 +33,12 @@ function pct(v?: number) {
   return (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
 }
 
-export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Props) {
+export function FinanceiroEditDialog({ lancamento, open, onClose, onSave, onDelete }: Props) {
   const { fazendaAtual } = useFazenda();
+  const [data, setData] = useState('');
+  const [quantidade, setQuantidade] = useState('');
+  const [categoria, setCategoria] = useState<Categoria>('bois');
+  const [local, setLocal] = useState('');
   const [pesoMedioKg, setPesoMedioKg] = useState('');
   const [pesoCarcacaKg, setPesoCarcacaKg] = useState('');
   const [precoArroba, setPrecoArroba] = useState('');
@@ -50,6 +55,10 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Prop
 
   useEffect(() => {
     if (lancamento) {
+      setData(lancamento.data ?? '');
+      setQuantidade(String(lancamento.quantidade ?? ''));
+      setCategoria(lancamento.categoria as Categoria);
+      setLocal(lancamento.tipo === 'compra' ? (lancamento.fazendaOrigem ?? '') : (lancamento.fazendaDestino ?? ''));
       setPesoMedioKg(lancamento.pesoMedioKg?.toString() ?? '');
       setPesoCarcacaKg(lancamento.pesoCarcacaKg?.toString() ?? '');
       setPrecoArroba(lancamento.precoArroba?.toString() ?? '');
@@ -67,11 +76,18 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Prop
   }, [lancamento]);
 
   const isAbate = lancamento?.tipo === 'abate';
-  const isCompraVenda = lancamento?.tipo === 'compra' || lancamento?.tipo === 'venda';
+
+  const quantidadeNum = useMemo(() => {
+    const parsed = Number(quantidade);
+    if (isNaN(parsed) || parsed <= 0) return 0;
+    return Math.floor(parsed);
+  }, [quantidade]);
+
+  const localLabel = lancamento?.tipo === 'compra' ? 'Origem' : 'Destino';
 
   const calc = useMemo(() => {
     if (!lancamento) return null;
-    const qtd = lancamento.quantidade;
+    const qtd = quantidadeNum;
     const pesoVivo = num(pesoMedioKg) ?? 0;
     const pesoCarcaca = num(pesoCarcacaKg) ?? 0;
     const preco = num(precoArroba) ?? 0;
@@ -90,16 +106,13 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Prop
     const pesoTotalArrobas = pesoArroba * qtd;
     const valorBruto = pesoTotalArrobas * preco;
 
-    let totalAcrescimos = 0;
-    let totalDescontos = 0;
+    const totalAcrescimos = isAbate
+      ? (num(bonusPrecoce) ?? 0) + (num(bonusQualidade) ?? 0) + (num(bonusListaTrace) ?? 0)
+      : (num(acrescimos) ?? 0);
 
-    if (isAbate) {
-      totalAcrescimos = (num(bonusPrecoce) ?? 0) + (num(bonusQualidade) ?? 0) + (num(bonusListaTrace) ?? 0);
-      totalDescontos = (num(descontoQualidade) ?? 0) + (num(descontoFunrural) ?? 0) + (num(outrosDescontos) ?? 0);
-    } else {
-      totalAcrescimos = num(acrescimos) ?? 0;
-      totalDescontos = num(deducoes) ?? 0;
-    }
+    const totalDescontos = isAbate
+      ? (num(descontoQualidade) ?? 0) + (num(descontoFunrural) ?? 0) + (num(outrosDescontos) ?? 0)
+      : (num(deducoes) ?? 0);
 
     const valorTotal = valorBruto + totalAcrescimos - totalDescontos;
     const liqArroba = pesoTotalArrobas > 0 ? valorTotal / pesoTotalArrobas : 0;
@@ -107,24 +120,39 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Prop
     const liqKgVivo = pesoTotalKg > 0 ? valorTotal / pesoTotalKg : 0;
 
     return {
-      pesoArroba, pesoTotalKg, pesoTotalArrobas, rendimentoCarcaca,
-      valorBruto, totalAcrescimos, totalDescontos, valorTotal,
-      liqArroba, liqCabeca, liqKgVivo,
+      pesoArroba,
+      pesoTotalKg,
+      pesoTotalArrobas,
+      rendimentoCarcaca,
+      valorBruto,
+      totalAcrescimos,
+      totalDescontos,
+      valorTotal,
+      liqArroba,
+      liqCabeca,
+      liqKgVivo,
     };
-  }, [lancamento, pesoMedioKg, pesoCarcacaKg, precoArroba, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, descontoFunrural, outrosDescontos, acrescimos, deducoes, isAbate]);
+  }, [lancamento, quantidadeNum, pesoMedioKg, pesoCarcacaKg, precoArroba, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, descontoFunrural, outrosDescontos, acrescimos, deducoes, isAbate]);
 
   if (!lancamento || !calc) return null;
 
-  const cat = CATEGORIAS.find(c => c.value === lancamento.categoria)?.label ?? lancamento.categoria;
   const fazendaNome = fazendaAtual?.nome ?? '';
 
   const handleSave = () => {
+    if (!data || quantidadeNum <= 0) return;
+
     const dados: Partial<Omit<Lancamento, 'id'>> = {
+      data,
+      quantidade: quantidadeNum,
+      categoria,
       pesoMedioKg: num(pesoMedioKg) ?? null as any,
       precoArroba: num(precoArroba) ?? null as any,
       notaFiscal: notaFiscal || null as any,
       tipoPeso,
+      fazendaOrigem: lancamento.tipo === 'compra' ? (local || undefined) : undefined,
+      fazendaDestino: lancamento.tipo !== 'compra' ? (local || undefined) : undefined,
     };
+
     if (isAbate) {
       Object.assign(dados, {
         pesoCarcacaKg: num(pesoCarcacaKg) ?? null,
@@ -141,7 +169,13 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Prop
         deducoes: num(deducoes) ?? null,
       });
     }
+
     onSave(lancamento.id, dados);
+    onClose();
+  };
+
+  const handleDelete = () => {
+    onDelete(lancamento.id);
     onClose();
   };
 
@@ -154,21 +188,45 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Prop
           </DialogTitle>
         </DialogHeader>
 
-        {/* Info fixa */}
-        <div className="grid grid-cols-2 gap-2 text-sm bg-muted/50 rounded-lg p-3">
-          {fazendaNome && (
-            <div className="col-span-2"><span className="text-muted-foreground">Fazenda:</span> <strong>{fazendaNome}</strong></div>
-          )}
-          <div><span className="text-muted-foreground">Data:</span> <strong>{format(parseISO(lancamento.data), 'dd/MM/yyyy')}</strong></div>
-          <div><span className="text-muted-foreground">Qtd:</span> <strong>{lancamento.quantidade} cab</strong></div>
-          <div><span className="text-muted-foreground">Categoria:</span> <strong>{cat}</strong></div>
-          <div><span className="text-muted-foreground">{isAbate || lancamento.tipo === 'venda' ? 'Destino' : 'Origem'}:</span> <strong>{(isAbate || lancamento.tipo === 'venda' ? lancamento.fazendaDestino : lancamento.fazendaOrigem) || '-'}</strong></div>
-        </div>
-
-        <Separator />
-
-        {/* Campos editáveis */}
         <div className="space-y-3">
+          {fazendaNome && (
+            <div className="text-sm bg-muted/50 rounded-lg p-3">
+              <span className="text-muted-foreground">Fazenda:</span> <strong>{fazendaNome}</strong>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Data</Label>
+              <Input type="date" value={data} onChange={e => setData(e.target.value)} className="h-9" />
+            </div>
+            <div>
+              <Label className="text-xs">Quantidade</Label>
+              <Input type="number" min="1" value={quantidade} onChange={e => setQuantidade(e.target.value)} className="h-9" />
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-xs">Categoria</Label>
+            <Select value={categoria} onValueChange={v => setCategoria(v as Categoria)}>
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORIAS.map(c => (
+                  <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label className="text-xs">{localLabel}</Label>
+            <Input value={local} onChange={e => setLocal(e.target.value)} placeholder={`Informe ${localLabel.toLowerCase()}`} className="h-9" />
+          </div>
+
+          <Separator />
+
           <h4 className="text-xs font-bold text-muted-foreground uppercase">Nota Fiscal</h4>
           <Input value={notaFiscal} onChange={e => setNotaFiscal(e.target.value)} placeholder="Nº da nota fiscal" className="h-9" />
 
@@ -267,7 +325,6 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Prop
 
         <Separator />
 
-        {/* Campos calculados automaticamente */}
         <div className="space-y-2">
           <h4 className="text-xs font-bold text-muted-foreground uppercase">Valores Calculados</h4>
           <div className="bg-muted/30 rounded-lg p-3 space-y-1.5 text-sm">
@@ -297,13 +354,13 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Prop
               <span>R$ {fmt(calc.valorBruto)}</span>
             </div>
             {calc.totalAcrescimos > 0 && (
-              <div className="flex justify-between text-green-600">
+              <div className="flex justify-between text-success">
                 <span>+ Acréscimos/Bônus</span>
                 <span>R$ {fmt(calc.totalAcrescimos)}</span>
               </div>
             )}
             {calc.totalDescontos > 0 && (
-              <div className="flex justify-between text-red-500">
+              <div className="flex justify-between text-destructive">
                 <span>- Descontos</span>
                 <span>R$ {fmt(calc.totalDescontos)}</span>
               </div>
@@ -331,9 +388,32 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Prop
         </div>
 
         <div className="flex gap-2">
+          <Button variant="destructive" size="icon" onClick={handleDelete} aria-label="Excluir lançamento">
+            <Trash2 className="h-4 w-4" />
+          </Button>
           <Button onClick={handleSave} className="flex-1">Salvar</Button>
           <LancamentoShareButtons
-            lancamento={{...lancamento, pesoMedioKg: num(pesoMedioKg), pesoCarcacaKg: num(pesoCarcacaKg), precoArroba: num(precoArroba), bonusPrecoce: num(bonusPrecoce), bonusQualidade: num(bonusQualidade), bonusListaTrace: num(bonusListaTrace), descontoQualidade: num(descontoQualidade), descontoFunrural: num(descontoFunrural), outrosDescontos: num(outrosDescontos), acrescimos: num(acrescimos), deducoes: num(deducoes), notaFiscal, tipoPeso}}
+            lancamento={{
+              ...lancamento,
+              data,
+              quantidade: quantidadeNum || lancamento.quantidade,
+              categoria,
+              fazendaOrigem: lancamento.tipo === 'compra' ? local : lancamento.fazendaOrigem,
+              fazendaDestino: lancamento.tipo !== 'compra' ? local : lancamento.fazendaDestino,
+              pesoMedioKg: num(pesoMedioKg),
+              pesoCarcacaKg: num(pesoCarcacaKg),
+              precoArroba: num(precoArroba),
+              bonusPrecoce: num(bonusPrecoce),
+              bonusQualidade: num(bonusQualidade),
+              bonusListaTrace: num(bonusListaTrace),
+              descontoQualidade: num(descontoQualidade),
+              descontoFunrural: num(descontoFunrural),
+              outrosDescontos: num(outrosDescontos),
+              acrescimos: num(acrescimos),
+              deducoes: num(deducoes),
+              notaFiscal,
+              tipoPeso,
+            }}
             fazendaNome={fazendaNome}
           />
         </div>

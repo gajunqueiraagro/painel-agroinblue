@@ -273,6 +273,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover }: Props) {
         open={!!editando}
         onClose={() => setEditando(null)}
         onSave={onEditar}
+        onDelete={onRemover}
       />
     </div>
   );
