@@ -172,7 +172,7 @@ export function ResumoTab({ lancamentos, saldosIniciais }: Props) {
         </div>
       )}
 
-      {filtrados.length === 0 && saldoInicialTotal === 0 && (
+      {filtrados.length === 0 && saldoInicialPeriodo === 0 && (
         <div className="text-center py-10">
           <p className="text-muted-foreground text-lg font-semibold">Nenhum lançamento neste período</p>
           <p className="text-muted-foreground text-sm mt-1">Toque em "Lançar" para começar</p>
