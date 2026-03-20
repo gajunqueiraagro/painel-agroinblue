@@ -132,7 +132,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover }
     });
   }, [lancamentos, anoFiltro, mesFiltro]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const lancamentoDetalhe = detalheId ? lancamentos.find(l => l.id === detalheId) : null;
+  const campos = useMemo(() => getCamposFazenda(tipo, nomeFazenda), [tipo, nomeFazenda]);
+
     e.preventDefault();
     if (!quantidade || Number(quantidade) <= 0) return;
 
