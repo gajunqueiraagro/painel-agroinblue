@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { parseISO, format } from 'date-fns';
 import { DollarSign, Pencil } from 'lucide-react';
 import { FinanceiroEditDialog } from '@/components/FinanceiroEditDialog';
+import { FinanceiroExportMenu } from '@/components/FinanceiroExportMenu';
 
 interface Props {
   lancamentos: Lancamento[];
