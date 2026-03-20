@@ -35,7 +35,7 @@ const Index = () => {
       />
 
       {activeTab === 'resumo' && <ResumoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
-      {activeTab === 'movimentacao' && <MovimentacaoTab lancamentos={lancamentos} />}
+      {activeTab === 'movimentacao' && <MovimentacaoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
       {activeTab === 'lancamentos' && (
         <LancamentosTab
           lancamentos={lancamentos}
