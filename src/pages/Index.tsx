@@ -5,6 +5,8 @@ import { ResumoTab } from './ResumoTab';
 import { MovimentacaoTab } from './MovimentacaoTab';
 import { LancamentosTab } from './LancamentosTab';
 import { EvolucaoTab } from './EvolucaoTab';
+import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
+
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { useLancamentos } from '@/hooks/useLancamentos';
 
@@ -12,7 +14,9 @@ const TITLES: Record<TabId, string> = {
   resumo: 'Controle de Rebanho',
   movimentacao: 'Fluxo Mensal',
   lancamentos: 'Lançamentos',
-  evolucao: 'Evolução por Categoria',
+  evolucao: 'Categorias por Mês',
+  evolucao_categoria: 'Evolução por Categoria',
+
 };
 
 const Index = () => {
@@ -41,6 +45,7 @@ const Index = () => {
         />
       )}
       {activeTab === 'evolucao' && <EvolucaoTab lancamentos={lancamentos} />}
+      {activeTab === 'evolucao_categoria' && <EvolucaoCategoriaTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
 
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>

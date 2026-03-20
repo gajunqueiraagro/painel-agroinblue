@@ -1,7 +1,7 @@
-import { BarChart3, ArrowLeftRight, PlusCircle, LayoutGrid } from 'lucide-react';
+import { BarChart3, ArrowLeftRight, PlusCircle, LayoutGrid, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'evolucao';
+export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'evolucao' | 'evolucao_categoria';
 
 interface BottomNavProps {
   activeTab: TabId;
@@ -12,7 +12,9 @@ const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
   { id: 'resumo', label: 'Resumo', icon: BarChart3 },
   { id: 'movimentacao', label: 'Fluxo', icon: ArrowLeftRight },
   { id: 'lancamentos', label: 'Lançar', icon: PlusCircle },
-  { id: 'evolucao', label: 'Categorias', icon: LayoutGrid },
+  { id: 'evolucao', label: 'Cat/Mês', icon: LayoutGrid },
+  { id: 'evolucao_categoria', label: 'Evolução', icon: TrendingUp },
+
 ];
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
