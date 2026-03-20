@@ -200,15 +200,15 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
   currentY += 12;
   if (fazendaNome) {
     doc.setFontSize(11);
-    doc.text(fazendaNome, pageW / 2, subtitleY, { align: 'center' });
-    subtitleY += 7;
+    doc.text(fazendaNome, pageW / 2, currentY, { align: 'center' });
+    currentY += 7;
   }
 
   const totalQtd = lancamentos.reduce((s, l) => s + l.quantidade, 0);
   doc.setFontSize(10);
-  doc.text(`${lancamentos.length} registros | ${totalQtd} cabeças`, pageW / 2, subtitleY, { align: 'center' });
+  doc.text(`${lancamentos.length} registros | ${totalQtd} cabeças`, pageW / 2, currentY, { align: 'center' });
 
-  const startY = subtitleY + 4;
+  const startY = currentY + 4;
 
   if (subAba === 'abate') {
     const head = [['Data', 'NF', 'Qtd', 'Categoria', 'Destino', 'Rend.', 'P.@', 'R$/@', 'Total', 'Líq/@', 'Líq/Cab']];
