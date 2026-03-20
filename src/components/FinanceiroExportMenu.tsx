@@ -245,13 +245,20 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
   doc.save(`financeiro_${subAba}_${ano}.pdf`);
 }
 
-function gerarPDFIndividual(l: Lancamento, fazendaNome?: string) {
+async function gerarPDFIndividual(l: Lancamento, fazendaNome?: string) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
   const tipoLabel = l.tipo === 'abate' ? 'Abate' : l.tipo === 'compra' ? 'Compra' : 'Venda em Pé';
 
+  let currentY = 5;
+  try {
+    const logoData = await loadLogoBase64();
+    currentY = addLogoToDoc(doc, logoData, currentY, 105);
+  } catch { /* skip logo if fails */ }
+
   doc.setFontSize(16);
-  doc.text(`Resumo de ${tipoLabel}`, 105, 20, { align: 'center' });
+  doc.text(`Resumo de ${tipoLabel}`, 105, currentY + 5, { align: 'center' });
+  const infoStartY = currentY + 12;
 
   const info: string[][] = [];
   if (fazendaNome) info.push(['Fazenda', fazendaNome]);
