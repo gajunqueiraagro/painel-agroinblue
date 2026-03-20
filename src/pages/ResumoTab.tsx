@@ -86,23 +86,39 @@ export function ResumoTab({ lancamentos, saldosIniciais }: Props) {
   const saldo = saldoInicialPeriodo + totalEntradas - totalSaidas;
 
   const porCategoria = CATEGORIAS.map(cat => {
-    const saldoIni = saldosIniciais
+    const saldoIniAno = saldosIniciais
       .filter(s => s.ano === Number(anoFiltro) && s.categoria === cat.value)
       .reduce((sum, s) => sum + s.quantidade, 0);
+    // Acumulado de meses anteriores por categoria
+    let saldoIniCat = saldoIniAno;
+    if (mesFiltro !== 'todos') {
+      const mesNum = Number(mesFiltro);
+      const anteriores = lancamentos.filter(l => {
+        try {
+          const d = parseISO(l.data);
+          return format(d, 'yyyy') === anoFiltro && Number(format(d, 'MM')) < mesNum;
+        } catch { return false; }
+      });
+      anteriores.forEach(l => {
+        if (l.categoria === cat.value && isEntrada(l.tipo)) saldoIniCat += l.quantidade;
+        if (l.categoria === cat.value && !isEntrada(l.tipo) && !isReclassificacao(l.tipo)) saldoIniCat -= l.quantidade;
+        if (l.tipo === 'reclassificacao' && l.categoria === cat.value) saldoIniCat -= l.quantidade;
+        if (l.tipo === 'reclassificacao' && l.categoriaDestino === cat.value) saldoIniCat += l.quantidade;
+      });
+    }
     const entradas = filtrados
       .filter(l => l.categoria === cat.value && isEntrada(l.tipo))
       .reduce((s, l) => s + l.quantidade, 0);
     const saidas = filtrados
       .filter(l => l.categoria === cat.value && !isEntrada(l.tipo) && !isReclassificacao(l.tipo))
       .reduce((s, l) => s + l.quantidade, 0);
-    // Reclassificações: saem da categoria origem, entram na categoria destino
     const reclassSaida = filtrados
       .filter(l => l.tipo === 'reclassificacao' && l.categoria === cat.value)
       .reduce((s, l) => s + l.quantidade, 0);
     const reclassEntrada = filtrados
       .filter(l => l.tipo === 'reclassificacao' && l.categoriaDestino === cat.value)
       .reduce((s, l) => s + l.quantidade, 0);
-    return { ...cat, saldo: saldoIni + entradas - saidas - reclassSaida + reclassEntrada };
+    return { ...cat, saldo: saldoIniCat + entradas - saidas - reclassSaida + reclassEntrada };
   }).filter(c => c.saldo !== 0);
 
   return (
