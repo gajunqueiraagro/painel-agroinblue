@@ -176,6 +176,8 @@ export function useLancamentos() {
     if (dados.acrescimos !== undefined) update.acrescimos = dados.acrescimos;
     if (dados.deducoes !== undefined) update.deducoes = dados.deducoes;
     if (dados.valorTotal !== undefined) update.valor_total = dados.valorTotal;
+    if (dados.notaFiscal !== undefined) update.nota_fiscal = dados.notaFiscal;
+    if (dados.tipoPeso !== undefined) update.tipo_peso = dados.tipoPeso;
 
     const { error } = await supabase.from('lancamentos').update(update).eq('id', id);
     if (!error) {
