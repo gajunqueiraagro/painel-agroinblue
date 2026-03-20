@@ -6,6 +6,7 @@ import { parseISO, format } from 'date-fns';
 import { DollarSign, Pencil } from 'lucide-react';
 import { FinanceiroEditDialog } from '@/components/FinanceiroEditDialog';
 import { FinanceiroExportMenu } from '@/components/FinanceiroExportMenu';
+import { useFazenda } from '@/contexts/FazendaContext';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -165,6 +166,7 @@ function CompraVendaTable({ lancamentos, onEdit, tipo }: { lancamentos: Lancamen
 }
 
 export function FinanceiroTab({ lancamentos, onEditar }: Props) {
+  const { fazendaAtual } = useFazenda();
   const [subAba, setSubAba] = useState<SubAba>('abate');
   const [editando, setEditando] = useState<Lancamento | null>(null);
 
@@ -224,7 +226,7 @@ export function FinanceiroTab({ lancamentos, onEditar }: Props) {
           <p className="text-xs text-muted-foreground font-semibold">{filtrados.length} registros</p>
           <p className="text-sm font-bold text-foreground">{filtrados.reduce((s, l) => s + l.quantidade, 0)} cabeças</p>
         </div>
-        <FinanceiroExportMenu lancamentos={filtrados} subAba={subAba} ano={anoFiltro} />
+        <FinanceiroExportMenu lancamentos={filtrados} subAba={subAba} ano={anoFiltro} fazendaNome={fazendaAtual?.nome} />
       </div>
 
       <div className="bg-card rounded-lg shadow-sm border overflow-hidden">

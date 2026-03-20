@@ -70,6 +70,8 @@ export interface Lancamento {
   acrescimos?: number;
   deducoes?: number;
   valorTotal?: number;
+  notaFiscal?: string;
+  tipoPeso?: 'vivo' | 'morto';
 }
 
 export interface SaldoInicial {
