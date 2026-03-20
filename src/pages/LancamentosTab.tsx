@@ -67,7 +67,7 @@ function getCamposFazenda(tipo: TipoMovimentacao, nomeFazenda: string) {
     case 'consumo':
       return {
         origem: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Origem' },
-        destino: { show: false },
+        destino: { show: true, auto: false, label: 'Motivo', placeholder: 'Ex: Consumo interno' },
       };
     case 'morte':
       return {
