@@ -44,7 +44,7 @@ const Index = () => {
           onRemover={removerLancamento}
         />
       )}
-      {activeTab === 'evolucao' && <EvolucaoTab lancamentos={lancamentos} />}
+      {activeTab === 'evolucao' && <EvolucaoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
       {activeTab === 'evolucao_categoria' && <EvolucaoCategoriaTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
 
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />

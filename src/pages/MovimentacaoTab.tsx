@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Lancamento, isEntrada } from '@/types/cattle';
+import { Lancamento, SaldoInicial, isEntrada, isReclassificacao } from '@/types/cattle';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, addMonths, subMonths, isWithinInterval, parseISO } from 'date-fns';
+import { format, startOfMonth, endOfMonth, addMonths, subMonths, isWithinInterval, parseISO, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface Props {
   lancamentos: Lancamento[];
+  saldosIniciais: SaldoInicial[];
 }
 
 const MESES_LABEL = (d: Date) => format(d, 'MMMM yyyy', { locale: ptBR });
@@ -23,11 +24,12 @@ const FLUXO_CONFIG: { tipo: FluxoTipo; label: string; sinal: '+' | '-' }[] = [
   { tipo: 'morte', label: 'Mortes', sinal: '-' },
 ];
 
-export function MovimentacaoTab({ lancamentos }: Props) {
+export function MovimentacaoTab({ lancamentos, saldosIniciais }: Props) {
   const [mesAtual, setMesAtual] = useState(new Date());
 
   const inicio = startOfMonth(mesAtual);
   const fim = endOfMonth(mesAtual);
+  const anoAtual = format(mesAtual, 'yyyy');
 
   const lancamentosMes = lancamentos.filter(l => {
     try {
@@ -38,24 +40,36 @@ export function MovimentacaoTab({ lancamentos }: Props) {
     }
   });
 
-  const lancamentosAnteriores = lancamentos.filter(l => {
+  // Saldo inicial do ano (definido pelo usuário)
+  const saldoInicialAno = saldosIniciais
+    .filter(s => s.ano === Number(anoAtual))
+    .reduce((sum, s) => sum + s.quantidade, 0);
+
+  // Lançamentos anteriores ao mês selecionado MAS no mesmo ano
+  const inicioAno = parseISO(`${anoAtual}-01-01`);
+  const lancamentosAnterioresMes = lancamentos.filter(l => {
     try {
       const d = parseISO(l.data);
-      return d < inicio;
+      return d >= inicioAno && isBefore(d, inicio);
     } catch {
       return false;
     }
   });
 
-  const saldoInicial = lancamentosAnteriores.reduce((sum, l) => {
-    return sum + (isEntrada(l.tipo) ? l.quantidade : -l.quantidade);
-  }, 0);
+  const entradasAnt = lancamentosAnterioresMes
+    .filter(l => isEntrada(l.tipo))
+    .reduce((s, l) => s + l.quantidade, 0);
+  const saidasAnt = lancamentosAnterioresMes
+    .filter(l => !isEntrada(l.tipo) && !isReclassificacao(l.tipo))
+    .reduce((s, l) => s + l.quantidade, 0);
+
+  const saldoInicial = saldoInicialAno + entradasAnt - saidasAnt;
 
   const getTotal = (tipo: FluxoTipo) =>
     lancamentosMes.filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade, 0);
 
   const totalEntradas = lancamentosMes.filter(l => isEntrada(l.tipo)).reduce((s, l) => s + l.quantidade, 0);
-  const totalSaidas = lancamentosMes.filter(l => !isEntrada(l.tipo)).reduce((s, l) => s + l.quantidade, 0);
+  const totalSaidas = lancamentosMes.filter(l => !isEntrada(l.tipo) && !isReclassificacao(l.tipo)).reduce((s, l) => s + l.quantidade, 0);
   const saldoFinal = saldoInicial + totalEntradas - totalSaidas;
 
   return (
