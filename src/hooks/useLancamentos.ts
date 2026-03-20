@@ -49,6 +49,8 @@ export function useLancamentos() {
         acrescimos: (l as any).acrescimos ?? undefined,
         deducoes: (l as any).deducoes ?? undefined,
         valorTotal: (l as any).valor_total ?? undefined,
+        notaFiscal: (l as any).nota_fiscal ?? undefined,
+        tipoPeso: (l as any).tipo_peso ?? 'vivo',
       })));
     }
 
