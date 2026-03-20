@@ -233,6 +233,10 @@ export type Database = {
         Args: { _fazenda_id: string; _user_id: string }
         Returns: boolean
       }
+      shares_fazenda: {
+        Args: { _target_user_id: string; _viewer_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

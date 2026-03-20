@@ -1,0 +1,128 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  try {
+    // Verify caller is authenticated
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Não autorizado" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const anonKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY")!;
+
+    // Verify caller with anon client
+    const anonClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user: caller }, error: authError } = await anonClient.auth.getUser();
+    if (authError || !caller) {
+      return new Response(JSON.stringify({ error: "Não autorizado" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { email, senha, nome, fazenda_id, papel } = await req.json();
+
+    if (!email || !senha || !fazenda_id || !papel) {
+      return new Response(JSON.stringify({ error: "Campos obrigatórios: email, senha, fazenda_id, papel" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Verify caller is owner or gerente of the fazenda
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    
+    const { data: callerMembro } = await adminClient
+      .from("fazenda_membros")
+      .select("papel")
+      .eq("user_id", caller.id)
+      .eq("fazenda_id", fazenda_id)
+      .single();
+
+    if (!callerMembro || !["dono", "gerente"].includes(callerMembro.papel)) {
+      return new Response(JSON.stringify({ error: "Sem permissão para adicionar membros nesta fazenda" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Check if user already exists
+    const { data: existingUsers } = await adminClient.auth.admin.listUsers();
+    const existingUser = existingUsers?.users?.find((u) => u.email === email);
+
+    let userId: string;
+
+    if (existingUser) {
+      userId = existingUser.id;
+    } else {
+      // Create user
+      const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
+        email,
+        password: senha,
+        email_confirm: true,
+        user_metadata: { nome: nome || email },
+      });
+
+      if (createError) {
+        return new Response(JSON.stringify({ error: "Erro ao criar usuário: " + createError.message }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      userId = newUser.user.id;
+    }
+
+    // Check if already a member
+    const { data: existingMembro } = await adminClient
+      .from("fazenda_membros")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("fazenda_id", fazenda_id)
+      .single();
+
+    if (existingMembro) {
+      // Update papel
+      await adminClient
+        .from("fazenda_membros")
+        .update({ papel })
+        .eq("id", existingMembro.id);
+    } else {
+      // Insert membro
+      const { error: membroError } = await adminClient
+        .from("fazenda_membros")
+        .insert({ user_id: userId, fazenda_id, papel });
+
+      if (membroError) {
+        return new Response(JSON.stringify({ error: "Erro ao vincular: " + membroError.message }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true, user_id: userId }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});

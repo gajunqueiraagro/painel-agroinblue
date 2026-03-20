@@ -8,6 +8,7 @@ import { EvolucaoTab } from './EvolucaoTab';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import { FluxoAnualTab } from './FluxoAnualTab';
 import { FinanceiroTab } from './FinanceiroTab';
+import { AcessosTab } from './AcessosTab';
 
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { ExportMenu } from '@/components/ExportMenu';
@@ -24,6 +25,7 @@ const TITLES: Record<TabId, string> = {
   evolucao: 'Categorias por Mês',
   evolucao_categoria: 'Evolução por Categoria',
   fluxo_anual: 'Fluxo Anual',
+  acessos: 'Acessos',
 };
 
 const Index = () => {
@@ -32,7 +34,9 @@ const Index = () => {
   const { fazendaAtual, fazendas } = useFazenda();
   const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial } = useLancamentos();
 
+  const papel = fazendaAtual?.papel;
   const isDono = fazendaAtual?.owner_id === user?.id;
+  const isDonoOuGerente = isDono || papel === 'gerente';
 
   return (
     <div className="min-h-screen bg-background">
@@ -43,7 +47,7 @@ const Index = () => {
             {activeTab === 'resumo' && (
               <>
                 <ExportMenu lancamentos={lancamentos} saldosIniciais={saldosIniciais} />
-                {isDono && <SaldoInicialForm saldosIniciais={saldosIniciais} onSetSaldo={setSaldoInicial} />}
+                {isDonoOuGerente && <SaldoInicialForm saldosIniciais={saldosIniciais} onSetSaldo={setSaldoInicial} />}
               </>
             )}
             {fazendas.length > 1 && <FazendaSelector />}
@@ -65,6 +69,7 @@ const Index = () => {
       {activeTab === 'evolucao_categoria' && <EvolucaoCategoriaTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
       {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
       {activeTab === 'financeiro' && <FinanceiroTab lancamentos={lancamentos} onEditar={editarLancamento} />}
+      {activeTab === 'acessos' && <AcessosTab />}
 
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
