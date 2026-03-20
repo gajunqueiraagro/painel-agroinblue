@@ -184,15 +184,20 @@ function gerarTextoIndividual(l: Lancamento, fazendaNome?: string): string {
 }
 
 // ── PDF generation ──
-function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: string, fazendaNome?: string) {
+async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: string, fazendaNome?: string) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const titulo = SUB_ABA_LABELS[subAba];
 
-  doc.setFontSize(16);
-  doc.text(`${titulo} - ${ano}`, pageW / 2, 15, { align: 'center' });
+  let currentY = 5;
+  try {
+    const logoData = await loadLogoBase64();
+    currentY = addLogoToDoc(doc, logoData, currentY, pageW / 2);
+  } catch { /* skip logo if fails */ }
 
-  let subtitleY = 22;
+  doc.setFontSize(16);
+  doc.text(`${titulo} - ${ano}`, pageW / 2, currentY + 5, { align: 'center' });
+  currentY += 12;
   if (fazendaNome) {
     doc.setFontSize(11);
     doc.text(fazendaNome, pageW / 2, subtitleY, { align: 'center' });
