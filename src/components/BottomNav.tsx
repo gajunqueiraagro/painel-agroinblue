@@ -1,7 +1,7 @@
-import { BarChart3, ArrowLeftRight, PlusCircle, LayoutGrid, TrendingUp, CalendarRange } from 'lucide-react';
+import { BarChart3, ArrowLeftRight, PlusCircle, LayoutGrid, TrendingUp, CalendarRange, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'evolucao' | 'evolucao_categoria' | 'fluxo_anual';
+export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'financeiro' | 'evolucao' | 'evolucao_categoria' | 'fluxo_anual';
 
 interface BottomNavProps {
   activeTab: TabId;
@@ -12,6 +12,7 @@ const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
   { id: 'resumo', label: 'Resumo', icon: BarChart3 },
   { id: 'movimentacao', label: 'Fluxo', icon: ArrowLeftRight },
   { id: 'lancamentos', label: 'Lançar', icon: PlusCircle },
+  { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
   { id: 'evolucao', label: 'Cat/Mês', icon: LayoutGrid },
   { id: 'evolucao_categoria', label: 'Evolução', icon: TrendingUp },
   { id: 'fluxo_anual', label: 'Anual', icon: CalendarRange },
