@@ -1,4 +1,7 @@
 import { ReactNode } from 'react';
+import { LogOut } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/AuthContext';
 import logo from '@/assets/logo.png';
 
 interface HeaderProps {
@@ -7,6 +10,8 @@ interface HeaderProps {
 }
 
 export function Header({ title, rightAction }: HeaderProps) {
+  const { signOut } = useAuth();
+
   return (
     <header className="sticky top-0 z-40 bg-primary px-4 py-3 shadow-md">
       <div className="max-w-lg mx-auto flex items-center justify-between gap-3">
@@ -16,7 +21,18 @@ export function Header({ title, rightAction }: HeaderProps) {
             {title}
           </h1>
         </div>
-        {rightAction && <div>{rightAction}</div>}
+        <div className="flex items-center gap-2">
+          {rightAction}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={signOut}
+            className="text-primary-foreground hover:bg-primary/80"
+            title="Sair"
+          >
+            <LogOut className="h-5 w-5" />
+          </Button>
+        </div>
       </div>
     </header>
   );
