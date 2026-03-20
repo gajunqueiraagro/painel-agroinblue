@@ -84,6 +84,7 @@ export type Database = {
           fazenda_id: string
           fazenda_origem: string | null
           id: string
+          nota_fiscal: string | null
           observacao: string | null
           outros_descontos: number | null
           peso_carcaca_kg: number | null
@@ -93,6 +94,7 @@ export type Database = {
           preco_medio_cabeca: number | null
           quantidade: number
           tipo: string
+          tipo_peso: string | null
           updated_at: string
           valor_total: number | null
         }
@@ -112,6 +114,7 @@ export type Database = {
           fazenda_id: string
           fazenda_origem?: string | null
           id?: string
+          nota_fiscal?: string | null
           observacao?: string | null
           outros_descontos?: number | null
           peso_carcaca_kg?: number | null
@@ -121,6 +124,7 @@ export type Database = {
           preco_medio_cabeca?: number | null
           quantidade: number
           tipo: string
+          tipo_peso?: string | null
           updated_at?: string
           valor_total?: number | null
         }
@@ -140,6 +144,7 @@ export type Database = {
           fazenda_id?: string
           fazenda_origem?: string | null
           id?: string
+          nota_fiscal?: string | null
           observacao?: string | null
           outros_descontos?: number | null
           peso_carcaca_kg?: number | null
@@ -149,6 +154,7 @@ export type Database = {
           preco_medio_cabeca?: number | null
           quantidade?: number
           tipo?: string
+          tipo_peso?: string | null
           updated_at?: string
           valor_total?: number | null
         }
