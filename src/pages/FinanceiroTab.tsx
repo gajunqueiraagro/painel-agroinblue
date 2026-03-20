@@ -11,6 +11,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 interface Props {
   lancamentos: Lancamento[];
   onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
+  onRemover: (id: string) => void;
 }
 
 type SubAba = 'abate' | 'compra' | 'venda';
