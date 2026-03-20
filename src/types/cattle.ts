@@ -28,7 +28,6 @@ export type TipoMovimentacao = TipoEntrada | TipoSaida | 'reclassificacao';
 export const TIPOS_ENTRADA: { value: TipoEntrada; label: string; icon: string }[] = [
   { value: 'nascimento', label: 'Nascimento', icon: '🐄' },
   { value: 'compra', label: 'Compra', icon: '🛒' },
-  { value: 'transferencia_entrada', label: 'Transferência (entrada)', icon: '📥' },
 ];
 
 export const TIPOS_SAIDA: { value: TipoSaida; label: string; icon: string }[] = [
