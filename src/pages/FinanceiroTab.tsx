@@ -182,7 +182,7 @@ const MESES = [
   { value: '12', label: 'Dezembro' },
 ];
 
-export function FinanceiroTab({ lancamentos, onEditar }: Props) {
+export function FinanceiroTab({ lancamentos, onEditar, onRemover }: Props) {
   const { fazendaAtual } = useFazenda();
   const [subAba, setSubAba] = useState<SubAba>('abate');
   const [editando, setEditando] = useState<Lancamento | null>(null);
