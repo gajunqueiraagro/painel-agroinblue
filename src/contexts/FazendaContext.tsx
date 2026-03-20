@@ -69,15 +69,9 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
       .insert({ nome, owner_id: user.id })
       .select()
       .single();
-    if (error) { toast.error('Erro ao criar fazenda'); return null; }
+    if (error) { toast.error('Erro ao criar fazenda: ' + error.message); return null; }
 
-    // Add owner as membro
-    await supabase.from('fazenda_membros').insert({
-      fazenda_id: data.id,
-      user_id: user.id,
-      papel: 'dono',
-    });
-
+    // Trigger auto-adds owner as membro
     const fazenda = { ...data, papel: 'dono' };
     await loadFazendas();
     setFazendaAtual(fazenda);
