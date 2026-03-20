@@ -97,7 +97,21 @@ export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
   const totalSaldoInicial = CATEGORIAS.reduce((s, c) => s + (dados[c.value]?.saldoInicial || 0), 0);
 
   return (
-    <div className="p-4 max-w-4xl mx-auto animate-fade-in pb-20">
+    <div className="p-4 max-w-4xl mx-auto animate-fade-in pb-20 space-y-4">
+      {/* Filtro de ano */}
+      <div className="w-40">
+        <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+          <SelectTrigger className="touch-target text-base font-bold">
+            <SelectValue placeholder="Ano" />
+          </SelectTrigger>
+          <SelectContent>
+            {anosDisponiveis.map(a => (
+              <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
