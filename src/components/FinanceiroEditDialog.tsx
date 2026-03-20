@@ -297,7 +297,10 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave }: Prop
           </div>
         </div>
 
-        <Button onClick={handleSave} className="w-full">Salvar</Button>
+        <div className="flex gap-2">
+          <Button onClick={handleSave} className="flex-1">Salvar</Button>
+          <LancamentoShareButtons lancamento={{...lancamento, pesoMedioKg: num(pesoMedioKg), pesoCarcacaKg: num(pesoCarcacaKg), precoArroba: num(precoArroba), bonusPrecoce: num(bonusPrecoce), bonusQualidade: num(bonusQualidade), bonusListaTrace: num(bonusListaTrace), descontoQualidade: num(descontoQualidade), descontoFunrural: num(descontoFunrural), outrosDescontos: num(outrosDescontos), acrescimos: num(acrescimos), deducoes: num(deducoes)}} />
+        </div>
       </DialogContent>
     </Dialog>
   );
