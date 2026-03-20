@@ -38,6 +38,17 @@ export function useLancamentos() {
         pesoMedioArrobas: l.peso_medio_arrobas ?? undefined,
         precoMedioCabeca: l.preco_medio_cabeca ?? undefined,
         observacao: l.observacao ?? undefined,
+        precoArroba: (l as any).preco_arroba ?? undefined,
+        pesoCarcacaKg: (l as any).peso_carcaca_kg ?? undefined,
+        bonusPrecoce: (l as any).bonus_precoce ?? undefined,
+        bonusQualidade: (l as any).bonus_qualidade ?? undefined,
+        bonusListaTrace: (l as any).bonus_lista_trace ?? undefined,
+        descontoQualidade: (l as any).desconto_qualidade ?? undefined,
+        descontoFunrural: (l as any).desconto_funrural ?? undefined,
+        outrosDescontos: (l as any).outros_descontos ?? undefined,
+        acrescimos: (l as any).acrescimos ?? undefined,
+        deducoes: (l as any).deducoes ?? undefined,
+        valorTotal: (l as any).valor_total ?? undefined,
       })));
     }
 
@@ -149,6 +160,20 @@ export function useLancamentos() {
     if (dados.categoria !== undefined) update.categoria = dados.categoria;
     if (dados.categoriaDestino !== undefined) update.categoria_destino = dados.categoriaDestino;
     if (dados.observacao !== undefined) update.observacao = dados.observacao;
+    if (dados.pesoMedioKg !== undefined) update.peso_medio_kg = dados.pesoMedioKg;
+    if (dados.pesoMedioArrobas !== undefined) update.peso_medio_arrobas = dados.pesoMedioArrobas;
+    if (dados.precoMedioCabeca !== undefined) update.preco_medio_cabeca = dados.precoMedioCabeca;
+    if (dados.precoArroba !== undefined) update.preco_arroba = dados.precoArroba;
+    if (dados.pesoCarcacaKg !== undefined) update.peso_carcaca_kg = dados.pesoCarcacaKg;
+    if (dados.bonusPrecoce !== undefined) update.bonus_precoce = dados.bonusPrecoce;
+    if (dados.bonusQualidade !== undefined) update.bonus_qualidade = dados.bonusQualidade;
+    if (dados.bonusListaTrace !== undefined) update.bonus_lista_trace = dados.bonusListaTrace;
+    if (dados.descontoQualidade !== undefined) update.desconto_qualidade = dados.descontoQualidade;
+    if (dados.descontoFunrural !== undefined) update.desconto_funrural = dados.descontoFunrural;
+    if (dados.outrosDescontos !== undefined) update.outros_descontos = dados.outrosDescontos;
+    if (dados.acrescimos !== undefined) update.acrescimos = dados.acrescimos;
+    if (dados.deducoes !== undefined) update.deducoes = dados.deducoes;
+    if (dados.valorTotal !== undefined) update.valor_total = dados.valorTotal;
 
     const { error } = await supabase.from('lancamentos').update(update).eq('id', id);
     if (!error) {

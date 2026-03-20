@@ -69,55 +69,88 @@ export type Database = {
       }
       lancamentos: {
         Row: {
+          acrescimos: number | null
+          bonus_lista_trace: number | null
+          bonus_precoce: number | null
+          bonus_qualidade: number | null
           categoria: string
           categoria_destino: string | null
           created_at: string
           data: string
+          deducoes: number | null
+          desconto_funrural: number | null
+          desconto_qualidade: number | null
           fazenda_destino: string | null
           fazenda_id: string
           fazenda_origem: string | null
           id: string
           observacao: string | null
+          outros_descontos: number | null
+          peso_carcaca_kg: number | null
           peso_medio_arrobas: number | null
           peso_medio_kg: number | null
+          preco_arroba: number | null
           preco_medio_cabeca: number | null
           quantidade: number
           tipo: string
           updated_at: string
+          valor_total: number | null
         }
         Insert: {
+          acrescimos?: number | null
+          bonus_lista_trace?: number | null
+          bonus_precoce?: number | null
+          bonus_qualidade?: number | null
           categoria: string
           categoria_destino?: string | null
           created_at?: string
           data: string
+          deducoes?: number | null
+          desconto_funrural?: number | null
+          desconto_qualidade?: number | null
           fazenda_destino?: string | null
           fazenda_id: string
           fazenda_origem?: string | null
           id?: string
           observacao?: string | null
+          outros_descontos?: number | null
+          peso_carcaca_kg?: number | null
           peso_medio_arrobas?: number | null
           peso_medio_kg?: number | null
+          preco_arroba?: number | null
           preco_medio_cabeca?: number | null
           quantidade: number
           tipo: string
           updated_at?: string
+          valor_total?: number | null
         }
         Update: {
+          acrescimos?: number | null
+          bonus_lista_trace?: number | null
+          bonus_precoce?: number | null
+          bonus_qualidade?: number | null
           categoria?: string
           categoria_destino?: string | null
           created_at?: string
           data?: string
+          deducoes?: number | null
+          desconto_funrural?: number | null
+          desconto_qualidade?: number | null
           fazenda_destino?: string | null
           fazenda_id?: string
           fazenda_origem?: string | null
           id?: string
           observacao?: string | null
+          outros_descontos?: number | null
+          peso_carcaca_kg?: number | null
           peso_medio_arrobas?: number | null
           peso_medio_kg?: number | null
+          preco_arroba?: number | null
           preco_medio_cabeca?: number | null
           quantidade?: number
           tipo?: string
           updated_at?: string
+          valor_total?: number | null
         }
         Relationships: [
           {
