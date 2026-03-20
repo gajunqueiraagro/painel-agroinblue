@@ -161,6 +161,8 @@ export function useLancamentos() {
     if (dados.quantidade !== undefined) update.quantidade = dados.quantidade;
     if (dados.categoria !== undefined) update.categoria = dados.categoria;
     if (dados.categoriaDestino !== undefined) update.categoria_destino = dados.categoriaDestino;
+    if (dados.fazendaOrigem !== undefined) update.fazenda_origem = dados.fazendaOrigem;
+    if (dados.fazendaDestino !== undefined) update.fazenda_destino = dados.fazendaDestino;
     if (dados.observacao !== undefined) update.observacao = dados.observacao;
     if (dados.pesoMedioKg !== undefined) update.peso_medio_kg = dados.pesoMedioKg;
     if (dados.pesoMedioArrobas !== undefined) update.peso_medio_arrobas = dados.pesoMedioArrobas;
