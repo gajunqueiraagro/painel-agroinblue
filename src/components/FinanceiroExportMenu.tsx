@@ -7,6 +7,32 @@ import { parseISO, format } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
+import logoUrl from '@/assets/logo.png';
+
+// Load logo as base64 for jsPDF
+function loadLogoBase64(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = reject;
+    img.src = logoUrl;
+  });
+}
+
+function addLogoToDoc(doc: jsPDF, logoData: string, y: number, centerX: number) {
+  const logoH = 12;
+  const logoW = logoH * 2; // approximate aspect ratio
+  doc.addImage(logoData, 'PNG', centerX - logoW / 2, y, logoW, logoH);
+  return y + logoH + 3;
+}
 
 type SubAba = 'abate' | 'compra' | 'venda';
 
@@ -158,26 +184,31 @@ function gerarTextoIndividual(l: Lancamento, fazendaNome?: string): string {
 }
 
 // ── PDF generation ──
-function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: string, fazendaNome?: string) {
+async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: string, fazendaNome?: string) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const titulo = SUB_ABA_LABELS[subAba];
 
-  doc.setFontSize(16);
-  doc.text(`${titulo} - ${ano}`, pageW / 2, 15, { align: 'center' });
+  let currentY = 5;
+  try {
+    const logoData = await loadLogoBase64();
+    currentY = addLogoToDoc(doc, logoData, currentY, pageW / 2);
+  } catch { /* skip logo if fails */ }
 
-  let subtitleY = 22;
+  doc.setFontSize(16);
+  doc.text(`${titulo} - ${ano}`, pageW / 2, currentY + 5, { align: 'center' });
+  currentY += 12;
   if (fazendaNome) {
     doc.setFontSize(11);
-    doc.text(fazendaNome, pageW / 2, subtitleY, { align: 'center' });
-    subtitleY += 7;
+    doc.text(fazendaNome, pageW / 2, currentY, { align: 'center' });
+    currentY += 7;
   }
 
   const totalQtd = lancamentos.reduce((s, l) => s + l.quantidade, 0);
   doc.setFontSize(10);
-  doc.text(`${lancamentos.length} registros | ${totalQtd} cabeças`, pageW / 2, subtitleY, { align: 'center' });
+  doc.text(`${lancamentos.length} registros | ${totalQtd} cabeças`, pageW / 2, currentY, { align: 'center' });
 
-  const startY = subtitleY + 4;
+  const startY = currentY + 4;
 
   if (subAba === 'abate') {
     const head = [['Data', 'NF', 'Qtd', 'Categoria', 'Destino', 'Rend.', 'P.@', 'R$/@', 'Total', 'Líq/@', 'Líq/Cab']];
@@ -214,13 +245,20 @@ function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: string, 
   doc.save(`financeiro_${subAba}_${ano}.pdf`);
 }
 
-function gerarPDFIndividual(l: Lancamento, fazendaNome?: string) {
+async function gerarPDFIndividual(l: Lancamento, fazendaNome?: string) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
   const tipoLabel = l.tipo === 'abate' ? 'Abate' : l.tipo === 'compra' ? 'Compra' : 'Venda em Pé';
 
+  let currentY = 5;
+  try {
+    const logoData = await loadLogoBase64();
+    currentY = addLogoToDoc(doc, logoData, currentY, 105);
+  } catch { /* skip logo if fails */ }
+
   doc.setFontSize(16);
-  doc.text(`Resumo de ${tipoLabel}`, 105, 20, { align: 'center' });
+  doc.text(`Resumo de ${tipoLabel}`, 105, currentY + 5, { align: 'center' });
+  const infoStartY = currentY + 12;
 
   const info: string[][] = [];
   if (fazendaNome) info.push(['Fazenda', fazendaNome]);
@@ -241,7 +279,7 @@ function gerarPDFIndividual(l: Lancamento, fazendaNome?: string) {
     info.push(['Tipo de Peso', l.tipoPeso === 'morto' ? 'Peso Morto' : 'Peso Vivo']);
   }
 
-  autoTable(doc, { startY: 28, body: info, theme: 'plain', bodyStyles: { fontSize: 11 }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 50 } }, margin: { left: 20, right: 20 } });
+  autoTable(doc, { startY: infoStartY, body: info, theme: 'plain', bodyStyles: { fontSize: 11 }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 50 } }, margin: { left: 20, right: 20 } });
 
   let detalhes: string[][] = [];
   if (l.tipo === 'abate') {
@@ -318,7 +356,7 @@ export function FinanceiroExportMenu({ lancamentos, subAba, ano, fazendaNome }: 
           <DialogTitle>Exportar {SUB_ABA_LABELS[subAba]}</DialogTitle>
         </DialogHeader>
         <div className="space-y-2">
-          <Button className="w-full justify-start gap-2" variant="outline" onClick={() => { gerarPDFTabela(lancamentos, subAba, ano, fazendaNome); setOpen(false); toast.success('PDF exportado!'); }}>
+          <Button className="w-full justify-start gap-2" variant="outline" onClick={async () => { await gerarPDFTabela(lancamentos, subAba, ano, fazendaNome); setOpen(false); toast.success('PDF exportado!'); }}>
             <FileText className="h-5 w-5 text-destructive" />
             Exportar PDF
           </Button>
@@ -336,7 +374,7 @@ export function FinanceiroExportMenu({ lancamentos, subAba, ano, fazendaNome }: 
 export function LancamentoShareButtons({ lancamento, fazendaNome }: { lancamento: Lancamento; fazendaNome?: string }) {
   return (
     <div className="flex gap-2">
-      <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { gerarPDFIndividual(lancamento, fazendaNome); toast.success('PDF exportado!'); }}>
+      <Button variant="outline" size="sm" className="gap-1.5" onClick={async () => { await gerarPDFIndividual(lancamento, fazendaNome); toast.success('PDF exportado!'); }}>
         <FileText className="h-4 w-4 text-destructive" />
         PDF
       </Button>
