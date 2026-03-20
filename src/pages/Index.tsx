@@ -5,6 +5,8 @@ import { ResumoTab } from './ResumoTab';
 import { MovimentacaoTab } from './MovimentacaoTab';
 import { LancamentosTab } from './LancamentosTab';
 import { EvolucaoTab } from './EvolucaoTab';
+import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
+
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { useLancamentos } from '@/hooks/useLancamentos';
 
