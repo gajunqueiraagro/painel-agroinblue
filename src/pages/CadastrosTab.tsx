@@ -14,6 +14,7 @@ import logoUrl from '@/assets/logo.png';
 
 interface CadastroData {
   id?: string;
+  municipio: string;
   ie: string;
   proprietario_nome: string;
   cpf_cnpj: string;
@@ -29,7 +30,7 @@ interface CadastroData {
 }
 
 const EMPTY: CadastroData = {
-  ie: '', proprietario_nome: '', cpf_cnpj: '', endereco: '',
+  municipio: '', ie: '', proprietario_nome: '', cpf_cnpj: '', endereco: '',
   email: '', telefone: '', banco: '', pix: '',
   area_total: '', area_produtiva: '', inscricao_rural: '', roteiro: '',
 };
@@ -73,6 +74,7 @@ export function CadastrosTab() {
     if (row) {
       setData({
         id: row.id,
+        municipio: (row as any).municipio || '',
         ie: row.ie || '',
         proprietario_nome: row.proprietario_nome || '',
         cpf_cnpj: row.cpf_cnpj || '',
@@ -101,6 +103,7 @@ export function CadastrosTab() {
     setSaving(true);
     const payload = {
       fazenda_id: fazendaAtual.id,
+      municipio: data.municipio || null,
       ie: data.ie || null,
       proprietario_nome: data.proprietario_nome || null,
       cpf_cnpj: data.cpf_cnpj || null,
@@ -294,6 +297,7 @@ export function CadastrosTab() {
       y = drawLabeledRows(
         doc,
         [
+        ['Município', data.municipio],
         ['Fazenda', fazendaAtual?.nome || ''],
         ['IE', data.ie],
         ['Proprietário', data.proprietario_nome],
@@ -318,6 +322,7 @@ export function CadastrosTab() {
       doc.setFontSize(11);
 
       drawLabeledRows(doc, [
+        ['Município', data.municipio],
         ['Fazenda', fazendaAtual?.nome || ''],
         ['IE', data.ie],
         ['Proprietário', data.proprietario_nome],
@@ -339,9 +344,9 @@ export function CadastrosTab() {
     let text = '';
     const nome = fazendaAtual?.nome || '';
     if (type === 'roteiro') {
-      text = `*Roteiro para Embarque*\n\n*Fazenda:* ${nome}\n*IE:* ${data.ie || '—'}\n*Proprietário:* ${data.proprietario_nome || '—'}\n*Roteiro:* ${data.roteiro || '—'}`;
+      text = `*Roteiro para Embarque*\n\n*Município:* ${data.municipio || '—'}\n*Fazenda:* ${nome}\n*IE:* ${data.ie || '—'}\n*Proprietário:* ${data.proprietario_nome || '—'}\n*Roteiro:* ${data.roteiro || '—'}`;
     } else {
-      text = `*Dados para Cadastro*\n\n*Fazenda:* ${nome}\n*IE:* ${data.ie || '—'}\n*Proprietário:* ${data.proprietario_nome || '—'}\n*CPF/CNPJ:* ${data.cpf_cnpj || '—'}\n*Endereço:* ${data.endereco || '—'}\n*Email:* ${data.email || '—'}\n*Telefone:* ${data.telefone || '—'}`;
+      text = `*Dados para Cadastro*\n\n*Município:* ${data.municipio || '—'}\n*Fazenda:* ${nome}\n*IE:* ${data.ie || '—'}\n*Proprietário:* ${data.proprietario_nome || '—'}\n*CPF/CNPJ:* ${data.cpf_cnpj || '—'}\n*Endereço:* ${data.endereco || '—'}\n*Email:* ${data.email || '—'}\n*Telefone:* ${data.telefone || '—'}`;
     }
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
@@ -377,6 +382,7 @@ export function CadastrosTab() {
           <CardTitle className="text-base">Dados da Fazenda</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {field('Município', 'municipio')}
           {field('Inscrição Estadual (IE)', 'ie')}
           {field('Nome do Proprietário', 'proprietario_nome')}
           {field('CPF ou CNPJ', 'cpf_cnpj')}

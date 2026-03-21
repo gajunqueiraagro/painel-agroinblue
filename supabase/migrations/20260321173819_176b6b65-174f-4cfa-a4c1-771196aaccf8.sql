@@ -1,0 +1,1 @@
+ALTER TABLE public.fazenda_cadastros ADD COLUMN municipio text;
