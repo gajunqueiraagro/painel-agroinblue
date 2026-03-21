@@ -45,7 +45,7 @@ function isDesfrute(tipo: string): boolean {
 }
 
 function calcArrobas(l: Lancamento): number {
-  // Abate: usa peso real de arroba (pesoMedioArrobas ou pesoCarcacaKg/15)
+  // Abate: usa peso real de arroba direto (pesoMedioArrobas * qtd, ou pesoCarcacaKg/15 * qtd)
   if (l.tipo === 'abate') {
     if (l.pesoMedioArrobas && l.pesoMedioArrobas > 0) {
       return l.pesoMedioArrobas * l.quantidade;
@@ -53,17 +53,14 @@ function calcArrobas(l: Lancamento): number {
     if (l.pesoCarcacaKg && l.pesoCarcacaKg > 0) {
       return (l.pesoCarcacaKg / 15) * l.quantidade;
     }
-    if (l.pesoMedioKg && l.pesoMedioKg > 0) {
-      return (l.pesoMedioKg / 30) * l.quantidade;
-    }
     return 0;
   }
-  // Venda/Consumo: peso em kg / 30
+  // Venda/Consumo: usa pesoMedioArrobas se disponível, senão pesoMedioKg / 15
   if (l.pesoMedioArrobas && l.pesoMedioArrobas > 0) {
     return l.pesoMedioArrobas * l.quantidade;
   }
   if (l.pesoMedioKg && l.pesoMedioKg > 0) {
-    return (l.pesoMedioKg / 30) * l.quantidade;
+    return (l.pesoMedioKg / 15) * l.quantidade;
   }
   return 0;
 }
