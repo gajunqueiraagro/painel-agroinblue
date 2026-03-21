@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Lancamento, SaldoInicial, CATEGORIAS, Categoria, isEntrada, isReclassificacao } from '@/types/cattle';
+
+const TIPOS_DESFRUTE = ['abate', 'venda', 'consumo'];
 import { parseISO, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
@@ -128,6 +130,38 @@ export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange }: Props) 
           ))}
         </SelectContent>
       </Select>
+
+      {/* Summary boxes: Entradas, Saídas, Desfrute */}
+      {(() => {
+        const lancAno = lancamentos.filter(l => {
+          try { return format(parseISO(l.data), 'yyyy') === anoFiltro; } catch { return false; }
+        });
+        const entradas = lancAno.filter(l => isEntrada(l.tipo)).reduce((s, l) => s + l.quantidade, 0);
+        const saidas = lancAno.filter(l => !isEntrada(l.tipo) && !isReclassificacao(l.tipo)).reduce((s, l) => s + l.quantidade, 0);
+        const desfrute = lancAno.filter(l => TIPOS_DESFRUTE.includes(l.tipo)).reduce((s, l) => s + l.quantidade, 0);
+        return (
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
+              <TrendingUp className="h-5 w-5 mx-auto text-success mb-1" />
+              <p className="text-xs text-muted-foreground font-semibold">Entradas</p>
+              <p className="text-xl font-extrabold text-foreground">+{entradas}</p>
+            </div>
+            <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
+              <TrendingDown className="h-5 w-5 mx-auto text-destructive mb-1" />
+              <p className="text-xs text-muted-foreground font-semibold">Saídas</p>
+              <p className="text-xl font-extrabold text-foreground">-{saidas}</p>
+            </div>
+            <button
+              onClick={() => onTabChange('desfrute')}
+              className="bg-card rounded-lg p-3 text-center shadow-sm border hover:bg-accent transition-colors"
+            >
+              <TrendingUp className="h-5 w-5 mx-auto text-amber-500 mb-1" />
+              <p className="text-xs text-muted-foreground font-semibold">Desfrute</p>
+              <p className="text-xl font-extrabold text-foreground">{desfrute}</p>
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Line chart - Saldo mensal */}
       <div className="bg-card rounded-lg p-4 shadow-sm border">
