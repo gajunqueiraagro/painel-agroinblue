@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Lancamento, CATEGORIAS } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -12,14 +12,20 @@ interface Props {
   lancamentos: Lancamento[];
   onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
   onRemover: (id: string) => void;
+  subAbaInicial?: SubAba;
 }
 
-type SubAba = 'abate' | 'compra' | 'venda';
+export type SubAba = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
 
 const SUB_ABAS: { id: SubAba; label: string; icon: string }[] = [
-  { id: 'abate', label: 'Abates', icon: '🔪' },
+  { id: 'nascimento', label: 'Nasc.', icon: '🐄' },
   { id: 'compra', label: 'Compras', icon: '🛒' },
+  { id: 'transferencia_entrada', label: 'T.Ent.', icon: '📥' },
+  { id: 'abate', label: 'Abates', icon: '🔪' },
   { id: 'venda', label: 'Vendas', icon: '💰' },
+  { id: 'transferencia_saida', label: 'T.Saí.', icon: '📤' },
+  { id: 'consumo', label: 'Cons.', icon: '🍖' },
+  { id: 'morte', label: 'Mortes', icon: '💀' },
 ];
 
 function fmt(v?: number) {
@@ -251,10 +257,65 @@ const MESES = [
   { value: '12', label: 'Dezembro' },
 ];
 
-export function FinanceiroTab({ lancamentos, onEditar, onRemover }: Props) {
+function SimpleTable({ lancamentos, onEdit, tipoLabel }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; tipoLabel: string }) {
+  if (lancamentos.length === 0) return <p className="text-center text-muted-foreground py-6">Nenhum registro no período</p>;
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs border-collapse">
+        <thead>
+          <tr className="border-b bg-muted/50">
+            <th className="p-1.5 text-left font-bold">Data</th>
+            <th className="p-1.5 text-right font-bold">Qtd</th>
+            <th className="p-1.5 text-left font-bold">Cat.</th>
+            <th className="p-1.5 text-right font-bold">P.Vivo</th>
+            <th className="p-1.5 text-left font-bold">Obs.</th>
+            <th className="p-1.5 w-8"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {lancamentos.map(l => {
+            const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
+            return (
+              <tr key={l.id} className="border-b hover:bg-muted/30">
+                <td className="p-1.5 whitespace-nowrap">{format(parseISO(l.data), 'dd/MM/yy')}</td>
+                <td className="p-1.5 text-right font-bold">{l.quantidade}</td>
+                <td className="p-1.5">{cat}</td>
+                <td className="p-1.5 text-right">{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
+                <td className="p-1.5 truncate max-w-[100px]">{l.observacao || '-'}</td>
+                <td className="p-1.5">
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(l)}>
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+        {lancamentos.length > 1 && (
+          <tfoot>
+            <tr className="border-t-2 border-primary/40 bg-muted/30 font-bold">
+              <td className="p-1.5">TOTAL</td>
+              <td className="p-1.5 text-right">{lancamentos.reduce((s, l) => s + l.quantidade, 0)}</td>
+              <td className="p-1.5" colSpan={4}></td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
+  );
+}
+
+const FINANCIAL_TYPES: SubAba[] = ['abate', 'compra', 'venda'];
+
+export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial }: Props) {
   const { fazendaAtual } = useFazenda();
-  const [subAba, setSubAba] = useState<SubAba>('abate');
+  const [subAba, setSubAba] = useState<SubAba>(subAbaInicial || 'abate');
   const [editando, setEditando] = useState<Lancamento | null>(null);
+
+  useEffect(() => {
+    if (subAbaInicial) setSubAba(subAbaInicial);
+  }, [subAbaInicial]);
 
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
@@ -281,14 +342,16 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover }: Props) {
       .sort((a, b) => a.data.localeCompare(b.data));
   }, [lancamentos, anoFiltro, mesFiltro, subAba]);
 
+  const isFinancial = FINANCIAL_TYPES.includes(subAba);
+
   return (
     <div className="p-4 max-w-full mx-auto space-y-4 animate-fade-in pb-20">
-      <div className="grid grid-cols-3 gap-1 bg-muted rounded-lg p-1">
+      <div className="grid grid-cols-4 gap-1 bg-muted rounded-lg p-1">
         {SUB_ABAS.map(a => (
           <button
             key={a.id}
             onClick={() => setSubAba(a.id)}
-            className={`py-2 px-1 rounded-md text-xs font-bold transition-colors touch-target ${
+            className={`py-2 px-1 rounded-md text-[10px] font-bold transition-colors touch-target ${
               subAba === a.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'
             }`}
           >
@@ -326,14 +389,18 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover }: Props) {
           <p className="text-xs text-muted-foreground font-semibold">{filtrados.length} registros</p>
           <p className="text-sm font-bold text-foreground">{filtrados.reduce((s, l) => s + l.quantidade, 0)} cabeças</p>
         </div>
-        <FinanceiroExportMenu lancamentos={filtrados} subAba={subAba} ano={anoFiltro} fazendaNome={fazendaAtual?.nome} />
+        {isFinancial && (
+          <FinanceiroExportMenu lancamentos={filtrados} subAba={subAba as 'abate' | 'compra' | 'venda'} ano={anoFiltro} fazendaNome={fazendaAtual?.nome} />
+        )}
       </div>
 
       <div className="bg-card rounded-lg shadow-sm border overflow-hidden">
         {subAba === 'abate' ? (
           <AbateTable lancamentos={filtrados} onEdit={setEditando} />
-        ) : (
+        ) : subAba === 'compra' || subAba === 'venda' ? (
           <CompraVendaTable lancamentos={filtrados} onEdit={setEditando} tipo={subAba} />
+        ) : (
+          <SimpleTable lancamentos={filtrados} onEdit={setEditando} tipoLabel={SUB_ABAS.find(a => a.id === subAba)?.label || ''} />
         )}
       </div>
 

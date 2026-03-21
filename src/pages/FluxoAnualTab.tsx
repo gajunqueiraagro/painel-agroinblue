@@ -3,10 +3,12 @@ import { Lancamento, SaldoInicial, isEntrada, isReclassificacao } from '@/types/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { parseISO, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import type { SubAba } from './FinanceiroTab';
 
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
+  onNavigateToMovimentacao?: (subAba: SubAba) => void;
 }
 
 const MESES_COLS = [
@@ -37,7 +39,7 @@ const LINHAS: { tipo: FluxoTipo; label: string; sinal: '+' | '-' }[] = [
   { tipo: 'morte', label: 'Mortes', sinal: '-' },
 ];
 
-export function FluxoAnualTab({ lancamentos, saldosIniciais }: Props) {
+export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao }: Props) {
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
@@ -152,8 +154,12 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais }: Props) {
 
             {/* Linhas de movimentação */}
             {LINHAS.map((li, i) => (
-              <tr key={li.tipo} className={i % 2 === 0 ? '' : 'bg-muted/30'}>
-                <td className={`px-2 py-1.5 font-bold text-foreground sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
+              <tr
+                key={li.tipo}
+                className={`${i % 2 === 0 ? '' : 'bg-muted/30'} ${onNavigateToMovimentacao ? 'cursor-pointer hover:bg-accent/50' : ''}`}
+                onClick={() => onNavigateToMovimentacao?.(li.tipo as SubAba)}
+              >
+                <td className={`px-2 py-1.5 font-bold text-foreground sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'} ${onNavigateToMovimentacao ? 'underline decoration-dotted' : ''}`}>
                   {li.sinal === '+' ? '➕' : '➖'} {li.label}
                 </td>
                 {MESES_COLS.map(m => {

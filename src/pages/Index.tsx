@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { BottomNav, TabId } from '@/components/BottomNav';
 import { Header } from '@/components/Header';
 import { ResumoTab } from './ResumoTab';
@@ -7,7 +7,7 @@ import { LancamentosTab } from './LancamentosTab';
 import { EvolucaoTab } from './EvolucaoTab';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import { FluxoAnualTab } from './FluxoAnualTab';
-import { FinanceiroTab } from './FinanceiroTab';
+import { FinanceiroTab, type SubAba } from './FinanceiroTab';
 import { AcessosTab } from './AcessosTab';
 import { AnaliseTab } from './AnaliseTab';
 import { AnaliseEntradasTab } from './AnaliseEntradasTab';
@@ -25,7 +25,7 @@ const TITLES: Record<TabId, string> = {
   resumo: 'Controle de Rebanho',
   movimentacao: 'Fluxo Mensal',
   lancamentos: 'Lançamentos',
-  financeiro: 'Financeiro',
+  financeiro: 'Movimentações',
   evolucao: 'Categorias por Mês',
   evolucao_categoria: 'Evolução por Categoria',
   fluxo_anual: 'Fluxo Anual',
@@ -38,6 +38,7 @@ const TITLES: Record<TabId, string> = {
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState<TabId>('resumo');
+  const [subAbaFinanceiro, setSubAbaFinanceiro] = useState<SubAba | undefined>(undefined);
   const { user } = useAuth();
   const { fazendaAtual, fazendas } = useFazenda();
   const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial } = useLancamentos();
@@ -45,6 +46,16 @@ const Index = () => {
   const papel = fazendaAtual?.papel;
   const isDono = fazendaAtual?.owner_id === user?.id;
   const isDonoOuGerente = isDono || papel === 'gerente';
+
+  const navigateToMovimentacao = useCallback((subAba: SubAba) => {
+    setSubAbaFinanceiro(subAba);
+    setActiveTab('financeiro');
+  }, []);
+
+  const handleTabChange = useCallback((tab: TabId) => {
+    if (tab !== 'financeiro') setSubAbaFinanceiro(undefined);
+    setActiveTab(tab);
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -63,7 +74,7 @@ const Index = () => {
         }
       />
 
-      {activeTab === 'resumo' && <ResumoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={setActiveTab} />}
+      {activeTab === 'resumo' && <ResumoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
       {activeTab === 'movimentacao' && <MovimentacaoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
       {activeTab === 'lancamentos' && (
         <LancamentosTab
@@ -75,15 +86,15 @@ const Index = () => {
       )}
       {activeTab === 'evolucao' && <EvolucaoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
       {activeTab === 'evolucao_categoria' && <EvolucaoCategoriaTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
-      {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
-      {activeTab === 'financeiro' && <FinanceiroTab lancamentos={lancamentos} onEditar={editarLancamento} onRemover={removerLancamento} />}
+      {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} />}
+      {activeTab === 'financeiro' && <FinanceiroTab lancamentos={lancamentos} onEditar={editarLancamento} onRemover={removerLancamento} subAbaInicial={subAbaFinanceiro} />}
       {activeTab === 'acessos' && <AcessosTab />}
-      {activeTab === 'analise' && <AnaliseTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={setActiveTab} />}
-      {activeTab === 'analise_entradas' && <AnaliseEntradasTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={setActiveTab} />}
-      {activeTab === 'analise_saidas' && <AnaliseSaidasTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={setActiveTab} />}
-      {activeTab === 'desfrute' && <DesfrunteTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={setActiveTab} />}
+      {activeTab === 'analise' && <AnaliseTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
+      {activeTab === 'analise_entradas' && <AnaliseEntradasTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
+      {activeTab === 'analise_saidas' && <AnaliseSaidasTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
+      {activeTab === 'desfrute' && <DesfrunteTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
 
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
   );
 };
