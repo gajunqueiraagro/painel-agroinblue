@@ -14,6 +14,7 @@ import { AnaliseEntradasTab } from './AnaliseEntradasTab';
 import { AnaliseSaidasTab } from './AnaliseSaidasTab';
 import { DesfrunteTab } from './DesfrunteTab';
 import { CadastrosTab } from './CadastrosTab';
+import { ChuvasTab } from './ChuvasTab';
 
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { ExportMenu } from '@/components/ExportMenu';
@@ -38,6 +39,7 @@ const TITLES: Record<TabId, string> = {
   analise_saidas: 'Análise de Saídas',
   desfrute: 'Desfrute',
   cadastros: 'Cadastros',
+  chuvas: 'Chuvas',
 };
 
 const Index = () => {
@@ -108,6 +110,7 @@ const Index = () => {
       {activeTab === 'analise_saidas' && <AnaliseSaidasTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
       {activeTab === 'desfrute' && <DesfrunteTab lancamentos={isGlobal ? lancamentosVisiveis : lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} isGlobal={isGlobal} />}
       {activeTab === 'cadastros' && <CadastrosTab />}
+      {activeTab === 'chuvas' && <ChuvasTab />}
 
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
