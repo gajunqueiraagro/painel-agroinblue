@@ -313,8 +313,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial 
   const [subAba, setSubAba] = useState<SubAba>(subAbaInicial || 'abate');
   const [editando, setEditando] = useState<Lancamento | null>(null);
 
-  // Sync subAbaInicial when it changes externally
-  useMemo(() => {
+  useEffect(() => {
     if (subAbaInicial) setSubAba(subAbaInicial);
   }, [subAbaInicial]);
 
