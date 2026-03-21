@@ -9,6 +9,9 @@ import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import { FluxoAnualTab } from './FluxoAnualTab';
 import { FinanceiroTab } from './FinanceiroTab';
 import { AcessosTab } from './AcessosTab';
+import { AnaliseTab } from './AnaliseTab';
+import { AnaliseEntradasTab } from './AnaliseEntradasTab';
+import { AnaliseSaidasTab } from './AnaliseSaidasTab';
 
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { ExportMenu } from '@/components/ExportMenu';
