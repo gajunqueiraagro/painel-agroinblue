@@ -178,23 +178,31 @@ export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange }: Props) 
         </ResponsiveContainer>
       </div>
 
-      {/* Links para entradas e saídas */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* Links para entradas, saídas e desfrute */}
+      <div className="grid grid-cols-3 gap-3">
         <button
           onClick={() => onTabChange('analise_entradas')}
           className="bg-card rounded-lg p-4 shadow-sm border flex flex-col items-center gap-2 hover:bg-accent transition-colors"
         >
           <TrendingUp className="h-8 w-8 text-success" />
-          <span className="font-bold text-foreground">Entradas</span>
-          <span className="text-xs text-muted-foreground">Análise detalhada</span>
+          <span className="font-bold text-foreground text-sm">Entradas</span>
+          <span className="text-[10px] text-muted-foreground">Análise</span>
         </button>
         <button
           onClick={() => onTabChange('analise_saidas')}
           className="bg-card rounded-lg p-4 shadow-sm border flex flex-col items-center gap-2 hover:bg-accent transition-colors"
         >
           <TrendingDown className="h-8 w-8 text-destructive" />
-          <span className="font-bold text-foreground">Saídas</span>
-          <span className="text-xs text-muted-foreground">Análise detalhada</span>
+          <span className="font-bold text-foreground text-sm">Saídas</span>
+          <span className="text-[10px] text-muted-foreground">Análise</span>
+        </button>
+        <button
+          onClick={() => onTabChange('desfrute')}
+          className="bg-card rounded-lg p-4 shadow-sm border flex flex-col items-center gap-2 hover:bg-accent transition-colors"
+        >
+          <TrendingUp className="h-8 w-8 text-amber-500" />
+          <span className="font-bold text-foreground text-sm">Desfrute</span>
+          <span className="text-[10px] text-muted-foreground">@, R$, kg</span>
         </button>
       </div>
     </div>
