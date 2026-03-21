@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Lancamento, SaldoInicial, CATEGORIAS, Categoria, isEntrada, isReclassificacao } from '@/types/cattle';
 
-const TIPOS_DESFRUTE = ['abate', 'venda', 'consumo'];
+const TIPOS_DESFRUTE_BASE = ['abate', 'venda', 'consumo'];
+const TIPOS_DESFRUTE_FAZENDA = ['abate', 'venda', 'consumo', 'transferencia_saida'];
 import { parseISO, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
