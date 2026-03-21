@@ -197,7 +197,7 @@ export function ChuvasTab() {
               {MESES.map((m, i) => (
                 <th key={i} className="border border-border px-1 py-1 text-center min-w-[52px]">{m}</th>
               ))}
-              <th className="border border-border px-1 py-1 text-center min-w-[58px] font-bold">Total</th>
+              
             </tr>
           </thead>
           <tbody>
@@ -246,7 +246,7 @@ export function ChuvasTab() {
                     </td>
                   );
                 })}
-                <td className="border border-border bg-muted/10" />
+                
               </tr>
             ))}
 
@@ -261,9 +261,6 @@ export function ChuvasTab() {
                   {t > 0 ? t.toFixed(1) : '-'}
                 </td>
               ))}
-              <td className="border border-border px-1 py-1 text-center text-blue-700 dark:text-blue-300 font-bold">
-                {yearTotal > 0 ? yearTotal.toFixed(1) : '-'}
-              </td>
             </tr>
 
             {/* Historical years monthly totals */}
@@ -286,9 +283,6 @@ export function ChuvasTab() {
                       {t > 0 ? t.toFixed(1) : '-'}
                     </td>
                   ))}
-                  <td className="border border-border px-1 py-1 text-center text-xs font-semibold">
-                    {yTotal > 0 ? yTotal.toFixed(1) : '-'}
-                  </td>
                 </tr>
               );
             })}
@@ -304,9 +298,6 @@ export function ChuvasTab() {
                   {t > 0 ? t.toFixed(1) : '-'}
                 </td>
               ))}
-              <td className="border border-border px-1 py-1 text-center text-blue-800 dark:text-blue-200 font-bold">
-                {yearTotal > 0 ? yearTotal.toFixed(1) : '-'}
-              </td>
             </tr>
 
             {/* Historical years accumulated */}
@@ -331,9 +322,6 @@ export function ChuvasTab() {
                       {t > 0 ? t.toFixed(1) : '-'}
                     </td>
                   ))}
-                  <td className="border border-border px-1 py-1 text-center text-xs font-semibold">
-                    {sum > 0 ? sum.toFixed(1) : '-'}
-                  </td>
                 </tr>
               );
             })}
