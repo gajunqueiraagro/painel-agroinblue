@@ -91,14 +91,28 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
 
   const totalEntradas = entradasAno.reduce((s, l) => s + l.quantidade, 0);
   const totalAnterior = entradasAnoAnterior.reduce((s, l) => s + l.quantidade, 0);
+  const diferencaCab = totalEntradas - totalAnterior;
   const variacao = totalAnterior > 0 ? (((totalEntradas - totalAnterior) / totalAnterior) * 100).toFixed(1) : null;
 
-  // Arrobas acumuladas (peso médio em arrobas * quantidade)
   const arrobasAtual = entradasAno.reduce((s, l) => s + (l.pesoMedioArrobas || 0) * l.quantidade, 0);
   const arrobasAnterior = entradasAnoAnterior.reduce((s, l) => s + (l.pesoMedioArrobas || 0) * l.quantidade, 0);
+  const diferencaArrobas = arrobasAtual - arrobasAnterior;
   const variacaoArrobas = arrobasAnterior > 0 ? (((arrobasAtual - arrobasAnterior) / arrobasAnterior) * 100).toFixed(1) : null;
 
   const periodoLabel = mesLimite === 12 ? 'Ano todo' : `Jan–${MESES_NOMES[mesLimite - 1]}`;
+
+  // Stacked bar by tipo per month
+  const TIPOS_ENTRADA_KEYS = Object.keys(TIPOS_ENTRADA_LABELS);
+  const barTipoData = MESES_NOMES.slice(0, mesLimite).map((nome, i) => {
+    const mesNum = String(i + 1).padStart(2, '0');
+    const row: Record<string, string | number> = { mes: nome };
+    TIPOS_ENTRADA_KEYS.forEach(tipo => {
+      row[TIPOS_ENTRADA_LABELS[tipo]] = entradasAnoAll
+        .filter(l => { try { return format(parseISO(l.data), 'MM') === mesNum && l.tipo === tipo; } catch { return false; } })
+        .reduce((s, l) => s + l.quantidade, 0);
+    });
+    return row;
+  });
 
   return (
     <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
@@ -133,7 +147,7 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
       </div>
 
       {/* Resumo YoY - Cabeças */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">{anoFiltro}</p>
           <p className="text-xl font-extrabold text-foreground">{totalEntradas}</p>
@@ -144,8 +158,16 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
           <p className="text-xl font-extrabold text-foreground">{totalAnterior}</p>
           <p className="text-[10px] text-muted-foreground">cab. ({periodoLabel})</p>
         </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
-          <p className="text-xs text-muted-foreground font-semibold">Variação</p>
+          <p className="text-xs text-muted-foreground font-semibold">Diferença</p>
+          <p className={`text-xl font-extrabold ${diferencaCab >= 0 ? 'text-success' : 'text-destructive'}`}>
+            {diferencaCab >= 0 ? '+' : ''}{diferencaCab} cab.
+          </p>
+        </div>
+        <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
+          <p className="text-xs text-muted-foreground font-semibold">Variação %</p>
           <p className={`text-xl font-extrabold ${variacao && Number(variacao) >= 0 ? 'text-success' : 'text-destructive'}`}>
             {variacao ? `${Number(variacao) >= 0 ? '+' : ''}${variacao}%` : '-'}
           </p>
@@ -153,8 +175,8 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
       </div>
 
       {/* Resumo YoY - Arrobas */}
-      {(arrobasAtual > 0 || arrobasAnterior > 0) && (
-        <div className="grid grid-cols-3 gap-3">
+      {(arrobasAtual > 0 || arrobasAnterior > 0) && (<>
+        <div className="grid grid-cols-2 gap-3">
           <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
             <p className="text-xs text-muted-foreground font-semibold">{anoFiltro} @</p>
             <p className="text-lg font-extrabold text-foreground">{arrobasAtual.toFixed(1)}</p>
@@ -165,6 +187,14 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
             <p className="text-lg font-extrabold text-foreground">{arrobasAnterior.toFixed(1)}</p>
             <p className="text-[10px] text-muted-foreground">arrobas</p>
           </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
+            <p className="text-xs text-muted-foreground font-semibold">Diferença @</p>
+            <p className={`text-lg font-extrabold ${diferencaArrobas >= 0 ? 'text-success' : 'text-destructive'}`}>
+              {diferencaArrobas >= 0 ? '+' : ''}{diferencaArrobas.toFixed(1)}
+            </p>
+          </div>
           <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
             <p className="text-xs text-muted-foreground font-semibold">Variação @</p>
             <p className={`text-lg font-extrabold ${variacaoArrobas && Number(variacaoArrobas) >= 0 ? 'text-success' : 'text-destructive'}`}>
@@ -172,7 +202,7 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
             </p>
           </div>
         </div>
-      )}
+      </>)}
 
       {/* Bar chart mensal YoY */}
       <div className="bg-card rounded-lg p-4 shadow-sm border">
@@ -186,6 +216,23 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
             <Legend />
             <Bar dataKey={anoFiltro} fill="hsl(142, 76%, 36%)" radius={[3, 3, 0, 0]} />
             <Bar dataKey={anoAnterior} fill="hsl(var(--muted-foreground))" radius={[3, 3, 0, 0]} opacity={0.5} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Stacked bar by tipo per month */}
+      <div className="bg-card rounded-lg p-4 shadow-sm border">
+        <h2 className="font-bold text-foreground mb-3">Tipo de Entrada por Mês</h2>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={barTipoData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
+            <YAxis tick={{ fontSize: 11 }} />
+            <Tooltip />
+            <Legend wrapperStyle={{ fontSize: '11px' }} />
+            {Object.values(TIPOS_ENTRADA_LABELS).map((label, i) => (
+              <Bar key={label} dataKey={label} stackId="a" fill={COLORS[i % COLORS.length]} radius={i === Object.values(TIPOS_ENTRADA_LABELS).length - 1 ? [3, 3, 0, 0] : undefined} />
+            ))}
           </BarChart>
         </ResponsiveContainer>
       </div>
