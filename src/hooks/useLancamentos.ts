@@ -275,6 +275,7 @@ export function useLancamentos() {
     editarLancamento,
     removerLancamento,
     setSaldoInicial,
+    loadData,
     loading,
   };
 }
