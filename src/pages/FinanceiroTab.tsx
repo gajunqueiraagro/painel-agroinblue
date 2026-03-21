@@ -148,7 +148,7 @@ function CompraVendaTable({ lancamentos, onEdit, tipo }: { lancamentos: Lancamen
                 <td className="p-1.5 text-right font-bold">{l.quantidade}</td>
                 <td className="p-1.5">{cat}</td>
                 <td className="p-1.5 truncate max-w-[80px]">{local || '-'}</td>
-                <td className="p-1.5 text-right">{l.pesoMedioKg ?? '-'}</td>
+                <td className="p-1.5 text-right">{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
                 <td className="p-1.5 text-right text-muted-foreground">{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
                 <td className="p-1.5 text-right">{fmt(l.precoArroba)}</td>
                 <td className="p-1.5 text-right font-bold text-primary">{fmt(c.valorFinal)}</td>
