@@ -1,9 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Lancamento, SaldoInicial, isEntrada, isReclassificacao, CATEGORIAS, Categoria } from '@/types/cattle';
-import { TrendingUp, TrendingDown, Beef, BarChart2, Percent } from 'lucide-react';
+import { TrendingUp, TrendingDown, Beef, BarChart2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { parseISO, format } from 'date-fns';
-import { kgToArrobas } from '@/types/cattle';
 import { TabId } from '@/components/BottomNav';
 
 interface Props {
@@ -88,24 +87,6 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
 
   const saldo = saldoInicialPeriodo + totalEntradas - totalSaidas;
 
-  // Desfrute calculations
-  const tiposDesfrute = ['abate', 'venda', 'consumo'];
-  const desfrutados = filtrados.filter(l => tiposDesfrute.includes(l.tipo));
-  const totalDesfruteCab = desfrutados.reduce((sum, l) => sum + l.quantidade, 0);
-  const totalDesfrunteArrobas = desfrutados.reduce((sum, l) => sum + (l.pesoMedioArrobas || 0) * l.quantidade, 0);
-
-  const arrobasInicioAno = useMemo(() => {
-    return saldosIniciais
-      .filter(s => s.ano === Number(anoFiltro))
-      .reduce((sum, s) => {
-        const pesoKg = s.pesoMedioKg || 0;
-        return sum + s.quantidade * kgToArrobas(pesoKg);
-      }, 0);
-  }, [saldosIniciais, anoFiltro]);
-
-  const pctDesfruteCab = saldoInicialAno > 0 ? (totalDesfruteCab / saldoInicialAno) * 100 : 0;
-  const pctDesfrunteArrobas = arrobasInicioAno > 0 ? (totalDesfrunteArrobas / arrobasInicioAno) * 100 : 0;
-
   const porCategoria = CATEGORIAS.map(cat => {
     const saldoIniAno = saldosIniciais
       .filter(s => s.ano === Number(anoFiltro) && s.categoria === cat.value)
@@ -174,6 +155,13 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
         <p className="text-primary-foreground text-sm font-semibold opacity-80">Saldo Atual</p>
         <p className="text-4xl font-extrabold text-primary-foreground">{saldo}</p>
         <p className="text-primary-foreground text-sm opacity-70">cabeças</p>
+        <button
+          onClick={() => onTabChange('analise')}
+          className="mt-3 inline-flex items-center gap-1.5 bg-primary-foreground/20 hover:bg-primary-foreground/30 text-primary-foreground text-sm font-semibold px-4 py-2 rounded-full transition-colors"
+        >
+          <BarChart2 className="h-4 w-4" />
+          Análise Gráfica
+        </button>
       </div>
 
       {/* Entradas e saídas */}
@@ -193,33 +181,6 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
           <p className="text-xl font-extrabold text-foreground">-{totalSaidas}</p>
         </div>
       </div>
-
-      {/* Desfrute */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
-          <p className="text-xs text-muted-foreground font-semibold">Desfrute (cab.)</p>
-          <p className="text-xl font-extrabold text-foreground">{totalDesfruteCab}</p>
-        </div>
-        <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
-          <Percent className="h-4 w-4 mx-auto text-amber-600 mb-1" />
-          <p className="text-xs text-muted-foreground font-semibold">% Desfrute Cab.</p>
-          <p className="text-xl font-extrabold text-foreground">{pctDesfruteCab.toFixed(1)}%</p>
-        </div>
-        <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
-          <Percent className="h-4 w-4 mx-auto text-amber-600 mb-1" />
-          <p className="text-xs text-muted-foreground font-semibold">% Desfrute @</p>
-          <p className="text-xl font-extrabold text-foreground">{pctDesfrunteArrobas.toFixed(1)}%</p>
-        </div>
-      </div>
-
-      {/* Link para análise gráfica */}
-      <button
-        onClick={() => onTabChange('analise')}
-        className="w-full inline-flex items-center justify-center gap-1.5 bg-primary/10 hover:bg-primary/20 text-primary text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors border border-primary/20"
-      >
-        <BarChart2 className="h-4 w-4" />
-        Análise Gráfica
-      </button>
 
       {/* Por categoria */}
       {porCategoria.length > 0 && (

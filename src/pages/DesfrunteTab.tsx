@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Lancamento, SaldoInicial } from '@/types/cattle';
+import { Lancamento, SaldoInicial, kgToArrobas } from '@/types/cattle';
 import { parseISO, format } from 'date-fns';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -71,6 +71,16 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange }: Props
   const [mesFiltro, setMesFiltro] = useState('12');
   const anoAnterior = String(Number(anoFiltro) - 1);
   const mesLimite = Number(mesFiltro);
+
+  const saldoInicialAno = useMemo(() =>
+    saldosIniciais.filter(s => s.ano === Number(anoFiltro)).reduce((sum, s) => sum + s.quantidade, 0),
+    [saldosIniciais, anoFiltro]);
+
+  const arrobasInicioAno = useMemo(() =>
+    saldosIniciais
+      .filter(s => s.ano === Number(anoFiltro))
+      .reduce((sum, s) => sum + s.quantidade * kgToArrobas(s.pesoMedioKg || 0), 0),
+    [saldosIniciais, anoFiltro]);
 
   const filterAcumulado = (list: Lancamento[]) =>
     list.filter(l => {
@@ -262,6 +272,24 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange }: Props
               {precoMedioArroba >= precoMedioArrobaAnt ? '+' : ''}{fmt(precoMedioArroba - precoMedioArrobaAnt)} YoY
             </p>
           )}
+        </div>
+      </div>
+
+      {/* Faturado */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
+          <p className="text-xs text-muted-foreground font-semibold">% Desfrute (cab.)</p>
+          <p className="text-xl font-extrabold text-foreground">
+            {saldoInicialAno > 0 ? ((totalCab / saldoInicialAno) * 100).toFixed(1) : '0.0'}%
+          </p>
+          <p className="text-[10px] text-muted-foreground">{totalCab} / {saldoInicialAno} cab.</p>
+        </div>
+        <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
+          <p className="text-xs text-muted-foreground font-semibold">% Desfrute (@)</p>
+          <p className="text-xl font-extrabold text-foreground">
+            {arrobasInicioAno > 0 ? ((totalArrobas / arrobasInicioAno) * 100).toFixed(1) : '0.0'}%
+          </p>
+          <p className="text-[10px] text-muted-foreground">{fmt(totalArrobas)} / {fmt(arrobasInicioAno)} @</p>
         </div>
       </div>
 
