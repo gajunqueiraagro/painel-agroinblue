@@ -27,7 +27,7 @@ const MESES = [
   { value: '12', label: 'Dezembro' },
 ];
 
-export function ResumoTab({ lancamentos, saldosIniciais }: Props) {
+export function ResumoTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
