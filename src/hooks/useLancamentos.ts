@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Lancamento, SaldoInicial, Categoria } from '@/types/cattle';
+import { addToQueue, isOnline } from '@/lib/offlineQueue';
+import { toast } from 'sonner';
 
 const STORAGE_KEY = 'gado-lancamentos';
 const SALDO_KEY = 'gado-saldo-inicial';
