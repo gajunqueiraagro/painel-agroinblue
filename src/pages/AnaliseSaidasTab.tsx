@@ -14,6 +14,20 @@ interface Props {
 }
 
 const MESES_NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+const MESES_OPTIONS = [
+  { value: '12', label: 'Ano todo' },
+  { value: '01', label: 'Até Janeiro' },
+  { value: '02', label: 'Até Fevereiro' },
+  { value: '03', label: 'Até Março' },
+  { value: '04', label: 'Até Abril' },
+  { value: '05', label: 'Até Maio' },
+  { value: '06', label: 'Até Junho' },
+  { value: '07', label: 'Até Julho' },
+  { value: '08', label: 'Até Agosto' },
+  { value: '09', label: 'Até Setembro' },
+  { value: '10', label: 'Até Outubro' },
+  { value: '11', label: 'Até Novembro' },
+];
 const COLORS = ['#dc2626', '#ea580c', '#d97706', '#8b5cf6', '#64748b', '#2563eb', '#16a34a', '#0891b2', '#ec4899'];
 
 const TIPOS_SAIDA_LABELS: Record<string, string> = {
@@ -37,23 +51,33 @@ export function AnaliseSaidasTab({ lancamentos, saldosIniciais, onTabChange }: P
   }, [lancamentos]);
 
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
+  const [mesFiltro, setMesFiltro] = useState('12');
   const anoAnterior = String(Number(anoFiltro) - 1);
+  const mesLimite = Number(mesFiltro);
 
-  const saidasAno = useMemo(() =>
+  const filterAcumulado = (list: Lancamento[]) =>
+    list.filter(l => {
+      try { return Number(format(parseISO(l.data), 'MM')) <= mesLimite; } catch { return false; }
+    });
+
+  const saidasAnoAll = useMemo(() =>
     lancamentos.filter(l => {
       try { return format(parseISO(l.data), 'yyyy') === anoFiltro && isSaida(l.tipo); } catch { return false; }
     }), [lancamentos, anoFiltro]);
 
-  const saidasAnoAnterior = useMemo(() =>
+  const saidasAnoAnteriorAll = useMemo(() =>
     lancamentos.filter(l => {
       try { return format(parseISO(l.data), 'yyyy') === anoAnterior && isSaida(l.tipo); } catch { return false; }
     }), [lancamentos, anoAnterior]);
 
-  const barData = MESES_NOMES.map((nome, i) => {
+  const saidasAno = useMemo(() => filterAcumulado(saidasAnoAll), [saidasAnoAll, mesLimite]);
+  const saidasAnoAnterior = useMemo(() => filterAcumulado(saidasAnoAnteriorAll), [saidasAnoAnteriorAll, mesLimite]);
+
+  const barData = MESES_NOMES.slice(0, mesLimite).map((nome, i) => {
     const mesNum = String(i + 1).padStart(2, '0');
-    const atual = saidasAno.filter(l => { try { return format(parseISO(l.data), 'MM') === mesNum; } catch { return false; } })
+    const atual = saidasAnoAll.filter(l => { try { return format(parseISO(l.data), 'MM') === mesNum; } catch { return false; } })
       .reduce((s, l) => s + l.quantidade, 0);
-    const anterior = saidasAnoAnterior.filter(l => { try { return format(parseISO(l.data), 'MM') === mesNum; } catch { return false; } })
+    const anterior = saidasAnoAnteriorAll.filter(l => { try { return format(parseISO(l.data), 'MM') === mesNum; } catch { return false; } })
       .reduce((s, l) => s + l.quantidade, 0);
     return { mes: nome, [anoFiltro]: atual, [anoAnterior]: anterior };
   });
@@ -72,6 +96,13 @@ export function AnaliseSaidasTab({ lancamentos, saldosIniciais, onTabChange }: P
   const totalAnterior = saidasAnoAnterior.reduce((s, l) => s + l.quantidade, 0);
   const variacao = totalAnterior > 0 ? (((totalSaidas - totalAnterior) / totalAnterior) * 100).toFixed(1) : null;
 
+  // Arrobas acumuladas
+  const arrobasAtual = saidasAno.reduce((s, l) => s + (l.pesoMedioArrobas || 0) * l.quantidade, 0);
+  const arrobasAnterior = saidasAnoAnterior.reduce((s, l) => s + (l.pesoMedioArrobas || 0) * l.quantidade, 0);
+  const variacaoArrobas = arrobasAnterior > 0 ? (((arrobasAtual - arrobasAnterior) / arrobasAnterior) * 100).toFixed(1) : null;
+
+  const periodoLabel = mesLimite === 12 ? 'Ano todo' : `Jan–${MESES_NOMES[mesLimite - 1]}`;
+
   return (
     <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
       <div className="flex items-center gap-2">
@@ -81,25 +112,40 @@ export function AnaliseSaidasTab({ lancamentos, saldosIniciais, onTabChange }: P
         <h1 className="text-lg font-bold text-foreground">Análise de Saídas</h1>
       </div>
 
-      <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-        <SelectTrigger className="touch-target text-base font-bold">
-          <SelectValue placeholder="Ano" />
-        </SelectTrigger>
-        <SelectContent>
-          {anosDisponiveis.map(a => (
-            <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div className="grid grid-cols-2 gap-3">
+        <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+          <SelectTrigger className="touch-target text-base font-bold">
+            <SelectValue placeholder="Ano" />
+          </SelectTrigger>
+          <SelectContent>
+            {anosDisponiveis.map(a => (
+              <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={mesFiltro} onValueChange={setMesFiltro}>
+          <SelectTrigger className="touch-target text-base font-bold">
+            <SelectValue placeholder="Período" />
+          </SelectTrigger>
+          <SelectContent>
+            {MESES_OPTIONS.map(m => (
+              <SelectItem key={m.value} value={m.value} className="text-base">{m.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
+      {/* Resumo YoY - Cabeças */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">{anoFiltro}</p>
           <p className="text-xl font-extrabold text-foreground">{totalSaidas}</p>
+          <p className="text-[10px] text-muted-foreground">cab. ({periodoLabel})</p>
         </div>
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">{anoAnterior}</p>
           <p className="text-xl font-extrabold text-foreground">{totalAnterior}</p>
+          <p className="text-[10px] text-muted-foreground">cab. ({periodoLabel})</p>
         </div>
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">Variação</p>
@@ -108,6 +154,28 @@ export function AnaliseSaidasTab({ lancamentos, saldosIniciais, onTabChange }: P
           </p>
         </div>
       </div>
+
+      {/* Resumo YoY - Arrobas */}
+      {(arrobasAtual > 0 || arrobasAnterior > 0) && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
+            <p className="text-xs text-muted-foreground font-semibold">{anoFiltro} @</p>
+            <p className="text-lg font-extrabold text-foreground">{arrobasAtual.toFixed(1)}</p>
+            <p className="text-[10px] text-muted-foreground">arrobas</p>
+          </div>
+          <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
+            <p className="text-xs text-muted-foreground font-semibold">{anoAnterior} @</p>
+            <p className="text-lg font-extrabold text-foreground">{arrobasAnterior.toFixed(1)}</p>
+            <p className="text-[10px] text-muted-foreground">arrobas</p>
+          </div>
+          <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
+            <p className="text-xs text-muted-foreground font-semibold">Variação @</p>
+            <p className={`text-lg font-extrabold ${variacaoArrobas && Number(variacaoArrobas) >= 0 ? 'text-success' : 'text-destructive'}`}>
+              {variacaoArrobas ? `${Number(variacaoArrobas) >= 0 ? '+' : ''}${variacaoArrobas}%` : '-'}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="bg-card rounded-lg p-4 shadow-sm border">
         <h2 className="font-bold text-foreground mb-3">Saídas por Mês</h2>
@@ -127,13 +195,19 @@ export function AnaliseSaidasTab({ lancamentos, saldosIniciais, onTabChange }: P
       {porCategoria.length > 0 && (
         <div className="bg-card rounded-lg p-4 shadow-sm border">
           <h2 className="font-bold text-foreground mb-3">Saídas por Categoria</h2>
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={280}>
             <PieChart>
-              <Pie data={porCategoria} cx="50%" cy="50%" outerRadius={70} dataKey="value"
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false}>
+              <Pie data={porCategoria} cx="50%" cy="45%" outerRadius={70} innerRadius={30} dataKey="value" label={false} labelLine={false}>
                 {porCategoria.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
               </Pie>
               <Tooltip />
+              <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
+                formatter={(value: string) => {
+                  const item = porCategoria.find(c => c.name === value);
+                  const total = porCategoria.reduce((s, c) => s + c.value, 0);
+                  const pct = item && total > 0 ? ((item.value / total) * 100).toFixed(0) : 0;
+                  return `${value} ${pct}%`;
+                }} />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -142,13 +216,19 @@ export function AnaliseSaidasTab({ lancamentos, saldosIniciais, onTabChange }: P
       {porTipo.length > 0 && (
         <div className="bg-card rounded-lg p-4 shadow-sm border">
           <h2 className="font-bold text-foreground mb-3">Saídas por Tipo</h2>
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={280}>
             <PieChart>
-              <Pie data={porTipo} cx="50%" cy="50%" outerRadius={70} dataKey="value"
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false}>
+              <Pie data={porTipo} cx="50%" cy="45%" outerRadius={70} innerRadius={30} dataKey="value" label={false} labelLine={false}>
                 {porTipo.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
               </Pie>
               <Tooltip />
+              <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
+                formatter={(value: string) => {
+                  const item = porTipo.find(c => c.name === value);
+                  const total = porTipo.reduce((s, c) => s + c.value, 0);
+                  const pct = item && total > 0 ? ((item.value / total) * 100).toFixed(0) : 0;
+                  return `${value} ${pct}%`;
+                }} />
             </PieChart>
           </ResponsiveContainer>
         </div>
