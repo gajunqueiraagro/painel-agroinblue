@@ -242,7 +242,9 @@ export function CadastrosTab() {
       y += 8;
     });
 
-    doc.save(`cadastro_${fazendaAtual?.nome || 'fazenda'}.pdf`);
+    const pdfBlob = doc.output('blob');
+    const url = URL.createObjectURL(pdfBlob);
+    window.open(url, '_blank');
     toast.success('PDF do cadastro exportado!');
   };
 
