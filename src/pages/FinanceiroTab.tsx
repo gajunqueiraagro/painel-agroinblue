@@ -198,6 +198,38 @@ function CompraVendaTable({ lancamentos, onEdit, tipo }: { lancamentos: Lancamen
             );
           })}
         </tbody>
+        {lancamentos.length > 1 && (() => {
+          const totals = lancamentos.reduce((acc, l) => {
+            const c = calc(l);
+            acc.qtd += l.quantidade;
+            acc.pesoVivoTotal += (l.pesoMedioKg ?? 0) * l.quantidade;
+            acc.arrobasTotal += c.pesoArroba * l.quantidade;
+            acc.valorTotal += c.valorFinal;
+            return acc;
+          }, { qtd: 0, pesoVivoTotal: 0, arrobasTotal: 0, valorTotal: 0 });
+          const pesoVivoMedio = totals.qtd > 0 ? totals.pesoVivoTotal / totals.qtd : 0;
+          const arrobaMedio = totals.qtd > 0 ? totals.arrobasTotal / totals.qtd : 0;
+          const precoArrobaMedio = totals.arrobasTotal > 0 ? totals.valorTotal / totals.arrobasTotal : 0;
+          const liqCabeca = totals.qtd > 0 ? totals.valorTotal / totals.qtd : 0;
+          const liqKg = totals.pesoVivoTotal > 0 ? totals.valorTotal / totals.pesoVivoTotal : 0;
+          return (
+            <tfoot>
+              <tr className="border-t-2 border-primary/40 bg-muted/30 font-bold">
+                <td className="p-1.5">TOTAL</td>
+                <td className="p-1.5 text-right">{totals.qtd}</td>
+                <td className="p-1.5"></td>
+                <td className="p-1.5"></td>
+                <td className="p-1.5 text-right">{fmt(pesoVivoMedio)}</td>
+                <td className="p-1.5 text-right text-muted-foreground">{fmt(arrobaMedio)}</td>
+                <td className="p-1.5 text-right">{fmt(precoArrobaMedio)}</td>
+                <td className="p-1.5 text-right text-primary">{fmt(totals.valorTotal)}</td>
+                <td className="p-1.5 text-right">{fmt(liqCabeca)}</td>
+                <td className="p-1.5 text-right">{fmt(liqKg)}</td>
+                <td className="p-1.5"></td>
+              </tr>
+            </tfoot>
+          );
+        })()}
       </table>
     </div>
   );
