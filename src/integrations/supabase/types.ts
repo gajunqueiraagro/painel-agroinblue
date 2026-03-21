@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      chuvas: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data: string
+          fazenda_id: string
+          id: string
+          milimetros: number
+          observacao: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data: string
+          fazenda_id: string
+          id?: string
+          milimetros?: number
+          observacao?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          fazenda_id?: string
+          id?: string
+          milimetros?: number
+          observacao?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chuvas_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fazenda_cadastros: {
         Row: {
           area_produtiva: number | null
