@@ -78,6 +78,7 @@ function AbateTable({ lancamentos, onEdit }: { lancamentos: Lancamento[]; onEdit
                 <td className="p-1.5 text-right font-bold">{l.quantidade}</td>
                 <td className="p-1.5">{cat}</td>
                 <td className="p-1.5 truncate max-w-[80px]">{l.fazendaDestino || '-'}</td>
+                <td className="p-1.5 text-right">{l.pesoMedioKg ?? '-'}</td>
                 <td className="p-1.5 text-right text-muted-foreground">{c.rendimento ? c.rendimento.toFixed(1) + '%' : '-'}</td>
                 <td className="p-1.5 text-right">{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
                 <td className="p-1.5 text-right">{fmt(l.precoArroba)}</td>
