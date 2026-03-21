@@ -43,7 +43,8 @@ const Index = () => {
   const [subAbaFinanceiro, setSubAbaFinanceiro] = useState<SubAba | undefined>(undefined);
   const { user } = useAuth();
   const { fazendaAtual, fazendas } = useFazenda();
-  const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial } = useLancamentos();
+  const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial, loadData } = useLancamentos();
+  const { pendingCount, syncing, online, syncQueue } = useOfflineSync(fazendaAtual?.id, loadData);
 
   const papel = fazendaAtual?.papel;
   const isDono = fazendaAtual?.owner_id === user?.id;
