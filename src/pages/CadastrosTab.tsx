@@ -56,6 +56,11 @@ export function CadastrosTab() {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [logoBase64, setLogoBase64] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadLogoBase64().then(setLogoBase64).catch(() => setLogoBase64(null));
+  }, []);
 
   const load = useCallback(async () => {
     if (!fazendaAtual) return;
