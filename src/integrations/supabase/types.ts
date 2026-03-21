@@ -14,6 +14,71 @@ export type Database = {
   }
   public: {
     Tables: {
+      fazenda_cadastros: {
+        Row: {
+          area_produtiva: number | null
+          area_total: number | null
+          banco: string | null
+          cpf_cnpj: string | null
+          created_at: string
+          email: string | null
+          endereco: string | null
+          fazenda_id: string
+          id: string
+          ie: string | null
+          inscricao_rural: string | null
+          pix: string | null
+          proprietario_nome: string | null
+          roteiro: string | null
+          telefone: string | null
+          updated_at: string
+        }
+        Insert: {
+          area_produtiva?: number | null
+          area_total?: number | null
+          banco?: string | null
+          cpf_cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          endereco?: string | null
+          fazenda_id: string
+          id?: string
+          ie?: string | null
+          inscricao_rural?: string | null
+          pix?: string | null
+          proprietario_nome?: string | null
+          roteiro?: string | null
+          telefone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          area_produtiva?: number | null
+          area_total?: number | null
+          banco?: string | null
+          cpf_cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          endereco?: string | null
+          fazenda_id?: string
+          id?: string
+          ie?: string | null
+          inscricao_rural?: string | null
+          pix?: string | null
+          proprietario_nome?: string | null
+          roteiro?: string | null
+          telefone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fazenda_cadastros_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: true
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fazenda_membros: {
         Row: {
           created_at: string
