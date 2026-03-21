@@ -257,7 +257,8 @@ const MESES = [
   { value: '12', label: 'Dezembro' },
 ];
 
-function SimpleTable({ lancamentos, onEdit, tipoLabel }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; tipoLabel: string }) {
+function SimpleTable({ lancamentos, onEdit, tipoLabel, subAba }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; tipoLabel: string; subAba?: string }) {
+  const isMorte = subAba === 'morte';
   const calc = (l: Lancamento) => {
     const pesoVivo = l.pesoMedioKg ?? 0;
     const pesoArroba = pesoVivo > 0 ? pesoVivo / 30 : 0;
@@ -288,6 +289,7 @@ function SimpleTable({ lancamentos, onEdit, tipoLabel }: { lancamentos: Lancamen
             <th className="p-1.5 text-right font-bold text-primary">Total</th>
             <th className="p-1.5 text-right font-bold">Líq/Cab</th>
             <th className="p-1.5 text-right font-bold">Líq/kg</th>
+            {isMorte && <th className="p-1.5 text-left font-bold">Motivo</th>}
             <th className="p-1.5 text-left font-bold">Obs.</th>
             <th className="p-1.5 w-8"></th>
           </tr>
@@ -307,6 +309,7 @@ function SimpleTable({ lancamentos, onEdit, tipoLabel }: { lancamentos: Lancamen
                 <td className="p-1.5 text-right font-bold text-primary">{fmt(c.valorFinal)}</td>
                 <td className="p-1.5 text-right">{fmt(c.liqCabeca)}</td>
                 <td className="p-1.5 text-right">{fmt(c.liqKg)}</td>
+                {isMorte && <td className="p-1.5 truncate max-w-[80px]">{l.fazendaDestino || '-'}</td>}
                 <td className="p-1.5 truncate max-w-[80px]">{l.observacao || '-'}</td>
                 <td className="p-1.5">
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(l)}>
@@ -448,7 +451,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial 
         ) : subAba === 'compra' || subAba === 'venda' ? (
           <CompraVendaTable lancamentos={filtrados} onEdit={setEditando} tipo={subAba} />
         ) : (
-          <SimpleTable lancamentos={filtrados} onEdit={setEditando} tipoLabel={SUB_ABAS.find(a => a.id === subAba)?.label || ''} />
+          <SimpleTable lancamentos={filtrados} onEdit={setEditando} tipoLabel={SUB_ABAS.find(a => a.id === subAba)?.label || ''} subAba={subAba} />
         )}
       </div>
 
