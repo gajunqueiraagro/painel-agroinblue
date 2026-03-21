@@ -175,8 +175,8 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
       </div>
 
       {/* Resumo YoY - Arrobas */}
-      {(arrobasAtual > 0 || arrobasAnterior > 0) && (
-        <div className="grid grid-cols-3 gap-3">
+      {(arrobasAtual > 0 || arrobasAnterior > 0) && (<>
+        <div className="grid grid-cols-2 gap-3">
           <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
             <p className="text-xs text-muted-foreground font-semibold">{anoFiltro} @</p>
             <p className="text-lg font-extrabold text-foreground">{arrobasAtual.toFixed(1)}</p>
@@ -187,6 +187,14 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
             <p className="text-lg font-extrabold text-foreground">{arrobasAnterior.toFixed(1)}</p>
             <p className="text-[10px] text-muted-foreground">arrobas</p>
           </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
+            <p className="text-xs text-muted-foreground font-semibold">Diferença @</p>
+            <p className={`text-lg font-extrabold ${diferencaArrobas >= 0 ? 'text-success' : 'text-destructive'}`}>
+              {diferencaArrobas >= 0 ? '+' : ''}{diferencaArrobas.toFixed(1)}
+            </p>
+          </div>
           <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
             <p className="text-xs text-muted-foreground font-semibold">Variação @</p>
             <p className={`text-lg font-extrabold ${variacaoArrobas && Number(variacaoArrobas) >= 0 ? 'text-success' : 'text-destructive'}`}>
@@ -194,7 +202,7 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
             </p>
           </div>
         </div>
-      )}
+      </>)}
 
       {/* Bar chart mensal YoY */}
       <div className="bg-card rounded-lg p-4 shadow-sm border">
