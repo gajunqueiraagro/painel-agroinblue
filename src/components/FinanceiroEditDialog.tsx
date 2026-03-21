@@ -170,6 +170,9 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave, onDele
       });
     }
 
+    // Always save the calculated valor_total
+    dados.valorTotal = calc.valorTotal > 0 ? calc.valorTotal : null as any;
+
     onSave(lancamento.id, dados);
     onClose();
   };
