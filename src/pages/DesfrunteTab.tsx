@@ -14,6 +14,7 @@ interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
   onTabChange: (tab: TabId) => void;
+  isGlobal?: boolean;
 }
 
 const MESES_NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -33,19 +34,17 @@ const MESES_OPTIONS = [
 ];
 const COLORS = ['#dc2626', '#ea580c', '#d97706', '#8b5cf6', '#64748b', '#2563eb', '#16a34a'];
 
-const TIPOS_DESFRUTE = ['abate', 'venda', 'consumo'] as const;
+const TIPOS_DESFRUTE_BASE = ['abate', 'venda', 'consumo'] as const;
+const TIPOS_DESFRUTE_FAZENDA = ['abate', 'venda', 'consumo', 'transferencia_saida'] as const;
 const TIPOS_DESFRUTE_LABELS: Record<string, string> = {
   abate: 'Abate',
   venda: 'Venda em Pé',
   consumo: 'Consumo',
+  transferencia_saida: 'Transf. Saída',
 };
 
-function isDesfrute(tipo: string): boolean {
-  return TIPOS_DESFRUTE.includes(tipo as any);
-}
-
 function calcArrobas(l: Lancamento): number {
-  // Abate: usa total de arrobas informado diretamente (sem fórmula de kg)
+  // Abate: usa total de arrobas informado diretamente
   if (l.tipo === 'abate') {
     if (l.pesoMedioArrobas && l.pesoMedioArrobas > 0) {
       return l.pesoMedioArrobas * l.quantidade;
@@ -55,7 +54,17 @@ function calcArrobas(l: Lancamento): number {
     }
     return 0;
   }
-  // Venda/Consumo: peso vivo em kg / 30
+  // Venda: usa arrobas informadas, senão kg/30
+  if (l.tipo === 'venda') {
+    if (l.pesoMedioArrobas && l.pesoMedioArrobas > 0) {
+      return l.pesoMedioArrobas * l.quantidade;
+    }
+    if (l.pesoMedioKg && l.pesoMedioKg > 0) {
+      return (l.pesoMedioKg / 30) * l.quantidade;
+    }
+    return 0;
+  }
+  // Consumo / Transferência saída: peso vivo em kg / 30
   if (l.pesoMedioKg && l.pesoMedioKg > 0) {
     return (l.pesoMedioKg / 30) * l.quantidade;
   }
@@ -73,7 +82,9 @@ function fmt(v: number): string {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
+export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGlobal = false }: Props) {
+  const tiposDesfrute = isGlobal ? TIPOS_DESFRUTE_BASE : TIPOS_DESFRUTE_FAZENDA;
+  const isDesfrute = (tipo: string) => (tiposDesfrute as readonly string[]).includes(tipo);
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
@@ -104,12 +115,12 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange }: Props
   const desfrAnoAll = useMemo(() =>
     lancamentos.filter(l => {
       try { return format(parseISO(l.data), 'yyyy') === anoFiltro && isDesfrute(l.tipo); } catch { return false; }
-    }), [lancamentos, anoFiltro]);
+    }), [lancamentos, anoFiltro, tiposDesfrute]);
 
   const desfrAnoAntAll = useMemo(() =>
     lancamentos.filter(l => {
       try { return format(parseISO(l.data), 'yyyy') === anoAnterior && isDesfrute(l.tipo); } catch { return false; }
-    }), [lancamentos, anoAnterior]);
+    }), [lancamentos, anoAnterior, tiposDesfrute]);
 
   const desfrAno = useMemo(() => filterAcumulado(desfrAnoAll), [desfrAnoAll, mesLimite]);
   const desfrAnoAnt = useMemo(() => filterAcumulado(desfrAnoAntAll), [desfrAnoAntAll, mesLimite]);
@@ -150,8 +161,8 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange }: Props
   });
 
   // Pie: tipo de desfrute
-  const porTipo = Object.entries(TIPOS_DESFRUTE_LABELS).map(([tipo, label]) => ({
-    name: label,
+  const porTipo = (tiposDesfrute as readonly string[]).map(tipo => ({
+    name: TIPOS_DESFRUTE_LABELS[tipo] || tipo,
     value: desfrAno.filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade, 0),
   })).filter(c => c.value > 0);
 
