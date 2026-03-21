@@ -17,7 +17,9 @@ import { DesfrunteTab } from './DesfrunteTab';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { ExportMenu } from '@/components/ExportMenu';
 import { FazendaSelector } from '@/components/FazendaSelector';
+import { SyncStatus } from '@/components/SyncStatus';
 import { useLancamentos } from '@/hooks/useLancamentos';
+import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -41,7 +43,8 @@ const Index = () => {
   const [subAbaFinanceiro, setSubAbaFinanceiro] = useState<SubAba | undefined>(undefined);
   const { user } = useAuth();
   const { fazendaAtual, fazendas } = useFazenda();
-  const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial } = useLancamentos();
+  const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial, loadData } = useLancamentos();
+  const { pendingCount, syncing, online, syncQueue } = useOfflineSync(fazendaAtual?.id, loadData);
 
   const papel = fazendaAtual?.papel;
   const isDono = fazendaAtual?.owner_id === user?.id;
@@ -59,6 +62,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <SyncStatus online={online} pendingCount={pendingCount} syncing={syncing} onSync={syncQueue} />
       <Header
         title={fazendaAtual?.nome || TITLES[activeTab]}
         rightAction={
