@@ -56,6 +56,11 @@ export function CadastrosTab() {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [logoBase64, setLogoBase64] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadLogoBase64().then(setLogoBase64).catch(() => setLogoBase64(null));
+  }, []);
 
   const load = useCallback(async () => {
     if (!fazendaAtual) return;
@@ -160,104 +165,110 @@ export function CadastrosTab() {
     </div>
   );
 
-  const generateRoteiroPDF = async () => {
-    const doc = new jsPDF();
-    const pageW = doc.internal.pageSize.getWidth();
-    let y = 10;
-    try {
-      const logoData = await loadLogoBase64();
-      const logoH = 14;
-      const logoW = logoH * 2;
-      doc.addImage(logoData, 'PNG', pageW / 2 - logoW / 2, y, logoW, logoH);
-      y += logoH + 5;
-    } catch {}
-
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Roteiro para Embarque', pageW / 2, y, { align: 'center' });
-    y += 12;
-
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    const lines = [
-      ['Fazenda', fazendaAtual?.nome || ''],
-      ['IE', data.ie],
-      ['Proprietário', data.proprietario_nome],
-      ['Roteiro', data.roteiro],
-    ];
-    lines.forEach(([label, value]) => {
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${label}: `, 20, y);
-      doc.setFont('helvetica', 'normal');
-      const labelW = doc.getTextWidth(`${label}: `);
-      if (label === 'Roteiro' && value) {
-        const splitText = doc.splitTextToSize(value, pageW - 40 - labelW);
-        doc.text(splitText, 20 + labelW, y);
-        y += splitText.length * 6;
-      } else {
-        doc.text(value || '—', 20 + labelW, y);
-        y += 8;
-      }
-    });
-
+  const downloadPdf = (doc: jsPDF, fileName: string) => {
     const pdfBlob = doc.output('blob');
     const url = URL.createObjectURL(pdfBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `roteiro_${fazendaAtual?.nome || 'fazenda'}.pdf`;
+    a.download = fileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success('PDF do roteiro exportado!');
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
   };
 
-  const generateCadastroPDF = async () => {
-    const doc = new jsPDF();
-    const pageW = doc.internal.pageSize.getWidth();
-    let y = 10;
+  const generateRoteiroPDF = () => {
     try {
-      const logoData = await loadLogoBase64();
-      const logoH = 14;
-      const logoW = logoH * 2;
-      doc.addImage(logoData, 'PNG', pageW / 2 - logoW / 2, y, logoW, logoH);
-      y += logoH + 5;
-    } catch {}
+      const doc = new jsPDF();
+      const pageW = doc.internal.pageSize.getWidth();
+      let y = 10;
 
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Dados para Cadastro', pageW / 2, y, { align: 'center' });
-    y += 12;
+      if (logoBase64) {
+        const logoH = 14;
+        const logoW = logoH * 2;
+        doc.addImage(logoBase64, 'PNG', pageW / 2 - logoW / 2, y, logoW, logoH);
+        y += logoH + 5;
+      }
 
-    doc.setFontSize(11);
-    const lines = [
-      ['Fazenda', fazendaAtual?.nome || ''],
-      ['IE', data.ie],
-      ['Proprietário', data.proprietario_nome],
-      ['CPF/CNPJ', data.cpf_cnpj],
-      ['Endereço', data.endereco],
-      ['Email', data.email],
-      ['Telefone', data.telefone],
-    ];
-    lines.forEach(([label, value]) => {
+      doc.setFontSize(16);
       doc.setFont('helvetica', 'bold');
-      doc.text(`${label}: `, 20, y);
-      doc.setFont('helvetica', 'normal');
-      const labelW = doc.getTextWidth(`${label}: `);
-      doc.text(value || '—', 20 + labelW, y);
-      y += 8;
-    });
+      doc.text('Roteiro para Embarque', pageW / 2, y, { align: 'center' });
+      y += 12;
 
-    const pdfBlob = doc.output('blob');
-    const url = URL.createObjectURL(pdfBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `cadastro_${fazendaAtual?.nome || 'fazenda'}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success('PDF do cadastro exportado!');
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      const lines = [
+        ['Fazenda', fazendaAtual?.nome || ''],
+        ['IE', data.ie],
+        ['Proprietário', data.proprietario_nome],
+        ['Roteiro', data.roteiro],
+      ];
+      lines.forEach(([label, value]) => {
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${label}: `, 20, y);
+        doc.setFont('helvetica', 'normal');
+        const labelW = doc.getTextWidth(`${label}: `);
+        if (label === 'Roteiro' && value) {
+          const splitText = doc.splitTextToSize(value, pageW - 40 - labelW);
+          doc.text(splitText, 20 + labelW, y);
+          y += splitText.length * 6;
+        } else {
+          doc.text(value || '—', 20 + labelW, y);
+          y += 8;
+        }
+      });
+
+      downloadPdf(doc, `roteiro_${fazendaAtual?.nome || 'fazenda'}.pdf`);
+      toast.success('PDF do roteiro exportado!');
+    } catch (error) {
+      console.error('Erro ao exportar PDF de roteiro:', error);
+      toast.error('Não foi possível exportar o PDF do roteiro.');
+    }
+  };
+
+  const generateCadastroPDF = () => {
+    try {
+      const doc = new jsPDF();
+      const pageW = doc.internal.pageSize.getWidth();
+      let y = 10;
+
+      if (logoBase64) {
+        const logoH = 14;
+        const logoW = logoH * 2;
+        doc.addImage(logoBase64, 'PNG', pageW / 2 - logoW / 2, y, logoW, logoH);
+        y += logoH + 5;
+      }
+
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Dados para Cadastro', pageW / 2, y, { align: 'center' });
+      y += 12;
+
+      doc.setFontSize(11);
+      const lines = [
+        ['Fazenda', fazendaAtual?.nome || ''],
+        ['IE', data.ie],
+        ['Proprietário', data.proprietario_nome],
+        ['CPF/CNPJ', data.cpf_cnpj],
+        ['Endereço', data.endereco],
+        ['Email', data.email],
+        ['Telefone', data.telefone],
+      ];
+      lines.forEach(([label, value]) => {
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${label}: `, 20, y);
+        doc.setFont('helvetica', 'normal');
+        const labelW = doc.getTextWidth(`${label}: `);
+        doc.text(value || '—', 20 + labelW, y);
+        y += 8;
+      });
+
+      downloadPdf(doc, `cadastro_${fazendaAtual?.nome || 'fazenda'}.pdf`);
+      toast.success('PDF do cadastro exportado!');
+    } catch (error) {
+      console.error('Erro ao exportar PDF de cadastro:', error);
+      toast.error('Não foi possível exportar o PDF do cadastro.');
+    }
   };
 
   const shareWhatsApp = (type: 'roteiro' | 'cadastro') => {
