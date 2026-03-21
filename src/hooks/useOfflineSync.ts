@@ -43,10 +43,11 @@ export function useOfflineSync(fazendaId: string | undefined, onSyncComplete: ()
     for (const item of queue) {
       try {
         if (item.action === 'insert') {
-          const { error } = await supabase.from('lancamentos').insert({
+          const insertData = {
             fazenda_id: item.fazendaId,
             ...item.data,
-          });
+          };
+          const { error } = await supabase.from('lancamentos').insert(insertData as any);
           if (error) throw error;
         } else if (item.action === 'update') {
           const { error } = await supabase.from('lancamentos')
