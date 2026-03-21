@@ -13,6 +13,7 @@ import { AnaliseTab } from './AnaliseTab';
 import { AnaliseEntradasTab } from './AnaliseEntradasTab';
 import { AnaliseSaidasTab } from './AnaliseSaidasTab';
 import { DesfrunteTab } from './DesfrunteTab';
+import { CadastrosTab } from './CadastrosTab';
 
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { ExportMenu } from '@/components/ExportMenu';
