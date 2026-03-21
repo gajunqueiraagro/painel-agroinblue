@@ -27,6 +27,7 @@ export type Database = {
           id: string
           ie: string | null
           inscricao_rural: string | null
+          municipio: string | null
           pix: string | null
           proprietario_nome: string | null
           roteiro: string | null
@@ -45,6 +46,7 @@ export type Database = {
           id?: string
           ie?: string | null
           inscricao_rural?: string | null
+          municipio?: string | null
           pix?: string | null
           proprietario_nome?: string | null
           roteiro?: string | null
@@ -63,6 +65,7 @@ export type Database = {
           id?: string
           ie?: string | null
           inscricao_rural?: string | null
+          municipio?: string | null
           pix?: string | null
           proprietario_nome?: string | null
           roteiro?: string | null
