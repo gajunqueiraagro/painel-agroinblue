@@ -11,7 +11,7 @@ interface BottomNavProps {
 const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'resumo', label: 'Resumo', icon: BarChart3 },
   { id: 'lancamentos', label: 'Lançar', icon: PlusCircle },
-  { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
+  { id: 'financeiro', label: 'Moviment.', icon: ArrowLeftRight },
   { id: 'evolucao', label: 'Cat/Mês', icon: LayoutGrid },
   { id: 'evolucao_categoria', label: 'Evolução', icon: TrendingUp },
   { id: 'fluxo_anual', label: 'Anual', icon: CalendarRange },
