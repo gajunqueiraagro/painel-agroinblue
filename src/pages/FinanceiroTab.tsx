@@ -289,6 +289,7 @@ function SimpleTable({ lancamentos, onEdit, tipoLabel, subAba }: { lancamentos: 
             <th className="p-1.5 text-right font-bold text-primary">Total</th>
             <th className="p-1.5 text-right font-bold">Líq/Cab</th>
             <th className="p-1.5 text-right font-bold">Líq/kg</th>
+            {isMorte && <th className="p-1.5 text-left font-bold">Motivo</th>}
             <th className="p-1.5 text-left font-bold">Obs.</th>
             <th className="p-1.5 w-8"></th>
           </tr>
