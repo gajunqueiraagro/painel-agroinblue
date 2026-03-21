@@ -140,6 +140,27 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 </div>
               )}
             </div>
+            {/* Audit info */}
+            <div className="col-span-2 bg-muted/50 rounded-lg p-3 space-y-1">
+              <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">Histórico</p>
+              <p className="text-[11px] text-muted-foreground">
+                <span className="font-semibold">ID:</span> {lancamento.id.slice(0, 8)}
+              </p>
+              {lancamento.createdAt && (
+                <p className="text-[11px] text-muted-foreground">
+                  <span className="font-semibold">Criado:</span>{' '}
+                  {format(parseISO(lancamento.createdAt), "dd/MM/yy 'às' HH:mm", { locale: ptBR })}
+                  {lancamento.createdByNome && ` por ${lancamento.createdByNome}`}
+                </p>
+              )}
+              {lancamento.updatedAt && lancamento.updatedAt !== lancamento.createdAt && (
+                <p className="text-[11px] text-muted-foreground">
+                  <span className="font-semibold">Editado:</span>{' '}
+                  {format(parseISO(lancamento.updatedAt), "dd/MM/yy 'às' HH:mm", { locale: ptBR })}
+                  {lancamento.updatedByNome && ` por ${lancamento.updatedByNome}`}
+                </p>
+              )}
+            </div>
             {isTransferenciaEntrada && (
               <div className="col-span-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
                 <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
