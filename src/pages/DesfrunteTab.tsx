@@ -203,12 +203,17 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange }: Props
         </Select>
       </div>
 
-      {/* Cards resumo */}
+      {/* Cards resumo - com YoY inline */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">Cab. {anoFiltro}</p>
           <p className="text-xl font-extrabold text-foreground">{totalCab}</p>
-          <p className="text-[10px] text-muted-foreground">{periodoLabel}</p>
+          <p className={`text-[10px] font-semibold ${difCab >= 0 ? 'text-success' : 'text-destructive'}`}>
+            {difCab >= 0 ? '+' : ''}{difCab} cab. YoY
+          </p>
+          <p className={`text-[10px] font-semibold ${varCab && Number(varCab) >= 0 ? 'text-success' : 'text-destructive'}`}>
+            {varCab ? `${Number(varCab) >= 0 ? '+' : ''}${varCab}% YoY` : '-'}
+          </p>
         </div>
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">Cab. {anoAnterior}</p>
@@ -216,50 +221,70 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange }: Props
           <p className="text-[10px] text-muted-foreground">{periodoLabel}</p>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
-          <p className="text-xs text-muted-foreground font-semibold">Diferença</p>
-          <p className={`text-xl font-extrabold ${difCab >= 0 ? 'text-success' : 'text-destructive'}`}>
-            {difCab >= 0 ? '+' : ''}{difCab} cab.
-          </p>
-        </div>
-        <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
-          <p className="text-xs text-muted-foreground font-semibold">Variação</p>
-          <p className={`text-xl font-extrabold ${varCab && Number(varCab) >= 0 ? 'text-success' : 'text-destructive'}`}>
-            {varCab ? `${Number(varCab) >= 0 ? '+' : ''}${varCab}%` : '-'}
-          </p>
-        </div>
-      </div>
 
-      {/* Arrobas e Peso */}
+      {/* Arrobas */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">Arrobas {anoFiltro}</p>
           <p className="text-lg font-extrabold text-foreground">{fmt(totalArrobas)}</p>
+          <p className={`text-[10px] font-semibold ${difArrobas >= 0 ? 'text-success' : 'text-destructive'}`}>
+            {difArrobas >= 0 ? '+' : ''}{fmt(difArrobas)} @ YoY
+          </p>
+          {totalArrobasAnt > 0 && (
+            <p className={`text-[10px] font-semibold ${difArrobas >= 0 ? 'text-success' : 'text-destructive'}`}>
+              {difArrobas >= 0 ? '+' : ''}{((difArrobas / totalArrobasAnt) * 100).toFixed(1)}% YoY
+            </p>
+          )}
         </div>
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">Arrobas {anoAnterior}</p>
           <p className="text-lg font-extrabold text-foreground">{fmt(totalArrobasAnt)}</p>
+          <p className="text-[10px] text-muted-foreground">{periodoLabel}</p>
         </div>
       </div>
+
+      {/* Peso e Preço */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">P.Médio (kg)</p>
           <p className="text-lg font-extrabold text-foreground">{fmt(pesoMedioKg)}</p>
+          {pesoMedioKgAnt > 0 && (
+            <p className={`text-[10px] font-semibold ${pesoMedioKg >= pesoMedioKgAnt ? 'text-success' : 'text-destructive'}`}>
+              {pesoMedioKg >= pesoMedioKgAnt ? '+' : ''}{fmt(pesoMedioKg - pesoMedioKgAnt)} kg YoY
+            </p>
+          )}
         </div>
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">R$/@</p>
           <p className="text-lg font-extrabold text-foreground">{fmt(precoMedioArroba)}</p>
+          {precoMedioArrobaAnt > 0 && (
+            <p className={`text-[10px] font-semibold ${precoMedioArroba >= precoMedioArrobaAnt ? 'text-success' : 'text-destructive'}`}>
+              {precoMedioArroba >= precoMedioArrobaAnt ? '+' : ''}{fmt(precoMedioArroba - precoMedioArrobaAnt)} YoY
+            </p>
+          )}
         </div>
       </div>
+
+      {/* Faturado */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">Faturado {anoFiltro}</p>
           <p className="text-base font-extrabold text-foreground">R$ {fmt(totalValor)}</p>
+          {totalValorAnt > 0 && (
+            <>
+              <p className={`text-[10px] font-semibold ${totalValor >= totalValorAnt ? 'text-success' : 'text-destructive'}`}>
+                {totalValor >= totalValorAnt ? '+' : ''}R$ {fmt(totalValor - totalValorAnt)} YoY
+              </p>
+              <p className={`text-[10px] font-semibold ${totalValor >= totalValorAnt ? 'text-success' : 'text-destructive'}`}>
+                {totalValor >= totalValorAnt ? '+' : ''}{(((totalValor - totalValorAnt) / totalValorAnt) * 100).toFixed(1)}% YoY
+              </p>
+            </>
+          )}
         </div>
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">Faturado {anoAnterior}</p>
           <p className="text-base font-extrabold text-foreground">R$ {fmt(totalValorAnt)}</p>
+          <p className="text-[10px] text-muted-foreground">{periodoLabel}</p>
         </div>
       </div>
 
