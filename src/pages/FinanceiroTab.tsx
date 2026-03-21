@@ -258,6 +258,20 @@ const MESES = [
 ];
 
 function SimpleTable({ lancamentos, onEdit, tipoLabel }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; tipoLabel: string }) {
+  const calc = (l: Lancamento) => {
+    const pesoVivo = l.pesoMedioKg ?? 0;
+    const pesoArroba = pesoVivo > 0 ? pesoVivo / 30 : 0;
+    const qtd = l.quantidade;
+    const precoArroba = l.precoArroba ?? 0;
+    const pesoTotalKg = pesoVivo * qtd;
+    const pesoTotalArrobas = pesoArroba * qtd;
+    const valorBruto = pesoTotalArrobas * precoArroba;
+    const valorFinal = l.valorTotal ?? (valorBruto + (l.acrescimos ?? 0) - (l.deducoes ?? 0));
+    const liqCabeca = qtd > 0 ? valorFinal / qtd : 0;
+    const liqKg = pesoTotalKg > 0 ? valorFinal / pesoTotalKg : 0;
+    return { pesoArroba, valorFinal, liqCabeca, liqKg };
+  };
+
   if (lancamentos.length === 0) return <p className="text-center text-muted-foreground py-6">Nenhum registro no período</p>;
 
   return (
@@ -269,6 +283,11 @@ function SimpleTable({ lancamentos, onEdit, tipoLabel }: { lancamentos: Lancamen
             <th className="p-1.5 text-right font-bold">Qtd</th>
             <th className="p-1.5 text-left font-bold">Cat.</th>
             <th className="p-1.5 text-right font-bold">P.Vivo</th>
+            <th className="p-1.5 text-right font-bold">P.@</th>
+            <th className="p-1.5 text-right font-bold">R$/@</th>
+            <th className="p-1.5 text-right font-bold text-primary">Total</th>
+            <th className="p-1.5 text-right font-bold">Líq/Cab</th>
+            <th className="p-1.5 text-right font-bold">Líq/kg</th>
             <th className="p-1.5 text-left font-bold">Obs.</th>
             <th className="p-1.5 w-8"></th>
           </tr>
@@ -276,13 +295,19 @@ function SimpleTable({ lancamentos, onEdit, tipoLabel }: { lancamentos: Lancamen
         <tbody>
           {lancamentos.map(l => {
             const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
+            const c = calc(l);
             return (
               <tr key={l.id} className="border-b hover:bg-muted/30">
                 <td className="p-1.5 whitespace-nowrap">{format(parseISO(l.data), 'dd/MM/yy')}</td>
                 <td className="p-1.5 text-right font-bold">{l.quantidade}</td>
                 <td className="p-1.5">{cat}</td>
                 <td className="p-1.5 text-right">{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
-                <td className="p-1.5 truncate max-w-[100px]">{l.observacao || '-'}</td>
+                <td className="p-1.5 text-right text-muted-foreground">{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
+                <td className="p-1.5 text-right">{fmt(l.precoArroba)}</td>
+                <td className="p-1.5 text-right font-bold text-primary">{fmt(c.valorFinal)}</td>
+                <td className="p-1.5 text-right">{fmt(c.liqCabeca)}</td>
+                <td className="p-1.5 text-right">{fmt(c.liqKg)}</td>
+                <td className="p-1.5 truncate max-w-[80px]">{l.observacao || '-'}</td>
                 <td className="p-1.5">
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(l)}>
                     <Pencil className="h-3 w-3" />
@@ -292,15 +317,38 @@ function SimpleTable({ lancamentos, onEdit, tipoLabel }: { lancamentos: Lancamen
             );
           })}
         </tbody>
-        {lancamentos.length > 1 && (
-          <tfoot>
-            <tr className="border-t-2 border-primary/40 bg-muted/30 font-bold">
-              <td className="p-1.5">TOTAL</td>
-              <td className="p-1.5 text-right">{lancamentos.reduce((s, l) => s + l.quantidade, 0)}</td>
-              <td className="p-1.5" colSpan={4}></td>
-            </tr>
-          </tfoot>
-        )}
+        {lancamentos.length > 1 && (() => {
+          const totals = lancamentos.reduce((acc, l) => {
+            const c = calc(l);
+            acc.qtd += l.quantidade;
+            acc.pesoVivoTotal += (l.pesoMedioKg ?? 0) * l.quantidade;
+            acc.arrobasTotal += c.pesoArroba * l.quantidade;
+            acc.valorTotal += c.valorFinal;
+            return acc;
+          }, { qtd: 0, pesoVivoTotal: 0, arrobasTotal: 0, valorTotal: 0 });
+          const pesoVivoMedio = totals.qtd > 0 ? totals.pesoVivoTotal / totals.qtd : 0;
+          const arrobaMedio = totals.qtd > 0 ? totals.arrobasTotal / totals.qtd : 0;
+          const precoArrobaMedio = totals.arrobasTotal > 0 ? totals.valorTotal / totals.arrobasTotal : 0;
+          const liqCabeca = totals.qtd > 0 ? totals.valorTotal / totals.qtd : 0;
+          const liqKg = totals.pesoVivoTotal > 0 ? totals.valorTotal / totals.pesoVivoTotal : 0;
+          return (
+            <tfoot>
+              <tr className="border-t-2 border-primary/40 bg-muted/30 font-bold">
+                <td className="p-1.5">TOTAL</td>
+                <td className="p-1.5 text-right">{totals.qtd}</td>
+                <td className="p-1.5"></td>
+                <td className="p-1.5 text-right">{fmt(pesoVivoMedio)}</td>
+                <td className="p-1.5 text-right text-muted-foreground">{fmt(arrobaMedio)}</td>
+                <td className="p-1.5 text-right">{fmt(precoArrobaMedio)}</td>
+                <td className="p-1.5 text-right text-primary">{fmt(totals.valorTotal)}</td>
+                <td className="p-1.5 text-right">{fmt(liqCabeca)}</td>
+                <td className="p-1.5 text-right">{fmt(liqKg)}</td>
+                <td className="p-1.5"></td>
+                <td className="p-1.5"></td>
+              </tr>
+            </tfoot>
+          );
+        })()}
       </table>
     </div>
   );
