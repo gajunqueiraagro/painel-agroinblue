@@ -297,8 +297,8 @@ export function CadastrosTab() {
       y = drawLabeledRows(
         doc,
         [
-        ['Município', data.municipio],
         ['Fazenda', fazendaAtual?.nome || ''],
+        ['Município', data.municipio],
         ['IE', data.ie],
         ['Proprietário', data.proprietario_nome],
         ['Roteiro', data.roteiro],
@@ -322,8 +322,8 @@ export function CadastrosTab() {
       doc.setFontSize(11);
 
       drawLabeledRows(doc, [
-        ['Município', data.municipio],
         ['Fazenda', fazendaAtual?.nome || ''],
+        ['Município', data.municipio],
         ['IE', data.ie],
         ['Proprietário', data.proprietario_nome],
         ['CPF/CNPJ', data.cpf_cnpj],
@@ -344,9 +344,9 @@ export function CadastrosTab() {
     let text = '';
     const nome = fazendaAtual?.nome || '';
     if (type === 'roteiro') {
-      text = `*Roteiro para Embarque*\n\n*Município:* ${data.municipio || '—'}\n*Fazenda:* ${nome}\n*IE:* ${data.ie || '—'}\n*Proprietário:* ${data.proprietario_nome || '—'}\n*Roteiro:* ${data.roteiro || '—'}`;
+      text = `*Roteiro para Embarque*\n\n*Fazenda:* ${nome}\n*Município:* ${data.municipio || '—'}\n*IE:* ${data.ie || '—'}\n*Proprietário:* ${data.proprietario_nome || '—'}\n*Roteiro:* ${data.roteiro || '—'}`;
     } else {
-      text = `*Dados para Cadastro*\n\n*Município:* ${data.municipio || '—'}\n*Fazenda:* ${nome}\n*IE:* ${data.ie || '—'}\n*Proprietário:* ${data.proprietario_nome || '—'}\n*CPF/CNPJ:* ${data.cpf_cnpj || '—'}\n*Endereço:* ${data.endereco || '—'}\n*Email:* ${data.email || '—'}\n*Telefone:* ${data.telefone || '—'}`;
+      text = `*Dados para Cadastro*\n\n*Fazenda:* ${nome}\n*Município:* ${data.municipio || '—'}\n*IE:* ${data.ie || '—'}\n*Proprietário:* ${data.proprietario_nome || '—'}\n*CPF/CNPJ:* ${data.cpf_cnpj || '—'}\n*Endereço:* ${data.endereco || '—'}\n*Email:* ${data.email || '—'}\n*Telefone:* ${data.telefone || '—'}`;
     }
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
