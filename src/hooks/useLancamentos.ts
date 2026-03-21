@@ -9,7 +9,7 @@ const STORAGE_KEY = 'gado-lancamentos';
 const SALDO_KEY = 'gado-saldo-inicial';
 
 export function useLancamentos() {
-  const { fazendaAtual } = useFazenda();
+  const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [saldosIniciais, setSaldosIniciais] = useState<SaldoInicial[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,13 +21,89 @@ export function useLancamentos() {
     if (!fazendaId) { setLancamentos([]); setSaldosIniciais([]); setLoading(false); return; }
     setLoading(true);
 
+    if (isGlobal) {
+      // Load data from ALL user's fazendas
+      const fazendaIds = fazendas.map(f => f.id);
+      
+      const [lancRes, saldoRes] = await Promise.all([
+        supabase.from('lancamentos').select('*').in('fazenda_id', fazendaIds).order('data', { ascending: false }),
+        supabase.from('saldos_iniciais').select('*').in('fazenda_id', fazendaIds),
+      ]);
+
+      if (lancRes.data) {
+        const userIds = new Set<string>();
+        lancRes.data.forEach((l: any) => {
+          if (l.created_by) userIds.add(l.created_by);
+          if (l.updated_by) userIds.add(l.updated_by);
+        });
+        
+        let profileMap: Record<string, string> = {};
+        if (userIds.size > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('user_id, nome')
+            .in('user_id', Array.from(userIds));
+          if (profiles) {
+            profiles.forEach(p => { profileMap[p.user_id] = p.nome || 'Sem nome'; });
+          }
+        }
+
+        setLancamentos(lancRes.data.map((l: any) => ({
+          id: l.id,
+          data: l.data,
+          tipo: l.tipo as any,
+          quantidade: l.quantidade,
+          categoria: l.categoria as Categoria,
+          categoriaDestino: l.categoria_destino as Categoria | undefined,
+          fazendaOrigem: l.fazenda_origem ?? undefined,
+          fazendaDestino: l.fazenda_destino ?? undefined,
+          pesoMedioKg: l.peso_medio_kg ?? undefined,
+          pesoMedioArrobas: l.peso_medio_arrobas ?? undefined,
+          precoMedioCabeca: l.preco_medio_cabeca ?? undefined,
+          observacao: l.observacao ?? undefined,
+          precoArroba: l.preco_arroba ?? undefined,
+          pesoCarcacaKg: l.peso_carcaca_kg ?? undefined,
+          bonusPrecoce: l.bonus_precoce ?? undefined,
+          bonusQualidade: l.bonus_qualidade ?? undefined,
+          bonusListaTrace: l.bonus_lista_trace ?? undefined,
+          descontoQualidade: l.desconto_qualidade ?? undefined,
+          descontoFunrural: l.desconto_funrural ?? undefined,
+          outrosDescontos: l.outros_descontos ?? undefined,
+          acrescimos: l.acrescimos ?? undefined,
+          deducoes: l.deducoes ?? undefined,
+          valorTotal: l.valor_total ?? undefined,
+          notaFiscal: l.nota_fiscal ?? undefined,
+          tipoPeso: l.tipo_peso ?? 'vivo',
+          createdAt: l.created_at,
+          updatedAt: l.updated_at,
+          createdBy: l.created_by ?? undefined,
+          updatedBy: l.updated_by ?? undefined,
+          createdByNome: l.created_by ? profileMap[l.created_by] : undefined,
+          updatedByNome: l.updated_by ? profileMap[l.updated_by] : undefined,
+          fazendaId: l.fazenda_id,
+        })));
+      }
+
+      if (saldoRes.data) {
+        setSaldosIniciais(saldoRes.data.map(s => ({
+          ano: s.ano,
+          categoria: s.categoria as Categoria,
+          quantidade: s.quantidade,
+          pesoMedioKg: (s as any).peso_medio_kg ?? undefined,
+        })));
+      }
+
+      setLoading(false);
+      return;
+    }
+
+    // Single fazenda mode
     const [lancRes, saldoRes] = await Promise.all([
       supabase.from('lancamentos').select('*').eq('fazenda_id', fazendaId).order('data', { ascending: false }),
       supabase.from('saldos_iniciais').select('*').eq('fazenda_id', fazendaId),
     ]);
 
     if (lancRes.data) {
-      // Fetch profile names for audit
       const userIds = new Set<string>();
       lancRes.data.forEach((l: any) => {
         if (l.created_by) userIds.add(l.created_by);
@@ -77,6 +153,7 @@ export function useLancamentos() {
         updatedBy: l.updated_by ?? undefined,
         createdByNome: l.created_by ? profileMap[l.created_by] : undefined,
         updatedByNome: l.updated_by ? profileMap[l.updated_by] : undefined,
+        fazendaId: l.fazenda_id,
       })));
     }
 
@@ -90,13 +167,13 @@ export function useLancamentos() {
     }
 
     setLoading(false);
-  }, [fazendaId]);
+  }, [fazendaId, isGlobal, fazendas]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
   // Migrate localStorage data on first load
   useEffect(() => {
-    if (!fazendaId || migrated) return;
+    if (!fazendaId || fazendaId === '__global__' || migrated) return;
     const migrateKey = `migrated-${fazendaId}`;
     if (localStorage.getItem(migrateKey)) { setMigrated(true); return; }
 
@@ -147,7 +224,7 @@ export function useLancamentos() {
   }, [fazendaId, migrated, loadData]);
 
   const adicionarLancamento = async (lancamento: Omit<Lancamento, 'id'>) => {
-    if (!fazendaId) return;
+    if (!fazendaId || fazendaId === '__global__') return;
 
     const insertData = {
       data: lancamento.data,
@@ -171,7 +248,6 @@ export function useLancamentos() {
         fazendaId,
         data: insertData,
       });
-      // Add locally with temp id
       setLancamentos(prev => [{
         id: `temp-${Date.now()}`,
         ...lancamento,
@@ -244,7 +320,7 @@ export function useLancamentos() {
   };
 
   const setSaldoInicial = async (ano: number, categoria: SaldoInicial['categoria'], quantidade: number, pesoMedioKg?: number) => {
-    if (!fazendaId) return;
+    if (!fazendaId || fazendaId === '__global__') return;
 
     if (quantidade > 0) {
       const { error } = await supabase.from('saldos_iniciais').upsert({
@@ -279,5 +355,6 @@ export function useLancamentos() {
     setSaldoInicial,
     loadData,
     loading,
+    isGlobal,
   };
 }
