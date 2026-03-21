@@ -39,6 +39,7 @@ const TITLES: Record<TabId, string> = {
   analise_saidas: 'Análise de Saídas',
   desfrute: 'Desfrute',
   cadastros: 'Cadastros',
+  chuvas: 'Chuvas',
 };
 
 const Index = () => {
