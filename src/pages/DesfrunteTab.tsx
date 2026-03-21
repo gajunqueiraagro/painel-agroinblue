@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Lancamento, SaldoInicial } from '@/types/cattle';
+import { Lancamento, SaldoInicial, kgToArrobas } from '@/types/cattle';
 import { parseISO, format } from 'date-fns';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -71,6 +71,16 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange }: Props
   const [mesFiltro, setMesFiltro] = useState('12');
   const anoAnterior = String(Number(anoFiltro) - 1);
   const mesLimite = Number(mesFiltro);
+
+  const saldoInicialAno = useMemo(() =>
+    saldosIniciais.filter(s => s.ano === Number(anoFiltro)).reduce((sum, s) => sum + s.quantidade, 0),
+    [saldosIniciais, anoFiltro]);
+
+  const arrobasInicioAno = useMemo(() =>
+    saldosIniciais
+      .filter(s => s.ano === Number(anoFiltro))
+      .reduce((sum, s) => sum + s.quantidade * kgToArrobas(s.pesoMedioKg || 0), 0),
+    [saldosIniciais, anoFiltro]);
 
   const filterAcumulado = (list: Lancamento[]) =>
     list.filter(l => {
