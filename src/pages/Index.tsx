@@ -29,6 +29,9 @@ const TITLES: Record<TabId, string> = {
   evolucao_categoria: 'Evolução por Categoria',
   fluxo_anual: 'Fluxo Anual',
   acessos: 'Acessos',
+  analise: 'Análise Gráfica',
+  analise_entradas: 'Análise de Entradas',
+  analise_saidas: 'Análise de Saídas',
 };
 
 const Index = () => {
