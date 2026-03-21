@@ -22,7 +22,8 @@ const MESES_NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Se
 
 const COLORS = ['#2563eb', '#16a34a', '#ea580c', '#8b5cf6', '#dc2626', '#0891b2', '#d97706', '#64748b', '#ec4899'];
 
-export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
+export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange, isGlobal = false }: Props) {
+  const TIPOS_DESFRUTE = isGlobal ? TIPOS_DESFRUTE_BASE : TIPOS_DESFRUTE_FAZENDA;
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
