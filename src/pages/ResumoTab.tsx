@@ -1,12 +1,14 @@
 import { useState, useMemo } from 'react';
 import { Lancamento, SaldoInicial, isEntrada, isReclassificacao, CATEGORIAS, Categoria } from '@/types/cattle';
-import { TrendingUp, TrendingDown, Beef } from 'lucide-react';
+import { TrendingUp, TrendingDown, Beef, BarChart2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { parseISO, format } from 'date-fns';
+import { TabId } from '@/components/BottomNav';
 
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
+  onTabChange: (tab: TabId) => void;
 }
 
 const MESES = [
@@ -25,7 +27,7 @@ const MESES = [
   { value: '12', label: 'Dezembro' },
 ];
 
-export function ResumoTab({ lancamentos, saldosIniciais }: Props) {
+export function ResumoTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
@@ -153,6 +155,13 @@ export function ResumoTab({ lancamentos, saldosIniciais }: Props) {
         <p className="text-primary-foreground text-sm font-semibold opacity-80">Saldo Atual</p>
         <p className="text-4xl font-extrabold text-primary-foreground">{saldo}</p>
         <p className="text-primary-foreground text-sm opacity-70">cabeças</p>
+        <button
+          onClick={() => onTabChange('analise')}
+          className="mt-3 inline-flex items-center gap-1.5 bg-primary-foreground/20 hover:bg-primary-foreground/30 text-primary-foreground text-sm font-semibold px-4 py-2 rounded-full transition-colors"
+        >
+          <BarChart2 className="h-4 w-4" />
+          Análise Gráfica
+        </button>
       </div>
 
       {/* Entradas e saídas */}

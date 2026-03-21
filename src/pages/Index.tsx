@@ -9,6 +9,9 @@ import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import { FluxoAnualTab } from './FluxoAnualTab';
 import { FinanceiroTab } from './FinanceiroTab';
 import { AcessosTab } from './AcessosTab';
+import { AnaliseTab } from './AnaliseTab';
+import { AnaliseEntradasTab } from './AnaliseEntradasTab';
+import { AnaliseSaidasTab } from './AnaliseSaidasTab';
 
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { ExportMenu } from '@/components/ExportMenu';
@@ -26,6 +29,9 @@ const TITLES: Record<TabId, string> = {
   evolucao_categoria: 'Evolução por Categoria',
   fluxo_anual: 'Fluxo Anual',
   acessos: 'Acessos',
+  analise: 'Análise Gráfica',
+  analise_entradas: 'Análise de Entradas',
+  analise_saidas: 'Análise de Saídas',
 };
 
 const Index = () => {
@@ -55,7 +61,7 @@ const Index = () => {
         }
       />
 
-      {activeTab === 'resumo' && <ResumoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
+      {activeTab === 'resumo' && <ResumoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={setActiveTab} />}
       {activeTab === 'movimentacao' && <MovimentacaoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
       {activeTab === 'lancamentos' && (
         <LancamentosTab
@@ -70,6 +76,9 @@ const Index = () => {
       {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
       {activeTab === 'financeiro' && <FinanceiroTab lancamentos={lancamentos} onEditar={editarLancamento} onRemover={removerLancamento} />}
       {activeTab === 'acessos' && <AcessosTab />}
+      {activeTab === 'analise' && <AnaliseTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={setActiveTab} />}
+      {activeTab === 'analise_entradas' && <AnaliseEntradasTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={setActiveTab} />}
+      {activeTab === 'analise_saidas' && <AnaliseSaidasTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={setActiveTab} />}
 
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>

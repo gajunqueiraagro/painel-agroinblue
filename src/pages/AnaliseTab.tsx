@@ -1,0 +1,192 @@
+import { useMemo, useState } from 'react';
+import { Lancamento, SaldoInicial, CATEGORIAS, Categoria, isEntrada, isReclassificacao } from '@/types/cattle';
+import { parseISO, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { TrendingUp, TrendingDown, ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { TabId } from '@/components/BottomNav';
+
+interface Props {
+  lancamentos: Lancamento[];
+  saldosIniciais: SaldoInicial[];
+  onTabChange: (tab: TabId) => void;
+}
+
+const MESES_NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+const COLORS = ['#2563eb', '#16a34a', '#ea580c', '#8b5cf6', '#dc2626', '#0891b2', '#d97706', '#64748b', '#ec4899'];
+
+export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
+  const anosDisponiveis = useMemo(() => {
+    const anos = new Set<string>();
+    anos.add(String(new Date().getFullYear()));
+    lancamentos.forEach(l => { try { anos.add(format(parseISO(l.data), 'yyyy')); } catch {} });
+    saldosIniciais.forEach(s => anos.add(String(s.ano)));
+    return Array.from(anos).sort().reverse();
+  }, [lancamentos, saldosIniciais]);
+
+  const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
+
+  // Saldo mensal acumulado
+  const saldoMensal = useMemo(() => {
+    const saldoInicialAno = saldosIniciais
+      .filter(s => s.ano === Number(anoFiltro))
+      .reduce((sum, s) => sum + s.quantidade, 0);
+
+    const lancAno = lancamentos.filter(l => {
+      try { return format(parseISO(l.data), 'yyyy') === anoFiltro; } catch { return false; }
+    });
+
+    return MESES_NOMES.map((nome, i) => {
+      const mesNum = i + 1;
+      const acumulado = lancAno.filter(l => {
+        try { return Number(format(parseISO(l.data), 'MM')) <= mesNum; } catch { return false; }
+      }).reduce((sum, l) => {
+        if (isEntrada(l.tipo)) return sum + l.quantidade;
+        if (!isReclassificacao(l.tipo)) return sum - l.quantidade;
+        return sum;
+      }, 0);
+      return { mes: nome, saldo: saldoInicialAno + acumulado };
+    });
+  }, [lancamentos, saldosIniciais, anoFiltro]);
+
+  // Saldo mensal do ano anterior (YoY)
+  const anoAnterior = String(Number(anoFiltro) - 1);
+  const saldoMensalAnterior = useMemo(() => {
+    const saldoInicialAno = saldosIniciais
+      .filter(s => s.ano === Number(anoAnterior))
+      .reduce((sum, s) => sum + s.quantidade, 0);
+
+    const lancAno = lancamentos.filter(l => {
+      try { return format(parseISO(l.data), 'yyyy') === anoAnterior; } catch { return false; }
+    });
+
+    return MESES_NOMES.map((_, i) => {
+      const mesNum = i + 1;
+      const acumulado = lancAno.filter(l => {
+        try { return Number(format(parseISO(l.data), 'MM')) <= mesNum; } catch { return false; }
+      }).reduce((sum, l) => {
+        if (isEntrada(l.tipo)) return sum + l.quantidade;
+        if (!isReclassificacao(l.tipo)) return sum - l.quantidade;
+        return sum;
+      }, 0);
+      return saldoInicialAno + acumulado;
+    });
+  }, [lancamentos, saldosIniciais, anoAnterior]);
+
+  const chartData = saldoMensal.map((d, i) => ({
+    mes: d.mes,
+    [anoFiltro]: d.saldo,
+    [anoAnterior]: saldoMensalAnterior[i],
+  }));
+
+  // Pie chart: saldo atual por categoria
+  const porCategoria = useMemo(() => {
+    const saldoInicialAno = saldosIniciais.filter(s => s.ano === Number(anoFiltro));
+
+    return CATEGORIAS.map(cat => {
+      const saldoIni = saldoInicialAno
+        .filter(s => s.categoria === cat.value)
+        .reduce((sum, s) => sum + s.quantidade, 0);
+
+      const lancAno = lancamentos.filter(l => {
+        try { return format(parseISO(l.data), 'yyyy') === anoFiltro; } catch { return false; }
+      });
+
+      let saldo = saldoIni;
+      lancAno.forEach(l => {
+        if (l.categoria === cat.value && isEntrada(l.tipo)) saldo += l.quantidade;
+        if (l.categoria === cat.value && !isEntrada(l.tipo) && !isReclassificacao(l.tipo)) saldo -= l.quantidade;
+        if (l.tipo === 'reclassificacao' && l.categoria === cat.value) saldo -= l.quantidade;
+        if (l.tipo === 'reclassificacao' && l.categoriaDestino === cat.value) saldo += l.quantidade;
+      });
+
+      return { name: cat.label, value: saldo, categoria: cat.value };
+    }).filter(c => c.value > 0);
+  }, [lancamentos, saldosIniciais, anoFiltro]);
+
+  const totalRebanho = porCategoria.reduce((s, c) => s + c.value, 0);
+
+  return (
+    <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="icon" onClick={() => onTabChange('resumo')}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <h1 className="text-lg font-bold text-foreground">Análise Gráfica</h1>
+      </div>
+
+      <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+        <SelectTrigger className="touch-target text-base font-bold">
+          <SelectValue placeholder="Ano" />
+        </SelectTrigger>
+        <SelectContent>
+          {anosDisponiveis.map(a => (
+            <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {/* Line chart - Saldo mensal */}
+      <div className="bg-card rounded-lg p-4 shadow-sm border">
+        <h2 className="font-bold text-foreground mb-3">Saldo do Rebanho</h2>
+        <ResponsiveContainer width="100%" height={220}>
+          <LineChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
+            <YAxis tick={{ fontSize: 11 }} />
+            <Tooltip />
+            <Line type="monotone" dataKey={anoFiltro} stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} name={anoFiltro} />
+            <Line type="monotone" dataKey={anoAnterior} stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="5 5" dot={false} name={anoAnterior} />
+          </LineChart>
+        </ResponsiveContainer>
+        <p className="text-xs text-muted-foreground mt-1 text-center">— {anoFiltro} vs ‐‐ {anoAnterior}</p>
+      </div>
+
+      {/* Pie chart - Categorias */}
+      <div className="bg-card rounded-lg p-4 shadow-sm border">
+        <h2 className="font-bold text-foreground mb-3">Composição do Rebanho</h2>
+        <ResponsiveContainer width="100%" height={260}>
+          <PieChart>
+            <Pie
+              data={porCategoria}
+              cx="50%"
+              cy="50%"
+              outerRadius={80}
+              dataKey="value"
+              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+              labelLine={false}
+            >
+              {porCategoria.map((_, i) => (
+                <Cell key={i} fill={COLORS[i % COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip formatter={(value: number) => [`${value} cab. (${totalRebanho > 0 ? ((value / totalRebanho) * 100).toFixed(1) : 0}%)`, '']} />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Links para entradas e saídas */}
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          onClick={() => onTabChange('analise_entradas')}
+          className="bg-card rounded-lg p-4 shadow-sm border flex flex-col items-center gap-2 hover:bg-accent transition-colors"
+        >
+          <TrendingUp className="h-8 w-8 text-success" />
+          <span className="font-bold text-foreground">Entradas</span>
+          <span className="text-xs text-muted-foreground">Análise detalhada</span>
+        </button>
+        <button
+          onClick={() => onTabChange('analise_saidas')}
+          className="bg-card rounded-lg p-4 shadow-sm border flex flex-col items-center gap-2 hover:bg-accent transition-colors"
+        >
+          <TrendingDown className="h-8 w-8 text-destructive" />
+          <span className="font-bold text-foreground">Saídas</span>
+          <span className="text-xs text-muted-foreground">Análise detalhada</span>
+        </button>
+      </div>
+    </div>
+  );
+}
