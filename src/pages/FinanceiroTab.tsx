@@ -309,6 +309,7 @@ function SimpleTable({ lancamentos, onEdit, tipoLabel, subAba }: { lancamentos: 
                 <td className="p-1.5 text-right font-bold text-primary">{fmt(c.valorFinal)}</td>
                 <td className="p-1.5 text-right">{fmt(c.liqCabeca)}</td>
                 <td className="p-1.5 text-right">{fmt(c.liqKg)}</td>
+                {isMorte && <td className="p-1.5 truncate max-w-[80px]">{l.fazendaDestino || '-'}</td>}
                 <td className="p-1.5 truncate max-w-[80px]">{l.observacao || '-'}</td>
                 <td className="p-1.5">
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(l)}>
