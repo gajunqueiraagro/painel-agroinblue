@@ -44,36 +44,23 @@ const TIPOS_DESFRUTE_LABELS: Record<string, string> = {
 };
 
 function calcArrobas(l: Lancamento): number {
-  // Abate: usa total de arrobas informado diretamente
+  // Abate: usar peso de carcaça real (kg/15). Não usar pesoMedioArrobas.
   if (l.tipo === 'abate') {
-    if (l.pesoMedioArrobas && l.pesoMedioArrobas > 0) {
-      return l.pesoMedioArrobas * l.quantidade;
-    }
     if (l.pesoCarcacaKg && l.pesoCarcacaKg > 0) {
       return (l.pesoCarcacaKg / 15) * l.quantidade;
     }
     return 0;
   }
 
-  // Venda e Transferência saída: usa arrobas informadas, senão kg/30
-  if (l.tipo === 'venda' || l.tipo === 'transferencia_saida') {
-    if (l.pesoMedioArrobas && l.pesoMedioArrobas > 0) {
-      return l.pesoMedioArrobas * l.quantidade;
-    }
+  // Venda, Consumo e Transferência saída: peso vivo em kg/30
+  if (l.tipo === 'venda' || l.tipo === 'consumo' || l.tipo === 'transferencia_saida') {
     if (l.pesoMedioKg && l.pesoMedioKg > 0) {
       return (l.pesoMedioKg / 30) * l.quantidade;
+    }
+    if (l.pesoMedioArrobas && l.pesoMedioArrobas > 0) {
+      return l.pesoMedioArrobas * l.quantidade;
     }
     return 0;
-  }
-
-  // Consumo: prioriza kg/30
-  if (l.tipo === 'consumo') {
-    if (l.pesoMedioKg && l.pesoMedioKg > 0) {
-      return (l.pesoMedioKg / 30) * l.quantidade;
-    }
-    if (l.pesoMedioArrobas && l.pesoMedioArrobas > 0) {
-      return l.pesoMedioArrobas * l.quantidade;
-    }
   }
 
   return 0;
