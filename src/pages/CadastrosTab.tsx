@@ -182,18 +182,16 @@ export function CadastrosTab() {
       const isEmbedded = window.self !== window.top;
 
       if (isMobile || isEmbedded) {
-        const opened = window.open(url, '_blank', 'noopener,noreferrer');
-        if (!opened) {
-          const fallbackLink = document.createElement('a');
-          fallbackLink.href = url;
-          fallbackLink.target = '_blank';
-          fallbackLink.rel = 'noopener noreferrer';
-          fallbackLink.style.display = 'none';
-          document.body.appendChild(fallbackLink);
-          fallbackLink.click();
-          document.body.removeChild(fallbackLink);
-        }
-        toast.info('PDF aberto em nova aba para garantir o download.');
+        const dataUri = doc.output('datauristring');
+        const openInSameTab = document.createElement('a');
+        openInSameTab.href = dataUri;
+        openInSameTab.target = '_self';
+        openInSameTab.rel = 'noopener noreferrer';
+        openInSameTab.style.display = 'none';
+        document.body.appendChild(openInSameTab);
+        openInSameTab.click();
+        document.body.removeChild(openInSameTab);
+        toast.info('Se não baixar automático, o PDF foi aberto para salvar/compartilhar.');
       }
     } catch (error) {
       console.error('Erro ao iniciar download do PDF:', error);
