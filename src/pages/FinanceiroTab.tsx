@@ -58,6 +58,7 @@ function AbateTable({ lancamentos, onEdit }: { lancamentos: Lancamento[]; onEdit
             <th className="p-1.5 text-right font-bold">Qtd</th>
             <th className="p-1.5 text-left font-bold">Cat.</th>
             <th className="p-1.5 text-left font-bold">Destino</th>
+            <th className="p-1.5 text-right font-bold">P.Vivo</th>
             <th className="p-1.5 text-right font-bold">Rend.</th>
             <th className="p-1.5 text-right font-bold">P.@</th>
             <th className="p-1.5 text-right font-bold">R$/@</th>
