@@ -15,6 +15,7 @@ interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
   onTabChange: (tab: TabId) => void;
+  isGlobal?: boolean;
 }
 
 const MESES_NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
