@@ -62,6 +62,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <SyncStatus online={online} pendingCount={pendingCount} syncing={syncing} onSync={syncQueue} />
       <Header
         title={fazendaAtual?.nome || TITLES[activeTab]}
         rightAction={
