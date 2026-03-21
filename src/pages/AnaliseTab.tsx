@@ -141,22 +141,28 @@ export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange }: Props) 
         const desfrute = lancAno.filter(l => TIPOS_DESFRUTE.includes(l.tipo)).reduce((s, l) => s + l.quantidade, 0);
         return (
           <div className="grid grid-cols-3 gap-3">
-            <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
+            <button
+              onClick={() => onTabChange('analise_entradas')}
+              className="bg-card rounded-lg p-4 shadow-sm border flex flex-col items-center gap-2 hover:bg-accent transition-colors"
+            >
               <TrendingUp className="h-5 w-5 mx-auto text-success mb-1" />
-              <p className="text-xs text-muted-foreground font-semibold">Entradas</p>
+              <p className="font-bold text-foreground text-sm">Entradas</p>
               <p className="text-xl font-extrabold text-foreground">+{entradas}</p>
-            </div>
-            <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
+            </button>
+            <button
+              onClick={() => onTabChange('analise_saidas')}
+              className="bg-card rounded-lg p-4 shadow-sm border flex flex-col items-center gap-2 hover:bg-accent transition-colors"
+            >
               <TrendingDown className="h-5 w-5 mx-auto text-destructive mb-1" />
-              <p className="text-xs text-muted-foreground font-semibold">Saídas</p>
+              <p className="font-bold text-foreground text-sm">Saídas</p>
               <p className="text-xl font-extrabold text-foreground">-{saidas}</p>
-            </div>
+            </button>
             <button
               onClick={() => onTabChange('desfrute')}
-              className="bg-card rounded-lg p-3 text-center shadow-sm border hover:bg-accent transition-colors"
+              className="bg-card rounded-lg p-4 shadow-sm border flex flex-col items-center gap-2 hover:bg-accent transition-colors"
             >
-              <TrendingUp className="h-5 w-5 mx-auto text-amber-500 mb-1" />
-              <p className="text-xs text-muted-foreground font-semibold">Desfrute</p>
+              <TrendingUp className="h-5 w-5 mx-auto text-amber-500" />
+              <p className="font-bold text-foreground text-sm">Desfrute</p>
               <p className="text-xl font-extrabold text-foreground">{desfrute}</p>
             </button>
           </div>
@@ -212,33 +218,6 @@ export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange }: Props) 
         </ResponsiveContainer>
       </div>
 
-      {/* Links para entradas, saídas e desfrute */}
-      <div className="grid grid-cols-3 gap-3">
-        <button
-          onClick={() => onTabChange('analise_entradas')}
-          className="bg-card rounded-lg p-4 shadow-sm border flex flex-col items-center gap-2 hover:bg-accent transition-colors"
-        >
-          <TrendingUp className="h-8 w-8 text-success" />
-          <span className="font-bold text-foreground text-sm">Entradas</span>
-          <span className="text-[10px] text-muted-foreground">Análise</span>
-        </button>
-        <button
-          onClick={() => onTabChange('analise_saidas')}
-          className="bg-card rounded-lg p-4 shadow-sm border flex flex-col items-center gap-2 hover:bg-accent transition-colors"
-        >
-          <TrendingDown className="h-8 w-8 text-destructive" />
-          <span className="font-bold text-foreground text-sm">Saídas</span>
-          <span className="text-[10px] text-muted-foreground">Análise</span>
-        </button>
-        <button
-          onClick={() => onTabChange('desfrute')}
-          className="bg-card rounded-lg p-4 shadow-sm border flex flex-col items-center gap-2 hover:bg-accent transition-colors"
-        >
-          <TrendingUp className="h-8 w-8 text-amber-500" />
-          <span className="font-bold text-foreground text-sm">Desfrute</span>
-          <span className="text-[10px] text-muted-foreground">@, R$, kg</span>
-        </button>
-      </div>
     </div>
   );
 }
