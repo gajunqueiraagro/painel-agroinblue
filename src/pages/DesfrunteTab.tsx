@@ -99,7 +99,7 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange }: Props
   const arrobasInicioAno = useMemo(() =>
     saldosIniciais
       .filter(s => s.ano === Number(anoFiltro))
-      .reduce((sum, s) => sum + s.quantidade * kgToArrobas(s.pesoMedioKg || 0), 0),
+      .reduce((sum, s) => sum + s.quantidade * ((s.pesoMedioKg || 0) / 30), 0),
     [saldosIniciais, anoFiltro]);
 
   const filterAcumulado = (list: Lancamento[]) =>
