@@ -45,11 +45,18 @@ function isDesfrute(tipo: string): boolean {
 }
 
 function calcArrobas(l: Lancamento): number {
+  // Se tem peso de carcaça (peso morto), usa /15
+  if (l.pesoCarcacaKg && l.pesoCarcacaKg > 0) {
+    return (l.pesoCarcacaKg / 15) * l.quantidade;
+  }
+  // Se tem pesoMedioArrobas preenchido diretamente, usa ele
   if (l.pesoMedioArrobas && l.pesoMedioArrobas > 0) {
     return l.pesoMedioArrobas * l.quantidade;
   }
+  // Se tem peso em kg, verifica tipo de peso
   if (l.pesoMedioKg && l.pesoMedioKg > 0) {
-    return (l.pesoMedioKg / 30) * l.quantidade;
+    const divisor = l.tipoPeso === 'morto' ? 15 : 30;
+    return (l.pesoMedioKg / divisor) * l.quantidade;
   }
   return 0;
 }
