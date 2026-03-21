@@ -1,4 +1,4 @@
-import { BarChart3, ArrowLeftRight, PlusCircle, LayoutGrid, TrendingUp, CalendarRange, DollarSign, Users } from 'lucide-react';
+import { BarChart3, ArrowLeftRight, PlusCircle, LayoutGrid, TrendingUp, CalendarRange, DollarSign, Users, ClipboardList } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'financeiro' | 'evolucao' | 'evolucao_categoria' | 'fluxo_anual' | 'acessos' | 'analise' | 'analise_entradas' | 'analise_saidas' | 'desfrute' | 'cadastros';
