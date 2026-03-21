@@ -12,14 +12,20 @@ interface Props {
   lancamentos: Lancamento[];
   onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
   onRemover: (id: string) => void;
+  subAbaInicial?: SubAba;
 }
 
-type SubAba = 'abate' | 'compra' | 'venda';
+export type SubAba = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
 
 const SUB_ABAS: { id: SubAba; label: string; icon: string }[] = [
-  { id: 'abate', label: 'Abates', icon: '🔪' },
+  { id: 'nascimento', label: 'Nasc.', icon: '🐄' },
   { id: 'compra', label: 'Compras', icon: '🛒' },
+  { id: 'transferencia_entrada', label: 'T.Ent.', icon: '📥' },
+  { id: 'abate', label: 'Abates', icon: '🔪' },
   { id: 'venda', label: 'Vendas', icon: '💰' },
+  { id: 'transferencia_saida', label: 'T.Saí.', icon: '📤' },
+  { id: 'consumo', label: 'Cons.', icon: '🍖' },
+  { id: 'morte', label: 'Mortes', icon: '💀' },
 ];
 
 function fmt(v?: number) {
