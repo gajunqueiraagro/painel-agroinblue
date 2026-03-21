@@ -168,13 +168,39 @@ export function CadastrosTab() {
   const downloadPdf = (doc: jsPDF, fileName: string) => {
     const pdfBlob = doc.output('blob');
     const url = URL.createObjectURL(pdfBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 3000);
+
+    try {
+      const downloadLink = document.createElement('a');
+      downloadLink.href = url;
+      downloadLink.download = fileName;
+      downloadLink.style.display = 'none';
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      const isEmbedded = window.self !== window.top;
+
+      if (isMobile || isEmbedded) {
+        const opened = window.open(url, '_blank', 'noopener,noreferrer');
+        if (!opened) {
+          const fallbackLink = document.createElement('a');
+          fallbackLink.href = url;
+          fallbackLink.target = '_blank';
+          fallbackLink.rel = 'noopener noreferrer';
+          fallbackLink.style.display = 'none';
+          document.body.appendChild(fallbackLink);
+          fallbackLink.click();
+          document.body.removeChild(fallbackLink);
+        }
+        toast.info('PDF aberto em nova aba para garantir o download.');
+      }
+    } catch (error) {
+      console.error('Erro ao iniciar download do PDF:', error);
+      toast.error('Não foi possível iniciar o download do PDF.');
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
   };
 
   const generateRoteiroPDF = () => {
