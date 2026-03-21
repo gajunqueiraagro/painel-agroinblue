@@ -68,7 +68,14 @@ function calcArrobas(l: Lancamento): number {
 
 function calcValorTotal(l: Lancamento): number {
   if (l.valorTotal) return l.valorTotal;
-  if (l.precoArroba && l.pesoMedioArrobas) return l.precoArroba * l.pesoMedioArrobas * l.quantidade;
+  // Para abate, calcular valor com arrobas reais (carcaça/15)
+  if (l.tipo === 'abate' && l.precoArroba) {
+    if (l.pesoCarcacaKg && l.pesoCarcacaKg > 0) {
+      return l.precoArroba * (l.pesoCarcacaKg / 15) * l.quantidade;
+    }
+    return 0;
+  }
+  if (l.precoArroba && l.pesoMedioKg) return l.precoArroba * (l.pesoMedioKg / 30) * l.quantidade;
   if (l.precoMedioCabeca) return l.precoMedioCabeca * l.quantidade;
   return 0;
 }
