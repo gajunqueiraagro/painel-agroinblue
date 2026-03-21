@@ -3,12 +3,19 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
 
-interface Fazenda {
+export interface Fazenda {
   id: string;
   nome: string;
   owner_id: string;
   papel?: string;
 }
+
+export const GLOBAL_FAZENDA: Fazenda = {
+  id: '__global__',
+  nome: 'Global',
+  owner_id: '',
+  papel: 'viewer',
+};
 
 interface FazendaContextType {
   fazendas: Fazenda[];
@@ -17,6 +24,7 @@ interface FazendaContextType {
   criarFazenda: (nome: string) => Promise<Fazenda | null>;
   loading: boolean;
   reloadFazendas: () => Promise<void>;
+  isGlobal: boolean;
 }
 
 const FazendaContext = createContext<FazendaContextType | undefined>(undefined);
@@ -43,8 +51,12 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
         }));
         setFazendas(list);
         const savedId = localStorage.getItem('fazenda-ativa');
-        const saved = list.find(f => f.id === savedId);
-        setFazendaAtualState(saved || list[0]);
+        if (savedId === '__global__' && list.length > 1) {
+          setFazendaAtualState(GLOBAL_FAZENDA);
+        } else {
+          const saved = list.find(f => f.id === savedId);
+          setFazendaAtualState(saved || list[0]);
+        }
       } else {
         setFazendas([]);
         setFazendaAtualState(null);
@@ -71,15 +83,16 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
       .single();
     if (error) { toast.error('Erro ao criar fazenda: ' + error.message); return null; }
 
-    // Trigger auto-adds owner as membro
     const fazenda = { ...data, papel: 'dono' };
     await loadFazendas();
     setFazendaAtual(fazenda);
     return fazenda;
   };
 
+  const isGlobal = fazendaAtual?.id === '__global__';
+
   return (
-    <FazendaContext.Provider value={{ fazendas, fazendaAtual, setFazendaAtual, criarFazenda, loading, reloadFazendas: loadFazendas }}>
+    <FazendaContext.Provider value={{ fazendas, fazendaAtual, setFazendaAtual, criarFazenda, loading, reloadFazendas: loadFazendas, isGlobal }}>
       {children}
     </FazendaContext.Provider>
   );

@@ -79,6 +79,7 @@ export interface Lancamento {
   updatedBy?: string;
   createdByNome?: string;
   updatedByNome?: string;
+  fazendaId?: string;
 }
 
 export interface SaldoInicial {
