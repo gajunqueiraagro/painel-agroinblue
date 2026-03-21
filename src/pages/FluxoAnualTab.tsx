@@ -39,7 +39,7 @@ const LINHAS: { tipo: FluxoTipo; label: string; sinal: '+' | '-' }[] = [
   { tipo: 'morte', label: 'Mortes', sinal: '-' },
 ];
 
-export function FluxoAnualTab({ lancamentos, saldosIniciais }: Props) {
+export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao }: Props) {
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
