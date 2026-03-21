@@ -1,4 +1,4 @@
-import { useFazenda } from '@/contexts/FazendaContext';
+import { useFazenda, GLOBAL_FAZENDA } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ export function FazendaSelector() {
   if (fazendas.length <= 1) {
     return (
       <div className="flex items-center gap-2">
-        {fazendaAtual && (
+        {fazendaAtual && fazendaAtual.id !== '__global__' && (
           <span className="text-sm font-bold text-primary-foreground opacity-80 truncate max-w-[120px]">
             {fazendaAtual.nome}
           </span>
@@ -23,19 +23,28 @@ export function FazendaSelector() {
     );
   }
 
+  const hasMultiple = fazendas.length > 1;
+
   return (
     <div className="flex items-center gap-2">
       <Select
         value={fazendaAtual?.id || ''}
         onValueChange={id => {
-          const f = fazendas.find(f => f.id === id);
-          if (f) setFazendaAtual(f);
+          if (id === '__global__') {
+            setFazendaAtual(GLOBAL_FAZENDA);
+          } else {
+            const f = fazendas.find(f => f.id === id);
+            if (f) setFazendaAtual(f);
+          }
         }}
       >
         <SelectTrigger className="h-8 text-xs font-bold bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground max-w-[140px]">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
+          {hasMultiple && (
+            <SelectItem value="__global__" className="text-sm font-bold">🌐 Global</SelectItem>
+          )}
           {fazendas.map(f => (
             <SelectItem key={f.id} value={f.id} className="text-sm">{f.nome}</SelectItem>
           ))}
