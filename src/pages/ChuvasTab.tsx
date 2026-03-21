@@ -190,13 +190,14 @@ export function ChuvasTab() {
 
       {/* Matrix table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-xs border-collapse min-w-[700px]">
+        <table className="w-full text-xs border-collapse min-w-[750px]">
           <thead>
             <tr className="bg-muted/50">
               <th className="border border-border px-1 py-1 text-left sticky left-0 bg-muted/50 z-10 w-10">Dia</th>
               {MESES.map((m, i) => (
                 <th key={i} className="border border-border px-1 py-1 text-center min-w-[52px]">{m}</th>
               ))}
+              <th className="border border-border px-1 py-1 text-center min-w-[58px] font-bold">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -245,10 +246,12 @@ export function ChuvasTab() {
                     </td>
                   );
                 })}
+                <td className="border border-border bg-muted/10" />
               </tr>
             ))}
 
-            {/* Monthly total row */}
+            {/* === TOTALS SECTION === */}
+            {/* Current year monthly total */}
             <tr className="bg-blue-50 dark:bg-blue-900/20 font-bold">
               <td className="border border-border px-1 py-1 sticky left-0 bg-blue-50 dark:bg-blue-900/20 z-10 text-xs">
                 Total
@@ -258,21 +261,12 @@ export function ChuvasTab() {
                   {t > 0 ? t.toFixed(1) : '-'}
                 </td>
               ))}
-            </tr>
-
-            {/* Accumulated row */}
-            <tr className="bg-blue-100 dark:bg-blue-900/30 font-bold">
-              <td className="border border-border px-1 py-1 sticky left-0 bg-blue-100 dark:bg-blue-900/30 z-10 text-xs">
-                Acum.
+              <td className="border border-border px-1 py-1 text-center text-blue-700 dark:text-blue-300 font-bold">
+                {yearTotal > 0 ? yearTotal.toFixed(1) : '-'}
               </td>
-              {accumulatedTotals.map((t, i) => (
-                <td key={i} className="border border-border px-1 py-1 text-center text-blue-800 dark:text-blue-200">
-                  {t > 0 ? t.toFixed(1) : '-'}
-                </td>
-              ))}
             </tr>
 
-            {/* Historical years */}
+            {/* Historical years monthly totals */}
             {historicalYears.map(year => {
               const yearMap = historicalMaps[year] || {};
               const mTotals = Array(12).fill(0) as number[];
@@ -283,7 +277,7 @@ export function ChuvasTab() {
               const yTotal = mTotals.reduce((a, b) => a + b, 0);
 
               return (
-                <tr key={year} className="bg-muted/30 text-muted-foreground">
+                <tr key={`total-${year}`} className="bg-muted/30 text-muted-foreground">
                   <td className="border border-border px-1 py-1 sticky left-0 bg-muted/30 z-10 text-xs font-semibold">
                     {year}
                   </td>
@@ -292,6 +286,54 @@ export function ChuvasTab() {
                       {t > 0 ? t.toFixed(1) : '-'}
                     </td>
                   ))}
+                  <td className="border border-border px-1 py-1 text-center text-xs font-semibold">
+                    {yTotal > 0 ? yTotal.toFixed(1) : '-'}
+                  </td>
+                </tr>
+              );
+            })}
+
+            {/* === ACCUMULATED SECTION === */}
+            {/* Current year accumulated */}
+            <tr className="bg-blue-100 dark:bg-blue-900/30 font-bold">
+              <td className="border border-border px-1 py-1 sticky left-0 bg-blue-100 dark:bg-blue-900/30 z-10 text-xs">
+                Acum.
+              </td>
+              {accumulatedTotals.map((t, i) => (
+                <td key={i} className="border border-border px-1 py-1 text-center text-blue-800 dark:text-blue-200">
+                  {t > 0 ? t.toFixed(1) : '-'}
+                </td>
+              ))}
+              <td className="border border-border px-1 py-1 text-center text-blue-800 dark:text-blue-200 font-bold">
+                {yearTotal > 0 ? yearTotal.toFixed(1) : '-'}
+              </td>
+            </tr>
+
+            {/* Historical years accumulated */}
+            {historicalYears.map(year => {
+              const yearMap = historicalMaps[year] || {};
+              const mTotals = Array(12).fill(0) as number[];
+              Object.entries(yearMap).forEach(([key, mm]) => {
+                const m = parseInt(key.slice(0, 2)) - 1;
+                if (m >= 0 && m < 12) mTotals[m] += mm;
+              });
+              const acc: number[] = [];
+              let sum = 0;
+              mTotals.forEach(v => { sum += v; acc.push(sum); });
+
+              return (
+                <tr key={`acum-${year}`} className="bg-muted/20 text-muted-foreground">
+                  <td className="border border-border px-1 py-1 sticky left-0 bg-muted/20 z-10 text-xs font-semibold">
+                    {year}
+                  </td>
+                  {acc.map((t, i) => (
+                    <td key={i} className="border border-border px-1 py-1 text-center text-xs">
+                      {t > 0 ? t.toFixed(1) : '-'}
+                    </td>
+                  ))}
+                  <td className="border border-border px-1 py-1 text-center text-xs font-semibold">
+                    {sum > 0 ? sum.toFixed(1) : '-'}
+                  </td>
                 </tr>
               );
             })}
