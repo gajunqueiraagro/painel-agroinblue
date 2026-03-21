@@ -104,13 +104,17 @@ export function AnaliseSaidasTab({ lancamentos, saldosIniciais, onTabChange }: P
 
   const periodoLabel = mesLimite === 12 ? 'Ano todo' : `Jan–${MESES_NOMES[mesLimite - 1]}`;
 
-  // Stacked bar by tipo per month
+  // Bar by tipo per month with YoY
   const TIPOS_SAIDA_KEYS = Object.keys(TIPOS_SAIDA_LABELS);
   const barTipoData = MESES_NOMES.slice(0, mesLimite).map((nome, i) => {
     const mesNum = String(i + 1).padStart(2, '0');
     const row: Record<string, string | number> = { mes: nome };
     TIPOS_SAIDA_KEYS.forEach(tipo => {
-      row[TIPOS_SAIDA_LABELS[tipo]] = saidasAnoAll
+      const label = TIPOS_SAIDA_LABELS[tipo];
+      row[`${label} ${anoFiltro}`] = saidasAnoAll
+        .filter(l => { try { return format(parseISO(l.data), 'MM') === mesNum && l.tipo === tipo; } catch { return false; } })
+        .reduce((s, l) => s + l.quantidade, 0);
+      row[`${label} ${anoAnterior}`] = saidasAnoAnteriorAll
         .filter(l => { try { return format(parseISO(l.data), 'MM') === mesNum && l.tipo === tipo; } catch { return false; } })
         .reduce((s, l) => s + l.quantidade, 0);
     });
