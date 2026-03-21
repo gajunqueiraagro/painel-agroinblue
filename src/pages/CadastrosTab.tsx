@@ -200,7 +200,9 @@ export function CadastrosTab() {
       }
     });
 
-    doc.save(`roteiro_${fazendaAtual?.nome || 'fazenda'}.pdf`);
+    const pdfBlob = doc.output('blob');
+    const url = URL.createObjectURL(pdfBlob);
+    window.open(url, '_blank');
     toast.success('PDF do roteiro exportado!');
   };
 
