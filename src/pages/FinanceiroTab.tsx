@@ -451,7 +451,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial 
         ) : subAba === 'compra' || subAba === 'venda' ? (
           <CompraVendaTable lancamentos={filtrados} onEdit={setEditando} tipo={subAba} />
         ) : (
-          <SimpleTable lancamentos={filtrados} onEdit={setEditando} tipoLabel={SUB_ABAS.find(a => a.id === subAba)?.label || ''} />
+          <SimpleTable lancamentos={filtrados} onEdit={setEditando} tipoLabel={SUB_ABAS.find(a => a.id === subAba)?.label || ''} subAba={subAba} />
         )}
       </div>
 
