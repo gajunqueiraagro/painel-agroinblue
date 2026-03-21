@@ -44,7 +44,7 @@ const TIPOS_DESFRUTE_LABELS: Record<string, string> = {
 };
 
 function calcArrobas(l: Lancamento): number {
-  // Abate: usa total de arrobas informado diretamente (sem fórmula de kg)
+  // Abate: usa total de arrobas informado diretamente
   if (l.tipo === 'abate') {
     if (l.pesoMedioArrobas && l.pesoMedioArrobas > 0) {
       return l.pesoMedioArrobas * l.quantidade;
@@ -54,7 +54,17 @@ function calcArrobas(l: Lancamento): number {
     }
     return 0;
   }
-  // Venda/Consumo: peso vivo em kg / 30
+  // Venda: usa arrobas informadas, senão kg/30
+  if (l.tipo === 'venda') {
+    if (l.pesoMedioArrobas && l.pesoMedioArrobas > 0) {
+      return l.pesoMedioArrobas * l.quantidade;
+    }
+    if (l.pesoMedioKg && l.pesoMedioKg > 0) {
+      return (l.pesoMedioKg / 30) * l.quantidade;
+    }
+    return 0;
+  }
+  // Consumo / Transferência saída: peso vivo em kg / 30
   if (l.pesoMedioKg && l.pesoMedioKg > 0) {
     return (l.pesoMedioKg / 30) * l.quantidade;
   }
