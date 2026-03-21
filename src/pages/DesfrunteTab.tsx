@@ -68,6 +68,20 @@ function calcArrobas(l: Lancamento): number {
 
 function calcValorTotal(l: Lancamento): number {
   if (l.valorTotal) return l.valorTotal;
+  // Fallback: calcular se valor_total não estiver salvo
+  if (l.tipo === 'abate' && l.precoArroba && l.pesoCarcacaKg) {
+    const arrobas = (l.pesoCarcacaKg / 15) * l.quantidade;
+    const bruto = arrobas * l.precoArroba;
+    const bonus = (l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0);
+    const desc = (l.descontoQualidade ?? 0) + (l.descontoFunrural ?? 0) + (l.outrosDescontos ?? 0);
+    return bruto + bonus - desc;
+  }
+  if ((l.tipo === 'venda' || l.tipo === 'compra' || l.tipo === 'consumo' || l.tipo === 'transferencia_saida') && l.precoArroba && l.pesoMedioKg) {
+    const arrobas = (l.pesoMedioKg / 30) * l.quantidade;
+    const bruto = arrobas * l.precoArroba;
+    return bruto + (l.acrescimos ?? 0) - (l.deducoes ?? 0);
+  }
+  if (l.precoMedioCabeca) return l.precoMedioCabeca * l.quantidade;
   return 0;
 }
 
