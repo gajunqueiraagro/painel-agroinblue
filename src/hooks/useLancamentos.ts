@@ -85,6 +85,7 @@ export function useLancamentos() {
         ano: s.ano,
         categoria: s.categoria as Categoria,
         quantidade: s.quantidade,
+        pesoMedioKg: (s as any).peso_medio_kg ?? undefined,
       })));
     }
 
