@@ -322,9 +322,6 @@ export function ChuvasTab() {
                       {t > 0 ? t.toFixed(1) : '-'}
                     </td>
                   ))}
-                  <td className="border border-border px-1 py-1 text-center text-xs font-semibold">
-                    {sum > 0 ? sum.toFixed(1) : '-'}
-                  </td>
                 </tr>
               );
             })}
