@@ -155,6 +155,13 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
         <p className="text-primary-foreground text-sm font-semibold opacity-80">Saldo Atual</p>
         <p className="text-4xl font-extrabold text-primary-foreground">{saldo}</p>
         <p className="text-primary-foreground text-sm opacity-70">cabeças</p>
+        <button
+          onClick={() => onTabChange('analise')}
+          className="mt-3 inline-flex items-center gap-1.5 bg-primary-foreground/20 hover:bg-primary-foreground/30 text-primary-foreground text-sm font-semibold px-4 py-2 rounded-full transition-colors"
+        >
+          <BarChart2 className="h-4 w-4" />
+          Análise Gráfica
+        </button>
       </div>
 
       {/* Entradas e saídas */}
