@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { BottomNav, TabId } from '@/components/BottomNav';
 import { Header } from '@/components/Header';
 import { ResumoTab } from './ResumoTab';
@@ -44,13 +44,19 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState<TabId>('resumo');
   const [subAbaFinanceiro, setSubAbaFinanceiro] = useState<SubAba | undefined>(undefined);
   const { user } = useAuth();
-  const { fazendaAtual, fazendas } = useFazenda();
+  const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial, loadData } = useLancamentos();
-  const { pendingCount, syncing, online, syncQueue } = useOfflineSync(fazendaAtual?.id, loadData);
+  const { pendingCount, syncing, online, syncQueue } = useOfflineSync(fazendaAtual?.id === '__global__' ? undefined : fazendaAtual?.id, loadData);
 
   const papel = fazendaAtual?.papel;
   const isDono = fazendaAtual?.owner_id === user?.id;
   const isDonoOuGerente = isDono || papel === 'gerente';
+
+  // In global mode, filter out internal transfers (transferencia_entrada and transferencia_saida)
+  const lancamentosVisiveis = useMemo(() => {
+    if (!isGlobal) return lancamentos;
+    return lancamentos.filter(l => l.tipo !== 'transferencia_entrada' && l.tipo !== 'transferencia_saida');
+  }, [lancamentos, isGlobal]);
 
   const navigateToMovimentacao = useCallback((subAba: SubAba) => {
     setSubAbaFinanceiro(subAba);
@@ -62,14 +68,16 @@ const Index = () => {
     setActiveTab(tab);
   }, []);
 
+  const headerTitle = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || TITLES[activeTab]);
+
   return (
     <div className="min-h-screen bg-background">
       <SyncStatus online={online} pendingCount={pendingCount} syncing={syncing} onSync={syncQueue} />
       <Header
-        title={fazendaAtual?.nome || TITLES[activeTab]}
+        title={headerTitle}
         rightAction={
           <div className="flex items-center gap-2">
-            {activeTab === 'resumo' && (
+            {activeTab === 'resumo' && !isGlobal && (
               <>
                 <ExportMenu lancamentos={lancamentos} saldosIniciais={saldosIniciais} />
                 {isDonoOuGerente && <SaldoInicialForm saldosIniciais={saldosIniciais} onSetSaldo={setSaldoInicial} />}
@@ -80,25 +88,25 @@ const Index = () => {
         }
       />
 
-      {activeTab === 'resumo' && <ResumoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
-      {activeTab === 'movimentacao' && <MovimentacaoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
+      {activeTab === 'resumo' && <ResumoTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
+      {activeTab === 'movimentacao' && <MovimentacaoTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} />}
       {activeTab === 'lancamentos' && (
         <LancamentosTab
-          lancamentos={lancamentos}
-          onAdicionar={adicionarLancamento}
-          onEditar={editarLancamento}
-          onRemover={removerLancamento}
+          lancamentos={lancamentosVisiveis}
+          onAdicionar={isGlobal ? async () => {} : adicionarLancamento}
+          onEditar={isGlobal ? async () => {} : editarLancamento}
+          onRemover={isGlobal ? async () => {} : removerLancamento}
         />
       )}
-      {activeTab === 'evolucao' && <EvolucaoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
-      {activeTab === 'evolucao_categoria' && <EvolucaoCategoriaTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
-      {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} />}
-      {activeTab === 'financeiro' && <FinanceiroTab lancamentos={lancamentos} onEditar={editarLancamento} onRemover={removerLancamento} subAbaInicial={subAbaFinanceiro} />}
+      {activeTab === 'evolucao' && <EvolucaoTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} />}
+      {activeTab === 'evolucao_categoria' && <EvolucaoCategoriaTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} />}
+      {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} />}
+      {activeTab === 'financeiro' && <FinanceiroTab lancamentos={lancamentosVisiveis} onEditar={isGlobal ? async () => {} : editarLancamento} onRemover={isGlobal ? async () => {} : removerLancamento} subAbaInicial={subAbaFinanceiro} />}
       {activeTab === 'acessos' && <AcessosTab />}
-      {activeTab === 'analise' && <AnaliseTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
-      {activeTab === 'analise_entradas' && <AnaliseEntradasTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
-      {activeTab === 'analise_saidas' && <AnaliseSaidasTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
-      {activeTab === 'desfrute' && <DesfrunteTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
+      {activeTab === 'analise' && <AnaliseTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
+      {activeTab === 'analise_entradas' && <AnaliseEntradasTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
+      {activeTab === 'analise_saidas' && <AnaliseSaidasTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
+      {activeTab === 'desfrute' && <DesfrunteTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
       {activeTab === 'cadastros' && <CadastrosTab />}
 
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
