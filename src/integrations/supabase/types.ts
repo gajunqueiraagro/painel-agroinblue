@@ -76,6 +76,7 @@ export type Database = {
           categoria: string
           categoria_destino: string | null
           created_at: string
+          created_by: string | null
           data: string
           deducoes: number | null
           desconto_funrural: number | null
@@ -97,6 +98,7 @@ export type Database = {
           tipo_peso: string | null
           transferencia_par_id: string | null
           updated_at: string
+          updated_by: string | null
           valor_total: number | null
         }
         Insert: {
@@ -107,6 +109,7 @@ export type Database = {
           categoria: string
           categoria_destino?: string | null
           created_at?: string
+          created_by?: string | null
           data: string
           deducoes?: number | null
           desconto_funrural?: number | null
@@ -128,6 +131,7 @@ export type Database = {
           tipo_peso?: string | null
           transferencia_par_id?: string | null
           updated_at?: string
+          updated_by?: string | null
           valor_total?: number | null
         }
         Update: {
@@ -138,6 +142,7 @@ export type Database = {
           categoria?: string
           categoria_destino?: string | null
           created_at?: string
+          created_by?: string | null
           data?: string
           deducoes?: number | null
           desconto_funrural?: number | null
@@ -159,6 +164,7 @@ export type Database = {
           tipo_peso?: string | null
           transferencia_par_id?: string | null
           updated_at?: string
+          updated_by?: string | null
           valor_total?: number | null
         }
         Relationships: [
