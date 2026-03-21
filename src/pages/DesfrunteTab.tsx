@@ -161,8 +161,8 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
   });
 
   // Pie: tipo de desfrute
-  const porTipo = Object.entries(TIPOS_DESFRUTE_LABELS).map(([tipo, label]) => ({
-    name: label,
+  const porTipo = (tiposDesfrute as readonly string[]).map(tipo => ({
+    name: TIPOS_DESFRUTE_LABELS[tipo] || tipo,
     value: desfrAno.filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade, 0),
   })).filter(c => c.value > 0);
 
