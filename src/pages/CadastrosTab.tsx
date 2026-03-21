@@ -201,46 +201,92 @@ export function CadastrosTab() {
     }
   };
 
+  const normalizePdfText = (value?: string) => {
+    if (!value) return '—';
+    const cleaned = value.replace(/\u00a0/g, ' ').replace(/[\t ]+/g, ' ').trim();
+    return cleaned || '—';
+  };
+
+  const drawPdfHeader = (doc: jsPDF, title: string) => {
+    const pageW = doc.internal.pageSize.getWidth();
+    let y = 10;
+
+    if (logoBase64) {
+      const logoH = 14;
+      const logoW = logoH * 2;
+      doc.addImage(logoBase64, 'PNG', pageW / 2 - logoW / 2, y, logoW, logoH);
+      y += logoH + 6;
+    }
+
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title, pageW / 2, y, { align: 'center' });
+    return y + 12;
+  };
+
+  const drawLabeledRows = (
+    doc: jsPDF,
+    rows: Array<[string, string | undefined]>,
+    startY: number,
+    options?: { preserveLineBreaks?: boolean },
+  ) => {
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const marginX = 18;
+    const labelWidth = 42;
+    const lineHeight = 6;
+    const rowGap = 2;
+    let y = startY;
+
+    rows.forEach(([label, raw]) => {
+      const normalized = options?.preserveLineBreaks
+        ? (raw || '')
+            .replace(/\u00a0/g, ' ')
+            .replace(/\r/g, '')
+            .split('\n')
+            .map((part) => part.replace(/[\t ]+/g, ' ').trim())
+            .filter(Boolean)
+            .join('\n') || '—'
+        : normalizePdfText(raw);
+
+      const wrapped = doc.splitTextToSize(normalized, pageW - marginX * 2 - labelWidth);
+      const requiredHeight = Math.max(lineHeight, wrapped.length * lineHeight) + rowGap;
+
+      if (y + requiredHeight > pageH - 18) {
+        doc.addPage();
+        y = 20;
+      }
+
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${label}:`, marginX, y);
+
+      doc.setFont('helvetica', 'normal');
+      doc.text(wrapped, marginX + labelWidth, y);
+
+      y += requiredHeight;
+    });
+
+    return y;
+  };
+
   const generateRoteiroPDF = () => {
     try {
       const doc = new jsPDF();
-      const pageW = doc.internal.pageSize.getWidth();
-      let y = 10;
-
-      if (logoBase64) {
-        const logoH = 14;
-        const logoW = logoH * 2;
-        doc.addImage(logoBase64, 'PNG', pageW / 2 - logoW / 2, y, logoW, logoH);
-        y += logoH + 5;
-      }
-
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Roteiro para Embarque', pageW / 2, y, { align: 'center' });
-      y += 12;
-
+      let y = drawPdfHeader(doc, 'Roteiro para Embarque');
       doc.setFontSize(11);
       doc.setFont('helvetica', 'normal');
-      const lines = [
+
+      y = drawLabeledRows(
+        doc,
+        [
         ['Fazenda', fazendaAtual?.nome || ''],
         ['IE', data.ie],
         ['Proprietário', data.proprietario_nome],
         ['Roteiro', data.roteiro],
-      ];
-      lines.forEach(([label, value]) => {
-        doc.setFont('helvetica', 'bold');
-        doc.text(`${label}: `, 20, y);
-        doc.setFont('helvetica', 'normal');
-        const labelW = doc.getTextWidth(`${label}: `);
-        if (label === 'Roteiro' && value) {
-          const splitText = doc.splitTextToSize(value, pageW - 40 - labelW);
-          doc.text(splitText, 20 + labelW, y);
-          y += splitText.length * 6;
-        } else {
-          doc.text(value || '—', 20 + labelW, y);
-          y += 8;
-        }
-      });
+        ],
+        y,
+        { preserveLineBreaks: true },
+      );
 
       downloadPdf(doc, `roteiro_${fazendaAtual?.nome || 'fazenda'}.pdf`);
       toast.success('PDF do roteiro exportado!');
@@ -253,23 +299,10 @@ export function CadastrosTab() {
   const generateCadastroPDF = () => {
     try {
       const doc = new jsPDF();
-      const pageW = doc.internal.pageSize.getWidth();
-      let y = 10;
-
-      if (logoBase64) {
-        const logoH = 14;
-        const logoW = logoH * 2;
-        doc.addImage(logoBase64, 'PNG', pageW / 2 - logoW / 2, y, logoW, logoH);
-        y += logoH + 5;
-      }
-
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Dados para Cadastro', pageW / 2, y, { align: 'center' });
-      y += 12;
-
+      const y = drawPdfHeader(doc, 'Dados para Cadastro');
       doc.setFontSize(11);
-      const lines = [
+
+      drawLabeledRows(doc, [
         ['Fazenda', fazendaAtual?.nome || ''],
         ['IE', data.ie],
         ['Proprietário', data.proprietario_nome],
@@ -277,15 +310,7 @@ export function CadastrosTab() {
         ['Endereço', data.endereco],
         ['Email', data.email],
         ['Telefone', data.telefone],
-      ];
-      lines.forEach(([label, value]) => {
-        doc.setFont('helvetica', 'bold');
-        doc.text(`${label}: `, 20, y);
-        doc.setFont('helvetica', 'normal');
-        const labelW = doc.getTextWidth(`${label}: `);
-        doc.text(value || '—', 20 + labelW, y);
-        y += 8;
-      });
+      ], y);
 
       downloadPdf(doc, `cadastro_${fazendaAtual?.nome || 'fazenda'}.pdf`);
       toast.success('PDF do cadastro exportado!');
