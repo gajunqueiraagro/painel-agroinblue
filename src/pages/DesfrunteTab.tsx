@@ -268,6 +268,24 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange }: Props
       {/* Faturado */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
+          <p className="text-xs text-muted-foreground font-semibold">% Desfrute (cab.)</p>
+          <p className="text-xl font-extrabold text-foreground">
+            {saldoInicialAno > 0 ? ((totalCab / saldoInicialAno) * 100).toFixed(1) : '0.0'}%
+          </p>
+          <p className="text-[10px] text-muted-foreground">{totalCab} / {saldoInicialAno} cab.</p>
+        </div>
+        <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
+          <p className="text-xs text-muted-foreground font-semibold">% Desfrute (@)</p>
+          <p className="text-xl font-extrabold text-foreground">
+            {arrobasInicioAno > 0 ? ((totalArrobas / arrobasInicioAno) * 100).toFixed(1) : '0.0'}%
+          </p>
+          <p className="text-[10px] text-muted-foreground">{fmt(totalArrobas)} / {fmt(arrobasInicioAno)} @</p>
+        </div>
+      </div>
+
+      {/* Faturado */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">Faturado {anoFiltro}</p>
           <p className="text-base font-extrabold text-foreground">R$ {fmt(totalValor)}</p>
           {totalValorAnt > 0 && (
