@@ -45,7 +45,13 @@ function isDesfrute(tipo: string): boolean {
 }
 
 function calcArrobas(l: Lancamento): number {
-  return (l.pesoMedioArrobas || 0) * l.quantidade;
+  if (l.pesoMedioArrobas && l.pesoMedioArrobas > 0) {
+    return l.pesoMedioArrobas * l.quantidade;
+  }
+  if (l.pesoMedioKg && l.pesoMedioKg > 0) {
+    return (l.pesoMedioKg / 30) * l.quantidade;
+  }
+  return 0;
 }
 
 function calcValorTotal(l: Lancamento): number {
