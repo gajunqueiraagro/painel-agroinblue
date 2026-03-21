@@ -85,6 +85,7 @@ export interface SaldoInicial {
   ano: number;
   categoria: Categoria;
   quantidade: number;
+  pesoMedioKg?: number;
 }
 
 export function isEntrada(tipo: TipoMovimentacao): tipo is TipoEntrada {

@@ -242,7 +242,7 @@ export function useLancamentos() {
     }
   };
 
-  const setSaldoInicial = async (ano: number, categoria: SaldoInicial['categoria'], quantidade: number) => {
+  const setSaldoInicial = async (ano: number, categoria: SaldoInicial['categoria'], quantidade: number, pesoMedioKg?: number) => {
     if (!fazendaId) return;
 
     if (quantidade > 0) {
@@ -251,11 +251,12 @@ export function useLancamentos() {
         ano,
         categoria,
         quantidade,
+        peso_medio_kg: pesoMedioKg ?? null,
       }, { onConflict: 'fazenda_id,ano,categoria' });
       if (!error) {
         setSaldosIniciais(prev => {
           const filtered = prev.filter(s => !(s.ano === ano && s.categoria === categoria));
-          return [...filtered, { ano, categoria, quantidade }];
+          return [...filtered, { ano, categoria, quantidade, pesoMedioKg }];
         });
       }
     } else {
