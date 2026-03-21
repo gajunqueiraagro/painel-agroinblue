@@ -154,8 +154,12 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
 
             {/* Linhas de movimentação */}
             {LINHAS.map((li, i) => (
-              <tr key={li.tipo} className={i % 2 === 0 ? '' : 'bg-muted/30'}>
-                <td className={`px-2 py-1.5 font-bold text-foreground sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
+              <tr
+                key={li.tipo}
+                className={`${i % 2 === 0 ? '' : 'bg-muted/30'} ${onNavigateToMovimentacao ? 'cursor-pointer hover:bg-accent/50' : ''}`}
+                onClick={() => onNavigateToMovimentacao?.(li.tipo as SubAba)}
+              >
+                <td className={`px-2 py-1.5 font-bold text-foreground sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'} ${onNavigateToMovimentacao ? 'underline decoration-dotted' : ''}`}>
                   {li.sinal === '+' ? '➕' : '➖'} {li.label}
                 </td>
                 {MESES_COLS.map(m => {
