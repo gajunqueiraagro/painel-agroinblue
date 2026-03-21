@@ -94,14 +94,28 @@ export function AnaliseSaidasTab({ lancamentos, saldosIniciais, onTabChange }: P
 
   const totalSaidas = saidasAno.reduce((s, l) => s + l.quantidade, 0);
   const totalAnterior = saidasAnoAnterior.reduce((s, l) => s + l.quantidade, 0);
+  const diferencaCab = totalSaidas - totalAnterior;
   const variacao = totalAnterior > 0 ? (((totalSaidas - totalAnterior) / totalAnterior) * 100).toFixed(1) : null;
 
-  // Arrobas acumuladas
   const arrobasAtual = saidasAno.reduce((s, l) => s + (l.pesoMedioArrobas || 0) * l.quantidade, 0);
   const arrobasAnterior = saidasAnoAnterior.reduce((s, l) => s + (l.pesoMedioArrobas || 0) * l.quantidade, 0);
+  const diferencaArrobas = arrobasAtual - arrobasAnterior;
   const variacaoArrobas = arrobasAnterior > 0 ? (((arrobasAtual - arrobasAnterior) / arrobasAnterior) * 100).toFixed(1) : null;
 
   const periodoLabel = mesLimite === 12 ? 'Ano todo' : `Jan–${MESES_NOMES[mesLimite - 1]}`;
+
+  // Stacked bar by tipo per month
+  const TIPOS_SAIDA_KEYS = Object.keys(TIPOS_SAIDA_LABELS);
+  const barTipoData = MESES_NOMES.slice(0, mesLimite).map((nome, i) => {
+    const mesNum = String(i + 1).padStart(2, '0');
+    const row: Record<string, string | number> = { mes: nome };
+    TIPOS_SAIDA_KEYS.forEach(tipo => {
+      row[TIPOS_SAIDA_LABELS[tipo]] = saidasAnoAll
+        .filter(l => { try { return format(parseISO(l.data), 'MM') === mesNum && l.tipo === tipo; } catch { return false; } })
+        .reduce((s, l) => s + l.quantidade, 0);
+    });
+    return row;
+  });
 
   return (
     <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
