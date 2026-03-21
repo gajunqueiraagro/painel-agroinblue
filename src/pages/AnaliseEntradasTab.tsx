@@ -147,7 +147,7 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
       </div>
 
       {/* Resumo YoY - Cabeças */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">{anoFiltro}</p>
           <p className="text-xl font-extrabold text-foreground">{totalEntradas}</p>
@@ -158,8 +158,16 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
           <p className="text-xl font-extrabold text-foreground">{totalAnterior}</p>
           <p className="text-[10px] text-muted-foreground">cab. ({periodoLabel})</p>
         </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
-          <p className="text-xs text-muted-foreground font-semibold">Variação</p>
+          <p className="text-xs text-muted-foreground font-semibold">Diferença</p>
+          <p className={`text-xl font-extrabold ${diferencaCab >= 0 ? 'text-success' : 'text-destructive'}`}>
+            {diferencaCab >= 0 ? '+' : ''}{diferencaCab} cab.
+          </p>
+        </div>
+        <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
+          <p className="text-xs text-muted-foreground font-semibold">Variação %</p>
           <p className={`text-xl font-extrabold ${variacao && Number(variacao) >= 0 ? 'text-success' : 'text-destructive'}`}>
             {variacao ? `${Number(variacao) >= 0 ? '+' : ''}${variacao}%` : '-'}
           </p>
