@@ -250,7 +250,13 @@ export function CadastrosTab() {
 
     const pdfBlob = doc.output('blob');
     const url = URL.createObjectURL(pdfBlob);
-    window.open(url, '_blank');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `cadastro_${fazendaAtual?.nome || 'fazenda'}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
     toast.success('PDF do cadastro exportado!');
   };
 
