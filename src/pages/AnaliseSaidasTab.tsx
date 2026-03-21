@@ -222,6 +222,23 @@ export function AnaliseSaidasTab({ lancamentos, saldosIniciais, onTabChange }: P
         </ResponsiveContainer>
       </div>
 
+      {/* Stacked bar by tipo per month */}
+      <div className="bg-card rounded-lg p-4 shadow-sm border">
+        <h2 className="font-bold text-foreground mb-3">Tipo de Saída por Mês</h2>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={barTipoData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
+            <YAxis tick={{ fontSize: 11 }} />
+            <Tooltip />
+            <Legend wrapperStyle={{ fontSize: '11px' }} />
+            {Object.values(TIPOS_SAIDA_LABELS).map((label, i) => (
+              <Bar key={label} dataKey={label} stackId="a" fill={COLORS[i % COLORS.length]} radius={i === Object.values(TIPOS_SAIDA_LABELS).length - 1 ? [3, 3, 0, 0] : undefined} />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
       {porCategoria.length > 0 && (
         <div className="bg-card rounded-lg p-4 shadow-sm border">
           <h2 className="font-bold text-foreground mb-3">Saídas por Categoria</h2>

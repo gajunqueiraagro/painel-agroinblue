@@ -220,6 +220,23 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
         </ResponsiveContainer>
       </div>
 
+      {/* Stacked bar by tipo per month */}
+      <div className="bg-card rounded-lg p-4 shadow-sm border">
+        <h2 className="font-bold text-foreground mb-3">Tipo de Entrada por Mês</h2>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={barTipoData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
+            <YAxis tick={{ fontSize: 11 }} />
+            <Tooltip />
+            <Legend wrapperStyle={{ fontSize: '11px' }} />
+            {Object.values(TIPOS_ENTRADA_LABELS).map((label, i) => (
+              <Bar key={label} dataKey={label} stackId="a" fill={COLORS[i % COLORS.length]} radius={i === Object.values(TIPOS_ENTRADA_LABELS).length - 1 ? [3, 3, 0, 0] : undefined} />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
       {/* Pie por categoria */}
       {porCategoria.length > 0 && (
         <div className="bg-card rounded-lg p-4 shadow-sm border">
