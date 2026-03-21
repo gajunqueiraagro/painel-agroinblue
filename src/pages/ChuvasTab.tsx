@@ -298,9 +298,6 @@ export function ChuvasTab() {
                   {t > 0 ? t.toFixed(1) : '-'}
                 </td>
               ))}
-              <td className="border border-border px-1 py-1 text-center text-blue-800 dark:text-blue-200 font-bold">
-                {yearTotal > 0 ? yearTotal.toFixed(1) : '-'}
-              </td>
             </tr>
 
             {/* Historical years accumulated */}
