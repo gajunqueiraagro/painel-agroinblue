@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { BottomNav, TabId } from '@/components/BottomNav';
 import { Header } from '@/components/Header';
 import { ResumoTab } from './ResumoTab';
@@ -7,7 +7,7 @@ import { LancamentosTab } from './LancamentosTab';
 import { EvolucaoTab } from './EvolucaoTab';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import { FluxoAnualTab } from './FluxoAnualTab';
-import { FinanceiroTab } from './FinanceiroTab';
+import { FinanceiroTab, type SubAba } from './FinanceiroTab';
 import { AcessosTab } from './AcessosTab';
 import { AnaliseTab } from './AnaliseTab';
 import { AnaliseEntradasTab } from './AnaliseEntradasTab';
