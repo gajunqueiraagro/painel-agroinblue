@@ -203,9 +203,21 @@ export function CadastrosTab() {
 
   const normalizePdfText = (value?: string) => {
     if (!value) return '—';
-    const cleaned = value.replace(/\u00a0/g, ' ').replace(/[\t ]+/g, ' ').trim();
-    return cleaned || '—';
+
+    const normalizedSpaces = value
+      .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
+      .replace(/[^\S\r\n]+/g, ' ')
+      .trim();
+
+    const fixedSpacedChars = normalizedSpaces.replace(
+      /(?:\b[\p{L}\p{N}]\s+){2,}[\p{L}\p{N}]\b/gu,
+      (match) => match.replace(/\s+/g, ''),
+    );
+
+    return fixedSpacedChars || '—';
   };
+
+  const preventOverflow = (value: string) => value.replace(/(\S{24})(?=\S)/g, '$1 ');
 
   const drawPdfHeader = (doc: jsPDF, title: string) => {
     const pageW = doc.internal.pageSize.getWidth();
@@ -244,12 +256,15 @@ export function CadastrosTab() {
             .replace(/\u00a0/g, ' ')
             .replace(/\r/g, '')
             .split('\n')
-            .map((part) => part.replace(/[\t ]+/g, ' ').trim())
+            .map((part) => normalizePdfText(part))
             .filter(Boolean)
             .join('\n') || '—'
         : normalizePdfText(raw);
 
-      const wrapped = doc.splitTextToSize(normalized, pageW - marginX * 2 - labelWidth);
+      const wrapped = doc.splitTextToSize(
+        preventOverflow(normalized),
+        pageW - marginX * 2 - labelWidth,
+      );
       const requiredHeight = Math.max(lineHeight, wrapped.length * lineHeight) + rowGap;
 
       if (y + requiredHeight > pageH - 18) {
