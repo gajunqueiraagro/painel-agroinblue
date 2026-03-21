@@ -110,6 +110,7 @@ const Index = () => {
       {activeTab === 'analise_saidas' && <AnaliseSaidasTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
       {activeTab === 'desfrute' && <DesfrunteTab lancamentos={isGlobal ? lancamentosVisiveis : lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} isGlobal={isGlobal} />}
       {activeTab === 'cadastros' && <CadastrosTab />}
+      {activeTab === 'chuvas' && <ChuvasTab />}
 
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
