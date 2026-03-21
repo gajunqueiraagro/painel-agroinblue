@@ -101,13 +101,17 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
 
   const periodoLabel = mesLimite === 12 ? 'Ano todo' : `Jan–${MESES_NOMES[mesLimite - 1]}`;
 
-  // Stacked bar by tipo per month
+  // Bar by tipo per month with YoY
   const TIPOS_ENTRADA_KEYS = Object.keys(TIPOS_ENTRADA_LABELS);
   const barTipoData = MESES_NOMES.slice(0, mesLimite).map((nome, i) => {
     const mesNum = String(i + 1).padStart(2, '0');
     const row: Record<string, string | number> = { mes: nome };
     TIPOS_ENTRADA_KEYS.forEach(tipo => {
-      row[TIPOS_ENTRADA_LABELS[tipo]] = entradasAnoAll
+      const label = TIPOS_ENTRADA_LABELS[tipo];
+      row[`${label} ${anoFiltro}`] = entradasAnoAll
+        .filter(l => { try { return format(parseISO(l.data), 'MM') === mesNum && l.tipo === tipo; } catch { return false; } })
+        .reduce((s, l) => s + l.quantidade, 0);
+      row[`${label} ${anoAnterior}`] = entradasAnoAnteriorAll
         .filter(l => { try { return format(parseISO(l.data), 'MM') === mesNum && l.tipo === tipo; } catch { return false; } })
         .reduce((s, l) => s + l.quantidade, 0);
     });
@@ -220,21 +224,25 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
         </ResponsiveContainer>
       </div>
 
-      {/* Stacked bar by tipo per month */}
+      {/* Bar by tipo per month YoY */}
       <div className="bg-card rounded-lg p-4 shadow-sm border">
         <h2 className="font-bold text-foreground mb-3">Tipo de Entrada por Mês</h2>
-        <ResponsiveContainer width="100%" height={220}>
+        <ResponsiveContainer width="100%" height={260}>
           <BarChart data={barTipoData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} />
             <Tooltip />
-            <Legend wrapperStyle={{ fontSize: '11px' }} />
+            <Legend wrapperStyle={{ fontSize: '10px' }} />
             {Object.values(TIPOS_ENTRADA_LABELS).map((label, i) => (
-              <Bar key={label} dataKey={label} stackId="a" fill={COLORS[i % COLORS.length]} radius={i === Object.values(TIPOS_ENTRADA_LABELS).length - 1 ? [3, 3, 0, 0] : undefined} />
+              <Bar key={`${label}-atual`} dataKey={`${label} ${anoFiltro}`} stackId="atual" fill={COLORS[i % COLORS.length]} radius={i === Object.values(TIPOS_ENTRADA_LABELS).length - 1 ? [3, 3, 0, 0] : undefined} />
+            ))}
+            {Object.values(TIPOS_ENTRADA_LABELS).map((label, i) => (
+              <Bar key={`${label}-ant`} dataKey={`${label} ${anoAnterior}`} stackId="anterior" fill={COLORS[i % COLORS.length]} opacity={0.35} radius={i === Object.values(TIPOS_ENTRADA_LABELS).length - 1 ? [3, 3, 0, 0] : undefined} />
             ))}
           </BarChart>
         </ResponsiveContainer>
+        <p className="text-xs text-muted-foreground mt-1 text-center">Opaco: {anoFiltro} | Transparente: {anoAnterior}</p>
       </div>
 
       {/* Pie por categoria */}
