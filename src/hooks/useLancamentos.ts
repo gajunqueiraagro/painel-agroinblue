@@ -25,7 +25,25 @@ export function useLancamentos() {
     ]);
 
     if (lancRes.data) {
-      setLancamentos(lancRes.data.map(l => ({
+      // Fetch profile names for audit
+      const userIds = new Set<string>();
+      lancRes.data.forEach((l: any) => {
+        if (l.created_by) userIds.add(l.created_by);
+        if (l.updated_by) userIds.add(l.updated_by);
+      });
+      
+      let profileMap: Record<string, string> = {};
+      if (userIds.size > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('user_id, nome')
+          .in('user_id', Array.from(userIds));
+        if (profiles) {
+          profiles.forEach(p => { profileMap[p.user_id] = p.nome || 'Sem nome'; });
+        }
+      }
+
+      setLancamentos(lancRes.data.map((l: any) => ({
         id: l.id,
         data: l.data,
         tipo: l.tipo as any,
@@ -38,19 +56,25 @@ export function useLancamentos() {
         pesoMedioArrobas: l.peso_medio_arrobas ?? undefined,
         precoMedioCabeca: l.preco_medio_cabeca ?? undefined,
         observacao: l.observacao ?? undefined,
-        precoArroba: (l as any).preco_arroba ?? undefined,
-        pesoCarcacaKg: (l as any).peso_carcaca_kg ?? undefined,
-        bonusPrecoce: (l as any).bonus_precoce ?? undefined,
-        bonusQualidade: (l as any).bonus_qualidade ?? undefined,
-        bonusListaTrace: (l as any).bonus_lista_trace ?? undefined,
-        descontoQualidade: (l as any).desconto_qualidade ?? undefined,
-        descontoFunrural: (l as any).desconto_funrural ?? undefined,
-        outrosDescontos: (l as any).outros_descontos ?? undefined,
-        acrescimos: (l as any).acrescimos ?? undefined,
-        deducoes: (l as any).deducoes ?? undefined,
-        valorTotal: (l as any).valor_total ?? undefined,
-        notaFiscal: (l as any).nota_fiscal ?? undefined,
-        tipoPeso: (l as any).tipo_peso ?? 'vivo',
+        precoArroba: l.preco_arroba ?? undefined,
+        pesoCarcacaKg: l.peso_carcaca_kg ?? undefined,
+        bonusPrecoce: l.bonus_precoce ?? undefined,
+        bonusQualidade: l.bonus_qualidade ?? undefined,
+        bonusListaTrace: l.bonus_lista_trace ?? undefined,
+        descontoQualidade: l.desconto_qualidade ?? undefined,
+        descontoFunrural: l.desconto_funrural ?? undefined,
+        outrosDescontos: l.outros_descontos ?? undefined,
+        acrescimos: l.acrescimos ?? undefined,
+        deducoes: l.deducoes ?? undefined,
+        valorTotal: l.valor_total ?? undefined,
+        notaFiscal: l.nota_fiscal ?? undefined,
+        tipoPeso: l.tipo_peso ?? 'vivo',
+        createdAt: l.created_at,
+        updatedAt: l.updated_at,
+        createdBy: l.created_by ?? undefined,
+        updatedBy: l.updated_by ?? undefined,
+        createdByNome: l.created_by ? profileMap[l.created_by] : undefined,
+        updatedByNome: l.updated_by ? profileMap[l.updated_by] : undefined,
       })));
     }
 

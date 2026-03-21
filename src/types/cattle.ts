@@ -72,6 +72,13 @@ export interface Lancamento {
   valorTotal?: number;
   notaFiscal?: string;
   tipoPeso?: 'vivo' | 'morto';
+  // Audit fields
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
+  createdByNome?: string;
+  updatedByNome?: string;
 }
 
 export interface SaldoInicial {
