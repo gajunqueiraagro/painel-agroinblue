@@ -17,7 +17,9 @@ import { DesfrunteTab } from './DesfrunteTab';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { ExportMenu } from '@/components/ExportMenu';
 import { FazendaSelector } from '@/components/FazendaSelector';
+import { SyncStatus } from '@/components/SyncStatus';
 import { useLancamentos } from '@/hooks/useLancamentos';
+import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
 
