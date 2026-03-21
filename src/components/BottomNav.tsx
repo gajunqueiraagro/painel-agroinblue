@@ -15,6 +15,7 @@ const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
   { id: 'evolucao', label: 'Cat/Mês', icon: LayoutGrid },
   { id: 'evolucao_categoria', label: 'Evolução', icon: TrendingUp },
   { id: 'fluxo_anual', label: 'Anual', icon: CalendarRange },
+  { id: 'chuvas', label: 'Chuvas', icon: CloudRain },
   { id: 'cadastros', label: 'Cadastros', icon: ClipboardList },
   { id: 'acessos', label: 'Acessos', icon: Users },
 ];
