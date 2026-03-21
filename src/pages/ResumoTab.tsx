@@ -1,12 +1,14 @@
 import { useState, useMemo } from 'react';
 import { Lancamento, SaldoInicial, isEntrada, isReclassificacao, CATEGORIAS, Categoria } from '@/types/cattle';
-import { TrendingUp, TrendingDown, Beef } from 'lucide-react';
+import { TrendingUp, TrendingDown, Beef, BarChart2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { parseISO, format } from 'date-fns';
+import { TabId } from '@/components/BottomNav';
 
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
+  onTabChange: (tab: TabId) => void;
 }
 
 const MESES = [
