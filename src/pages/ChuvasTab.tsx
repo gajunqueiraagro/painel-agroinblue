@@ -197,7 +197,7 @@ export function ChuvasTab() {
               {MESES.map((m, i) => (
                 <th key={i} className="border border-border px-1 py-1 text-center min-w-[52px]">{m}</th>
               ))}
-              <th className="border border-border px-1 py-1 text-center min-w-[58px] font-bold">Total</th>
+              
             </tr>
           </thead>
           <tbody>
