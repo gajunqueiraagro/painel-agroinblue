@@ -246,7 +246,7 @@ export function ChuvasTab() {
                     </td>
                   );
                 })}
-                <td className="border border-border bg-muted/10" />
+                
               </tr>
             ))}
 
