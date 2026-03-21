@@ -189,11 +189,11 @@ export function ChuvasTab() {
       </div>
 
       {/* Matrix table */}
-      <div className="overflow-x-auto">
+      <div className="overflow-auto max-h-[calc(100vh-140px)]">
         <table className="w-full text-xs border-collapse min-w-[750px]">
-          <thead>
+          <thead className="sticky top-0 z-20">
             <tr className="bg-muted/50">
-              <th className="border border-border px-1 py-1 text-left sticky left-0 bg-muted/50 z-10 w-10">Dia</th>
+              <th className="border border-border px-1 py-1 text-left sticky left-0 bg-muted/50 z-30 w-10">Dia</th>
               {MESES.map((m, i) => (
                 <th key={i} className="border border-border px-1 py-1 text-center min-w-[52px]">{m}</th>
               ))}
