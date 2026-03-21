@@ -115,12 +115,12 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
   const desfrAnoAll = useMemo(() =>
     lancamentos.filter(l => {
       try { return format(parseISO(l.data), 'yyyy') === anoFiltro && isDesfrute(l.tipo); } catch { return false; }
-    }), [lancamentos, anoFiltro]);
+    }), [lancamentos, anoFiltro, tiposDesfrute]);
 
   const desfrAnoAntAll = useMemo(() =>
     lancamentos.filter(l => {
       try { return format(parseISO(l.data), 'yyyy') === anoAnterior && isDesfrute(l.tipo); } catch { return false; }
-    }), [lancamentos, anoAnterior]);
+    }), [lancamentos, anoAnterior, tiposDesfrute]);
 
   const desfrAno = useMemo(() => filterAcumulado(desfrAnoAll), [desfrAnoAll, mesLimite]);
   const desfrAnoAnt = useMemo(() => filterAcumulado(desfrAnoAntAll), [desfrAnoAntAll, mesLimite]);
