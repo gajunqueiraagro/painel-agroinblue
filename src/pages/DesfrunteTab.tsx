@@ -82,7 +82,9 @@ function fmt(v: number): string {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
+export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGlobal = false }: Props) {
+  const tiposDesfrute = isGlobal ? TIPOS_DESFRUTE_BASE : TIPOS_DESFRUTE_FAZENDA;
+  const isDesfrute = (tipo: string) => (tiposDesfrute as readonly string[]).includes(tipo);
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
