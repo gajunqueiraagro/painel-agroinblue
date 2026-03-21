@@ -148,15 +148,16 @@ export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange }: Props) 
       {/* Pie chart - Categorias */}
       <div className="bg-card rounded-lg p-4 shadow-sm border">
         <h2 className="font-bold text-foreground mb-3">Composição do Rebanho</h2>
-        <ResponsiveContainer width="100%" height={260}>
+        <ResponsiveContainer width="100%" height={320}>
           <PieChart>
             <Pie
               data={porCategoria}
               cx="50%"
-              cy="50%"
-              outerRadius={80}
+              cy="45%"
+              outerRadius={90}
+              innerRadius={40}
               dataKey="value"
-              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+              label={false}
               labelLine={false}
             >
               {porCategoria.map((_, i) => (
@@ -164,6 +165,15 @@ export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange }: Props) 
               ))}
             </Pie>
             <Tooltip formatter={(value: number) => [`${value} cab. (${totalRebanho > 0 ? ((value / totalRebanho) * 100).toFixed(1) : 0}%)`, '']} />
+            <Legend
+              verticalAlign="bottom"
+              formatter={(value: string, entry: any) => {
+                const item = porCategoria.find(c => c.name === value);
+                const pct = item && totalRebanho > 0 ? ((item.value / totalRebanho) * 100).toFixed(0) : 0;
+                return `${value} ${pct}%`;
+              }}
+              wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
+            />
           </PieChart>
         </ResponsiveContainer>
       </div>
