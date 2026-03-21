@@ -9,7 +9,7 @@ import { Settings } from 'lucide-react';
 
 interface Props {
   saldosIniciais: SaldoInicial[];
-  onSetSaldo: (ano: number, categoria: Categoria, quantidade: number) => void;
+  onSetSaldo: (ano: number, categoria: Categoria, quantidade: number, pesoMedioKg?: number) => void;
 }
 
 export function SaldoInicialForm({ saldosIniciais, onSetSaldo }: Props) {
@@ -23,21 +23,33 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo }: Props) {
     });
     return v;
   });
+  const [pesos, setPesos] = useState<Record<string, string>>(() => {
+    const p: Record<string, string> = {};
+    CATEGORIAS.forEach(c => {
+      const s = saldosIniciais.find(s => s.ano === Number(ano) && s.categoria === c.value);
+      p[c.value] = s?.pesoMedioKg ? String(s.pesoMedioKg) : '';
+    });
+    return p;
+  });
 
   const handleAnoChange = (novoAno: string) => {
     setAno(novoAno);
     const v: Record<string, string> = {};
+    const p: Record<string, string> = {};
     CATEGORIAS.forEach(c => {
       const s = saldosIniciais.find(s => s.ano === Number(novoAno) && s.categoria === c.value);
       v[c.value] = s ? String(s.quantidade) : '';
+      p[c.value] = s?.pesoMedioKg ? String(s.pesoMedioKg) : '';
     });
     setValores(v);
+    setPesos(p);
   };
 
   const handleSalvar = () => {
     CATEGORIAS.forEach(c => {
       const qtd = valores[c.value] ? Number(valores[c.value]) : 0;
-      onSetSaldo(Number(ano), c.value, qtd);
+      const peso = pesos[c.value] ? Number(pesos[c.value]) : undefined;
+      onSetSaldo(Number(ano), c.value, qtd, peso);
     });
     setOpen(false);
   };
@@ -68,16 +80,31 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo }: Props) {
           <p className="text-xs text-muted-foreground">Informe a quantidade de cabeças no início do ano por categoria:</p>
           <div className="space-y-2">
             {CATEGORIAS.map(c => (
-              <div key={c.value} className="flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold text-foreground flex-1">{c.label}</span>
-                <Input
-                  type="number"
-                  value={valores[c.value] || ''}
-                  onChange={e => setValores(v => ({ ...v, [c.value]: e.target.value }))}
-                  placeholder="0"
-                  min="0"
-                  className="w-24 text-center font-bold"
-                />
+              <div key={c.value} className="space-y-1">
+                <span className="text-sm font-semibold text-foreground">{c.label}</span>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <Input
+                      type="number"
+                      value={valores[c.value] || ''}
+                      onChange={e => setValores(v => ({ ...v, [c.value]: e.target.value }))}
+                      placeholder="Cab."
+                      min="0"
+                      className="text-center font-bold text-sm"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <Input
+                      type="number"
+                      value={pesos[c.value] || ''}
+                      onChange={e => setPesos(p => ({ ...p, [c.value]: e.target.value }))}
+                      placeholder="Peso kg"
+                      min="0"
+                      step="0.1"
+                      className="text-center text-sm"
+                    />
+                  </div>
+                </div>
               </div>
             ))}
           </div>

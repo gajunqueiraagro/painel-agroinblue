@@ -1,0 +1,1 @@
+ALTER TABLE public.saldos_iniciais ADD COLUMN peso_medio_kg numeric DEFAULT NULL;
