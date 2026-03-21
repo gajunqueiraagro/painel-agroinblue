@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Lancamento, SaldoInicial, CATEGORIAS, Categoria, isEntrada, isReclassificacao } from '@/types/cattle';
 
-const TIPOS_DESFRUTE = ['abate', 'venda', 'consumo'];
+const TIPOS_DESFRUTE_BASE = ['abate', 'venda', 'consumo'];
+const TIPOS_DESFRUTE_FAZENDA = ['abate', 'venda', 'consumo', 'transferencia_saida'];
 import { parseISO, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
@@ -14,13 +15,15 @@ interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
   onTabChange: (tab: TabId) => void;
+  isGlobal?: boolean;
 }
 
 const MESES_NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 const COLORS = ['#2563eb', '#16a34a', '#ea580c', '#8b5cf6', '#dc2626', '#0891b2', '#d97706', '#64748b', '#ec4899'];
 
-export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
+export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange, isGlobal = false }: Props) {
+  const TIPOS_DESFRUTE = isGlobal ? TIPOS_DESFRUTE_BASE : TIPOS_DESFRUTE_FAZENDA;
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
