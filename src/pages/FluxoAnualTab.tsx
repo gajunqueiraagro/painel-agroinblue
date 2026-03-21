@@ -3,10 +3,12 @@ import { Lancamento, SaldoInicial, isEntrada, isReclassificacao } from '@/types/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { parseISO, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import type { SubAba } from './FinanceiroTab';
 
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
+  onNavigateToMovimentacao?: (subAba: SubAba) => void;
 }
 
 const MESES_COLS = [
