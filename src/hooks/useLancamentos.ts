@@ -147,8 +147,8 @@ export function useLancamentos() {
 
   const adicionarLancamento = async (lancamento: Omit<Lancamento, 'id'>) => {
     if (!fazendaId) return;
-    const { data, error } = await supabase.from('lancamentos').insert({
-      fazenda_id: fazendaId,
+
+    const insertData = {
       data: lancamento.data,
       tipo: lancamento.tipo,
       quantidade: lancamento.quantidade,
@@ -160,6 +160,28 @@ export function useLancamentos() {
       peso_medio_arrobas: lancamento.pesoMedioArrobas || null,
       preco_medio_cabeca: lancamento.precoMedioCabeca || null,
       observacao: lancamento.observacao || null,
+    };
+
+    if (!isOnline()) {
+      addToQueue({
+        id: `offline-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        timestamp: Date.now(),
+        action: 'insert',
+        fazendaId,
+        data: insertData,
+      });
+      // Add locally with temp id
+      setLancamentos(prev => [{
+        id: `temp-${Date.now()}`,
+        ...lancamento,
+      }, ...prev]);
+      toast.info('Lançamento salvo na fila offline');
+      return;
+    }
+
+    const { data, error } = await supabase.from('lancamentos').insert({
+      fazenda_id: fazendaId,
+      ...insertData,
     }).select().single();
 
     if (!error && data) {
