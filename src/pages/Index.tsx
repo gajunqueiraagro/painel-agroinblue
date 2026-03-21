@@ -61,7 +61,7 @@ const Index = () => {
         }
       />
 
-      {activeTab === 'resumo' && <ResumoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
+      {activeTab === 'resumo' && <ResumoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={setActiveTab} />}
       {activeTab === 'movimentacao' && <MovimentacaoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
       {activeTab === 'lancamentos' && (
         <LancamentosTab
@@ -76,6 +76,9 @@ const Index = () => {
       {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />}
       {activeTab === 'financeiro' && <FinanceiroTab lancamentos={lancamentos} onEditar={editarLancamento} onRemover={removerLancamento} />}
       {activeTab === 'acessos' && <AcessosTab />}
+      {activeTab === 'analise' && <AnaliseTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={setActiveTab} />}
+      {activeTab === 'analise_entradas' && <AnaliseEntradasTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={setActiveTab} />}
+      {activeTab === 'analise_saidas' && <AnaliseSaidasTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onTabChange={setActiveTab} />}
 
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
