@@ -34,16 +34,14 @@ const MESES_OPTIONS = [
 ];
 const COLORS = ['#dc2626', '#ea580c', '#d97706', '#8b5cf6', '#64748b', '#2563eb', '#16a34a'];
 
-const TIPOS_DESFRUTE = ['abate', 'venda', 'consumo'] as const;
+const TIPOS_DESFRUTE_BASE = ['abate', 'venda', 'consumo'] as const;
+const TIPOS_DESFRUTE_FAZENDA = ['abate', 'venda', 'consumo', 'transferencia_saida'] as const;
 const TIPOS_DESFRUTE_LABELS: Record<string, string> = {
   abate: 'Abate',
   venda: 'Venda em Pé',
   consumo: 'Consumo',
+  transferencia_saida: 'Transf. Saída',
 };
-
-function isDesfrute(tipo: string): boolean {
-  return TIPOS_DESFRUTE.includes(tipo as any);
-}
 
 function calcArrobas(l: Lancamento): number {
   // Abate: usa total de arrobas informado diretamente (sem fórmula de kg)
