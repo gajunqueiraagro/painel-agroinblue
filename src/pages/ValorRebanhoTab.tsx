@@ -239,9 +239,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
       toast.info('Nenhum preço encontrado no mês anterior');
       return;
     }
-    const map: Record<string, number> = { ...precosLocal };
-    prev.forEach(p => { map[p.categoria] = p.preco_kg; });
-    setPrecosLocal(map);
+    const numMap: Record<string, number> = { ...precosLocal };
+    const strMap: Record<string, string> = { ...precosDisplay };
+    prev.forEach(p => {
+      numMap[p.categoria] = p.preco_kg;
+      strMap[p.categoria] = p.preco_kg > 0 ? String(p.preco_kg).replace('.', ',') : '';
+    });
+    setPrecosLocal(numMap);
+    setPrecosDisplay(strMap);
     toast.success(`${prev.length} preços copiados do mês anterior`);
   };
 
