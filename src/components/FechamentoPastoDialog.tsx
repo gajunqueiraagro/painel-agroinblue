@@ -146,7 +146,7 @@ export function FechamentoPastoDialog({
                   value={loteMes}
                   onChange={e => setLoteMes(e.target.value)}
                   disabled={isFechado}
-                  placeholder={pasto.lote_padrao || 'Lote'}
+                  placeholder="Lote"
                   className="h-10"
                 />
               </div>
