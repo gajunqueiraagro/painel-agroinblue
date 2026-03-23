@@ -144,36 +144,45 @@ export function useFechamento() {
     pastoId: string,
     anoMesAtual: string,
     categorias: CategoriaRebanho[]
-  ): Promise<{ categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string }[]> => {
-    // Calculate previous month
+  ): Promise<{ itens: { categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string }[]; dadosMes: { lote_mes: string | null; tipo_uso_mes: string | null; qualidade_mes: number | null; observacao_mes: string | null } }> => {
     const [y, m] = anoMesAtual.split('-').map(Number);
     const prev = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
 
     const { data: fechAnterior } = await supabase
       .from('fechamento_pastos')
-      .select('id')
+      .select('id, lote_mes, tipo_uso_mes, qualidade_mes, observacao_mes')
       .eq('pasto_id', pastoId)
       .eq('ano_mes', prev)
       .single();
 
     if (!fechAnterior) {
       toast.info('Sem dados do mês anterior');
-      return categorias.map(c => ({ categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: null, observacoes: null, origem_dado: 'manual' }));
+      return {
+        itens: categorias.map(c => ({ categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: null, observacoes: null, origem_dado: 'manual' })),
+        dadosMes: { lote_mes: null, tipo_uso_mes: null, qualidade_mes: null, observacao_mes: null },
+      };
     }
 
     const itens = await loadItens(fechAnterior.id);
-    // Map to current format
-    return categorias.map(c => {
-      const found = itens.find(i => i.categoria_id === c.id);
-      return {
-        categoria_id: c.id,
-        quantidade: found?.quantidade || 0,
-        peso_medio_kg: found?.peso_medio_kg || null,
-        lote: found?.lote || null,
-        observacoes: null,
-        origem_dado: found ? 'copiado_mes_anterior' : 'manual',
-      };
-    });
+    return {
+      itens: categorias.map(c => {
+        const found = itens.find(i => i.categoria_id === c.id);
+        return {
+          categoria_id: c.id,
+          quantidade: found?.quantidade || 0,
+          peso_medio_kg: found?.peso_medio_kg || null,
+          lote: found?.lote || null,
+          observacoes: null,
+          origem_dado: found ? 'copiado_mes_anterior' : 'manual',
+        };
+      }),
+      dadosMes: {
+        lote_mes: fechAnterior.lote_mes,
+        tipo_uso_mes: fechAnterior.tipo_uso_mes,
+        qualidade_mes: fechAnterior.qualidade_mes,
+        observacao_mes: fechAnterior.observacao_mes,
+      },
+    };
   }, [loadItens]);
 
   return { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, reabrirPasto, atualizarCamposMensais, copiarMesAnterior };
