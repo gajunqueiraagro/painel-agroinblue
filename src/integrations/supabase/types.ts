@@ -534,6 +534,53 @@ export type Database = {
           },
         ]
       }
+      valor_rebanho_fechamento: {
+        Row: {
+          ano_mes: string
+          created_at: string
+          fazenda_id: string
+          fechado_em: string | null
+          fechado_por: string | null
+          id: string
+          reaberto_em: string | null
+          reaberto_por: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          ano_mes: string
+          created_at?: string
+          fazenda_id: string
+          fechado_em?: string | null
+          fechado_por?: string | null
+          id?: string
+          reaberto_em?: string | null
+          reaberto_por?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          ano_mes?: string
+          created_at?: string
+          fazenda_id?: string
+          fechado_em?: string | null
+          fechado_por?: string | null
+          id?: string
+          reaberto_em?: string | null
+          reaberto_por?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "valor_rebanho_fechamento_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       valor_rebanho_mensal: {
         Row: {
           ano_mes: string
