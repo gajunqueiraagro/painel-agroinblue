@@ -40,7 +40,7 @@ interface Props {
   onSave: (items: FechamentoItem[]) => Promise<boolean>;
   onFechar: () => Promise<boolean>;
   onReabrir: () => Promise<boolean>;
-  onCopiar: () => Promise<FechamentoItem[]>;
+  onCopiar: () => Promise<{ itens: FechamentoItem[]; dadosMes: { lote_mes: string | null; tipo_uso_mes: string | null; qualidade_mes: number | null; observacao_mes: string | null } }>;
 }
 
 export function FechamentoPastoDialog({
@@ -105,8 +105,12 @@ export function FechamentoPastoDialog({
   };
 
   const handleCopiar = async () => {
-    const copied = await onCopiar();
+    const { itens: copied, dadosMes } = await onCopiar();
     setItens(copied);
+    if (dadosMes.lote_mes) setLoteMes(dadosMes.lote_mes);
+    if (dadosMes.tipo_uso_mes) setTipoUsoMes(dadosMes.tipo_uso_mes);
+    if (dadosMes.qualidade_mes !== null) setQualidadeMes(dadosMes.qualidade_mes);
+    if (dadosMes.observacao_mes) setObservacaoMes(dadosMes.observacao_mes);
   };
 
   const handleFechar = async () => {
