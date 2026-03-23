@@ -40,7 +40,7 @@ interface Props {
   onSave: (items: FechamentoItem[]) => Promise<boolean>;
   onFechar: () => Promise<boolean>;
   onReabrir: () => Promise<boolean>;
-  onCopiar: () => Promise<FechamentoItem[]>;
+  onCopiar: () => Promise<{ itens: FechamentoItem[]; dadosMes: { lote_mes: string | null; tipo_uso_mes: string | null; qualidade_mes: number | null; observacao_mes: string | null } }>;
 }
 
 export function FechamentoPastoDialog({
