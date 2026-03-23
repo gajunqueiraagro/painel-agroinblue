@@ -2,6 +2,24 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { CategoriaRebanho } from '@/hooks/usePastos';
 import type { PastoMapaRow, MapaTotais, AtividadeResumo } from '@/pages/MapaPastosTab';
+import logoUrl from '@/assets/logo.png';
+
+function loadLogoBase64(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = reject;
+    img.src = logoUrl;
+  });
+}
 
 const tipoUsoLabel = (t: string | null) => {
   if (!t) return '—';
@@ -18,7 +36,7 @@ function fmt(val: number | null | undefined, dec = 0): string {
   return val.toFixed(dec).replace('.', ',');
 }
 
-export function exportMapaPastosPdf(
+export async function exportMapaPastosPdf(
   rows: PastoMapaRow[],
   categorias: CategoriaRebanho[],
   totais: MapaTotais,
@@ -29,17 +47,30 @@ export function exportMapaPastosPdf(
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
 
+  let startY = 5;
+
+  // Logo
+  try {
+    const logoData = await loadLogoBase64();
+    const logoH = 12;
+    const logoW = logoH * 2;
+    doc.addImage(logoData, 'PNG', pageWidth / 2 - logoW / 2, startY, logoW, logoH);
+    startY += logoH + 3;
+  } catch { /* skip logo if fails */ }
+
   // Title
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
-  doc.text(`Mapa de Pastos — ${fazendaNome}`, 14, 15);
+  doc.text(`Mapa de Pastos — ${fazendaNome}`, pageWidth / 2, startY + 5, { align: 'center' });
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Referência: ${anoMes.split('-').reverse().join('/')}`, 14, 21);
+  doc.text(`Referência: ${anoMes.split('-').reverse().join('/')}`, pageWidth / 2, startY + 11, { align: 'center' });
 
   // Summary badges
   doc.setFontSize(9);
-  doc.text(`Total: ${totais.totalCab} cab  |  Área: ${fmt(totais.areaTotal, 1)} ha  |  Peso Méd.: ${totais.pesoMedioGeral ? fmt(totais.pesoMedioGeral, 2) : '—'} kg  |  UA/ha: ${totais.uaHaGeral ? fmt(totais.uaHaGeral, 2) : '—'}`, 14, 27);
+  doc.text(`Total: ${totais.totalCab} cab  |  Área: ${fmt(totais.areaTotal, 1)} ha  |  Peso Méd.: ${totais.pesoMedioGeral ? fmt(totais.pesoMedioGeral, 2) : '—'} kg  |  UA/ha: ${totais.uaHaGeral ? fmt(totais.uaHaGeral, 2) : '—'}`, pageWidth / 2, startY + 17, { align: 'center' });
+
+  const tableStartY = startY + 21;
 
   // Main table
   const catCols = categorias.map(c => c.nome);
@@ -79,7 +110,7 @@ export function exportMapaPastosPdf(
   ]);
 
   autoTable(doc, {
-    startY: 31,
+    startY: tableStartY,
     head,
     body,
     styles: { fontSize: 7, cellPadding: 1.5 },
