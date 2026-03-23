@@ -228,12 +228,76 @@ export function useIndicadoresZootecnicos(
   lancamentos: Lancamento[],
   saldosIniciais: SaldoInicial[],
   pastos: Pasto[],
+  categorias?: { id: string; codigo: string; nome: string; ordem_exibicao: number }[],
 ) {
   const [valorRebanhoData, setValorRebanhoData] = useState<{ total: number; fechado: boolean } | null>(null);
   const [valorRebanhoYoY, setValorRebanhoYoY] = useState<number | null>(null);
   const [loadingValor, setLoadingValor] = useState(false);
+  // Pesos oficiais do fechamento de pasto (código→peso)
+  const [pesoFechamentoMap, setPesoFechamentoMap] = useState<Record<string, number>>({});
+  const [pesoFechamentoMesAntMap, setPesoFechamentoMesAntMap] = useState<Record<string, number>>({});
 
   const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
+
+  // --- Load pesos do fechamento de pasto (mês atual + mês anterior) ---
+  const loadPesosFechamento = useCallback(async () => {
+    if (!fazendaId || fazendaId === '__global__' || !categorias?.length) {
+      setPesoFechamentoMap({});
+      setPesoFechamentoMesAntMap({});
+      return;
+    }
+    const idToCodigo = new Map(categorias.map(c => [c.id, c.codigo]));
+
+    const loadForMonth = async (targetAnoMes: string): Promise<Record<string, number>> => {
+      const { data: fechamentos } = await supabase
+        .from('fechamento_pastos')
+        .select('id')
+        .eq('fazenda_id', fazendaId)
+        .eq('ano_mes', targetAnoMes);
+      if (!fechamentos?.length) return {};
+
+      const { data: itens } = await supabase
+        .from('fechamento_pasto_itens')
+        .select('categoria_id, quantidade, peso_medio_kg')
+        .in('fechamento_id', fechamentos.map(f => f.id));
+      if (!itens) return {};
+
+      const acum: Record<string, { totalPeso: number; totalQtd: number }> = {};
+      itens.forEach(item => {
+        if (!item.peso_medio_kg || item.peso_medio_kg <= 0 || item.quantidade <= 0) return;
+        if (!acum[item.categoria_id]) acum[item.categoria_id] = { totalPeso: 0, totalQtd: 0 };
+        acum[item.categoria_id].totalPeso += item.peso_medio_kg * item.quantidade;
+        acum[item.categoria_id].totalQtd += item.quantidade;
+      });
+
+      const map: Record<string, number> = {};
+      Object.entries(acum).forEach(([catId, { totalPeso, totalQtd }]) => {
+        const codigo = idToCodigo.get(catId);
+        if (codigo && totalQtd > 0) map[codigo] = totalPeso / totalQtd;
+      });
+      return map;
+    };
+
+    try {
+      // Mês anterior
+      let mesAntAno = ano;
+      let mesAntMes = mes - 1;
+      if (mesAntMes < 1) { mesAntMes = 12; mesAntAno--; }
+      const mesAntStr = `${mesAntAno}-${String(mesAntMes).padStart(2, '0')}`;
+
+      const [mapAtual, mapAnt] = await Promise.all([
+        loadForMonth(anoMes),
+        loadForMonth(mesAntStr),
+      ]);
+      setPesoFechamentoMap(mapAtual);
+      setPesoFechamentoMesAntMap(mapAnt);
+    } catch {
+      setPesoFechamentoMap({});
+      setPesoFechamentoMesAntMap({});
+    }
+  }, [fazendaId, anoMes, ano, mes, categorias]);
+
+  useEffect(() => { loadPesosFechamento(); }, [loadPesosFechamento]);
 
   // --- Load valor rebanho (current + YoY) ---
   const loadValorRebanho = useCallback(async () => {
@@ -264,14 +328,14 @@ export function useIndicadoresZootecnicos(
           .eq('ano_mes', anoMesYoY),
       ]);
 
-      // Current month value
+      // Current month value — usa hierarquia oficial de peso
       if (precosRes.data && precosRes.data.length > 0) {
         const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
         const precoMap = new Map(precosRes.data.map(p => [p.categoria, Number(p.preco_kg)]));
         let total = 0;
         saldoMap.forEach((qtd, cat) => {
           const preco = precoMap.get(cat) || 0;
-          const pesoKg = getPesoMedioCat(cat, saldosIniciais, lancamentos, ano, mes);
+          const { valor: pesoKg } = getPesoOficial(cat, saldosIniciais, lancamentos, ano, mes, pesoFechamentoMap);
           total += qtd * (pesoKg || 0) * preco;
         });
         setValorRebanhoData({
@@ -302,7 +366,7 @@ export function useIndicadoresZootecnicos(
     } finally {
       setLoadingValor(false);
     }
-  }, [fazendaId, anoMes, saldosIniciais, lancamentos, ano, mes]);
+  }, [fazendaId, anoMes, saldosIniciais, lancamentos, ano, mes, pesoFechamentoMap]);
 
   useEffect(() => { loadValorRebanho(); }, [loadValorRebanho]);
 
