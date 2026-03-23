@@ -6,6 +6,8 @@ import { parseISO, format } from 'date-fns';
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
+  initialAno?: string;
+  initialMes?: string;
 }
 
 const MESES = [
@@ -36,7 +38,7 @@ const COLUNAS_MOV = [
   { tipo: 'reclassificacao_saida', label: 'Recl.S', entrada: false },
 ];
 
-export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais }: Props) {
+export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, initialMes }: Props) {
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
@@ -47,20 +49,18 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais }: Props) {
     return Array.from(anos).sort().reverse();
   }, [lancamentos, saldosIniciais]);
 
-  const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
-  const [mesFiltro, setMesFiltro] = useState(format(new Date(), 'MM'));
+  const [anoFiltro, setAnoFiltro] = useState(initialAno || String(new Date().getFullYear()));
+  const [mesFiltro, setMesFiltro] = useState(initialMes || format(new Date(), 'MM'));
 
   const dados = useMemo(() => {
     const mesKey = `${anoFiltro}-${mesFiltro}`;
 
-    // Filter lancamentos for selected month
     const filtrados = lancamentos.filter(l => {
       try {
         return format(parseISO(l.data), 'yyyy-MM') === mesKey;
       } catch { return false; }
     });
 
-    // Filter lancamentos before selected month (for cumulative saldo inicial)
     const anteriores = lancamentos.filter(l => {
       try {
         return format(parseISO(l.data), 'yyyy-MM') < mesKey;
@@ -68,12 +68,10 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais }: Props) {
     });
 
     return CATEGORIAS.map(cat => {
-      // Saldo inicial do ano
       const saldoAno = saldosIniciais
         .filter(s => s.ano === Number(anoFiltro) && s.categoria === cat.value)
         .reduce((sum, s) => sum + s.quantidade, 0);
 
-      // Movimentações anteriores ao mês (acumulado desde início do ano)
       const anterioresAno = anteriores.filter(l => {
         try {
           return format(parseISO(l.data), 'yyyy') === anoFiltro;
@@ -95,7 +93,6 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais }: Props) {
 
       const saldoInicioMes = saldoAno + entradasAnt - saidasAnt + reclassEntAnt - reclassSaiAnt;
 
-      // Movimentações do mês
       const getQtd = (tipo: string) => {
         if (tipo === 'reclassificacao_entrada') {
           return filtrados
@@ -118,12 +115,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais }: Props) {
       const totalSaidas = movs.slice(4).reduce((a, b) => a + b, 0);
       const saldoFinal = saldoInicioMes + totalEntradas - totalSaidas;
 
-      return {
-        ...cat,
-        saldoInicioMes,
-        movs,
-        saldoFinal,
-      };
+      return { ...cat, saldoInicioMes, movs, saldoFinal };
     });
   }, [lancamentos, saldosIniciais, anoFiltro, mesFiltro]);
 
@@ -200,7 +192,6 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais }: Props) {
                 </td>
               </tr>
             ))}
-            {/* Total */}
             <tr className="border-t-2 bg-primary/10">
               <td className="px-2 py-2 font-extrabold text-foreground sticky left-0 bg-primary/10">TOTAL</td>
               <td className="px-2 py-2 text-center font-extrabold text-foreground">{totais.saldoIni}</td>

@@ -4,8 +4,6 @@ import { Header } from '@/components/Header';
 import { ResumoTab } from './ResumoTab';
 import { MovimentacaoTab } from './MovimentacaoTab';
 import { LancamentosTab } from './LancamentosTab';
-import { EvolucaoTab } from './EvolucaoTab';
-import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import { FluxoAnualTab } from './FluxoAnualTab';
 import { FinanceiroTab, type SubAba } from './FinanceiroTab';
 import { AcessosTab } from './AcessosTab';
@@ -14,8 +12,6 @@ import { AnaliseEntradasTab } from './AnaliseEntradasTab';
 import { AnaliseSaidasTab } from './AnaliseSaidasTab';
 import { DesfrunteTab } from './DesfrunteTab';
 import { CadastrosTab } from './CadastrosTab';
-import { ChuvasTab } from './ChuvasTab';
-import { PastosTab } from './PastosTab';
 import { ConciliacaoHubTab } from './ConciliacaoHubTab';
 
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
@@ -30,11 +26,11 @@ import { useAuth } from '@/contexts/AuthContext';
 const TITLES: Record<TabId, string> = {
   resumo: 'Controle de Rebanho',
   movimentacao: 'Fluxo Mensal',
-  lancamentos: 'Lançamentos',
+  lancamentos: 'Lançar Rebanho',
   financeiro: 'Movimentações',
   evolucao: 'Categorias por Mês',
   evolucao_categoria: 'Evolução por Categoria',
-  fluxo_anual: 'Fluxo Anual',
+  fluxo_anual: 'Evolução Rebanho',
   acessos: 'Acessos',
   analise: 'Análise Gráfica',
   analise_entradas: 'Análise de Entradas',
@@ -58,7 +54,6 @@ const Index = () => {
   const isDono = fazendaAtual?.owner_id === user?.id;
   const isDonoOuGerente = isDono || papel === 'gerente';
 
-  // In global mode, filter out internal transfers (transferencia_entrada and transferencia_saida)
   const lancamentosVisiveis = useMemo(() => {
     if (!isGlobal) return lancamentos;
     return lancamentos.filter(l => l.tipo !== 'transferencia_entrada' && l.tipo !== 'transferencia_saida');
@@ -104,8 +99,6 @@ const Index = () => {
           onRemover={isGlobal ? async () => {} : removerLancamento}
         />
       )}
-      {activeTab === 'evolucao' && <EvolucaoTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} />}
-      {activeTab === 'evolucao_categoria' && <EvolucaoCategoriaTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} />}
       {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} />}
       {activeTab === 'financeiro' && <FinanceiroTab lancamentos={lancamentosVisiveis} onEditar={isGlobal ? async () => {} : editarLancamento} onRemover={isGlobal ? async () => {} : removerLancamento} subAbaInicial={subAbaFinanceiro} />}
       {activeTab === 'acessos' && <AcessosTab />}
@@ -114,8 +107,6 @@ const Index = () => {
       {activeTab === 'analise_saidas' && <AnaliseSaidasTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
       {activeTab === 'desfrute' && <DesfrunteTab lancamentos={isGlobal ? lancamentosVisiveis : lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} isGlobal={isGlobal} />}
       {activeTab === 'cadastros' && <CadastrosTab />}
-      {activeTab === 'chuvas' && <ChuvasTab />}
-      {activeTab === 'pastos' && <PastosTab />}
       {activeTab === 'conciliacao' && <ConciliacaoHubTab />}
 
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
