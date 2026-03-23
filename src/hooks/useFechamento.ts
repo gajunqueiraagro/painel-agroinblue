@@ -156,5 +156,5 @@ export function useFechamento() {
     });
   }, [loadItens]);
 
-  return { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, reabrirPasto, copiarMesAnterior };
+  return { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, reabrirPasto, atualizarCamposMensais, copiarMesAnterior };
 }
