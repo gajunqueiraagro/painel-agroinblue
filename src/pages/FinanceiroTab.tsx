@@ -380,8 +380,8 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial 
           lancamento={editando}
           open={!!editando}
           onClose={() => setEditando(null)}
-          onSave={(dados) => { onEditar(editando.id, dados); setEditando(null); }}
-          onRemover={() => { onRemover(editando.id); setEditando(null); }}
+          onSave={(id, dados) => { onEditar(id, dados); setEditando(null); }}
+          onDelete={(id) => { onRemover(id); setEditando(null); }}
         />
       )}
     </div>
