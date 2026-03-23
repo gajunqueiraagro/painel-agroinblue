@@ -61,12 +61,16 @@ export interface GmdMovDetalhe {
   pesoTotalKg: number;
 }
 
+/** Fonte do peso médio por categoria */
+export type FontePeso = 'fechamento' | 'lancamento' | 'saldo_inicial' | 'nenhuma';
+
 /** Detalhe de estoque por categoria */
 export interface EstoqueCategoriaDetalhe {
   categoria: string;
   cabecas: number;
   pesoMedioKg: number | null;
   pesoTotalKg: number;
+  fontePeso: FontePeso;
 }
 
 /** Estrutura completa da abertura do cálculo do GMD */
@@ -224,12 +228,76 @@ export function useIndicadoresZootecnicos(
   lancamentos: Lancamento[],
   saldosIniciais: SaldoInicial[],
   pastos: Pasto[],
+  categorias?: { id: string; codigo: string; nome: string; ordem_exibicao: number }[],
 ) {
   const [valorRebanhoData, setValorRebanhoData] = useState<{ total: number; fechado: boolean } | null>(null);
   const [valorRebanhoYoY, setValorRebanhoYoY] = useState<number | null>(null);
   const [loadingValor, setLoadingValor] = useState(false);
+  // Pesos oficiais do fechamento de pasto (código→peso)
+  const [pesoFechamentoMap, setPesoFechamentoMap] = useState<Record<string, number>>({});
+  const [pesoFechamentoMesAntMap, setPesoFechamentoMesAntMap] = useState<Record<string, number>>({});
 
   const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
+
+  // --- Load pesos do fechamento de pasto (mês atual + mês anterior) ---
+  const loadPesosFechamento = useCallback(async () => {
+    if (!fazendaId || fazendaId === '__global__' || !categorias?.length) {
+      setPesoFechamentoMap({});
+      setPesoFechamentoMesAntMap({});
+      return;
+    }
+    const idToCodigo = new Map(categorias.map(c => [c.id, c.codigo]));
+
+    const loadForMonth = async (targetAnoMes: string): Promise<Record<string, number>> => {
+      const { data: fechamentos } = await supabase
+        .from('fechamento_pastos')
+        .select('id')
+        .eq('fazenda_id', fazendaId)
+        .eq('ano_mes', targetAnoMes);
+      if (!fechamentos?.length) return {};
+
+      const { data: itens } = await supabase
+        .from('fechamento_pasto_itens')
+        .select('categoria_id, quantidade, peso_medio_kg')
+        .in('fechamento_id', fechamentos.map(f => f.id));
+      if (!itens) return {};
+
+      const acum: Record<string, { totalPeso: number; totalQtd: number }> = {};
+      itens.forEach(item => {
+        if (!item.peso_medio_kg || item.peso_medio_kg <= 0 || item.quantidade <= 0) return;
+        if (!acum[item.categoria_id]) acum[item.categoria_id] = { totalPeso: 0, totalQtd: 0 };
+        acum[item.categoria_id].totalPeso += item.peso_medio_kg * item.quantidade;
+        acum[item.categoria_id].totalQtd += item.quantidade;
+      });
+
+      const map: Record<string, number> = {};
+      Object.entries(acum).forEach(([catId, { totalPeso, totalQtd }]) => {
+        const codigo = idToCodigo.get(catId);
+        if (codigo && totalQtd > 0) map[codigo] = totalPeso / totalQtd;
+      });
+      return map;
+    };
+
+    try {
+      // Mês anterior
+      let mesAntAno = ano;
+      let mesAntMes = mes - 1;
+      if (mesAntMes < 1) { mesAntMes = 12; mesAntAno--; }
+      const mesAntStr = `${mesAntAno}-${String(mesAntMes).padStart(2, '0')}`;
+
+      const [mapAtual, mapAnt] = await Promise.all([
+        loadForMonth(anoMes),
+        loadForMonth(mesAntStr),
+      ]);
+      setPesoFechamentoMap(mapAtual);
+      setPesoFechamentoMesAntMap(mapAnt);
+    } catch {
+      setPesoFechamentoMap({});
+      setPesoFechamentoMesAntMap({});
+    }
+  }, [fazendaId, anoMes, ano, mes, categorias]);
+
+  useEffect(() => { loadPesosFechamento(); }, [loadPesosFechamento]);
 
   // --- Load valor rebanho (current + YoY) ---
   const loadValorRebanho = useCallback(async () => {
@@ -260,14 +328,14 @@ export function useIndicadoresZootecnicos(
           .eq('ano_mes', anoMesYoY),
       ]);
 
-      // Current month value
+      // Current month value — usa hierarquia oficial de peso
       if (precosRes.data && precosRes.data.length > 0) {
         const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
         const precoMap = new Map(precosRes.data.map(p => [p.categoria, Number(p.preco_kg)]));
         let total = 0;
         saldoMap.forEach((qtd, cat) => {
           const preco = precoMap.get(cat) || 0;
-          const pesoKg = getPesoMedioCat(cat, saldosIniciais, lancamentos, ano, mes);
+          const { valor: pesoKg } = getPesoOficial(cat, saldosIniciais, lancamentos, ano, mes, pesoFechamentoMap);
           total += qtd * (pesoKg || 0) * preco;
         });
         setValorRebanhoData({
@@ -298,7 +366,7 @@ export function useIndicadoresZootecnicos(
     } finally {
       setLoadingValor(false);
     }
-  }, [fazendaId, anoMes, saldosIniciais, lancamentos, ano, mes]);
+  }, [fazendaId, anoMes, saldosIniciais, lancamentos, ano, mes, pesoFechamentoMap]);
 
   useEffect(() => { loadValorRebanho(); }, [loadValorRebanho]);
 
@@ -313,11 +381,12 @@ export function useIndicadoresZootecnicos(
       .filter(s => s.ano === ano)
       .reduce((sum, s) => sum + s.quantidade, 0);
 
-    // Peso médio
+    // Peso médio — usa hierarquia oficial (fechamento > lançamento > saldo_inicial)
     const itensParaPeso: { quantidade: number; pesoKg: number | null }[] = [];
     saldoMap.forEach((qtd, cat) => {
       if (qtd > 0) {
-        itensParaPeso.push({ quantidade: qtd, pesoKg: getPesoMedioCat(cat, saldosIniciais, lancamentos, ano, mes) });
+        const { valor } = getPesoOficial(cat, saldosIniciais, lancamentos, ano, mes, pesoFechamentoMap);
+        itensParaPeso.push({ quantidade: qtd, pesoKg: valor });
       }
     });
     const pesoMedioRebanhoKg = calcPesoMedioPonderado(itensParaPeso);
@@ -355,19 +424,19 @@ export function useIndicadoresZootecnicos(
     // ===== GMD MÊS (com abertura) =====
     const diasMes = new Date(ano, mes, 0).getDate();
 
-    // Peso final: soma por categoria (saldo_cat × peso_medio_cat)
+    // Peso final: soma por categoria usando hierarquia oficial
     const estoqueFinalDetalhe: EstoqueCategoriaDetalhe[] = [];
     let pesoFinalMes = 0;
     saldoMap.forEach((qtd, cat) => {
-      const pesoMedio = getPesoMedioCat(cat, saldosIniciais, lancamentos, ano, mes);
+      const { valor: pesoMedio, fonte } = getPesoOficial(cat, saldosIniciais, lancamentos, ano, mes, pesoFechamentoMap);
       const pesoTotal = qtd * (pesoMedio || 0);
       pesoFinalMes += pesoTotal;
       if (qtd !== 0) {
-        estoqueFinalDetalhe.push({ categoria: cat, cabecas: qtd, pesoMedioKg: pesoMedio, pesoTotalKg: pesoTotal });
+        estoqueFinalDetalhe.push({ categoria: cat, cabecas: qtd, pesoMedioKg: pesoMedio, pesoTotalKg: pesoTotal, fontePeso: fonte });
       }
     });
 
-    // Peso inicial: soma por categoria do mês anterior
+    // Peso inicial: soma por categoria do mês anterior usando hierarquia oficial
     const estoqueInicialDetalhe: EstoqueCategoriaDetalhe[] = [];
     let pesoInicialMes = 0;
     const saldoMapAnterior = mes > 1
@@ -379,11 +448,11 @@ export function useIndicadoresZootecnicos(
 
     if (mes > 1) {
       saldoMapAnterior.forEach((qtd, cat) => {
-        const pesoMedio = getPesoMedioCat(cat, saldosIniciais, lancamentos, ano, mes - 1);
+        const { valor: pesoMedio, fonte } = getPesoOficial(cat, saldosIniciais, lancamentos, ano, mes - 1, pesoFechamentoMesAntMap);
         const pesoTotal = qtd * (pesoMedio || 0);
         pesoInicialMes += pesoTotal;
         if (qtd !== 0) {
-          estoqueInicialDetalhe.push({ categoria: cat, cabecas: qtd, pesoMedioKg: pesoMedio, pesoTotalKg: pesoTotal });
+          estoqueInicialDetalhe.push({ categoria: cat, cabecas: qtd, pesoMedioKg: pesoMedio, pesoTotalKg: pesoTotal, fontePeso: fonte });
         }
       });
     } else {
@@ -393,7 +462,7 @@ export function useIndicadoresZootecnicos(
         const pesoTotal = s.quantidade * (pesoMedio || 0);
         pesoInicialMes += pesoTotal;
         if (s.quantidade !== 0) {
-          estoqueInicialDetalhe.push({ categoria: s.categoria, cabecas: s.quantidade, pesoMedioKg: pesoMedio, pesoTotalKg: pesoTotal });
+          estoqueInicialDetalhe.push({ categoria: s.categoria, cabecas: s.quantidade, pesoMedioKg: pesoMedio, pesoTotalKg: pesoTotal, fontePeso: 'saldo_inicial' });
         }
       });
     }
@@ -522,7 +591,7 @@ export function useIndicadoresZootecnicos(
       },
       loading,
     };
-  }, [lancamentos, saldosIniciais, pastos, ano, mes, anoMes, valorRebanhoData, valorRebanhoYoY, loadingValor]);
+  }, [lancamentos, saldosIniciais, pastos, ano, mes, anoMes, valorRebanhoData, valorRebanhoYoY, loadingValor, pesoFechamentoMap, pesoFechamentoMesAntMap]);
 
   return indicadores;
 }
@@ -530,6 +599,38 @@ export function useIndicadoresZootecnicos(
 // ---------------------------------------------------------------------------
 // Helpers de peso (internos)
 // ---------------------------------------------------------------------------
+
+/**
+ * Hierarquia oficial de peso médio por categoria:
+ * 1. Fechamento de pasto (prioridade máxima)
+ * 2. Último lançamento com peso no período
+ * 3. Saldo inicial do ano (fallback)
+ */
+function getPesoOficial(
+  catCodigo: string,
+  saldosIniciais: SaldoInicial[],
+  lancamentos: Lancamento[],
+  ano: number,
+  mes: number,
+  fechamentoMap: Record<string, number>,
+): { valor: number | null; fonte: FontePeso } {
+  // 1. Fechamento de pasto
+  if (fechamentoMap[catCodigo] && fechamentoMap[catCodigo] > 0) {
+    return { valor: fechamentoMap[catCodigo], fonte: 'fechamento' };
+  }
+  // 2. Último lançamento com peso
+  const lancsAteMes = lancamentos.filter(
+    l => l.categoria === catCodigo && l.data <= `${ano}-${String(mes).padStart(2, '0')}-31` && l.pesoMedioKg && l.pesoMedioKg > 0,
+  );
+  if (lancsAteMes.length > 0) {
+    const sorted = [...lancsAteMes].sort((a, b) => b.data.localeCompare(a.data));
+    return { valor: sorted[0].pesoMedioKg!, fonte: 'lancamento' };
+  }
+  // 3. Saldo inicial
+  const si = saldosIniciais.find(s => s.ano === ano && s.categoria === catCodigo);
+  if (si?.pesoMedioKg && si.pesoMedioKg > 0) return { valor: si.pesoMedioKg, fonte: 'saldo_inicial' };
+  return { valor: null, fonte: 'nenhuma' };
+}
 
 function getPesoMedioCat(
   catCodigo: string,

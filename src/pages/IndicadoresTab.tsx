@@ -15,7 +15,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
-import { useIndicadoresZootecnicos, type Comparacao, type GmdAbertura, type EstoqueCategoriaDetalhe } from '@/hooks/useIndicadoresZootecnicos';
+import { useIndicadoresZootecnicos, type Comparacao, type GmdAbertura, type EstoqueCategoriaDetalhe, type FontePeso } from '@/hooks/useIndicadoresZootecnicos';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_COLS } from '@/lib/calculos/labels';
 
@@ -26,7 +26,7 @@ interface Props {
 
 export function IndicadoresTab({ lancamentos, saldosIniciais }: Props) {
   const { fazendaAtual } = useFazenda();
-  const { pastos } = usePastos();
+  const { pastos, categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
 
   const anosDisponiveis = useMemo(() => {
@@ -47,6 +47,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais }: Props) {
     lancamentos,
     saldosIniciais,
     pastos,
+    categorias,
   );
 
   const mesLabel = MESES_COLS.find(m => m.key === mesFiltro)?.label || mesFiltro;
@@ -469,6 +470,19 @@ function GmdMovSection({ title, itens }: { title: string; itens: { tipo: string;
 // Sub-componentes — Estoque por Categoria (para GMD)
 // ---------------------------------------------------------------------------
 
+const FONTE_LABEL: Record<FontePeso, string> = {
+  fechamento: 'Fechamento de pasto',
+  lancamento: 'Último lançamento',
+  saldo_inicial: 'Saldo inicial',
+  nenhuma: 'Sem dados',
+};
+const FONTE_LABEL_SHORT: Record<FontePeso, string> = {
+  fechamento: 'fech.',
+  lancamento: 'lanç.',
+  saldo_inicial: 'ini.',
+  nenhuma: '?',
+};
+
 function EstoqueDetalheSection({ title, itens }: { title: string; itens: EstoqueCategoriaDetalhe[] }) {
   const [open, setOpen] = useState(false);
   const totalCab = itens.reduce((s, i) => s + i.cabecas, 0);
@@ -489,10 +503,15 @@ function EstoqueDetalheSection({ title, itens }: { title: string; itens: Estoque
       <CollapsibleContent>
         <div className="space-y-1 text-sm pl-1">
           {itens.map(item => (
-            <div key={item.categoria} className="flex justify-between text-muted-foreground">
-              <span>{item.categoria}</span>
-              <span>
+            <div key={item.categoria} className="flex justify-between text-muted-foreground gap-2">
+              <span className="truncate">{item.categoria}</span>
+              <span className="whitespace-nowrap flex items-center gap-1">
                 {item.cabecas} cab · {item.pesoMedioKg !== null ? formatNum(item.pesoMedioKg, 1) : '?'} kg/cab · {formatNum(item.pesoTotalKg, 0)} kg
+                {item.fontePeso && item.fontePeso !== 'nenhuma' && (
+                  <span className="text-[10px] text-muted-foreground/60" title={`Fonte: ${FONTE_LABEL[item.fontePeso]}`}>
+                    ({FONTE_LABEL_SHORT[item.fontePeso]})
+                  </span>
+                )}
               </span>
             </div>
           ))}
