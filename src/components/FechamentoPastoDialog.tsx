@@ -160,7 +160,7 @@ export function FechamentoPastoDialog({
                   value={qualidadeMes ?? ''}
                   onChange={e => setQualidadeMes(e.target.value ? Number(e.target.value) : null)}
                   disabled={isFechado}
-                  placeholder={pasto.qualidade?.toString() || '—'}
+                  placeholder="1-10"
                   className="h-10"
                 />
               </div>
