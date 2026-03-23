@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { Save, Copy, Eye, EyeOff } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Save, Copy, Eye, EyeOff, Info } from 'lucide-react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
@@ -11,8 +12,31 @@ import { useValorRebanho } from '@/hooks/useValorRebanho';
 import { calcSaldoPorCategoria } from '@/lib/calculos/zootecnicos';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_COLS } from '@/lib/calculos/labels';
+import { supabase } from '@/integrations/supabase/client';
 import { parseISO, format } from 'date-fns';
 import { toast } from 'sonner';
+
+/**
+ * Fonte do peso médio por categoria — hierarquia de prioridade:
+ *
+ * 1. "fechamento" — Peso médio ponderado dos fechamentos de pasto do mês
+ *    (média ponderada por qtd de `fechamento_pasto_itens` da mesma categoria).
+ *    Fonte oficial quando o mês tem fechamento completo.
+ *
+ * 2. "lancamento" — Último lançamento com peso no período (jan→mês atual).
+ *    Usado como dado mais recente disponível quando não há fechamento.
+ *
+ * 3. "saldo_inicial" — Peso médio informado no saldo inicial do ano.
+ *    Fallback base quando não há nenhum dado mais atual.
+ *
+ * Se nenhuma fonte disponível → peso = 0 (sem estimativa forçada).
+ */
+type FontePeso = 'fechamento' | 'lancamento' | 'saldo_inicial';
+
+interface PesoInfo {
+  valor: number;
+  fonte: FontePeso;
+}
 
 interface Props {
   lancamentos: Lancamento[];
@@ -22,6 +46,7 @@ interface Props {
 export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
   const { fazendaAtual, isGlobal } = useFazenda();
   const { categorias } = usePastos();
+  const fazendaId = fazendaAtual?.id;
 
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
@@ -41,38 +66,98 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
 
   const [precosLocal, setPrecosLocal] = useState<Record<string, number>>({});
 
+  // --- Fechamento: peso médio ponderado por categoria_id ---
+  const [pesoFechamentoMap, setPesoFechamentoMap] = useState<Record<string, number>>({});
+
+  const loadPesosFechamento = useCallback(async () => {
+    if (!fazendaId || fazendaId === '__global__') return;
+    try {
+      // Get all fechamentos for this month
+      const { data: fechamentos } = await supabase
+        .from('fechamento_pastos')
+        .select('id')
+        .eq('fazenda_id', fazendaId)
+        .eq('ano_mes', anoMes);
+
+      if (!fechamentos || fechamentos.length === 0) {
+        setPesoFechamentoMap({});
+        return;
+      }
+
+      const fechIds = fechamentos.map(f => f.id);
+      const { data: itens } = await supabase
+        .from('fechamento_pasto_itens')
+        .select('categoria_id, quantidade, peso_medio_kg')
+        .in('fechamento_id', fechIds);
+
+      if (!itens) { setPesoFechamentoMap({}); return; }
+
+      // Média ponderada por categoria_id
+      const acum: Record<string, { totalPeso: number; totalQtd: number }> = {};
+      itens.forEach(item => {
+        if (!item.peso_medio_kg || item.peso_medio_kg <= 0 || item.quantidade <= 0) return;
+        if (!acum[item.categoria_id]) acum[item.categoria_id] = { totalPeso: 0, totalQtd: 0 };
+        acum[item.categoria_id].totalPeso += item.peso_medio_kg * item.quantidade;
+        acum[item.categoria_id].totalQtd += item.quantidade;
+      });
+
+      const map: Record<string, number> = {};
+      // Map from categoria_id → codigo for consistency
+      const idToCodigo = new Map(categorias.map(c => [c.id, c.codigo]));
+      Object.entries(acum).forEach(([catId, { totalPeso, totalQtd }]) => {
+        const codigo = idToCodigo.get(catId);
+        if (codigo && totalQtd > 0) {
+          map[codigo] = totalPeso / totalQtd;
+        }
+      });
+      setPesoFechamentoMap(map);
+    } catch {
+      setPesoFechamentoMap({});
+    }
+  }, [fazendaId, anoMes, categorias]);
+
+  useEffect(() => { loadPesosFechamento(); }, [loadPesosFechamento]);
+
   // Saldo final do mês por categoria
   const saldoMap = useMemo(() => {
     if (!categorias.length) return new Map<string, number>();
     return calcSaldoPorCategoria(saldosIniciais, lancamentos, Number(anoFiltro), Number(mesFiltro), categorias);
   }, [saldosIniciais, lancamentos, anoFiltro, mesFiltro, categorias]);
 
-  // Peso médio ponderado por categoria — usa saldo inicial + movimentações com peso
+  // --- Peso médio com hierarquia de fontes e rastreamento ---
   const pesoMedioMap = useMemo(() => {
-    const map: Record<string, number> = {};
-    // Base: saldo inicial do ano
+    const map: Record<string, PesoInfo> = {};
+
+    // Nível 3 (fallback): saldo inicial do ano
     saldosIniciais
       .filter(s => s.ano === Number(anoFiltro))
       .forEach(s => {
         if (s.pesoMedioKg && s.pesoMedioKg > 0) {
-          map[s.categoria] = s.pesoMedioKg;
+          map[s.categoria] = { valor: s.pesoMedioKg, fonte: 'saldo_inicial' };
         }
       });
-    // Override com último lançamento que tenha peso no período (mais recente = mais atual)
-    const mesStr = mesFiltro;
-    const endDate = `${anoFiltro}-${mesStr}-31`;
+
+    // Nível 2: último lançamento com peso no período
+    const endDate = `${anoFiltro}-${mesFiltro}-31`;
     const startDate = `${anoFiltro}-01-01`;
     lancamentos
       .filter(l => l.data >= startDate && l.data <= endDate && l.pesoMedioKg && l.pesoMedioKg > 0)
       .sort((a, b) => a.data.localeCompare(b.data))
       .forEach(l => {
-        // Atualiza o peso da categoria com o dado mais recente
         if (l.pesoMedioKg && l.pesoMedioKg > 0) {
-          map[l.categoria] = l.pesoMedioKg;
+          map[l.categoria] = { valor: l.pesoMedioKg, fonte: 'lancamento' };
         }
       });
+
+    // Nível 1 (oficial): peso do fechamento do mês
+    Object.entries(pesoFechamentoMap).forEach(([codigo, peso]) => {
+      if (peso > 0) {
+        map[codigo] = { valor: peso, fonte: 'fechamento' };
+      }
+    });
+
     return map;
-  }, [saldosIniciais, lancamentos, anoFiltro, mesFiltro]);
+  }, [saldosIniciais, lancamentos, anoFiltro, mesFiltro, pesoFechamentoMap]);
 
   // Build rows
   const allRows = useMemo(() => {
@@ -80,7 +165,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
       .sort((a, b) => a.ordem_exibicao - b.ordem_exibicao)
       .map(cat => {
         const saldo = saldoMap.get(cat.id) || 0;
-        const pesoMedio = pesoMedioMap[cat.codigo] || 0;
+        const pesoInfo = pesoMedioMap[cat.codigo];
+        const pesoMedio = pesoInfo?.valor || 0;
+        const fonte = pesoInfo?.fonte || null;
         const precoKg = precosLocal[cat.codigo] ?? 0;
         const valorTotal = saldo * pesoMedio * precoKg;
         const valorCabeca = saldo > 0 && pesoMedio > 0 && precoKg > 0 ? pesoMedio * precoKg : 0;
@@ -90,6 +177,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
           nome: cat.nome,
           saldo,
           pesoMedio,
+          fonte,
           precoKg,
           valorCabeca,
           valorTotal,
@@ -103,6 +191,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
   }, [allRows, mostrarZerados]);
 
   const categoriasOcultas = allRows.length - allRows.filter(r => r.saldo > 0).length;
+  const temEstimativa = rows.some(r => r.saldo > 0 && r.pesoMedio > 0 && r.fonte !== 'fechamento');
 
   const totalRebanho = useMemo(() => allRows.reduce((sum, r) => sum + r.valorTotal, 0), [allRows]);
   const totalCabecas = useMemo(() => allRows.reduce((sum, r) => sum + r.saldo, 0), [allRows]);
@@ -144,6 +233,15 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
     prev.forEach(p => { map[p.categoria] = p.preco_kg; });
     setPrecosLocal(map);
     toast.success(`${prev.length} preços copiados do mês anterior`);
+  };
+
+  const fonteLabel = (fonte: FontePeso | null): string => {
+    switch (fonte) {
+      case 'fechamento': return 'Fechamento do mês';
+      case 'lancamento': return 'Último lançamento';
+      case 'saldo_inicial': return 'Saldo inicial do ano';
+      default: return 'Sem dados';
+    }
   };
 
   if (isGlobal) {
@@ -192,13 +290,24 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
             Valor do Rebanho — {mesLabel}/{anoFiltro}
           </p>
           <p className="text-2xl font-extrabold text-foreground">{formatMoeda(totalRebanho)}</p>
-          <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+          <div className="flex gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
             <span><strong className="text-foreground">{totalCabecas}</strong> cabeças</span>
             <span>Peso médio: <strong className="text-foreground">{formatNum(pesoMedioGeral, 1)} kg</strong></span>
             <span>R$/cab: <strong className="text-foreground">{formatMoeda(valorMedioCabeca)}</strong></span>
           </div>
         </CardContent>
       </Card>
+
+      {/* Aviso de estimativa */}
+      {temEstimativa && (
+        <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/40 rounded-md px-3 py-2 border border-border">
+          <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <span>
+            Algumas categorias usam peso estimado (último lançamento ou saldo inicial).
+            Para maior precisão, realize o fechamento de pastos do mês com peso médio informado.
+          </span>
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
@@ -220,8 +329,20 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
                 <td className="px-2 py-2 text-right text-foreground font-semibold">
                   {r.saldo > 0 ? r.saldo : '-'}
                 </td>
-                <td className="px-2 py-2 text-right text-muted-foreground text-xs">
-                  {r.pesoMedio > 0 ? `${formatNum(r.pesoMedio, 1)} kg` : '-'}
+                <td className="px-2 py-2 text-right text-xs">
+                  {r.pesoMedio > 0 ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className={`cursor-help ${r.fonte === 'fechamento' ? 'text-foreground' : 'text-muted-foreground italic'}`}>
+                          {formatNum(r.pesoMedio, 1)} kg
+                          {r.fonte !== 'fechamento' && ' *'}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs">
+                        Fonte: {fonteLabel(r.fonte)}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : '-'}
                 </td>
                 <td className="px-2 py-1">
                   <Input
@@ -256,19 +377,24 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
         </table>
       </div>
 
-      {/* Toggle hidden categories + Save */}
-      <div className="flex justify-between items-center">
-        {categoriasOcultas > 0 && (
-          <Button variant="ghost" size="sm" onClick={() => setMostrarZerados(!mostrarZerados)} className="gap-1 text-xs text-muted-foreground">
-            {mostrarZerados ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-            {mostrarZerados ? 'Ocultar zeradas' : `Mostrar ${categoriasOcultas} zeradas`}
-          </Button>
-        )}
-        <div className="ml-auto">
-          <Button onClick={handleSalvar} disabled={saving} className="gap-2">
-            <Save className="h-4 w-4" />
-            {saving ? 'Salvando...' : 'Salvar Preços'}
-          </Button>
+      {/* Footer: legend + toggle + save */}
+      <div className="flex flex-col gap-2">
+        <p className="text-[10px] text-muted-foreground">
+          * Peso estimado — sem fechamento oficial no mês. Passe o dedo sobre o valor para ver a fonte.
+        </p>
+        <div className="flex justify-between items-center">
+          {categoriasOcultas > 0 && (
+            <Button variant="ghost" size="sm" onClick={() => setMostrarZerados(!mostrarZerados)} className="gap-1 text-xs text-muted-foreground">
+              {mostrarZerados ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              {mostrarZerados ? 'Ocultar zeradas' : `Mostrar ${categoriasOcultas} zeradas`}
+            </Button>
+          )}
+          <div className="ml-auto">
+            <Button onClick={handleSalvar} disabled={saving} className="gap-2">
+              <Save className="h-4 w-4" />
+              {saving ? 'Salvando...' : 'Salvar Preços'}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
