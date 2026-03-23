@@ -15,7 +15,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
-import { useIndicadoresZootecnicos, type Comparacao, type GmdAbertura } from '@/hooks/useIndicadoresZootecnicos';
+import { useIndicadoresZootecnicos, type Comparacao, type GmdAbertura, type EstoqueCategoriaDetalhe } from '@/hooks/useIndicadoresZootecnicos';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_COLS } from '@/lib/calculos/labels';
 
@@ -394,6 +394,16 @@ function GmdDetalheSheet({ abertura, mesLabel, anoLabel }: { abertura: GmdAbertu
             </div>
           </div>
 
+          {/* Estoque Final por Categoria */}
+          {abertura.estoqueFinalDetalhe.length > 0 && (
+            <EstoqueDetalheSection title="Estoque Final do Mês" itens={abertura.estoqueFinalDetalhe} />
+          )}
+
+          {/* Estoque Inicial por Categoria */}
+          {abertura.estoqueInicialDetalhe.length > 0 && (
+            <EstoqueDetalheSection title="Estoque Inicial do Mês" itens={abertura.estoqueInicialDetalhe} />
+          )}
+
           {/* Detalhamento Entradas */}
           {abertura.entradasDetalhe.length > 0 && (
             <GmdMovSection title="Detalhamento das Entradas" itens={abertura.entradasDetalhe} />
@@ -447,6 +457,43 @@ function GmdMovSection({ title, itens }: { title: string; itens: { tipo: string;
             <div key={item.tipo} className="flex justify-between text-muted-foreground">
               <span>{item.label}</span>
               <span>{item.quantidade} cab · {formatNum(item.pesoTotalKg, 0)} kg</span>
+            </div>
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sub-componentes — Estoque por Categoria (para GMD)
+// ---------------------------------------------------------------------------
+
+function EstoqueDetalheSection({ title, itens }: { title: string; itens: EstoqueCategoriaDetalhe[] }) {
+  const [open, setOpen] = useState(false);
+  const totalCab = itens.reduce((s, i) => s + i.cabecas, 0);
+  const totalPeso = itens.reduce((s, i) => s + i.pesoTotalKg, 0);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <button className="flex items-center justify-between w-full text-xs font-semibold text-muted-foreground uppercase tracking-wider py-1.5 hover:text-foreground transition-colors">
+          <span>{title}</span>
+          {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        </button>
+      </CollapsibleTrigger>
+      <div className="flex justify-between text-xs text-muted-foreground mb-1">
+        <span>{formatNum(totalCab)} cab</span>
+        <span>{formatNum(totalPeso, 0)} kg total</span>
+      </div>
+      <CollapsibleContent>
+        <div className="space-y-1 text-sm pl-1">
+          {itens.map(item => (
+            <div key={item.categoria} className="flex justify-between text-muted-foreground">
+              <span>{item.categoria}</span>
+              <span>
+                {item.cabecas} cab · {item.pesoMedioKg !== null ? formatNum(item.pesoMedioKg, 1) : '?'} kg/cab · {formatNum(item.pesoTotalKg, 0)} kg
+              </span>
             </div>
           ))}
         </div>
