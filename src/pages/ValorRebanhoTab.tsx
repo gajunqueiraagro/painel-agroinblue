@@ -360,7 +360,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
                     inputMode="decimal"
                     className="h-8 text-right text-sm w-full"
                     placeholder="0,00"
-                    value={r.precoKg > 0 ? String(r.precoKg).replace('.', ',') : ''}
+                    value={precosDisplay[r.codigo] ?? ''}
                     onChange={e => handlePrecoChange(r.codigo, e.target.value)}
                     disabled={r.saldo === 0}
                   />
