@@ -430,7 +430,7 @@ function LinhaCalculo({
   );
 }
 
-function GmdMovSection({ title, itens }: { title: string; itens: { label: string; quantidade: number; pesoTotalKg: number }[] }) {
+function GmdMovSection({ title, itens }: { title: string; itens: { tipo: string; label: string; quantidade: number; pesoTotalKg: number }[] }) {
   const [open, setOpen] = useState(false);
 
   return (
