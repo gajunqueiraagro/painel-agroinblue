@@ -70,8 +70,8 @@ export function FechamentoPastoDialog({
 
   useEffect(() => {
     if (!open) return;
-    setItens(categorias.map(c => ({ categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: pasto.lote_padrao || null, observacoes: null, origem_dado: 'manual' })));
-  }, [open, categorias, pasto]);
+    setItens(categorias.map(c => ({ categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: null, observacoes: null, origem_dado: 'manual' })));
+  }, [open, categorias]);
 
   useEffect(() => {
     if (!open || !fechamento) return;
