@@ -171,11 +171,14 @@ export function FechamentoTab() {
 
   const preenchidos = pastosAtivos.filter(p => getFechamento(p.id)).length;
 
+  const [activeFechamento, setActiveFechamento] = useState<FechamentoPasto | null>(null);
+
   const handleOpenPasto = async (pasto: Pasto) => {
     let fech = getFechamento(pasto.id);
     if (!fech) {
       fech = await criarFechamento(pasto.id, anoMes);
     }
+    setActiveFechamento(fech);
     setSelectedPasto(pasto);
     setDialogOpen(true);
   };
