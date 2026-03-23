@@ -238,27 +238,21 @@ export function FechamentoTab() {
         </div>
       )}
 
-      {selectedPasto && (
+      {selectedPasto && activeFechamento && (
         <FechamentoPastoDialog
           open={dialogOpen}
-          onOpenChange={(o) => { setDialogOpen(o); if (!o) { setSelectedPasto(null); loadFechamentos(anoMes); } }}
+          onOpenChange={(o) => { setDialogOpen(o); if (!o) { setSelectedPasto(null); setActiveFechamento(null); loadFechamentos(anoMes); } }}
           pasto={selectedPasto}
-          fechamento={getFechamento(selectedPasto.id)}
+          fechamento={activeFechamento}
           categorias={categorias}
           onSave={async (items) => {
-            const fech = getFechamento(selectedPasto.id);
-            if (!fech) return false;
-            return salvarItens(fech.id, items);
+            return salvarItens(activeFechamento.id, items);
           }}
           onFechar={async () => {
-            const fech = getFechamento(selectedPasto.id);
-            if (!fech) return false;
-            return fecharPasto(fech.id);
+            return fecharPasto(activeFechamento.id);
           }}
           onReabrir={async () => {
-            const fech = getFechamento(selectedPasto.id);
-            if (!fech) return false;
-            const ok = await reabrirPasto(fech.id);
+            const ok = await reabrirPasto(activeFechamento.id);
             if (ok) loadFechamentos(anoMes);
             return ok;
           }}
