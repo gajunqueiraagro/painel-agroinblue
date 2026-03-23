@@ -44,26 +44,44 @@ function drawHeader(
   totais: MapaTotais,
   pageWidth: number
 ): number {
-  let y = 4;
+  let y = 6;
 
   if (logoData) {
-    const logoH = 9;
+    const logoH = 10;
     const logoW = logoH * 2;
     doc.addImage(logoData, 'PNG', pageWidth / 2 - logoW / 2, y, logoW, logoH);
-    y += logoH + 1;
+    y += logoH + 2;
   }
 
-  doc.setFontSize(12);
+  // Title - bold and prominent
+  doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
+  doc.setTextColor(30, 30, 30);
   doc.text(`Mapa de Pastos — ${fazendaNome}`, pageWidth / 2, y + 4, { align: 'center' });
+  y += 8;
 
+  // Reference line - organized with separators
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
+  doc.setTextColor(80, 80, 80);
   const ref = anoMes.split('-').reverse().join('/');
-  const summary = `Ref: ${ref}  |  ${totais.totalCab} cab  |  Área: ${fmt(totais.areaTotal, 1)} ha  |  Peso Méd: ${totais.pesoMedioGeral ? fmt(totais.pesoMedioGeral, 2) : '—'} kg  |  UA/ha: ${totais.uaHaGeral ? fmt(totais.uaHaGeral, 2) : '—'}`;
-  doc.text(summary, pageWidth / 2, y + 9, { align: 'center' });
+  const parts = [
+    `Ref: ${ref}`,
+    `${totais.totalCab} cabeças`,
+    `Área: ${fmt(totais.areaTotal, 1)} ha`,
+    `Peso Méd: ${totais.pesoMedioGeral ? fmt(totais.pesoMedioGeral, 2) : '—'} kg`,
+    `UA/ha: ${totais.uaHaGeral ? fmt(totais.uaHaGeral, 2) : '—'}`,
+  ];
+  doc.text(parts.join('   •   '), pageWidth / 2, y + 4, { align: 'center' });
+  doc.setTextColor(0, 0, 0);
 
-  return y + 12;
+  // Subtle divider line
+  y += 7;
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  doc.line(8, y, pageWidth - 8, y);
+
+  return y + 3;
 }
 
 export async function exportMapaPastosPdf(
@@ -77,7 +95,7 @@ export async function exportMapaPastosPdf(
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margins = { left: 6, right: 6, bottom: 10 };
+  const margins = { left: 6, right: 6, bottom: 12 };
 
   let logoData: string | null = null;
   try {
@@ -129,7 +147,7 @@ export async function exportMapaPastosPdf(
     totais.qualidadeMedia ? fmt(totais.qualidadeMedia, 1) : '',
   ]);
 
-  // PESO MÉDIO row — weighted average per category
+  // PESO MÉDIO row
   const pesoMedioCatVals = categorias.map(cat => {
     const t = totais.catTotals.get(cat.id);
     if (t && t.qtdComPeso > 0) {
@@ -174,9 +192,10 @@ export async function exportMapaPastosPdf(
     body,
     styles: {
       fontSize: 6.5,
-      cellPadding: { top: 1, right: 1.2, bottom: 1, left: 1.2 },
-      lineColor: [200, 200, 200],
-      lineWidth: 0.2,
+      cellPadding: { top: 1.2, right: 1.5, bottom: 1.2, left: 1.5 },
+      lineColor: [220, 220, 220],
+      lineWidth: 0.15,
+      textColor: [40, 40, 40],
     },
     headStyles: {
       fillColor: [41, 128, 185],
@@ -184,19 +203,21 @@ export async function exportMapaPastosPdf(
       fontStyle: 'bold',
       fontSize: 6.5,
       halign: 'center',
-      cellPadding: { top: 1.5, right: 1, bottom: 1.5, left: 1 },
+      cellPadding: { top: 1.8, right: 1.2, bottom: 1.8, left: 1.2 },
     },
     columnStyles: colStyles,
-    alternateRowStyles: { fillColor: [248, 250, 252] },
+    alternateRowStyles: { fillColor: [250, 251, 253] },
     didParseCell: (data) => {
       if (data.section === 'body') {
         if (data.row.index === totalRowIdx) {
           data.cell.styles.fontStyle = 'bold';
-          data.cell.styles.fillColor = [220, 235, 250];
+          data.cell.styles.fillColor = [232, 240, 250];
+          data.cell.styles.textColor = [25, 25, 25];
         }
         if (data.row.index === pesoRowIdx) {
           data.cell.styles.fontStyle = 'italic' as any;
-          data.cell.styles.fillColor = [235, 245, 235];
+          data.cell.styles.fillColor = [242, 248, 242];
+          data.cell.styles.textColor = [60, 60, 60];
           data.cell.styles.fontSize = 6;
         }
       }
@@ -216,14 +237,15 @@ export async function exportMapaPastosPdf(
   let currentY = (doc as any).lastAutoTable?.finalY || 120;
 
   if (resumoAtividades.length > 0) {
-    let actY = currentY + 6;
-    if (actY > pageHeight - 35) {
+    let actY = currentY + 8;
+    if (actY > pageHeight - 40) {
       doc.addPage();
-      actY = drawHeader(doc, logoData, fazendaNome, anoMes, totais, pageWidth) + 2;
+      actY = drawHeader(doc, logoData, fazendaNome, anoMes, totais, pageWidth) + 4;
     }
 
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
+    doc.setTextColor(40, 40, 40);
     doc.text('Resumo por Atividade', margins.left, actY);
 
     const actHead = [['Atividade', 'Pastos', 'Área (ha)', 'Cabeças', 'Peso Méd (kg)', 'UA/ha']];
@@ -242,11 +264,18 @@ export async function exportMapaPastosPdf(
       body: actBody,
       styles: {
         fontSize: 7,
-        cellPadding: 1.5,
-        lineColor: [200, 200, 200],
-        lineWidth: 0.2,
+        cellPadding: { top: 1.5, right: 2, bottom: 1.5, left: 2 },
+        lineColor: [220, 220, 220],
+        lineWidth: 0.15,
+        textColor: [40, 40, 40],
       },
-      headStyles: { fillColor: [39, 174, 96], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+      headStyles: {
+        fillColor: [76, 175, 100],
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 7,
+      },
+      alternateRowStyles: { fillColor: [248, 252, 248] },
       columnStyles: {
         0: { cellWidth: 28, halign: 'left' },
         1: { cellWidth: 16, halign: 'right' },
@@ -273,18 +302,19 @@ export async function exportMapaPastosPdf(
     .sort((a, b) => b.quantidade - a.quantidade);
 
   if (catData.length > 0) {
-    let chartY = currentY + 8;
-    const chartHeight = 6 * catData.length + 14;
+    let chartY = currentY + 10;
+    const chartHeight = 6 * catData.length + 16;
 
     if (chartY + chartHeight > pageHeight - margins.bottom) {
       doc.addPage();
-      chartY = drawHeader(doc, logoData, fazendaNome, anoMes, totais, pageWidth) + 2;
+      chartY = drawHeader(doc, logoData, fazendaNome, anoMes, totais, pageWidth) + 4;
     }
 
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
+    doc.setTextColor(40, 40, 40);
     doc.text('Distribuição por Categoria', margins.left, chartY);
-    chartY += 5;
+    chartY += 6;
 
     const maxVal = catData[0].quantidade;
     const barMaxWidth = 100;
@@ -293,10 +323,10 @@ export async function exportMapaPastosPdf(
     const barHeight = 4.5;
     const barGap = 1.5;
 
-    // Soft professional colors
+    // Muted professional palette
     const colors: [number, number, number][] = [
-      [41, 128, 185], [39, 174, 96], [230, 126, 34], [142, 68, 173],
-      [44, 62, 80], [192, 57, 43], [22, 160, 133], [243, 156, 18], [52, 73, 94],
+      [66, 133, 183], [76, 160, 110], [200, 140, 60], [140, 100, 160],
+      [80, 100, 120], [180, 90, 80], [60, 145, 130], [200, 160, 50], [90, 105, 120],
     ];
 
     catData.forEach((d, i) => {
@@ -306,15 +336,15 @@ export async function exportMapaPastosPdf(
       // Label
       doc.setFontSize(7);
       doc.setFont('helvetica', 'normal');
-      doc.setTextColor(60, 60, 60);
+      doc.setTextColor(70, 70, 70);
       doc.text(d.nome, barX - 2, y + barHeight / 2 + 1, { align: 'right' });
 
-      // Bar
+      // Bar with rounded corners
       const barW = (d.quantidade / maxVal) * barMaxWidth;
       doc.setFillColor(color[0], color[1], color[2]);
-      doc.roundedRect(barX, y, barW, barHeight, 1, 1, 'F');
+      doc.roundedRect(barX, y, barW, barHeight, 1.2, 1.2, 'F');
 
-      // Value
+      // Value label
       doc.setFontSize(6.5);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(color[0], color[1], color[2]);
@@ -329,11 +359,11 @@ export async function exportMapaPastosPdf(
   const footerRef = anoMes.split('-').reverse().join('/');
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
-    doc.setFontSize(6.5);
+    doc.setFontSize(6);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(120, 120, 120);
-    doc.text(`${fazendaNome} — Mapa de Pastos ${footerRef}`, margins.left, pageHeight - 4);
-    doc.text(`Página ${i} de ${pageCount}`, pageWidth - margins.left, pageHeight - 4, { align: 'right' });
+    doc.setTextColor(140, 140, 140);
+    doc.text(`Agroinblue – Gestão Pecuária  |  ${fazendaNome}  |  ${footerRef}`, margins.left, pageHeight - 5);
+    doc.text(`Página ${i} de ${pageCount}`, pageWidth - margins.left, pageHeight - 5, { align: 'right' });
     doc.setTextColor(0, 0, 0);
   }
 
