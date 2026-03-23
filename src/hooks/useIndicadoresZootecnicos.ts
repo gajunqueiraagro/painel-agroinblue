@@ -61,12 +61,16 @@ export interface GmdMovDetalhe {
   pesoTotalKg: number;
 }
 
+/** Fonte do peso médio por categoria */
+export type FontePeso = 'fechamento' | 'lancamento' | 'saldo_inicial' | 'nenhuma';
+
 /** Detalhe de estoque por categoria */
 export interface EstoqueCategoriaDetalhe {
   categoria: string;
   cabecas: number;
   pesoMedioKg: number | null;
   pesoTotalKg: number;
+  fontePeso: FontePeso;
 }
 
 /** Estrutura completa da abertura do cálculo do GMD */
