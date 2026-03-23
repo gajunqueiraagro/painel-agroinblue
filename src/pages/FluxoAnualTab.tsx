@@ -66,6 +66,10 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
         <TabsTrigger value="valor">Valor Rebanho</TabsTrigger>
       </TabsList>
 
+      <TabsContent value="indicadores">
+        <IndicadoresTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />
+      </TabsContent>
+
       <TabsContent value="evolucao">
         <div className="p-4 max-w-4xl mx-auto space-y-4 animate-fade-in pb-20">
           <div className="max-w-[200px]">
