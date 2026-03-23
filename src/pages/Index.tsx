@@ -15,6 +15,8 @@ import { AnaliseSaidasTab } from './AnaliseSaidasTab';
 import { DesfrunteTab } from './DesfrunteTab';
 import { CadastrosTab } from './CadastrosTab';
 import { ChuvasTab } from './ChuvasTab';
+import { PastosTab } from './PastosTab';
+import { ConciliacaoHubTab } from './ConciliacaoHubTab';
 
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { ExportMenu } from '@/components/ExportMenu';
