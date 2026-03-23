@@ -207,13 +207,21 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
 
   // Sync loaded prices to local state
   useEffect(() => {
-    const map: Record<string, number> = {};
-    precos.forEach(p => { map[p.categoria] = p.preco_kg; });
-    setPrecosLocal(map);
+    const numMap: Record<string, number> = {};
+    const strMap: Record<string, string> = {};
+    precos.forEach(p => {
+      numMap[p.categoria] = p.preco_kg;
+      strMap[p.categoria] = p.preco_kg > 0 ? String(p.preco_kg).replace('.', ',') : '';
+    });
+    setPrecosLocal(numMap);
+    setPrecosDisplay(strMap);
   }, [precos]);
 
   const handlePrecoChange = (codigo: string, value: string) => {
-    const num = parseFloat(value.replace(',', '.'));
+    // Allow only digits, comma, and dot
+    const sanitized = value.replace(/[^0-9.,]/g, '');
+    setPrecosDisplay(prev => ({ ...prev, [codigo]: sanitized }));
+    const num = parseFloat(sanitized.replace(',', '.'));
     setPrecosLocal(prev => ({ ...prev, [codigo]: isNaN(num) ? 0 : num }));
   };
 
