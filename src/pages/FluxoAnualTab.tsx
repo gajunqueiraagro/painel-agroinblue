@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import { ValorRebanhoTab } from './ValorRebanhoTab';
+import { IndicadoresTab } from './IndicadoresTab';
 import type { SubAba } from './FinanceiroTab';
 import { calcFluxoAnual, FLUXO_LINHAS, type FluxoTipo } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
@@ -59,10 +60,15 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
 
   return (
     <Tabs defaultValue="evolucao" className="w-full">
-      <TabsList className="w-full grid grid-cols-2 mx-4 mt-2" style={{ maxWidth: 'calc(100% - 2rem)' }}>
+      <TabsList className="w-full grid grid-cols-3 mx-4 mt-2" style={{ maxWidth: 'calc(100% - 2rem)' }}>
+        <TabsTrigger value="indicadores">Indicadores</TabsTrigger>
         <TabsTrigger value="evolucao">Evolução</TabsTrigger>
         <TabsTrigger value="valor">Valor Rebanho</TabsTrigger>
       </TabsList>
+
+      <TabsContent value="indicadores">
+        <IndicadoresTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />
+      </TabsContent>
 
       <TabsContent value="evolucao">
         <div className="p-4 max-w-4xl mx-auto space-y-4 animate-fade-in pb-20">
