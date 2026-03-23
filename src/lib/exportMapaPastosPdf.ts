@@ -106,7 +106,7 @@ export async function exportMapaPastosPdf(
     });
     return [
       row.pasto.nome,
-      tipoUsoLabel(row.tipoUso),
+      tipoUsoLabelCurto(row.tipoUso),
       row.lote || '',
       ...catVals,
       row.totalCabecas ? String(row.totalCabecas) : '',
@@ -237,7 +237,7 @@ export async function exportMapaPastosPdf(
 
     const actHead = [['Atividade', 'Pastos', 'Área (ha)', 'Cabeças', 'Peso Méd (kg)', 'UA/ha']];
     const actBody = resumoAtividades.map(a => [
-      tipoUsoLabel(a.tipo),
+      tipoUsoLabelCurto(a.tipo),
       String(a.qtdPastos),
       fmt(a.area, 1),
       String(a.cabecas),
