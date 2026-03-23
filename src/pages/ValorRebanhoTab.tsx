@@ -65,6 +65,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
   const { precos, loading, saving, salvarPrecos, loadPrecosMesAnterior } = useValorRebanho(anoMes);
 
   const [precosLocal, setPrecosLocal] = useState<Record<string, number>>({});
+  // String state for inputs to preserve comma during typing
+  const [precosDisplay, setPrecosDisplay] = useState<Record<string, string>>({});
 
   // --- Fechamento: peso médio ponderado por categoria_id ---
   const [pesoFechamentoMap, setPesoFechamentoMap] = useState<Record<string, number>>({});
