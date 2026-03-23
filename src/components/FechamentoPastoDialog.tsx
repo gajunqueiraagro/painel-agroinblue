@@ -105,8 +105,12 @@ export function FechamentoPastoDialog({
   };
 
   const handleCopiar = async () => {
-    const copied = await onCopiar();
+    const { itens: copied, dadosMes } = await onCopiar();
     setItens(copied);
+    if (dadosMes.lote_mes) setLoteMes(dadosMes.lote_mes);
+    if (dadosMes.tipo_uso_mes) setTipoUsoMes(dadosMes.tipo_uso_mes);
+    if (dadosMes.qualidade_mes !== null) setQualidadeMes(dadosMes.qualidade_mes);
+    if (dadosMes.observacao_mes) setObservacaoMes(dadosMes.observacao_mes);
   };
 
   const handleFechar = async () => {
