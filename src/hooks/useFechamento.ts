@@ -53,19 +53,39 @@ export function useFechamento() {
   const criarFechamento = useCallback(async (
     pastoId: string,
     anoMes: string,
-    defaults?: { responsavel?: string; lote_mes?: string | null; tipo_uso_mes?: string | null; qualidade_mes?: number | null }
   ) => {
     if (!fazendaId) return null;
+
+    // Try to copy monthly fields from the most recent previous fechamento of this pasto
+    let lote_mes: string | null = null;
+    let tipo_uso_mes: string | null = null;
+    let qualidade_mes: number | null = null;
+
+    const { data: ultimo } = await supabase
+      .from('fechamento_pastos')
+      .select('lote_mes, tipo_uso_mes, qualidade_mes')
+      .eq('pasto_id', pastoId)
+      .eq('fazenda_id', fazendaId)
+      .lt('ano_mes', anoMes)
+      .order('ano_mes', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (ultimo) {
+      lote_mes = ultimo.lote_mes;
+      tipo_uso_mes = ultimo.tipo_uso_mes;
+      qualidade_mes = ultimo.qualidade_mes;
+    }
+
     const { data, error } = await supabase
       .from('fechamento_pastos')
       .insert({
         pasto_id: pastoId,
         fazenda_id: fazendaId,
         ano_mes: anoMes,
-        responsavel_nome: defaults?.responsavel || null,
-        lote_mes: defaults?.lote_mes || null,
-        tipo_uso_mes: defaults?.tipo_uso_mes || null,
-        qualidade_mes: defaults?.qualidade_mes || null,
+        lote_mes,
+        tipo_uso_mes,
+        qualidade_mes,
       })
       .select()
       .single();

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { usePastos, TIPOS_USO, type Pasto } from '@/hooks/usePastos';
+import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

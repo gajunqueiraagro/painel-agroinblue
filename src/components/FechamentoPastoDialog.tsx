@@ -168,7 +168,7 @@ export function FechamentoPastoDialog({
             <div>
               <Label className="text-xs">Tipo de Uso</Label>
               <Select value={tipoUsoMes} onValueChange={setTipoUsoMes} disabled={isFechado}>
-                <SelectTrigger className="h-10"><SelectValue placeholder={TIPOS_USO_OPTIONS.find(t => t.value === pasto.tipo_uso)?.label || 'Selecione'} /></SelectTrigger>
+                <SelectTrigger className="h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {TIPOS_USO_OPTIONS.map(t => (
                     <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
