@@ -1,9 +1,11 @@
 import { useState, useMemo } from 'react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
+import { ValorRebanhoTab } from './ValorRebanhoTab';
 import type { SubAba } from './FinanceiroTab';
 import { calcFluxoAnual, FLUXO_LINHAS, type FluxoTipo } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
