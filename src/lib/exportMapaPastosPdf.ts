@@ -74,7 +74,7 @@ export async function exportMapaPastosPdf(
 
   // Main table
   const catCols = categorias.map(c => c.nome);
-  const head = [['Pasto', 'Atividade', ...catCols, 'Total', 'Peso Méd.', 'Área', 'UA/ha', 'Qual.']];
+  const head = [['Pasto', 'Atividade', 'Lote', ...catCols, 'Total', 'Peso Méd.', 'Área', 'UA/ha', 'Qual.']];
 
   const body = rows.map(row => {
     const catVals = categorias.map(cat => {
@@ -84,6 +84,7 @@ export async function exportMapaPastosPdf(
     return [
       row.pasto.nome,
       tipoUsoLabel(row.tipoUso),
+      row.lote || '—',
       ...catVals,
       String(row.totalCabecas || '—'),
       row.pesoMedio ? fmt(row.pesoMedio, 2) : '—',
