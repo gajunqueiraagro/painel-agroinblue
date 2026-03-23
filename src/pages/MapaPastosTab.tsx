@@ -11,6 +11,9 @@ import { format } from 'date-fns';
 import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
 import { exportMapaPastosXlsx } from '@/lib/exportMapaPastos';
 import { exportMapaPastosPdf } from '@/lib/exportMapaPastosPdf';
+import { calcUA, calcUAHa, calcPesoMedioPonderado } from '@/lib/calculos/zootecnicos';
+import { formatNum } from '@/lib/calculos/formatters';
+import { tipoUsoLabel } from '@/lib/calculos/labels';
 
 export interface PastoMapaRow {
   pasto: Pasto;
@@ -22,11 +25,6 @@ export interface PastoMapaRow {
   pesoMedio: number | null;
   uaTotal: number;
   uaHa: number | null;
-}
-
-function calcUA(quantidade: number, pesoMedioKg: number | null): number {
-  if (!pesoMedioKg || pesoMedioKg <= 0) return quantidade;
-  return (quantidade * pesoMedioKg) / 450;
 }
 
 export interface MapaTotais {
@@ -46,11 +44,6 @@ export interface AtividadeResumo {
   pesoMedio: number | null;
   uaHa: number | null;
   qtdPastos: number;
-}
-
-function formatNum(val: number | null | undefined, decimals = 0): string {
-  if (val === null || val === undefined) return '—';
-  return val.toFixed(decimals).replace('.', ',');
 }
 
 export function MapaPastosTab() {
@@ -89,14 +82,16 @@ export function MapaPastosTab() {
         const qualidade = fech?.qualidade_mes ?? null;
 
         const totalCab = Array.from(catMap.values()).reduce((s, v) => s + v.quantidade, 0);
-        const comPeso = Array.from(catMap.values()).filter(v => v.quantidade > 0 && v.peso_medio_kg);
-        const pesoMedio = comPeso.length > 0
-          ? comPeso.reduce((s, v) => s + (v.peso_medio_kg || 0) * v.quantidade, 0) / comPeso.reduce((s, v) => s + v.quantidade, 0)
-          : null;
 
+        // Peso médio ponderado via lib central
+        const pesoMedio = calcPesoMedioPonderado(
+          Array.from(catMap.values()).map(v => ({ quantidade: v.quantidade, pesoKg: v.peso_medio_kg }))
+        );
+
+        // UA via lib central
         let uaTotal = 0;
         catMap.forEach(v => { uaTotal += calcUA(v.quantidade, v.peso_medio_kg); });
-        const uaHa = pasto.area_produtiva_ha && uaTotal > 0 ? uaTotal / pasto.area_produtiva_ha : null;
+        const uaHa = calcUAHa(uaTotal, pasto.area_produtiva_ha);
 
         return { pasto, lote, tipoUso, qualidade, categorias: catMap, totalCabecas: totalCab, pesoMedio, uaTotal, uaHa };
       });
@@ -126,13 +121,14 @@ export function MapaPastosTab() {
 
     const totalCab = rows.reduce((s, r) => s + r.totalCabecas, 0);
     const areaTotal = rows.reduce((s, r) => s + (r.pasto.area_produtiva_ha || 0), 0);
-    const comPesoRows = rows.filter(r => r.pesoMedio !== null && r.totalCabecas > 0);
-    const pesoMedioGeral = comPesoRows.length > 0
-      ? comPesoRows.reduce((s, r) => s + (r.pesoMedio || 0) * r.totalCabecas, 0) / comPesoRows.reduce((s, r) => s + r.totalCabecas, 0)
-      : null;
+
+    // Peso médio geral via lib central
+    const pesoMedioGeral = calcPesoMedioPonderado(
+      rows.filter(r => r.totalCabecas > 0).map(r => ({ quantidade: r.totalCabecas, pesoKg: r.pesoMedio }))
+    );
 
     const uaTotal = rows.reduce((s, r) => s + r.uaTotal, 0);
-    const uaHaGeral = areaTotal > 0 ? uaTotal / areaTotal : null;
+    const uaHaGeral = calcUAHa(uaTotal, areaTotal);
 
     const comQualidade = rows.filter(r => r.qualidade !== null && r.qualidade > 0);
     const qualidadeMedia = comQualidade.length > 0
@@ -163,7 +159,7 @@ export function MapaPastosTab() {
       area: d.area,
       cabecas: d.cabecas,
       pesoMedio: d.qtdComPeso > 0 ? d.pesoTotal / d.qtdComPeso : null,
-      uaHa: d.area > 0 ? d.uaTotal / d.area : null,
+      uaHa: calcUAHa(d.uaTotal, d.area),
       qtdPastos: d.qtdPastos,
     })).sort((a, b) => b.cabecas - a.cabecas);
   }, [rows]);
@@ -180,16 +176,6 @@ export function MapaPastosTab() {
     if (q >= 8) return 'bg-green-500/20 text-green-700';
     if (q >= 5) return 'bg-yellow-500/20 text-yellow-700';
     return 'bg-red-500/20 text-red-700';
-  };
-
-  const tipoUsoLabel = (t: string | null) => {
-    if (!t) return '—';
-    const labels: Record<string, string> = {
-      cria: 'Cria', recria: 'Recria', engorda: 'Engorda',
-      reforma_pecuaria: 'Reforma Pec.', agricultura: 'Agricultura',
-      app: 'APP', reserva_legal: 'Reserva Legal', benfeitorias: 'Benfeitorias',
-    };
-    return labels[t] || t;
   };
 
   if (isGlobal) return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda.</div>;

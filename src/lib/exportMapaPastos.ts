@@ -1,16 +1,7 @@
 import * as XLSX from 'xlsx';
 import type { CategoriaRebanho } from '@/hooks/usePastos';
 import type { PastoMapaRow, MapaTotais, AtividadeResumo } from '@/pages/MapaPastosTab';
-
-const tipoUsoLabel = (t: string | null) => {
-  if (!t) return '';
-  const labels: Record<string, string> = {
-    cria: 'Cria', recria: 'Recria', engorda: 'Engorda',
-    reforma_pecuaria: 'Reforma Pec.', agricultura: 'Agricultura',
-    app: 'APP', reserva_legal: 'Reserva Legal', benfeitorias: 'Benfeitorias',
-  };
-  return labels[t] || t;
-};
+import { tipoUsoLabel } from '@/lib/calculos/labels';
 
 export function exportMapaPastosXlsx(
   rows: PastoMapaRow[],

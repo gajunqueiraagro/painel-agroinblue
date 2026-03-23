@@ -8,14 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { format } from 'date-fns';
 import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
-
-interface ConciliacaoRow {
-  categoria: CategoriaRebanho;
-  qtdSistema: number;
-  qtdPastos: number;
-  diferenca: number;
-  nivel: 'ok' | 'atencao' | 'critico';
-}
+import { calcSaldoPorCategoria, calcConciliacao } from '@/lib/calculos/zootecnicos';
 
 export function ConciliacaoTab() {
   const { isGlobal } = useFazenda();
@@ -28,7 +21,6 @@ export function ConciliacaoTab() {
 
   useEffect(() => { loadFechamentos(anoMes); }, [anoMes, loadFechamentos]);
 
-  // Load all fechamento items in parallel (not N+1)
   useEffect(() => {
     const load = async () => {
       if (fechamentos.length === 0) { setItensPastos(new Map()); return; }
@@ -44,52 +36,19 @@ export function ConciliacaoTab() {
     load();
   }, [fechamentos, loadItens]);
 
-  // Calculate system balances per category up to end of selected month
-  const saldoSistema = useMemo(() => {
-    const [y, m] = anoMes.split('-').map(Number);
-    const map = new Map<string, number>();
-    const codeToId = new Map(categorias.map(c => [c.codigo, c.id]));
+  const [ano, mes] = anoMes.split('-').map(Number);
 
-    saldosIniciais.filter(s => s.ano === y).forEach(s => {
-      const catId = codeToId.get(s.categoria);
-      if (catId) map.set(catId, (map.get(catId) || 0) + s.quantidade);
-    });
+  // Saldo do sistema via lib central
+  const saldoSistema = useMemo(
+    () => calcSaldoPorCategoria(saldosIniciais, lancamentos, ano, mes, categorias),
+    [saldosIniciais, lancamentos, ano, mes, categorias],
+  );
 
-    const endDate = `${anoMes}-31`;
-    const startDate = `${y}-01-01`;
-    lancamentos
-      .filter(l => l.data >= startDate && l.data <= endDate)
-      .forEach(l => {
-        const catId = codeToId.get(l.categoria);
-        if (!catId) return;
-        const isEntrada = ['nascimento', 'compra', 'transferencia_entrada'].includes(l.tipo);
-        const isSaida = ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'].includes(l.tipo);
-        const isReclass = l.tipo === 'reclassificacao';
-
-        if (isEntrada) {
-          map.set(catId, (map.get(catId) || 0) + l.quantidade);
-        } else if (isSaida) {
-          map.set(catId, (map.get(catId) || 0) - l.quantidade);
-        } else if (isReclass && l.categoriaDestino) {
-          const destId = codeToId.get(l.categoriaDestino);
-          map.set(catId, (map.get(catId) || 0) - l.quantidade);
-          if (destId) map.set(destId, (map.get(destId) || 0) + l.quantidade);
-        }
-      });
-
-    return map;
-  }, [anoMes, lancamentos, saldosIniciais, categorias]);
-
-  const rows: ConciliacaoRow[] = useMemo(() => {
-    return categorias.map(cat => {
-      const qtdSistema = saldoSistema.get(cat.id) || 0;
-      const qtdPastos = itensPastos.get(cat.id) || 0;
-      const diferenca = qtdPastos - qtdSistema;
-      const absDif = Math.abs(diferenca);
-      const nivel: 'ok' | 'atencao' | 'critico' = absDif === 0 ? 'ok' : absDif <= 3 ? 'atencao' : 'critico';
-      return { categoria: cat, qtdSistema, qtdPastos, diferenca, nivel };
-    });
-  }, [categorias, saldoSistema, itensPastos]);
+  // Conciliação via lib central
+  const rows = useMemo(
+    () => calcConciliacao(categorias, saldoSistema, itensPastos),
+    [categorias, saldoSistema, itensPastos],
+  );
 
   const alertas = useMemo(() => {
     const msgs: string[] = [];
