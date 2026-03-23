@@ -50,11 +50,23 @@ export function useFechamento() {
     setLoading(false);
   }, [fazendaId]);
 
-  const criarFechamento = useCallback(async (pastoId: string, anoMes: string, responsavel?: string) => {
+  const criarFechamento = useCallback(async (
+    pastoId: string,
+    anoMes: string,
+    defaults?: { responsavel?: string; lote_mes?: string | null; tipo_uso_mes?: string | null; qualidade_mes?: number | null }
+  ) => {
     if (!fazendaId) return null;
     const { data, error } = await supabase
       .from('fechamento_pastos')
-      .insert({ pasto_id: pastoId, fazenda_id: fazendaId, ano_mes: anoMes, responsavel_nome: responsavel || null })
+      .insert({
+        pasto_id: pastoId,
+        fazenda_id: fazendaId,
+        ano_mes: anoMes,
+        responsavel_nome: defaults?.responsavel || null,
+        lote_mes: defaults?.lote_mes || null,
+        tipo_uso_mes: defaults?.tipo_uso_mes || null,
+        qualidade_mes: defaults?.qualidade_mes || null,
+      })
       .select()
       .single();
     if (error) { toast.error('Erro ao criar fechamento'); console.error(error); return null; }
