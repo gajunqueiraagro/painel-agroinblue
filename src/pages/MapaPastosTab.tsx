@@ -59,10 +59,10 @@ export function MapaPastosTab() {
           });
         }
 
-        // Use monthly data from fechamento, fallback to pasto defaults
-        const lote = fech?.lote_mes ?? pasto.lote_padrao ?? null;
-        const tipoUso = fech?.tipo_uso_mes ?? pasto.tipo_uso ?? null;
-        const qualidade = fech?.qualidade_mes ?? pasto.qualidade ?? null;
+        // Use monthly data from fechamento only
+        const lote = fech?.lote_mes ?? null;
+        const tipoUso = fech?.tipo_uso_mes ?? null;
+        const qualidade = fech?.qualidade_mes ?? null;
 
         const totalCab = Array.from(catMap.values()).reduce((s, v) => s + v.quantidade, 0);
         const comPeso = Array.from(catMap.values()).filter(v => v.quantidade > 0 && v.peso_medio_kg);

@@ -29,11 +29,7 @@ export function FechamentoTab() {
   const handleOpenPasto = async (pasto: Pasto) => {
     let fech = getFechamento(pasto.id);
     if (!fech) {
-      fech = await criarFechamento(pasto.id, anoMes, {
-        lote_mes: pasto.lote_padrao,
-        tipo_uso_mes: pasto.tipo_uso,
-        qualidade_mes: pasto.qualidade,
-      });
+      fech = await criarFechamento(pasto.id, anoMes);
     }
     if (!fech) return;
     setActiveFechamento(fech);

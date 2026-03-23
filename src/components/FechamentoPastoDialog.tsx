@@ -70,8 +70,8 @@ export function FechamentoPastoDialog({
 
   useEffect(() => {
     if (!open) return;
-    setItens(categorias.map(c => ({ categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: pasto.lote_padrao || null, observacoes: null, origem_dado: 'manual' })));
-  }, [open, categorias, pasto]);
+    setItens(categorias.map(c => ({ categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: null, observacoes: null, origem_dado: 'manual' })));
+  }, [open, categorias]);
 
   useEffect(() => {
     if (!open || !fechamento) return;
@@ -81,11 +81,11 @@ export function FechamentoPastoDialog({
           const found = existing.find(e => e.categoria_id === c.id);
           return found
             ? { categoria_id: c.id, quantidade: found.quantidade, peso_medio_kg: found.peso_medio_kg, lote: found.lote, observacoes: found.observacoes, origem_dado: found.origem_dado }
-            : { categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: pasto.lote_padrao || null, observacoes: null, origem_dado: 'manual' };
+            : { categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: null, observacoes: null, origem_dado: 'manual' };
         }));
       }
     });
-  }, [open, fechamento, categorias, loadItens, pasto]);
+  }, [open, fechamento, categorias, loadItens]);
 
   const updateItem = (idx: number, field: string, value: any) => {
     setItens(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value, origem_dado: item.origem_dado === 'copiado_mes_anterior' ? 'ajustado' : item.origem_dado } : item));
@@ -146,7 +146,7 @@ export function FechamentoPastoDialog({
                   value={loteMes}
                   onChange={e => setLoteMes(e.target.value)}
                   disabled={isFechado}
-                  placeholder={pasto.lote_padrao || 'Lote'}
+                  placeholder="Lote"
                   className="h-10"
                 />
               </div>
@@ -160,7 +160,7 @@ export function FechamentoPastoDialog({
                   value={qualidadeMes ?? ''}
                   onChange={e => setQualidadeMes(e.target.value ? Number(e.target.value) : null)}
                   disabled={isFechado}
-                  placeholder={pasto.qualidade?.toString() || '—'}
+                  placeholder="1-10"
                   className="h-10"
                 />
               </div>
@@ -168,7 +168,7 @@ export function FechamentoPastoDialog({
             <div>
               <Label className="text-xs">Tipo de Uso</Label>
               <Select value={tipoUsoMes} onValueChange={setTipoUsoMes} disabled={isFechado}>
-                <SelectTrigger className="h-10"><SelectValue placeholder={TIPOS_USO_OPTIONS.find(t => t.value === pasto.tipo_uso)?.label || 'Selecione'} /></SelectTrigger>
+                <SelectTrigger className="h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {TIPOS_USO_OPTIONS.map(t => (
                     <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
