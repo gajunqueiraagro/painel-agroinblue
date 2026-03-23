@@ -209,9 +209,9 @@ export function MapaPastosTab() {
                     <td className={`p-2 text-center border-r ${getLotacaoColor(row.cabHa)}`}>{row.cabHa?.toFixed(2) || '—'}</td>
                     <td className={`p-2 text-center border-r ${getLotacaoColor(row.uaHa)}`}>{row.uaHa?.toFixed(2) || '—'}</td>
                     <td className="p-2 text-center">
-                      {row.pasto.qualidade ? (
-                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${getQualidadeColor(row.pasto.qualidade)}`}>
-                          {row.pasto.qualidade}
+                      {row.qualidade ? (
+                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${getQualidadeColor(row.qualidade)}`}>
+                          {row.qualidade}
                         </span>
                       ) : '—'}
                     </td>
