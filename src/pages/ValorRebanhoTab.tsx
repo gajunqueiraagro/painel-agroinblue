@@ -65,6 +65,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
   const { precos, loading, saving, salvarPrecos, loadPrecosMesAnterior } = useValorRebanho(anoMes);
 
   const [precosLocal, setPrecosLocal] = useState<Record<string, number>>({});
+  // String state for inputs to preserve comma during typing
+  const [precosDisplay, setPrecosDisplay] = useState<Record<string, string>>({});
 
   // --- Fechamento: peso médio ponderado por categoria_id ---
   const [pesoFechamentoMap, setPesoFechamentoMap] = useState<Record<string, number>>({});
@@ -205,13 +207,21 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
 
   // Sync loaded prices to local state
   useEffect(() => {
-    const map: Record<string, number> = {};
-    precos.forEach(p => { map[p.categoria] = p.preco_kg; });
-    setPrecosLocal(map);
+    const numMap: Record<string, number> = {};
+    const strMap: Record<string, string> = {};
+    precos.forEach(p => {
+      numMap[p.categoria] = p.preco_kg;
+      strMap[p.categoria] = p.preco_kg > 0 ? String(p.preco_kg).replace('.', ',') : '';
+    });
+    setPrecosLocal(numMap);
+    setPrecosDisplay(strMap);
   }, [precos]);
 
   const handlePrecoChange = (codigo: string, value: string) => {
-    const num = parseFloat(value.replace(',', '.'));
+    // Allow only digits, comma, and dot
+    const sanitized = value.replace(/[^0-9.,]/g, '');
+    setPrecosDisplay(prev => ({ ...prev, [codigo]: sanitized }));
+    const num = parseFloat(sanitized.replace(',', '.'));
     setPrecosLocal(prev => ({ ...prev, [codigo]: isNaN(num) ? 0 : num }));
   };
 
@@ -229,9 +239,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
       toast.info('Nenhum preço encontrado no mês anterior');
       return;
     }
-    const map: Record<string, number> = { ...precosLocal };
-    prev.forEach(p => { map[p.categoria] = p.preco_kg; });
-    setPrecosLocal(map);
+    const numMap: Record<string, number> = { ...precosLocal };
+    const strMap: Record<string, string> = { ...precosDisplay };
+    prev.forEach(p => {
+      numMap[p.categoria] = p.preco_kg;
+      strMap[p.categoria] = p.preco_kg > 0 ? String(p.preco_kg).replace('.', ',') : '';
+    });
+    setPrecosLocal(numMap);
+    setPrecosDisplay(strMap);
     toast.success(`${prev.length} preços copiados do mês anterior`);
   };
 
@@ -350,7 +365,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
                     inputMode="decimal"
                     className="h-8 text-right text-sm w-full"
                     placeholder="0,00"
-                    value={r.precoKg > 0 ? String(r.precoKg).replace('.', ',') : ''}
+                    value={precosDisplay[r.codigo] ?? ''}
                     onChange={e => handlePrecoChange(r.codigo, e.target.value)}
                     disabled={r.saldo === 0}
                   />
