@@ -20,10 +20,11 @@ export function formatMoeda(val: number | null | undefined): string {
 }
 
 /**
- * Formata número com locale pt-BR, ideal para tabelas financeiras.
+ * Formata número com locale pt-BR, ideal para tabelas financeiras e econômicas.
  * Retorna '-' para zero, null ou NaN.
+ * Uso: valores monetários, arrobas, pesos em tabelas.
  */
-export function fmtValor(v?: number | null): string {
+export function fmtValor(v?: number | null, decimals = 2): string {
   if (v === undefined || v === null || isNaN(v) || v === 0) return '-';
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
