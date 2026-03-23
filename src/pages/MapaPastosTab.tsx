@@ -181,7 +181,7 @@ export function MapaPastosTab() {
                     <td className="sticky left-0 z-10 p-2 font-semibold border-r whitespace-nowrap" style={{ backgroundColor: 'inherit' }}>
                       {row.pasto.nome}
                     </td>
-                    <td className="p-2 text-xs text-muted-foreground border-r">{row.pasto.lote_padrao || '—'}</td>
+                    <td className="p-2 text-xs text-muted-foreground border-r">{row.lote || '—'}</td>
                     {categorias.map(cat => {
                       const val = row.categorias.get(cat.id);
                       const qty = val?.quantidade || 0;
