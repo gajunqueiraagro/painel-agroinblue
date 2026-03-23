@@ -1,29 +1,18 @@
+/**
+ * Hook de análise operacional — usa funções centrais de cálculo.
+ */
 import { useMemo } from 'react';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import type { CategoriaRebanho } from '@/hooks/usePastos';
+import {
+  calcResumoMovimentacoes,
+  calcSaldoPorCategoria,
+  calcConciliacao,
+  type ResumoMovimentacoes,
+  type ConciliacaoCategoria,
+} from '@/lib/calculos/zootecnicos';
 
-export interface ResumoMovimentacoes {
-  nascimentos: number;
-  compras: number;
-  vendas: number;
-  abates: number;
-  mortes: number;
-  consumos: number;
-  transferenciasEntrada: number;
-  transferenciasSaida: number;
-  reclassificacoes: number;
-  totalEntradas: number;
-  totalSaidas: number;
-  saldoMes: number;
-}
-
-export interface ConciliacaoInteligente {
-  categoria: CategoriaRebanho;
-  qtdSistema: number;
-  qtdPastos: number;
-  diferenca: number;
-  nivel: 'ok' | 'atencao' | 'critico';
-}
+export type { ResumoMovimentacoes };
 
 export interface AlertaInteligente {
   tipo: 'info' | 'atencao' | 'critico';
@@ -46,81 +35,24 @@ export function useAnaliseOperacional(
   anoMes: string
 ) {
   const [ano, mes] = anoMes.split('-').map(Number);
-  const mesStr = anoMes;
 
-  // Movimentações do mês
-  const resumoMov: ResumoMovimentacoes = useMemo(() => {
-    const startDate = `${mesStr}-01`;
-    const endDate = `${mesStr}-31`;
-    const doMes = lancamentos.filter(l => l.data >= startDate && l.data <= endDate);
+  // Movimentações do mês — lib central
+  const resumoMov = useMemo(
+    () => calcResumoMovimentacoes(lancamentos, anoMes),
+    [lancamentos, anoMes],
+  );
 
-    const count = (tipo: string) => doMes.filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade, 0);
+  // Saldo do sistema — lib central
+  const saldoSistema = useMemo(
+    () => calcSaldoPorCategoria(saldosIniciais, lancamentos, ano, mes, categorias),
+    [ano, mes, lancamentos, saldosIniciais, categorias],
+  );
 
-    const nascimentos = count('nascimento');
-    const compras = count('compra');
-    const vendas = count('venda');
-    const abates = count('abate');
-    const mortes = count('morte');
-    const consumos = count('consumo');
-    const transferenciasEntrada = count('transferencia_entrada');
-    const transferenciasSaida = count('transferencia_saida');
-    const reclassificacoes = count('reclassificacao');
-
-    const totalEntradas = nascimentos + compras + transferenciasEntrada;
-    const totalSaidas = vendas + abates + mortes + consumos + transferenciasSaida;
-
-    return {
-      nascimentos, compras, vendas, abates, mortes, consumos,
-      transferenciasEntrada, transferenciasSaida, reclassificacoes,
-      totalEntradas, totalSaidas,
-      saldoMes: totalEntradas - totalSaidas,
-    };
-  }, [lancamentos, mesStr]);
-
-  // Saldo do sistema por categoria até o final do mês
-  const saldoSistema = useMemo(() => {
-    const map = new Map<string, number>();
-    const codeToId = new Map(categorias.map(c => [c.codigo, c.id]));
-
-    saldosIniciais.filter(s => s.ano === ano).forEach(s => {
-      const catId = codeToId.get(s.categoria);
-      if (catId) map.set(catId, (map.get(catId) || 0) + s.quantidade);
-    });
-
-    const endDate = `${mesStr}-31`;
-    const startDate = `${ano}-01-01`;
-    lancamentos
-      .filter(l => l.data >= startDate && l.data <= endDate)
-      .forEach(l => {
-        const catId = codeToId.get(l.categoria);
-        if (!catId) return;
-        const isEntrada = ['nascimento', 'compra', 'transferencia_entrada'].includes(l.tipo);
-        const isSaida = ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'].includes(l.tipo);
-        const isReclass = l.tipo === 'reclassificacao';
-
-        if (isEntrada) map.set(catId, (map.get(catId) || 0) + l.quantidade);
-        else if (isSaida) map.set(catId, (map.get(catId) || 0) - l.quantidade);
-        else if (isReclass && l.categoriaDestino) {
-          const destId = codeToId.get(l.categoriaDestino);
-          map.set(catId, (map.get(catId) || 0) - l.quantidade);
-          if (destId) map.set(destId, (map.get(destId) || 0) + l.quantidade);
-        }
-      });
-
-    return map;
-  }, [ano, mesStr, lancamentos, saldosIniciais, categorias]);
-
-  // Conciliação por categoria
-  const conciliacao: ConciliacaoInteligente[] = useMemo(() => {
-    return categorias.map(cat => {
-      const qtdSistema = saldoSistema.get(cat.id) || 0;
-      const qtdPastos = itensPastos.get(cat.id) || 0;
-      const diferenca = qtdPastos - qtdSistema;
-      const absDif = Math.abs(diferenca);
-      const nivel: 'ok' | 'atencao' | 'critico' = absDif === 0 ? 'ok' : absDif <= 3 ? 'atencao' : 'critico';
-      return { categoria: cat, qtdSistema, qtdPastos, diferenca, nivel };
-    });
-  }, [categorias, saldoSistema, itensPastos]);
+  // Conciliação — lib central
+  const conciliacao = useMemo(
+    () => calcConciliacao(categorias, saldoSistema, itensPastos),
+    [categorias, saldoSistema, itensPastos],
+  );
 
   // Alertas inteligentes
   const alertas: AlertaInteligente[] = useMemo(() => {
@@ -166,7 +98,6 @@ export function useAnaliseOperacional(
         const a = conciliacao[i];
         const b = conciliacao[j];
 
-        // Padrão: uma categoria diminuiu e outra aumentou na mesma proporção
         if (a.diferenca < -2 && b.diferenca > 2 && Math.abs(a.diferenca + b.diferenca) <= 2) {
           result.push({
             tipo: 'evolucao',
@@ -188,7 +119,6 @@ export function useAnaliseOperacional(
       }
     }
 
-    // Categorias com diferença positiva grande (pastos > sistema) → entrada faltante
     conciliacao.filter(r => r.diferenca > 5).forEach(r => {
       result.push({
         tipo: 'entrada_faltante',
@@ -197,7 +127,6 @@ export function useAnaliseOperacional(
       });
     });
 
-    // Categorias com diferença negativa grande (sistema > pastos) → saída faltante
     conciliacao.filter(r => r.diferenca < -5).forEach(r => {
       result.push({
         tipo: 'saida_faltante',

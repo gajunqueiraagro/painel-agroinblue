@@ -3,6 +3,8 @@ import autoTable from 'jspdf-autotable';
 import type { CategoriaRebanho } from '@/hooks/usePastos';
 import type { PastoMapaRow, MapaTotais, AtividadeResumo } from '@/pages/MapaPastosTab';
 import logoUrl from '@/assets/logo.png';
+import { tipoUsoLabelCurto } from '@/lib/calculos/labels';
+import { formatNum as fmt } from '@/lib/calculos/formatters';
 
 function loadLogoBase64(): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -19,21 +21,6 @@ function loadLogoBase64(): Promise<string> {
     img.onerror = reject;
     img.src = logoUrl;
   });
-}
-
-const tipoUsoLabel = (t: string | null) => {
-  if (!t) return '—';
-  const labels: Record<string, string> = {
-    cria: 'Cria', recria: 'Recria', engorda: 'Engorda',
-    reforma_pecuaria: 'Ref. Pec.', agricultura: 'Agric.',
-    app: 'APP', reserva_legal: 'Res. Legal', benfeitorias: 'Benf.',
-  };
-  return labels[t] || t;
-};
-
-function fmt(val: number | null | undefined, dec = 0): string {
-  if (val === null || val === undefined) return '—';
-  return val.toFixed(dec).replace('.', ',');
 }
 
 function drawHeader(
@@ -119,7 +106,7 @@ export async function exportMapaPastosPdf(
     });
     return [
       row.pasto.nome,
-      tipoUsoLabel(row.tipoUso),
+      tipoUsoLabelCurto(row.tipoUso),
       row.lote || '',
       ...catVals,
       row.totalCabecas ? String(row.totalCabecas) : '',
@@ -250,7 +237,7 @@ export async function exportMapaPastosPdf(
 
     const actHead = [['Atividade', 'Pastos', 'Área (ha)', 'Cabeças', 'Peso Méd (kg)', 'UA/ha']];
     const actBody = resumoAtividades.map(a => [
-      tipoUsoLabel(a.tipo),
+      tipoUsoLabelCurto(a.tipo),
       String(a.qtdPastos),
       fmt(a.area, 1),
       String(a.cabecas),

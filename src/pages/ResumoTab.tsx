@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
-import { Lancamento, SaldoInicial, isEntrada, isReclassificacao, CATEGORIAS, Categoria } from '@/types/cattle';
+import { Lancamento, SaldoInicial, CATEGORIAS } from '@/types/cattle';
 import { TrendingUp, TrendingDown, Beef, BarChart2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { parseISO, format } from 'date-fns';
 import { TabId } from '@/components/BottomNav';
+import { calcSaldoPorCategoriaLegado, calcSaldoMensalAcumulado } from '@/lib/calculos';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -41,6 +42,18 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState('todos');
 
+  const anoNum = Number(anoFiltro);
+  const mesNum = mesFiltro === 'todos' ? undefined : Number(mesFiltro);
+
+  // Saldo mensal acumulado (para calcular saldo início do período)
+  const { saldoInicioMes, saldoFinalAno, saldoInicialAno } = useMemo(
+    () => calcSaldoMensalAcumulado(saldosIniciais, lancamentos, anoNum),
+    [saldosIniciais, lancamentos, anoNum],
+  );
+
+  const saldoInicialPeriodo = mesNum ? saldoInicioMes[String(mesNum).padStart(2, '0')] : saldoInicialAno;
+
+  // Entradas e saídas do período
   const filtrados = useMemo(() => {
     return lancamentos.filter(l => {
       try {
@@ -54,74 +67,25 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
     });
   }, [lancamentos, anoFiltro, mesFiltro]);
 
-  const saldoInicialAno = useMemo(() => {
-    return saldosIniciais
-      .filter(s => s.ano === Number(anoFiltro))
-      .reduce((sum, s) => sum + s.quantidade, 0);
-  }, [saldosIniciais, anoFiltro]);
-
-  // Saldo início do mês: saldo ano + acumulado meses anteriores
-  const saldoInicialPeriodo = useMemo(() => {
-    if (mesFiltro === 'todos') return saldoInicialAno;
-    const mesNum = Number(mesFiltro);
-    const acumulado = lancamentos.filter(l => {
-      try {
-        const d = parseISO(l.data);
-        return format(d, 'yyyy') === anoFiltro && Number(format(d, 'MM')) < mesNum;
-      } catch { return false; }
-    }).reduce((sum, l) => {
-      if (isEntrada(l.tipo)) return sum + l.quantidade;
-      if (!isReclassificacao(l.tipo)) return sum - l.quantidade;
-      return sum;
-    }, 0);
-    return saldoInicialAno + acumulado;
-  }, [lancamentos, saldosIniciais, anoFiltro, mesFiltro, saldoInicialAno]);
-
   const totalEntradas = filtrados
-    .filter(l => isEntrada(l.tipo))
+    .filter(l => ['nascimento', 'compra', 'transferencia_entrada'].includes(l.tipo))
     .reduce((sum, l) => sum + l.quantidade, 0);
 
   const totalSaidas = filtrados
-    .filter(l => !isEntrada(l.tipo) && !isReclassificacao(l.tipo))
+    .filter(l => ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'].includes(l.tipo))
     .reduce((sum, l) => sum + l.quantidade, 0);
 
   const saldo = saldoInicialPeriodo + totalEntradas - totalSaidas;
 
-  const porCategoria = CATEGORIAS.map(cat => {
-    const saldoIniAno = saldosIniciais
-      .filter(s => s.ano === Number(anoFiltro) && s.categoria === cat.value)
-      .reduce((sum, s) => sum + s.quantidade, 0);
-    // Acumulado de meses anteriores por categoria
-    let saldoIniCat = saldoIniAno;
-    if (mesFiltro !== 'todos') {
-      const mesNum = Number(mesFiltro);
-      const anteriores = lancamentos.filter(l => {
-        try {
-          const d = parseISO(l.data);
-          return format(d, 'yyyy') === anoFiltro && Number(format(d, 'MM')) < mesNum;
-        } catch { return false; }
-      });
-      anteriores.forEach(l => {
-        if (l.categoria === cat.value && isEntrada(l.tipo)) saldoIniCat += l.quantidade;
-        if (l.categoria === cat.value && !isEntrada(l.tipo) && !isReclassificacao(l.tipo)) saldoIniCat -= l.quantidade;
-        if (l.tipo === 'reclassificacao' && l.categoria === cat.value) saldoIniCat -= l.quantidade;
-        if (l.tipo === 'reclassificacao' && l.categoriaDestino === cat.value) saldoIniCat += l.quantidade;
-      });
-    }
-    const entradas = filtrados
-      .filter(l => l.categoria === cat.value && isEntrada(l.tipo))
-      .reduce((s, l) => s + l.quantidade, 0);
-    const saidas = filtrados
-      .filter(l => l.categoria === cat.value && !isEntrada(l.tipo) && !isReclassificacao(l.tipo))
-      .reduce((s, l) => s + l.quantidade, 0);
-    const reclassSaida = filtrados
-      .filter(l => l.tipo === 'reclassificacao' && l.categoria === cat.value)
-      .reduce((s, l) => s + l.quantidade, 0);
-    const reclassEntrada = filtrados
-      .filter(l => l.tipo === 'reclassificacao' && l.categoriaDestino === cat.value)
-      .reduce((s, l) => s + l.quantidade, 0);
-    return { ...cat, saldo: saldoIniCat + entradas - saidas - reclassSaida + reclassEntrada };
-  }).filter(c => c.saldo !== 0);
+  // Saldo por categoria usando cálculo central
+  const saldoMap = useMemo(
+    () => calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, anoNum, mesNum),
+    [saldosIniciais, lancamentos, anoNum, mesNum],
+  );
+
+  const porCategoria = CATEGORIAS
+    .map(cat => ({ ...cat, saldo: saldoMap.get(cat.value) || 0 }))
+    .filter(c => c.saldo !== 0);
 
   return (
     <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">

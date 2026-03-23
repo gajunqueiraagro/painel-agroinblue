@@ -1,15 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Lancamento, SaldoInicial, CATEGORIAS, Categoria, isEntrada, isReclassificacao } from '@/types/cattle';
-
-const TIPOS_DESFRUTE_BASE = ['abate', 'venda', 'consumo'];
-const TIPOS_DESFRUTE_FAZENDA = ['abate', 'venda', 'consumo', 'transferencia_saida'];
-import { parseISO, format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { Lancamento, SaldoInicial, CATEGORIAS, isEntrada, isReclassificacao } from '@/types/cattle';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TrendingUp, TrendingDown, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TabId } from '@/components/BottomNav';
+import { parseISO, format } from 'date-fns';
+import { calcSaldoMensalArray, calcSaldoPorCategoriaLegado } from '@/lib/calculos';
+import { MESES_NOMES } from '@/lib/calculos/labels';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -18,7 +16,8 @@ interface Props {
   isGlobal?: boolean;
 }
 
-const MESES_NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+const TIPOS_DESFRUTE_BASE = ['abate', 'venda', 'consumo'];
+const TIPOS_DESFRUTE_FAZENDA = ['abate', 'venda', 'consumo', 'transferencia_saida'];
 
 const COLORS = ['#2563eb', '#16a34a', '#ea580c', '#8b5cf6', '#dc2626', '#0891b2', '#d97706', '#64748b', '#ec4899'];
 
@@ -33,84 +32,27 @@ export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange, isGlobal 
   }, [lancamentos, saldosIniciais]);
 
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
+  const anoNum = Number(anoFiltro);
+  const anoAnterior = String(anoNum - 1);
+  const anoAntNum = anoNum - 1;
 
-  // Saldo mensal acumulado
-  const saldoMensal = useMemo(() => {
-    const saldoInicialAno = saldosIniciais
-      .filter(s => s.ano === Number(anoFiltro))
-      .reduce((sum, s) => sum + s.quantidade, 0);
+  // Saldo mensal via lib central
+  const saldoMensalAtual = useMemo(() => calcSaldoMensalArray(saldosIniciais, lancamentos, anoNum), [saldosIniciais, lancamentos, anoNum]);
+  const saldoMensalAnt = useMemo(() => calcSaldoMensalArray(saldosIniciais, lancamentos, anoAntNum), [saldosIniciais, lancamentos, anoAntNum]);
 
-    const lancAno = lancamentos.filter(l => {
-      try { return format(parseISO(l.data), 'yyyy') === anoFiltro; } catch { return false; }
-    });
-
-    return MESES_NOMES.map((nome, i) => {
-      const mesNum = i + 1;
-      const acumulado = lancAno.filter(l => {
-        try { return Number(format(parseISO(l.data), 'MM')) <= mesNum; } catch { return false; }
-      }).reduce((sum, l) => {
-        if (isEntrada(l.tipo)) return sum + l.quantidade;
-        if (!isReclassificacao(l.tipo)) return sum - l.quantidade;
-        return sum;
-      }, 0);
-      return { mes: nome, saldo: saldoInicialAno + acumulado };
-    });
-  }, [lancamentos, saldosIniciais, anoFiltro]);
-
-  // Saldo mensal do ano anterior (YoY)
-  const anoAnterior = String(Number(anoFiltro) - 1);
-  const saldoMensalAnterior = useMemo(() => {
-    const saldoInicialAno = saldosIniciais
-      .filter(s => s.ano === Number(anoAnterior))
-      .reduce((sum, s) => sum + s.quantidade, 0);
-
-    const lancAno = lancamentos.filter(l => {
-      try { return format(parseISO(l.data), 'yyyy') === anoAnterior; } catch { return false; }
-    });
-
-    return MESES_NOMES.map((_, i) => {
-      const mesNum = i + 1;
-      const acumulado = lancAno.filter(l => {
-        try { return Number(format(parseISO(l.data), 'MM')) <= mesNum; } catch { return false; }
-      }).reduce((sum, l) => {
-        if (isEntrada(l.tipo)) return sum + l.quantidade;
-        if (!isReclassificacao(l.tipo)) return sum - l.quantidade;
-        return sum;
-      }, 0);
-      return saldoInicialAno + acumulado;
-    });
-  }, [lancamentos, saldosIniciais, anoAnterior]);
-
-  const chartData = saldoMensal.map((d, i) => ({
-    mes: d.mes,
-    [anoFiltro]: d.saldo,
-    [anoAnterior]: saldoMensalAnterior[i],
+  const chartData = MESES_NOMES.map((nome, i) => ({
+    mes: nome,
+    [anoFiltro]: saldoMensalAtual[i].saldo,
+    [anoAnterior]: saldoMensalAnt[i].saldo,
   }));
 
-  // Pie chart: saldo atual por categoria
+  // Pie chart: saldo atual por categoria via lib central
   const porCategoria = useMemo(() => {
-    const saldoInicialAno = saldosIniciais.filter(s => s.ano === Number(anoFiltro));
-
-    return CATEGORIAS.map(cat => {
-      const saldoIni = saldoInicialAno
-        .filter(s => s.categoria === cat.value)
-        .reduce((sum, s) => sum + s.quantidade, 0);
-
-      const lancAno = lancamentos.filter(l => {
-        try { return format(parseISO(l.data), 'yyyy') === anoFiltro; } catch { return false; }
-      });
-
-      let saldo = saldoIni;
-      lancAno.forEach(l => {
-        if (l.categoria === cat.value && isEntrada(l.tipo)) saldo += l.quantidade;
-        if (l.categoria === cat.value && !isEntrada(l.tipo) && !isReclassificacao(l.tipo)) saldo -= l.quantidade;
-        if (l.tipo === 'reclassificacao' && l.categoria === cat.value) saldo -= l.quantidade;
-        if (l.tipo === 'reclassificacao' && l.categoriaDestino === cat.value) saldo += l.quantidade;
-      });
-
-      return { name: cat.label, value: saldo, categoria: cat.value };
-    }).filter(c => c.value > 0);
-  }, [lancamentos, saldosIniciais, anoFiltro]);
+    const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, anoNum);
+    return CATEGORIAS
+      .map(cat => ({ name: cat.label, value: saldoMap.get(cat.value) || 0, categoria: cat.value }))
+      .filter(c => c.value > 0);
+  }, [saldosIniciais, lancamentos, anoNum]);
 
   const totalRebanho = porCategoria.reduce((s, c) => s + c.value, 0);
 
@@ -134,7 +76,7 @@ export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange, isGlobal 
         </SelectContent>
       </Select>
 
-      {/* Summary boxes: Entradas, Saídas, Desfrute */}
+      {/* Summary boxes */}
       {(() => {
         const lancAno = lancamentos.filter(l => {
           try { return format(parseISO(l.data), 'yyyy') === anoFiltro; } catch { return false; }
@@ -172,7 +114,7 @@ export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange, isGlobal 
         );
       })()}
 
-      {/* Line chart - Saldo mensal */}
+      {/* Line chart */}
       <div className="bg-card rounded-lg p-4 shadow-sm border">
         <h2 className="font-bold text-foreground mb-3">Saldo do Rebanho</h2>
         <ResponsiveContainer width="100%" height={220}>
@@ -188,7 +130,7 @@ export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange, isGlobal 
         <p className="text-xs text-muted-foreground mt-1 text-center">— {anoFiltro} vs ‐‐ {anoAnterior}</p>
       </div>
 
-      {/* Pie chart - Categorias */}
+      {/* Pie chart */}
       <div className="bg-card rounded-lg p-4 shadow-sm border">
         <h2 className="font-bold text-foreground mb-3">Composição do Rebanho</h2>
         <ResponsiveContainer width="100%" height={320}>
@@ -210,7 +152,7 @@ export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange, isGlobal 
             <Tooltip formatter={(value: number) => [`${value} cab. (${totalRebanho > 0 ? ((value / totalRebanho) * 100).toFixed(1) : 0}%)`, '']} />
             <Legend
               verticalAlign="bottom"
-              formatter={(value: string, entry: any) => {
+              formatter={(value: string) => {
                 const item = porCategoria.find(c => c.name === value);
                 const pct = item && totalRebanho > 0 ? ((item.value / totalRebanho) * 100).toFixed(0) : 0;
                 return `${value} ${pct}%`;
@@ -220,7 +162,6 @@ export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange, isGlobal 
           </PieChart>
         </ResponsiveContainer>
       </div>
-
     </div>
   );
 }

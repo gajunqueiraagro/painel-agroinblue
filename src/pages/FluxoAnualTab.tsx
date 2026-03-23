@@ -1,11 +1,13 @@
 import { useState, useMemo } from 'react';
-import { Lancamento, SaldoInicial, isEntrada, isReclassificacao } from '@/types/cattle';
+import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { parseISO, format } from 'date-fns';
 import { ArrowLeft } from 'lucide-react';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import type { SubAba } from './FinanceiroTab';
+import { calcFluxoAnual, FLUXO_LINHAS, type FluxoTipo } from '@/lib/calculos/zootecnicos';
+import { MESES_COLS } from '@/lib/calculos/labels';
+import { parseISO, format } from 'date-fns';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -13,95 +15,24 @@ interface Props {
   onNavigateToMovimentacao?: (subAba: SubAba) => void;
 }
 
-const MESES_COLS = [
-  { key: '01', label: 'Jan' },
-  { key: '02', label: 'Fev' },
-  { key: '03', label: 'Mar' },
-  { key: '04', label: 'Abr' },
-  { key: '05', label: 'Mai' },
-  { key: '06', label: 'Jun' },
-  { key: '07', label: 'Jul' },
-  { key: '08', label: 'Ago' },
-  { key: '09', label: 'Set' },
-  { key: '10', label: 'Out' },
-  { key: '11', label: 'Nov' },
-  { key: '12', label: 'Dez' },
-];
-
-type FluxoTipo = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
-
-const LINHAS: { tipo: FluxoTipo; label: string; sinal: '+' | '-' }[] = [
-  { tipo: 'nascimento', label: 'Nascimentos', sinal: '+' },
-  { tipo: 'compra', label: 'Compras', sinal: '+' },
-  { tipo: 'transferencia_entrada', label: 'Transf. Entrada', sinal: '+' },
-  { tipo: 'abate', label: 'Abates', sinal: '-' },
-  { tipo: 'venda', label: 'Vendas em Pé', sinal: '-' },
-  { tipo: 'transferencia_saida', label: 'Transf. Saída', sinal: '-' },
-  { tipo: 'consumo', label: 'Consumo', sinal: '-' },
-  { tipo: 'morte', label: 'Mortes', sinal: '-' },
-];
-
 export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao }: Props) {
   const [drilldownMonth, setDrilldownMonth] = useState<string | null>(null);
 
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
-    lancamentos.forEach(l => {
-      try { anos.add(format(parseISO(l.data), 'yyyy')); } catch {}
-    });
+    lancamentos.forEach(l => { try { anos.add(format(parseISO(l.data), 'yyyy')); } catch {} });
     saldosIniciais.forEach(s => anos.add(String(s.ano)));
     return Array.from(anos).sort().reverse();
   }, [lancamentos, saldosIniciais]);
 
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
 
-  const dados = useMemo(() => {
-    const saldoInicialAno = saldosIniciais
-      .filter(s => s.ano === Number(anoFiltro))
-      .reduce((sum, s) => sum + s.quantidade, 0);
+  const dados = useMemo(
+    () => calcFluxoAnual(saldosIniciais, lancamentos, Number(anoFiltro)),
+    [lancamentos, saldosIniciais, anoFiltro],
+  );
 
-    const lancAno = lancamentos.filter(l => {
-      try { return format(parseISO(l.data), 'yyyy') === anoFiltro; }
-      catch { return false; }
-    });
-
-    const porMesTipo: Record<string, Record<FluxoTipo, number>> = {};
-    MESES_COLS.forEach(m => {
-      porMesTipo[m.key] = {} as Record<FluxoTipo, number>;
-      LINHAS.forEach(li => { porMesTipo[m.key][li.tipo] = 0; });
-    });
-
-    lancAno.forEach(l => {
-      const mes = format(parseISO(l.data), 'MM');
-      if (porMesTipo[mes] && !isReclassificacao(l.tipo)) {
-        const tipo = l.tipo as FluxoTipo;
-        if (porMesTipo[mes][tipo] !== undefined) {
-          porMesTipo[mes][tipo] += l.quantidade;
-        }
-      }
-    });
-
-    const saldoInicioMes: Record<string, number> = {};
-    let acum = saldoInicialAno;
-    MESES_COLS.forEach(m => {
-      saldoInicioMes[m.key] = acum;
-      const entradas = LINHAS.filter(li => li.sinal === '+').reduce((s, li) => s + porMesTipo[m.key][li.tipo], 0);
-      const saidas = LINHAS.filter(li => li.sinal === '-').reduce((s, li) => s + porMesTipo[m.key][li.tipo], 0);
-      acum += entradas - saidas;
-    });
-
-    const saldoFinalAno = acum;
-
-    const totalAno: Record<FluxoTipo, number> = {} as any;
-    LINHAS.forEach(li => {
-      totalAno[li.tipo] = MESES_COLS.reduce((s, m) => s + porMesTipo[m.key][li.tipo], 0);
-    });
-
-    return { porMesTipo, saldoInicioMes, saldoFinalAno, totalAno, saldoInicialAno };
-  }, [lancamentos, saldosIniciais, anoFiltro]);
-
-  // Drill-down into month evolution
   if (drilldownMonth) {
     const mesLabel = MESES_COLS.find(m => m.key === drilldownMonth)?.label || drilldownMonth;
     return (
@@ -180,8 +111,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               </td>
             </tr>
 
-            {/* Linhas de movimentação */}
-            {LINHAS.map((li, i) => (
+            {FLUXO_LINHAS.map((li, i) => (
               <tr
                 key={li.tipo}
                 className={`${i % 2 === 0 ? '' : 'bg-muted/30'} ${onNavigateToMovimentacao ? 'cursor-pointer hover:bg-accent/50' : ''}`}
