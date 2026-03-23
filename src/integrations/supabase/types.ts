@@ -534,6 +534,44 @@ export type Database = {
           },
         ]
       }
+      valor_rebanho_mensal: {
+        Row: {
+          ano_mes: string
+          categoria: string
+          created_at: string
+          fazenda_id: string
+          id: string
+          preco_kg: number
+          updated_at: string
+        }
+        Insert: {
+          ano_mes: string
+          categoria: string
+          created_at?: string
+          fazenda_id: string
+          id?: string
+          preco_kg?: number
+          updated_at?: string
+        }
+        Update: {
+          ano_mes?: string
+          categoria?: string
+          created_at?: string
+          fazenda_id?: string
+          id?: string
+          preco_kg?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "valor_rebanho_mensal_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
