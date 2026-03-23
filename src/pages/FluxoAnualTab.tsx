@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import { ValorRebanhoTab } from './ValorRebanhoTab';
+import { IndicadoresTab } from './IndicadoresTab';
 import type { SubAba } from './FinanceiroTab';
 import { calcFluxoAnual, FLUXO_LINHAS, type FluxoTipo } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
