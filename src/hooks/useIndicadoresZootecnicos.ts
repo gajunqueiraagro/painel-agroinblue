@@ -61,6 +61,14 @@ export interface GmdMovDetalhe {
   pesoTotalKg: number;
 }
 
+/** Detalhe de estoque por categoria */
+export interface EstoqueCategoriaDetalhe {
+  categoria: string;
+  cabecas: number;
+  pesoMedioKg: number | null;
+  pesoTotalKg: number;
+}
+
 /** Estrutura completa da abertura do cálculo do GMD */
 export interface GmdAbertura {
   pesoFinalEstoque: number;
@@ -73,6 +81,8 @@ export interface GmdAbertura {
   gmd: number | null;
   entradasDetalhe: GmdMovDetalhe[];
   saidasDetalhe: GmdMovDetalhe[];
+  estoqueFinalDetalhe: EstoqueCategoriaDetalhe[];
+  estoqueInicialDetalhe: EstoqueCategoriaDetalhe[];
   baseCompleta: boolean;
 }
 
