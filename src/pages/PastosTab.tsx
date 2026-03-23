@@ -115,12 +115,9 @@ export function PastosTab() {
                     {p.nome}
                     {p.entra_conciliacao && <Badge variant="outline" className="text-xs">Conciliação</Badge>}
                   </div>
-                  <div className="text-sm text-muted-foreground flex gap-3 mt-1">
-                    <span>{TIPOS_USO.find(t => t.value === p.tipo_uso)?.label || p.tipo_uso}</span>
-                    {p.area_produtiva_ha && <span>{p.area_produtiva_ha} ha</span>}
-                    {p.qualidade && <span>Q: {p.qualidade}/10</span>}
-                    {p.lote_padrao && <span>Lote: {p.lote_padrao}</span>}
-                  </div>
+                    <div className="text-sm text-muted-foreground flex gap-3 mt-1">
+                      {p.area_produtiva_ha && <span>{p.area_produtiva_ha} ha</span>}
+                    </div>
                 </div>
                 <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" onClick={() => { setEditingPasto(p); setDialogOpen(true); }}>
