@@ -81,11 +81,11 @@ export function FechamentoPastoDialog({
           const found = existing.find(e => e.categoria_id === c.id);
           return found
             ? { categoria_id: c.id, quantidade: found.quantidade, peso_medio_kg: found.peso_medio_kg, lote: found.lote, observacoes: found.observacoes, origem_dado: found.origem_dado }
-            : { categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: pasto.lote_padrao || null, observacoes: null, origem_dado: 'manual' };
+            : { categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: null, observacoes: null, origem_dado: 'manual' };
         }));
       }
     });
-  }, [open, fechamento, categorias, loadItens, pasto]);
+  }, [open, fechamento, categorias, loadItens]);
 
   const updateItem = (idx: number, field: string, value: any) => {
     setItens(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value, origem_dado: item.origem_dado === 'copiado_mes_anterior' ? 'ajustado' : item.origem_dado } : item));
