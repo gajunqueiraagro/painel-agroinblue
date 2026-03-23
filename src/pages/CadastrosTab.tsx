@@ -7,10 +7,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Save, FileText, Share2, Pencil, Trash2 } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Save, FileText, Share2, Pencil, Trash2, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import logoUrl from '@/assets/logo.png';
+import { PastosTab } from './PastosTab';
 
 interface CadastroData {
   id?: string;
@@ -171,7 +173,6 @@ export function CadastrosTab() {
   const downloadPdf = (doc: jsPDF, fileName: string) => {
     const pdfBlob = doc.output('blob');
     const url = URL.createObjectURL(pdfBlob);
-
     try {
       const downloadLink = document.createElement('a');
       downloadLink.href = url;
@@ -180,10 +181,8 @@ export function CadastrosTab() {
       document.body.appendChild(downloadLink);
       downloadLink.click();
       document.body.removeChild(downloadLink);
-
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
       const isEmbedded = window.self !== window.top;
-
       if (isMobile || isEmbedded) {
         const dataUri = doc.output('datauristring');
         const openInSameTab = document.createElement('a');
@@ -206,17 +205,8 @@ export function CadastrosTab() {
 
   const normalizePdfText = (value?: string) => {
     if (!value) return '—';
-
-    const normalizedSpaces = value
-      .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
-      .replace(/[^\S\r\n]+/g, ' ')
-      .trim();
-
-    const fixedSpacedChars = normalizedSpaces.replace(
-      /(?:\b[\p{L}\p{N}]\s+){2,}[\p{L}\p{N}]\b/gu,
-      (match) => match.replace(/\s+/g, ''),
-    );
-
+    const normalizedSpaces = value.replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ').replace(/[^\S\r\n]+/g, ' ').trim();
+    const fixedSpacedChars = normalizedSpaces.replace(/(?:\b[\p{L}\p{N}]\s+){2,}[\p{L}\p{N}]\b/gu, (match) => match.replace(/\s+/g, ''));
     return fixedSpacedChars || '—';
   };
 
@@ -225,26 +215,19 @@ export function CadastrosTab() {
   const drawPdfHeader = (doc: jsPDF, title: string) => {
     const pageW = doc.internal.pageSize.getWidth();
     let y = 10;
-
     if (logoBase64) {
       const logoH = 14;
       const logoW = logoH * 2;
       doc.addImage(logoBase64, 'PNG', pageW / 2 - logoW / 2, y, logoW, logoH);
       y += logoH + 6;
     }
-
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.text(title, pageW / 2, y, { align: 'center' });
     return y + 12;
   };
 
-  const drawLabeledRows = (
-    doc: jsPDF,
-    rows: Array<[string, string | undefined]>,
-    startY: number,
-    options?: { preserveLineBreaks?: boolean },
-  ) => {
+  const drawLabeledRows = (doc: jsPDF, rows: Array<[string, string | undefined]>, startY: number, options?: { preserveLineBreaks?: boolean }) => {
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
     const marginX = 18;
@@ -255,35 +238,17 @@ export function CadastrosTab() {
 
     rows.forEach(([label, raw]) => {
       const normalized = options?.preserveLineBreaks
-        ? (raw || '')
-            .replace(/\u00a0/g, ' ')
-            .replace(/\r/g, '')
-            .split('\n')
-            .map((part) => normalizePdfText(part))
-            .filter(Boolean)
-            .join('\n') || '—'
+        ? (raw || '').replace(/\u00a0/g, ' ').replace(/\r/g, '').split('\n').map(part => normalizePdfText(part)).filter(Boolean).join('\n') || '—'
         : normalizePdfText(raw);
-
-      const wrapped = doc.splitTextToSize(
-        preventOverflow(normalized),
-        pageW - marginX * 2 - labelWidth,
-      );
+      const wrapped = doc.splitTextToSize(preventOverflow(normalized), pageW - marginX * 2 - labelWidth);
       const requiredHeight = Math.max(lineHeight, wrapped.length * lineHeight) + rowGap;
-
-      if (y + requiredHeight > pageH - 18) {
-        doc.addPage();
-        y = 20;
-      }
-
+      if (y + requiredHeight > pageH - 18) { doc.addPage(); y = 20; }
       doc.setFont('helvetica', 'bold');
       doc.text(`${label}:`, marginX, y);
-
       doc.setFont('helvetica', 'normal');
       doc.text(wrapped, marginX + labelWidth, y);
-
       y += requiredHeight;
     });
-
     return y;
   };
 
@@ -293,20 +258,13 @@ export function CadastrosTab() {
       let y = drawPdfHeader(doc, 'Roteiro para Embarque');
       doc.setFontSize(11);
       doc.setFont('helvetica', 'normal');
-
-      y = drawLabeledRows(
-        doc,
-        [
+      y = drawLabeledRows(doc, [
         ['Fazenda', fazendaAtual?.nome || ''],
         ['Município', data.municipio],
         ['IE', data.ie],
         ['Proprietário', data.proprietario_nome],
         ['Roteiro', data.roteiro],
-        ],
-        y,
-        { preserveLineBreaks: true },
-      );
-
+      ], y, { preserveLineBreaks: true });
       downloadPdf(doc, `roteiro_${fazendaAtual?.nome || 'fazenda'}.pdf`);
       toast.success('PDF do roteiro exportado!');
     } catch (error) {
@@ -320,7 +278,6 @@ export function CadastrosTab() {
       const doc = new jsPDF();
       const y = drawPdfHeader(doc, 'Dados para Cadastro');
       doc.setFontSize(11);
-
       drawLabeledRows(doc, [
         ['Fazenda', fazendaAtual?.nome || ''],
         ['Município', data.municipio],
@@ -331,7 +288,6 @@ export function CadastrosTab() {
         ['Email', data.email],
         ['Telefone', data.telefone],
       ], y);
-
       downloadPdf(doc, `cadastro_${fazendaAtual?.nome || 'fazenda'}.pdf`);
       toast.success('PDF do cadastro exportado!');
     } catch (error) {
@@ -341,8 +297,8 @@ export function CadastrosTab() {
   };
 
   const shareWhatsApp = (type: 'roteiro' | 'cadastro') => {
-    let text = '';
     const nome = fazendaAtual?.nome || '';
+    let text = '';
     if (type === 'roteiro') {
       text = `*Roteiro para Embarque*\n\n*Fazenda:* ${nome}\n*Município:* ${data.municipio || '—'}\n*IE:* ${data.ie || '—'}\n*Proprietário:* ${data.proprietario_nome || '—'}\n*Roteiro:* ${data.roteiro || '—'}`;
     } else {
@@ -351,9 +307,7 @@ export function CadastrosTab() {
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
-  if (loading) {
-    return <div className="p-4 text-center text-muted-foreground">Carregando...</div>;
-  }
+  if (loading) return <div className="p-4 text-center text-muted-foreground">Carregando...</div>;
 
   return (
     <div className="pb-24 pt-2 px-3 max-w-lg mx-auto space-y-4">
@@ -376,82 +330,80 @@ export function CadastrosTab() {
         )}
       </div>
 
-      {/* Main cadastro card */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Dados da Fazenda</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {field('Município', 'municipio')}
-          {field('Inscrição Estadual (IE)', 'ie')}
-          {field('Nome do Proprietário', 'proprietario_nome')}
-          {field('CPF ou CNPJ', 'cpf_cnpj')}
-          {field('Área Total (ha)', 'area_total', 'number', 'Hectares')}
-          {field('Área Produtiva (ha)', 'area_produtiva', 'number', 'Hectares')}
-          {field('Inscrição Rural (IR)', 'inscricao_rural')}
-        </CardContent>
-      </Card>
+      <Accordion type="multiple" defaultValue={['dados', 'contato', 'bancario', 'roteiro', 'pastos']} className="space-y-2">
+        <AccordionItem value="dados" className="border rounded-lg">
+          <AccordionTrigger className="px-4 py-3 text-sm font-bold">🏠 Dados da Fazenda</AccordionTrigger>
+          <AccordionContent className="px-4 pb-4 space-y-3">
+            {field('Município', 'municipio')}
+            {field('Inscrição Estadual (IE)', 'ie')}
+            {field('Nome do Proprietário', 'proprietario_nome')}
+            {field('CPF ou CNPJ', 'cpf_cnpj')}
+            {field('Área Total (ha)', 'area_total', 'number', 'Hectares')}
+            {field('Área Produtiva (ha)', 'area_produtiva', 'number', 'Hectares')}
+            {field('Inscrição Rural (IR)', 'inscricao_rural')}
+          </AccordionContent>
+        </AccordionItem>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Contato e Endereço</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {field('Endereço para Correspondência', 'endereco')}
-          {field('Email', 'email', 'email')}
-          {field('Telefone', 'telefone', 'tel')}
-        </CardContent>
-      </Card>
+        <AccordionItem value="contato" className="border rounded-lg">
+          <AccordionTrigger className="px-4 py-3 text-sm font-bold">📍 Contato e Endereço</AccordionTrigger>
+          <AccordionContent className="px-4 pb-4 space-y-3">
+            {field('Endereço para Correspondência', 'endereco')}
+            {field('Email', 'email', 'email')}
+            {field('Telefone', 'telefone', 'tel')}
+          </AccordionContent>
+        </AccordionItem>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Dados Bancários</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {field('Banco', 'banco')}
-          {field('PIX', 'pix')}
-        </CardContent>
-      </Card>
+        <AccordionItem value="bancario" className="border rounded-lg">
+          <AccordionTrigger className="px-4 py-3 text-sm font-bold">🏦 Dados Bancários</AccordionTrigger>
+          <AccordionContent className="px-4 pb-4 space-y-3">
+            {field('Banco', 'banco')}
+            {field('PIX', 'pix')}
+          </AccordionContent>
+        </AccordionItem>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Roteiro</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-1">
-            <Label className="text-xs font-semibold text-muted-foreground">Roteiro para Embarque</Label>
-            {editing ? (
-              <Textarea
-                value={data.roteiro}
-                onChange={e => setData(prev => ({ ...prev, roteiro: e.target.value }))}
-                placeholder="Descreva o roteiro de acesso à fazenda..."
-                className="text-sm min-h-[100px]"
-              />
-            ) : (
-              <p className="text-sm font-medium text-foreground min-h-[36px] px-3 py-2 rounded-md bg-muted/50 whitespace-pre-wrap">
-                {data.roteiro || <span className="text-muted-foreground italic">—</span>}
-              </p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+        <AccordionItem value="roteiro" className="border rounded-lg">
+          <AccordionTrigger className="px-4 py-3 text-sm font-bold">🚛 Roteiro</AccordionTrigger>
+          <AccordionContent className="px-4 pb-4 space-y-3">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-muted-foreground">Roteiro para Embarque</Label>
+              {editing ? (
+                <Textarea
+                  value={data.roteiro}
+                  onChange={e => setData(prev => ({ ...prev, roteiro: e.target.value }))}
+                  placeholder="Descreva o roteiro de acesso à fazenda..."
+                  className="text-sm min-h-[100px]"
+                />
+              ) : (
+                <p className="text-sm font-medium text-foreground min-h-[36px] px-3 py-2 rounded-md bg-muted/50 whitespace-pre-wrap">
+                  {data.roteiro || <span className="text-muted-foreground italic">—</span>}
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={generateRoteiroPDF} className="flex-1">
+                <FileText className="h-4 w-4 mr-1 text-destructive" /> PDF
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => shareWhatsApp('roteiro')} className="flex-1">
+                <Share2 className="h-4 w-4 mr-1 text-success" /> WhatsApp
+              </Button>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="pastos" className="border rounded-lg">
+          <AccordionTrigger className="px-4 py-3 text-sm font-bold">
+            <span className="flex items-center gap-2">
+              <MapPin className="h-4 w-4" /> Pastos
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="px-0 pb-0">
+            <PastosTab />
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
       <Separator />
-
-      {/* Export: Roteiro */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Exportar Roteiro para Embarque</CardTitle>
-        </CardHeader>
-        <CardContent className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={generateRoteiroPDF} className="flex-1">
-            <FileText className="h-4 w-4 mr-1 text-destructive" /> PDF
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => shareWhatsApp('roteiro')} className="flex-1">
-            <Share2 className="h-4 w-4 mr-1 text-success" /> WhatsApp
-          </Button>
-        </CardContent>
-      </Card>
 
       {/* Export: Cadastro */}
       <Card>
