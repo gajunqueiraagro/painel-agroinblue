@@ -5,10 +5,9 @@ import {
   TODOS_TIPOS,
   Categoria,
   TipoMovimentacao,
-  isEntrada,
-  isReclassificacao,
   kgToArrobas,
 } from '@/types/cattle';
+import { isEntrada, isReclassificacao } from '@/lib/calculos/zootecnicos';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

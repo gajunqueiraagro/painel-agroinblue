@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Lancamento, SaldoInicial, CATEGORIAS, isEntrada } from '@/types/cattle';
+import { Lancamento, SaldoInicial, CATEGORIAS } from '@/types/cattle';
 import { parseISO, format } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TabId } from '@/components/BottomNav';
+import { MESES_NOMES, MESES_OPTIONS_ACUMULADO } from '@/lib/calculos/labels';
+import { isEntrada } from '@/lib/calculos/zootecnicos';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -13,21 +15,6 @@ interface Props {
   onTabChange: (tab: TabId) => void;
 }
 
-const MESES_NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-const MESES_OPTIONS = [
-  { value: '12', label: 'Ano todo' },
-  { value: '01', label: 'Até Janeiro' },
-  { value: '02', label: 'Até Fevereiro' },
-  { value: '03', label: 'Até Março' },
-  { value: '04', label: 'Até Abril' },
-  { value: '05', label: 'Até Maio' },
-  { value: '06', label: 'Até Junho' },
-  { value: '07', label: 'Até Julho' },
-  { value: '08', label: 'Até Agosto' },
-  { value: '09', label: 'Até Setembro' },
-  { value: '10', label: 'Até Outubro' },
-  { value: '11', label: 'Até Novembro' },
-];
 const COLORS = ['#2563eb', '#16a34a', '#ea580c', '#8b5cf6', '#dc2626', '#0891b2', '#d97706', '#64748b', '#ec4899'];
 
 const TIPOS_ENTRADA_LABELS: Record<string, string> = {
@@ -139,7 +126,7 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
             <SelectValue placeholder="Período" />
           </SelectTrigger>
           <SelectContent>
-            {MESES_OPTIONS.map(m => (
+            {MESES_OPTIONS_ACUMULADO.map(m => (
               <SelectItem key={m.value} value={m.value} className="text-base">{m.label}</SelectItem>
             ))}
           </SelectContent>

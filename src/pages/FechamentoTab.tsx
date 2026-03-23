@@ -8,16 +8,8 @@ import { CheckCircle, Circle } from 'lucide-react';
 import { format } from 'date-fns';
 import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
 import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
-
-function calcUA(quantidade: number, pesoMedioKg: number | null): number {
-  if (!pesoMedioKg || pesoMedioKg <= 0) return quantidade;
-  return (quantidade * pesoMedioKg) / 450;
-}
-
-function fmtNum(val: number | null | undefined, dec = 0): string {
-  if (val === null || val === undefined) return '—';
-  return val.toFixed(dec).replace('.', ',');
-}
+import { calcUA } from '@/lib/calculos/zootecnicos';
+import { formatNum } from '@/lib/calculos/formatters';
 
 interface PastoResumo {
   totalCabecas: number;
@@ -134,7 +126,7 @@ export function FechamentoTab() {
                 </div>
 
                 <div className="text-sm text-muted-foreground">
-                  {p.area_produtiva_ha ? `${fmtNum(p.area_produtiva_ha, 1)} ha` : '—'}
+                  {p.area_produtiva_ha ? `${formatNum(p.area_produtiva_ha, 1)} ha` : '—'}
                   {fech?.lote_mes && ` · Lote: ${fech.lote_mes}`}
                 </div>
 
@@ -145,7 +137,7 @@ export function FechamentoTab() {
                       <span>Qualidade: <span className="font-medium text-foreground">{fech.qualidade_mes}</span></span>
                     )}
                     {resumo.uaHa && (
-                      <span>UA/ha: <span className="font-medium text-foreground">{fmtNum(resumo.uaHa, 2)}</span></span>
+                      <span>UA/ha: <span className="font-medium text-foreground">{formatNum(resumo.uaHa, 2)}</span></span>
                     )}
                   </div>
                 )}

@@ -53,15 +53,25 @@ export interface ConciliacaoCategoria {
 const TIPOS_ENTRADA: TipoMovimentacao[] = ['nascimento', 'compra', 'transferencia_entrada'];
 const TIPOS_SAIDA: TipoMovimentacao[] = ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'];
 
-function isEntrada(tipo: string): boolean {
+/**
+ * Verifica se o tipo de movimentação é uma entrada.
+ * Fonte única — use esta em vez de reimplementar em cada tela.
+ */
+export function isEntrada(tipo: string): boolean {
   return (TIPOS_ENTRADA as string[]).includes(tipo);
 }
 
-function isSaida(tipo: string): boolean {
+/**
+ * Verifica se o tipo de movimentação é uma saída.
+ */
+export function isSaida(tipo: string): boolean {
   return (TIPOS_SAIDA as string[]).includes(tipo);
 }
 
-function isReclassificacao(tipo: string): boolean {
+/**
+ * Verifica se o tipo é reclassificação.
+ */
+export function isReclassificacao(tipo: string): boolean {
   return tipo === 'reclassificacao';
 }
 

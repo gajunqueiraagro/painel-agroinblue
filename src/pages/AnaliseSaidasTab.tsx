@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Lancamento, SaldoInicial, CATEGORIAS, isEntrada, isReclassificacao } from '@/types/cattle';
+import { Lancamento, SaldoInicial, CATEGORIAS } from '@/types/cattle';
 import { parseISO, format } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TabId } from '@/components/BottomNav';
+import { MESES_NOMES, MESES_OPTIONS_ACUMULADO } from '@/lib/calculos/labels';
+import { isSaida } from '@/lib/calculos/zootecnicos';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -13,21 +15,6 @@ interface Props {
   onTabChange: (tab: TabId) => void;
 }
 
-const MESES_NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-const MESES_OPTIONS = [
-  { value: '12', label: 'Ano todo' },
-  { value: '01', label: 'Até Janeiro' },
-  { value: '02', label: 'Até Fevereiro' },
-  { value: '03', label: 'Até Março' },
-  { value: '04', label: 'Até Abril' },
-  { value: '05', label: 'Até Maio' },
-  { value: '06', label: 'Até Junho' },
-  { value: '07', label: 'Até Julho' },
-  { value: '08', label: 'Até Agosto' },
-  { value: '09', label: 'Até Setembro' },
-  { value: '10', label: 'Até Outubro' },
-  { value: '11', label: 'Até Novembro' },
-];
 const COLORS = ['#dc2626', '#ea580c', '#d97706', '#8b5cf6', '#64748b', '#2563eb', '#16a34a', '#0891b2', '#ec4899'];
 
 const TIPOS_SAIDA_LABELS: Record<string, string> = {
@@ -37,10 +24,6 @@ const TIPOS_SAIDA_LABELS: Record<string, string> = {
   consumo: 'Consumo',
   morte: 'Morte',
 };
-
-function isSaida(tipo: string): boolean {
-  return ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'].includes(tipo);
-}
 
 export function AnaliseSaidasTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
   const anosDisponiveis = useMemo(() => {
@@ -142,7 +125,7 @@ export function AnaliseSaidasTab({ lancamentos, saldosIniciais, onTabChange }: P
             <SelectValue placeholder="Período" />
           </SelectTrigger>
           <SelectContent>
-            {MESES_OPTIONS.map(m => (
+            {MESES_OPTIONS_ACUMULADO.map(m => (
               <SelectItem key={m.value} value={m.value} className="text-base">{m.label}</SelectItem>
             ))}
           </SelectContent>
