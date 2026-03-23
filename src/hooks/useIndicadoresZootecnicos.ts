@@ -417,6 +417,8 @@ export function useIndicadoresZootecnicos(
       gmd: gmdMes,
       entradasDetalhe: agruparPorTipo(entradasMes),
       saidasDetalhe: agruparPorTipo(saidasGmdMes),
+      estoqueFinalDetalhe,
+      estoqueInicialDetalhe,
       baseCompleta: pesoFinalMes > 0 && pesoInicialMes > 0 && cabMediaMes > 0,
     };
 
