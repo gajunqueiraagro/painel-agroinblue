@@ -46,7 +46,6 @@ function drawHeader(
 ): number {
   let y = 4;
 
-  // Logo — smaller
   if (logoData) {
     const logoH = 9;
     const logoW = logoH * 2;
@@ -54,12 +53,10 @@ function drawHeader(
     y += logoH + 1;
   }
 
-  // Title line
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   doc.text(`Mapa de Pastos — ${fazendaNome}`, pageWidth / 2, y + 4, { align: 'center' });
 
-  // Reference + summary on same line
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   const ref = anoMes.split('-').reverse().join('/');
@@ -82,7 +79,6 @@ export async function exportMapaPastosPdf(
   const pageHeight = doc.internal.pageSize.getHeight();
   const margins = { left: 6, right: 6, bottom: 10 };
 
-  // Pre-load logo
   let logoData: string | null = null;
   try {
     logoData = await loadLogoBase64();
@@ -90,9 +86,8 @@ export async function exportMapaPastosPdf(
 
   const tableStartY = drawHeader(doc, logoData, fazendaNome, anoMes, totais, pageWidth);
 
-  // Build column config
   const numCats = categorias.length;
-  const fixedColsWidth = 24 + 14 + 16 + 12 + 14 + 12 + 12 + 10; // pasto+ativ+lote+total+peso+area+ua+qual
+  const fixedColsWidth = 24 + 14 + 16 + 12 + 14 + 12 + 12 + 10;
   const availableForCats = pageWidth - margins.left - margins.right - fixedColsWidth;
   const catColWidth = Math.max(10, Math.floor(availableForCats / Math.max(numCats, 1)));
 
@@ -117,7 +112,7 @@ export async function exportMapaPastosPdf(
     ];
   });
 
-  // Totals row
+  // TOTAL row
   const totalCatVals = categorias.map(cat => {
     const t = totais.catTotals.get(cat.id);
     return t && t.quantidade > 0 ? String(t.quantidade) : '';
@@ -134,23 +129,44 @@ export async function exportMapaPastosPdf(
     totais.qualidadeMedia ? fmt(totais.qualidadeMedia, 1) : '',
   ]);
 
-  // Column styles — fixed widths + right-align numbers
+  // PESO MÉDIO row — weighted average per category
+  const pesoMedioCatVals = categorias.map(cat => {
+    const t = totais.catTotals.get(cat.id);
+    if (t && t.qtdComPeso > 0) {
+      return fmt(t.pesoTotal / t.qtdComPeso, 2);
+    }
+    return '';
+  });
+  body.push([
+    'PESO MÉDIO',
+    '',
+    '',
+    ...pesoMedioCatVals,
+    '',
+    '',
+    '',
+    '',
+    '',
+  ]);
+
+  const totalRowIdx = body.length - 2;
+  const pesoRowIdx = body.length - 1;
+
+  // Column styles
   const colStyles: Record<number, any> = {
     0: { cellWidth: 24, fontStyle: 'bold', halign: 'left' },
     1: { cellWidth: 14, halign: 'left' },
     2: { cellWidth: 16, halign: 'left' },
   };
-  // Category columns
   for (let i = 0; i < numCats; i++) {
     colStyles[3 + i] = { cellWidth: catColWidth, halign: 'right' };
   }
-  // Fixed trailing columns
   const afterCats = 3 + numCats;
-  colStyles[afterCats] = { cellWidth: 12, halign: 'right', fontStyle: 'bold' };     // Total
-  colStyles[afterCats + 1] = { cellWidth: 14, halign: 'right' };  // Peso Md
-  colStyles[afterCats + 2] = { cellWidth: 12, halign: 'right' };  // Área
-  colStyles[afterCats + 3] = { cellWidth: 12, halign: 'right' };  // UA/ha
-  colStyles[afterCats + 4] = { cellWidth: 10, halign: 'center' }; // Qual
+  colStyles[afterCats] = { cellWidth: 12, halign: 'right', fontStyle: 'bold' };
+  colStyles[afterCats + 1] = { cellWidth: 14, halign: 'right' };
+  colStyles[afterCats + 2] = { cellWidth: 12, halign: 'right' };
+  colStyles[afterCats + 3] = { cellWidth: 12, halign: 'right' };
+  colStyles[afterCats + 4] = { cellWidth: 10, halign: 'center' };
 
   autoTable(doc, {
     startY: tableStartY,
@@ -173,18 +189,22 @@ export async function exportMapaPastosPdf(
     columnStyles: colStyles,
     alternateRowStyles: { fillColor: [248, 250, 252] },
     didParseCell: (data) => {
-      if (data.row.index === body.length - 1 && data.section === 'body') {
-        data.cell.styles.fontStyle = 'bold';
-        data.cell.styles.fillColor = [220, 235, 250];
+      if (data.section === 'body') {
+        if (data.row.index === totalRowIdx) {
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fillColor = [220, 235, 250];
+        }
+        if (data.row.index === pesoRowIdx) {
+          data.cell.styles.fontStyle = 'italic' as any;
+          data.cell.styles.fillColor = [235, 245, 235];
+          data.cell.styles.fontSize = 6;
+        }
       }
     },
-    // Repeat header on every page
     showHead: 'everyPage',
-    // Keep rows together (don't split a pasto across pages)
     rowPageBreak: 'avoid',
     margin: { left: margins.left, right: margins.right, top: tableStartY, bottom: margins.bottom },
     didDrawPage: (data) => {
-      // Re-draw header on subsequent pages
       if (data.pageNumber > 1) {
         drawHeader(doc, logoData, fazendaNome, anoMes, totais, pageWidth);
       }
@@ -193,10 +213,10 @@ export async function exportMapaPastosPdf(
   });
 
   // Activity summary
-  if (resumoAtividades.length > 0) {
-    const finalY = (doc as any).lastAutoTable?.finalY || 120;
-    let actY = finalY + 6;
+  let currentY = (doc as any).lastAutoTable?.finalY || 120;
 
+  if (resumoAtividades.length > 0) {
+    let actY = currentY + 6;
     if (actY > pageHeight - 35) {
       doc.addPage();
       actY = drawHeader(doc, logoData, fazendaNome, anoMes, totais, pageWidth) + 2;
@@ -239,6 +259,69 @@ export async function exportMapaPastosPdf(
       theme: 'grid',
       tableWidth: 132,
     });
+
+    currentY = (doc as any).lastAutoTable?.finalY || currentY + 30;
+  }
+
+  // Bar chart — total cabeças por categoria
+  const catData = categorias
+    .map(c => {
+      const t = totais.catTotals.get(c.id);
+      return { nome: c.nome, quantidade: t?.quantidade || 0 };
+    })
+    .filter(d => d.quantidade > 0)
+    .sort((a, b) => b.quantidade - a.quantidade);
+
+  if (catData.length > 0) {
+    let chartY = currentY + 8;
+    const chartHeight = 6 * catData.length + 14;
+
+    if (chartY + chartHeight > pageHeight - margins.bottom) {
+      doc.addPage();
+      chartY = drawHeader(doc, logoData, fazendaNome, anoMes, totais, pageWidth) + 2;
+    }
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Distribuição por Categoria', margins.left, chartY);
+    chartY += 5;
+
+    const maxVal = catData[0].quantidade;
+    const barMaxWidth = 100;
+    const labelWidth = 28;
+    const barX = margins.left + labelWidth;
+    const barHeight = 4.5;
+    const barGap = 1.5;
+
+    // Soft professional colors
+    const colors: [number, number, number][] = [
+      [41, 128, 185], [39, 174, 96], [230, 126, 34], [142, 68, 173],
+      [44, 62, 80], [192, 57, 43], [22, 160, 133], [243, 156, 18], [52, 73, 94],
+    ];
+
+    catData.forEach((d, i) => {
+      const y = chartY + i * (barHeight + barGap);
+      const color = colors[i % colors.length];
+
+      // Label
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(60, 60, 60);
+      doc.text(d.nome, barX - 2, y + barHeight / 2 + 1, { align: 'right' });
+
+      // Bar
+      const barW = (d.quantidade / maxVal) * barMaxWidth;
+      doc.setFillColor(color[0], color[1], color[2]);
+      doc.roundedRect(barX, y, barW, barHeight, 1, 1, 'F');
+
+      // Value
+      doc.setFontSize(6.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(color[0], color[1], color[2]);
+      doc.text(String(d.quantidade), barX + barW + 2, y + barHeight / 2 + 1);
+    });
+
+    doc.setTextColor(0, 0, 0);
   }
 
   // Footer on all pages
