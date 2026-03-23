@@ -102,6 +102,7 @@ export async function exportMapaPastosPdf(
   body.push([
     'TOTAL',
     '',
+    '',
     ...totalCatVals,
     String(totais.totalCab),
     totais.pesoMedioGeral ? fmt(totais.pesoMedioGeral, 2) : '—',
