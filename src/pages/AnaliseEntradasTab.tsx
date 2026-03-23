@@ -15,21 +15,6 @@ interface Props {
   onTabChange: (tab: TabId) => void;
 }
 
-const MESES_NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-const MESES_OPTIONS = [
-  { value: '12', label: 'Ano todo' },
-  { value: '01', label: 'Até Janeiro' },
-  { value: '02', label: 'Até Fevereiro' },
-  { value: '03', label: 'Até Março' },
-  { value: '04', label: 'Até Abril' },
-  { value: '05', label: 'Até Maio' },
-  { value: '06', label: 'Até Junho' },
-  { value: '07', label: 'Até Julho' },
-  { value: '08', label: 'Até Agosto' },
-  { value: '09', label: 'Até Setembro' },
-  { value: '10', label: 'Até Outubro' },
-  { value: '11', label: 'Até Novembro' },
-];
 const COLORS = ['#2563eb', '#16a34a', '#ea580c', '#8b5cf6', '#dc2626', '#0891b2', '#d97706', '#64748b', '#ec4899'];
 
 const TIPOS_ENTRADA_LABELS: Record<string, string> = {
