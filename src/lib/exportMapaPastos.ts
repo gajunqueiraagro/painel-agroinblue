@@ -1,47 +1,39 @@
 import * as XLSX from 'xlsx';
-import type { Pasto, CategoriaRebanho } from '@/hooks/usePastos';
+import type { CategoriaRebanho } from '@/hooks/usePastos';
+import type { PastoMapaRow, MapaTotais, AtividadeResumo } from '@/pages/MapaPastosTab';
 
-interface PastoMapaRow {
-  pasto: Pasto;
-  lote: string | null;
-  tipoUso: string | null;
-  qualidade: number | null;
-  categorias: Map<string, { quantidade: number; peso_medio_kg: number | null }>;
-  totalCabecas: number;
-  pesoMedio: number | null;
-  cabHa: number | null;
-  uaHa: number | null;
-}
-
-interface Totais {
-  catTotals: Map<string, { quantidade: number; pesoTotal: number; qtdComPeso: number }>;
-  totalCab: number;
-  areaTotal: number;
-  pesoMedioGeral: number | null;
-}
+const tipoUsoLabel = (t: string | null) => {
+  if (!t) return '';
+  const labels: Record<string, string> = {
+    cria: 'Cria', recria: 'Recria', engorda: 'Engorda',
+    reforma_pecuaria: 'Reforma Pec.', agricultura: 'Agricultura',
+    app: 'APP', reserva_legal: 'Reserva Legal', benfeitorias: 'Benfeitorias',
+  };
+  return labels[t] || t;
+};
 
 export function exportMapaPastosXlsx(
   rows: PastoMapaRow[],
   categorias: CategoriaRebanho[],
-  totais: Totais,
+  totais: MapaTotais,
+  resumoAtividades: AtividadeResumo[],
   anoMes: string,
   fazendaNome: string
 ) {
   const wb = XLSX.utils.book_new();
 
-  // Header row
-  const headers = ['Pasto', 'Lote', ...categorias.map(c => c.nome), 'Total Cab.', 'Área (ha)', 'Cab/ha', 'UA/ha', 'Qualidade'];
+  const headers = ['Pasto', 'Atividade', 'Lote', ...categorias.map(c => c.nome), 'Total Cab.', 'Peso Méd. (kg)', 'Área (ha)', 'UA/ha', 'Qualidade'];
 
   // Data rows - Qtde
   const dataQtde = rows.map(row => {
-    const vals: (string | number)[] = [row.pasto.nome, row.lote || ''];
+    const vals: (string | number)[] = [row.pasto.nome, tipoUsoLabel(row.tipoUso), row.lote || ''];
     categorias.forEach(cat => {
       const v = row.categorias.get(cat.id);
       vals.push(v?.quantidade || 0);
     });
     vals.push(row.totalCabecas);
+    vals.push(row.pesoMedio ? Number(row.pesoMedio.toFixed(2)) : 0);
     vals.push(row.pasto.area_produtiva_ha || 0);
-    vals.push(row.cabHa ? Number(row.cabHa.toFixed(2)) : 0);
     vals.push(row.uaHa ? Number(row.uaHa.toFixed(2)) : 0);
     vals.push(row.qualidade || 0);
     return vals;
@@ -49,20 +41,17 @@ export function exportMapaPastosXlsx(
 
   // Peso rows
   const dataPeso = rows.map(row => {
-    const vals: (string | number)[] = [row.pasto.nome, 'Peso'];
+    const vals: (string | number)[] = [row.pasto.nome, '', 'Peso'];
     categorias.forEach(cat => {
       const v = row.categorias.get(cat.id);
       vals.push(v?.peso_medio_kg ? Number(v.peso_medio_kg.toFixed(0)) : 0);
     });
     vals.push(row.pesoMedio ? Number(row.pesoMedio.toFixed(0)) : 0);
-    vals.push(''); // area
-    vals.push(''); // cab/ha
-    vals.push(''); // ua/ha
-    vals.push(''); // qualidade
+    vals.push(''); vals.push(''); vals.push(''); vals.push('');
     return vals;
   });
 
-  // Interleave qtde and peso
+  // Interleave
   const allRows: (string | number)[][] = [];
   for (let i = 0; i < dataQtde.length; i++) {
     allRows.push(dataQtde[i]);
@@ -70,20 +59,20 @@ export function exportMapaPastosXlsx(
   }
 
   // Total row
-  const totalRow: (string | number)[] = ['TOTAL', ''];
+  const totalRow: (string | number)[] = ['TOTAL', '', ''];
   categorias.forEach(cat => {
     const t = totais.catTotals.get(cat.id);
     totalRow.push(t?.quantidade || 0);
   });
   totalRow.push(totais.totalCab);
+  totalRow.push(totais.pesoMedioGeral ? Number(totais.pesoMedioGeral.toFixed(2)) : 0);
   totalRow.push(Number(totais.areaTotal.toFixed(1)));
-  totalRow.push(totais.areaTotal > 0 ? Number((totais.totalCab / totais.areaTotal).toFixed(2)) : 0);
-  totalRow.push('');
-  totalRow.push('');
+  totalRow.push(totais.uaHaGeral ? Number(totais.uaHaGeral.toFixed(2)) : 0);
+  totalRow.push(totais.qualidadeMedia ? Number(totais.qualidadeMedia.toFixed(1)) : 0);
   allRows.push(totalRow);
 
   // Peso médio total row
-  const pesoRow: (string | number)[] = ['', 'Peso'];
+  const pesoRow: (string | number)[] = ['', '', 'Peso'];
   categorias.forEach(cat => {
     const t = totais.catTotals.get(cat.id);
     const pm = t && t.qtdComPeso > 0 ? t.pesoTotal / t.qtdComPeso : 0;
@@ -100,13 +89,29 @@ export function exportMapaPastosXlsx(
     ...allRows,
   ];
 
+  // Activity summary section
+  if (resumoAtividades.length > 0) {
+    wsData.push([]);
+    wsData.push(['Resumo por Atividade']);
+    wsData.push(['Atividade', 'Pastos', 'Área (ha)', 'Cabeças', 'Peso Méd. (kg)', 'UA/ha']);
+    resumoAtividades.forEach(a => {
+      wsData.push([
+        tipoUsoLabel(a.tipo),
+        a.qtdPastos,
+        Number(a.area.toFixed(1)),
+        a.cabecas,
+        a.pesoMedio ? Number(a.pesoMedio.toFixed(2)) : 0,
+        a.uaHa ? Number(a.uaHa.toFixed(2)) : 0,
+      ] as (string | number)[]);
+    });
+  }
+
   const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-  // Column widths
   ws['!cols'] = [
-    { wch: 18 }, { wch: 8 },
+    { wch: 18 }, { wch: 12 }, { wch: 8 },
     ...categorias.map(() => ({ wch: 10 })),
-    { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 8 },
+    { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 8 }, { wch: 8 },
   ];
 
   XLSX.utils.book_append_sheet(wb, ws, 'Mapa de Pastos');
