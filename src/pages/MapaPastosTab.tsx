@@ -59,6 +59,11 @@ export function MapaPastosTab() {
           });
         }
 
+        // Use monthly data from fechamento, fallback to pasto defaults
+        const lote = fech?.lote_mes ?? pasto.lote_padrao ?? null;
+        const tipoUso = fech?.tipo_uso_mes ?? pasto.tipo_uso ?? null;
+        const qualidade = fech?.qualidade_mes ?? pasto.qualidade ?? null;
+
         const totalCab = Array.from(catMap.values()).reduce((s, v) => s + v.quantidade, 0);
         const comPeso = Array.from(catMap.values()).filter(v => v.quantidade > 0 && v.peso_medio_kg);
         const pesoMedio = comPeso.length > 0
@@ -70,7 +75,7 @@ export function MapaPastosTab() {
         catMap.forEach(v => { totalUA += calcUA(v.quantidade, v.peso_medio_kg); });
         const uaHa = pasto.area_produtiva_ha && totalUA > 0 ? totalUA / pasto.area_produtiva_ha : null;
 
-        return { pasto, categorias: catMap, totalCabecas: totalCab, pesoMedio, cabHa, uaHa };
+        return { pasto, lote, tipoUso, qualidade, categorias: catMap, totalCabecas: totalCab, pesoMedio, cabHa, uaHa };
       });
 
       setRows(result);
