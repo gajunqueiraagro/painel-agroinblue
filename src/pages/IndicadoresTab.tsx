@@ -15,7 +15,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
-import { useIndicadoresZootecnicos, type Comparacao, type GmdAbertura } from '@/hooks/useIndicadoresZootecnicos';
+import { useIndicadoresZootecnicos, type Comparacao, type GmdAbertura, type EstoqueCategoriaDetalhe } from '@/hooks/useIndicadoresZootecnicos';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_COLS } from '@/lib/calculos/labels';
 
