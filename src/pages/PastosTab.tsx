@@ -14,10 +14,7 @@ import { Plus, Edit2, MapPin } from 'lucide-react';
 function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: any) => void; onCancel: () => void }) {
   const { fazendaAtual } = useFazenda();
   const [nome, setNome] = useState(pasto?.nome || '');
-  const [lotePadrao, setLotePadrao] = useState(pasto?.lote_padrao || '');
   const [area, setArea] = useState(pasto?.area_produtiva_ha?.toString() || '');
-  const [tipoUso, setTipoUso] = useState(pasto?.tipo_uso || 'recria');
-  const [qualidade, setQualidade] = useState(pasto?.qualidade?.toString() || '');
   const [entraConciliacao, setEntraConciliacao] = useState(pasto?.entra_conciliacao ?? true);
   const [observacoes, setObservacoes] = useState(pasto?.observacoes || '');
 
@@ -26,10 +23,7 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
     onSave({
       fazenda_id: fazendaAtual?.id,
       nome: nome.trim(),
-      lote_padrao: lotePadrao || null,
       area_produtiva_ha: area ? Number(area) : null,
-      tipo_uso: tipoUso,
-      qualidade: qualidade ? Number(qualidade) : null,
       entra_conciliacao: entraConciliacao,
       observacoes: observacoes || null,
       ativo: pasto?.ativo ?? true,
@@ -42,30 +36,9 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
         <Label>Nome *</Label>
         <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome do pasto" className="h-12 text-lg" />
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>Lote Padrão</Label>
-          <Input value={lotePadrao} onChange={e => setLotePadrao(e.target.value)} placeholder="Ex: L01" className="h-12" />
-        </div>
-        <div>
-          <Label>Área (ha)</Label>
-          <Input type="number" value={area} onChange={e => setArea(e.target.value)} placeholder="0" className="h-12" />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>Tipo de Uso</Label>
-          <Select value={tipoUso} onValueChange={setTipoUso}>
-            <SelectTrigger className="h-12"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {TIPOS_USO.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label>Qualidade (1-10)</Label>
-          <Input type="number" min={1} max={10} value={qualidade} onChange={e => setQualidade(e.target.value)} placeholder="1-10" className="h-12" />
-        </div>
+      <div>
+        <Label>Área Produtiva (ha)</Label>
+        <Input type="number" value={area} onChange={e => setArea(e.target.value)} placeholder="0" className="h-12" />
       </div>
       <div className="flex items-center gap-3">
         <Switch checked={entraConciliacao} onCheckedChange={setEntraConciliacao} />
@@ -73,7 +46,7 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
       </div>
       <div>
         <Label>Observações</Label>
-        <Textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} placeholder="Observações..." />
+        <Textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} placeholder="Observações gerais..." />
       </div>
       <div className="flex gap-2 pt-2">
         <Button onClick={handleSubmit} className="flex-1 h-12">{pasto ? 'Atualizar' : 'Criar Pasto'}</Button>
