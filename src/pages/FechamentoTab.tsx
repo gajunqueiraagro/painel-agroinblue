@@ -8,16 +8,8 @@ import { CheckCircle, Circle } from 'lucide-react';
 import { format } from 'date-fns';
 import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
 import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
-
-function calcUA(quantidade: number, pesoMedioKg: number | null): number {
-  if (!pesoMedioKg || pesoMedioKg <= 0) return quantidade;
-  return (quantidade * pesoMedioKg) / 450;
-}
-
-function fmtNum(val: number | null | undefined, dec = 0): string {
-  if (val === null || val === undefined) return '—';
-  return val.toFixed(dec).replace('.', ',');
-}
+import { calcUA } from '@/lib/calculos/zootecnicos';
+import { formatNum } from '@/lib/calculos/formatters';
 
 interface PastoResumo {
   totalCabecas: number;
