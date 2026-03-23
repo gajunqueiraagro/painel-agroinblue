@@ -86,3 +86,19 @@ export const MESES_SELECT = [
   { value: '11', label: 'Novembro' },
   { value: '12', label: 'Dezembro' },
 ];
+
+/** Options de período acumulado "Até mês" (para selects de desfrute/análise). */
+export const MESES_OPTIONS_ACUMULADO = [
+  { value: '12', label: 'Ano todo' },
+  { value: '01', label: 'Até Janeiro' },
+  { value: '02', label: 'Até Fevereiro' },
+  { value: '03', label: 'Até Março' },
+  { value: '04', label: 'Até Abril' },
+  { value: '05', label: 'Até Maio' },
+  { value: '06', label: 'Até Junho' },
+  { value: '07', label: 'Até Julho' },
+  { value: '08', label: 'Até Agosto' },
+  { value: '09', label: 'Até Setembro' },
+  { value: '10', label: 'Até Outubro' },
+  { value: '11', label: 'Até Novembro' },
+];
