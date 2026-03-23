@@ -34,7 +34,7 @@ export function exportMapaPastosXlsx(
 
   // Data rows - Qtde
   const dataQtde = rows.map(row => {
-    const vals: (string | number)[] = [row.pasto.nome, row.pasto.lote_padrao || ''];
+    const vals: (string | number)[] = [row.pasto.nome, row.lote || ''];
     categorias.forEach(cat => {
       const v = row.categorias.get(cat.id);
       vals.push(v?.quantidade || 0);
