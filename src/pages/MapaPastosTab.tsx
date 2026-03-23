@@ -13,6 +13,9 @@ import { exportMapaPastosXlsx } from '@/lib/exportMapaPastos';
 
 interface PastoMapaRow {
   pasto: Pasto;
+  lote: string | null;
+  tipoUso: string | null;
+  qualidade: number | null;
   categorias: Map<string, { quantidade: number; peso_medio_kg: number | null }>;
   totalCabecas: number;
   pesoMedio: number | null;
@@ -56,6 +59,11 @@ export function MapaPastosTab() {
           });
         }
 
+        // Use monthly data from fechamento, fallback to pasto defaults
+        const lote = fech?.lote_mes ?? pasto.lote_padrao ?? null;
+        const tipoUso = fech?.tipo_uso_mes ?? pasto.tipo_uso ?? null;
+        const qualidade = fech?.qualidade_mes ?? pasto.qualidade ?? null;
+
         const totalCab = Array.from(catMap.values()).reduce((s, v) => s + v.quantidade, 0);
         const comPeso = Array.from(catMap.values()).filter(v => v.quantidade > 0 && v.peso_medio_kg);
         const pesoMedio = comPeso.length > 0
@@ -67,7 +75,7 @@ export function MapaPastosTab() {
         catMap.forEach(v => { totalUA += calcUA(v.quantidade, v.peso_medio_kg); });
         const uaHa = pasto.area_produtiva_ha && totalUA > 0 ? totalUA / pasto.area_produtiva_ha : null;
 
-        return { pasto, categorias: catMap, totalCabecas: totalCab, pesoMedio, cabHa, uaHa };
+        return { pasto, lote, tipoUso, qualidade, categorias: catMap, totalCabecas: totalCab, pesoMedio, cabHa, uaHa };
       });
 
       setRows(result);
@@ -173,7 +181,7 @@ export function MapaPastosTab() {
                     <td className="sticky left-0 z-10 p-2 font-semibold border-r whitespace-nowrap" style={{ backgroundColor: 'inherit' }}>
                       {row.pasto.nome}
                     </td>
-                    <td className="p-2 text-xs text-muted-foreground border-r">{row.pasto.lote_padrao || '—'}</td>
+                    <td className="p-2 text-xs text-muted-foreground border-r">{row.lote || '—'}</td>
                     {categorias.map(cat => {
                       const val = row.categorias.get(cat.id);
                       const qty = val?.quantidade || 0;
@@ -201,9 +209,9 @@ export function MapaPastosTab() {
                     <td className={`p-2 text-center border-r ${getLotacaoColor(row.cabHa)}`}>{row.cabHa?.toFixed(2) || '—'}</td>
                     <td className={`p-2 text-center border-r ${getLotacaoColor(row.uaHa)}`}>{row.uaHa?.toFixed(2) || '—'}</td>
                     <td className="p-2 text-center">
-                      {row.pasto.qualidade ? (
-                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${getQualidadeColor(row.pasto.qualidade)}`}>
-                          {row.pasto.qualidade}
+                      {row.qualidade ? (
+                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${getQualidadeColor(row.qualidade)}`}>
+                          {row.qualidade}
                         </span>
                       ) : '—'}
                     </td>

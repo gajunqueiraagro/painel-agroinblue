@@ -251,9 +251,13 @@ export type Database = {
           created_at: string
           fazenda_id: string
           id: string
+          lote_mes: string | null
+          observacao_mes: string | null
           pasto_id: string
+          qualidade_mes: number | null
           responsavel_nome: string | null
           status: string
+          tipo_uso_mes: string | null
           updated_at: string
         }
         Insert: {
@@ -261,9 +265,13 @@ export type Database = {
           created_at?: string
           fazenda_id: string
           id?: string
+          lote_mes?: string | null
+          observacao_mes?: string | null
           pasto_id: string
+          qualidade_mes?: number | null
           responsavel_nome?: string | null
           status?: string
+          tipo_uso_mes?: string | null
           updated_at?: string
         }
         Update: {
@@ -271,9 +279,13 @@ export type Database = {
           created_at?: string
           fazenda_id?: string
           id?: string
+          lote_mes?: string | null
+          observacao_mes?: string | null
           pasto_id?: string
+          qualidade_mes?: number | null
           responsavel_nome?: string | null
           status?: string
+          tipo_uso_mes?: string | null
           updated_at?: string
         }
         Relationships: [

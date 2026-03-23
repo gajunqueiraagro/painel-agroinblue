@@ -11,6 +11,10 @@ export interface FechamentoPasto {
   ano_mes: string;
   status: string;
   responsavel_nome: string | null;
+  lote_mes: string | null;
+  tipo_uso_mes: string | null;
+  qualidade_mes: number | null;
+  observacao_mes: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -46,11 +50,23 @@ export function useFechamento() {
     setLoading(false);
   }, [fazendaId]);
 
-  const criarFechamento = useCallback(async (pastoId: string, anoMes: string, responsavel?: string) => {
+  const criarFechamento = useCallback(async (
+    pastoId: string,
+    anoMes: string,
+    defaults?: { responsavel?: string; lote_mes?: string | null; tipo_uso_mes?: string | null; qualidade_mes?: number | null }
+  ) => {
     if (!fazendaId) return null;
     const { data, error } = await supabase
       .from('fechamento_pastos')
-      .insert({ pasto_id: pastoId, fazenda_id: fazendaId, ano_mes: anoMes, responsavel_nome: responsavel || null })
+      .insert({
+        pasto_id: pastoId,
+        fazenda_id: fazendaId,
+        ano_mes: anoMes,
+        responsavel_nome: defaults?.responsavel || null,
+        lote_mes: defaults?.lote_mes || null,
+        tipo_uso_mes: defaults?.tipo_uso_mes || null,
+        qualidade_mes: defaults?.qualidade_mes || null,
+      })
       .select()
       .single();
     if (error) { toast.error('Erro ao criar fechamento'); console.error(error); return null; }
@@ -95,6 +111,15 @@ export function useFechamento() {
     return true;
   }, []);
 
+  const atualizarCamposMensais = useCallback(async (
+    fechamentoId: string,
+    campos: { lote_mes?: string | null; tipo_uso_mes?: string | null; qualidade_mes?: number | null; observacao_mes?: string | null }
+  ) => {
+    const { error } = await supabase.from('fechamento_pastos').update(campos).eq('id', fechamentoId);
+    if (error) { console.error(error); return false; }
+    return true;
+  }, []);
+
   const copiarMesAnterior = useCallback(async (
     pastoId: string,
     anoMesAtual: string,
@@ -131,5 +156,5 @@ export function useFechamento() {
     });
   }, [loadItens]);
 
-  return { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, reabrirPasto, copiarMesAnterior };
+  return { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, reabrirPasto, atualizarCamposMensais, copiarMesAnterior };
 }

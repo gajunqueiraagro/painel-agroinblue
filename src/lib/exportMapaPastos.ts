@@ -3,6 +3,9 @@ import type { Pasto, CategoriaRebanho } from '@/hooks/usePastos';
 
 interface PastoMapaRow {
   pasto: Pasto;
+  lote: string | null;
+  tipoUso: string | null;
+  qualidade: number | null;
   categorias: Map<string, { quantidade: number; peso_medio_kg: number | null }>;
   totalCabecas: number;
   pesoMedio: number | null;
@@ -31,7 +34,7 @@ export function exportMapaPastosXlsx(
 
   // Data rows - Qtde
   const dataQtde = rows.map(row => {
-    const vals: (string | number)[] = [row.pasto.nome, row.pasto.lote_padrao || ''];
+    const vals: (string | number)[] = [row.pasto.nome, row.lote || ''];
     categorias.forEach(cat => {
       const v = row.categorias.get(cat.id);
       vals.push(v?.quantidade || 0);
@@ -40,7 +43,7 @@ export function exportMapaPastosXlsx(
     vals.push(row.pasto.area_produtiva_ha || 0);
     vals.push(row.cabHa ? Number(row.cabHa.toFixed(2)) : 0);
     vals.push(row.uaHa ? Number(row.uaHa.toFixed(2)) : 0);
-    vals.push(row.pasto.qualidade || 0);
+    vals.push(row.qualidade || 0);
     return vals;
   });
 

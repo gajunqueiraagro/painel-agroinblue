@@ -1,184 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { usePastos, type Pasto, type CategoriaRebanho } from '@/hooks/usePastos';
+import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { CheckCircle, Circle, Lock, Copy, Save, LockOpen } from 'lucide-react';
+import { CheckCircle, Circle } from 'lucide-react';
 import { format } from 'date-fns';
 import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
-
-function FechamentoPastoDialog({
-  open, onOpenChange, pasto, fechamento,
-  categorias, onSave, onFechar, onReabrir, onCopiar
-}: {
-  open: boolean; onOpenChange: (o: boolean) => void;
-  pasto: Pasto; fechamento: FechamentoPasto;
-  categorias: CategoriaRebanho[];
-  onSave: (items: any[]) => Promise<boolean>;
-  onFechar: () => Promise<boolean>;
-  onReabrir: () => Promise<boolean>;
-  onCopiar: () => Promise<any[]>;
-}) {
-  const [itens, setItens] = useState<{ categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string }[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState(fechamento.status);
-  const isFechado = status === 'fechado';
-
-  useEffect(() => {
-    setStatus(fechamento.status);
-  }, [fechamento]);
-
-  useEffect(() => {
-    if (!open) return;
-    setItens(categorias.map(c => ({ categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: pasto.lote_padrao || null, observacoes: null, origem_dado: 'manual' })));
-  }, [open, categorias, pasto]);
-
-  const { loadItens } = useFechamento();
-  useEffect(() => {
-    if (!open || !fechamento) return;
-    loadItens(fechamento.id).then(existing => {
-      if (existing.length > 0) {
-        setItens(categorias.map(c => {
-          const found = existing.find(e => e.categoria_id === c.id);
-          return found
-            ? { categoria_id: c.id, quantidade: found.quantidade, peso_medio_kg: found.peso_medio_kg, lote: found.lote, observacoes: found.observacoes, origem_dado: found.origem_dado }
-            : { categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: pasto.lote_padrao || null, observacoes: null, origem_dado: 'manual' };
-        }));
-      }
-    });
-  }, [open, fechamento, categorias, loadItens, pasto]);
-
-  const updateItem = (idx: number, field: string, value: any) => {
-    setItens(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value, origem_dado: item.origem_dado === 'copiado_mes_anterior' ? 'ajustado' : item.origem_dado } : item));
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    await onSave(itens);
-    setSaving(false);
-  };
-
-  const handleCopiar = async () => {
-    const copied = await onCopiar();
-    setItens(copied);
-  };
-
-  const handleFechar = async () => {
-    await handleSave();
-    const ok = await onFechar();
-    if (ok) setStatus('fechado');
-  };
-
-  const handleReabrir = async () => {
-    const ok = await onReabrir();
-    if (ok) setStatus('rascunho');
-  };
-
-  const total = itens.reduce((s, i) => s + (i.quantidade || 0), 0);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {pasto.nome}
-            {isFechado && <Badge variant="default"><Lock className="h-3 w-3 mr-1" />Fechado</Badge>}
-          </DialogTitle>
-          <div className="text-sm text-muted-foreground">
-            {pasto.area_produtiva_ha && `${pasto.area_produtiva_ha} ha • `}
-            {pasto.lote_padrao && `Lote ${pasto.lote_padrao}`}
-          </div>
-        </DialogHeader>
-
-        <div className="space-y-3">
-          {!isFechado && (
-            <Button variant="outline" size="sm" onClick={handleCopiar} className="w-full">
-              <Copy className="h-4 w-4 mr-1" />Copiar do mês anterior
-            </Button>
-          )}
-
-          {categorias.map((cat, idx) => (
-            <div key={cat.id} className="rounded-lg border p-3">
-              <div className="font-medium text-sm mb-2">{cat.nome}</div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs">Quantidade</Label>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    value={itens[idx]?.quantidade || ''}
-                    onChange={e => updateItem(idx, 'quantidade', Number(e.target.value) || 0)}
-                    disabled={isFechado}
-                    className="h-12 text-lg font-bold"
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Peso Médio (kg)</Label>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    value={itens[idx]?.peso_medio_kg ?? ''}
-                    onChange={e => updateItem(idx, 'peso_medio_kg', e.target.value ? Number(e.target.value) : null)}
-                    disabled={isFechado}
-                    className="h-12"
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-              {itens[idx]?.origem_dado === 'copiado_mes_anterior' && (
-                <Badge variant="secondary" className="text-xs mt-1">Copiado do mês anterior</Badge>
-              )}
-            </div>
-          ))}
-
-          <div className="rounded-lg bg-muted p-3 text-center">
-            <span className="text-sm text-muted-foreground">Total: </span>
-            <span className="text-xl font-bold">{total} cab</span>
-          </div>
-
-          {!isFechado ? (
-            <div className="flex gap-2">
-              <Button onClick={handleSave} disabled={saving} className="flex-1 h-12">
-                <Save className="h-4 w-4 mr-1" />{saving ? 'Salvando...' : 'Salvar'}
-              </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="default" className="h-12">
-                    <Lock className="h-4 w-4 mr-1" />Fechar
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Fechar pasto?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Após fechar, os dados não poderão ser alterados sem reabrir o pasto. Deseja continuar?
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleFechar}>Confirmar Fechamento</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          ) : (
-            <Button variant="outline" onClick={handleReabrir} className="w-full h-12">
-              <LockOpen className="h-4 w-4 mr-1" />Reabrir Pasto
-            </Button>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
+import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
 
 export function FechamentoTab() {
   const { isGlobal } = useFazenda();
@@ -200,7 +29,11 @@ export function FechamentoTab() {
   const handleOpenPasto = async (pasto: Pasto) => {
     let fech = getFechamento(pasto.id);
     if (!fech) {
-      fech = await criarFechamento(pasto.id, anoMes);
+      fech = await criarFechamento(pasto.id, anoMes, {
+        lote_mes: pasto.lote_padrao,
+        tipo_uso_mes: pasto.tipo_uso,
+        qualidade_mes: pasto.qualidade,
+      });
     }
     if (!fech) return;
     setActiveFechamento(fech);
