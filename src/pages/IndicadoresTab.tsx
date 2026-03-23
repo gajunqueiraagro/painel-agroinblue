@@ -490,10 +490,15 @@ function EstoqueDetalheSection({ title, itens }: { title: string; itens: Estoque
       <CollapsibleContent>
         <div className="space-y-1 text-sm pl-1">
           {itens.map(item => (
-            <div key={item.categoria} className="flex justify-between text-muted-foreground">
-              <span>{item.categoria}</span>
-              <span>
+            <div key={item.categoria} className="flex justify-between text-muted-foreground gap-2">
+              <span className="truncate">{item.categoria}</span>
+              <span className="whitespace-nowrap flex items-center gap-1">
                 {item.cabecas} cab · {item.pesoMedioKg !== null ? formatNum(item.pesoMedioKg, 1) : '?'} kg/cab · {formatNum(item.pesoTotalKg, 0)} kg
+                {item.fontePeso && item.fontePeso !== 'nenhuma' && (
+                  <span className="text-[10px] text-muted-foreground/60" title={`Fonte: ${FONTE_LABEL[item.fontePeso]}`}>
+                    ({FONTE_LABEL_SHORT[item.fontePeso]})
+                  </span>
+                )}
               </span>
             </div>
           ))}
