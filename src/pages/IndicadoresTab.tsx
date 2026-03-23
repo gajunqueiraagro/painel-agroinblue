@@ -470,6 +470,19 @@ function GmdMovSection({ title, itens }: { title: string; itens: { tipo: string;
 // Sub-componentes — Estoque por Categoria (para GMD)
 // ---------------------------------------------------------------------------
 
+const FONTE_LABEL: Record<FontePeso, string> = {
+  fechamento: 'Fechamento de pasto',
+  lancamento: 'Último lançamento',
+  saldo_inicial: 'Saldo inicial',
+  nenhuma: 'Sem dados',
+};
+const FONTE_LABEL_SHORT: Record<FontePeso, string> = {
+  fechamento: 'fech.',
+  lancamento: 'lanç.',
+  saldo_inicial: 'ini.',
+  nenhuma: '?',
+};
+
 function EstoqueDetalheSection({ title, itens }: { title: string; itens: EstoqueCategoriaDetalhe[] }) {
   const [open, setOpen] = useState(false);
   const totalCab = itens.reduce((s, i) => s + i.cabecas, 0);
