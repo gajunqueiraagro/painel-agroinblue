@@ -3,6 +3,9 @@ import type { Pasto, CategoriaRebanho } from '@/hooks/usePastos';
 
 interface PastoMapaRow {
   pasto: Pasto;
+  lote: string | null;
+  tipoUso: string | null;
+  qualidade: number | null;
   categorias: Map<string, { quantidade: number; peso_medio_kg: number | null }>;
   totalCabecas: number;
   pesoMedio: number | null;
