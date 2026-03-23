@@ -394,6 +394,16 @@ function GmdDetalheSheet({ abertura, mesLabel, anoLabel }: { abertura: GmdAbertu
             </div>
           </div>
 
+          {/* Estoque Final por Categoria */}
+          {abertura.estoqueFinalDetalhe.length > 0 && (
+            <EstoqueDetalheSection title="Estoque Final do Mês" itens={abertura.estoqueFinalDetalhe} />
+          )}
+
+          {/* Estoque Inicial por Categoria */}
+          {abertura.estoqueInicialDetalhe.length > 0 && (
+            <EstoqueDetalheSection title="Estoque Inicial do Mês" itens={abertura.estoqueInicialDetalhe} />
+          )}
+
           {/* Detalhamento Entradas */}
           {abertura.entradasDetalhe.length > 0 && (
             <GmdMovSection title="Detalhamento das Entradas" itens={abertura.entradasDetalhe} />
