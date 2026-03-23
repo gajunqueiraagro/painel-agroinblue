@@ -36,7 +36,7 @@ function fmt(val: number | null | undefined, dec = 0): string {
   return val.toFixed(dec).replace('.', ',');
 }
 
-export function exportMapaPastosPdf(
+export async function exportMapaPastosPdf(
   rows: PastoMapaRow[],
   categorias: CategoriaRebanho[],
   totais: MapaTotais,
