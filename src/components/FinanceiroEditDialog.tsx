@@ -267,9 +267,28 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave, onDele
 
           <Separator />
 
-          <h4 className="text-xs font-bold text-muted-foreground uppercase">Preço</h4>
+          <h4 className="text-xs font-bold text-muted-foreground uppercase">Valor da Operação</h4>
           <div>
-            <Label className="text-xs">Preço por arroba (R$)</Label>
+            <Label className="text-xs font-bold">Valor Total Final (R$)</Label>
+            <Input type="number" value={calc.valorTotal > 0 ? String(calc.valorTotal) : ''} onChange={e => {
+              // When user types valorTotal directly, we back-calculate precoArroba
+              const vt = parseFloat(e.target.value);
+              if (!isNaN(vt) && calc.pesoTotalArrobas > 0) {
+                const totalAcr = isAbate ? (num(bonusPrecoce) ?? 0) + (num(bonusQualidade) ?? 0) + (num(bonusListaTrace) ?? 0) : (num(acrescimos) ?? 0);
+                const totalDes = isAbate ? (num(descontoQualidade) ?? 0) + (num(descontoFunrural) ?? 0) + (num(outrosDescontos) ?? 0) : (num(deducoes) ?? 0);
+                const bruto = vt - totalAcr + totalDes;
+                setPrecoArroba(String((bruto / calc.pesoTotalArrobas).toFixed(4)));
+              }
+            }} placeholder="Valor total líquido" className="h-10 text-base font-bold" />
+          </div>
+          {calc.liqArroba > 0 && (
+            <div className="bg-primary/10 rounded-lg p-2 text-sm font-bold flex justify-between">
+              <span>R$/líq @</span>
+              <span className="text-primary">R$ {fmt(calc.liqArroba)}</span>
+            </div>
+          )}
+          <div>
+            <Label className="text-xs text-muted-foreground">Preço referência por arroba (R$)</Label>
             <Input type="number" value={precoArroba} onChange={e => setPrecoArroba(e.target.value)} placeholder="0,00" className="h-9" />
           </div>
 

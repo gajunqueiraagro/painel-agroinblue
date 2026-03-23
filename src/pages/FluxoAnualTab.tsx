@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react';
 import { Lancamento, SaldoInicial, isEntrada, isReclassificacao } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 import { parseISO, format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { ArrowLeft } from 'lucide-react';
+import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import type { SubAba } from './FinanceiroTab';
 
 interface Props {
@@ -40,6 +42,8 @@ const LINHAS: { tipo: FluxoTipo; label: string; sinal: '+' | '-' }[] = [
 ];
 
 export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao }: Props) {
+  const [drilldownMonth, setDrilldownMonth] = useState<string | null>(null);
+
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
@@ -62,7 +66,6 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
       catch { return false; }
     });
 
-    // Por mês e tipo
     const porMesTipo: Record<string, Record<FluxoTipo, number>> = {};
     MESES_COLS.forEach(m => {
       porMesTipo[m.key] = {} as Record<FluxoTipo, number>;
@@ -79,7 +82,6 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
       }
     });
 
-    // Saldo início de cada mês
     const saldoInicioMes: Record<string, number> = {};
     let acum = saldoInicialAno;
     MESES_COLS.forEach(m => {
@@ -89,10 +91,8 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
       acum += entradas - saidas;
     });
 
-    // Saldo final (após dezembro)
     const saldoFinalAno = acum;
 
-    // Total do ano por tipo
     const totalAno: Record<FluxoTipo, number> = {} as any;
     LINHAS.forEach(li => {
       totalAno[li.tipo] = MESES_COLS.reduce((s, m) => s + porMesTipo[m.key][li.tipo], 0);
@@ -101,12 +101,31 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
     return { porMesTipo, saldoInicioMes, saldoFinalAno, totalAno, saldoInicialAno };
   }, [lancamentos, saldosIniciais, anoFiltro]);
 
-  const totalEntradasAno = LINHAS.filter(l => l.sinal === '+').reduce((s, l) => s + dados.totalAno[l.tipo], 0);
-  const totalSaidasAno = LINHAS.filter(l => l.sinal === '-').reduce((s, l) => s + dados.totalAno[l.tipo], 0);
+  // Drill-down into month evolution
+  if (drilldownMonth) {
+    const mesLabel = MESES_COLS.find(m => m.key === drilldownMonth)?.label || drilldownMonth;
+    return (
+      <div className="animate-fade-in pb-20">
+        <div className="p-4 flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => setDrilldownMonth(null)} className="gap-1">
+            <ArrowLeft className="h-4 w-4" /> Voltar
+          </Button>
+          <h2 className="text-base font-bold text-foreground">
+            Evolução — {mesLabel}/{anoFiltro}
+          </h2>
+        </div>
+        <EvolucaoCategoriaTab
+          lancamentos={lancamentos}
+          saldosIniciais={saldosIniciais}
+          initialAno={anoFiltro}
+          initialMes={drilldownMonth}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 max-w-4xl mx-auto space-y-4 animate-fade-in pb-20">
-      {/* Filtro ano */}
       <div className="max-w-[200px]">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
           <SelectTrigger className="touch-target text-base font-bold">
@@ -120,7 +139,8 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
         </Select>
       </div>
 
-      {/* Tabela */}
+      <p className="text-xs text-muted-foreground">Toque em um mês para ver a evolução por categoria</p>
+
       <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
@@ -129,7 +149,11 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                 Movimentação
               </th>
               {MESES_COLS.map(m => (
-                <th key={m.key} className="px-2 py-2 font-bold text-foreground text-center min-w-[45px]">
+                <th
+                  key={m.key}
+                  className="px-2 py-2 font-bold text-foreground text-center min-w-[45px] cursor-pointer hover:bg-primary/20 transition-colors"
+                  onClick={() => setDrilldownMonth(m.key)}
+                >
                   {m.label}
                 </th>
               ))}
@@ -139,11 +163,15 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
             </tr>
           </thead>
           <tbody>
-            {/* Saldo início do mês */}
+            {/* Saldo início */}
             <tr className="bg-primary/10 border-b">
               <td className="px-2 py-2 font-bold text-foreground sticky left-0 bg-primary/10">Saldo Início</td>
               {MESES_COLS.map(m => (
-                <td key={m.key} className="px-2 py-2 text-center font-extrabold text-foreground">
+                <td
+                  key={m.key}
+                  className="px-2 py-2 text-center font-extrabold text-foreground cursor-pointer hover:bg-primary/20 transition-colors"
+                  onClick={() => setDrilldownMonth(m.key)}
+                >
                   {dados.saldoInicioMes[m.key]}
                 </td>
               ))}
@@ -180,7 +208,6 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
             <tr className="border-t-2 bg-primary/10">
               <td className="px-2 py-2 font-extrabold text-foreground sticky left-0 bg-primary/10">Saldo Final</td>
               {MESES_COLS.map((m, i) => {
-                // Saldo final do mês = saldo início do próximo mês (ou saldoFinalAno para dezembro)
                 const saldoFim = i < 11 ? dados.saldoInicioMes[MESES_COLS[i + 1].key] : dados.saldoFinalAno;
                 return (
                   <td key={m.key} className="px-2 py-2 text-center font-extrabold text-foreground">

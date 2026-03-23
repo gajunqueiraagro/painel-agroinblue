@@ -238,6 +238,19 @@ export function useLancamentos() {
       peso_medio_arrobas: lancamento.pesoMedioArrobas || null,
       preco_medio_cabeca: lancamento.precoMedioCabeca || null,
       observacao: lancamento.observacao || null,
+      preco_arroba: lancamento.precoArroba || null,
+      peso_carcaca_kg: lancamento.pesoCarcacaKg || null,
+      bonus_precoce: lancamento.bonusPrecoce || null,
+      bonus_qualidade: lancamento.bonusQualidade || null,
+      bonus_lista_trace: lancamento.bonusListaTrace || null,
+      desconto_qualidade: lancamento.descontoQualidade || null,
+      desconto_funrural: lancamento.descontoFunrural || null,
+      outros_descontos: lancamento.outrosDescontos || null,
+      acrescimos: lancamento.acrescimos || null,
+      deducoes: lancamento.deducoes || null,
+      valor_total: lancamento.valorTotal || null,
+      nota_fiscal: lancamento.notaFiscal || null,
+      tipo_peso: lancamento.tipoPeso || 'vivo',
     };
 
     if (!isOnline()) {

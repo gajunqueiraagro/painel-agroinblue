@@ -1,4 +1,4 @@
-import { BarChart3, ArrowLeftRight, PlusCircle, LayoutGrid, TrendingUp, CalendarRange, DollarSign, Users, ClipboardList, CloudRain, MapPin, GitCompare } from 'lucide-react';
+import { BarChart3, ArrowLeftRight, PlusCircle, TrendingUp, GitCompare, ClipboardList, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'financeiro' | 'evolucao' | 'evolucao_categoria' | 'fluxo_anual' | 'acessos' | 'analise' | 'analise_entradas' | 'analise_saidas' | 'desfrute' | 'cadastros' | 'chuvas' | 'pastos' | 'conciliacao';
@@ -10,13 +10,9 @@ interface BottomNavProps {
 
 const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'resumo', label: 'Resumo', icon: BarChart3 },
-  { id: 'lancamentos', label: 'Lançar', icon: PlusCircle },
+  { id: 'lancamentos', label: 'Lançar Reb.', icon: PlusCircle },
   { id: 'financeiro', label: 'Moviment.', icon: ArrowLeftRight },
-  { id: 'evolucao', label: 'Cat/Mês', icon: LayoutGrid },
-  { id: 'evolucao_categoria', label: 'Evolução', icon: TrendingUp },
-  { id: 'fluxo_anual', label: 'Anual', icon: CalendarRange },
-  { id: 'chuvas', label: 'Chuvas', icon: CloudRain },
-  { id: 'pastos', label: 'Pastos', icon: MapPin },
+  { id: 'fluxo_anual', label: 'Evol. Reb.', icon: TrendingUp },
   { id: 'conciliacao', label: 'Conciliar', icon: GitCompare },
   { id: 'cadastros', label: 'Cadastros', icon: ClipboardList },
   { id: 'acessos', label: 'Acessos', icon: Users },
@@ -37,8 +33,8 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                 : 'text-muted-foreground'
             )}
           >
-            <Icon className={cn('h-6 w-6', activeTab === id && 'scale-110')} />
-            <span className="text-xs font-semibold">{label}</span>
+            <Icon className={cn('h-5 w-5', activeTab === id && 'scale-110')} />
+            <span className="text-[10px] font-semibold leading-tight">{label}</span>
           </button>
         ))}
       </div>
