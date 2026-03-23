@@ -381,11 +381,12 @@ export function useIndicadoresZootecnicos(
       .filter(s => s.ano === ano)
       .reduce((sum, s) => sum + s.quantidade, 0);
 
-    // Peso médio
+    // Peso médio — usa hierarquia oficial (fechamento > lançamento > saldo_inicial)
     const itensParaPeso: { quantidade: number; pesoKg: number | null }[] = [];
     saldoMap.forEach((qtd, cat) => {
       if (qtd > 0) {
-        itensParaPeso.push({ quantidade: qtd, pesoKg: getPesoMedioCat(cat, saldosIniciais, lancamentos, ano, mes) });
+        const { valor } = getPesoOficial(cat, saldosIniciais, lancamentos, ano, mes, pesoFechamentoMap);
+        itensParaPeso.push({ quantidade: qtd, pesoKg: valor });
       }
     });
     const pesoMedioRebanhoKg = calcPesoMedioPonderado(itensParaPeso);
