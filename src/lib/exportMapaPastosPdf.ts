@@ -110,7 +110,7 @@ export async function exportMapaPastosPdf(
   ]);
 
   autoTable(doc, {
-    startY: 31,
+    startY: tableStartY,
     head,
     body,
     styles: { fontSize: 7, cellPadding: 1.5 },
