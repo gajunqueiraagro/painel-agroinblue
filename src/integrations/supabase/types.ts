@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      categorias_rebanho: {
+        Row: {
+          codigo: string
+          id: string
+          nome: string
+          ordem_exibicao: number
+        }
+        Insert: {
+          codigo: string
+          id?: string
+          nome: string
+          ordem_exibicao?: number
+        }
+        Update: {
+          codigo?: string
+          id?: string
+          nome?: string
+          ordem_exibicao?: number
+        }
+        Relationships: []
+      }
       chuvas: {
         Row: {
           created_at: string
@@ -173,6 +194,105 @@ export type Database = {
         }
         Relationships: []
       }
+      fechamento_pasto_itens: {
+        Row: {
+          categoria_id: string
+          created_at: string
+          fechamento_id: string
+          id: string
+          lote: string | null
+          observacoes: string | null
+          origem_dado: string
+          peso_medio_kg: number | null
+          quantidade: number
+        }
+        Insert: {
+          categoria_id: string
+          created_at?: string
+          fechamento_id: string
+          id?: string
+          lote?: string | null
+          observacoes?: string | null
+          origem_dado?: string
+          peso_medio_kg?: number | null
+          quantidade?: number
+        }
+        Update: {
+          categoria_id?: string
+          created_at?: string
+          fechamento_id?: string
+          id?: string
+          lote?: string | null
+          observacoes?: string | null
+          origem_dado?: string
+          peso_medio_kg?: number | null
+          quantidade?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fechamento_pasto_itens_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "categorias_rebanho"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fechamento_pasto_itens_fechamento_id_fkey"
+            columns: ["fechamento_id"]
+            isOneToOne: false
+            referencedRelation: "fechamento_pastos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fechamento_pastos: {
+        Row: {
+          ano_mes: string
+          created_at: string
+          fazenda_id: string
+          id: string
+          pasto_id: string
+          responsavel_nome: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          ano_mes: string
+          created_at?: string
+          fazenda_id: string
+          id?: string
+          pasto_id: string
+          responsavel_nome?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          ano_mes?: string
+          created_at?: string
+          fazenda_id?: string
+          id?: string
+          pasto_id?: string
+          responsavel_nome?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fechamento_pastos_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fechamento_pastos_pasto_id_fkey"
+            columns: ["pasto_id"]
+            isOneToOne: false
+            referencedRelation: "pastos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lancamentos: {
         Row: {
           acrescimos: number | null
@@ -286,6 +406,59 @@ export type Database = {
             columns: ["transferencia_par_id"]
             isOneToOne: false
             referencedRelation: "lancamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pastos: {
+        Row: {
+          area_produtiva_ha: number | null
+          ativo: boolean
+          created_at: string
+          entra_conciliacao: boolean
+          fazenda_id: string
+          id: string
+          lote_padrao: string | null
+          nome: string
+          observacoes: string | null
+          qualidade: number | null
+          tipo_uso: string
+          updated_at: string
+        }
+        Insert: {
+          area_produtiva_ha?: number | null
+          ativo?: boolean
+          created_at?: string
+          entra_conciliacao?: boolean
+          fazenda_id: string
+          id?: string
+          lote_padrao?: string | null
+          nome: string
+          observacoes?: string | null
+          qualidade?: number | null
+          tipo_uso?: string
+          updated_at?: string
+        }
+        Update: {
+          area_produtiva_ha?: number | null
+          ativo?: boolean
+          created_at?: string
+          entra_conciliacao?: boolean
+          fazenda_id?: string
+          id?: string
+          lote_padrao?: string | null
+          nome?: string
+          observacoes?: string | null
+          qualidade?: number | null
+          tipo_uso?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pastos_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
             referencedColumns: ["id"]
           },
         ]
