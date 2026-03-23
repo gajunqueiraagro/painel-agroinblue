@@ -6,27 +6,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { CheckCircle, Circle, Lock, Copy, Save, LockOpen } from 'lucide-react';
-import { format, subMonths } from 'date-fns';
-
-function getAnoMesOptions() {
-  const opts: string[] = [];
-  const now = new Date();
-  for (let i = 0; i < 24; i++) {
-    const d = subMonths(now, i);
-    opts.push(format(d, 'yyyy-MM'));
-  }
-  return opts;
-}
+import { format } from 'date-fns';
+import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
 
 function FechamentoPastoDialog({
-  open, onOpenChange, pasto, fechamento, categorias,
-  onSave, onFechar, onReabrir, onCopiar
+  open, onOpenChange, pasto, fechamento,
+  categorias, onSave, onFechar, onReabrir, onCopiar
 }: {
   open: boolean; onOpenChange: (o: boolean) => void;
-  pasto: Pasto; fechamento: FechamentoPasto | null;
+  pasto: Pasto; fechamento: FechamentoPasto;
   categorias: CategoriaRebanho[];
   onSave: (items: any[]) => Promise<boolean>;
   onFechar: () => Promise<boolean>;
@@ -35,15 +27,18 @@ function FechamentoPastoDialog({
 }) {
   const [itens, setItens] = useState<{ categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string }[]>([]);
   const [saving, setSaving] = useState(false);
-  const isFechado = fechamento?.status === 'fechado';
+  const [status, setStatus] = useState(fechamento.status);
+  const isFechado = status === 'fechado';
+
+  useEffect(() => {
+    setStatus(fechamento.status);
+  }, [fechamento]);
 
   useEffect(() => {
     if (!open) return;
-    // Initialize empty items for all categories
     setItens(categorias.map(c => ({ categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: pasto.lote_padrao || null, observacoes: null, origem_dado: 'manual' })));
   }, [open, categorias, pasto]);
 
-  // Load existing items when fechamento exists
   const { loadItens } = useFechamento();
   useEffect(() => {
     if (!open || !fechamento) return;
@@ -74,6 +69,17 @@ function FechamentoPastoDialog({
     setItens(copied);
   };
 
+  const handleFechar = async () => {
+    await handleSave();
+    const ok = await onFechar();
+    if (ok) setStatus('fechado');
+  };
+
+  const handleReabrir = async () => {
+    const ok = await onReabrir();
+    if (ok) setStatus('rascunho');
+  };
+
   const total = itens.reduce((s, i) => s + (i.quantidade || 0), 0);
 
   return (
@@ -93,7 +99,7 @@ function FechamentoPastoDialog({
         <div className="space-y-3">
           {!isFechado && (
             <Button variant="outline" size="sm" onClick={handleCopiar} className="w-full">
-              <Copy className="h-4 w-4 mr-1" />Copiar mês anterior
+              <Copy className="h-4 w-4 mr-1" />Copiar do mês anterior
             </Button>
           )}
 
@@ -102,9 +108,10 @@ function FechamentoPastoDialog({
               <div className="font-medium text-sm mb-2">{cat.nome}</div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label className="text-xs">Qtde</Label>
+                  <Label className="text-xs">Quantidade</Label>
                   <Input
                     type="number"
+                    inputMode="numeric"
                     min={0}
                     value={itens[idx]?.quantidade || ''}
                     onChange={e => updateItem(idx, 'quantidade', Number(e.target.value) || 0)}
@@ -117,6 +124,7 @@ function FechamentoPastoDialog({
                   <Label className="text-xs">Peso Médio (kg)</Label>
                   <Input
                     type="number"
+                    inputMode="decimal"
                     value={itens[idx]?.peso_medio_kg ?? ''}
                     onChange={e => updateItem(idx, 'peso_medio_kg', e.target.value ? Number(e.target.value) : null)}
                     disabled={isFechado}
@@ -139,14 +147,30 @@ function FechamentoPastoDialog({
           {!isFechado ? (
             <div className="flex gap-2">
               <Button onClick={handleSave} disabled={saving} className="flex-1 h-12">
-                <Save className="h-4 w-4 mr-1" />{saving ? 'Salvando...' : 'Salvar Rascunho'}
+                <Save className="h-4 w-4 mr-1" />{saving ? 'Salvando...' : 'Salvar'}
               </Button>
-              <Button variant="default" onClick={async () => { await handleSave(); await onFechar(); onOpenChange(false); }} className="h-12">
-                <Lock className="h-4 w-4 mr-1" />Fechar
-              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="default" className="h-12">
+                    <Lock className="h-4 w-4 mr-1" />Fechar
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Fechar pasto?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Após fechar, os dados não poderão ser alterados sem reabrir o pasto. Deseja continuar?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleFechar}>Confirmar Fechamento</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           ) : (
-            <Button variant="outline" onClick={async () => { await onReabrir(); }} className="w-full h-12">
+            <Button variant="outline" onClick={handleReabrir} className="w-full h-12">
               <LockOpen className="h-4 w-4 mr-1" />Reabrir Pasto
             </Button>
           )}
@@ -163,6 +187,7 @@ export function FechamentoTab() {
   const [anoMes, setAnoMes] = useState(format(new Date(), 'yyyy-MM'));
   const [selectedPasto, setSelectedPasto] = useState<Pasto | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [activeFechamento, setActiveFechamento] = useState<FechamentoPasto | null>(null);
 
   useEffect(() => { loadFechamentos(anoMes); }, [anoMes, loadFechamentos]);
 
@@ -170,14 +195,14 @@ export function FechamentoTab() {
   const getFechamento = useCallback((pastoId: string) => fechamentos.find(f => f.pasto_id === pastoId) || null, [fechamentos]);
 
   const preenchidos = pastosAtivos.filter(p => getFechamento(p.id)).length;
-
-  const [activeFechamento, setActiveFechamento] = useState<FechamentoPasto | null>(null);
+  const fechadosCount = pastosAtivos.filter(p => getFechamento(p.id)?.status === 'fechado').length;
 
   const handleOpenPasto = async (pasto: Pasto) => {
     let fech = getFechamento(pasto.id);
     if (!fech) {
       fech = await criarFechamento(pasto.id, anoMes);
     }
+    if (!fech) return;
     setActiveFechamento(fech);
     setSelectedPasto(pasto);
     setDialogOpen(true);
@@ -192,17 +217,23 @@ export function FechamentoTab() {
           <SelectTrigger className="w-40 h-12"><SelectValue /></SelectTrigger>
           <SelectContent>
             {getAnoMesOptions().map(am => (
-              <SelectItem key={am} value={am}>{am.split('-').reverse().join('/')}</SelectItem>
+              <SelectItem key={am} value={am}>{formatAnoMes(am)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Badge variant="secondary">{preenchidos} de {pastosAtivos.length} pastos</Badge>
+        <div className="flex flex-col text-sm">
+          <Badge variant="secondary">{preenchidos}/{pastosAtivos.length} iniciados</Badge>
+          <span className="text-xs text-muted-foreground mt-0.5">{fechadosCount} fechados</span>
+        </div>
       </div>
 
       {loading ? (
         <div className="text-center py-8 text-muted-foreground">Carregando...</div>
       ) : pastosAtivos.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">Nenhum pasto ativo para conciliação.</div>
+        <div className="text-center py-12 text-muted-foreground">
+          <p>Nenhum pasto ativo para conciliação.</p>
+          <p className="text-xs mt-1">Cadastre pastos na aba "Pastos" e marque "Entra na conciliação".</p>
+        </div>
       ) : (
         <div className="space-y-2">
           {pastosAtivos.map(p => {
@@ -245,12 +276,8 @@ export function FechamentoTab() {
           pasto={selectedPasto}
           fechamento={activeFechamento}
           categorias={categorias}
-          onSave={async (items) => {
-            return salvarItens(activeFechamento.id, items);
-          }}
-          onFechar={async () => {
-            return fecharPasto(activeFechamento.id);
-          }}
+          onSave={async (items) => salvarItens(activeFechamento.id, items)}
+          onFechar={async () => fecharPasto(activeFechamento.id)}
           onReabrir={async () => {
             const ok = await reabrirPasto(activeFechamento.id);
             if (ok) loadFechamentos(anoMes);

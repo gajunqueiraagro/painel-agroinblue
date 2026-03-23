@@ -6,17 +6,8 @@ import { useLancamentos } from '@/hooks/useLancamentos';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, CheckCircle, Info } from 'lucide-react';
-import { format, subMonths } from 'date-fns';
-
-function getAnoMesOptions() {
-  const opts: string[] = [];
-  const now = new Date();
-  for (let i = 0; i < 24; i++) {
-    const d = subMonths(now, i);
-    opts.push(format(d, 'yyyy-MM'));
-  }
-  return opts;
-}
+import { format } from 'date-fns';
+import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
 
 interface ConciliacaoRow {
   categoria: CategoriaRebanho;
@@ -37,39 +28,33 @@ export function ConciliacaoTab() {
 
   useEffect(() => { loadFechamentos(anoMes); }, [anoMes, loadFechamentos]);
 
-  // Load all fechamento items for the month
+  // Load all fechamento items in parallel (not N+1)
   useEffect(() => {
     const load = async () => {
       if (fechamentos.length === 0) { setItensPastos(new Map()); return; }
       setLoadingItens(true);
+      const allItems = await Promise.all(fechamentos.map(f => loadItens(f.id)));
       const map = new Map<string, number>();
-      for (const fech of fechamentos) {
-        const items = await loadItens(fech.id);
-        items.forEach(item => {
-          map.set(item.categoria_id, (map.get(item.categoria_id) || 0) + item.quantidade);
-        });
-      }
+      allItems.flat().forEach(item => {
+        map.set(item.categoria_id, (map.get(item.categoria_id) || 0) + item.quantidade);
+      });
       setItensPastos(map);
       setLoadingItens(false);
     };
     load();
   }, [fechamentos, loadItens]);
 
-  // Calculate system balances per category up to the end of selected month
+  // Calculate system balances per category up to end of selected month
   const saldoSistema = useMemo(() => {
     const [y, m] = anoMes.split('-').map(Number);
     const map = new Map<string, number>();
-
-    // Map categoria codes to IDs
     const codeToId = new Map(categorias.map(c => [c.codigo, c.id]));
 
-    // Add saldos iniciais for the year
     saldosIniciais.filter(s => s.ano === y).forEach(s => {
       const catId = codeToId.get(s.categoria);
       if (catId) map.set(catId, (map.get(catId) || 0) + s.quantidade);
     });
 
-    // Process lancamentos up to end of selected month
     const endDate = `${anoMes}-31`;
     const startDate = `${y}-01-01`;
     lancamentos
@@ -77,7 +62,6 @@ export function ConciliacaoTab() {
       .forEach(l => {
         const catId = codeToId.get(l.categoria);
         if (!catId) return;
-
         const isEntrada = ['nascimento', 'compra', 'transferencia_entrada'].includes(l.tipo);
         const isSaida = ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'].includes(l.tipo);
         const isReclass = l.tipo === 'reclassificacao';
@@ -107,27 +91,30 @@ export function ConciliacaoTab() {
     });
   }, [categorias, saldoSistema, itensPastos]);
 
-  // Detect patterns
   const alertas = useMemo(() => {
     const msgs: string[] = [];
     const totalSistema = rows.reduce((s, r) => s + r.qtdSistema, 0);
     const totalPastos = rows.reduce((s, r) => s + r.qtdPastos, 0);
 
-    if (totalPastos > totalSistema + 3) {
-      msgs.push(`Total nos pastos (${totalPastos}) é maior que no sistema (${totalSistema}). Possível falta de lançamento de entrada.`);
-    }
-    if (totalPastos < totalSistema - 3) {
-      msgs.push(`Total nos pastos (${totalPastos}) é menor que no sistema (${totalSistema}). Possível falta de lançamento de saída.`);
+    if (totalPastos === 0 && totalSistema > 0) {
+      msgs.push('Nenhum dado de fechamento de pastos encontrado para este mês. Preencha os fechamentos para comparar.');
+      return msgs;
     }
 
-    // Detect possible category evolution
+    if (totalPastos > totalSistema + 3) {
+      msgs.push(`Total nos pastos (${totalPastos}) maior que no sistema (${totalSistema}). Verifique se há entradas (nascimentos, compras) não lançadas.`);
+    }
+    if (totalPastos < totalSistema - 3) {
+      msgs.push(`Total nos pastos (${totalPastos}) menor que no sistema (${totalSistema}). Verifique se há saídas (vendas, abates, mortes) não lançadas.`);
+    }
+
     for (let i = 0; i < rows.length; i++) {
       for (let j = i + 1; j < rows.length; j++) {
         if (rows[i].diferenca < -2 && rows[j].diferenca > 2 && Math.abs(rows[i].diferenca + rows[j].diferenca) <= 2) {
-          msgs.push(`Possível evolução de categoria: ${rows[i].categoria.nome} → ${rows[j].categoria.nome} não refletida no sistema.`);
+          msgs.push(`Possível evolução de categoria: ${rows[i].categoria.nome} → ${rows[j].categoria.nome} não lançada no sistema.`);
         }
         if (rows[j].diferenca < -2 && rows[i].diferenca > 2 && Math.abs(rows[i].diferenca + rows[j].diferenca) <= 2) {
-          msgs.push(`Possível evolução de categoria: ${rows[j].categoria.nome} → ${rows[i].categoria.nome} não refletida no sistema.`);
+          msgs.push(`Possível evolução de categoria: ${rows[j].categoria.nome} → ${rows[i].categoria.nome} não lançada no sistema.`);
         }
       }
     }
@@ -147,7 +134,7 @@ export function ConciliacaoTab() {
           <SelectTrigger className="w-40 h-12"><SelectValue /></SelectTrigger>
           <SelectContent>
             {getAnoMesOptions().map(am => (
-              <SelectItem key={am} value={am}>{am.split('-').reverse().join('/')}</SelectItem>
+              <SelectItem key={am} value={am}>{formatAnoMes(am)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -205,7 +192,6 @@ export function ConciliacaoTab() {
             </div>
           ))}
 
-          {/* Totals */}
           <div className="rounded-lg border-2 p-3 bg-muted">
             <div className="grid grid-cols-3 gap-2 text-sm">
               <div>
