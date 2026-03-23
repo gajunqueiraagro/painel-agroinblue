@@ -424,7 +424,9 @@ export function useIndicadoresZootecnicos(
 
     // GMD acumulado
     const diasAcum = Array.from({ length: mes }, (_, i) => new Date(ano, i + 1, 0).getDate()).reduce((a, b) => a + b, 0);
-    const pesoInicialAno = saldoInicialAno * (getPesoMedioInicial(saldosIniciais, ano) || 0);
+    const pesoInicialAno = saldosIniciais
+      .filter(s => s.ano === ano)
+      .reduce((s, si) => s + si.quantidade * (si.pesoMedioKg || 0), 0);
     const pesoEntradasAcum = lancsAcum.filter(l => TIPOS_ENTRADA.includes(l.tipo))
       .reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
     const pesoSaidasAcum = lancsAcum.filter(l => TIPOS_SAIDA_DESFRUTE.includes(l.tipo) || l.tipo === 'morte')
