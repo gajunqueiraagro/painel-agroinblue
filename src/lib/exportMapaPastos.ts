@@ -43,7 +43,7 @@ export function exportMapaPastosXlsx(
     vals.push(row.pasto.area_produtiva_ha || 0);
     vals.push(row.cabHa ? Number(row.cabHa.toFixed(2)) : 0);
     vals.push(row.uaHa ? Number(row.uaHa.toFixed(2)) : 0);
-    vals.push(row.pasto.qualidade || 0);
+    vals.push(row.qualidade || 0);
     return vals;
   });
 
