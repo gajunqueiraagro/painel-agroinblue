@@ -354,21 +354,49 @@ export function useIndicadoresZootecnicos(
 
     // ===== GMD MÊS (com abertura) =====
     const diasMes = new Date(ano, mes, 0).getDate();
-    const pesoFinalMes = saldoFinalMes * (pesoMedioRebanhoKg || 0);
+
+    // Peso final: soma por categoria (saldo_cat × peso_medio_cat)
+    const estoqueFinalDetalhe: EstoqueCategoriaDetalhe[] = [];
+    let pesoFinalMes = 0;
+    saldoMap.forEach((qtd, cat) => {
+      const pesoMedio = getPesoMedioCat(cat, saldosIniciais, lancamentos, ano, mes);
+      const pesoTotal = qtd * (pesoMedio || 0);
+      pesoFinalMes += pesoTotal;
+      if (qtd !== 0) {
+        estoqueFinalDetalhe.push({ categoria: cat, cabecas: qtd, pesoMedioKg: pesoMedio, pesoTotalKg: pesoTotal });
+      }
+    });
+
+    // Peso inicial: soma por categoria do mês anterior
+    const estoqueInicialDetalhe: EstoqueCategoriaDetalhe[] = [];
+    let pesoInicialMes = 0;
     const saldoMapAnterior = mes > 1
       ? calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes - 1)
       : new Map<string, number>();
     const saldoAnterior = mes > 1
       ? Array.from(saldoMapAnterior.values()).reduce((s, v) => s + v, 0)
       : saldoInicialAno;
-    const pesoMedioAnterior = mes > 1
-      ? calcPesoMedioPonderado(
-          Array.from(saldoMapAnterior.entries())
-            .filter(([, q]) => q > 0)
-            .map(([cat, q]) => ({ quantidade: q, pesoKg: getPesoMedioCat(cat, saldosIniciais, lancamentos, ano, mes - 1) }))
-        )
-      : getPesoMedioInicial(saldosIniciais, ano);
-    const pesoInicialMes = saldoAnterior * (pesoMedioAnterior || 0);
+
+    if (mes > 1) {
+      saldoMapAnterior.forEach((qtd, cat) => {
+        const pesoMedio = getPesoMedioCat(cat, saldosIniciais, lancamentos, ano, mes - 1);
+        const pesoTotal = qtd * (pesoMedio || 0);
+        pesoInicialMes += pesoTotal;
+        if (qtd !== 0) {
+          estoqueInicialDetalhe.push({ categoria: cat, cabecas: qtd, pesoMedioKg: pesoMedio, pesoTotalKg: pesoTotal });
+        }
+      });
+    } else {
+      // Janeiro: usar saldos iniciais do ano
+      saldosIniciais.filter(s => s.ano === ano).forEach(s => {
+        const pesoMedio = s.pesoMedioKg ?? null;
+        const pesoTotal = s.quantidade * (pesoMedio || 0);
+        pesoInicialMes += pesoTotal;
+        if (s.quantidade !== 0) {
+          estoqueInicialDetalhe.push({ categoria: s.categoria, cabecas: s.quantidade, pesoMedioKg: pesoMedio, pesoTotalKg: pesoTotal });
+        }
+      });
+    }
 
     const entradasMes = lancsMes.filter(l => TIPOS_ENTRADA.includes(l.tipo));
     const saidasGmdMes = lancsMes.filter(l => TIPOS_SAIDA_DESFRUTE.includes(l.tipo) || l.tipo === 'morte');
