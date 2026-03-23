@@ -26,7 +26,7 @@ interface Props {
 
 export function IndicadoresTab({ lancamentos, saldosIniciais }: Props) {
   const { fazendaAtual } = useFazenda();
-  const { pastos } = usePastos();
+  const { pastos, categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
 
   const anosDisponiveis = useMemo(() => {
@@ -47,6 +47,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais }: Props) {
     lancamentos,
     saldosIniciais,
     pastos,
+    categorias,
   );
 
   const mesLabel = MESES_COLS.find(m => m.key === mesFiltro)?.label || mesFiltro;
