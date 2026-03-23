@@ -6,12 +6,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Download } from 'lucide-react';
+import { Download, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
 import { exportMapaPastosXlsx } from '@/lib/exportMapaPastos';
+import { exportMapaPastosPdf } from '@/lib/exportMapaPastosPdf';
 
-interface PastoMapaRow {
+export interface PastoMapaRow {
   pasto: Pasto;
   lote: string | null;
   tipoUso: string | null;
@@ -19,13 +20,37 @@ interface PastoMapaRow {
   categorias: Map<string, { quantidade: number; peso_medio_kg: number | null }>;
   totalCabecas: number;
   pesoMedio: number | null;
-  cabHa: number | null;
+  uaTotal: number;
   uaHa: number | null;
 }
 
 function calcUA(quantidade: number, pesoMedioKg: number | null): number {
   if (!pesoMedioKg || pesoMedioKg <= 0) return quantidade;
   return (quantidade * pesoMedioKg) / 450;
+}
+
+export interface MapaTotais {
+  catTotals: Map<string, { quantidade: number; pesoTotal: number; qtdComPeso: number }>;
+  totalCab: number;
+  areaTotal: number;
+  pesoMedioGeral: number | null;
+  uaTotal: number;
+  uaHaGeral: number | null;
+  qualidadeMedia: number | null;
+}
+
+export interface AtividadeResumo {
+  tipo: string;
+  area: number;
+  cabecas: number;
+  pesoMedio: number | null;
+  uaHa: number | null;
+  qtdPastos: number;
+}
+
+function formatNum(val: number | null | undefined, decimals = 0): string {
+  if (val === null || val === undefined) return '—';
+  return val.toFixed(decimals).replace('.', ',');
 }
 
 export function MapaPastosTab() {
@@ -59,7 +84,6 @@ export function MapaPastosTab() {
           });
         }
 
-        // Use monthly data from fechamento only
         const lote = fech?.lote_mes ?? null;
         const tipoUso = fech?.tipo_uso_mes ?? null;
         const qualidade = fech?.qualidade_mes ?? null;
@@ -69,13 +93,12 @@ export function MapaPastosTab() {
         const pesoMedio = comPeso.length > 0
           ? comPeso.reduce((s, v) => s + (v.peso_medio_kg || 0) * v.quantidade, 0) / comPeso.reduce((s, v) => s + v.quantidade, 0)
           : null;
-        const cabHa = pasto.area_produtiva_ha && totalCab > 0 ? totalCab / pasto.area_produtiva_ha : null;
 
-        let totalUA = 0;
-        catMap.forEach(v => { totalUA += calcUA(v.quantidade, v.peso_medio_kg); });
-        const uaHa = pasto.area_produtiva_ha && totalUA > 0 ? totalUA / pasto.area_produtiva_ha : null;
+        let uaTotal = 0;
+        catMap.forEach(v => { uaTotal += calcUA(v.quantidade, v.peso_medio_kg); });
+        const uaHa = pasto.area_produtiva_ha && uaTotal > 0 ? uaTotal / pasto.area_produtiva_ha : null;
 
-        return { pasto, lote, tipoUso, qualidade, categorias: catMap, totalCabecas: totalCab, pesoMedio, cabHa, uaHa };
+        return { pasto, lote, tipoUso, qualidade, categorias: catMap, totalCabecas: totalCab, pesoMedio, uaTotal, uaHa };
       });
 
       setRows(result);
@@ -84,7 +107,7 @@ export function MapaPastosTab() {
     build();
   }, [fechamentos, pastos, loadItens]);
 
-  const totais = useMemo(() => {
+  const totais: MapaTotais = useMemo(() => {
     const catTotals = new Map<string, { quantidade: number; pesoTotal: number; qtdComPeso: number }>();
     categorias.forEach(c => catTotals.set(c.id, { quantidade: 0, pesoTotal: 0, qtdComPeso: 0 }));
 
@@ -108,13 +131,47 @@ export function MapaPastosTab() {
       ? comPesoRows.reduce((s, r) => s + (r.pesoMedio || 0) * r.totalCabecas, 0) / comPesoRows.reduce((s, r) => s + r.totalCabecas, 0)
       : null;
 
-    return { catTotals, totalCab, areaTotal, pesoMedioGeral };
+    const uaTotal = rows.reduce((s, r) => s + r.uaTotal, 0);
+    const uaHaGeral = areaTotal > 0 ? uaTotal / areaTotal : null;
+
+    const comQualidade = rows.filter(r => r.qualidade !== null && r.qualidade > 0);
+    const qualidadeMedia = comQualidade.length > 0
+      ? comQualidade.reduce((s, r) => s + (r.qualidade || 0), 0) / comQualidade.length
+      : null;
+
+    return { catTotals, totalCab, areaTotal, pesoMedioGeral, uaTotal, uaHaGeral, qualidadeMedia };
   }, [rows, categorias]);
 
-  const getLotacaoColor = (cabHa: number | null) => {
-    if (!cabHa) return '';
-    if (cabHa > 2.5) return 'text-red-600 font-bold';
-    if (cabHa > 1.5) return 'text-yellow-600 font-semibold';
+  const resumoAtividades: AtividadeResumo[] = useMemo(() => {
+    const map = new Map<string, { area: number; cabecas: number; pesoTotal: number; qtdComPeso: number; uaTotal: number; qtdPastos: number }>();
+    rows.forEach(row => {
+      const tipo = row.tipoUso || 'não definido';
+      const entry = map.get(tipo) || { area: 0, cabecas: 0, pesoTotal: 0, qtdComPeso: 0, uaTotal: 0, qtdPastos: 0 };
+      entry.area += row.pasto.area_produtiva_ha || 0;
+      entry.cabecas += row.totalCabecas;
+      if (row.pesoMedio && row.totalCabecas > 0) {
+        entry.pesoTotal += row.pesoMedio * row.totalCabecas;
+        entry.qtdComPeso += row.totalCabecas;
+      }
+      entry.uaTotal += row.uaTotal;
+      entry.qtdPastos += 1;
+      map.set(tipo, entry);
+    });
+
+    return Array.from(map.entries()).map(([tipo, d]) => ({
+      tipo,
+      area: d.area,
+      cabecas: d.cabecas,
+      pesoMedio: d.qtdComPeso > 0 ? d.pesoTotal / d.qtdComPeso : null,
+      uaHa: d.area > 0 ? d.uaTotal / d.area : null,
+      qtdPastos: d.qtdPastos,
+    })).sort((a, b) => b.cabecas - a.cabecas);
+  }, [rows]);
+
+  const getUaHaColor = (uaHa: number | null) => {
+    if (!uaHa) return '';
+    if (uaHa > 3) return 'text-red-600 font-bold';
+    if (uaHa > 2) return 'text-yellow-600 font-semibold';
     return 'text-green-600';
   };
 
@@ -125,12 +182,23 @@ export function MapaPastosTab() {
     return 'bg-red-500/20 text-red-700';
   };
 
+  const tipoUsoLabel = (t: string | null) => {
+    if (!t) return '—';
+    const labels: Record<string, string> = {
+      cria: 'Cria', recria: 'Recria', engorda: 'Engorda',
+      reforma_pecuaria: 'Reforma Pec.', agricultura: 'Agricultura',
+      app: 'APP', reserva_legal: 'Reserva Legal', benfeitorias: 'Benfeitorias',
+    };
+    return labels[t] || t;
+  };
+
   if (isGlobal) return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda.</div>;
 
   return (
     <TooltipProvider>
       <div className="p-4 pb-24 space-y-4">
-        <div className="flex items-center justify-between gap-3">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
             <Select value={anoMes} onValueChange={setAnoMes}>
               <SelectTrigger className="w-40 h-12"><SelectValue /></SelectTrigger>
@@ -140,16 +208,29 @@ export function MapaPastosTab() {
                 ))}
               </SelectContent>
             </Select>
-            <Badge variant="secondary">{totais.totalCab} cab</Badge>
+            <Badge variant="secondary" className="text-sm">{totais.totalCab} cab</Badge>
+            {totais.uaHaGeral !== null && (
+              <Badge variant="outline" className="text-sm">{formatNum(totais.uaHaGeral, 2)} UA/ha</Badge>
+            )}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => exportMapaPastosXlsx(rows, categorias, totais, anoMes, fazendaAtual?.nome || 'Fazenda')}
-            disabled={rows.length === 0}
-          >
-            <Download className="h-4 w-4 mr-1" />Exportar
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportMapaPastosXlsx(rows, categorias, totais, resumoAtividades, anoMes, fazendaAtual?.nome || 'Fazenda')}
+              disabled={rows.length === 0}
+            >
+              <Download className="h-4 w-4 mr-1" />Excel
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportMapaPastosPdf(rows, categorias, totais, resumoAtividades, anoMes, fazendaAtual?.nome || 'Fazenda')}
+              disabled={rows.length === 0}
+            >
+              <FileText className="h-4 w-4 mr-1" />PDF
+            </Button>
+          </div>
         </div>
 
         {loading ? (
@@ -157,116 +238,137 @@ export function MapaPastosTab() {
         ) : rows.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">Nenhum pasto ativo para conciliação.</div>
         ) : (
-          <div className="relative overflow-auto rounded-lg border">
-            <table className="w-full text-sm border-collapse">
-              <thead className="sticky top-0 z-10 bg-muted">
-                <tr>
-                  <th className="sticky left-0 z-20 bg-muted p-2 text-left font-semibold border-b border-r min-w-[120px]">Pasto</th>
-                  <th className="p-2 text-left font-medium border-b border-r min-w-[60px]">Lote</th>
-                  {categorias.map(cat => (
-                    <th key={cat.id} className="p-2 text-center font-medium border-b border-r min-w-[70px]">
-                      <div className="text-xs leading-tight">{cat.nome}</div>
-                    </th>
+          <>
+            {/* Main Table */}
+            <div className="relative overflow-auto rounded-lg border" style={{ maxHeight: '60vh' }}>
+              <table className="w-full text-sm border-collapse">
+                <thead className="sticky top-0 z-10 bg-muted">
+                  <tr>
+                    <th className="sticky left-0 z-20 bg-muted p-2 text-left font-semibold border-b border-r min-w-[120px]">Pasto</th>
+                    <th className="p-2 text-left font-medium border-b border-r min-w-[80px]">Atividade</th>
+                    <th className="p-2 text-left font-medium border-b border-r min-w-[60px]">Lote</th>
+                    {categorias.map(cat => (
+                      <th key={cat.id} className="p-2 text-center font-medium border-b border-r min-w-[70px]">
+                        <div className="text-xs leading-tight">{cat.nome}</div>
+                      </th>
+                    ))}
+                    <th className="p-2 text-center font-semibold border-b border-r min-w-[80px] bg-primary/10">Total</th>
+                    <th className="p-2 text-center font-medium border-b border-r min-w-[80px]">Peso Méd.</th>
+                    <th className="p-2 text-center font-medium border-b border-r min-w-[60px]">Área (ha)</th>
+                    <th className="p-2 text-center font-medium border-b border-r min-w-[70px]">UA/ha</th>
+                    <th className="p-2 text-center font-medium border-b min-w-[50px]">Qual.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, idx) => (
+                    <tr key={row.pasto.id} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/30'}>
+                      <td className="sticky left-0 z-10 p-2 font-semibold border-r whitespace-nowrap" style={{ backgroundColor: 'inherit' }}>
+                        {row.pasto.nome}
+                      </td>
+                      <td className="p-2 text-xs border-r text-muted-foreground">{tipoUsoLabel(row.tipoUso)}</td>
+                      <td className="p-2 text-xs text-muted-foreground border-r">{row.lote || '—'}</td>
+                      {categorias.map(cat => {
+                        const val = row.categorias.get(cat.id);
+                        const qty = val?.quantidade || 0;
+                        const peso = val?.peso_medio_kg;
+                        return (
+                          <td key={cat.id} className="p-2 text-center border-r">
+                            {qty > 0 ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="font-semibold cursor-default">{qty}</span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>{cat.nome}: {qty} cab</p>
+                                  {peso && <p>Peso médio: {formatNum(peso, 0)} kg</p>}
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : (
+                              <span className="text-muted-foreground/40">—</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td className="p-2 text-center font-bold border-r bg-primary/5">{row.totalCabecas || '—'}</td>
+                      <td className="p-2 text-center border-r">{row.pesoMedio ? formatNum(row.pesoMedio, 2) : '—'}</td>
+                      <td className="p-2 text-center border-r">{row.pasto.area_produtiva_ha ? formatNum(row.pasto.area_produtiva_ha, 1) : '—'}</td>
+                      <td className={`p-2 text-center border-r ${getUaHaColor(row.uaHa)}`}>{row.uaHa ? formatNum(row.uaHa, 2) : '—'}</td>
+                      <td className="p-2 text-center">
+                        {row.qualidade ? (
+                          <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${getQualidadeColor(row.qualidade)}`}>
+                            {row.qualidade}
+                          </span>
+                        ) : '—'}
+                      </td>
+                    </tr>
                   ))}
-                  <th className="p-2 text-center font-semibold border-b border-r min-w-[80px] bg-primary/10">Total</th>
-                  <th className="p-2 text-center font-medium border-b border-r min-w-[60px]">Área (ha)</th>
-                  <th className="p-2 text-center font-medium border-b border-r min-w-[70px]">Cab/ha</th>
-                  <th className="p-2 text-center font-medium border-b border-r min-w-[70px]">UA/ha</th>
-                  <th className="p-2 text-center font-medium border-b min-w-[50px]">Qual.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, idx) => (
-                  <tr key={row.pasto.id} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/30'}>
-                    <td className="sticky left-0 z-10 p-2 font-semibold border-r whitespace-nowrap" style={{ backgroundColor: 'inherit' }}>
-                      {row.pasto.nome}
-                    </td>
-                    <td className="p-2 text-xs text-muted-foreground border-r">{row.lote || '—'}</td>
+                </tbody>
+                <tfoot>
+                  <tr className="bg-muted font-bold border-t-2">
+                    <td className="sticky left-0 z-10 bg-muted p-2 border-r" colSpan={3}>TOTAL / MÉDIA</td>
                     {categorias.map(cat => {
-                      const val = row.categorias.get(cat.id);
-                      const qty = val?.quantidade || 0;
-                      const peso = val?.peso_medio_kg;
+                      const t = totais.catTotals.get(cat.id);
+                      const pesoMed = t && t.qtdComPeso > 0 ? t.pesoTotal / t.qtdComPeso : null;
                       return (
                         <td key={cat.id} className="p-2 text-center border-r">
-                          {qty > 0 ? (
+                          {t && t.quantidade > 0 ? (
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <span className="font-semibold cursor-default">{qty}</span>
+                                <span className="cursor-default">{t.quantidade}</span>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p>{cat.nome}: {qty} cab</p>
-                                {peso && <p>Peso médio: {peso.toFixed(0)} kg</p>}
+                                <p>{cat.nome}: {t.quantidade} cab</p>
+                                {pesoMed && <p>Peso médio: {formatNum(pesoMed, 0)} kg</p>}
                               </TooltipContent>
                             </Tooltip>
-                          ) : (
-                            <span className="text-muted-foreground/40">—</span>
-                          )}
+                          ) : '—'}
                         </td>
                       );
                     })}
-                    <td className="p-2 text-center font-bold border-r bg-primary/5">{row.totalCabecas || '—'}</td>
-                    <td className="p-2 text-center border-r">{row.pasto.area_produtiva_ha?.toFixed(1) || '—'}</td>
-                    <td className={`p-2 text-center border-r ${getLotacaoColor(row.cabHa)}`}>{row.cabHa?.toFixed(2) || '—'}</td>
-                    <td className={`p-2 text-center border-r ${getLotacaoColor(row.uaHa)}`}>{row.uaHa?.toFixed(2) || '—'}</td>
+                    <td className="p-2 text-center border-r bg-primary/10 text-lg">{totais.totalCab}</td>
+                    <td className="p-2 text-center border-r">{totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 2) : '—'}</td>
+                    <td className="p-2 text-center border-r">{formatNum(totais.areaTotal, 1)}</td>
+                    <td className={`p-2 text-center border-r ${getUaHaColor(totais.uaHaGeral)}`}>
+                      {totais.uaHaGeral ? formatNum(totais.uaHaGeral, 2) : '—'}
+                    </td>
                     <td className="p-2 text-center">
-                      {row.qualidade ? (
-                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${getQualidadeColor(row.qualidade)}`}>
-                          {row.qualidade}
+                      {totais.qualidadeMedia ? (
+                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${getQualidadeColor(totais.qualidadeMedia)}`}>
+                          {formatNum(totais.qualidadeMedia, 1)}
                         </span>
                       ) : '—'}
                     </td>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="bg-muted font-bold border-t-2">
-                  <td className="sticky left-0 z-10 bg-muted p-2 border-r" colSpan={2}>TOTAL</td>
-                  {categorias.map(cat => {
-                    const t = totais.catTotals.get(cat.id);
-                    const pesoMed = t && t.qtdComPeso > 0 ? t.pesoTotal / t.qtdComPeso : null;
-                    return (
-                      <td key={cat.id} className="p-2 text-center border-r">
-                        {t && t.quantidade > 0 ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="cursor-default">{t.quantidade}</span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>{cat.nome}: {t.quantidade} cab</p>
-                              {pesoMed && <p>Peso médio: {pesoMed.toFixed(0)} kg</p>}
-                            </TooltipContent>
-                          </Tooltip>
-                        ) : '—'}
-                      </td>
-                    );
-                  })}
-                  <td className="p-2 text-center border-r bg-primary/10 text-lg">{totais.totalCab}</td>
-                  <td className="p-2 text-center border-r">{totais.areaTotal.toFixed(1)}</td>
-                  <td className={`p-2 text-center border-r ${getLotacaoColor(totais.areaTotal > 0 ? totais.totalCab / totais.areaTotal : null)}`}>
-                    {totais.areaTotal > 0 ? (totais.totalCab / totais.areaTotal).toFixed(2) : '—'}
-                  </td>
-                  <td className="p-2 text-center border-r">—</td>
-                  <td className="p-2 text-center">—</td>
-                </tr>
-                <tr className="bg-muted/60 text-sm">
-                  <td className="sticky left-0 z-10 bg-muted/60 p-2 border-r" colSpan={2}>Peso Médio</td>
-                  {categorias.map(cat => {
-                    const t = totais.catTotals.get(cat.id);
-                    const pesoMed = t && t.qtdComPeso > 0 ? t.pesoTotal / t.qtdComPeso : null;
-                    return (
-                      <td key={cat.id} className="p-2 text-center border-r text-muted-foreground">
-                        {pesoMed ? pesoMed.toFixed(0) : '—'}
-                      </td>
-                    );
-                  })}
-                  <td className="p-2 text-center border-r font-semibold">
-                    {totais.pesoMedioGeral ? totais.pesoMedioGeral.toFixed(0) : '—'}
-                  </td>
-                  <td colSpan={4}></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+                </tfoot>
+              </table>
+            </div>
+
+            {/* Activity Summary */}
+            {resumoAtividades.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Resumo por Atividade</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {resumoAtividades.map(a => (
+                    <div key={a.tipo} className="rounded-lg border bg-card p-3 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-sm capitalize">{tipoUsoLabel(a.tipo)}</span>
+                        <Badge variant="secondary" className="text-xs">{a.qtdPastos} pastos</Badge>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                        <span>Área:</span><span className="text-right font-medium text-foreground">{formatNum(a.area, 1)} ha</span>
+                        <span>Cabeças:</span><span className="text-right font-medium text-foreground">{a.cabecas}</span>
+                        <span>Peso Méd.:</span><span className="text-right font-medium text-foreground">{a.pesoMedio ? formatNum(a.pesoMedio, 2) + ' kg' : '—'}</span>
+                        <span>UA/ha:</span>
+                        <span className={`text-right font-medium ${getUaHaColor(a.uaHa)}`}>
+                          {a.uaHa ? formatNum(a.uaHa, 2) : '—'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </TooltipProvider>
