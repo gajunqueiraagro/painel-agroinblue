@@ -111,6 +111,15 @@ export function useFechamento() {
     return true;
   }, []);
 
+  const atualizarCamposMensais = useCallback(async (
+    fechamentoId: string,
+    campos: { lote_mes?: string | null; tipo_uso_mes?: string | null; qualidade_mes?: number | null; observacao_mes?: string | null }
+  ) => {
+    const { error } = await supabase.from('fechamento_pastos').update(campos).eq('id', fechamentoId);
+    if (error) { console.error(error); return false; }
+    return true;
+  }, []);
+
   const copiarMesAnterior = useCallback(async (
     pastoId: string,
     anoMesAtual: string,
