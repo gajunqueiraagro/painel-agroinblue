@@ -11,6 +11,10 @@ export interface FechamentoPasto {
   ano_mes: string;
   status: string;
   responsavel_nome: string | null;
+  lote_mes: string | null;
+  tipo_uso_mes: string | null;
+  qualidade_mes: number | null;
+  observacao_mes: string | null;
   created_at: string;
   updated_at: string;
 }
