@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Lancamento, SaldoInicial, isEntrada, isReclassificacao } from '@/types/cattle';
+import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, isWithinInterval, parseISO, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { isEntrada, isReclassificacao } from '@/lib/calculos/zootecnicos';
 
 interface Props {
   lancamentos: Lancamento[];

@@ -137,7 +137,7 @@ export function FechamentoTab() {
                       <span>Qualidade: <span className="font-medium text-foreground">{fech.qualidade_mes}</span></span>
                     )}
                     {resumo.uaHa && (
-                      <span>UA/ha: <span className="font-medium text-foreground">{fmtNum(resumo.uaHa, 2)}</span></span>
+                      <span>UA/ha: <span className="font-medium text-foreground">{formatNum(resumo.uaHa, 2)}</span></span>
                     )}
                   </div>
                 )}

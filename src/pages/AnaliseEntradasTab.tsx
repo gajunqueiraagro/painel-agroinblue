@@ -126,7 +126,7 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
             <SelectValue placeholder="Período" />
           </SelectTrigger>
           <SelectContent>
-            {MESES_OPTIONS.map(m => (
+            {MESES_OPTIONS_ACUMULADO.map(m => (
               <SelectItem key={m.value} value={m.value} className="text-base">{m.label}</SelectItem>
             ))}
           </SelectContent>

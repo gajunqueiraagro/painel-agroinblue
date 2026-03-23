@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Lancamento, SaldoInicial, kgToArrobas } from '@/types/cattle';
+import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { parseISO, format } from 'date-fns';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -9,6 +9,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TabId } from '@/components/BottomNav';
+import { MESES_NOMES, MESES_OPTIONS_ACUMULADO } from '@/lib/calculos/labels';
+import { fmtValor } from '@/lib/calculos/formatters';
+import {
+  calcArrobasSafe,
+  calcValorTotal,
+  calcArrobasIniciais,
+  calcDesfrute,
+  calcDesfruteArrobas,
+  TIPOS_DESFRUTE_GLOBAL,
+  TIPOS_DESFRUTE_FAZENDA,
+  TIPOS_DESFRUTE_LABELS,
+} from '@/lib/calculos/economicos';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -17,80 +29,10 @@ interface Props {
   isGlobal?: boolean;
 }
 
-const MESES_NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-const MESES_OPTIONS = [
-  { value: '12', label: 'Ano todo' },
-  { value: '01', label: 'Até Janeiro' },
-  { value: '02', label: 'Até Fevereiro' },
-  { value: '03', label: 'Até Março' },
-  { value: '04', label: 'Até Abril' },
-  { value: '05', label: 'Até Maio' },
-  { value: '06', label: 'Até Junho' },
-  { value: '07', label: 'Até Julho' },
-  { value: '08', label: 'Até Agosto' },
-  { value: '09', label: 'Até Setembro' },
-  { value: '10', label: 'Até Outubro' },
-  { value: '11', label: 'Até Novembro' },
-];
 const COLORS = ['#dc2626', '#ea580c', '#d97706', '#8b5cf6', '#64748b', '#2563eb', '#16a34a'];
 
-const TIPOS_DESFRUTE_BASE = ['abate', 'venda', 'consumo'] as const;
-const TIPOS_DESFRUTE_FAZENDA = ['abate', 'venda', 'consumo', 'transferencia_saida'] as const;
-const TIPOS_DESFRUTE_LABELS: Record<string, string> = {
-  abate: 'Abate',
-  venda: 'Venda em Pé',
-  consumo: 'Consumo',
-  transferencia_saida: 'Transf. Saída',
-};
-
-function calcArrobas(l: Lancamento): number {
-  // Abate: usar peso de carcaça real (kg/15). Não usar pesoMedioArrobas.
-  if (l.tipo === 'abate') {
-    if (l.pesoCarcacaKg && l.pesoCarcacaKg > 0) {
-      return (l.pesoCarcacaKg / 15) * l.quantidade;
-    }
-    return 0;
-  }
-
-  // Venda, Consumo e Transferência saída: peso vivo em kg/30
-  if (l.tipo === 'venda' || l.tipo === 'consumo' || l.tipo === 'transferencia_saida') {
-    if (l.pesoMedioKg && l.pesoMedioKg > 0) {
-      return (l.pesoMedioKg / 30) * l.quantidade;
-    }
-    if (l.pesoMedioArrobas && l.pesoMedioArrobas > 0) {
-      return l.pesoMedioArrobas * l.quantidade;
-    }
-    return 0;
-  }
-
-  return 0;
-}
-
-function calcValorTotal(l: Lancamento): number {
-  if (l.valorTotal) return l.valorTotal;
-  // Fallback: calcular se valor_total não estiver salvo
-  if (l.tipo === 'abate' && l.precoArroba && l.pesoCarcacaKg) {
-    const arrobas = (l.pesoCarcacaKg / 15) * l.quantidade;
-    const bruto = arrobas * l.precoArroba;
-    const bonus = (l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0);
-    const desc = (l.descontoQualidade ?? 0) + (l.descontoFunrural ?? 0) + (l.outrosDescontos ?? 0);
-    return bruto + bonus - desc;
-  }
-  if ((l.tipo === 'venda' || l.tipo === 'compra' || l.tipo === 'consumo' || l.tipo === 'transferencia_saida') && l.precoArroba && l.pesoMedioKg) {
-    const arrobas = (l.pesoMedioKg / 30) * l.quantidade;
-    const bruto = arrobas * l.precoArroba;
-    return bruto + (l.acrescimos ?? 0) - (l.deducoes ?? 0);
-  }
-  if (l.precoMedioCabeca) return l.precoMedioCabeca * l.quantidade;
-  return 0;
-}
-
-function fmt(v: number): string {
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
 export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGlobal = false }: Props) {
-  const tiposDesfrute = isGlobal ? TIPOS_DESFRUTE_BASE : TIPOS_DESFRUTE_FAZENDA;
+  const tiposDesfrute = isGlobal ? TIPOS_DESFRUTE_GLOBAL : TIPOS_DESFRUTE_FAZENDA;
   const isDesfrute = (tipo: string) => (tiposDesfrute as readonly string[]).includes(tipo);
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
@@ -109,9 +51,7 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
     [saldosIniciais, anoFiltro]);
 
   const arrobasInicioAno = useMemo(() =>
-    saldosIniciais
-      .filter(s => s.ano === Number(anoFiltro))
-      .reduce((sum, s) => sum + s.quantidade * ((s.pesoMedioKg || 0) / 30), 0),
+    calcArrobasIniciais(saldosIniciais, Number(anoFiltro)),
     [saldosIniciais, anoFiltro]);
 
   const filterAcumulado = (list: Lancamento[]) =>
@@ -134,14 +74,14 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
 
   const periodoLabel = mesLimite === 12 ? 'Ano todo' : `Jan–${MESES_NOMES[mesLimite - 1]}`;
 
-  // Totais acumulados
+  // Totais acumulados — usando lib central
   const totalCab = desfrAno.reduce((s, l) => s + l.quantidade, 0);
   const totalCabAnt = desfrAnoAnt.reduce((s, l) => s + l.quantidade, 0);
   const difCab = totalCab - totalCabAnt;
   const varCab = totalCabAnt > 0 ? (((totalCab - totalCabAnt) / totalCabAnt) * 100).toFixed(1) : null;
 
-  const totalArrobas = desfrAno.reduce((s, l) => s + calcArrobas(l), 0);
-  const totalArrobasAnt = desfrAnoAnt.reduce((s, l) => s + calcArrobas(l), 0);
+  const totalArrobas = desfrAno.reduce((s, l) => s + calcArrobasSafe(l), 0);
+  const totalArrobasAnt = desfrAnoAnt.reduce((s, l) => s + calcArrobasSafe(l), 0);
   const difArrobas = totalArrobas - totalArrobasAnt;
 
   const totalValor = desfrAno.reduce((s, l) => s + calcValorTotal(l), 0);
@@ -156,6 +96,10 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
   const pesoMedioKgAnt = totalCabAnt > 0
     ? desfrAnoAnt.reduce((s, l) => s + (l.pesoMedioKg || 0) * l.quantidade, 0) / totalCabAnt
     : 0;
+
+  // Desfrute via lib central
+  const desfruteCab = calcDesfrute(totalCab, saldoInicialAno);
+  const desfruteArrobas = calcDesfruteArrobas(totalArrobas, arrobasInicioAno);
 
   // Gráfico barras: quantidade por mês YoY
   const barData = MESES_NOMES.slice(0, mesLimite).map((nome, i) => {
@@ -178,10 +122,10 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
     const mesNum = i + 1;
     const acumAtual = desfrAnoAll
       .filter(l => { try { return Number(format(parseISO(l.data), 'MM')) <= mesNum; } catch { return false; } })
-      .reduce((s, l) => s + calcArrobas(l), 0);
+      .reduce((s, l) => s + calcArrobasSafe(l), 0);
     const acumAnt = desfrAnoAntAll
       .filter(l => { try { return Number(format(parseISO(l.data), 'MM')) <= mesNum; } catch { return false; } })
-      .reduce((s, l) => s + calcArrobas(l), 0);
+      .reduce((s, l) => s + calcArrobasSafe(l), 0);
     return { mes: nome, [anoFiltro]: Number(acumAtual.toFixed(1)), [anoAnterior]: Number(acumAnt.toFixed(1)) };
   });
 
@@ -202,9 +146,9 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
     const mesNum = i + 1;
     const filtAtual = desfrAnoAll.filter(l => { try { return Number(format(parseISO(l.data), 'MM')) <= mesNum; } catch { return false; } });
     const filtAnt = desfrAnoAntAll.filter(l => { try { return Number(format(parseISO(l.data), 'MM')) <= mesNum; } catch { return false; } });
-    const arrobAtual = filtAtual.reduce((s, l) => s + calcArrobas(l), 0);
+    const arrobAtual = filtAtual.reduce((s, l) => s + calcArrobasSafe(l), 0);
     const valAtual = filtAtual.reduce((s, l) => s + calcValorTotal(l), 0);
-    const arrobAnt = filtAnt.reduce((s, l) => s + calcArrobas(l), 0);
+    const arrobAnt = filtAnt.reduce((s, l) => s + calcArrobasSafe(l), 0);
     const valAnt = filtAnt.reduce((s, l) => s + calcValorTotal(l), 0);
     return {
       mes: nome,
@@ -238,7 +182,7 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
             <SelectValue placeholder="Período" />
           </SelectTrigger>
           <SelectContent>
-            {MESES_OPTIONS.map(m => (
+            {MESES_OPTIONS_ACUMULADO.map(m => (
               <SelectItem key={m.value} value={m.value} className="text-base">{m.label}</SelectItem>
             ))}
           </SelectContent>
@@ -268,9 +212,9 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">Arrobas {anoFiltro}</p>
-          <p className="text-lg font-extrabold text-foreground">{fmt(totalArrobas)}</p>
+          <p className="text-lg font-extrabold text-foreground">{fmtValor(totalArrobas)}</p>
           <p className={`text-[10px] font-semibold ${difArrobas >= 0 ? 'text-success' : 'text-destructive'}`}>
-            {difArrobas >= 0 ? '+' : ''}{fmt(difArrobas)} @ YoY
+            {difArrobas >= 0 ? '+' : ''}{fmtValor(difArrobas)} @ YoY
           </p>
           {totalArrobasAnt > 0 && (
             <p className={`text-[10px] font-semibold ${difArrobas >= 0 ? 'text-success' : 'text-destructive'}`}>
@@ -280,7 +224,7 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
         </div>
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">Arrobas {anoAnterior}</p>
-          <p className="text-lg font-extrabold text-foreground">{fmt(totalArrobasAnt)}</p>
+          <p className="text-lg font-extrabold text-foreground">{fmtValor(totalArrobasAnt)}</p>
           <p className="text-[10px] text-muted-foreground">{periodoLabel}</p>
         </div>
       </div>
@@ -289,39 +233,39 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">P.Médio (kg)</p>
-          <p className="text-lg font-extrabold text-foreground">{fmt(pesoMedioKg)}</p>
+          <p className="text-lg font-extrabold text-foreground">{fmtValor(pesoMedioKg)}</p>
           {pesoMedioKgAnt > 0 && (
             <p className={`text-[10px] font-semibold ${pesoMedioKg >= pesoMedioKgAnt ? 'text-success' : 'text-destructive'}`}>
-              {pesoMedioKg >= pesoMedioKgAnt ? '+' : ''}{fmt(pesoMedioKg - pesoMedioKgAnt)} kg YoY
+              {pesoMedioKg >= pesoMedioKgAnt ? '+' : ''}{fmtValor(pesoMedioKg - pesoMedioKgAnt)} kg YoY
             </p>
           )}
         </div>
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
-          <p className="text-xs text-muted-foreground font-semibold">R$/@</p>
-          <p className="text-lg font-extrabold text-foreground">{fmt(precoMedioArroba)}</p>
+          <p className="text-xs text-muted-foreground font-semibold">R$/líq @</p>
+          <p className="text-lg font-extrabold text-foreground">{fmtValor(precoMedioArroba)}</p>
           {precoMedioArrobaAnt > 0 && (
             <p className={`text-[10px] font-semibold ${precoMedioArroba >= precoMedioArrobaAnt ? 'text-success' : 'text-destructive'}`}>
-              {precoMedioArroba >= precoMedioArrobaAnt ? '+' : ''}{fmt(precoMedioArroba - precoMedioArrobaAnt)} YoY
+              {precoMedioArroba >= precoMedioArrobaAnt ? '+' : ''}{fmtValor(precoMedioArroba - precoMedioArrobaAnt)} YoY
             </p>
           )}
         </div>
       </div>
 
-      {/* Faturado */}
+      {/* Desfrute */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">% Desfrute (cab.)</p>
           <p className="text-xl font-extrabold text-foreground">
-            {saldoInicialAno > 0 ? ((totalCab / saldoInicialAno) * 100).toFixed(1) : '0.0'}%
+            {desfruteCab !== null ? desfruteCab.toFixed(1) : '0.0'}%
           </p>
           <p className="text-[10px] text-muted-foreground">{totalCab} / {saldoInicialAno} cab.</p>
         </div>
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">% Desfrute (@)</p>
           <p className="text-xl font-extrabold text-foreground">
-            {arrobasInicioAno > 0 ? ((totalArrobas / arrobasInicioAno) * 100).toFixed(1) : '0.0'}%
+            {desfruteArrobas !== null ? desfruteArrobas.toFixed(1) : '0.0'}%
           </p>
-          <p className="text-[10px] text-muted-foreground">{fmt(totalArrobas)} / {fmt(arrobasInicioAno)} @</p>
+          <p className="text-[10px] text-muted-foreground">{fmtValor(totalArrobas)} / {fmtValor(arrobasInicioAno)} @</p>
         </div>
       </div>
 
@@ -329,11 +273,11 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">Faturado {anoFiltro}</p>
-          <p className="text-base font-extrabold text-foreground">R$ {fmt(totalValor)}</p>
+          <p className="text-base font-extrabold text-foreground">R$ {fmtValor(totalValor)}</p>
           {totalValorAnt > 0 && (
             <>
               <p className={`text-[10px] font-semibold ${totalValor >= totalValorAnt ? 'text-success' : 'text-destructive'}`}>
-                {totalValor >= totalValorAnt ? '+' : ''}R$ {fmt(totalValor - totalValorAnt)} YoY
+                {totalValor >= totalValorAnt ? '+' : ''}R$ {fmtValor(totalValor - totalValorAnt)} YoY
               </p>
               <p className={`text-[10px] font-semibold ${totalValor >= totalValorAnt ? 'text-success' : 'text-destructive'}`}>
                 {totalValor >= totalValorAnt ? '+' : ''}{(((totalValor - totalValorAnt) / totalValorAnt) * 100).toFixed(1)}% YoY
@@ -343,7 +287,7 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
         </div>
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">Faturado {anoAnterior}</p>
-          <p className="text-base font-extrabold text-foreground">R$ {fmt(totalValorAnt)}</p>
+          <p className="text-base font-extrabold text-foreground">R$ {fmtValor(totalValorAnt)}</p>
           <p className="text-[10px] text-muted-foreground">{periodoLabel}</p>
         </div>
       </div>
@@ -386,9 +330,9 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
         </div>
       )}
 
-      {/* Linha: arrobas acumuladas YoY */}
+      {/* Linha acumulada: arrobas */}
       <div className="bg-card rounded-lg p-4 shadow-sm border">
-        <h2 className="font-bold text-foreground mb-3">Arrobas Acumuladas (@)</h2>
+        <h2 className="font-bold text-foreground mb-3">Arrobas Acumuladas</h2>
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={lineArrobasData}>
             <CartesianGrid strokeDasharray="3 3" />
@@ -396,40 +340,40 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
             <YAxis tick={{ fontSize: 11 }} />
             <Tooltip />
             <Legend />
-            <Line type="monotone" dataKey={anoFiltro} stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
-            <Line type="monotone" dataKey={anoAnterior} stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="5 5" dot={false} />
+            <Line type="monotone" dataKey={anoFiltro} stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey={anoAnterior} stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} strokeDasharray="5 5" />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Linha: valor faturado acumulado YoY */}
+      {/* Linha acumulada: valor faturado */}
       <div className="bg-card rounded-lg p-4 shadow-sm border">
-        <h2 className="font-bold text-foreground mb-3">Faturamento Acumulado (R$)</h2>
+        <h2 className="font-bold text-foreground mb-3">Valor Faturado Acumulado</h2>
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={lineValorData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-            <Tooltip formatter={(v: number) => [`R$ ${fmt(v)}`, '']} />
+            <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+            <Tooltip formatter={(v: number) => `R$ ${fmtValor(v)}`} />
             <Legend />
-            <Line type="monotone" dataKey={anoFiltro} stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} />
-            <Line type="monotone" dataKey={anoAnterior} stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="5 5" dot={false} />
+            <Line type="monotone" dataKey={anoFiltro} stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey={anoAnterior} stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} strokeDasharray="5 5" />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Linha: preço médio acumulado R$/@ YoY */}
+      {/* Linha acumulada: preço médio R$/@ */}
       <div className="bg-card rounded-lg p-4 shadow-sm border">
-        <h2 className="font-bold text-foreground mb-3">Preço Médio Acumulado (R$/@)</h2>
+        <h2 className="font-bold text-foreground mb-3">R$/líq @ Acumulado</h2>
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={linePrecoData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip formatter={(v: number) => [`R$ ${fmt(v)}`, '']} />
+            <Tooltip formatter={(v: number) => `R$ ${fmtValor(v)}`} />
             <Legend />
-            <Line type="monotone" dataKey={anoFiltro} stroke="#d97706" strokeWidth={2} dot={{ r: 3 }} />
-            <Line type="monotone" dataKey={anoAnterior} stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="5 5" dot={false} />
+            <Line type="monotone" dataKey={anoFiltro} stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey={anoAnterior} stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} strokeDasharray="5 5" />
           </LineChart>
         </ResponsiveContainer>
       </div>

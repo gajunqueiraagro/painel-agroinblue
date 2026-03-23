@@ -8,6 +8,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 import logoUrl from '@/assets/logo.png';
+import { fmtValor } from '@/lib/calculos/formatters';
+import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 
 // Load logo as base64 for jsPDF
 function loadLogoBase64(): Promise<string> {
@@ -29,7 +31,7 @@ function loadLogoBase64(): Promise<string> {
 
 function addLogoToDoc(doc: jsPDF, logoData: string, y: number, centerX: number) {
   const logoH = 12;
-  const logoW = logoH * 2; // approximate aspect ratio
+  const logoW = logoH * 2;
   doc.addImage(logoData, 'PNG', centerX - logoW / 2, y, logoW, logoH);
   return y + logoH + 3;
 }
@@ -49,45 +51,6 @@ const SUB_ABA_LABELS: Record<SubAba, string> = {
   venda: 'Vendas em Pé',
 };
 
-function fmt(v?: number, decimals = 2) {
-  if (v === undefined || v === null || isNaN(v) || v === 0) return '-';
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-}
-
-function calcAbate(l: Lancamento) {
-  const pesoCarcaca = l.pesoCarcacaKg ?? 0;
-  const pesoVivo = l.pesoMedioKg ?? 0;
-  const pesoArroba = pesoCarcaca > 0 ? pesoCarcaca / 15 : 0;
-  const qtd = l.quantidade;
-  const precoArroba = l.precoArroba ?? 0;
-  const pesoTotalKg = pesoVivo * qtd;
-  const pesoTotalArrobas = pesoArroba * qtd;
-  const bonusTotal = (l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0);
-  const descontoTotal = (l.descontoQualidade ?? 0) + (l.descontoFunrural ?? 0) + (l.outrosDescontos ?? 0);
-  const valorBruto = pesoTotalArrobas * precoArroba;
-  const valorFinal = valorBruto + bonusTotal - descontoTotal;
-  const rendimento = pesoVivo > 0 && pesoCarcaca > 0 ? (pesoCarcaca / pesoVivo) * 100 : 0;
-  const liqCabeca = qtd > 0 ? valorFinal / qtd : 0;
-  const liqArroba = pesoTotalArrobas > 0 ? valorFinal / pesoTotalArrobas : 0;
-  const liqKgVivo = pesoTotalKg > 0 ? valorFinal / pesoTotalKg : 0;
-  return { pesoArroba, rendimento, valorFinal, liqCabeca, liqArroba, liqKgVivo, pesoTotalKg, pesoTotalArrobas };
-}
-
-function calcCompraVenda(l: Lancamento) {
-  const pesoVivo = l.pesoMedioKg ?? 0;
-  const pesoArroba = pesoVivo > 0 ? pesoVivo / 30 : 0;
-  const qtd = l.quantidade;
-  const precoArroba = l.precoArroba ?? 0;
-  const pesoTotalKg = pesoVivo * qtd;
-  const pesoTotalArrobas = pesoArroba * qtd;
-  const valorBruto = pesoTotalArrobas * precoArroba;
-  const valorFinal = valorBruto + (l.acrescimos ?? 0) - (l.deducoes ?? 0);
-  const liqCabeca = qtd > 0 ? valorFinal / qtd : 0;
-  const liqArroba = pesoTotalArrobas > 0 ? valorFinal / pesoTotalArrobas : 0;
-  const liqKg = pesoTotalKg > 0 ? valorFinal / pesoTotalKg : 0;
-  return { pesoArroba, valorFinal, liqCabeca, liqArroba, liqKg, pesoTotalKg, pesoTotalArrobas };
-}
-
 // ── Generate text summary for WhatsApp ──
 function gerarTextoResumo(lancamentos: Lancamento[], subAba: SubAba, ano: string, fazendaNome?: string): string {
   const titulo = SUB_ABA_LABELS[subAba];
@@ -100,25 +63,25 @@ function gerarTextoResumo(lancamentos: Lancamento[], subAba: SubAba, ano: string
   if (subAba === 'abate') {
     let totalValor = 0;
     lancamentos.forEach(l => {
-      const c = calcAbate(l);
+      const c = calcIndicadoresLancamento(l);
       const cat = CATEGORIAS.find(ct => ct.value === l.categoria)?.label ?? l.categoria;
       totalValor += c.valorFinal;
       const nf = l.notaFiscal ? ` | NF: ${l.notaFiscal}` : '';
-      lines.push(`🔪 ${format(parseISO(l.data), 'dd/MM/yy')} | ${l.quantidade} ${cat} | Rend: ${c.rendimento ? fmt(c.rendimento, 1) + '%' : '-'} | R$ ${fmt(c.valorFinal)}${nf}`);
+      lines.push(`🔪 ${format(parseISO(l.data), 'dd/MM/yy')} | ${l.quantidade} ${cat} | Rend: ${c.rendimento ? fmtValor(c.rendimento, 1) + '%' : '-'} | R$ ${fmtValor(c.valorFinal)}${nf}`);
     });
-    lines.push(`\n💰 *Total: R$ ${fmt(totalValor)}*`);
+    lines.push(`\n💰 *Total: R$ ${fmtValor(totalValor)}*`);
   } else {
     let totalValor = 0;
     const emoji = subAba === 'compra' ? '🛒' : '💰';
     lancamentos.forEach(l => {
-      const c = calcCompraVenda(l);
+      const c = calcIndicadoresLancamento(l);
       const cat = CATEGORIAS.find(ct => ct.value === l.categoria)?.label ?? l.categoria;
       totalValor += c.valorFinal;
       const local = subAba === 'compra' ? l.fazendaOrigem : l.fazendaDestino;
       const nf = l.notaFiscal ? ` | NF: ${l.notaFiscal}` : '';
-      lines.push(`${emoji} ${format(parseISO(l.data), 'dd/MM/yy')} | ${l.quantidade} ${cat} | ${local || '-'} | R$ ${fmt(c.valorFinal)}${nf}`);
+      lines.push(`${emoji} ${format(parseISO(l.data), 'dd/MM/yy')} | ${l.quantidade} ${cat} | ${local || '-'} | R$ ${fmtValor(c.valorFinal)}${nf}`);
     });
-    lines.push(`\n💰 *Total: R$ ${fmt(totalValor)}*`);
+    lines.push(`\n💰 *Total: R$ ${fmtValor(totalValor)}*`);
   }
 
   return lines.join('\n');
@@ -126,13 +89,11 @@ function gerarTextoResumo(lancamentos: Lancamento[], subAba: SubAba, ano: string
 
 function gerarTextoIndividual(l: Lancamento, fazendaNome?: string): string {
   const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
+  const c = calcIndicadoresLancamento(l);
   let lines: string[] = [];
 
   if (l.tipo === 'abate') {
-    const c = calcAbate(l);
-    lines = [
-      `🔪 *Resumo de Abate*\n`,
-    ];
+    lines = [`🔪 *Resumo de Abate*\n`];
     if (fazendaNome) lines.push(`🏠 Fazenda: ${fazendaNome}`);
     lines.push(
       `📅 Data: ${format(parseISO(l.data), 'dd/MM/yyyy')}`,
@@ -142,25 +103,22 @@ function gerarTextoIndividual(l: Lancamento, fazendaNome?: string): string {
     if (l.notaFiscal) lines.push(`📄 NF: ${l.notaFiscal}`);
     if (l.tipoPeso) lines.push(`📦 Tipo peso: ${l.tipoPeso === 'morto' ? 'Peso Morto' : 'Peso Vivo'}`);
     lines.push(
-      `⚖️ Peso vivo: ${fmt(l.pesoMedioKg)} kg`,
-      `🥩 Peso carcaça: ${fmt(l.pesoCarcacaKg)} kg`,
-      `📊 Rendimento: ${c.rendimento ? fmt(c.rendimento, 1) + '%' : '-'}`,
-      `📐 Peso @: ${fmt(c.pesoArroba)} @`,
-      `💲 Preço/@: R$ ${fmt(l.precoArroba)}`,
+      `⚖️ Peso vivo: ${fmtValor(l.pesoMedioKg)} kg`,
+      `🥩 Peso carcaça: ${fmtValor(l.pesoCarcacaKg)} kg`,
+      `📊 Rendimento: ${c.rendimento ? fmtValor(c.rendimento, 1) + '%' : '-'}`,
+      `📐 Peso @: ${fmtValor(c.pesoArroba)} @`,
+      `💲 Preço/@: R$ ${fmtValor(l.precoArroba)}`,
       ``,
-      `💰 *Valor Total: R$ ${fmt(c.valorFinal)}*`,
-      `📈 Líq/@: R$ ${fmt(c.liqArroba)}`,
-      `📈 Líq/cab: R$ ${fmt(c.liqCabeca)}`,
-      `📈 Líq/kg: R$ ${fmt(c.liqKgVivo)}`,
+      `💰 *Valor Total: R$ ${fmtValor(c.valorFinal)}*`,
+      `📈 Líq/@: R$ ${fmtValor(c.liqArroba)}`,
+      `📈 Líq/cab: R$ ${fmtValor(c.liqCabeca)}`,
+      `📈 Líq/kg: R$ ${fmtValor(c.liqKg)}`,
     );
   } else {
-    const c = calcCompraVenda(l);
     const tipoLabel = l.tipo === 'compra' ? 'Compra' : 'Venda em Pé';
     const emoji = l.tipo === 'compra' ? '🛒' : '💰';
     const local = l.tipo === 'compra' ? l.fazendaOrigem : l.fazendaDestino;
-    lines = [
-      `${emoji} *Resumo de ${tipoLabel}*\n`,
-    ];
+    lines = [`${emoji} *Resumo de ${tipoLabel}*\n`];
     if (fazendaNome) lines.push(`🏠 Fazenda: ${fazendaNome}`);
     lines.push(
       `📅 Data: ${format(parseISO(l.data), 'dd/MM/yyyy')}`,
@@ -169,14 +127,14 @@ function gerarTextoIndividual(l: Lancamento, fazendaNome?: string): string {
     );
     if (l.notaFiscal) lines.push(`📄 NF: ${l.notaFiscal}`);
     lines.push(
-      `⚖️ Peso vivo: ${fmt(l.pesoMedioKg)} kg`,
-      `📐 Peso @: ${fmt(c.pesoArroba)} @`,
-      `💲 Preço/@: R$ ${fmt(l.precoArroba)}`,
+      `⚖️ Peso vivo: ${fmtValor(l.pesoMedioKg)} kg`,
+      `📐 Peso @: ${fmtValor(c.pesoArroba)} @`,
+      `💲 Preço/@: R$ ${fmtValor(l.precoArroba)}`,
       ``,
-      `💰 *Valor Total: R$ ${fmt(c.valorFinal)}*`,
-      `📈 Líq/@: R$ ${fmt(c.liqArroba)}`,
-      `📈 Líq/cab: R$ ${fmt(c.liqCabeca)}`,
-      `📈 Líq/kg: R$ ${fmt(c.liqKg)}`,
+      `💰 *Valor Total: R$ ${fmtValor(c.valorFinal)}*`,
+      `📈 Líq/@: R$ ${fmtValor(c.liqArroba)}`,
+      `📈 Líq/cab: R$ ${fmtValor(c.liqCabeca)}`,
+      `📈 Líq/kg: R$ ${fmtValor(c.liqKg)}`,
     );
   }
 
@@ -214,31 +172,31 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
     const head = [['Data', 'NF', 'Qtd', 'Categoria', 'Destino', 'Rend.', 'P.@', 'R$/@', 'Total', 'Líq/@', 'Líq/Cab']];
     const body = lancamentos.map(l => {
       const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
-      const c = calcAbate(l);
+      const c = calcIndicadoresLancamento(l);
       return [
         format(parseISO(l.data), 'dd/MM/yy'), l.notaFiscal || '-', String(l.quantidade), cat, l.fazendaDestino || '-',
-        c.rendimento ? fmt(c.rendimento, 1) + '%' : '-', fmt(c.pesoArroba), fmt(l.precoArroba),
-        fmt(c.valorFinal), fmt(c.liqArroba), fmt(c.liqCabeca),
+        c.rendimento ? fmtValor(c.rendimento, 1) + '%' : '-', fmtValor(c.pesoArroba), fmtValor(l.precoArroba),
+        fmtValor(c.valorFinal), fmtValor(c.liqArroba), fmtValor(c.liqCabeca),
       ];
     });
-    const totalValor = lancamentos.reduce((s, l) => s + calcAbate(l).valorFinal, 0);
-    body.push(['TOTAL', '', String(totalQtd), '', '', '', '', '', fmt(totalValor), '', '']);
+    const totalValor = lancamentos.reduce((s, l) => s + calcIndicadoresLancamento(l).valorFinal, 0);
+    body.push(['TOTAL', '', String(totalQtd), '', '', '', '', '', fmtValor(totalValor), '', '']);
     autoTable(doc, { startY, head, body, theme: 'grid', headStyles: { fillColor: [34, 120, 74], fontSize: 7 }, bodyStyles: { fontSize: 7 }, margin: { left: 10, right: 10 } });
   } else {
     const campoLocal = subAba === 'compra' ? 'Origem' : 'Destino';
     const head = [['Data', 'NF', 'Qtd', 'Categoria', campoLocal, 'P.Vivo', 'P.@', 'R$/@', 'Total', 'Líq/Cab', 'Líq/kg']];
     const body = lancamentos.map(l => {
       const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
-      const c = calcCompraVenda(l);
+      const c = calcIndicadoresLancamento(l);
       const local = subAba === 'compra' ? l.fazendaOrigem : l.fazendaDestino;
       return [
         format(parseISO(l.data), 'dd/MM/yy'), l.notaFiscal || '-', String(l.quantidade), cat, local || '-',
-        fmt(l.pesoMedioKg), fmt(c.pesoArroba), fmt(l.precoArroba),
-        fmt(c.valorFinal), fmt(c.liqCabeca), fmt(c.liqKg),
+        fmtValor(l.pesoMedioKg), fmtValor(c.pesoArroba), fmtValor(l.precoArroba),
+        fmtValor(c.valorFinal), fmtValor(c.liqCabeca), fmtValor(c.liqKg),
       ];
     });
-    const totalValor = lancamentos.reduce((s, l) => s + calcCompraVenda(l).valorFinal, 0);
-    body.push(['TOTAL', '', String(totalQtd), '', '', '', '', '', fmt(totalValor), '', '']);
+    const totalValor = lancamentos.reduce((s, l) => s + calcIndicadoresLancamento(l).valorFinal, 0);
+    body.push(['TOTAL', '', String(totalQtd), '', '', '', '', '', fmtValor(totalValor), '', '']);
     autoTable(doc, { startY, head, body, theme: 'grid', headStyles: { fillColor: [34, 120, 74], fontSize: 7 }, bodyStyles: { fontSize: 7 }, margin: { left: 10, right: 10 } });
   }
 
@@ -281,40 +239,40 @@ async function gerarPDFIndividual(l: Lancamento, fazendaNome?: string) {
 
   autoTable(doc, { startY: infoStartY, body: info, theme: 'plain', bodyStyles: { fontSize: 11 }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 50 } }, margin: { left: 20, right: 20 } });
 
+  const c = calcIndicadoresLancamento(l);
   let detalhes: string[][] = [];
+
   if (l.tipo === 'abate') {
-    const c = calcAbate(l);
     detalhes = [
-      ['Peso vivo (kg)', fmt(l.pesoMedioKg)],
-      ['Peso carcaça (kg)', fmt(l.pesoCarcacaKg)],
-      ['Rendimento', c.rendimento ? fmt(c.rendimento, 1) + '%' : '-'],
-      ['Peso em @ (por cab)', fmt(c.pesoArroba)],
-      ['Preço por @ (R$)', fmt(l.precoArroba)],
-      ['Bônus precoce', fmt(l.bonusPrecoce)],
-      ['Bônus qualidade', fmt(l.bonusQualidade)],
-      ['Bônus lista trace', fmt(l.bonusListaTrace)],
-      ['Desc. qualidade', fmt(l.descontoQualidade)],
-      ['Desc. funrural', fmt(l.descontoFunrural)],
-      ['Outros descontos', fmt(l.outrosDescontos)],
+      ['Peso vivo (kg)', fmtValor(l.pesoMedioKg)],
+      ['Peso carcaça (kg)', fmtValor(l.pesoCarcacaKg)],
+      ['Rendimento', c.rendimento ? fmtValor(c.rendimento, 1) + '%' : '-'],
+      ['Peso em @ (por cab)', fmtValor(c.pesoArroba)],
+      ['Preço por @ (R$)', fmtValor(l.precoArroba)],
+      ['Bônus precoce', fmtValor(l.bonusPrecoce)],
+      ['Bônus qualidade', fmtValor(l.bonusQualidade)],
+      ['Bônus lista trace', fmtValor(l.bonusListaTrace)],
+      ['Desc. qualidade', fmtValor(l.descontoQualidade)],
+      ['Desc. funrural', fmtValor(l.descontoFunrural)],
+      ['Outros descontos', fmtValor(l.outrosDescontos)],
       ['', ''],
-      ['VALOR TOTAL', `R$ ${fmt(c.valorFinal)}`],
-      ['Líquido por @', `R$ ${fmt(c.liqArroba)}`],
-      ['Líquido por cabeça', `R$ ${fmt(c.liqCabeca)}`],
-      ['Líquido por kg vivo', `R$ ${fmt(c.liqKgVivo)}`],
+      ['VALOR TOTAL', `R$ ${fmtValor(c.valorFinal)}`],
+      ['Líquido por @', `R$ ${fmtValor(c.liqArroba)}`],
+      ['Líquido por cabeça', `R$ ${fmtValor(c.liqCabeca)}`],
+      ['Líquido por kg vivo', `R$ ${fmtValor(c.liqKg)}`],
     ];
   } else {
-    const c = calcCompraVenda(l);
     detalhes = [
-      ['Peso vivo (kg)', fmt(l.pesoMedioKg)],
-      ['Peso em @ (por cab)', fmt(c.pesoArroba)],
-      ['Preço por @ (R$)', fmt(l.precoArroba)],
-      ['Acréscimos', fmt(l.acrescimos)],
-      ['Deduções', fmt(l.deducoes)],
+      ['Peso vivo (kg)', fmtValor(l.pesoMedioKg)],
+      ['Peso em @ (por cab)', fmtValor(c.pesoArroba)],
+      ['Preço por @ (R$)', fmtValor(l.precoArroba)],
+      ['Acréscimos', fmtValor(l.acrescimos)],
+      ['Deduções', fmtValor(l.deducoes)],
       ['', ''],
-      ['VALOR TOTAL', `R$ ${fmt(c.valorFinal)}`],
-      ['Líquido por @', `R$ ${fmt(c.liqArroba)}`],
-      ['Líquido por cabeça', `R$ ${fmt(c.liqCabeca)}`],
-      ['Líquido por kg vivo', `R$ ${fmt(c.liqKg)}`],
+      ['VALOR TOTAL', `R$ ${fmtValor(c.valorFinal)}`],
+      ['Líquido por @', `R$ ${fmtValor(c.liqArroba)}`],
+      ['Líquido por cabeça', `R$ ${fmtValor(c.liqCabeca)}`],
+      ['Líquido por kg vivo', `R$ ${fmtValor(c.liqKg)}`],
     ];
   }
 
