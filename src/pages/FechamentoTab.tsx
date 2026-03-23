@@ -126,7 +126,7 @@ export function FechamentoTab() {
                 </div>
 
                 <div className="text-sm text-muted-foreground">
-                  {p.area_produtiva_ha ? `${fmtNum(p.area_produtiva_ha, 1)} ha` : '—'}
+                  {p.area_produtiva_ha ? `${formatNum(p.area_produtiva_ha, 1)} ha` : '—'}
                   {fech?.lote_mes && ` · Lote: ${fech.lote_mes}`}
                 </div>
 
