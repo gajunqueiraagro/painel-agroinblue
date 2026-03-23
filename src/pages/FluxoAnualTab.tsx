@@ -60,7 +60,8 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
 
   return (
     <Tabs defaultValue="evolucao" className="w-full">
-      <TabsList className="w-full grid grid-cols-2 mx-4 mt-2" style={{ maxWidth: 'calc(100% - 2rem)' }}>
+      <TabsList className="w-full grid grid-cols-3 mx-4 mt-2" style={{ maxWidth: 'calc(100% - 2rem)' }}>
+        <TabsTrigger value="indicadores">Indicadores</TabsTrigger>
         <TabsTrigger value="evolucao">Evolução</TabsTrigger>
         <TabsTrigger value="valor">Valor Rebanho</TabsTrigger>
       </TabsList>
