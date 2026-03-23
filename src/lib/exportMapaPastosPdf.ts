@@ -120,6 +120,7 @@ export async function exportMapaPastosPdf(
     columnStyles: {
       0: { cellWidth: 28, fontStyle: 'bold' },
       1: { cellWidth: 18 },
+      2: { cellWidth: 18 },
     },
     didParseCell: (data) => {
       // Bold totals row
