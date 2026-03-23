@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Lancamento, SaldoInicial, CATEGORIAS, isEntrada, isReclassificacao } from '@/types/cattle';
+import { Lancamento, SaldoInicial, CATEGORIAS } from '@/types/cattle';
 import { parseISO, format } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TabId } from '@/components/BottomNav';
+import { MESES_NOMES, MESES_OPTIONS_ACUMULADO } from '@/lib/calculos/labels';
+import { isSaida } from '@/lib/calculos/zootecnicos';
 
 interface Props {
   lancamentos: Lancamento[];
