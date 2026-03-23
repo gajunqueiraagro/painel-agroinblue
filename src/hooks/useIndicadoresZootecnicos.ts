@@ -424,19 +424,19 @@ export function useIndicadoresZootecnicos(
     // ===== GMD MÊS (com abertura) =====
     const diasMes = new Date(ano, mes, 0).getDate();
 
-    // Peso final: soma por categoria (saldo_cat × peso_medio_cat)
+    // Peso final: soma por categoria usando hierarquia oficial
     const estoqueFinalDetalhe: EstoqueCategoriaDetalhe[] = [];
     let pesoFinalMes = 0;
     saldoMap.forEach((qtd, cat) => {
-      const pesoMedio = getPesoMedioCat(cat, saldosIniciais, lancamentos, ano, mes);
+      const { valor: pesoMedio, fonte } = getPesoOficial(cat, saldosIniciais, lancamentos, ano, mes, pesoFechamentoMap);
       const pesoTotal = qtd * (pesoMedio || 0);
       pesoFinalMes += pesoTotal;
       if (qtd !== 0) {
-        estoqueFinalDetalhe.push({ categoria: cat, cabecas: qtd, pesoMedioKg: pesoMedio, pesoTotalKg: pesoTotal });
+        estoqueFinalDetalhe.push({ categoria: cat, cabecas: qtd, pesoMedioKg: pesoMedio, pesoTotalKg: pesoTotal, fontePeso: fonte });
       }
     });
 
-    // Peso inicial: soma por categoria do mês anterior
+    // Peso inicial: soma por categoria do mês anterior usando hierarquia oficial
     const estoqueInicialDetalhe: EstoqueCategoriaDetalhe[] = [];
     let pesoInicialMes = 0;
     const saldoMapAnterior = mes > 1
@@ -448,11 +448,11 @@ export function useIndicadoresZootecnicos(
 
     if (mes > 1) {
       saldoMapAnterior.forEach((qtd, cat) => {
-        const pesoMedio = getPesoMedioCat(cat, saldosIniciais, lancamentos, ano, mes - 1);
+        const { valor: pesoMedio, fonte } = getPesoOficial(cat, saldosIniciais, lancamentos, ano, mes - 1, pesoFechamentoMesAntMap);
         const pesoTotal = qtd * (pesoMedio || 0);
         pesoInicialMes += pesoTotal;
         if (qtd !== 0) {
-          estoqueInicialDetalhe.push({ categoria: cat, cabecas: qtd, pesoMedioKg: pesoMedio, pesoTotalKg: pesoTotal });
+          estoqueInicialDetalhe.push({ categoria: cat, cabecas: qtd, pesoMedioKg: pesoMedio, pesoTotalKg: pesoTotal, fontePeso: fonte });
         }
       });
     } else {
@@ -462,7 +462,7 @@ export function useIndicadoresZootecnicos(
         const pesoTotal = s.quantidade * (pesoMedio || 0);
         pesoInicialMes += pesoTotal;
         if (s.quantidade !== 0) {
-          estoqueInicialDetalhe.push({ categoria: s.categoria, cabecas: s.quantidade, pesoMedioKg: pesoMedio, pesoTotalKg: pesoTotal });
+          estoqueInicialDetalhe.push({ categoria: s.categoria, cabecas: s.quantidade, pesoMedioKg: pesoMedio, pesoTotalKg: pesoTotal, fontePeso: 'saldo_inicial' });
         }
       });
     }
