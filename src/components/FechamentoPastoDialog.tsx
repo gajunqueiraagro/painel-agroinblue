@@ -17,12 +17,15 @@ const TIPOS_USO_OPTIONS = [
   { value: 'cria', label: 'Cria' },
   { value: 'recria', label: 'Recria' },
   { value: 'engorda', label: 'Engorda' },
+  { value: 'vedado', label: 'Vedado' },
   { value: 'reforma_pecuaria', label: 'Reforma Pecuária' },
   { value: 'agricultura', label: 'Agricultura' },
   { value: 'app', label: 'APP' },
   { value: 'reserva_legal', label: 'Reserva Legal' },
   { value: 'benfeitorias', label: 'Benfeitorias' },
 ];
+
+const TIPOS_USO_EXIGEM_REBANHO = ['cria', 'recria', 'engorda'];
 
 interface FechamentoItem {
   categoria_id: string;
@@ -139,12 +142,17 @@ export function FechamentoPastoDialog({
   const uaTotal = itens.reduce((s, i) => s + calcUA(i.quantidade, i.peso_medio_kg), 0);
   const uaHa = pasto.area_produtiva_ha && uaTotal > 0 ? uaTotal / pasto.area_produtiva_ha : null;
 
+  const exigeRebanho = TIPOS_USO_EXIGEM_REBANHO.includes(tipoUsoMes);
+
   const avisos: string[] = [];
-  if (total === 0) avisos.push('Nenhum animal informado');
-  if (itensComQtd.some(i => !i.peso_medio_kg)) avisos.push('Peso médio não informado em alguma categoria');
+  if (total === 0 && exigeRebanho) avisos.push('Nenhum animal informado');
+  if (total === 0 && !exigeRebanho) avisos.push('Pasto sem rebanho (conforme tipo de uso selecionado)');
+  if (itensComQtd.length > 0 && itensComQtd.some(i => !i.peso_medio_kg)) avisos.push('Peso médio não informado em alguma categoria');
   if (!qualidadeMes) avisos.push('Qualidade do pasto não preenchida');
 
-  const podeFechar = total > 0 && itensComQtd.some(i => i.peso_medio_kg);
+  const podeFechar = exigeRebanho
+    ? total > 0 && itensComQtd.some(i => i.peso_medio_kg)
+    : true;
   const tipoUsoLabel = TIPOS_USO_OPTIONS.find(t => t.value === tipoUsoMes)?.label || tipoUsoMes;
 
   return (
@@ -311,12 +319,12 @@ export function FechamentoPastoDialog({
 
                   {/* BLOCO 4 — Avisos */}
                   {avisos.length > 0 && (
-                    <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm space-y-1">
-                      <div className="flex items-center gap-1 font-semibold text-yellow-700 dark:text-yellow-400 text-xs uppercase tracking-wide mb-1">
+                    <div className={`rounded-lg border p-3 text-sm space-y-1 ${exigeRebanho && (total === 0 || itensComQtd.some(i => !i.peso_medio_kg)) ? 'border-yellow-500/30 bg-yellow-500/10' : 'border-blue-500/30 bg-blue-500/10'}`}>
+                      <div className={`flex items-center gap-1 font-semibold text-xs uppercase tracking-wide mb-1 ${exigeRebanho && (total === 0 || itensComQtd.some(i => !i.peso_medio_kg)) ? 'text-yellow-700 dark:text-yellow-400' : 'text-blue-700 dark:text-blue-400'}`}>
                         <AlertTriangle className="h-3.5 w-3.5" />Avisos
                       </div>
                       {avisos.map((a, i) => (
-                        <div key={i} className="text-yellow-700 dark:text-yellow-400">• {a}</div>
+                        <div key={i} className={exigeRebanho && (total === 0 || itensComQtd.some(ii => !ii.peso_medio_kg)) ? 'text-yellow-700 dark:text-yellow-400' : 'text-blue-700 dark:text-blue-400'}>• {a}</div>
                       ))}
                     </div>
                   )}
