@@ -247,37 +247,6 @@ export function useIndicadoresZootecnicos(
       setPesoFechamentoMesAntMap({});
       return;
     }
-    const idToCodigo = new Map(categorias.map(c => [c.id, c.codigo]));
-
-    const loadForMonth = async (targetAnoMes: string): Promise<Record<string, number>> => {
-      const { data: fechamentos } = await supabase
-        .from('fechamento_pastos')
-        .select('id')
-        .eq('fazenda_id', fazendaId)
-        .eq('ano_mes', targetAnoMes);
-      if (!fechamentos?.length) return {};
-
-      const { data: itens } = await supabase
-        .from('fechamento_pasto_itens')
-        .select('categoria_id, quantidade, peso_medio_kg')
-        .in('fechamento_id', fechamentos.map(f => f.id));
-      if (!itens) return {};
-
-      const acum: Record<string, { totalPeso: number; totalQtd: number }> = {};
-      itens.forEach(item => {
-        if (!item.peso_medio_kg || item.peso_medio_kg <= 0 || item.quantidade <= 0) return;
-        if (!acum[item.categoria_id]) acum[item.categoria_id] = { totalPeso: 0, totalQtd: 0 };
-        acum[item.categoria_id].totalPeso += item.peso_medio_kg * item.quantidade;
-        acum[item.categoria_id].totalQtd += item.quantidade;
-      });
-
-      const map: Record<string, number> = {};
-      Object.entries(acum).forEach(([catId, { totalPeso, totalQtd }]) => {
-        const codigo = idToCodigo.get(catId);
-        if (codigo && totalQtd > 0) map[codigo] = totalPeso / totalQtd;
-      });
-      return map;
-    };
 
     try {
       // Mês anterior
@@ -287,8 +256,8 @@ export function useIndicadoresZootecnicos(
       const mesAntStr = `${mesAntAno}-${String(mesAntMes).padStart(2, '0')}`;
 
       const [mapAtual, mapAnt] = await Promise.all([
-        loadForMonth(anoMes),
-        loadForMonth(mesAntStr),
+        loadPesosPastosPorCategoria(fazendaId, anoMes, categorias),
+        loadPesosPastosPorCategoria(fazendaId, mesAntStr, categorias),
       ]);
       setPesoFechamentoMap(mapAtual);
       setPesoFechamentoMesAntMap(mapAnt);
