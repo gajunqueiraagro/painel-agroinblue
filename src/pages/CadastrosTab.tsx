@@ -14,10 +14,6 @@ import jsPDF from 'jspdf';
 import logoUrl from '@/assets/logo.png';
 import { PastosTab } from './PastosTab';
 import { CodigoFazendaField } from '@/components/CodigoFazendaField';
-import { toast } from 'sonner';
-import jsPDF from 'jspdf';
-import logoUrl from '@/assets/logo.png';
-import { PastosTab } from './PastosTab';
 
 interface CadastroData {
   id?: string;
