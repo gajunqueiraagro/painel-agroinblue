@@ -12,12 +12,11 @@ import { Loader2 } from 'lucide-react';
 type SubTab = 'dashboard' | 'rateio' | 'importacao';
 
 interface Props {
-  cabMediaMes?: number;
-  cabMediaAcum?: number;
-  arrobasProduzidasAcum?: number;
+  lancamentosPecuarios?: import('@/types/cattle').Lancamento[];
+  saldosIniciais?: import('@/types/cattle').SaldoInicial[];
 }
 
-export function FinanceiroCaixaTab({ cabMediaMes, cabMediaAcum, arrobasProduzidasAcum }: Props) {
+export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [] }: Props) {
   const [subTab, setSubTab] = useState<SubTab>('dashboard');
   const {
     importacoes, lancamentos, centrosCusto, indicadores,
@@ -62,9 +61,8 @@ export function FinanceiroCaixaTab({ cabMediaMes, cabMediaAcum, arrobasProduzida
             <DashboardFinanceiro
               lancamentos={lancamentos}
               indicadores={indicadores}
-              cabMediaMes={cabMediaMes}
-              cabMediaAcum={cabMediaAcum}
-              arrobasProduzidasAcum={arrobasProduzidasAcum}
+              lancamentosPecuarios={lancamentosPecuarios}
+              saldosIniciais={saldosIniciais}
               rateioADM={rateioADM}
               isGlobal={isGlobal}
               fazendasSemArea={fazendasSemArea}

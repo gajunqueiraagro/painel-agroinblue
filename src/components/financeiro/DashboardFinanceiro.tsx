@@ -11,7 +11,7 @@ import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TrendingDown, TrendingUp, DollarSign, BarChart3, Building2, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { TrendingDown, TrendingUp, DollarSign, BarChart3, Building2, AlertTriangle, ChevronDown, ChevronUp, Activity } from 'lucide-react';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_OPTIONS } from '@/lib/calculos/labels';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
@@ -19,6 +19,9 @@ import {
   type FinanceiroLancamento,
   type RateioADM,
 } from '@/hooks/useFinanceiro';
+import type { Lancamento, SaldoInicial } from '@/types/cattle';
+import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
+import { calcArrobasSafe } from '@/lib/calculos/economicos';
 
 // ---------------------------------------------------------------------------
 // Helpers — correct classification
@@ -58,9 +61,8 @@ interface Props {
     porGrupo: { nome: string; valor: number }[];
     porCentro: { nome: string; valor: number }[];
   } | null;
-  cabMediaMes?: number;
-  cabMediaAcum?: number;
-  arrobasProduzidasAcum?: number;
+  lancamentosPecuarios?: Lancamento[];
+  saldosIniciais?: SaldoInicial[];
   rateioADM?: RateioADM[];
   isGlobal?: boolean;
   fazendasSemArea?: string[];
@@ -131,7 +133,7 @@ function AuditTable({ title, lancamentos, totalLabel }: { title: string; lancame
 // Main component
 // ---------------------------------------------------------------------------
 
-export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cabMediaAcum, arrobasProduzidasAcum, rateioADM = [], isGlobal = false, fazendasSemArea = [] }: Props) {
+export function DashboardFinanceiro({ lancamentos, indicadores, lancamentosPecuarios = [], saldosIniciais = [], rateioADM = [], isGlobal = false, fazendasSemArea = [] }: Props) {
   const [showAudit, setShowAudit] = useState(false);
 
   const anosDisp = useMemo(() => {
@@ -196,6 +198,87 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
     [rateioFiltrado],
   );
 
+  // ===========================================================================
+  // Zootechnical KPIs — computed from cattle data + dashboard period
+  // ===========================================================================
+  const zoo = useMemo(() => {
+    if (lancamentosPecuarios.length === 0 && saldosIniciais.length === 0) {
+      return { cabMediaMes: null, cabMediaAcum: null, arrobasProduzidasAcum: null };
+    }
+
+    const ano = Number(anoFiltro);
+    const mesNum = mesFiltro !== 'todos' ? Number(mesFiltro) : new Date().getMonth() + 1;
+
+    // Saldo inicial do ano
+    const saldoInicialAno = saldosIniciais
+      .filter(s => s.ano === ano)
+      .reduce((sum, s) => sum + s.quantidade, 0);
+
+    // Saldo final do mês selecionado
+    const saldoMapFinal = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, ano, mesNum);
+    const saldoFinalMes = Array.from(saldoMapFinal.values()).reduce((s, v) => s + v, 0);
+
+    // Saldo final do mês anterior (para cab média do mês)
+    const saldoAnterior = mesNum > 1
+      ? Array.from(calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, ano, mesNum - 1).values()).reduce((s, v) => s + v, 0)
+      : saldoInicialAno;
+
+    // Cab média mês
+    const cabMediaMes = saldoAnterior > 0 || saldoFinalMes > 0
+      ? (saldoAnterior + saldoFinalMes) / 2
+      : null;
+
+    // Cab média acumulada (jan → mês)
+    const cabMediaAcum = saldoInicialAno > 0 || saldoFinalMes > 0
+      ? (saldoInicialAno + saldoFinalMes) / 2
+      : null;
+
+    // Arrobas produzidas acumuladas: ganho líquido de peso / 30
+    // Peso inicial = sum(saldo_inicial × peso_medio_kg)
+    const pesoInicialAno = saldosIniciais
+      .filter(s => s.ano === ano)
+      .reduce((sum, s) => sum + s.quantidade * (s.pesoMedioKg || 0), 0);
+
+    // Peso final = sum(saldo por cat × peso médio estimado)
+    // Use peso from saldosIniciais as fallback (simplified)
+    const pesoMedioPorCat = new Map<string, number>();
+    saldosIniciais.filter(s => s.ano === ano).forEach(s => {
+      if (s.pesoMedioKg && s.pesoMedioKg > 0) pesoMedioPorCat.set(s.categoria, s.pesoMedioKg);
+    });
+
+    let pesoFinalMes = 0;
+    saldoMapFinal.forEach((qtd, cat) => {
+      const pesoMedio = pesoMedioPorCat.get(cat) || 0;
+      pesoFinalMes += qtd * pesoMedio;
+    });
+
+    // Peso entradas e saídas acumuladas no ano
+    const lancsAnoMes = lancamentosPecuarios.filter(l => {
+      if (!l.data || l.data.length < 7) return false;
+      const lAno = Number(l.data.substring(0, 4));
+      const lMes = Number(l.data.substring(5, 7));
+      return lAno === ano && lMes <= mesNum;
+    });
+
+    const tiposEntrada = ['nascimento', 'compra', 'transferencia_entrada'];
+    const tiposSaida = ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'];
+
+    const pesoEntradasAcum = lancsAnoMes
+      .filter(l => tiposEntrada.includes(l.tipo))
+      .reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
+
+    const pesoSaidasAcum = lancsAnoMes
+      .filter(l => tiposSaida.includes(l.tipo))
+      .reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
+
+    const ganhoLiquido = pesoFinalMes - pesoInicialAno - pesoEntradasAcum + pesoSaidasAcum;
+    const arrobasProduzidasAcum = (pesoFinalMes > 0 && pesoInicialAno > 0)
+      ? ganhoLiquido / 30
+      : null;
+
+    return { cabMediaMes, cabMediaAcum, arrobasProduzidasAcum };
+  }, [lancamentosPecuarios, saldosIniciais, anoFiltro, mesFiltro]);
+
   // Indicadores filtrados
   const ind = useMemo(() => {
     if (!indicadores) return null;
@@ -205,23 +288,34 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
 
     const saidasComRateio = saidas + totalRateioFiltrado;
 
-    // Custo/cabeça acumulado (all months of the year)
+    // Desembolso acumulado (all months of the year up to selected month)
+    const mesNum = mesFiltro !== 'todos' ? Number(mesFiltro) : 12;
     const saidasAcum = lancamentos
       .filter(l => {
         if (!isConciliado(l)) return false;
         if (!isSaida(l)) return false;
         const am = datePagtoAnoMes(l);
-        return am ? am.startsWith(anoFiltro) : false;
+        if (!am || !am.startsWith(anoFiltro)) return false;
+        const lMes = Number(am.substring(5, 7));
+        return lMes <= mesNum;
       })
       .reduce((s, l) => s + Math.abs(l.valor), 0);
     const rateioAcum = rateioADM
-      .filter(r => r.anoMes.startsWith(anoFiltro))
+      .filter(r => {
+        if (!r.anoMes.startsWith(anoFiltro)) return false;
+        const rMes = Number(r.anoMes.substring(5, 7));
+        return rMes <= mesNum;
+      })
       .reduce((s, r) => s + r.valorRateado, 0);
-    const custoAcumTotal = saidasAcum + rateioAcum;
+    const desembolsoAcum = saidasAcum + rateioAcum;
 
-    const custoCabMes = cabMediaMes && cabMediaMes > 0 ? saidasComRateio / cabMediaMes : null;
-    const custoCabAcum = cabMediaAcum && cabMediaAcum > 0 ? custoAcumTotal / cabMediaAcum : null;
-    const custoArrobaProd = arrobasProduzidasAcum && arrobasProduzidasAcum > 0 ? custoAcumTotal / arrobasProduzidasAcum : null;
+    // Número de meses no acumulado
+    const numMeses = mesFiltro !== 'todos' ? Number(mesFiltro) : 12;
+    const mediaMenual = numMeses > 0 ? desembolsoAcum / numMeses : 0;
+
+    const custoCabMes = zoo.cabMediaMes && zoo.cabMediaMes > 0 ? saidasComRateio / zoo.cabMediaMes : null;
+    const custoCabAcum = zoo.cabMediaAcum && zoo.cabMediaAcum > 0 ? desembolsoAcum / zoo.cabMediaAcum : null;
+    const custoArrobaProd = zoo.arrobasProduzidasAcum && zoo.arrobasProduzidasAcum > 0 ? desembolsoAcum / zoo.arrobasProduzidasAcum : null;
 
     // Hierarquia macro (saídas only)
     const macroMap = new Map<string, number>();
@@ -240,13 +334,15 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
       entradas,
       saidas,
       saidasComRateio,
+      desembolsoAcum,
+      mediaMenual,
       custoCabMes,
       custoCabAcum,
       custoArrobaProd,
       porMacro,
       rateioADM: totalRateioFiltrado,
     };
-  }, [entradasList, saidasList, indicadores, lancamentos, anoFiltro, cabMediaMes, cabMediaAcum, arrobasProduzidasAcum, totalRateioFiltrado, rateioADM]);
+  }, [entradasList, saidasList, indicadores, lancamentos, anoFiltro, mesFiltro, zoo, totalRateioFiltrado, rateioADM]);
 
   // Chart data — rebuild from lancamentos with correct filters
   const chartData = useMemo(() => {
@@ -368,27 +464,52 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
             </Card>
           )}
 
-          {/* Indicadores cruzados */}
-          <div className="grid grid-cols-3 gap-2">
-            <Card>
-              <CardContent className="p-3">
-                <div className="text-xs text-muted-foreground mb-1">Custo/cab mês</div>
-                <p className="text-sm font-bold">{ind.custoCabMes !== null ? formatMoeda(ind.custoCabMes) : '—'}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-3">
-                <div className="text-xs text-muted-foreground mb-1">Custo/cab acum.</div>
-                <p className="text-sm font-bold">{ind.custoCabAcum !== null ? formatMoeda(ind.custoCabAcum) : '—'}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-3">
-                <div className="text-xs text-muted-foreground mb-1">Custo/@ prod.</div>
-                <p className="text-sm font-bold">{ind.custoArrobaProd !== null ? formatMoeda(ind.custoArrobaProd) : '—'}</p>
-              </CardContent>
-            </Card>
-          </div>
+          {/* Indicadores econômicos */}
+          <Card>
+            <CardContent className="p-3 space-y-3">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                <Activity className="h-3.5 w-3.5" /> Indicadores Econômicos
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="text-[10px] text-muted-foreground">Desembolso acumulado</div>
+                  <p className="text-sm font-bold">{formatMoeda(ind.desembolsoAcum)}</p>
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground">Média mensal</div>
+                  <p className="text-sm font-bold">{formatMoeda(ind.mediaMenual)}</p>
+                </div>
+              </div>
+              <div className="border-t pt-2 grid grid-cols-3 gap-2">
+                <div>
+                  <div className="text-[10px] text-muted-foreground">Custo/cab mês</div>
+                  <p className="text-sm font-bold">{ind.custoCabMes !== null ? formatMoeda(ind.custoCabMes) : '—'}</p>
+                  {zoo.cabMediaMes !== null && (
+                    <p className="text-[9px] text-muted-foreground">{formatNum(zoo.cabMediaMes, 0)} cab méd.</p>
+                  )}
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground">Custo/cab acum.</div>
+                  <p className="text-sm font-bold">{ind.custoCabAcum !== null ? formatMoeda(ind.custoCabAcum) : '—'}</p>
+                  {zoo.cabMediaAcum !== null && (
+                    <p className="text-[9px] text-muted-foreground">{formatNum(zoo.cabMediaAcum, 0)} cab méd.</p>
+                  )}
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground">Custo/@ prod.</div>
+                  <p className="text-sm font-bold">{ind.custoArrobaProd !== null ? formatMoeda(ind.custoArrobaProd) : '—'}</p>
+                  {zoo.arrobasProduzidasAcum !== null && (
+                    <p className="text-[9px] text-muted-foreground">{formatNum(zoo.arrobasProduzidasAcum, 1)} @ prod.</p>
+                  )}
+                </div>
+              </div>
+              {(zoo.cabMediaMes === null && zoo.cabMediaAcum === null && zoo.arrobasProduzidasAcum === null) && (
+                <p className="text-[10px] text-muted-foreground italic">
+                  Dados zootécnicos insuficientes — cadastre saldos iniciais e lançamentos para habilitar.
+                </p>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Auditoria expandível */}
           {!isGlobal && (
