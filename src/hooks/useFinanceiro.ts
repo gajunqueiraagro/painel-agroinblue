@@ -2,14 +2,22 @@
  * Hook central do módulo financeiro.
  * Gerencia importações, lançamentos financeiros, indicadores e rateio ADM.
  *
- * Regras de rateio ADM:
+ * ═══════════════════════════════════════════════════════════════════════
+ * RATEIO ADM v1
+ * ═══════════════════════════════════════════════════════════════════════
+ * Critério único: área produtiva (ha) de fazenda_cadastros.
+ *
+ * Regras:
  * - Modo global: soma todos os lançamentos originais (incluindo ADM), sem rateio.
  * - Modo por fazenda: lançamentos da fazenda + parcela rateada dos custos ADM
  *   proporcional à área produtiva.
+ * - Somente lançamentos ADM com status_transacao = "conciliado" entram no rateio.
+ * - O período do rateio usa data_pagamento (não data_realizacao nem ano_mes).
+ * ═══════════════════════════════════════════════════════════════════════
  */
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useFazenda } from '@/contexts/FazendaContext';
+import { useFazenda, type Fazenda } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import type { LinhaImportada, CentroCustoOficial } from '@/lib/financeiro/importParser';
@@ -55,11 +63,26 @@ export interface FinanceiroLancamento {
   escopo_negocio: string | null;
 }
 
+/** Rateio calculado para a fazenda atual */
 export interface RateioADM {
   anoMes: string;
   valorTotal: number;
   percentualFazenda: number;
   valorRateado: number;
+}
+
+/** Dados completos do rateio para conferência (todas as fazendas) */
+export interface RateioADMConferencia {
+  anoMes: string;
+  totalADMConciliado: number;
+  fazendas: {
+    fazendaId: string;
+    fazendaNome: string;
+    areaProdutiva: number;
+    percentual: number;
+    valorRateado: number;
+  }[];
+  fazendasSemArea: string[]; // nomes das fazendas sem area_produtiva
 }
 
 // ---------------------------------------------------------------------------
@@ -82,6 +105,16 @@ export const isReceita = (l: FinanceiroLancamento) => {
   return tipo === 'receita' || l.valor < 0;
 };
 
+/** Check if ADM lancamento qualifies for rateio */
+const isADMConciliado = (l: FinanceiroLancamento) =>
+  (l.status_transacao || '').toLowerCase() === 'conciliado' && isDesembolsoProdutivo(l);
+
+/** Extract YYYY-MM from a date string (YYYY-MM-DD) */
+const dateToAnoMes = (dateStr: string | null): string | null => {
+  if (!dateStr || dateStr.length < 7) return null;
+  return dateStr.substring(0, 7);
+};
+
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
@@ -99,10 +132,15 @@ export function useFinanceiro() {
   const [areaFazendas, setAreaFazendas] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(false);
 
-  // Identify ADM fazenda
+  // Identify ADM fazenda and operational fazendas
   const fazendaADM = useMemo(
     () => fazendas.find(f => (f.codigo_importacao || '').toUpperCase() === 'ADM'),
     [fazendas],
+  );
+
+  const fazendasOperacionais = useMemo(
+    () => fazendas.filter(f => f.id !== '__global__' && f.id !== fazendaADM?.id),
+    [fazendas, fazendaADM],
   );
 
   // --- Load data ---
@@ -112,23 +150,25 @@ export function useFinanceiro() {
       setLancamentos([]);
       setCentrosCusto([]);
       setLancamentosADM([]);
+      setAreaFazendas(new Map());
       return;
     }
     setLoading(true);
     try {
       if (isGlobal) {
-        // Global: load ALL lancamentos across all fazendas the user has access to
         const fazendaIds = fazendas.filter(f => f.id !== '__global__').map(f => f.id);
         if (fazendaIds.length === 0) {
           setLancamentos([]);
           setImportacoes([]);
           setCentrosCusto([]);
           setLancamentosADM([]);
+          setAreaFazendas(new Map());
           setLoading(false);
           return;
         }
 
-        const [lancRes, ccRes] = await Promise.all([
+        // Global: load all lancamentos + ADM lancamentos + areas (for conference view)
+        const promises: PromiseLike<any>[] = [
           supabase
             .from('financeiro_lancamentos')
             .select('*')
@@ -139,14 +179,44 @@ export function useFinanceiro() {
             .select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro')
             .in('fazenda_id', fazendaIds)
             .eq('ativo', true),
-        ]);
+        ];
 
+        // Load areas for conference view
+        const opIds = fazendasOperacionais.map(f => f.id);
+        if (opIds.length > 0) {
+          promises.push(
+            supabase
+              .from('fazenda_cadastros')
+              .select('fazenda_id, area_produtiva')
+              .in('fazenda_id', opIds),
+          );
+        }
+
+        const results = await Promise.all(promises);
         setImportacoes([]);
-        setLancamentos((lancRes.data as FinanceiroLancamento[]) || []);
-        setCentrosCusto((ccRes.data as CentroCustoOficial[]) || []);
-        setLancamentosADM([]);
+        setLancamentos((results[0].data as FinanceiroLancamento[]) || []);
+        setCentrosCusto((results[1].data as CentroCustoOficial[]) || []);
+
+        // In global, ADM lancamentos are already in lancamentos — extract for conference
+        if (fazendaADM) {
+          const allLancs = (results[0].data as FinanceiroLancamento[]) || [];
+          setLancamentosADM(allLancs.filter(l => l.fazenda_id === fazendaADM.id));
+        } else {
+          setLancamentosADM([]);
+        }
+
+        // Build area map
+        const areaMap = new Map<string, number>();
+        if (results[2]?.data) {
+          for (const row of results[2].data as { fazenda_id: string; area_produtiva: number | null }[]) {
+            if (row.area_produtiva && row.area_produtiva > 0) {
+              areaMap.set(row.fazenda_id, row.area_produtiva);
+            }
+          }
+        }
+        setAreaFazendas(areaMap);
       } else {
-        // Per-fazenda: own lancamentos + ADM lancamentos for rateio
+        // Per-fazenda
         const promises: PromiseLike<any>[] = [
           supabase
             .from('financeiro_importacoes')
@@ -165,7 +235,6 @@ export function useFinanceiro() {
             .eq('ativo', true),
         ];
 
-        // Load ADM lancamentos if ADM fazenda exists and is different from current
         const needsRateio = fazendaADM && fazendaADM.id !== fazendaId;
         if (needsRateio) {
           promises.push(
@@ -175,16 +244,13 @@ export function useFinanceiro() {
               .eq('fazenda_id', fazendaADM.id)
               .order('data_realizacao', { ascending: false }),
           );
-          // Load areas for all operational fazendas
-          const operationalIds = fazendas
-            .filter(f => f.id !== '__global__' && f.id !== fazendaADM.id)
-            .map(f => f.id);
-          if (operationalIds.length > 0) {
+          const opIds = fazendasOperacionais.map(f => f.id);
+          if (opIds.length > 0) {
             promises.push(
               supabase
                 .from('fazenda_cadastros')
                 .select('fazenda_id, area_produtiva')
-                .in('fazenda_id', operationalIds),
+                .in('fazenda_id', opIds),
             );
           }
         }
@@ -198,7 +264,6 @@ export function useFinanceiro() {
 
         if (needsRateio) {
           setLancamentosADM((results[3]?.data as FinanceiroLancamento[]) || []);
-          // Build area map
           const areaMap = new Map<string, number>();
           if (results[4]?.data) {
             for (const row of results[4].data as { fazenda_id: string; area_produtiva: number | null }[]) {
@@ -218,11 +283,19 @@ export function useFinanceiro() {
     } finally {
       setLoading(false);
     }
-  }, [fazendaId, isGlobal, fazendas, fazendaADM]);
+  }, [fazendaId, isGlobal, fazendas, fazendaADM, fazendasOperacionais]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // --- Rateio ADM ---
+  // --- Fazendas sem área produtiva ---
+  const fazendasSemArea = useMemo(() => {
+    if (!fazendaADM) return [];
+    return fazendasOperacionais
+      .filter(f => !areaFazendas.has(f.id) || (areaFazendas.get(f.id) || 0) <= 0)
+      .map(f => f.nome);
+  }, [fazendasOperacionais, areaFazendas, fazendaADM]);
+
+  // --- Rateio ADM (for current fazenda) ---
   const rateioADM = useMemo((): RateioADM[] => {
     if (isGlobal || !fazendaId || !fazendaADM || fazendaADM.id === fazendaId) return [];
     if (lancamentosADM.length === 0 || areaFazendas.size === 0) return [];
@@ -233,12 +306,14 @@ export function useFinanceiro() {
 
     const percentual = (areaAtual / areaTotal) * 100;
 
-    // Group ADM costs by ano_mes
+    // Group ADM conciliado costs by data_pagamento → YYYY-MM
     const admPorMes = new Map<string, number>();
     for (const l of lancamentosADM) {
-      if (!isDesembolsoProdutivo(l)) continue;
+      if (!isADMConciliado(l)) continue;
+      const am = dateToAnoMes(l.data_pagamento);
+      if (!am) continue;
       const v = Math.abs(l.valor);
-      admPorMes.set(l.ano_mes, (admPorMes.get(l.ano_mes) || 0) + v);
+      admPorMes.set(am, (admPorMes.get(am) || 0) + v);
     }
 
     return Array.from(admPorMes.entries()).map(([anoMes, valorTotal]) => ({
@@ -248,6 +323,47 @@ export function useFinanceiro() {
       valorRateado: valorTotal * (percentual / 100),
     }));
   }, [isGlobal, fazendaId, fazendaADM, lancamentosADM, areaFazendas]);
+
+  // --- Rateio ADM conferência (all fazendas, for review view) ---
+  const rateioConferencia = useMemo((): RateioADMConferencia[] => {
+    if (!fazendaADM || lancamentosADM.length === 0) return [];
+
+    const areaTotal = Array.from(areaFazendas.values()).reduce((s, v) => s + v, 0);
+
+    // Group ADM conciliado by data_pagamento → YYYY-MM
+    const admPorMes = new Map<string, number>();
+    for (const l of lancamentosADM) {
+      if (!isADMConciliado(l)) continue;
+      const am = dateToAnoMes(l.data_pagamento);
+      if (!am) continue;
+      admPorMes.set(am, (admPorMes.get(am) || 0) + Math.abs(l.valor));
+    }
+
+    const semArea = fazendasOperacionais
+      .filter(f => !areaFazendas.has(f.id) || (areaFazendas.get(f.id) || 0) <= 0)
+      .map(f => f.nome);
+
+    return Array.from(admPorMes.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([anoMes, totalADM]) => ({
+        anoMes,
+        totalADMConciliado: totalADM,
+        fazendas: fazendasOperacionais
+          .filter(f => areaFazendas.has(f.id) && (areaFazendas.get(f.id) || 0) > 0)
+          .map(f => {
+            const area = areaFazendas.get(f.id) || 0;
+            const pct = areaTotal > 0 ? (area / areaTotal) * 100 : 0;
+            return {
+              fazendaId: f.id,
+              fazendaNome: f.nome,
+              areaProdutiva: area,
+              percentual: pct,
+              valorRateado: totalADM * (pct / 100),
+            };
+          }),
+        fazendasSemArea: semArea,
+      }));
+  }, [fazendaADM, lancamentosADM, areaFazendas, fazendasOperacionais]);
 
   // --- Confirmar importação ---
   const confirmarImportacao = useCallback(async (
@@ -336,7 +452,6 @@ export function useFinanceiro() {
       const desembolsoProd = lancs.filter(isDesembolsoProdutivo).reduce((s, l) => s + Math.abs(l.valor), 0);
       const desembolsoPec = lancs.filter(isDesembolsoPecuaria).reduce((s, l) => s + Math.abs(l.valor), 0);
 
-      // Add rateio ADM for this month (per-fazenda only)
       const rateioMes = rateioADM.find(r => r.anoMes === am);
       const rateioValor = rateioMes?.valorRateado || 0;
 
@@ -350,12 +465,10 @@ export function useFinanceiro() {
       };
     });
 
-    // Hierarquia de custos
     const porMacro = new Map<string, number>();
     for (const l of lancamentos) {
       if (!isDesembolsoProdutivo(l) || !l.macro_custo) continue;
-      const v = Math.abs(l.valor);
-      porMacro.set(l.macro_custo, (porMacro.get(l.macro_custo) || 0) + v);
+      porMacro.set(l.macro_custo, (porMacro.get(l.macro_custo) || 0) + Math.abs(l.valor));
     }
 
     const totalDesembolsoProd = lancamentos.filter(isDesembolsoProdutivo).reduce((s, l) => s + Math.abs(l.valor), 0);
@@ -363,7 +476,6 @@ export function useFinanceiro() {
     const totalReceitas = lancamentos.filter(isReceita).reduce((s, l) => s + Math.abs(l.valor), 0);
     const totalRateio = rateioADM.reduce((s, r) => s + r.valorRateado, 0);
 
-    // Add rateio to macro hierarchy as "ADM (Rateio)"
     if (totalRateio > 0) {
       porMacro.set('ADM (Rateio)', (porMacro.get('ADM (Rateio)') || 0) + totalRateio);
     }
@@ -386,6 +498,8 @@ export function useFinanceiro() {
     centrosCusto,
     indicadores,
     rateioADM,
+    rateioConferencia,
+    fazendasSemArea,
     loading,
     confirmarImportacao,
     reloadData: loadData,

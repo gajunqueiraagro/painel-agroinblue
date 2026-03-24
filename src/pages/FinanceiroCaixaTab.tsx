@@ -1,37 +1,42 @@
 /**
  * Módulo Financeiro — container principal com sub-abas.
- * Fase 1: Importação + Dashboard.
+ * Fase 1: Importação + Dashboard + Rateio ADM v1.
  */
 import { useState } from 'react';
 import { ImportacaoFinanceira } from '@/components/financeiro/ImportacaoFinanceira';
 import { DashboardFinanceiro } from '@/components/financeiro/DashboardFinanceiro';
+import { RateioADMConferenciaView } from '@/components/financeiro/RateioADMConferencia';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { Loader2 } from 'lucide-react';
 
-type SubTab = 'dashboard' | 'importacao';
+type SubTab = 'dashboard' | 'rateio' | 'importacao';
 
 interface Props {
-  /** Cabeças médias do mês — do módulo zootécnico */
   cabMediaMes?: number;
-  /** Cabeças médias acumulado */
   cabMediaAcum?: number;
-  /** Arrobas produzidas acumulado */
   arrobasProduzidasAcum?: number;
 }
 
 export function FinanceiroCaixaTab({ cabMediaMes, cabMediaAcum, arrobasProduzidasAcum }: Props) {
   const [subTab, setSubTab] = useState<SubTab>('dashboard');
-  const { importacoes, lancamentos, centrosCusto, indicadores, rateioADM, loading, confirmarImportacao, isGlobal } = useFinanceiro();
+  const {
+    importacoes, lancamentos, centrosCusto, indicadores,
+    rateioADM, rateioConferencia, fazendasSemArea,
+    loading, confirmarImportacao, isGlobal, fazendaADM,
+  } = useFinanceiro();
 
   const tabs: { id: SubTab; label: string; icon: string }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    ...(fazendaADM ? [{ id: 'rateio' as SubTab, label: 'Rateio ADM', icon: '🏢' }] : []),
     { id: 'importacao', label: 'Importação', icon: '📥' },
   ];
+
+  const gridCols = tabs.length === 3 ? 'grid-cols-3' : 'grid-cols-2';
 
   return (
     <div className="p-4 max-w-full mx-auto space-y-3 animate-fade-in pb-20">
       {/* Sub-tabs */}
-      <div className="grid grid-cols-2 gap-1 bg-muted rounded-lg p-1">
+      <div className={`grid ${gridCols} gap-1 bg-muted rounded-lg p-1`}>
         {tabs.map(t => (
           <button
             key={t.id}
@@ -62,6 +67,13 @@ export function FinanceiroCaixaTab({ cabMediaMes, cabMediaAcum, arrobasProduzida
               arrobasProduzidasAcum={arrobasProduzidasAcum}
               rateioADM={rateioADM}
               isGlobal={isGlobal}
+              fazendasSemArea={fazendasSemArea}
+            />
+          )}
+          {subTab === 'rateio' && (
+            <RateioADMConferenciaView
+              conferencia={rateioConferencia}
+              fazendasSemArea={fazendasSemArea}
             />
           )}
           {subTab === 'importacao' && (
