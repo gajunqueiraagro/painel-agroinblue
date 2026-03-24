@@ -447,6 +447,14 @@ export function DashboardFinanceiro({
     lancamentosPecuarios, saldosIniciais, pastos, categorias,
   );
 
+  // ===========================================================================
+  // GLOBAL: arrobas produzidas = Σ fazendas (com pesos oficiais por fazenda)
+  // ===========================================================================
+  const arrobasGlobal = useArrobasGlobal(
+    isGlobal, lancamentosPecuarios, saldosIniciais, categorias,
+    Number(anoFiltro), mesNum, fazendaIdsReais,
+  );
+
   // Derived zoo values for economic indicators
   const zooData = useMemo(() => {
     const anoNum = Number(anoFiltro);
