@@ -156,18 +156,19 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
   return { linhasValidas, erros, totalLinhas: dataRows.length };
 }
 
-/** Valida divergência de fazenda */
+/** Valida e resolve fazenda pelo codigo_importacao */
 export function validarFazenda(
   linhas: LinhaImportada[],
-  fazendaAtiva: string,
+  codigoFazendaAtiva: string,
 ): ErroImportacao[] {
   const erros: ErroImportacao[] = [];
+  const codigoNorm = codigoFazendaAtiva.toLowerCase().trim();
   for (const l of linhas) {
-    if (l.fazenda && l.fazenda.toLowerCase().trim() !== fazendaAtiva.toLowerCase().trim()) {
+    if (l.fazenda && l.fazenda.toLowerCase().trim() !== codigoNorm) {
       erros.push({
         linha: l.linha,
         campo: 'Fazenda',
-        mensagem: `Fazenda "${l.fazenda}" difere da ativa "${fazendaAtiva}"`,
+        mensagem: `Código "${l.fazenda}" difere do código da fazenda ativa "${codigoFazendaAtiva}"`,
       });
     }
   }

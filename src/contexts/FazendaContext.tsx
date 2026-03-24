@@ -7,6 +7,7 @@ export interface Fazenda {
   id: string;
   nome: string;
   owner_id: string;
+  codigo_importacao?: string | null;
   papel?: string;
 }
 
@@ -21,7 +22,7 @@ interface FazendaContextType {
   fazendas: Fazenda[];
   fazendaAtual: Fazenda | null;
   setFazendaAtual: (f: Fazenda) => void;
-  criarFazenda: (nome: string) => Promise<Fazenda | null>;
+  criarFazenda: (nome: string, codigoImportacao?: string) => Promise<Fazenda | null>;
   loading: boolean;
   reloadFazendas: () => Promise<void>;
   isGlobal: boolean;
@@ -41,7 +42,7 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
     try {
       const { data: membros } = await supabase
         .from('fazenda_membros')
-        .select('fazenda_id, papel, fazendas(id, nome, owner_id)')
+        .select('fazenda_id, papel, fazendas(id, nome, owner_id, codigo_importacao)')
         .eq('user_id', user.id);
 
       if (membros && membros.length > 0) {
@@ -74,11 +75,13 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('fazenda-ativa', f.id);
   };
 
-  const criarFazenda = async (nome: string): Promise<Fazenda | null> => {
+  const criarFazenda = async (nome: string, codigoImportacao?: string): Promise<Fazenda | null> => {
     if (!user) return null;
+    const payload: any = { nome, owner_id: user.id };
+    if (codigoImportacao) payload.codigo_importacao = codigoImportacao;
     const { data, error } = await supabase
       .from('fazendas')
-      .insert({ nome, owner_id: user.id })
+      .insert(payload)
       .select()
       .single();
     if (error) { toast.error('Erro ao criar fazenda: ' + error.message); return null; }

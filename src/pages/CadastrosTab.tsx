@@ -8,11 +8,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Save, FileText, Share2, Pencil, Trash2, MapPin } from 'lucide-react';
+import { Save, FileText, Share2, Pencil, Trash2, MapPin, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import logoUrl from '@/assets/logo.png';
 import { PastosTab } from './PastosTab';
+import { CodigoFazendaField } from '@/components/CodigoFazendaField';
 
 interface CadastroData {
   id?: string;
@@ -330,7 +331,15 @@ export function CadastrosTab() {
         )}
       </div>
 
-      <Accordion type="multiple" defaultValue={['dados', 'contato', 'bancario', 'roteiro', 'pastos']} className="space-y-2">
+      <Accordion type="multiple" defaultValue={['codigo', 'dados', 'contato', 'bancario', 'roteiro', 'pastos']} className="space-y-2">
+        {/* Código da Fazenda */}
+        <AccordionItem value="codigo" className="border rounded-lg">
+          <AccordionTrigger className="px-4 py-3 text-sm font-bold">🏷️ Código da Fazenda</AccordionTrigger>
+          <AccordionContent className="px-4 pb-4 space-y-3">
+            <CodigoFazendaField fazendaAtual={fazendaAtual} />
+          </AccordionContent>
+        </AccordionItem>
+
         <AccordionItem value="dados" className="border rounded-lg">
           <AccordionTrigger className="px-4 py-3 text-sm font-bold">🏠 Dados da Fazenda</AccordionTrigger>
           <AccordionContent className="px-4 pb-4 space-y-3">
