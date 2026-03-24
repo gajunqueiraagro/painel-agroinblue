@@ -319,12 +319,12 @@ export function FechamentoPastoDialog({
 
                   {/* BLOCO 4 — Avisos */}
                   {avisos.length > 0 && (
-                    <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm space-y-1">
-                      <div className="flex items-center gap-1 font-semibold text-yellow-700 dark:text-yellow-400 text-xs uppercase tracking-wide mb-1">
+                    <div className={`rounded-lg border p-3 text-sm space-y-1 ${exigeRebanho && (total === 0 || itensComQtd.some(i => !i.peso_medio_kg)) ? 'border-yellow-500/30 bg-yellow-500/10' : 'border-blue-500/30 bg-blue-500/10'}`}>
+                      <div className={`flex items-center gap-1 font-semibold text-xs uppercase tracking-wide mb-1 ${exigeRebanho && (total === 0 || itensComQtd.some(i => !i.peso_medio_kg)) ? 'text-yellow-700 dark:text-yellow-400' : 'text-blue-700 dark:text-blue-400'}`}>
                         <AlertTriangle className="h-3.5 w-3.5" />Avisos
                       </div>
                       {avisos.map((a, i) => (
-                        <div key={i} className="text-yellow-700 dark:text-yellow-400">• {a}</div>
+                        <div key={i} className={exigeRebanho && (total === 0 || itensComQtd.some(ii => !ii.peso_medio_kg)) ? 'text-yellow-700 dark:text-yellow-400' : 'text-blue-700 dark:text-blue-400'}>• {a}</div>
                       ))}
                     </div>
                   )}
