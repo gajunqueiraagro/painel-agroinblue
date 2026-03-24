@@ -354,14 +354,17 @@ export function useFinanceiro() {
     if (!fazendaADM || lancamentosADM.length === 0) return [];
 
     const areaTotal = Array.from(areaFazendas.values()).reduce((s, v) => s + v, 0);
+    const admNomeFazenda = fazendaADM.nome;
 
     // Group ADM conciliado by data_pagamento → YYYY-MM
-    const admPorMes = new Map<string, number>();
+    const admPorMes = new Map<string, FinanceiroLancamento[]>();
     for (const l of lancamentosADM) {
       if (!isADMConciliado(l)) continue;
       const am = dateToAnoMes(l.data_pagamento);
       if (!am) continue;
-      admPorMes.set(am, (admPorMes.get(am) || 0) + Math.abs(l.valor));
+      const arr = admPorMes.get(am) || [];
+      arr.push(l);
+      admPorMes.set(am, arr);
     }
 
     const semArea = fazendasOperacionais
@@ -370,24 +373,37 @@ export function useFinanceiro() {
 
     return Array.from(admPorMes.entries())
       .sort(([a], [b]) => b.localeCompare(a))
-      .map(([anoMes, totalADM]) => ({
-        anoMes,
-        totalADMConciliado: totalADM,
-        fazendas: fazendasOperacionais
-          .filter(f => areaFazendas.has(f.id) && (areaFazendas.get(f.id) || 0) > 0)
-          .map(f => {
-            const area = areaFazendas.get(f.id) || 0;
-            const pct = areaTotal > 0 ? (area / areaTotal) * 100 : 0;
-            return {
-              fazendaId: f.id,
-              fazendaNome: f.nome,
-              areaProdutiva: area,
-              percentual: pct,
-              valorRateado: totalADM * (pct / 100),
-            };
-          }),
-        fazendasSemArea: semArea,
-      }));
+      .map(([anoMes, lancs]) => {
+        const totalADM = lancs.reduce((s, l) => s + Math.abs(l.valor), 0);
+        return {
+          anoMes,
+          totalADMConciliado: totalADM,
+          lancamentosUsados: lancs.map(l => ({
+            dataPagamento: l.data_pagamento,
+            produto: l.produto,
+            valor: Math.abs(l.valor),
+            statusTransacao: l.status_transacao,
+            fazenda: admNomeFazenda,
+            tipoOperacao: l.tipo_operacao,
+            contaOrigem: l.conta_origem,
+            contaDestino: l.conta_destino,
+          })),
+          fazendas: fazendasOperacionais
+            .filter(f => areaFazendas.has(f.id) && (areaFazendas.get(f.id) || 0) > 0)
+            .map(f => {
+              const area = areaFazendas.get(f.id) || 0;
+              const pct = areaTotal > 0 ? (area / areaTotal) * 100 : 0;
+              return {
+                fazendaId: f.id,
+                fazendaNome: f.nome,
+                areaProdutiva: area,
+                percentual: pct,
+                valorRateado: totalADM * (pct / 100),
+              };
+            }),
+          fazendasSemArea: semArea,
+        };
+      });
   }, [fazendaADM, lancamentosADM, areaFazendas, fazendasOperacionais]);
 
   // --- Confirmar importação (global: per-line fazenda_id) ---
