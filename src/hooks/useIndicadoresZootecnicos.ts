@@ -572,7 +572,7 @@ export function useIndicadoresZootecnicos(
 // Helpers de peso (internos)
 // ---------------------------------------------------------------------------
 
-import type { OrigemPeso } from '@/hooks/useFechamentoCategoria';
+
 
 /** Mapeia OrigemPeso (do hook unificado) para FontePeso (do indicadores) */
 function origemToFonte(origem: OrigemPeso): FontePeso {
