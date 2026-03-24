@@ -12,6 +12,7 @@
  * - Entradas = tipo_operacao começa com "1"
  * - Saídas = tipo_operacao começa com "2"
  */
+import { useMemo, useState } from 'react';
 import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
