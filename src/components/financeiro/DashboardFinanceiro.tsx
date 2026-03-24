@@ -209,11 +209,12 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
                 <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
                   <TrendingDown className="h-3 w-3 text-red-600" /> Saídas
                 </div>
-                <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.saidas)}</p>
-                {ind.rateioADM > 0 && (
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    inclui {formatMoeda(ind.rateioADM)} rateio ADM
-                  </p>
+                <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.saidasComRateio)}</p>
+                {!isGlobal && ind.rateioADM > 0 && (
+                  <div className="text-[10px] text-muted-foreground mt-0.5 space-y-0.5">
+                    <p>Próprio: {formatMoeda(ind.saidas)}</p>
+                    <p className="text-amber-600 dark:text-amber-400">+ Rateio ADM: {formatMoeda(ind.rateioADM)}</p>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -223,13 +224,23 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
             <Card>
               <CardContent className="p-3">
                 <div className="text-xs text-muted-foreground mb-1">Desemb. Produtivo</div>
-                <p className="text-base font-bold">{formatMoeda(ind.desembolsoProd)}</p>
+                <p className="text-base font-bold">{formatMoeda(ind.desembolsoProdComRateio)}</p>
+                {!isGlobal && ind.rateioADM > 0 && (
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    Próprio: {formatMoeda(ind.desembolsoProd)}
+                  </p>
+                )}
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-3">
                 <div className="text-xs text-muted-foreground mb-1">Desemb. Pecuária</div>
-                <p className="text-base font-bold">{formatMoeda(ind.desembolsoPec)}</p>
+                <p className="text-base font-bold">{formatMoeda(ind.desembolsoPecComRateio)}</p>
+                {!isGlobal && ind.rateioADM > 0 && (
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    Próprio: {formatMoeda(ind.desembolsoPec)}
+                  </p>
+                )}
               </CardContent>
             </Card>
           </div>
