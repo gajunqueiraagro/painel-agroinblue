@@ -11,7 +11,7 @@ export interface LinhaImportada {
   fornecedor: string | null;
   valor: number;
   statusTransacao: string | null;
-  fazenda: string | null;
+  codigoFazenda: string;
   tipoOperacao: string | null;
   contaOrigem: string | null;
   contaDestino: string | null;
@@ -26,6 +26,7 @@ export interface LinhaImportada {
   obs: string | null;
   anoMes: string;
   escopoNegocio: string;
+  fazendaId: string | null; // resolved after validation
 }
 
 export interface ErroImportacao {
