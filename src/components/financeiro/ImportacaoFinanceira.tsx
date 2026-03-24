@@ -16,6 +16,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 interface Props {
   importacoes: ImportacaoRecord[];
   centrosCusto: CentroCustoOficial[];
+  fazendasCodigos: FazendaCodigo[];
   onConfirmar: (nomeArquivo: string, linhas: LinhaImportada[], totalLinhas: number, totalErros: number) => Promise<boolean>;
 }
 
