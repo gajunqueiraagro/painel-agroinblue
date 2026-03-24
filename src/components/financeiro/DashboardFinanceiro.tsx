@@ -27,6 +27,8 @@ import {
   isDesembolsoProdutivo,
 } from '@/hooks/useFinanceiro';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
+import { useArrobasGlobal } from '@/hooks/useArrobasGlobal';
+import { useFazenda } from '@/contexts/FazendaContext';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import type { Pasto, CategoriaRebanho } from '@/hooks/usePastos';
 
@@ -301,72 +303,21 @@ function AuditEconomico(p: AuditEconomicoProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Audit: Arrobas produzidas Global vs Fazendas
+// Audit: Arrobas produzidas Global = Σ Fazendas
 // ---------------------------------------------------------------------------
 
 function AuditArrobasGlobal({
-  lancamentosPecuarios,
-  saldosIniciais,
+  porFazenda,
+  somaArrobas,
   arrobasGlobalExibido,
-  anoFiltro,
-  mesFiltro,
+  loading: loadingArrobas,
 }: {
-  lancamentosPecuarios: Lancamento[];
-  saldosIniciais: SaldoInicial[];
+  porFazenda: { fazendaId: string; fazendaNome: string; arrobasProduzidas: number | null; pesoFinalEstoque: number; pesoInicialEstoque: number; pesoEntradas: number; pesoSaidas: number; ganhoLiquidoKg: number }[];
+  somaArrobas: number | null;
   arrobasGlobalExibido: number | null;
-  anoFiltro: number;
-  mesFiltro: number;
+  loading: boolean;
 }) {
   const [open, setOpen] = useState(false);
-
-  const audit = useMemo(() => {
-    // Group lancamentos by fazenda_id (for movimentações breakdown)
-    const fazendaMap = new Map<string, Lancamento[]>();
-    for (const l of lancamentosPecuarios) {
-      const fid = l.fazendaId || '__sem_fazenda__';
-      const arr = fazendaMap.get(fid) || [];
-      arr.push(l);
-      fazendaMap.set(fid, arr);
-    }
-
-    const TIPOS_ENTRADA = ['nascimento', 'compra', 'transferencia_entrada'];
-    const TIPOS_SAIDA_GMD = ['abate', 'venda', 'consumo', 'transferencia_saida', 'morte'];
-
-    const end = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}-31`;
-
-    type FarmAudit = { fazendaId: string; pesoEntradas: number; pesoSaidas: number; cabEntradas: number; cabSaidas: number };
-    const porFazenda: FarmAudit[] = [];
-
-    for (const [fid, lancs] of fazendaMap) {
-      const acum = lancs.filter(l => l.data >= `${anoFiltro}-01-01` && l.data <= end);
-      const entradas = acum.filter(l => TIPOS_ENTRADA.includes(l.tipo));
-      const saidas = acum.filter(l => TIPOS_SAIDA_GMD.includes(l.tipo));
-
-      porFazenda.push({
-        fazendaId: fid,
-        pesoEntradas: entradas.reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0),
-        pesoSaidas: saidas.reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || l.pesoCarcacaKg || 0), 0),
-        cabEntradas: entradas.reduce((s, l) => s + l.quantidade, 0),
-        cabSaidas: saidas.reduce((s, l) => s + l.quantidade, 0),
-      });
-    }
-
-    // Global peso from saldos + all lancamentos
-    const pesoInicialGlobal = saldosIniciais
-      .filter(s => s.ano === anoFiltro)
-      .reduce((s, si) => s + si.quantidade * (si.pesoMedioKg || 0), 0);
-    
-    const saldoMapGlobal = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, anoFiltro, mesFiltro);
-    const saldoFinalGlobal = Array.from(saldoMapGlobal.values()).reduce((s, v) => s + v, 0);
-
-    const allAcum = lancamentosPecuarios.filter(l => l.data >= `${anoFiltro}-01-01` && l.data <= end);
-    const pesoEntradasGlobal = allAcum.filter(l => TIPOS_ENTRADA.includes(l.tipo))
-      .reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
-    const pesoSaidasGlobal = allAcum.filter(l => TIPOS_SAIDA_GMD.includes(l.tipo))
-      .reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || l.pesoCarcacaKg || 0), 0);
-
-    return { porFazenda, pesoInicialGlobal, saldoFinalGlobal, pesoEntradasGlobal, pesoSaidasGlobal };
-  }, [lancamentosPecuarios, saldosIniciais, anoFiltro, mesFiltro]);
 
   return (
     <Card>
@@ -376,63 +327,65 @@ function AuditArrobasGlobal({
           className="flex items-center justify-between w-full"
         >
           <div className="flex items-center gap-1.5 text-xs font-bold">
-            🔍 Auditoria: Arrobas Produzidas (Global)
+            🔍 Auditoria: Arrobas Produzidas (Global = Σ Fazendas)
           </div>
           {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
         </button>
         {open && (
           <div className="mt-2 space-y-2 text-[10px]">
-            {/* Composição global */}
-            <div className="bg-muted/50 rounded-md p-2 space-y-1">
-              <div className="font-bold text-xs mb-1">Base de cálculo global</div>
-              <div className="grid grid-cols-2 gap-1">
-                <div>Peso inicial (saldos):</div>
-                <div className="font-mono text-right">{formatNum(audit.pesoInicialGlobal, 0)} kg</div>
-                <div>Peso entradas acum:</div>
-                <div className="font-mono text-right">{formatNum(audit.pesoEntradasGlobal, 0)} kg</div>
-                <div>Peso saídas acum:</div>
-                <div className="font-mono text-right">{formatNum(audit.pesoSaidasGlobal, 0)} kg</div>
-              </div>
-              <div className="border-t pt-1 mt-1">
-                <div className="flex justify-between font-bold">
-                  <span>Global exibido:</span>
-                  <span className="font-mono">{arrobasGlobalExibido !== null ? `${formatNum(arrobasGlobalExibido, 1)} @` : '—'}</span>
+            {loadingArrobas ? (
+              <div className="text-center py-4 text-muted-foreground">Carregando pesos por fazenda…</div>
+            ) : (
+              <>
+                {/* Tabela por fazenda */}
+                <div className="bg-muted/50 rounded-md p-2">
+                  <div className="font-bold text-xs mb-1">Arrobas produzidas por fazenda</div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-[10px] px-2 py-1.5">Fazenda</TableHead>
+                        <TableHead className="text-[10px] px-2 py-1.5 text-right">Peso Ini (kg)</TableHead>
+                        <TableHead className="text-[10px] px-2 py-1.5 text-right">Peso Fin (kg)</TableHead>
+                        <TableHead className="text-[10px] px-2 py-1.5 text-right">Entr. (kg)</TableHead>
+                        <TableHead className="text-[10px] px-2 py-1.5 text-right">Saíd. (kg)</TableHead>
+                        <TableHead className="text-[10px] px-2 py-1.5 text-right">Ganho (kg)</TableHead>
+                        <TableHead className="text-[10px] px-2 py-1.5 text-right font-bold">@ Prod.</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {porFazenda.map(f => (
+                        <TableRow key={f.fazendaId}>
+                          <TableCell className="text-[10px] px-2 py-1 font-bold max-w-[120px] truncate">{f.fazendaNome}</TableCell>
+                          <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.pesoInicialEstoque, 0)}</TableCell>
+                          <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.pesoFinalEstoque, 0)}</TableCell>
+                          <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.pesoEntradas, 0)}</TableCell>
+                          <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.pesoSaidas, 0)}</TableCell>
+                          <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.ganhoLiquidoKg, 0)}</TableCell>
+                          <TableCell className="text-[10px] px-2 py-1 text-right font-mono font-bold">
+                            {f.arrobasProduzidas !== null ? formatNum(f.arrobasProduzidas, 1) : '—'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
-              </div>
-            </div>
 
-            {/* Movimentações por fazenda */}
-            <div className="bg-muted/50 rounded-md p-2">
-              <div className="font-bold text-xs mb-1">Movimentações por fazenda</div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-[10px] px-2 py-1.5">Fazenda</TableHead>
-                    <TableHead className="text-[10px] px-2 py-1.5 text-right">Entr. (cab)</TableHead>
-                    <TableHead className="text-[10px] px-2 py-1.5 text-right">Entr. (kg)</TableHead>
-                    <TableHead className="text-[10px] px-2 py-1.5 text-right">Saíd. (cab)</TableHead>
-                    <TableHead className="text-[10px] px-2 py-1.5 text-right">Saíd. (kg)</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {audit.porFazenda.map(f => (
-                    <TableRow key={f.fazendaId}>
-                      <TableCell className="text-[10px] px-2 py-1 font-bold max-w-[100px] truncate">{f.fazendaId.substring(0, 8)}…</TableCell>
-                      <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.cabEntradas, 0)}</TableCell>
-                      <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.pesoEntradas, 0)}</TableCell>
-                      <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.cabSaidas, 0)}</TableCell>
-                      <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.pesoSaidas, 0)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-
-            <div className="text-muted-foreground text-[9px] border-t pt-1">
-              ⚠ O cálculo global de arrobas produzidas usa todos os lançamentos em conjunto (base única).
-              Para que Global = Σ Fazendas, cada fazenda precisa usar o mesmo resolverPesoOficial.
-              Atualmente o global não carrega pesos de fechamento por fazenda (limitação arquitetural em correção).
-            </div>
+                {/* Totalizador */}
+                <div className="bg-muted/50 rounded-md p-2 space-y-1">
+                  <div className="flex justify-between font-bold text-xs">
+                    <span>Σ Fazendas (soma):</span>
+                    <span className="font-mono">{somaArrobas !== null ? `${formatNum(somaArrobas, 1)} @` : '—'}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span>Global exibido:</span>
+                    <span className="font-mono font-bold">{arrobasGlobalExibido !== null ? `${formatNum(arrobasGlobalExibido, 1)} @` : '—'}</span>
+                  </div>
+                  <div className="text-[9px] text-muted-foreground border-t pt-1 mt-1" style={{ color: 'hsl(var(--primary))' }}>
+                    ✅ Global = soma exata das fazendas (cada uma com resolverPesoOficial próprio)
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
       </CardContent>
@@ -457,6 +410,13 @@ export function DashboardFinanceiro({
   fazendaId,
 }: Props) {
   const [showAudit, setShowAudit] = useState(false);
+  const { fazendas } = useFazenda();
+
+  // IDs das fazendas reais (excluindo __global__)
+  const fazendaIdsReais = useMemo(
+    () => fazendas.filter(f => f.id !== '__global__').map(f => f.id),
+    [fazendas],
+  );
 
   const anosDisp = useMemo(() => {
     const set = new Set<string>();
@@ -485,6 +445,14 @@ export function DashboardFinanceiro({
   const zoo = useIndicadoresZootecnicos(
     fazendaId, Number(anoFiltro), mesNum,
     lancamentosPecuarios, saldosIniciais, pastos, categorias,
+  );
+
+  // ===========================================================================
+  // GLOBAL: arrobas produzidas = Σ fazendas (com pesos oficiais por fazenda)
+  // ===========================================================================
+  const arrobasGlobal = useArrobasGlobal(
+    isGlobal, lancamentosPecuarios, saldosIniciais, categorias,
+    Number(anoFiltro), mesNum, fazendaIdsReais,
   );
 
   // Derived zoo values for economic indicators
@@ -516,8 +484,12 @@ export function DashboardFinanceiro({
       ? rebanhosMensais.reduce((s, rm) => s + rm.media, 0) / rebanhosMensais.length
       : null;
 
-    // Arrobas produzidas acumuladas — direto do hook oficial
-    const arrobasProduzidasAcum = zoo.arrobasProduzidasAcumulado;
+    // Arrobas produzidas acumuladas:
+    // Global → soma das fazendas (useArrobasGlobal)
+    // Individual → direto do hook oficial
+    const arrobasProduzidasAcum = isGlobal
+      ? arrobasGlobal.somaArrobas
+      : zoo.arrobasProduzidasAcumulado;
 
     return {
       cabMediaMes,
@@ -530,7 +502,7 @@ export function DashboardFinanceiro({
       arrobasProduzidasMes: zoo.arrobasProduzidasMes,
       gmdAcumulado: zoo.gmdAcumulado,
     };
-  }, [zoo, saldosIniciais, anoFiltro, mesFiltro, lancamentosPecuarios]);
+  }, [zoo, saldosIniciais, anoFiltro, mesFiltro, lancamentosPecuarios, isGlobal, arrobasGlobal.somaArrobas]);
 
   // ===========================================================================
   // FINANCEIRO — filtros de lançamentos
@@ -847,14 +819,13 @@ export function DashboardFinanceiro({
             </CardContent>
           </Card>
 
-          {/* Auditoria de arrobas produzidas — Global vs Fazendas */}
+          {/* Auditoria de arrobas produzidas — Global = Σ Fazendas */}
           {isGlobal && (
             <AuditArrobasGlobal
-              lancamentosPecuarios={lancamentosPecuarios}
-              saldosIniciais={saldosIniciais}
+              porFazenda={arrobasGlobal.porFazenda}
+              somaArrobas={arrobasGlobal.somaArrobas}
               arrobasGlobalExibido={zooData.arrobasProduzidasAcum}
-              anoFiltro={Number(anoFiltro)}
-              mesFiltro={mesFiltro !== 'todos' ? Number(mesFiltro) : 12}
+              loading={arrobasGlobal.loading}
             />
           )}
           {/* Auditoria expandível */}
