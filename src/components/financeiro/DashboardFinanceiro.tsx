@@ -1,20 +1,50 @@
 /**
  * Dashboard financeiro — indicadores, rateio ADM e visão hierárquica.
+ *
+ * Regras de filtragem por fazenda:
+ * - Status Transação = Conciliado
+ * - Data base = Data Pagamento (YYYY-MM)
+ * - Entradas = tipo_operacao começa com "1"
+ * - Saídas = tipo_operacao começa com "2"
  */
 import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { TrendingDown, TrendingUp, DollarSign, BarChart3, Building2, AlertTriangle } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TrendingDown, TrendingUp, DollarSign, BarChart3, Building2, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_OPTIONS } from '@/lib/calculos/labels';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import {
   type FinanceiroLancamento,
   type RateioADM,
-  isDesembolsoProdutivo,
-  isDesembolsoPecuaria,
-  isReceita,
 } from '@/hooks/useFinanceiro';
+
+// ---------------------------------------------------------------------------
+// Helpers — correct classification
+// ---------------------------------------------------------------------------
+
+/** Conciliado check */
+const isConciliado = (l: FinanceiroLancamento) =>
+  (l.status_transacao || '').toLowerCase() === 'conciliado';
+
+/** Entrada = tipo_operacao starts with "1" */
+const isEntrada = (l: FinanceiroLancamento) =>
+  (l.tipo_operacao || '').startsWith('1');
+
+/** Saída = tipo_operacao starts with "2" */
+const isSaida = (l: FinanceiroLancamento) =>
+  (l.tipo_operacao || '').startsWith('2');
+
+/** Extract YYYY-MM from date string */
+const datePagtoAnoMes = (l: FinanceiroLancamento): string | null => {
+  if (!l.data_pagamento || l.data_pagamento.length < 7) return null;
+  return l.data_pagamento.substring(0, 7);
+};
+
+// ---------------------------------------------------------------------------
+// Props
+// ---------------------------------------------------------------------------
 
 interface Props {
   lancamentos: FinanceiroLancamento[];
@@ -36,11 +66,79 @@ interface Props {
   fazendasSemArea?: string[];
 }
 
+// ---------------------------------------------------------------------------
+// Audit table sub-component
+// ---------------------------------------------------------------------------
+
+function AuditTable({ title, lancamentos, totalLabel }: { title: string; lancamentos: FinanceiroLancamento[]; totalLabel: string }) {
+  const [open, setOpen] = useState(false);
+  const total = lancamentos.reduce((s, l) => s + Math.abs(l.valor), 0);
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <button onClick={() => setOpen(!open)} className="flex items-center justify-between w-full">
+          <CardTitle className="text-sm">
+            🔍 {title} ({lancamentos.length})
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold">{formatMoeda(total)}</span>
+            {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </div>
+        </button>
+      </CardHeader>
+      {open && (
+        <CardContent className="pt-0">
+          <div className="overflow-auto max-h-[300px]">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-[10px] px-2 py-1.5">Data Pgto</TableHead>
+                  <TableHead className="text-[10px] px-2 py-1.5">Produto</TableHead>
+                  <TableHead className="text-[10px] px-2 py-1.5 text-right">Valor</TableHead>
+                  <TableHead className="text-[10px] px-2 py-1.5">Status</TableHead>
+                  <TableHead className="text-[10px] px-2 py-1.5">Tipo Op.</TableHead>
+                  <TableHead className="text-[10px] px-2 py-1.5">Conta Origem</TableHead>
+                  <TableHead className="text-[10px] px-2 py-1.5">Conta Destino</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {lancamentos.map((l) => (
+                  <TableRow key={l.id}>
+                    <TableCell className="text-[10px] px-2 py-1">{l.data_pagamento || '-'}</TableCell>
+                    <TableCell className="text-[10px] px-2 py-1 max-w-[120px] truncate">{l.produto || '-'}</TableCell>
+                    <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatMoeda(Math.abs(l.valor))}</TableCell>
+                    <TableCell className="text-[10px] px-2 py-1">{l.status_transacao || '-'}</TableCell>
+                    <TableCell className="text-[10px] px-2 py-1">{l.tipo_operacao || '-'}</TableCell>
+                    <TableCell className="text-[10px] px-2 py-1 max-w-[100px] truncate">{l.conta_origem || '-'}</TableCell>
+                    <TableCell className="text-[10px] px-2 py-1 max-w-[100px] truncate">{l.conta_destino || '-'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="border-t mt-2 pt-2 flex justify-between text-xs">
+            <span className="font-bold">{lancamentos.length} lançamentos</span>
+            <span className="font-bold">{totalLabel}: {formatMoeda(total)}</span>
+          </div>
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cabMediaAcum, arrobasProduzidasAcum, rateioADM = [], isGlobal = false, fazendasSemArea = [] }: Props) {
+  const [showAudit, setShowAudit] = useState(false);
+
   const anosDisp = useMemo(() => {
     const set = new Set<string>();
     set.add(String(new Date().getFullYear()));
     lancamentos.forEach(l => {
+      if (l.data_pagamento) set.add(l.data_pagamento.substring(0, 4));
       if (l.ano_mes) set.add(l.ano_mes.substring(0, 4));
     });
     return Array.from(set).sort().reverse();
@@ -49,23 +147,30 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState('todos');
 
+  // Build target period string: "YYYY-MM" or just "YYYY"
+  const periodoAlvo = useMemo(
+    () => mesFiltro !== 'todos' ? `${anoFiltro}-${mesFiltro}` : anoFiltro,
+    [anoFiltro, mesFiltro],
+  );
+
+  // Filter lancamentos: conciliado + data_pagamento in period
   const filtrados = useMemo(() => {
     return lancamentos.filter(l => {
-      if (!l.ano_mes) return false;
-      if (!l.ano_mes.startsWith(anoFiltro)) return false;
-      if (mesFiltro !== 'todos' && l.ano_mes !== `${anoFiltro}-${mesFiltro}`) return false;
-      return true;
+      if (!isConciliado(l)) return false;
+      const am = datePagtoAnoMes(l);
+      if (!am) return false;
+      return am.startsWith(periodoAlvo);
     });
-  }, [lancamentos, anoFiltro, mesFiltro]);
+  }, [lancamentos, periodoAlvo]);
+
+  // Split into entries and exits
+  const entradasList = useMemo(() => filtrados.filter(isEntrada), [filtrados]);
+  const saidasList = useMemo(() => filtrados.filter(isSaida), [filtrados]);
 
   // Rateio filtrado pelo período
   const rateioFiltrado = useMemo(() => {
-    return rateioADM.filter(r => {
-      if (!r.anoMes.startsWith(anoFiltro)) return false;
-      if (mesFiltro !== 'todos' && r.anoMes !== `${anoFiltro}-${mesFiltro}`) return false;
-      return true;
-    });
-  }, [rateioADM, anoFiltro, mesFiltro]);
+    return rateioADM.filter(r => r.anoMes.startsWith(periodoAlvo));
+  }, [rateioADM, periodoAlvo]);
 
   const totalRateioFiltrado = useMemo(
     () => rateioFiltrado.reduce((s, r) => s + r.valorRateado, 0),
@@ -76,33 +181,33 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
   const ind = useMemo(() => {
     if (!indicadores) return null;
 
-    const entradas = filtrados.filter(isReceita).reduce((s, l) => s + Math.abs(l.valor), 0);
-    const saidas = filtrados.filter(l => !isReceita(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
-    const desembolsoProd = filtrados.filter(isDesembolsoProdutivo).reduce((s, l) => s + Math.abs(l.valor), 0);
-    const desembolsoPec = filtrados.filter(isDesembolsoPecuaria).reduce((s, l) => s + Math.abs(l.valor), 0);
+    const entradas = entradasList.reduce((s, l) => s + Math.abs(l.valor), 0);
+    const saidas = saidasList.reduce((s, l) => s + Math.abs(l.valor), 0);
 
-    // Add rateio for per-fazenda view
     const saidasComRateio = saidas + totalRateioFiltrado;
-    const desembolsoProdComRateio = desembolsoProd + totalRateioFiltrado;
-    const desembolsoPecComRateio = desembolsoPec + totalRateioFiltrado;
 
-    // Custo/cabeça acumulado
-    const custoAcumPec = lancamentos
-      .filter(l => l.ano_mes?.startsWith(anoFiltro) && isDesembolsoPecuaria(l))
+    // Custo/cabeça acumulado (all months of the year)
+    const saidasAcum = lancamentos
+      .filter(l => {
+        if (!isConciliado(l)) return false;
+        if (!isSaida(l)) return false;
+        const am = datePagtoAnoMes(l);
+        return am ? am.startsWith(anoFiltro) : false;
+      })
       .reduce((s, l) => s + Math.abs(l.valor), 0);
     const rateioAcum = rateioADM
       .filter(r => r.anoMes.startsWith(anoFiltro))
       .reduce((s, r) => s + r.valorRateado, 0);
-    const custoAcumTotal = custoAcumPec + rateioAcum;
+    const custoAcumTotal = saidasAcum + rateioAcum;
 
-    const custoCabMes = cabMediaMes && cabMediaMes > 0 ? desembolsoPecComRateio / cabMediaMes : null;
+    const custoCabMes = cabMediaMes && cabMediaMes > 0 ? saidasComRateio / cabMediaMes : null;
     const custoCabAcum = cabMediaAcum && cabMediaAcum > 0 ? custoAcumTotal / cabMediaAcum : null;
     const custoArrobaProd = arrobasProduzidasAcum && arrobasProduzidasAcum > 0 ? custoAcumTotal / arrobasProduzidasAcum : null;
 
-    // Hierarquia macro
+    // Hierarquia macro (saídas only)
     const macroMap = new Map<string, number>();
-    for (const l of filtrados) {
-      if (!isDesembolsoProdutivo(l) || !l.macro_custo) continue;
+    for (const l of saidasList) {
+      if (!l.macro_custo) continue;
       macroMap.set(l.macro_custo, (macroMap.get(l.macro_custo) || 0) + Math.abs(l.valor));
     }
     if (totalRateioFiltrado > 0) {
@@ -116,30 +221,31 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
       entradas,
       saidas,
       saidasComRateio,
-      desembolsoProd,
-      desembolsoProdComRateio,
-      desembolsoPec,
-      desembolsoPecComRateio,
       custoCabMes,
       custoCabAcum,
       custoArrobaProd,
       porMacro,
       rateioADM: totalRateioFiltrado,
     };
-  }, [filtrados, indicadores, lancamentos, anoFiltro, cabMediaMes, cabMediaAcum, arrobasProduzidasAcum, totalRateioFiltrado, rateioADM]);
+  }, [entradasList, saidasList, indicadores, lancamentos, anoFiltro, cabMediaMes, cabMediaAcum, arrobasProduzidasAcum, totalRateioFiltrado, rateioADM]);
 
-  // Chart data
+  // Chart data — rebuild from lancamentos with correct filters
   const chartData = useMemo(() => {
-    if (!indicadores) return [];
-    return indicadores.resumoMensal
-      .filter(r => r.anoMes.startsWith(anoFiltro))
-      .map(r => ({
-        mes: r.anoMes.substring(5),
-        Entradas: r.entradas,
-        Saídas: r.saidas,
-        ...(r.rateioADM && r.rateioADM > 0 ? { 'Rateio ADM': r.rateioADM } : {}),
-      }));
-  }, [indicadores, anoFiltro]);
+    const months = new Map<string, { entradas: number; saidas: number }>();
+    for (const l of lancamentos) {
+      if (!isConciliado(l)) continue;
+      const am = datePagtoAnoMes(l);
+      if (!am || !am.startsWith(anoFiltro)) continue;
+      const m = am.substring(5);
+      const entry = months.get(m) || { entradas: 0, saidas: 0 };
+      if (isEntrada(l)) entry.entradas += Math.abs(l.valor);
+      if (isSaida(l)) entry.saidas += Math.abs(l.valor);
+      months.set(m, entry);
+    }
+    return Array.from(months.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([mes, v]) => ({ mes, Entradas: v.entradas, Saídas: v.saidas }));
+  }, [lancamentos, anoFiltro]);
 
   if (lancamentos.length === 0) {
     return (
@@ -192,6 +298,11 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
         </Select>
       </div>
 
+      {/* Critério info */}
+      <div className="text-[10px] text-muted-foreground bg-muted rounded-md px-2.5 py-1.5">
+        Filtros: Status = Conciliado · Base = Data Pagamento · Entradas = 1-* · Saídas = 2-*
+      </div>
+
       {ind && (
         <>
           {/* Cards principais */}
@@ -202,6 +313,7 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
                   <TrendingUp className="h-3 w-3 text-green-600" /> Entradas
                 </div>
                 <p className="text-lg font-bold text-green-700 dark:text-green-400">{formatMoeda(ind.entradas)}</p>
+                <p className="text-[10px] text-muted-foreground">{entradasList.length} lançamentos</p>
               </CardContent>
             </Card>
             <Card>
@@ -210,36 +322,13 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
                   <TrendingDown className="h-3 w-3 text-red-600" /> Saídas
                 </div>
                 <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.saidasComRateio)}</p>
-                {!isGlobal && ind.rateioADM > 0 && (
+                {!isGlobal && ind.rateioADM > 0 ? (
                   <div className="text-[10px] text-muted-foreground mt-0.5 space-y-0.5">
-                    <p>Próprio: {formatMoeda(ind.saidas)}</p>
+                    <p>Próprio: {formatMoeda(ind.saidas)} ({saidasList.length} lanç.)</p>
                     <p className="text-amber-600 dark:text-amber-400">+ Rateio ADM: {formatMoeda(ind.rateioADM)}</p>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <Card>
-              <CardContent className="p-3">
-                <div className="text-xs text-muted-foreground mb-1">Desemb. Produtivo</div>
-                <p className="text-base font-bold">{formatMoeda(ind.desembolsoProdComRateio)}</p>
-                {!isGlobal && ind.rateioADM > 0 && (
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    Próprio: {formatMoeda(ind.desembolsoProd)}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-3">
-                <div className="text-xs text-muted-foreground mb-1">Desemb. Pecuária</div>
-                <p className="text-base font-bold">{formatMoeda(ind.desembolsoPecComRateio)}</p>
-                {!isGlobal && ind.rateioADM > 0 && (
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    Próprio: {formatMoeda(ind.desembolsoPec)}
-                  </p>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground">{saidasList.length} lançamentos</p>
                 )}
               </CardContent>
             </Card>
@@ -282,6 +371,59 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
             </Card>
           </div>
 
+          {/* Auditoria expandível */}
+          {!isGlobal && (
+            <div className="space-y-2">
+              <button
+                onClick={() => setShowAudit(!showAudit)}
+                className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors"
+              >
+                🔍 Auditoria de lançamentos
+                {showAudit ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </button>
+
+              {showAudit && (
+                <div className="space-y-3">
+                  <AuditTable
+                    title="Entradas próprias (1-*)"
+                    lancamentos={entradasList}
+                    totalLabel="Total entradas"
+                  />
+                  <AuditTable
+                    title="Saídas próprias (2-*)"
+                    lancamentos={saidasList}
+                    totalLabel="Total saídas"
+                  />
+
+                  {/* Summary */}
+                  <Card className="bg-muted/50">
+                    <CardContent className="p-3 space-y-1">
+                      <div className="text-xs font-bold mb-2">Resumo da composição</div>
+                      <div className="flex justify-between text-xs">
+                        <span>Entradas próprias</span>
+                        <span className="font-bold text-green-700 dark:text-green-400">{formatMoeda(ind.entradas)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span>Saídas próprias</span>
+                        <span className="font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.saidas)}</span>
+                      </div>
+                      {ind.rateioADM > 0 && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-amber-600 dark:text-amber-400">+ Rateio ADM</span>
+                          <span className="font-bold text-amber-600 dark:text-amber-400">{formatMoeda(ind.rateioADM)}</span>
+                        </div>
+                      )}
+                      <div className="border-t pt-1 mt-1 flex justify-between text-xs">
+                        <span className="font-bold">Total saídas + rateio</span>
+                        <span className="font-bold">{formatMoeda(ind.saidasComRateio)}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Gráfico */}
           {chartData.length > 0 && (
             <Card>
@@ -320,12 +462,12 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
               <CardContent>
                 <div className="space-y-2">
                   {ind.porMacro.map(m => {
-                    const pct = ind.desembolsoProdComRateio > 0 ? (m.valor / ind.desembolsoProdComRateio) * 100 : 0;
-                    const isRateio = m.nome === 'ADM (Rateio)';
+                    const pct = ind.saidasComRateio > 0 ? (m.valor / ind.saidasComRateio) * 100 : 0;
+                    const isRateioItem = m.nome === 'ADM (Rateio)';
                     return (
                       <div key={m.nome}>
                         <div className="flex justify-between text-xs mb-0.5">
-                          <span className={`font-bold truncate mr-2 ${isRateio ? 'text-amber-600 dark:text-amber-400' : ''}`}>
+                          <span className={`font-bold truncate mr-2 ${isRateioItem ? 'text-amber-600 dark:text-amber-400' : ''}`}>
                             {m.nome}
                           </span>
                           <span className="text-muted-foreground whitespace-nowrap">
@@ -334,7 +476,7 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
                         </div>
                         <div className="h-2 bg-muted rounded-full overflow-hidden">
                           <div
-                            className={`h-full rounded-full transition-all ${isRateio ? 'bg-amber-500' : 'bg-primary'}`}
+                            className={`h-full rounded-full transition-all ${isRateioItem ? 'bg-amber-500' : 'bg-primary'}`}
                             style={{ width: `${Math.min(pct, 100)}%` }}
                           />
                         </div>
