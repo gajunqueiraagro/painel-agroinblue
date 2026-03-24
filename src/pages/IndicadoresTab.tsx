@@ -4,11 +4,9 @@
  * NÃO faz nenhum cálculo próprio, exceto peso total = cab × peso médio.
  */
 
-import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useMemo } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Info } from 'lucide-react';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -22,9 +20,12 @@ import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
+  anoInicial?: string;
+  mesInicial?: string;
+  onNavigateSubTab?: (tab: string) => void;
 }
 
-export function IndicadoresTab({ lancamentos, saldosIniciais }: Props) {
+export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesInicial, onNavigateSubTab }: Props) {
   const { fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
@@ -37,8 +38,8 @@ export function IndicadoresTab({ lancamentos, saldosIniciais }: Props) {
     return Array.from(anos).sort().reverse();
   }, [lancamentos, saldosIniciais]);
 
-  const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
-  const [mesFiltro, setMesFiltro] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
+  const [anoFiltro, setAnoFiltro] = useStickyState(anoInicial || String(new Date().getFullYear()));
+  const [mesFiltro, setMesFiltro] = useStickyState(mesInicial || String(new Date().getMonth() + 1).padStart(2, '0'));
 
   const ind = useIndicadoresZootecnicos(
     fazendaId, Number(anoFiltro), Number(mesFiltro),
@@ -124,8 +125,13 @@ export function IndicadoresTab({ lancamentos, saldosIniciais }: Props) {
               semBase={ind.valorPorCabeca === null}
             />
             <div className="flex flex-col justify-end">
-              {ind.valorRebanho !== null && (
-                <LinkDiscreto label="Ver fechamento" tabKey="valor-rebanho" />
+              {ind.valorRebanho !== null && onNavigateSubTab && (
+                <button
+                  className="text-xs text-primary underline-offset-2 hover:underline text-left"
+                  onClick={() => onNavigateSubTab('valor')}
+                >
+                  Ver fechamento →
+                </button>
               )}
             </div>
           </div>
@@ -146,22 +152,22 @@ export function IndicadoresTab({ lancamentos, saldosIniciais }: Props) {
         </CardContent>
       </Card>
 
-      {/* BLOCO 3 — Produção */}
+      {/* BLOCO 3 — Produção (arrobas produzidas) */}
       <Card>
         <CardContent className="p-4 space-y-3">
           <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Produção</h3>
           <div className="grid grid-cols-3 gap-3">
             <KpiCard
-              label="@ saídas mês"
-              valor={formatNum(ind.arrobasSaidasMes, 1)}
+              label="@ produzidas mês"
+              valor={ind.arrobasProduzidasMes !== null ? formatNum(ind.arrobasProduzidasMes, 1) : '—'}
               unidade="@"
-              comparacao={ind.comparacoes.arrobasSaidasMes}
+              semBase={ind.arrobasProduzidasMes === null}
             />
             <KpiCard
-              label="@ saídas acum."
-              valor={formatNum(ind.arrobasSaidasAcumuladoAno, 1)}
+              label="@ produzidas acum."
+              valor={ind.arrobasProduzidasAcumulado !== null ? formatNum(ind.arrobasProduzidasAcumulado, 1) : '—'}
               unidade="@"
-              comparacao={ind.comparacoes.arrobasSaidasAcumuladoAno}
+              semBase={ind.arrobasProduzidasAcumulado === null}
             />
             <KpiCard
               label="@/ha acum."
@@ -180,8 +186,8 @@ export function IndicadoresTab({ lancamentos, saldosIniciais }: Props) {
           {ind.qualidade.gmdDisponivel ? (
             <>
               <div className="grid grid-cols-2 gap-3">
-                <KpiCard label="GMD mês" valor={ind.gmdMes !== null ? formatNum(ind.gmdMes, 2) : '—'} unidade="kg/dia" />
-                <KpiCard label="GMD acumulado" valor={ind.gmdAcumulado !== null ? formatNum(ind.gmdAcumulado, 2) : '—'} unidade="kg/dia" />
+                <KpiCard label="GMD mês" valor={ind.gmdMes !== null ? formatNum(ind.gmdMes, 3) : '—'} unidade="kg/dia" />
+                <KpiCard label="GMD acumulado" valor={ind.gmdAcumulado !== null ? formatNum(ind.gmdAcumulado, 3) : '—'} unidade="kg/dia" />
               </div>
               <GmdDetalheSheet abertura={ind.gmdAberturaMes} mesLabel={mesLabel} anoLabel={anoFiltro} />
             </>
@@ -200,7 +206,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais }: Props) {
           <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
             Desfrute — Acumulado {anoFiltro}
           </h3>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <KpiCard
               label="Desfrute cab."
               valor={ind.desfruteCabecasAcumulado !== null ? formatNum(ind.desfruteCabecasAcumulado, 1) : '—'}
@@ -212,6 +218,12 @@ export function IndicadoresTab({ lancamentos, saldosIniciais }: Props) {
               valor={ind.desfruteArrobasAcumulado !== null ? formatNum(ind.desfruteArrobasAcumulado, 1) : '—'}
               unidade="%"
               semBase={ind.desfruteArrobasAcumulado === null}
+            />
+            <KpiCard
+              label="@ desfrutadas acum."
+              valor={formatNum(ind.arrobasSaidasAcumuladoAno, 1)}
+              unidade="@"
+              comparacao={ind.comparacoes.arrobasSaidasAcumuladoAno}
             />
           </div>
         </CardContent>
@@ -236,22 +248,14 @@ export function IndicadoresTab({ lancamentos, saldosIniciais }: Props) {
 // Helpers
 // ---------------------------------------------------------------------------
 
+import { useState } from 'react';
+
+function useStickyState(initial: string): [string, (v: string) => void] {
+  return useState(initial);
+}
+
 function formatMoedaCompacto(val: number): string {
   if (val >= 1_000_000) return `R$ ${formatNum(val / 1_000_000, 2)}M`;
   if (val >= 1_000) return `R$ ${formatNum(val / 1_000, 1)}mil`;
   return formatMoeda(val);
-}
-
-function LinkDiscreto({ label, tabKey }: { label: string; tabKey: string }) {
-  return (
-    <button
-      className="text-xs text-primary underline-offset-2 hover:underline text-left"
-      onClick={() => {
-        // Dispatch custom event to switch tab in parent Index page
-        window.dispatchEvent(new CustomEvent('navigate-tab', { detail: tabKey }));
-      }}
-    >
-      {label} →
-    </button>
-  );
 }

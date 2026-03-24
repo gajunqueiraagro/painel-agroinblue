@@ -46,7 +46,7 @@ export function GmdDetalheSheet({ abertura, mesLabel, anoLabel }: Props) {
           {/* Resultado */}
           <div className="text-center py-3 border rounded-lg bg-muted/30">
             <span className="text-3xl font-bold text-foreground">
-              {abertura.gmd !== null ? formatNum(abertura.gmd, 2) : '—'}
+              {abertura.gmd !== null ? formatNum(abertura.gmd, 3) : '—'}
             </span>
             <span className="text-sm text-muted-foreground ml-1">kg/dia</span>
             {!abertura.baseCompleta && (

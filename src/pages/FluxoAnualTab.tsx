@@ -65,7 +65,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   }
 
   return (
-    <Tabs defaultValue="evolucao" className="w-full">
+    <Tabs value={activeSubTab} onValueChange={setActiveSubTab} className="w-full">
       <TabsList className="w-full grid grid-cols-4 mx-4 mt-2" style={{ maxWidth: 'calc(100% - 2rem)' }}>
         <TabsTrigger value="indicadores">Indicadores</TabsTrigger>
         <TabsTrigger value="evolucao">Evolução</TabsTrigger>
@@ -74,7 +74,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
       </TabsList>
 
       <TabsContent value="indicadores">
-        <IndicadoresTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />
+        <IndicadoresTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onNavigateSubTab={handleNavigateSubTab} />
       </TabsContent>
 
       <TabsContent value="fech_cat">
