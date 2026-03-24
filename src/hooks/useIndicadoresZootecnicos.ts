@@ -331,7 +331,7 @@ export function useIndicadoresZootecnicos(
         let totalYoY = 0;
         saldoMapYoY.forEach((qtd, cat) => {
           const preco = precoMapYoY.get(cat) || 0;
-          const pesoKg = getPesoMedioCat(cat, saldosIniciais, lancamentos, ano - 1, mes);
+          const pesoKg = getPesoMedioCatComPastos(cat, pesoFechamentoYoYMap, saldosIniciais, lancamentos, ano - 1, mes);
           totalYoY += qtd * (pesoKg || 0) * preco;
         });
         setValorRebanhoYoY(totalYoY > 0 ? totalYoY : null);
