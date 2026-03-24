@@ -20,7 +20,7 @@ interface Props {
   onConfirmar: (nomeArquivo: string, linhas: LinhaImportada[], totalLinhas: number, totalErros: number) => Promise<boolean>;
 }
 
-export function ImportacaoFinanceira({ importacoes, centrosCusto, onConfirmar }: Props) {
+export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendasCodigos, onConfirmar }: Props) {
   const { fazendaAtual } = useFazenda();
   const fileRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<{
