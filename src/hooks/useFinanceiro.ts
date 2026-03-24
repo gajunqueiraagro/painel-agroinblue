@@ -147,7 +147,7 @@ export function useFinanceiro() {
         setLancamentosADM([]);
       } else {
         // Per-fazenda: own lancamentos + ADM lancamentos for rateio
-        const promises: Promise<any>[] = [
+        const promises: PromiseLike<any>[] = [
           supabase
             .from('financeiro_importacoes')
             .select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro')
