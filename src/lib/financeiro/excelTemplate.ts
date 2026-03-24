@@ -10,7 +10,7 @@ const COLUNAS = [
   'Fornecedor',
   'Valor',
   'Status Transação',
-  'Fazenda',
+  'Codigo_Fazenda',
   'Tipo Operação',
   'Conta Origem',
   'Conta Destino',
