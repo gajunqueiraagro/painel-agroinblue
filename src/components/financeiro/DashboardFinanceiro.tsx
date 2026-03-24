@@ -114,9 +114,12 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
 
     return {
       entradas,
-      saidas: saidasComRateio,
-      desembolsoProd: desembolsoProdComRateio,
-      desembolsoPec: desembolsoPecComRateio,
+      saidas,
+      saidasComRateio,
+      desembolsoProd,
+      desembolsoProdComRateio,
+      desembolsoPec,
+      desembolsoPecComRateio,
       custoCabMes,
       custoCabAcum,
       custoArrobaProd,
