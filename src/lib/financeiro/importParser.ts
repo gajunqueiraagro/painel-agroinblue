@@ -162,18 +162,40 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
   return { linhasValidas, erros, totalLinhas: dataRows.length };
 }
 
-/** Valida divergência de fazenda */
-export function validarFazenda(
+/** Mapeia codigo_fazenda → fazenda_id usando o cadastro de fazendas */
+export interface FazendaCodigo {
+  id: string;
+  codigo_importacao: string;
+}
+
+export function validarEMapearFazendas(
   linhas: LinhaImportada[],
-  fazendaAtiva: string,
+  fazendasCodigos: FazendaCodigo[],
+  codigoAdm: string = 'ADM',
 ): ErroImportacao[] {
   const erros: ErroImportacao[] = [];
+  const mapaCodigoPara = new Map<string, string>();
+  for (const f of fazendasCodigos) {
+    if (f.codigo_importacao) {
+      mapaCodigoPara.set(f.codigo_importacao.toUpperCase().trim(), f.id);
+    }
+  }
+
   for (const l of linhas) {
-    if (l.fazenda && l.fazenda.toLowerCase().trim() !== fazendaAtiva.toLowerCase().trim()) {
+    const cod = l.codigoFazenda.toUpperCase().trim();
+    if (cod === codigoAdm.toUpperCase()) {
+      // ADM = global/administrativo — will be stored with the current fazenda but marked
+      l.fazendaId = '__adm__';
+      continue;
+    }
+    const fId = mapaCodigoPara.get(cod);
+    if (fId) {
+      l.fazendaId = fId;
+    } else {
       erros.push({
         linha: l.linha,
-        campo: 'Fazenda',
-        mensagem: `Fazenda "${l.fazenda}" difere da ativa "${fazendaAtiva}"`,
+        campo: 'Codigo_Fazenda',
+        mensagem: `Código "${l.codigoFazenda}" não encontrado no cadastro de fazendas`,
       });
     }
   }
