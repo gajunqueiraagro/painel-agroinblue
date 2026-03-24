@@ -345,7 +345,7 @@ export function DashboardFinanceiro({ lancamentos, indicadores, lancamentosPecua
   // ===========================================================================
   const zoo = useMemo(() => {
     if (lancamentosPecuarios.length === 0 && saldosIniciais.length === 0) {
-      return { cabMediaMes: null, cabMediaAcum: null, arrobasProduzidasAcum: null };
+      return { cabMediaMes: null, cabMediaAcum: null, arrobasProduzidasAcum: null, saldoAnterior: 0, saldoFinalMes: 0, saldoInicialAno: 0, pesoInicialAno: 0, pesoFinalMes: 0, pesoEntradasAcum: 0, pesoSaidasAcum: 0, ganhoLiquidoAcum: 0 };
     }
 
     const ano = Number(anoFiltro);
