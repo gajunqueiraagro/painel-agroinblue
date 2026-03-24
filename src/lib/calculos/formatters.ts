@@ -8,7 +8,10 @@
  */
 export function formatNum(val: number | null | undefined, decimals = 0): string {
   if (val === null || val === undefined) return '—';
-  return val.toFixed(decimals).replace('.', ',');
+  return val.toLocaleString('pt-BR', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
 }
 
 /**
