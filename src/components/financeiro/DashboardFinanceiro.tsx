@@ -24,6 +24,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import {
   type FinanceiroLancamento,
   type RateioADM,
+  isDesembolsoProdutivo,
 } from '@/hooks/useFinanceiro';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
