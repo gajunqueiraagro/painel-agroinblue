@@ -11,7 +11,7 @@ import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TrendingDown, TrendingUp, DollarSign, BarChart3, Building2, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { TrendingDown, TrendingUp, DollarSign, BarChart3, Building2, AlertTriangle, ChevronDown, ChevronUp, Activity } from 'lucide-react';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_OPTIONS } from '@/lib/calculos/labels';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
@@ -19,6 +19,9 @@ import {
   type FinanceiroLancamento,
   type RateioADM,
 } from '@/hooks/useFinanceiro';
+import type { Lancamento, SaldoInicial } from '@/types/cattle';
+import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
+import { calcArrobasSafe } from '@/lib/calculos/economicos';
 
 // ---------------------------------------------------------------------------
 // Helpers — correct classification
@@ -58,9 +61,8 @@ interface Props {
     porGrupo: { nome: string; valor: number }[];
     porCentro: { nome: string; valor: number }[];
   } | null;
-  cabMediaMes?: number;
-  cabMediaAcum?: number;
-  arrobasProduzidasAcum?: number;
+  lancamentosPecuarios?: Lancamento[];
+  saldosIniciais?: SaldoInicial[];
   rateioADM?: RateioADM[];
   isGlobal?: boolean;
   fazendasSemArea?: string[];
