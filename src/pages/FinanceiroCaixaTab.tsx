@@ -50,11 +50,12 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
 
   const tabs: { id: SubTab; label: string; icon: string }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { id: 'analise', label: 'Análise', icon: '📈' },
     ...(fazendaADM ? [{ id: 'rateio' as SubTab, label: 'Rateio ADM', icon: '🏢' }] : []),
     { id: 'importacao', label: 'Importação', icon: '📥' },
   ];
 
-  const gridCols = tabs.length === 3 ? 'grid-cols-3' : 'grid-cols-2';
+  const gridCols = tabs.length === 4 ? 'grid-cols-4' : 'grid-cols-3';
 
   return (
     <div className="p-4 max-w-full mx-auto space-y-3 animate-fade-in pb-20">
