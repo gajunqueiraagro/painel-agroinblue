@@ -355,7 +355,7 @@ export function useIndicadoresZootecnicos(
     const itensParaPeso: { quantidade: number; pesoKg: number | null }[] = [];
     saldoMap.forEach((qtd, cat) => {
       if (qtd > 0) {
-        const { valor } = getPesoOficial(cat, saldosIniciais, lancamentos, ano, mes, pesoFechamentoMap);
+        const { valor } = resolverPesoOficial(cat, pesoFechamentoMap, saldosIniciais, lancamentos, ano, mes);
         itensParaPeso.push({ quantidade: qtd, pesoKg: valor });
       }
     });
