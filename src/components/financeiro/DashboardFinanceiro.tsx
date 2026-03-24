@@ -403,6 +403,39 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
 
               {showAudit && (
                 <div className="space-y-3">
+                  {/* Status audit breakdown */}
+                  <Card className="border-dashed">
+                    <CardContent className="p-3">
+                      <div className="text-xs font-bold mb-2">📊 Lançamentos por Status no período</div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-[10px] px-2 py-1.5">Status</TableHead>
+                            <TableHead className="text-[10px] px-2 py-1.5 text-right">Qtde</TableHead>
+                            <TableHead className="text-[10px] px-2 py-1.5 text-right">Total</TableHead>
+                            <TableHead className="text-[10px] px-2 py-1.5 text-center">Usado?</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {auditStatus.map(s => {
+                            const usado = s.status.toLowerCase() === 'conciliado';
+                            return (
+                              <TableRow key={s.status} className={usado ? 'bg-green-50 dark:bg-green-950/20' : 'opacity-60'}>
+                                <TableCell className="text-[10px] px-2 py-1 font-bold">{s.status}</TableCell>
+                                <TableCell className="text-[10px] px-2 py-1 text-right">{s.count}</TableCell>
+                                <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatMoeda(s.total)}</TableCell>
+                                <TableCell className="text-[10px] px-2 py-1 text-center">{usado ? '✅' : '❌'}</TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                      <div className="border-t mt-2 pt-2 text-[10px] text-muted-foreground">
+                        Total no período: {todosNoPeriodo.length} lançamentos · Usados (Conciliado): {filtrados.length}
+                      </div>
+                    </CardContent>
+                  </Card>
+
                   <AuditTable
                     title="Entradas próprias (1-*)"
                     lancamentos={entradasList}
