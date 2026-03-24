@@ -331,12 +331,12 @@ export function CadastrosTab() {
         )}
       </div>
 
-      <Accordion type="multiple" defaultValue={['codigo', 'dados', 'contato', 'bancario', 'roteiro', 'pastos']} className="space-y-2">
-        {/* Código da Fazenda */}
-        <AccordionItem value="codigo" className="border rounded-lg">
-          <AccordionTrigger className="px-4 py-3 text-sm font-bold">🏷️ Código da Fazenda</AccordionTrigger>
-          <AccordionContent className="px-4 pb-4 space-y-3">
-            <CodigoFazendaField fazendaAtual={fazendaAtual} />
+      <Accordion type="multiple" defaultValue={['fazendas', 'dados', 'contato', 'bancario', 'roteiro', 'pastos']} className="space-y-2">
+        {/* Fazendas */}
+        <AccordionItem value="fazendas" className="border rounded-lg">
+          <AccordionTrigger className="px-4 py-3 text-sm font-bold">🏡 Fazendas</AccordionTrigger>
+          <AccordionContent className="px-4 pb-4">
+            <FazendasList />
           </AccordionContent>
         </AccordionItem>
 
