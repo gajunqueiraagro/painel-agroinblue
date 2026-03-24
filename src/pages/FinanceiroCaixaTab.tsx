@@ -21,7 +21,7 @@ interface Props {
 
 export function FinanceiroCaixaTab({ cabMediaMes, cabMediaAcum, arrobasProduzidasAcum }: Props) {
   const [subTab, setSubTab] = useState<SubTab>('dashboard');
-  const { importacoes, lancamentos, centrosCusto, indicadores, loading, confirmarImportacao } = useFinanceiro();
+  const { importacoes, lancamentos, centrosCusto, indicadores, rateioADM, loading, confirmarImportacao, isGlobal } = useFinanceiro();
 
   const tabs: { id: SubTab; label: string; icon: string }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
@@ -60,6 +60,8 @@ export function FinanceiroCaixaTab({ cabMediaMes, cabMediaAcum, arrobasProduzida
               cabMediaMes={cabMediaMes}
               cabMediaAcum={cabMediaAcum}
               arrobasProduzidasAcum={arrobasProduzidasAcum}
+              rateioADM={rateioADM}
+              isGlobal={isGlobal}
             />
           )}
           {subTab === 'importacao' && (
