@@ -398,7 +398,8 @@ export function useIndicadoresZootecnicos(
     const estoqueFinalDetalhe: EstoqueCategoriaDetalhe[] = [];
     let pesoFinalMes = 0;
     saldoMap.forEach((qtd, cat) => {
-      const { valor: pesoMedio, fonte } = getPesoOficial(cat, saldosIniciais, lancamentos, ano, mes, pesoFechamentoMap);
+      const { valor: pesoMedio, origem } = resolverPesoOficial(cat, pesoFechamentoMap, saldosIniciais, lancamentos, ano, mes);
+      const fonte = origemToFonte(origem);
       const pesoTotal = qtd * (pesoMedio || 0);
       pesoFinalMes += pesoTotal;
       if (qtd !== 0) {
