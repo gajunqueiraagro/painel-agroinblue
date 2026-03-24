@@ -12,6 +12,7 @@ export interface LinhaImportada {
   valor: number;
   statusTransacao: string | null;
   fazenda: string | null;
+  fazendaId: string | null;
   tipoOperacao: string | null;
   contaOrigem: string | null;
   contaDestino: string | null;
@@ -47,16 +48,13 @@ function str(val: unknown): string | null {
 
 function parseDate(val: unknown): string | null {
   if (!val) return null;
-  // Handle Excel serial dates
   if (typeof val === 'number') {
     const d = XLSX.SSF.parse_date_code(val);
     if (d) return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
     return null;
   }
   const s = String(val).trim();
-  // YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  // DD/MM/YYYY
   const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   if (m) return `${m[3]}-${m[2]}-${m[1]}`;
   return null;
@@ -74,13 +72,11 @@ function parseAnoMes(val: unknown): string | null {
   if (!val) return null;
   const s = String(val).trim();
   if (/^\d{4}-\d{2}$/.test(s)) return s;
-  // Try YYYY/MM
   const m = s.match(/^(\d{4})[\/\-](\d{1,2})$/);
   if (m) return `${m[1]}-${m[2].padStart(2, '0')}`;
   return null;
 }
 
-/** Infere escopo_negocio a partir do tipo_operacao e macro_custo */
 function inferirEscopo(tipoOp: string | null, macro: string | null): string {
   const combined = `${tipoOp || ''} ${macro || ''}`.toLowerCase();
   if (combined.includes('agricul')) return 'agricultura';
@@ -90,28 +86,26 @@ function inferirEscopo(tipoOp: string | null, macro: string | null): string {
 
 export function parseExcel(file: ArrayBuffer): ResultadoParsing {
   const wb = XLSX.read(file, { type: 'array' });
-  // Use first sheet or "DADOS"
   const sheetName = wb.SheetNames.includes('DADOS') ? 'DADOS' : wb.SheetNames[0];
   const ws = wb.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as unknown[][];
 
   if (rows.length < 2) return { linhasValidas: [], erros: [], totalLinhas: 0 };
 
-  // Skip header row
   const dataRows = rows.slice(1).filter(r => r.some(c => c !== null && c !== undefined && c !== ''));
   const erros: ErroImportacao[] = [];
   const linhasValidas: LinhaImportada[] = [];
 
   for (let i = 0; i < dataRows.length; i++) {
     const r = dataRows[i];
-    const linhaNum = i + 2; // 1-indexed + header
+    const linhaNum = i + 2;
 
     const dataRealizacao = parseDate(r[0]);
     const dataPagamento = parseDate(r[1]);
     const valor = parseValor(r[4]);
     const anoMes = parseAnoMes(r[22]);
+    const fazenda = str(r[6]);
 
-    // Validações obrigatórias
     if (!dataRealizacao) {
       erros.push({ linha: linhaNum, campo: 'Data Realização', mensagem: 'Data inválida ou ausente' });
     }
@@ -121,8 +115,11 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
     if (!anoMes) {
       erros.push({ linha: linhaNum, campo: 'AnoMes', mensagem: 'Competência inválida ou ausente (formato: AAAA-MM)' });
     }
+    if (!fazenda) {
+      erros.push({ linha: linhaNum, campo: 'Fazenda', mensagem: 'Código da fazenda ausente' });
+    }
 
-    if (!dataRealizacao || valor === null || !anoMes) continue;
+    if (!dataRealizacao || valor === null || !anoMes || !fazenda) continue;
 
     const tipoOp = str(r[7]);
     const macro = str(r[10]);
@@ -135,7 +132,8 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
       fornecedor: str(r[3]),
       valor,
       statusTransacao: str(r[5]),
-      fazenda: str(r[6]),
+      fazenda,
+      fazendaId: null, // resolved later
       tipoOperacao: tipoOp,
       contaOrigem: str(r[8]),
       contaDestino: str(r[9]),
@@ -156,19 +154,42 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
   return { linhasValidas, erros, totalLinhas: dataRows.length };
 }
 
-/** Valida e resolve fazenda pelo codigo_importacao */
-export function validarFazenda(
+/** Map fazendas: codigo_importacao → id/nome */
+export interface FazendaMap {
+  id: string;
+  nome: string;
+  codigo: string;
+}
+
+/**
+ * Resolve cada linha para um fazenda_id via codigo_importacao.
+ * Retorna erros para códigos não encontrados.
+ */
+export function resolverFazendas(
   linhas: LinhaImportada[],
-  codigoFazendaAtiva: string,
+  fazendas: FazendaMap[],
 ): ErroImportacao[] {
   const erros: ErroImportacao[] = [];
-  const codigoNorm = codigoFazendaAtiva.toLowerCase().trim();
+  const mapaCode = new Map<string, string>(); // code lower → id
+  for (const f of fazendas) {
+    mapaCode.set(f.codigo.toLowerCase().trim(), f.id);
+  }
+
   for (const l of linhas) {
-    if (l.fazenda && l.fazenda.toLowerCase().trim() !== codigoNorm) {
+    if (!l.fazenda) {
+      l.fazendaId = null;
+      continue;
+    }
+    const code = l.fazenda.toLowerCase().trim();
+    const id = mapaCode.get(code);
+    if (id) {
+      l.fazendaId = id;
+    } else {
+      l.fazendaId = null;
       erros.push({
         linha: l.linha,
         campo: 'Fazenda',
-        mensagem: `Código "${l.fazenda}" difere do código da fazenda ativa "${codigoFazendaAtiva}"`,
+        mensagem: `Código "${l.fazenda}" não encontrado no cadastro de fazendas`,
       });
     }
   }
@@ -188,7 +209,7 @@ export function validarCentrosCusto(
   linhas: LinhaImportada[],
   centrosOficiais: CentroCustoOficial[],
 ): ErroImportacao[] {
-  if (centrosOficiais.length === 0) return []; // Sem dimensão cadastrada, pular validação
+  if (centrosOficiais.length === 0) return [];
 
   const erros: ErroImportacao[] = [];
   const chaveSet = new Set(
@@ -200,9 +221,7 @@ export function validarCentrosCusto(
   );
 
   for (const l of linhas) {
-    // Only validate if at least macro_custo is filled
     if (!l.macroCusto) continue;
-
     const chave = [
       l.tipoOperacao || '',
       l.macroCusto || '',

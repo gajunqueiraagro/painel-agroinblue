@@ -21,8 +21,8 @@ export function FinanceiroCaixaTab({ cabMediaMes, cabMediaAcum, arrobasProduzida
   const [subTab, setSubTab] = useState<SubTab>('dashboard');
   const {
     importacoes, lancamentos, centrosCusto, indicadores,
-    rateioADM, rateioConferencia, fazendasSemArea,
-    loading, confirmarImportacao, isGlobal, fazendaADM,
+    rateioADM, rateioConferencia, fazendasSemArea, fazendaMapForImport,
+    loading, confirmarImportacao, excluirImportacao, isGlobal, fazendaADM,
   } = useFinanceiro();
 
   const tabs: { id: SubTab; label: string; icon: string }[] = [
@@ -80,7 +80,9 @@ export function FinanceiroCaixaTab({ cabMediaMes, cabMediaAcum, arrobasProduzida
             <ImportacaoFinanceira
               importacoes={importacoes}
               centrosCusto={centrosCusto}
+              fazendas={fazendaMapForImport}
               onConfirmar={confirmarImportacao}
+              onExcluir={excluirImportacao}
             />
           )}
         </>

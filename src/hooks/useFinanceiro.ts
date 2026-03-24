@@ -143,6 +143,14 @@ export function useFinanceiro() {
     [fazendas, fazendaADM],
   );
 
+  // Fazenda map for import resolution
+  const fazendaMapForImport = useMemo(
+    () => fazendas
+      .filter(f => f.id !== '__global__' && f.codigo_importacao)
+      .map(f => ({ id: f.id, nome: f.nome, codigo: f.codigo_importacao! })),
+    [fazendas],
+  );
+
   // --- Load data ---
   const loadData = useCallback(async () => {
     if (!fazendaId) {
@@ -155,9 +163,11 @@ export function useFinanceiro() {
     }
     setLoading(true);
     try {
+      // Always load importacoes across all fazendas (import is global)
+      const allFazendaIds = fazendas.filter(f => f.id !== '__global__').map(f => f.id);
+
       if (isGlobal) {
-        const fazendaIds = fazendas.filter(f => f.id !== '__global__').map(f => f.id);
-        if (fazendaIds.length === 0) {
+        if (allFazendaIds.length === 0) {
           setLancamentos([]);
           setImportacoes([]);
           setCentrosCusto([]);
@@ -167,21 +177,24 @@ export function useFinanceiro() {
           return;
         }
 
-        // Global: load all lancamentos + ADM lancamentos + areas (for conference view)
         const promises: PromiseLike<any>[] = [
           supabase
             .from('financeiro_lancamentos')
             .select('*')
-            .in('fazenda_id', fazendaIds)
+            .in('fazenda_id', allFazendaIds)
             .order('data_realizacao', { ascending: false }),
           supabase
             .from('financeiro_centros_custo')
             .select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro')
-            .in('fazenda_id', fazendaIds)
+            .in('fazenda_id', allFazendaIds)
             .eq('ativo', true),
+          supabase
+            .from('financeiro_importacoes')
+            .select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro')
+            .in('fazenda_id', allFazendaIds)
+            .order('data_importacao', { ascending: false }),
         ];
 
-        // Load areas for conference view
         const opIds = fazendasOperacionais.map(f => f.id);
         if (opIds.length > 0) {
           promises.push(
@@ -193,9 +206,9 @@ export function useFinanceiro() {
         }
 
         const results = await Promise.all(promises);
-        setImportacoes([]);
         setLancamentos((results[0].data as FinanceiroLancamento[]) || []);
         setCentrosCusto((results[1].data as CentroCustoOficial[]) || []);
+        setImportacoes((results[2].data as ImportacaoRecord[]) || []);
 
         // In global, ADM lancamentos are already in lancamentos — extract for conference
         if (fazendaADM) {
@@ -205,10 +218,9 @@ export function useFinanceiro() {
           setLancamentosADM([]);
         }
 
-        // Build area map
         const areaMap = new Map<string, number>();
-        if (results[2]?.data) {
-          for (const row of results[2].data as { fazenda_id: string; area_produtiva: number | null }[]) {
+        if (results[3]?.data) {
+          for (const row of results[3].data as { fazenda_id: string; area_produtiva: number | null }[]) {
             if (row.area_produtiva && row.area_produtiva > 0) {
               areaMap.set(row.fazenda_id, row.area_produtiva);
             }
@@ -216,13 +228,8 @@ export function useFinanceiro() {
         }
         setAreaFazendas(areaMap);
       } else {
-        // Per-fazenda
+        // Per-fazenda: own lancamentos + ADM for rateio + global importacoes
         const promises: PromiseLike<any>[] = [
-          supabase
-            .from('financeiro_importacoes')
-            .select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro')
-            .eq('fazenda_id', fazendaId)
-            .order('data_importacao', { ascending: false }),
           supabase
             .from('financeiro_lancamentos')
             .select('*')
@@ -233,6 +240,11 @@ export function useFinanceiro() {
             .select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro')
             .eq('fazenda_id', fazendaId)
             .eq('ativo', true),
+          supabase
+            .from('financeiro_importacoes')
+            .select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro')
+            .in('fazenda_id', allFazendaIds)
+            .order('data_importacao', { ascending: false }),
         ];
 
         const needsRateio = fazendaADM && fazendaADM.id !== fazendaId;
@@ -256,11 +268,10 @@ export function useFinanceiro() {
         }
 
         const results = await Promise.all(promises);
-        const [impRes, lancRes, ccRes] = results;
 
-        setImportacoes((impRes.data as ImportacaoRecord[]) || []);
-        setLancamentos((lancRes.data as FinanceiroLancamento[]) || []);
-        setCentrosCusto((ccRes.data as CentroCustoOficial[]) || []);
+        setLancamentos((results[0].data as FinanceiroLancamento[]) || []);
+        setCentrosCusto((results[1].data as CentroCustoOficial[]) || []);
+        setImportacoes((results[2].data as ImportacaoRecord[]) || []);
 
         if (needsRateio) {
           setLancamentosADM((results[3]?.data as FinanceiroLancamento[]) || []);
@@ -365,20 +376,27 @@ export function useFinanceiro() {
       }));
   }, [fazendaADM, lancamentosADM, areaFazendas, fazendasOperacionais]);
 
-  // --- Confirmar importação ---
+  // --- Confirmar importação (global: per-line fazenda_id) ---
   const confirmarImportacao = useCallback(async (
     nomeArquivo: string,
     linhas: LinhaImportada[],
     totalLinhas: number,
     totalErros: number,
   ) => {
-    if (!fazendaId || !user) return false;
+    if (!user) return false;
 
     try {
+      // Use the first fazenda_id as the import record's fazenda (for RLS)
+      const primaryFazendaId = linhas[0]?.fazendaId;
+      if (!primaryFazendaId) {
+        toast.error('Nenhuma linha com fazenda válida');
+        return false;
+      }
+
       const { data: imp, error: impErr } = await supabase
         .from('financeiro_importacoes')
         .insert({
-          fazenda_id: fazendaId,
+          fazenda_id: primaryFazendaId,
           nome_arquivo: nomeArquivo,
           usuario_id: user.id,
           status: 'processada',
@@ -394,7 +412,7 @@ export function useFinanceiro() {
       const batchSize = 50;
       for (let i = 0; i < linhas.length; i += batchSize) {
         const batch = linhas.slice(i, i + batchSize).map(l => ({
-          fazenda_id: fazendaId,
+          fazenda_id: l.fazendaId!,
           importacao_id: imp.id,
           origem_dado: 'import_excel',
           data_realizacao: l.dataRealizacao,
@@ -430,7 +448,33 @@ export function useFinanceiro() {
       toast.error('Erro na importação: ' + (err.message || err));
       return false;
     }
-  }, [fazendaId, user, loadData]);
+  }, [user, loadData]);
+
+  // --- Excluir importação ---
+  const excluirImportacao = useCallback(async (importacaoId: string) => {
+    try {
+      // Delete lancamentos first
+      const { error: delLanc } = await supabase
+        .from('financeiro_lancamentos')
+        .delete()
+        .eq('importacao_id', importacaoId);
+      if (delLanc) throw delLanc;
+
+      // Delete import record
+      const { error: delImp } = await supabase
+        .from('financeiro_importacoes')
+        .delete()
+        .eq('id', importacaoId);
+      if (delImp) throw delImp;
+
+      toast.success('Importação excluída com sucesso');
+      await loadData();
+      return true;
+    } catch (err: any) {
+      toast.error('Erro ao excluir: ' + (err.message || err));
+      return false;
+    }
+  }, [loadData]);
 
   // --- Indicadores ---
   const indicadores = useMemo(() => {
@@ -500,8 +544,10 @@ export function useFinanceiro() {
     rateioADM,
     rateioConferencia,
     fazendasSemArea,
+    fazendaMapForImport,
     loading,
     confirmarImportacao,
+    excluirImportacao,
     reloadData: loadData,
     isGlobal,
     fazendaADM,
