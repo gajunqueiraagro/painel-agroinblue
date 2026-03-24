@@ -80,7 +80,9 @@ export function FinanceiroCaixaTab({ cabMediaMes, cabMediaAcum, arrobasProduzida
             <ImportacaoFinanceira
               importacoes={importacoes}
               centrosCusto={centrosCusto}
+              fazendas={fazendaMapForImport}
               onConfirmar={confirmarImportacao}
+              onExcluir={excluirImportacao}
             />
           )}
         </>
