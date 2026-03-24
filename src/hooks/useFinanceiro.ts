@@ -105,9 +105,13 @@ export const isReceita = (l: FinanceiroLancamento) => {
   return tipo === 'receita' || l.valor < 0;
 };
 
-/** Check if ADM lancamento qualifies for rateio */
+/** Check if ADM lancamento qualifies for rateio:
+ *  - Status Transação = Conciliado
+ *  - Tipo Operação = 2-Saídas
+ */
 const isADMConciliado = (l: FinanceiroLancamento) =>
-  (l.status_transacao || '').toLowerCase() === 'conciliado' && isDesembolsoProdutivo(l);
+  (l.status_transacao || '').toLowerCase() === 'conciliado' &&
+  (l.tipo_operacao || '').toLowerCase().startsWith('2');
 
 /** Extract YYYY-MM from a date string (YYYY-MM-DD) */
 const dateToAnoMes = (dateStr: string | null): string | null => {
