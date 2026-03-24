@@ -1,35 +1,41 @@
 /**
- * Dashboard financeiro inicial — indicadores e visão hierárquica.
+ * Dashboard financeiro — indicadores, rateio ADM e visão hierárquica.
  */
 import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { TrendingDown, TrendingUp, DollarSign, BarChart3 } from 'lucide-react';
+import { TrendingDown, TrendingUp, DollarSign, BarChart3, Building2 } from 'lucide-react';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_OPTIONS } from '@/lib/calculos/labels';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
-import type { FinanceiroLancamento } from '@/hooks/useFinanceiro';
+import {
+  type FinanceiroLancamento,
+  type RateioADM,
+  isDesembolsoProdutivo,
+  isDesembolsoPecuaria,
+  isReceita,
+} from '@/hooks/useFinanceiro';
 
 interface Props {
   lancamentos: FinanceiroLancamento[];
   indicadores: {
-    resumoMensal: { anoMes: string; entradas: number; saidas: number; desembolsoProd: number; desembolsoPec: number }[];
+    resumoMensal: { anoMes: string; entradas: number; saidas: number; desembolsoProd: number; desembolsoPec: number; rateioADM?: number }[];
     totalDesembolsoProd: number;
     totalDesembolsoPec: number;
     totalReceitas: number;
+    totalRateioADM?: number;
     porMacro: { nome: string; valor: number }[];
     porGrupo: { nome: string; valor: number }[];
     porCentro: { nome: string; valor: number }[];
   } | null;
-  /** Cabeças médias do mês — do módulo zootécnico */
   cabMediaMes?: number;
-  /** Cabeças médias acumulado — do módulo zootécnico */
   cabMediaAcum?: number;
-  /** Arrobas produzidas acumulado — do módulo zootécnico */
   arrobasProduzidasAcum?: number;
+  rateioADM?: RateioADM[];
+  isGlobal?: boolean;
 }
 
-export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cabMediaAcum, arrobasProduzidasAcum }: Props) {
+export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cabMediaAcum, arrobasProduzidasAcum, rateioADM = [], isGlobal = false }: Props) {
   const anosDisp = useMemo(() => {
     const set = new Set<string>();
     set.add(String(new Date().getFullYear()));
@@ -51,43 +57,55 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
     });
   }, [lancamentos, anoFiltro, mesFiltro]);
 
+  // Rateio filtrado pelo período
+  const rateioFiltrado = useMemo(() => {
+    return rateioADM.filter(r => {
+      if (!r.anoMes.startsWith(anoFiltro)) return false;
+      if (mesFiltro !== 'todos' && r.anoMes !== `${anoFiltro}-${mesFiltro}`) return false;
+      return true;
+    });
+  }, [rateioADM, anoFiltro, mesFiltro]);
+
+  const totalRateioFiltrado = useMemo(
+    () => rateioFiltrado.reduce((s, r) => s + r.valorRateado, 0),
+    [rateioFiltrado],
+  );
+
   // Indicadores filtrados
   const ind = useMemo(() => {
     if (!indicadores) return null;
 
-    const isDesembolsoProdutivo = (l: FinanceiroLancamento) => {
-      const escopo = (l.escopo_negocio || '').toLowerCase();
-      const tipo = (l.tipo_operacao || '').toLowerCase();
-      if (escopo === 'financeiro') return false;
-      if (tipo === 'receita') return false;
-      return true;
-    };
-    const isDesembolsoPec = (l: FinanceiroLancamento) =>
-      isDesembolsoProdutivo(l) && (l.escopo_negocio || 'pecuaria') === 'pecuaria';
-    const isReceita = (l: FinanceiroLancamento) => {
-      const tipo = (l.tipo_operacao || '').toLowerCase();
-      return tipo === 'receita' || l.valor < 0;
-    };
-
     const entradas = filtrados.filter(isReceita).reduce((s, l) => s + Math.abs(l.valor), 0);
     const saidas = filtrados.filter(l => !isReceita(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
     const desembolsoProd = filtrados.filter(isDesembolsoProdutivo).reduce((s, l) => s + Math.abs(l.valor), 0);
-    const desembolsoPec = filtrados.filter(isDesembolsoPec).reduce((s, l) => s + Math.abs(l.valor), 0);
+    const desembolsoPec = filtrados.filter(isDesembolsoPecuaria).reduce((s, l) => s + Math.abs(l.valor), 0);
 
-    // Custo/cabeça — acumulado coerente
+    // Add rateio for per-fazenda view
+    const saidasComRateio = saidas + totalRateioFiltrado;
+    const desembolsoProdComRateio = desembolsoProd + totalRateioFiltrado;
+    const desembolsoPecComRateio = desembolsoPec + totalRateioFiltrado;
+
+    // Custo/cabeça acumulado
     const custoAcumPec = lancamentos
-      .filter(l => l.ano_mes?.startsWith(anoFiltro) && isDesembolsoPec(l))
+      .filter(l => l.ano_mes?.startsWith(anoFiltro) && isDesembolsoPecuaria(l))
       .reduce((s, l) => s + Math.abs(l.valor), 0);
+    const rateioAcum = rateioADM
+      .filter(r => r.anoMes.startsWith(anoFiltro))
+      .reduce((s, r) => s + r.valorRateado, 0);
+    const custoAcumTotal = custoAcumPec + rateioAcum;
 
-    const custoCabMes = cabMediaMes && cabMediaMes > 0 ? desembolsoPec / cabMediaMes : null;
-    const custoCabAcum = cabMediaAcum && cabMediaAcum > 0 ? custoAcumPec / cabMediaAcum : null;
-    const custoArrobaProd = arrobasProduzidasAcum && arrobasProduzidasAcum > 0 ? custoAcumPec / arrobasProduzidasAcum : null;
+    const custoCabMes = cabMediaMes && cabMediaMes > 0 ? desembolsoPecComRateio / cabMediaMes : null;
+    const custoCabAcum = cabMediaAcum && cabMediaAcum > 0 ? custoAcumTotal / cabMediaAcum : null;
+    const custoArrobaProd = arrobasProduzidasAcum && arrobasProduzidasAcum > 0 ? custoAcumTotal / arrobasProduzidasAcum : null;
 
-    // Hierarquia
+    // Hierarquia macro
     const macroMap = new Map<string, number>();
     for (const l of filtrados) {
       if (!isDesembolsoProdutivo(l) || !l.macro_custo) continue;
       macroMap.set(l.macro_custo, (macroMap.get(l.macro_custo) || 0) + Math.abs(l.valor));
+    }
+    if (totalRateioFiltrado > 0) {
+      macroMap.set('ADM (Rateio)', (macroMap.get('ADM (Rateio)') || 0) + totalRateioFiltrado);
     }
     const porMacro = Array.from(macroMap.entries())
       .map(([nome, valor]) => ({ nome, valor }))
@@ -95,17 +113,18 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
 
     return {
       entradas,
-      saidas,
-      desembolsoProd,
-      desembolsoPec,
+      saidas: saidasComRateio,
+      desembolsoProd: desembolsoProdComRateio,
+      desembolsoPec: desembolsoPecComRateio,
       custoCabMes,
       custoCabAcum,
       custoArrobaProd,
       porMacro,
+      rateioADM: totalRateioFiltrado,
     };
-  }, [filtrados, indicadores, lancamentos, anoFiltro, cabMediaMes, cabMediaAcum, arrobasProduzidasAcum]);
+  }, [filtrados, indicadores, lancamentos, anoFiltro, cabMediaMes, cabMediaAcum, arrobasProduzidasAcum, totalRateioFiltrado, rateioADM]);
 
-  // Dados para gráfico entradas vs saídas
+  // Chart data
   const chartData = useMemo(() => {
     if (!indicadores) return [];
     return indicadores.resumoMensal
@@ -114,6 +133,7 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
         mes: r.anoMes.substring(5),
         Entradas: r.entradas,
         Saídas: r.saidas,
+        ...(r.rateioADM && r.rateioADM > 0 ? { 'Rateio ADM': r.rateioADM } : {}),
       }));
   }, [indicadores, anoFiltro]);
 
@@ -129,6 +149,14 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
 
   return (
     <div className="space-y-4">
+      {/* Badge modo */}
+      {isGlobal && (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted rounded-md px-2.5 py-1.5 w-fit">
+          <Building2 className="h-3.5 w-3.5" />
+          Visão Global — lançamentos originais (sem rateio)
+        </div>
+      )}
+
       {/* Filtros */}
       <div className="flex gap-2">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
@@ -167,6 +195,11 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
                   <TrendingDown className="h-3 w-3 text-red-600" /> Saídas
                 </div>
                 <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.saidas)}</p>
+                {ind.rateioADM > 0 && (
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    inclui {formatMoeda(ind.rateioADM)} rateio ADM
+                  </p>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -186,7 +219,22 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
             </Card>
           </div>
 
-          {/* Indicadores cruzados com zootécnico */}
+          {/* Rateio ADM info card */}
+          {!isGlobal && ind.rateioADM > 0 && rateioFiltrado.length > 0 && (
+            <Card className="border-dashed border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-400 mb-1">
+                  <Building2 className="h-3.5 w-3.5" /> Rateio ADM
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {formatNum(rateioFiltrado[0]?.percentualFazenda || 0, 1)}% da área produtiva
+                  → <span className="font-bold text-foreground">{formatMoeda(ind.rateioADM)}</span> absorvido
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Indicadores cruzados */}
           <div className="grid grid-cols-3 gap-2">
             <Card>
               <CardContent className="p-3">
@@ -208,7 +256,7 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
             </Card>
           </div>
 
-          {/* Gráfico entradas vs saídas */}
+          {/* Gráfico */}
           {chartData.length > 0 && (
             <Card>
               <CardHeader className="pb-2">
@@ -235,7 +283,7 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
             </Card>
           )}
 
-          {/* Visão por hierarquia */}
+          {/* Hierarquia macro */}
           {ind.porMacro.length > 0 && (
             <Card>
               <CardHeader className="pb-2">
@@ -247,17 +295,20 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
                 <div className="space-y-2">
                   {ind.porMacro.map(m => {
                     const pct = ind.desembolsoProd > 0 ? (m.valor / ind.desembolsoProd) * 100 : 0;
+                    const isRateio = m.nome === 'ADM (Rateio)';
                     return (
                       <div key={m.nome}>
                         <div className="flex justify-between text-xs mb-0.5">
-                          <span className="font-bold truncate mr-2">{m.nome}</span>
+                          <span className={`font-bold truncate mr-2 ${isRateio ? 'text-amber-600 dark:text-amber-400' : ''}`}>
+                            {m.nome}
+                          </span>
                           <span className="text-muted-foreground whitespace-nowrap">
                             {formatMoeda(m.valor)} ({formatNum(pct, 1)}%)
                           </span>
                         </div>
                         <div className="h-2 bg-muted rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-primary rounded-full transition-all"
+                            className={`h-full rounded-full transition-all ${isRateio ? 'bg-amber-500' : 'bg-primary'}`}
                             style={{ width: `${Math.min(pct, 100)}%` }}
                           />
                         </div>
