@@ -218,10 +218,9 @@ export function useFinanceiro() {
           setLancamentosADM([]);
         }
 
-        // Build area map
         const areaMap = new Map<string, number>();
-        if (results[2]?.data) {
-          for (const row of results[2].data as { fazenda_id: string; area_produtiva: number | null }[]) {
+        if (results[3]?.data) {
+          for (const row of results[3].data as { fazenda_id: string; area_produtiva: number | null }[]) {
             if (row.area_produtiva && row.area_produtiva > 0) {
               areaMap.set(row.fazenda_id, row.area_produtiva);
             }
@@ -229,13 +228,8 @@ export function useFinanceiro() {
         }
         setAreaFazendas(areaMap);
       } else {
-        // Per-fazenda
+        // Per-fazenda: own lancamentos + ADM for rateio + global importacoes
         const promises: PromiseLike<any>[] = [
-          supabase
-            .from('financeiro_importacoes')
-            .select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro')
-            .eq('fazenda_id', fazendaId)
-            .order('data_importacao', { ascending: false }),
           supabase
             .from('financeiro_lancamentos')
             .select('*')
@@ -246,6 +240,11 @@ export function useFinanceiro() {
             .select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro')
             .eq('fazenda_id', fazendaId)
             .eq('ativo', true),
+          supabase
+            .from('financeiro_importacoes')
+            .select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro')
+            .in('fazenda_id', allFazendaIds)
+            .order('data_importacao', { ascending: false }),
         ];
 
         const needsRateio = fazendaADM && fazendaADM.id !== fazendaId;
@@ -269,11 +268,10 @@ export function useFinanceiro() {
         }
 
         const results = await Promise.all(promises);
-        const [impRes, lancRes, ccRes] = results;
 
-        setImportacoes((impRes.data as ImportacaoRecord[]) || []);
-        setLancamentos((lancRes.data as FinanceiroLancamento[]) || []);
-        setCentrosCusto((ccRes.data as CentroCustoOficial[]) || []);
+        setLancamentos((results[0].data as FinanceiroLancamento[]) || []);
+        setCentrosCusto((results[1].data as CentroCustoOficial[]) || []);
+        setImportacoes((results[2].data as ImportacaoRecord[]) || []);
 
         if (needsRateio) {
           setLancamentosADM((results[3]?.data as FinanceiroLancamento[]) || []);
