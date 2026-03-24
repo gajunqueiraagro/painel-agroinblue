@@ -348,18 +348,32 @@ export function DashboardFinanceiro({
 
   // Derived zoo values for economic indicators
   const zooData = useMemo(() => {
+    const anoNum = Number(anoFiltro);
     const saldoInicialAno = saldosIniciais
-      .filter(s => s.ano === Number(anoFiltro))
+      .filter(s => s.ano === anoNum)
       .reduce((sum, s) => sum + s.quantidade, 0);
 
     // Cab média mês: (saldo anterior + saldo final) / 2
-    // The hook already computes this via gmdAberturaMes
     const saldoAnterior = zoo.gmdAberturaMes.estoqueInicialDetalhe.reduce((s, d) => s + d.cabecas, 0);
     const saldoFinalMes = zoo.saldoFinalMes;
     const cabMediaMes = (saldoAnterior > 0 || saldoFinalMes > 0) ? (saldoAnterior + saldoFinalMes) / 2 : null;
 
-    // Cab média acumulada: (saldo inicial ano + saldo final mês) / 2
-    const cabMediaAcum = (saldoInicialAno > 0 || saldoFinalMes > 0) ? (saldoInicialAno + saldoFinalMes) / 2 : null;
+    // Rebanho médio mensal para cada mês jan→mesNum
+    const mesLimite = mesFiltro !== 'todos' ? Number(mesFiltro) : 12;
+    const rebanhosMensais: RebanhoMedioMensal[] = [];
+    for (let m = 1; m <= mesLimite; m++) {
+      const saldoInicioMes = m === 1
+        ? saldoInicialAno
+        : Array.from(calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, anoNum, m - 1).values()).reduce((s, v) => s + v, 0);
+      const saldoFimMes = Array.from(calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, anoNum, m).values()).reduce((s, v) => s + v, 0);
+      const media = (saldoInicioMes + saldoFimMes) / 2;
+      rebanhosMensais.push({ mes: m, saldoInicio: saldoInicioMes, saldoFim: saldoFimMes, media });
+    }
+
+    // Cab média acumulada = média dos rebanhos médios mensais
+    const cabMediaAcum = rebanhosMensais.length > 0
+      ? rebanhosMensais.reduce((s, rm) => s + rm.media, 0) / rebanhosMensais.length
+      : null;
 
     // Arrobas produzidas acumuladas — direto do hook oficial
     const arrobasProduzidasAcum = zoo.arrobasProduzidasAcumulado;
@@ -367,6 +381,7 @@ export function DashboardFinanceiro({
     return {
       cabMediaMes,
       cabMediaAcum,
+      rebanhosMensais,
       arrobasProduzidasAcum,
       saldoAnterior,
       saldoFinalMes,
@@ -374,7 +389,7 @@ export function DashboardFinanceiro({
       arrobasProduzidasMes: zoo.arrobasProduzidasMes,
       gmdAcumulado: zoo.gmdAcumulado,
     };
-  }, [zoo, saldosIniciais, anoFiltro]);
+  }, [zoo, saldosIniciais, anoFiltro, mesFiltro, lancamentosPecuarios]);
 
   // ===========================================================================
   // FINANCEIRO — filtros de lançamentos
