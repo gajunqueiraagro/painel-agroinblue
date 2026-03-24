@@ -1,7 +1,7 @@
-import { BarChart3, ArrowLeftRight, PlusCircle, TrendingUp, GitCompare, ClipboardList, Users } from 'lucide-react';
+import { BarChart3, ArrowLeftRight, PlusCircle, TrendingUp, GitCompare, ClipboardList, Users, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'financeiro' | 'evolucao' | 'evolucao_categoria' | 'fluxo_anual' | 'acessos' | 'analise' | 'analise_entradas' | 'analise_saidas' | 'desfrute' | 'cadastros' | 'chuvas' | 'pastos' | 'conciliacao';
+export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'financeiro' | 'evolucao' | 'evolucao_categoria' | 'fluxo_anual' | 'acessos' | 'analise' | 'analise_entradas' | 'analise_saidas' | 'desfrute' | 'cadastros' | 'chuvas' | 'pastos' | 'conciliacao' | 'fin_caixa';
 
 interface BottomNavProps {
   activeTab: TabId;
