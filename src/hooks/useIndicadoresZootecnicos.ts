@@ -845,3 +845,49 @@ function getPesoMedioInicial(saldosIniciais: SaldoInicial[], ano: number): numbe
     .map(s => ({ quantidade: s.quantidade, pesoKg: s.pesoMedioKg ?? null }));
   return calcPesoMedioPonderado(itens);
 }
+
+/** Calcula GMD de um único mês para um ano específico (usado em YoY) */
+function computeGmdForPeriod(
+  saldosIniciais: SaldoInicial[],
+  lancamentos: Lancamento[],
+  ano: number,
+  mes: number,
+  pesosPastosMap: Record<string, number>,
+): number | null {
+  const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
+  const saldoFinal = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
+  let pesoFinal = 0;
+  saldoMap.forEach((qtd, cat) => {
+    const pk = getPesoMedioCatComPastos(cat, pesosPastosMap, saldosIniciais, lancamentos, ano, mes);
+    pesoFinal += qtd * (pk || 0);
+  });
+
+  let pesoInicial = 0;
+  if (mes > 1) {
+    const saldoMapAnt = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes - 1);
+    saldoMapAnt.forEach((qtd, cat) => {
+      const pk = getPesoMedioCatComPastos(cat, pesosPastosMap, saldosIniciais, lancamentos, ano, mes - 1);
+      pesoInicial += qtd * (pk || 0);
+    });
+  } else {
+    pesoInicial = saldosIniciais.filter(s => s.ano === ano).reduce((s, si) => s + si.quantidade * (si.pesoMedioKg || 0), 0);
+  }
+
+  if (pesoFinal <= 0 || pesoInicial <= 0) return null;
+
+  const saldoIniAno = saldosIniciais.filter(s => s.ano === ano).reduce((sum, s) => sum + s.quantidade, 0);
+  const saldoAnterior = mes > 1
+    ? Array.from(calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes - 1).values()).reduce((s, v) => s + v, 0)
+    : saldoIniAno;
+
+  const anoMesStr = `${ano}-${String(mes).padStart(2, '0')}`;
+  const lancsMes = filterByAnoMes(lancamentos, anoMesStr);
+  const entr = lancsMes.filter(l => TIPOS_ENTRADA.includes(l.tipo));
+  const said = lancsMes.filter(l => TIPOS_SAIDA_DESFRUTE.includes(l.tipo) || l.tipo === 'morte');
+  const pesoEnt = entr.reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
+  const pesoSai = said.reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || l.pesoCarcacaKg || 0), 0);
+  const cabMedia = (saldoAnterior + saldoFinal) / 2;
+  const dias = new Date(ano, mes, 0).getDate();
+
+  return calcGMD(pesoFinal, pesoInicial, pesoEnt, pesoSai, dias, cabMedia);
+}
