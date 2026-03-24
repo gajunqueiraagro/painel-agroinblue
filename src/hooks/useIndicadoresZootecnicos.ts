@@ -237,6 +237,7 @@ export function useIndicadoresZootecnicos(
   // Pesos oficiais do fechamento de pasto (código→peso)
   const [pesoFechamentoMap, setPesoFechamentoMap] = useState<Record<string, number>>({});
   const [pesoFechamentoMesAntMap, setPesoFechamentoMesAntMap] = useState<Record<string, number>>({});
+  const [pesoFechamentoYoYMap, setPesoFechamentoYoYMap] = useState<Record<string, number>>({});
 
   const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
 
