@@ -175,21 +175,18 @@ export type Database = {
       }
       fazendas: {
         Row: {
-          codigo_importacao: string | null
           created_at: string
           id: string
           nome: string
           owner_id: string
         }
         Insert: {
-          codigo_importacao?: string | null
           created_at?: string
           id?: string
           nome: string
           owner_id: string
         }
         Update: {
-          codigo_importacao?: string | null
           created_at?: string
           id?: string
           nome?: string

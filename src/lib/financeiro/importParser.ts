@@ -11,7 +11,7 @@ export interface LinhaImportada {
   fornecedor: string | null;
   valor: number;
   statusTransacao: string | null;
-  codigoFazenda: string;
+  fazenda: string | null;
   tipoOperacao: string | null;
   contaOrigem: string | null;
   contaDestino: string | null;
@@ -26,7 +26,6 @@ export interface LinhaImportada {
   obs: string | null;
   anoMes: string;
   escopoNegocio: string;
-  fazendaId: string | null; // resolved after validation
 }
 
 export interface ErroImportacao {
@@ -110,7 +109,6 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
     const dataRealizacao = parseDate(r[0]);
     const dataPagamento = parseDate(r[1]);
     const valor = parseValor(r[4]);
-    const codigoFazenda = str(r[6]);
     const anoMes = parseAnoMes(r[22]);
 
     // Validações obrigatórias
@@ -120,14 +118,11 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
     if (valor === null) {
       erros.push({ linha: linhaNum, campo: 'Valor', mensagem: 'Valor inválido ou ausente' });
     }
-    if (!codigoFazenda) {
-      erros.push({ linha: linhaNum, campo: 'Codigo_Fazenda', mensagem: 'Código da fazenda é obrigatório' });
-    }
     if (!anoMes) {
       erros.push({ linha: linhaNum, campo: 'AnoMes', mensagem: 'Competência inválida ou ausente (formato: AAAA-MM)' });
     }
 
-    if (!dataRealizacao || valor === null || !codigoFazenda || !anoMes) continue;
+    if (!dataRealizacao || valor === null || !anoMes) continue;
 
     const tipoOp = str(r[7]);
     const macro = str(r[10]);
@@ -140,7 +135,7 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
       fornecedor: str(r[3]),
       valor,
       statusTransacao: str(r[5]),
-      codigoFazenda,
+      fazenda: str(r[6]),
       tipoOperacao: tipoOp,
       contaOrigem: str(r[8]),
       contaDestino: str(r[9]),
@@ -155,47 +150,24 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
       obs: str(r[19]),
       anoMes,
       escopoNegocio: inferirEscopo(tipoOp, macro),
-      fazendaId: null,
     });
   }
 
   return { linhasValidas, erros, totalLinhas: dataRows.length };
 }
 
-/** Mapeia codigo_fazenda → fazenda_id usando o cadastro de fazendas */
-export interface FazendaCodigo {
-  id: string;
-  codigo_importacao: string;
-}
-
-export function validarEMapearFazendas(
+/** Valida divergência de fazenda */
+export function validarFazenda(
   linhas: LinhaImportada[],
-  fazendasCodigos: FazendaCodigo[],
-  codigoAdm: string = 'ADM',
+  fazendaAtiva: string,
 ): ErroImportacao[] {
   const erros: ErroImportacao[] = [];
-  const mapaCodigoPara = new Map<string, string>();
-  for (const f of fazendasCodigos) {
-    if (f.codigo_importacao) {
-      mapaCodigoPara.set(f.codigo_importacao.toUpperCase().trim(), f.id);
-    }
-  }
-
   for (const l of linhas) {
-    const cod = l.codigoFazenda.toUpperCase().trim();
-    if (cod === codigoAdm.toUpperCase()) {
-      // ADM = global/administrativo — will be stored with the current fazenda but marked
-      l.fazendaId = '__adm__';
-      continue;
-    }
-    const fId = mapaCodigoPara.get(cod);
-    if (fId) {
-      l.fazendaId = fId;
-    } else {
+    if (l.fazenda && l.fazenda.toLowerCase().trim() !== fazendaAtiva.toLowerCase().trim()) {
       erros.push({
         linha: l.linha,
-        campo: 'Codigo_Fazenda',
-        mensagem: `Código "${l.codigoFazenda}" não encontrado no cadastro de fazendas`,
+        campo: 'Fazenda',
+        mensagem: `Fazenda "${l.fazenda}" difere da ativa "${fazendaAtiva}"`,
       });
     }
   }

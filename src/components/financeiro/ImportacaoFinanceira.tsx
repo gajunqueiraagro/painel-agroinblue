@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Download, Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { downloadModeloExcel } from '@/lib/financeiro/excelTemplate';
-import { parseExcel, validarEMapearFazendas, validarCentrosCusto, type LinhaImportada, type ErroImportacao, type CentroCustoOficial, type FazendaCodigo } from '@/lib/financeiro/importParser';
+import { parseExcel, validarFazenda, validarCentrosCusto, type LinhaImportada, type ErroImportacao, type CentroCustoOficial } from '@/lib/financeiro/importParser';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import type { ImportacaoRecord } from '@/hooks/useFinanceiro';
 import { format } from 'date-fns';
@@ -16,11 +16,10 @@ import { useFazenda } from '@/contexts/FazendaContext';
 interface Props {
   importacoes: ImportacaoRecord[];
   centrosCusto: CentroCustoOficial[];
-  fazendasCodigos: FazendaCodigo[];
   onConfirmar: (nomeArquivo: string, linhas: LinhaImportada[], totalLinhas: number, totalErros: number) => Promise<boolean>;
 }
 
-export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendasCodigos, onConfirmar }: Props) {
+export function ImportacaoFinanceira({ importacoes, centrosCusto, onConfirmar }: Props) {
   const { fazendaAtual } = useFazenda();
   const fileRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<{
@@ -39,7 +38,9 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendasCodigo
     const result = parseExcel(buffer);
 
     // Validações adicionais
-    const errosFazenda = validarEMapearFazendas(result.linhasValidas, fazendasCodigos);
+    const errosFazenda = fazendaAtual
+      ? validarFazenda(result.linhasValidas, fazendaAtual.nome)
+      : [];
     const errosCentro = validarCentrosCusto(result.linhasValidas, centrosCusto);
 
     setPreview({
