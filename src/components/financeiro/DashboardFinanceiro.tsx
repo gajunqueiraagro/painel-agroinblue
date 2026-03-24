@@ -208,7 +208,7 @@ function AuditEconomico(p: AuditEconomicoProps) {
                 <div className="text-muted-foreground">
                   ({formatNum(p.saldoAnterior, 0)} + {formatNum(p.saldoFinalMes, 0)}) ÷ 2
                 </div>
-                <div className="text-muted-foreground text-green-700 dark:text-green-400">
+                <div className="text-muted-foreground" style={{ color: 'hsl(var(--primary))' }}>
                   ✅ Fonte: useIndicadoresZootecnicos (oficial)
                 </div>
               </div>
@@ -218,28 +218,53 @@ function AuditEconomico(p: AuditEconomicoProps) {
             </div>
           </div>
 
-          {/* Custo/cab acumulado */}
+          {/* Custo/cab acumulado — NOVA FÓRMULA */}
           <div className="bg-muted/50 rounded-md p-2 space-y-1">
             <div className="font-bold text-xs">Custo/cab acumulado (jan→mês {mesLabel})</div>
-            <div className="text-muted-foreground">Fórmula: desembolso_acum ÷ cab_média_acum</div>
+            <div className="text-muted-foreground">
+              Fórmula: (desembolso_acum ÷ meses) ÷ rebanho_médio_acum
+            </div>
             <div className="grid grid-cols-2 gap-1">
               <div>
-                <span className="text-muted-foreground">Numerador:</span>
+                <span className="text-muted-foreground">Desembolso acumulado:</span>
                 <div className="font-mono font-bold">{formatMoeda(p.desembolsoAcum)}</div>
+                <span className="text-muted-foreground">Nº meses:</span>
+                <div className="font-mono font-bold">{p.numMeses}</div>
+                <span className="text-muted-foreground">Gasto médio mensal:</span>
+                <div className="font-mono font-bold">{formatMoeda(p.gastoMedioMensal)}</div>
               </div>
               <div>
-                <span className="text-muted-foreground">Denominador:</span>
+                <span className="text-muted-foreground">Rebanho médio acumulado:</span>
                 <div className="font-mono font-bold">{p.cabMediaAcum !== null ? formatNum(p.cabMediaAcum, 1) : '—'}</div>
                 <div className="text-muted-foreground">
-                  ({formatNum(p.saldoInicialAno, 0)} + {formatNum(p.saldoFinalMes, 0)}) ÷ 2
+                  = média dos rebanhos médios mensais
                 </div>
-                <div className="text-muted-foreground text-green-700 dark:text-green-400">
+                <div className="text-muted-foreground" style={{ color: 'hsl(var(--primary))' }}>
                   ✅ Fonte: useIndicadoresZootecnicos (oficial)
                 </div>
               </div>
             </div>
+            {/* Detalhe mensal */}
+            {p.rebanhosMensais.length > 0 && (
+              <div className="border-t pt-1 mt-1">
+                <div className="text-muted-foreground font-bold mb-1">Rebanho médio por mês:</div>
+                <div className="grid grid-cols-3 gap-x-2 gap-y-0.5">
+                  {p.rebanhosMensais.map(rm => (
+                    <div key={rm.mes} className="flex justify-between">
+                      <span className="text-muted-foreground">M{rm.mes}:</span>
+                      <span className="font-mono">{formatNum(rm.media, 0)} <span className="text-muted-foreground text-[8px]">({formatNum(rm.saldoInicio, 0)}+{formatNum(rm.saldoFim, 0)})/2</span></span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="border-t pt-1 font-bold">
               Resultado: {p.custoCabAcum !== null ? formatMoeda(p.custoCabAcum) : '—'}
+              {p.custoCabAcum !== null && (
+                <span className="font-normal text-muted-foreground ml-1">
+                  = {formatMoeda(p.gastoMedioMensal)} ÷ {p.cabMediaAcum !== null ? formatNum(p.cabMediaAcum, 1) : '—'}
+                </span>
+              )}
             </div>
           </div>
 
@@ -255,7 +280,7 @@ function AuditEconomico(p: AuditEconomicoProps) {
               <div>
                 <span className="text-muted-foreground">Denominador:</span>
                 <div className="font-mono font-bold">{p.arrobasProduzidasAcum !== null ? `${formatNum(p.arrobasProduzidasAcum, 1)} @` : '—'}</div>
-                <div className="text-muted-foreground text-green-700 dark:text-green-400">
+                <div className="text-muted-foreground" style={{ color: 'hsl(var(--primary))' }}>
                   ✅ Fonte: useIndicadoresZootecnicos (oficial)
                 </div>
                 <div className="text-muted-foreground">
