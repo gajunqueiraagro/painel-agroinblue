@@ -110,6 +110,7 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
     const dataRealizacao = parseDate(r[0]);
     const dataPagamento = parseDate(r[1]);
     const valor = parseValor(r[4]);
+    const codigoFazenda = str(r[6]);
     const anoMes = parseAnoMes(r[22]);
 
     // Validações obrigatórias
@@ -119,11 +120,14 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
     if (valor === null) {
       erros.push({ linha: linhaNum, campo: 'Valor', mensagem: 'Valor inválido ou ausente' });
     }
+    if (!codigoFazenda) {
+      erros.push({ linha: linhaNum, campo: 'Codigo_Fazenda', mensagem: 'Código da fazenda é obrigatório' });
+    }
     if (!anoMes) {
       erros.push({ linha: linhaNum, campo: 'AnoMes', mensagem: 'Competência inválida ou ausente (formato: AAAA-MM)' });
     }
 
-    if (!dataRealizacao || valor === null || !anoMes) continue;
+    if (!dataRealizacao || valor === null || !codigoFazenda || !anoMes) continue;
 
     const tipoOp = str(r[7]);
     const macro = str(r[10]);
@@ -136,7 +140,7 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
       fornecedor: str(r[3]),
       valor,
       statusTransacao: str(r[5]),
-      fazenda: str(r[6]),
+      codigoFazenda,
       tipoOperacao: tipoOp,
       contaOrigem: str(r[8]),
       contaDestino: str(r[9]),
@@ -151,6 +155,7 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
       obs: str(r[19]),
       anoMes,
       escopoNegocio: inferirEscopo(tipoOp, macro),
+      fazendaId: null,
     });
   }
 
