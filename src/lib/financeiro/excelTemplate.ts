@@ -73,7 +73,7 @@ const INSTRUCOES = [
   [],
   ['REGRAS IMPORTANTES:'],
   ['1. O campo AnoMes é a competência oficial. Ano, Mês e Mes são redundantes e serão ignorados.'],
-  ['2. A coluna Fazenda será validada contra a fazenda ativa no sistema.'],
+  ['2. A coluna Codigo_Fazenda deve conter o código oficial da fazenda cadastrado no app (ex: 3M, BG, ADM). ADM = Administrativo/Global.'],
   ['3. A hierarquia Macro > Grupo > Centro > Subcentro deve bater com os centros de custo cadastrados.'],
   ['4. Valores positivos representam saídas/custos. Valores negativos representam entradas/receitas.'],
   ['5. Datas devem estar no formato AAAA-MM-DD (ex: 2026-01-15).'],
