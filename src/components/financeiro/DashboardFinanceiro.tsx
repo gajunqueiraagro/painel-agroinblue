@@ -587,12 +587,12 @@ export function DashboardFinanceiro({
     const saidas = saidasList.reduce((s, l) => s + Math.abs(l.valor), 0);
     const saidasComRateio = saidas + totalRateioFiltrado;
 
-    // Desembolso acumulado (all months of the year up to selected month)
+    // Desembolso produtivo acumulado (apenas macro_custo = "Custeio Produtivo")
     const mesLimite = mesFiltro !== 'todos' ? Number(mesFiltro) : 12;
-    const saidasAcum = lancamentos
+    const desembolsoProdAcum = lancamentos
       .filter(l => {
         if (!isConciliado(l)) return false;
-        if (!isSaida(l)) return false;
+        if (!isDesembolsoProdutivo(l)) return false;
         const am = datePagtoAnoMes(l);
         if (!am || !am.startsWith(anoFiltro)) return false;
         const lMes = Number(am.substring(5, 7));
@@ -606,7 +606,7 @@ export function DashboardFinanceiro({
         return rMes <= mesLimite;
       })
       .reduce((s, r) => s + r.valorRateado, 0);
-    const desembolsoAcum = saidasAcum + rateioAcum;
+    const desembolsoAcum = desembolsoProdAcum + rateioAcum;
 
     // Número de meses no acumulado
     const numMeses = mesFiltro !== 'todos' ? Number(mesFiltro) : 12;
