@@ -508,6 +508,9 @@ export function DashboardFinanceiro({ lancamentos, indicadores, lancamentosPecua
                   Dados zootécnicos insuficientes — cadastre saldos iniciais e lançamentos para habilitar.
                 </p>
               )}
+
+              {/* Audit expandível dos indicadores econômicos */}
+              <AuditEconomico ind={ind} zoo={zoo} isGlobal={isGlobal} anoFiltro={anoFiltro} mesFiltro={mesFiltro} />
             </CardContent>
           </Card>
 
