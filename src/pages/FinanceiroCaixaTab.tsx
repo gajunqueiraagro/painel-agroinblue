@@ -96,6 +96,18 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
               fazendaId={fazendaId}
             />
           )}
+          {subTab === 'analise' && (
+            <AnaliseEconomica
+              lancamentos={lancamentos}
+              lancamentosPecuarios={lancamentosPecuarios}
+              saldosIniciais={saldosIniciais}
+              rateioADM={rateioADM}
+              isGlobal={isGlobal}
+              pastos={pastos}
+              categorias={categorias}
+              fazendaId={fazendaId}
+            />
+          )}
           {subTab === 'rateio' && (
             <RateioADMConferenciaView
               conferencia={rateioConferencia}
