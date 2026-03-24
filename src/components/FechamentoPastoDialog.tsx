@@ -17,12 +17,15 @@ const TIPOS_USO_OPTIONS = [
   { value: 'cria', label: 'Cria' },
   { value: 'recria', label: 'Recria' },
   { value: 'engorda', label: 'Engorda' },
+  { value: 'vedado', label: 'Vedado' },
   { value: 'reforma_pecuaria', label: 'Reforma Pecuária' },
   { value: 'agricultura', label: 'Agricultura' },
   { value: 'app', label: 'APP' },
   { value: 'reserva_legal', label: 'Reserva Legal' },
   { value: 'benfeitorias', label: 'Benfeitorias' },
 ];
+
+const TIPOS_USO_EXIGEM_REBANHO = ['cria', 'recria', 'engorda'];
 
 interface FechamentoItem {
   categoria_id: string;
