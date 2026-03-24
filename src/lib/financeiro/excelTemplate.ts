@@ -53,7 +53,7 @@ const INSTRUCOES = [
   ['Fornecedor', 'NÃO', 'Texto', 'Nome do fornecedor ou cliente'],
   ['Valor', 'SIM', 'Numérico', 'Valor da operação (positivo = saída/custo, negativo = entrada/receita)'],
   ['Status Transação', 'NÃO', 'Texto', 'Ex: Pago, Pendente, Cancelado'],
-  ['Fazenda', 'NÃO', 'Texto', 'Nome da fazenda (será validado contra a fazenda ativa)'],
+  ['Codigo_Fazenda', 'SIM', 'Texto', 'Código oficial da fazenda cadastrado no sistema (ex: 3M, BG, ADM)'],
   ['Tipo Operação', 'NÃO', 'Texto', 'Ex: Custo, Receita, Investimento, Financeiro'],
   ['Conta Origem', 'NÃO', 'Texto', 'Conta bancária de origem'],
   ['Conta Destino', 'NÃO', 'Texto', 'Conta bancária de destino'],
