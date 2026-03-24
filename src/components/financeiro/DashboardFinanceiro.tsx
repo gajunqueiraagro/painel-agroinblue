@@ -300,6 +300,168 @@ function AuditEconomico(p: AuditEconomicoProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Audit: Arrobas produzidas Global vs Fazendas
+// ---------------------------------------------------------------------------
+
+function AuditArrobasGlobal({
+  lancamentosPecuarios,
+  saldosIniciais,
+  arrobasGlobalExibido,
+  anoFiltro,
+  mesFiltro,
+}: {
+  lancamentosPecuarios: Lancamento[];
+  saldosIniciais: SaldoInicial[];
+  arrobasGlobalExibido: number | null;
+  anoFiltro: number;
+  mesFiltro: number;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const audit = useMemo(() => {
+    // Group lancamentos by fazenda_id
+    const fazendaIds = new Set<string>();
+    for (const l of lancamentosPecuarios) fazendaIds.add(l.fazendaId);
+
+    const TIPOS_ENTRADA = ['nascimento', 'compra', 'transferencia_entrada'];
+    const TIPOS_SAIDA_GMD = ['abate', 'venda', 'consumo', 'transferencia_saida', 'morte'];
+
+    const porFazenda: { fazendaId: string; arrobasProduzidas: number | null; pesoInicial: number; pesoFinal: number; pesoEntradas: number; pesoSaidas: number; ganhoLiquido: number }[] = [];
+
+    for (const fid of fazendaIds) {
+      const lancsF = lancamentosPecuarios.filter(l => l.fazendaId === fid);
+      const saldosF = saldosIniciais.filter(s => s.fazendaId === fid);
+
+      const pesoInicialAno = saldosF
+        .filter(s => s.ano === anoFiltro)
+        .reduce((s, si) => s + si.quantidade * (si.pesoMedioKg || 0), 0);
+
+      const saldoMap = calcSaldoPorCategoriaLegado(saldosF, lancsF, anoFiltro, mesFiltro);
+      const saldoInicialAno = saldosF.filter(s => s.ano === anoFiltro).reduce((sum, s) => sum + s.quantidade, 0);
+      const saldoFinal = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
+
+      // Peso final: simplificado (sem fechamento — pois não temos per-farm aqui)
+      // Usamos o peso do saldo inicial como proxy (limitação conhecida)
+      let pesoFinalEstoque = 0;
+      saldoMap.forEach((qtd, cat) => {
+        const si = saldosF.find(s => s.ano === anoFiltro && s.categoria === cat);
+        pesoFinalEstoque += qtd * (si?.pesoMedioKg || 0);
+      });
+
+      const end = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}-31`;
+      const lancsAcum = lancsF.filter(l => l.data >= `${anoFiltro}-01-01` && l.data <= end);
+
+      const pesoEntradas = lancsAcum.filter(l => TIPOS_ENTRADA.includes(l.tipo))
+        .reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
+      const pesoSaidas = lancsAcum.filter(l => TIPOS_SAIDA_GMD.includes(l.tipo))
+        .reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || l.pesoCarcacaKg || 0), 0);
+
+      const ganhoLiquido = pesoFinalEstoque - pesoInicialAno - pesoEntradas + pesoSaidas;
+      const arrobas = (pesoFinalEstoque > 0 && pesoInicialAno > 0) ? ganhoLiquido / 30 : null;
+
+      porFazenda.push({
+        fazendaId: fid,
+        arrobasProduzidas: arrobas,
+        pesoInicial: pesoInicialAno,
+        pesoFinal: pesoFinalEstoque,
+        pesoEntradas,
+        pesoSaidas,
+        ganhoLiquido,
+      });
+    }
+
+    const somaFazendas = porFazenda.reduce((s, f) => s + (f.arrobasProduzidas ?? 0), 0);
+    const diferenca = arrobasGlobalExibido !== null ? arrobasGlobalExibido - somaFazendas : null;
+
+    return { porFazenda, somaFazendas, diferenca };
+  }, [lancamentosPecuarios, saldosIniciais, anoFiltro, mesFiltro, arrobasGlobalExibido]);
+
+  return (
+    <Card className={audit.diferenca && Math.abs(audit.diferenca) > 0.1 ? 'border-destructive' : ''}>
+      <CardContent className="p-3">
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex items-center justify-between w-full"
+        >
+          <div className="flex items-center gap-1.5 text-xs font-bold">
+            🔍 Auditoria: Arrobas Produzidas Global vs Fazendas
+          </div>
+          <div className="flex items-center gap-2">
+            {audit.diferenca && Math.abs(audit.diferenca) > 0.1 && (
+              <span className="text-[10px] font-bold text-destructive">
+                ⚠ Δ {formatNum(audit.diferenca, 1)} @
+              </span>
+            )}
+            {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </div>
+        </button>
+        {open && (
+          <div className="mt-2 space-y-2 text-[10px]">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-[10px] px-2 py-1.5">Fazenda</TableHead>
+                  <TableHead className="text-[10px] px-2 py-1.5 text-right">Peso Ini (kg)</TableHead>
+                  <TableHead className="text-[10px] px-2 py-1.5 text-right">Peso Fin (kg)</TableHead>
+                  <TableHead className="text-[10px] px-2 py-1.5 text-right">Entradas (kg)</TableHead>
+                  <TableHead className="text-[10px] px-2 py-1.5 text-right">Saídas (kg)</TableHead>
+                  <TableHead className="text-[10px] px-2 py-1.5 text-right">Ganho Líq (kg)</TableHead>
+                  <TableHead className="text-[10px] px-2 py-1.5 text-right">@ Produzidas</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {audit.porFazenda.map(f => (
+                  <TableRow key={f.fazendaId}>
+                    <TableCell className="text-[10px] px-2 py-1 font-bold max-w-[100px] truncate">{f.fazendaId.substring(0, 8)}…</TableCell>
+                    <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.pesoInicial, 0)}</TableCell>
+                    <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.pesoFinal, 0)}</TableCell>
+                    <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.pesoEntradas, 0)}</TableCell>
+                    <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.pesoSaidas, 0)}</TableCell>
+                    <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.ganhoLiquido, 0)}</TableCell>
+                    <TableCell className="text-[10px] px-2 py-1 text-right font-mono font-bold">
+                      {f.arrobasProduzidas !== null ? formatNum(f.arrobasProduzidas, 1) : '—'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+
+            <div className="border-t pt-2 space-y-1">
+              <div className="flex justify-between">
+                <span className="font-bold">Σ Fazendas:</span>
+                <span className="font-mono font-bold">{formatNum(audit.somaFazendas, 1)} @</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-bold">Global exibido:</span>
+                <span className="font-mono font-bold">{arrobasGlobalExibido !== null ? formatNum(arrobasGlobalExibido, 1) : '—'} @</span>
+              </div>
+              {audit.diferenca !== null && Math.abs(audit.diferenca) > 0.1 && (
+                <div className="flex justify-between text-destructive">
+                  <span className="font-bold">⚠ Diferença:</span>
+                  <span className="font-mono font-bold">{formatNum(audit.diferenca, 1)} @</span>
+                </div>
+              )}
+              {audit.diferenca !== null && Math.abs(audit.diferenca) <= 0.1 && (
+                <div className="flex justify-between" style={{ color: 'hsl(var(--primary))' }}>
+                  <span className="font-bold">✅ Consistente</span>
+                  <span className="font-mono">Δ = {formatNum(audit.diferenca, 2)} @</span>
+                </div>
+              )}
+            </div>
+
+            <div className="text-muted-foreground text-[9px] border-t pt-1">
+              ⚠ Esta auditoria usa peso do saldo inicial como proxy (sem fechamento de pasto por fazenda).
+              O cálculo oficial do global usa resolverPesoOficial quando disponível, o que pode gerar divergência.
+              Para eliminar a diferença, cada fazenda precisa ter o mesmo peso oficial usado no cálculo global.
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
