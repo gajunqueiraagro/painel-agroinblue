@@ -587,6 +587,11 @@ export function DashboardFinanceiro({
     const saidas = saidasList.reduce((s, l) => s + Math.abs(l.valor), 0);
     const saidasComRateio = saidas + totalRateioFiltrado;
 
+    // Desembolso produtivo do mês (apenas macro_custo = "Custeio Produtivo" ou legado)
+    const desembolsoProdMes = filtrados
+      .filter(l => isDesembolsoProdutivo(l))
+      .reduce((s, l) => s + Math.abs(l.valor), 0) + totalRateioFiltrado;
+
     // Desembolso produtivo acumulado (apenas macro_custo = "Custeio Produtivo")
     const mesLimite = mesFiltro !== 'todos' ? Number(mesFiltro) : 12;
     const desembolsoProdAcum = lancamentos
@@ -614,7 +619,7 @@ export function DashboardFinanceiro({
 
     // Indicadores econômicos — denominadores do zootécnico oficial
     const custoCabMes = zooData.cabMediaMes && zooData.cabMediaMes > 0
-      ? saidasComRateio / zooData.cabMediaMes
+      ? desembolsoProdMes / zooData.cabMediaMes
       : null;
     // NOVA FÓRMULA: (gasto médio mensal) ÷ (rebanho médio acumulado)
     const custoCabAcum = zooData.cabMediaAcum && zooData.cabMediaAcum > 0 && numMeses > 0
