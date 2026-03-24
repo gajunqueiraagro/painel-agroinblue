@@ -265,22 +265,77 @@ export function FechamentoPastoDialog({
               <Button onClick={handleSave} disabled={saving} className="flex-1 h-12">
                 <Save className="h-4 w-4 mr-1" />{saving ? 'Salvando...' : 'Salvar'}
               </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="default" className="h-12">
-                    <Lock className="h-4 w-4 mr-1" />Fechar
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
+              <Button variant="default" className="h-12" onClick={() => setConfirmOpen(true)}>
+                <Lock className="h-4 w-4 mr-1" />Fechar
+              </Button>
+              <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+                <AlertDialogContent className="max-h-[85vh] overflow-y-auto max-w-md">
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Fechar pasto?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Após fechar, os dados não poderão ser alterados sem reabrir o pasto. Deseja continuar?
-                    </AlertDialogDescription>
+                    <AlertDialogTitle>Confirmar fechamento do pasto</AlertDialogTitle>
+                    <AlertDialogDescription>Revise os dados antes de confirmar</AlertDialogDescription>
                   </AlertDialogHeader>
+
+                  {/* BLOCO 1 — Info do pasto */}
+                  <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
+                    <div className="font-semibold text-xs uppercase text-muted-foreground tracking-wide mb-1">Informações do pasto</div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Lote:</span><span className="font-medium">{loteMes || '—'}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Tipo de uso:</span><span className="font-medium">{tipoUsoLabel || '—'}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Qualidade:</span><span className="font-medium">{qualidadeMes ?? '—'}</span></div>
+                  </div>
+
+                  {/* BLOCO 2 — Composição */}
+                  {itensComQtd.length > 0 && (
+                    <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                      <div className="font-semibold text-xs uppercase text-muted-foreground tracking-wide mb-2">Composição do rebanho</div>
+                      <div className="space-y-1">
+                        {itensComQtd.map(i => (
+                          <div key={i.categoria_id} className="flex justify-between">
+                            <span>{i.cat?.nome}</span>
+                            <span className="font-medium tabular-nums">
+                              {i.quantidade} cab{i.peso_medio_kg ? ` / ${formatNum(i.peso_medio_kg, 1)} kg` : ''}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* BLOCO 3 — Totais */}
+                  <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
+                    <div className="font-semibold text-xs uppercase text-muted-foreground tracking-wide mb-1">Totais do pasto</div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Total de cabeças:</span><span className="font-bold">{total}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Peso médio:</span><span className="font-medium">{pesoMedioPonderado > 0 ? `${formatNum(pesoMedioPonderado, 1)} kg` : '—'}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Peso total estimado:</span><span className="font-medium">{pesoTotalEstoque > 0 ? `${formatNum(pesoTotalEstoque, 0)} kg` : '—'}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Lotação (UA/ha):</span><span className="font-medium">{uaHa ? formatNum(uaHa, 2) : '—'}</span></div>
+                  </div>
+
+                  {/* BLOCO 4 — Avisos */}
+                  {avisos.length > 0 && (
+                    <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm space-y-1">
+                      <div className="flex items-center gap-1 font-semibold text-yellow-700 dark:text-yellow-400 text-xs uppercase tracking-wide mb-1">
+                        <AlertTriangle className="h-3.5 w-3.5" />Avisos
+                      </div>
+                      {avisos.map((a, i) => (
+                        <div key={i} className="text-yellow-700 dark:text-yellow-400">• {a}</div>
+                      ))}
+                    </div>
+                  )}
+
+                  {!podeFechar && (
+                    <div className="text-sm text-destructive font-medium text-center">
+                      Não é possível fechar: informe ao menos 1 categoria com quantidade e peso.
+                    </div>
+                  )}
+
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleFechar}>Confirmar Fechamento</AlertDialogAction>
+                    <AlertDialogCancel>Voltar para edição</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleFechar}
+                      disabled={!podeFechar}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      Confirmar fechamento
+                    </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
