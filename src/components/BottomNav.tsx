@@ -13,6 +13,7 @@ const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
   { id: 'lancamentos', label: 'Lançar Reb.', icon: PlusCircle },
   { id: 'financeiro', label: 'Moviment.', icon: ArrowLeftRight },
   { id: 'fluxo_anual', label: 'Evol. Reb.', icon: TrendingUp },
+  { id: 'fin_caixa', label: 'Financeiro', icon: DollarSign },
   { id: 'conciliacao', label: 'Conciliar', icon: GitCompare },
   { id: 'cadastros', label: 'Cadastros', icon: ClipboardList },
   { id: 'acessos', label: 'Acessos', icon: Users },
