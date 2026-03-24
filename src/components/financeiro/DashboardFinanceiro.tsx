@@ -153,19 +153,38 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
     [anoFiltro, mesFiltro],
   );
 
-  // Filter lancamentos: conciliado + data_pagamento in period
-  const filtrados = useMemo(() => {
+  // All lancamentos in the period (any status) — for audit
+  const todosNoPeriodo = useMemo(() => {
     return lancamentos.filter(l => {
-      if (!isConciliado(l)) return false;
       const am = datePagtoAnoMes(l);
       if (!am) return false;
       return am.startsWith(periodoAlvo);
     });
   }, [lancamentos, periodoAlvo]);
 
+  // Filter lancamentos: conciliado + data_pagamento in period
+  const filtrados = useMemo(() => {
+    return todosNoPeriodo.filter(l => isConciliado(l));
+  }, [todosNoPeriodo]);
+
   // Split into entries and exits
   const entradasList = useMemo(() => filtrados.filter(isEntrada), [filtrados]);
   const saidasList = useMemo(() => filtrados.filter(isSaida), [filtrados]);
+
+  // Status audit breakdown
+  const auditStatus = useMemo(() => {
+    const map = new Map<string, { count: number; total: number }>();
+    for (const l of todosNoPeriodo) {
+      const status = (l.status_transacao || '(vazio)').trim();
+      const entry = map.get(status) || { count: 0, total: 0 };
+      entry.count++;
+      entry.total += Math.abs(l.valor);
+      map.set(status, entry);
+    }
+    return Array.from(map.entries())
+      .map(([status, v]) => ({ status, ...v }))
+      .sort((a, b) => b.total - a.total);
+  }, [todosNoPeriodo]);
 
   // Rateio filtrado pelo período
   const rateioFiltrado = useMemo(() => {
