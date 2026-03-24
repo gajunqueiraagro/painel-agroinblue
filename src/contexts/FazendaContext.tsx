@@ -22,7 +22,7 @@ interface FazendaContextType {
   fazendas: Fazenda[];
   fazendaAtual: Fazenda | null;
   setFazendaAtual: (f: Fazenda) => void;
-  criarFazenda: (nome: string) => Promise<Fazenda | null>;
+  criarFazenda: (nome: string, codigoImportacao?: string) => Promise<Fazenda | null>;
   loading: boolean;
   reloadFazendas: () => Promise<void>;
   isGlobal: boolean;
