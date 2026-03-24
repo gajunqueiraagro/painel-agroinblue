@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Download, Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { downloadModeloExcel } from '@/lib/financeiro/excelTemplate';
-import { parseExcel, validarFazenda, validarCentrosCusto, type LinhaImportada, type ErroImportacao, type CentroCustoOficial } from '@/lib/financeiro/importParser';
+import { parseExcel, validarEMapearFazendas, validarCentrosCusto, type LinhaImportada, type ErroImportacao, type CentroCustoOficial, type FazendaCodigo } from '@/lib/financeiro/importParser';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import type { ImportacaoRecord } from '@/hooks/useFinanceiro';
 import { format } from 'date-fns';
