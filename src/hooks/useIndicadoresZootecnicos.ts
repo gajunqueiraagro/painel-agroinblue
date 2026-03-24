@@ -558,6 +558,8 @@ export function useIndicadoresZootecnicos(
       arrobasHaMes,
       arrobasSaidasAcumuladoAno,
       arrobasHaAcumuladoAno,
+      arrobasProduzidasMes,
+      arrobasProduzidasAcumulado,
       desfruteCabecasMes,
       desfruteArrobasMes,
       desfruteCabecasAcumulado,
