@@ -91,6 +91,31 @@ export interface GmdAbertura {
   baseCompleta: boolean;
 }
 
+/** Ponto de dados mensal para gráficos históricos */
+export interface HistoricoMensal {
+  mes: number;
+  arrobasProduzidasAcum: number | null;
+  uaHaMedia: number | null;
+  gmdAcumulado: number | null;
+  desfruteCabAcum: number | null;
+  desfruteArrobAcum: number | null;
+}
+
+/** Série anual para gráficos históricos */
+export interface HistoricoAnual {
+  ano: number;
+  meses: HistoricoMensal[];
+}
+
+/** Comparação histórica para cards de variação */
+export interface ComparacaoHistorica {
+  anoComparativo: number;
+  valorAtual: number | null;
+  valorComparativo: number | null;
+  diferencaAbsoluta: number | null;
+  diferencaPercentual: number | null;
+}
+
 export interface IndicadoresZootecnicos {
   // --- Estoque ---
   saldoFinalMes: number;
@@ -99,6 +124,7 @@ export interface IndicadoresZootecnicos {
   // --- Lotação ---
   uaTotal: number;
   uaHa: number | null;
+  uaHaMediaAno: number | null;
   areaProdutiva: number;
 
   // --- Arrobas saídas (mês) ---
@@ -137,6 +163,7 @@ export interface IndicadoresZootecnicos {
     saldoFinalMes: Comparacao | null;
     pesoMedioRebanhoKg: Comparacao | null;
     uaHa: Comparacao | null;
+    uaHaMediaAno: Comparacao | null;
     valorRebanho: Comparacao | null;
     // Operacionais → vs mês anterior
     arrobasSaidasMes: Comparacao | null;
@@ -144,6 +171,20 @@ export interface IndicadoresZootecnicos {
     // Acumulados → vs acumulado ano anterior
     arrobasSaidasAcumuladoAno: Comparacao | null;
     arrobasHaAcumuladoAno: Comparacao | null;
+    arrobasProduzidasAcumulado: Comparacao | null;
+    gmdMes: Comparacao | null;
+    gmdAcumulado: Comparacao | null;
+    desfruteCabecasAcumulado: Comparacao | null;
+    desfruteArrobasAcumulado: Comparacao | null;
+    arrobasDesfrutadasAcum: Comparacao | null;
+  };
+
+  // --- Histórico (gráficos) ---
+  historico: HistoricoAnual[];
+  comparacoesHistorico: {
+    arrobasProduzidas: ComparacaoHistorica[];
+    uaHaMedia: ComparacaoHistorica[];
+    gmdAcumulado: ComparacaoHistorica[];
   };
 
   // --- Qualidade ---
