@@ -101,13 +101,17 @@ export interface IndicadoresZootecnicos {
   uaHa: number | null;
   areaProdutiva: number;
 
-  // --- Arrobas (mês) ---
+  // --- Arrobas saídas (mês) ---
   arrobasSaidasMes: number;
   arrobasHaMes: number | null;
 
-  // --- Arrobas (acumulado ano) ---
+  // --- Arrobas saídas (acumulado ano) ---
   arrobasSaidasAcumuladoAno: number;
   arrobasHaAcumuladoAno: number | null;
+
+  // --- Arrobas produzidas ---
+  arrobasProduzidasMes: number | null;
+  arrobasProduzidasAcumulado: number | null;
 
   // --- Desfrute (mês) ---
   desfruteCabecasMes: number | null;
@@ -471,6 +475,11 @@ export function useIndicadoresZootecnicos(
       baseCompleta: pesoFinalMes > 0 && pesoInicialMes > 0 && cabMediaMes > 0,
     };
 
+    // Arrobas produzidas mês (ganho líquido / 30)
+    const arrobasProduzidasMes = (pesoFinalMes > 0 && pesoInicialMes > 0 && cabMediaMes > 0)
+      ? ganhoLiquido / 30
+      : null;
+
     // GMD acumulado
     const diasAcum = Array.from({ length: mes }, (_, i) => new Date(ano, i + 1, 0).getDate()).reduce((a, b) => a + b, 0);
     const pesoInicialAno = saldosIniciais
@@ -482,6 +491,12 @@ export function useIndicadoresZootecnicos(
       .reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || l.pesoCarcacaKg || 0), 0);
     const cabMediaAcum = (saldoInicialAno + saldoFinalMes) / 2;
     const gmdAcumulado = calcGMD(pesoFinalMes, pesoInicialAno, pesoEntradasAcum, pesoSaidasAcum, diasAcum, cabMediaAcum);
+
+    // Arrobas produzidas acumulado
+    const ganhoLiquidoAcum = pesoFinalMes - pesoInicialAno - pesoEntradasAcum + pesoSaidasAcum;
+    const arrobasProduzidasAcumulado = (pesoFinalMes > 0 && pesoInicialAno > 0 && cabMediaAcum > 0)
+      ? ganhoLiquidoAcum / 30
+      : null;
 
     // Valor patrimonial
     const valorRebanho = valorRebanhoData?.total ?? null;
@@ -543,6 +558,8 @@ export function useIndicadoresZootecnicos(
       arrobasHaMes,
       arrobasSaidasAcumuladoAno,
       arrobasHaAcumuladoAno,
+      arrobasProduzidasMes,
+      arrobasProduzidasAcumulado,
       desfruteCabecasMes,
       desfruteArrobasMes,
       desfruteCabecasAcumulado,
