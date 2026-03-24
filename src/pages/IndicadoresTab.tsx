@@ -248,7 +248,6 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
 // Helpers
 // ---------------------------------------------------------------------------
 
-import { useState } from 'react';
 
 function useStickyState(initial: string): [string, (v: string) => void] {
   return useState(initial);
