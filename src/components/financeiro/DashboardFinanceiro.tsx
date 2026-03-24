@@ -33,9 +33,10 @@ interface Props {
   arrobasProduzidasAcum?: number;
   rateioADM?: RateioADM[];
   isGlobal?: boolean;
+  fazendasSemArea?: string[];
 }
 
-export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cabMediaAcum, arrobasProduzidasAcum, rateioADM = [], isGlobal = false }: Props) {
+export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cabMediaAcum, arrobasProduzidasAcum, rateioADM = [], isGlobal = false, fazendasSemArea = [] }: Props) {
   const anosDisp = useMemo(() => {
     const set = new Set<string>();
     set.add(String(new Date().getFullYear()));
