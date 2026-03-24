@@ -681,11 +681,14 @@ export function DashboardFinanceiro({
                 saidasMes={ind.saidas}
                 rateioMes={ind.rateioADM}
                 desembolsoAcum={ind.desembolsoAcum}
+                numMeses={ind.numMeses}
+                gastoMedioMensal={ind.mediaMenual}
                 custoCabMes={ind.custoCabMes}
                 custoCabAcum={ind.custoCabAcum}
                 custoArrobaProd={ind.custoArrobaProd}
                 cabMediaMes={zooData.cabMediaMes}
                 cabMediaAcum={zooData.cabMediaAcum}
+                rebanhosMensais={zooData.rebanhosMensais}
                 arrobasProduzidasAcum={zooData.arrobasProduzidasAcum}
                 saldoAnterior={zooData.saldoAnterior}
                 saldoFinalMes={zooData.saldoFinalMes}
