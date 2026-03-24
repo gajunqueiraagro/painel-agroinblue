@@ -138,10 +138,12 @@ export const isReceita = (l: FinanceiroLancamento) => {
 /** Check if ADM lancamento qualifies for rateio:
  *  - Status Transação = Conciliado
  *  - Tipo Operação = 2-Saídas
+ *  - macro_custo = "Custeio Produtivo" (only operational costs)
  */
 const isADMConciliado = (l: FinanceiroLancamento) =>
   (l.status_transacao || '').toLowerCase() === 'conciliado' &&
-  (l.tipo_operacao || '').toLowerCase().startsWith('2');
+  (l.tipo_operacao || '').toLowerCase().startsWith('2') &&
+  (l.macro_custo || '').toLowerCase().trim() === 'custeio produtivo';
 
 /** Extract YYYY-MM from a date string (YYYY-MM-DD) */
 const dateToAnoMes = (dateStr: string | null): string | null => {
