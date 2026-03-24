@@ -163,9 +163,11 @@ export function useFinanceiro() {
     }
     setLoading(true);
     try {
+      // Always load importacoes across all fazendas (import is global)
+      const allFazendaIds = fazendas.filter(f => f.id !== '__global__').map(f => f.id);
+
       if (isGlobal) {
-        const fazendaIds = fazendas.filter(f => f.id !== '__global__').map(f => f.id);
-        if (fazendaIds.length === 0) {
+        if (allFazendaIds.length === 0) {
           setLancamentos([]);
           setImportacoes([]);
           setCentrosCusto([]);
@@ -175,21 +177,24 @@ export function useFinanceiro() {
           return;
         }
 
-        // Global: load all lancamentos + ADM lancamentos + areas (for conference view)
         const promises: PromiseLike<any>[] = [
           supabase
             .from('financeiro_lancamentos')
             .select('*')
-            .in('fazenda_id', fazendaIds)
+            .in('fazenda_id', allFazendaIds)
             .order('data_realizacao', { ascending: false }),
           supabase
             .from('financeiro_centros_custo')
             .select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro')
-            .in('fazenda_id', fazendaIds)
+            .in('fazenda_id', allFazendaIds)
             .eq('ativo', true),
+          supabase
+            .from('financeiro_importacoes')
+            .select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro')
+            .in('fazenda_id', allFazendaIds)
+            .order('data_importacao', { ascending: false }),
         ];
 
-        // Load areas for conference view
         const opIds = fazendasOperacionais.map(f => f.id);
         if (opIds.length > 0) {
           promises.push(
@@ -201,9 +206,9 @@ export function useFinanceiro() {
         }
 
         const results = await Promise.all(promises);
-        setImportacoes([]);
         setLancamentos((results[0].data as FinanceiroLancamento[]) || []);
         setCentrosCusto((results[1].data as CentroCustoOficial[]) || []);
+        setImportacoes((results[2].data as ImportacaoRecord[]) || []);
 
         // In global, ADM lancamentos are already in lancamentos — extract for conference
         if (fazendaADM) {
