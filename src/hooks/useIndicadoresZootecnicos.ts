@@ -29,6 +29,7 @@ import {
   calcArrobasIniciais,
   calcGMD,
 } from '@/lib/calculos/economicos';
+import { loadPesosPastosPorCategoria, resolverPesoOficial } from '@/hooks/useFechamentoCategoria';
 import { supabase } from '@/integrations/supabase/client';
 
 // ---------------------------------------------------------------------------
