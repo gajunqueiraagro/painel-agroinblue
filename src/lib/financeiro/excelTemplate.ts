@@ -38,7 +38,7 @@ const EXEMPLO_1 = [
 
 const EXEMPLO_2 = [
   '2026-02-10', '2026-02-10', 'Vacina aftosa', 'Vet Saúde Animal', 2800.00,
-  'Pago', 'Fazenda Exemplo', 'Custo', 'Sicredi', '', 'Sanidade',
+  'Pago', 'ADM', 'Custo', 'Sicredi', '', 'Sanidade',
   'Vacinação', 'Vacina obrigatória', '', 'NF-005678', 'Fevereiro',
   '98.765.432/0001-10', 'Semestral', 'PIX', 'Campanha mai/2026', 2026, 2, '2026-02',
 ];
