@@ -21,6 +21,11 @@ interface Props {
 
 export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao }: Props) {
   const [drilldownMonth, setDrilldownMonth] = useState<string | null>(null);
+  const [activeSubTab, setActiveSubTab] = useState('evolucao');
+
+  const handleNavigateSubTab = useCallback((tab: string) => {
+    setActiveSubTab(tab);
+  }, []);
 
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
