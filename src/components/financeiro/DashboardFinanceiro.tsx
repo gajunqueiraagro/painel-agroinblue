@@ -475,8 +475,9 @@ export function DashboardFinanceiro({
     const custoCabMes = zooData.cabMediaMes && zooData.cabMediaMes > 0
       ? saidasComRateio / zooData.cabMediaMes
       : null;
-    const custoCabAcum = zooData.cabMediaAcum && zooData.cabMediaAcum > 0
-      ? desembolsoAcum / zooData.cabMediaAcum
+    // NOVA FÓRMULA: (gasto médio mensal) ÷ (rebanho médio acumulado)
+    const custoCabAcum = zooData.cabMediaAcum && zooData.cabMediaAcum > 0 && numMeses > 0
+      ? mediaMenual / zooData.cabMediaAcum
       : null;
     const custoArrobaProd = zooData.arrobasProduzidasAcum && zooData.arrobasProduzidasAcum > 0
       ? desembolsoAcum / zooData.arrobasProduzidasAcum
