@@ -410,6 +410,13 @@ export function DashboardFinanceiro({
   fazendaId,
 }: Props) {
   const [showAudit, setShowAudit] = useState(false);
+  const { fazendas } = useFazenda();
+
+  // IDs das fazendas reais (excluindo __global__)
+  const fazendaIdsReais = useMemo(
+    () => fazendas.filter(f => f.id !== '__global__').map(f => f.id),
+    [fazendas],
+  );
 
   const anosDisp = useMemo(() => {
     const set = new Set<string>();
