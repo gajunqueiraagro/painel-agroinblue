@@ -592,14 +592,15 @@ function origemToFonte(origem: OrigemPeso): FontePeso {
   }
 }
 
-function getPesoMedioCat(
+function getPesoMedioCatComPastos(
   catCodigo: string,
+  pesosPastos: Record<string, number>,
   saldosIniciais: SaldoInicial[],
   lancamentos: Lancamento[],
   ano: number,
   mes: number,
 ): number | null {
-  const { valor } = resolverPesoOficial(catCodigo, {}, saldosIniciais, lancamentos, ano, mes);
+  const { valor } = resolverPesoOficial(catCodigo, pesosPastos, saldosIniciais, lancamentos, ano, mes);
   return valor;
 }
 
