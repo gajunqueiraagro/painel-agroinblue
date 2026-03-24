@@ -101,13 +101,17 @@ export interface IndicadoresZootecnicos {
   uaHa: number | null;
   areaProdutiva: number;
 
-  // --- Arrobas (mês) ---
+  // --- Arrobas saídas (mês) ---
   arrobasSaidasMes: number;
   arrobasHaMes: number | null;
 
-  // --- Arrobas (acumulado ano) ---
+  // --- Arrobas saídas (acumulado ano) ---
   arrobasSaidasAcumuladoAno: number;
   arrobasHaAcumuladoAno: number | null;
+
+  // --- Arrobas produzidas ---
+  arrobasProduzidasMes: number | null;
+  arrobasProduzidasAcumulado: number | null;
 
   // --- Desfrute (mês) ---
   desfruteCabecasMes: number | null;
