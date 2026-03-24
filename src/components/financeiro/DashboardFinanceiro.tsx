@@ -819,14 +819,13 @@ export function DashboardFinanceiro({
             </CardContent>
           </Card>
 
-          {/* Auditoria de arrobas produzidas — Global vs Fazendas */}
+          {/* Auditoria de arrobas produzidas — Global = Σ Fazendas */}
           {isGlobal && (
             <AuditArrobasGlobal
-              lancamentosPecuarios={lancamentosPecuarios}
-              saldosIniciais={saldosIniciais}
+              porFazenda={arrobasGlobal.porFazenda}
+              somaArrobas={arrobasGlobal.somaArrobas}
               arrobasGlobalExibido={zooData.arrobasProduzidasAcum}
-              anoFiltro={Number(anoFiltro)}
-              mesFiltro={mesFiltro !== 'todos' ? Number(mesFiltro) : 12}
+              loading={arrobasGlobal.loading}
             />
           )}
           {/* Auditoria expandível */}
