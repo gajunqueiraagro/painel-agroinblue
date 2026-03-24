@@ -237,6 +237,7 @@ export function useIndicadoresZootecnicos(
   // Pesos oficiais do fechamento de pasto (código→peso)
   const [pesoFechamentoMap, setPesoFechamentoMap] = useState<Record<string, number>>({});
   const [pesoFechamentoMesAntMap, setPesoFechamentoMesAntMap] = useState<Record<string, number>>({});
+  const [pesoFechamentoYoYMap, setPesoFechamentoYoYMap] = useState<Record<string, number>>({});
 
   const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
 
@@ -245,6 +246,7 @@ export function useIndicadoresZootecnicos(
     if (!fazendaId || fazendaId === '__global__' || !categorias?.length) {
       setPesoFechamentoMap({});
       setPesoFechamentoMesAntMap({});
+      setPesoFechamentoYoYMap({});
       return;
     }
 
@@ -255,15 +257,21 @@ export function useIndicadoresZootecnicos(
       if (mesAntMes < 1) { mesAntMes = 12; mesAntAno--; }
       const mesAntStr = `${mesAntAno}-${String(mesAntMes).padStart(2, '0')}`;
 
-      const [mapAtual, mapAnt] = await Promise.all([
+      // YoY: mesmo mês do ano anterior
+      const yoyStr = `${ano - 1}-${String(mes).padStart(2, '0')}`;
+
+      const [mapAtual, mapAnt, mapYoY] = await Promise.all([
         loadPesosPastosPorCategoria(fazendaId, anoMes, categorias),
         loadPesosPastosPorCategoria(fazendaId, mesAntStr, categorias),
+        loadPesosPastosPorCategoria(fazendaId, yoyStr, categorias),
       ]);
       setPesoFechamentoMap(mapAtual);
       setPesoFechamentoMesAntMap(mapAnt);
+      setPesoFechamentoYoYMap(mapYoY);
     } catch {
       setPesoFechamentoMap({});
       setPesoFechamentoMesAntMap({});
+      setPesoFechamentoYoYMap({});
     }
   }, [fazendaId, anoMes, ano, mes, categorias]);
 
@@ -323,7 +331,7 @@ export function useIndicadoresZootecnicos(
         let totalYoY = 0;
         saldoMapYoY.forEach((qtd, cat) => {
           const preco = precoMapYoY.get(cat) || 0;
-          const pesoKg = getPesoMedioCat(cat, saldosIniciais, lancamentos, ano - 1, mes);
+          const pesoKg = getPesoMedioCatComPastos(cat, pesoFechamentoYoYMap, saldosIniciais, lancamentos, ano - 1, mes);
           totalYoY += qtd * (pesoKg || 0) * preco;
         });
         setValorRebanhoYoY(totalYoY > 0 ? totalYoY : null);
@@ -492,7 +500,7 @@ export function useIndicadoresZootecnicos(
     const pesoYoY = calcPesoMedioPonderado(
       Array.from(saldoMapYoY.entries())
         .filter(([, q]) => q > 0)
-        .map(([cat, q]) => ({ quantidade: q, pesoKg: getPesoMedioCat(cat, saldosIniciais, lancamentos, anoAnt, mes) }))
+        .map(([cat, q]) => ({ quantidade: q, pesoKg: getPesoMedioCatComPastos(cat, pesoFechamentoYoYMap, saldosIniciais, lancamentos, anoAnt, mes) }))
     );
     const compPesoMedio = pesoMedioRebanhoKg !== null && pesoYoY !== null ? buildComparacao(pesoMedioRebanhoKg, pesoYoY, 'yoy') : null;
 
@@ -563,7 +571,7 @@ export function useIndicadoresZootecnicos(
       },
       loading,
     };
-  }, [lancamentos, saldosIniciais, pastos, ano, mes, anoMes, valorRebanhoData, valorRebanhoYoY, loadingValor, pesoFechamentoMap, pesoFechamentoMesAntMap]);
+  }, [lancamentos, saldosIniciais, pastos, ano, mes, anoMes, valorRebanhoData, valorRebanhoYoY, loadingValor, pesoFechamentoMap, pesoFechamentoMesAntMap, pesoFechamentoYoYMap]);
 
   return indicadores;
 }
@@ -584,14 +592,15 @@ function origemToFonte(origem: OrigemPeso): FontePeso {
   }
 }
 
-function getPesoMedioCat(
+function getPesoMedioCatComPastos(
   catCodigo: string,
+  pesosPastos: Record<string, number>,
   saldosIniciais: SaldoInicial[],
   lancamentos: Lancamento[],
   ano: number,
   mes: number,
 ): number | null {
-  const { valor } = resolverPesoOficial(catCodigo, {}, saldosIniciais, lancamentos, ano, mes);
+  const { valor } = resolverPesoOficial(catCodigo, pesosPastos, saldosIniciais, lancamentos, ano, mes);
   return valor;
 }
 

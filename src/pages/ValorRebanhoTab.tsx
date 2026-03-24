@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,30 +10,23 @@ import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
 import { useValorRebanho } from '@/hooks/useValorRebanho';
-import { calcSaldoPorCategoria } from '@/lib/calculos/zootecnicos';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_COLS } from '@/lib/calculos/labels';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-
-/**
- * Fonte do peso médio por categoria — hierarquia de prioridade:
- *
- * 1. "fechamento" — Peso médio ponderado dos fechamentos de pasto do mês
- * 2. "lancamento" — Último lançamento com peso no período (jan→mês atual)
- * 3. "saldo_inicial" — Peso médio informado no saldo inicial do ano
- */
-type FontePeso = 'fechamento' | 'lancamento' | 'saldo_inicial';
-
-interface PesoInfo {
-  valor: number;
-  fonte: FontePeso;
-}
+import { useFechamentoCategoria, type OrigemPeso } from '@/hooks/useFechamentoCategoria';
 
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
 }
+
+/** Mapeia OrigemPeso → label amigável */
+const ORIGEM_LABEL: Record<OrigemPeso, string> = {
+  pastos: 'Fechamento do mês',
+  lancamento: 'Último lançamento',
+  saldo_inicial: 'Saldo inicial do ano',
+  sem_base: 'Sem dados',
+};
 
 export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
   const { fazendaAtual, isGlobal } = useFazenda();
@@ -64,118 +57,37 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
   const [precosLocal, setPrecosLocal] = useState<Record<string, number>>({});
   const [precosDisplay, setPrecosDisplay] = useState<Record<string, string>>({});
 
-  // --- Fechamento: peso médio ponderado por categoria_id ---
-  const [pesoFechamentoMap, setPesoFechamentoMap] = useState<Record<string, number>>({});
+  // --- BASE OFICIAL: useFechamentoCategoria ---
+  const resumoOficial = useFechamentoCategoria(
+    fazendaId,
+    Number(anoFiltro),
+    Number(mesFiltro),
+    lancamentos,
+    saldosIniciais,
+    categorias,
+  );
 
-  const loadPesosFechamento = useCallback(async () => {
-    if (!fazendaId || fazendaId === '__global__') return;
-    try {
-      const { data: fechamentos } = await supabase
-        .from('fechamento_pastos')
-        .select('id')
-        .eq('fazenda_id', fazendaId)
-        .eq('ano_mes', anoMes);
-
-      if (!fechamentos || fechamentos.length === 0) {
-        setPesoFechamentoMap({});
-        return;
-      }
-
-      const fechIds = fechamentos.map(f => f.id);
-      const { data: itens } = await supabase
-        .from('fechamento_pasto_itens')
-        .select('categoria_id, quantidade, peso_medio_kg')
-        .in('fechamento_id', fechIds);
-
-      if (!itens) { setPesoFechamentoMap({}); return; }
-
-      const acum: Record<string, { totalPeso: number; totalQtd: number }> = {};
-      itens.forEach(item => {
-        if (!item.peso_medio_kg || item.peso_medio_kg <= 0 || item.quantidade <= 0) return;
-        if (!acum[item.categoria_id]) acum[item.categoria_id] = { totalPeso: 0, totalQtd: 0 };
-        acum[item.categoria_id].totalPeso += item.peso_medio_kg * item.quantidade;
-        acum[item.categoria_id].totalQtd += item.quantidade;
-      });
-
-      const map: Record<string, number> = {};
-      const idToCodigo = new Map(categorias.map(c => [c.id, c.codigo]));
-      Object.entries(acum).forEach(([catId, { totalPeso, totalQtd }]) => {
-        const codigo = idToCodigo.get(catId);
-        if (codigo && totalQtd > 0) {
-          map[codigo] = totalPeso / totalQtd;
-        }
-      });
-      setPesoFechamentoMap(map);
-    } catch {
-      setPesoFechamentoMap({});
-    }
-  }, [fazendaId, anoMes, categorias]);
-
-  useEffect(() => { loadPesosFechamento(); }, [loadPesosFechamento]);
-
-  // Saldo final do mês por categoria
-  const saldoMap = useMemo(() => {
-    if (!categorias.length) return new Map<string, number>();
-    return calcSaldoPorCategoria(saldosIniciais, lancamentos, Number(anoFiltro), Number(mesFiltro), categorias);
-  }, [saldosIniciais, lancamentos, anoFiltro, mesFiltro, categorias]);
-
-  // Peso médio com hierarquia de fontes
-  const pesoMedioMap = useMemo(() => {
-    const map: Record<string, PesoInfo> = {};
-
-    saldosIniciais
-      .filter(s => s.ano === Number(anoFiltro))
-      .forEach(s => {
-        if (s.pesoMedioKg && s.pesoMedioKg > 0) {
-          map[s.categoria] = { valor: s.pesoMedioKg, fonte: 'saldo_inicial' };
-        }
-      });
-
-    const endDate = `${anoFiltro}-${mesFiltro}-31`;
-    const startDate = `${anoFiltro}-01-01`;
-    lancamentos
-      .filter(l => l.data >= startDate && l.data <= endDate && l.pesoMedioKg && l.pesoMedioKg > 0)
-      .sort((a, b) => a.data.localeCompare(b.data))
-      .forEach(l => {
-        if (l.pesoMedioKg && l.pesoMedioKg > 0) {
-          map[l.categoria] = { valor: l.pesoMedioKg, fonte: 'lancamento' };
-        }
-      });
-
-    Object.entries(pesoFechamentoMap).forEach(([codigo, peso]) => {
-      if (peso > 0) {
-        map[codigo] = { valor: peso, fonte: 'fechamento' };
-      }
-    });
-
-    return map;
-  }, [saldosIniciais, lancamentos, anoFiltro, mesFiltro, pesoFechamentoMap]);
-
-  // Build rows — all categories always (for December validation)
+  // Build rows from official source
   const allRows = useMemo(() => {
-    return categorias
-      .sort((a, b) => a.ordem_exibicao - b.ordem_exibicao)
-      .map(cat => {
-        const saldo = saldoMap.get(cat.id) || 0;
-        const pesoInfo = pesoMedioMap[cat.codigo];
-        const pesoMedio = pesoInfo?.valor || 0;
-        const fonte = pesoInfo?.fonte || null;
-        const precoKg = precosLocal[cat.codigo] ?? 0;
-        const valorTotal = saldo * pesoMedio * precoKg;
-        const valorCabeca = saldo > 0 && pesoMedio > 0 && precoKg > 0 ? pesoMedio * precoKg : 0;
-        return {
-          categoriaId: cat.id,
-          codigo: cat.codigo,
-          nome: cat.nome,
-          saldo,
-          pesoMedio,
-          fonte,
-          precoKg,
-          valorCabeca,
-          valorTotal,
-        };
-      });
-  }, [categorias, saldoMap, pesoMedioMap, precosLocal]);
+    return resumoOficial.rows.map(row => {
+      const precoKg = precosLocal[row.categoriaCodigo] ?? 0;
+      const valorTotal = row.quantidadeFinal * (row.pesoMedioFinalKg || 0) * precoKg;
+      const valorCabeca = row.quantidadeFinal > 0 && row.pesoMedioFinalKg && precoKg > 0
+        ? row.pesoMedioFinalKg * precoKg
+        : 0;
+      return {
+        categoriaId: row.categoriaId,
+        codigo: row.categoriaCodigo,
+        nome: row.categoriaNome,
+        saldo: row.quantidadeFinal,
+        pesoMedio: row.pesoMedioFinalKg || 0,
+        origemPeso: row.origemPeso,
+        precoKg,
+        valorCabeca,
+        valorTotal,
+      };
+    });
+  }, [resumoOficial.rows, precosLocal]);
 
   const rows = useMemo(() => {
     if (mostrarZerados || isDezembro) return allRows;
@@ -183,7 +95,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
   }, [allRows, mostrarZerados, isDezembro]);
 
   const categoriasOcultas = allRows.length - allRows.filter(r => r.saldo > 0).length;
-  const temEstimativa = rows.some(r => r.saldo > 0 && r.pesoMedio > 0 && r.fonte !== 'fechamento');
+  const temEstimativa = rows.some(r => r.saldo > 0 && r.pesoMedio > 0 && r.origemPeso !== 'pastos');
 
   const totalRebanho = useMemo(() => allRows.reduce((sum, r) => sum + r.valorTotal, 0), [allRows]);
   const totalCabecas = useMemo(() => allRows.reduce((sum, r) => sum + r.saldo, 0), [allRows]);
@@ -193,18 +105,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
   }, [allRows, totalCabecas]);
   const valorMedioCabeca = totalCabecas > 0 ? totalRebanho / totalCabecas : 0;
 
-  // Preço médio ponderado por kg (ponderado pelo valor total, ou seja peso * saldo)
   const precoMedioKg = useMemo(() => {
     const pesoTotal = allRows.reduce((sum, r) => sum + (r.saldo * r.pesoMedio), 0);
     return pesoTotal > 0 ? totalRebanho / pesoTotal : 0;
   }, [allRows, totalRebanho]);
 
-  // R$/@ = R$/kg × 30
   const precoMedioArroba = precoMedioKg * 30;
-
   const mesLabel = MESES_COLS.find(m => m.key === mesFiltro)?.label || mesFiltro;
 
-  // December validation: check categories missing price
   const categoriasSemPreco = useMemo(() => {
     if (!isDezembro) return [];
     return allRows.filter(r => r.precoKg <= 0).map(r => r.nome);
@@ -256,16 +164,6 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
     toast.success(`${prev.length} preços copiados do mês anterior`);
   };
 
-  const fonteLabel = (fonte: FontePeso | null): string => {
-    switch (fonte) {
-      case 'fechamento': return 'Fechamento do mês';
-      case 'lancamento': return 'Último lançamento';
-      case 'saldo_inicial': return 'Saldo inicial do ano';
-      default: return 'Sem dados';
-    }
-  };
-
-  // Can edit: not fechado, or admin reopened
   const canEdit = !isFechado;
 
   if (isGlobal) {
@@ -396,13 +294,13 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
                   {r.pesoMedio > 0 ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className={`cursor-help ${r.fonte === 'fechamento' ? 'text-foreground' : 'text-muted-foreground italic'}`}>
+                        <span className={`cursor-help ${r.origemPeso === 'pastos' ? 'text-foreground' : 'text-muted-foreground italic'}`}>
                           {formatNum(r.pesoMedio, 1)} kg
-                          {r.fonte !== 'fechamento' && ' *'}
+                          {r.origemPeso !== 'pastos' && ' *'}
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="top" className="text-xs">
-                        Fonte: {fonteLabel(r.fonte)}
+                        Fonte: {ORIGEM_LABEL[r.origemPeso]}
                       </TooltipContent>
                     </Tooltip>
                   ) : '-'}
