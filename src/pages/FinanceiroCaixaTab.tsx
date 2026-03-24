@@ -9,6 +9,7 @@ import { useState, useMemo } from 'react';
 import { ImportacaoFinanceira } from '@/components/financeiro/ImportacaoFinanceira';
 import { DashboardFinanceiro } from '@/components/financeiro/DashboardFinanceiro';
 import { RateioADMConferenciaView } from '@/components/financeiro/RateioADMConferencia';
+import { AnaliseEconomica } from '@/components/financeiro/AnaliseEconomica';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -16,7 +17,7 @@ import { usePastos } from '@/hooks/usePastos';
 import { Loader2 } from 'lucide-react';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
-type SubTab = 'dashboard' | 'rateio' | 'importacao';
+type SubTab = 'dashboard' | 'analise' | 'rateio' | 'importacao';
 
 interface Props {
   /** Lançamentos pecuários COMPLETOS (incluindo transferências) — para cálculos zootécnicos */
@@ -49,11 +50,12 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
 
   const tabs: { id: SubTab; label: string; icon: string }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { id: 'analise', label: 'Análise', icon: '📈' },
     ...(fazendaADM ? [{ id: 'rateio' as SubTab, label: 'Rateio ADM', icon: '🏢' }] : []),
     { id: 'importacao', label: 'Importação', icon: '📥' },
   ];
 
-  const gridCols = tabs.length === 3 ? 'grid-cols-3' : 'grid-cols-2';
+  const gridCols = tabs.length === 4 ? 'grid-cols-4' : 'grid-cols-3';
 
   return (
     <div className="p-4 max-w-full mx-auto space-y-3 animate-fade-in pb-20">
@@ -89,6 +91,18 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
               rateioADM={rateioADM}
               isGlobal={isGlobal}
               fazendasSemArea={fazendasSemArea}
+              pastos={pastos}
+              categorias={categorias}
+              fazendaId={fazendaId}
+            />
+          )}
+          {subTab === 'analise' && (
+            <AnaliseEconomica
+              lancamentos={lancamentos}
+              lancamentosPecuarios={lancamentosPecuarios}
+              saldosIniciais={saldosIniciais}
+              rateioADM={rateioADM}
+              isGlobal={isGlobal}
               pastos={pastos}
               categorias={categorias}
               fazendaId={fazendaId}
