@@ -3,7 +3,8 @@
  * Critério: área produtiva (ha)
  *
  * Mostra por mês:
- * - Total ADM conciliado
+ * - Total ADM conciliado (apenas Saídas conciliadas por data_pagamento)
+ * - Tabela de auditoria com todos os lançamentos usados
  * - Critério de rateio
  * - Percentual e valor por fazenda
  * - Aviso de fazendas sem área
@@ -11,7 +12,8 @@
 import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertTriangle, Building2, Info } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AlertTriangle, Building2, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import type { RateioADMConferencia } from '@/hooks/useFinanceiro';
 
@@ -23,6 +25,7 @@ interface Props {
 export function RateioADMConferenciaView({ conferencia, fazendasSemArea }: Props) {
   const meses = useMemo(() => conferencia.map(c => c.anoMes), [conferencia]);
   const [mesSelecionado, setMesSelecionado] = useState(meses[0] || '');
+  const [showAudit, setShowAudit] = useState(false);
 
   const dados = useMemo(
     () => conferencia.find(c => c.anoMes === mesSelecionado),
@@ -96,12 +99,68 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemArea }: Props
           {/* Total ADM conciliado */}
           <Card>
             <CardContent className="p-3">
-              <div className="text-xs text-muted-foreground mb-1">Total ADM Conciliado</div>
+              <div className="text-xs text-muted-foreground mb-1">Total ADM Conciliado (Saídas)</div>
               <p className="text-xl font-bold">{formatMoeda(dados.totalADMConciliado)}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5">
-                Apenas lançamentos com status "conciliado" e data de pagamento em {dados.anoMes}
+                Fazenda ADM · Tipo Operação = 2-Saídas · Status = Conciliado · Data Pagamento em {dados.anoMes}
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                {dados.lancamentosUsados.length} lançamento(s) no total
               </p>
             </CardContent>
+          </Card>
+
+          {/* Auditoria - lançamentos usados */}
+          <Card>
+            <CardHeader className="pb-2">
+              <button
+                onClick={() => setShowAudit(!showAudit)}
+                className="flex items-center justify-between w-full"
+              >
+                <CardTitle className="text-sm">
+                  🔍 Auditoria — Lançamentos usados ({dados.lancamentosUsados.length})
+                </CardTitle>
+                {showAudit ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+            </CardHeader>
+            {showAudit && (
+              <CardContent className="pt-0">
+                <div className="overflow-auto max-h-[400px]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-[10px] px-2 py-1.5">Data Pgto</TableHead>
+                        <TableHead className="text-[10px] px-2 py-1.5">Produto</TableHead>
+                        <TableHead className="text-[10px] px-2 py-1.5 text-right">Valor</TableHead>
+                        <TableHead className="text-[10px] px-2 py-1.5">Status</TableHead>
+                        <TableHead className="text-[10px] px-2 py-1.5">Fazenda</TableHead>
+                        <TableHead className="text-[10px] px-2 py-1.5">Tipo Op.</TableHead>
+                        <TableHead className="text-[10px] px-2 py-1.5">Conta Origem</TableHead>
+                        <TableHead className="text-[10px] px-2 py-1.5">Conta Destino</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dados.lancamentosUsados.map((l, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-[10px] px-2 py-1">{l.dataPagamento || '-'}</TableCell>
+                          <TableCell className="text-[10px] px-2 py-1 max-w-[120px] truncate">{l.produto || '-'}</TableCell>
+                          <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatMoeda(l.valor)}</TableCell>
+                          <TableCell className="text-[10px] px-2 py-1">{l.statusTransacao || '-'}</TableCell>
+                          <TableCell className="text-[10px] px-2 py-1">{l.fazenda}</TableCell>
+                          <TableCell className="text-[10px] px-2 py-1">{l.tipoOperacao || '-'}</TableCell>
+                          <TableCell className="text-[10px] px-2 py-1 max-w-[100px] truncate">{l.contaOrigem || '-'}</TableCell>
+                          <TableCell className="text-[10px] px-2 py-1 max-w-[100px] truncate">{l.contaDestino || '-'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <div className="border-t mt-2 pt-2 flex justify-between text-xs">
+                  <span className="font-bold">{dados.lancamentosUsados.length} lançamentos</span>
+                  <span className="font-bold">{formatMoeda(dados.totalADMConciliado)}</span>
+                </div>
+              </CardContent>
+            )}
           </Card>
 
           {/* Distribuição por fazenda */}
