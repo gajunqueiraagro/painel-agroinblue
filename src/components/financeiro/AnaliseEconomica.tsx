@@ -100,10 +100,18 @@ export function AnaliseEconomica({
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const anoNum = Number(anoFiltro);
 
-  // Mês limite (até o mês atual se ano corrente, senão 12)
-  const mesLimite = anoNum === new Date().getFullYear()
+  // Mês limite — controlado pelo usuário
+  const mesDefault = anoNum === new Date().getFullYear()
     ? new Date().getMonth() + 1
     : 12;
+  const [mesLimite, setMesLimite] = useState(mesDefault);
+
+  // Sync default when ano changes
+  const handleAnoChange = (val: string) => {
+    setAnoFiltro(val);
+    const novoAno = Number(val);
+    setMesLimite(novoAno === new Date().getFullYear() ? new Date().getMonth() + 1 : 12);
+  };
 
   // IDs das fazendas reais
   const fazendaIdsReais = useMemo(
@@ -148,14 +156,11 @@ export function AnaliseEconomica({
     return map;
   }, [lancamentos, anoFiltro]);
 
-  // Todos lançamentos conciliados no ano (para acumulados)
-  const todosConciliadosAno = useMemo(() => {
-    return lancamentos.filter(l => {
-      if (!isConciliado(l)) return false;
-      const am = datePagtoAnoMes(l);
-      return am && am.startsWith(anoFiltro);
-    });
-  }, [lancamentos, anoFiltro]);
+  // Meses disponíveis para o seletor
+  const mesesOpt = Array.from({ length: 12 }, (_, i) => ({
+    value: i + 1,
+    label: MESES_NOMES[i],
+  }));
 
   const blocos: { id: Bloco; label: string }[] = [
     { id: 'indicadores', label: '📊 Indicadores' },
@@ -166,17 +171,31 @@ export function AnaliseEconomica({
 
   return (
     <div className="space-y-3">
-      {/* Filtro de ano */}
-      <div className="flex gap-2 items-center">
-        <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-          <SelectTrigger className="w-28 text-base font-bold">
+      {/* Filtros: Ano + Até o mês */}
+      <div className="flex gap-2 items-center flex-wrap">
+        <Select value={anoFiltro} onValueChange={handleAnoChange}>
+          <SelectTrigger className="w-24 text-base font-bold">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
           </SelectContent>
         </Select>
-        <span className="text-xs text-muted-foreground">
+
+        <Select value={String(mesLimite)} onValueChange={v => setMesLimite(Number(v))}>
+          <SelectTrigger className="w-32 text-sm font-bold">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {mesesOpt.map(m => (
+              <SelectItem key={m.value} value={String(m.value)}>
+                Até {m.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <span className="text-[10px] text-muted-foreground">
           Jan → {MESES_NOMES[mesLimite - 1]}
         </span>
       </div>
@@ -227,10 +246,14 @@ export function AnaliseEconomica({
         <DREAtividade
           lancConciliadosPorMes={lancConciliadosPorMes}
           lancamentosPecuarios={lancamentosPecuarios}
+          saldosIniciais={saldosIniciais}
           rateioADM={rateioADM}
           anoFiltro={anoFiltro}
           mesLimite={mesLimite}
           isGlobal={isGlobal}
+          fazendaId={fazendaId}
+          categorias={categorias}
+          pastos={pastos}
         />
       )}
 

@@ -1,10 +1,10 @@
 /**
- * Bloco 1: Indicadores Mensais — gráfico de linha + tabela histórica.
+ * Bloco 1: Indicadores Mensais — gráficos de coluna + linha + tabela histórica.
  */
 import { useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_NOMES } from '@/lib/calculos/labels';
 import { isCusteioProdutivo, isSaida, somaAbs } from './analiseHelpers';
@@ -69,25 +69,21 @@ export function IndicadoresMensais({
       const mesKey = String(m).padStart(2, '0');
       const lancs = lancConciliadosPorMes.get(mesKey) || [];
 
-      // Desembolso produtivo do mês (Custeio Produtivo + rateio ADM)
       const custeioProd = lancs.filter(l => isCusteioProdutivo(l) && isSaida(l));
       const desembolsoMes = somaAbs(custeioProd);
 
-      // Rateio ADM do mês
       const rateioMes = rateioADM
         .filter(r => r.anoMes === `${anoFiltro}-${mesKey}`)
         .reduce((s, r) => s + r.valorRateado, 0);
 
       const desembolsoMesTotal = desembolsoMes + rateioMes;
 
-      // Saídas totais do mês (para desembolso geral = todas as saídas)
       const saidasMes = somaAbs(lancs.filter(isSaida));
       acumSaidas += saidasMes;
       acumDesembolso += desembolsoMesTotal;
 
       const cabMedia = cabMediasMensais.find(c => c.mes === m)?.media || 0;
 
-      // Custo/cab mês e acumulado
       const custoCabMes = cabMedia > 0 ? desembolsoMesTotal / cabMedia : null;
       const cabMediaAcum = cabMediasMensais
         .filter(c => c.mes <= m)
@@ -95,14 +91,11 @@ export function IndicadoresMensais({
       const mediaMensal = acumDesembolso / m;
       const custoCabAcum = cabMediaAcum > 0 ? mediaMensal / cabMediaAcum : null;
 
-      // Custo/@ — usamos arrobas produzidas acumuladas proporcionais (simplificado)
-      // Para mês individual, não temos arrobas mês por mês do zoo, então mostrar "—"
-      const custoArrobaMes: number | null = null; // Só acumulado é confiável
+      const custoArrobaMes: number | null = null;
       const custoArrobaAcum = arrobasProduzidasAcum && arrobasProduzidasAcum > 0 && m === mesLimite
         ? acumDesembolso / arrobasProduzidasAcum
         : null;
 
-      // Desembolso/cab e /@ (usa saidasTotais, não apenas custeio produtivo)
       const desembolsoCabMes = cabMedia > 0 ? saidasMes / cabMedia : null;
       const desembolsoCabAcum = cabMediaAcum > 0 ? (acumSaidas / m) / cabMediaAcum : null;
       const desembolsoArrobaMes: number | null = null;
@@ -130,42 +123,35 @@ export function IndicadoresMensais({
     return rows;
   }, [lancConciliadosPorMes, rateioADM, cabMediasMensais, arrobasProduzidasAcum, anoFiltro, mesLimite]);
 
-  // Chart data baseado no indicador selecionado
-  const chartData = useMemo(() => {
+  // Chart data for bar chart
+  const barChartData = useMemo(() => {
     return dados.map(d => {
       let mensal: number | null = null;
-      let acum: number | null = null;
-
       switch (indicador) {
-        case 'custo_cab':
-          mensal = d.custoCabMes;
-          acum = d.custoCabAcum;
-          break;
-        case 'custo_arroba':
-          mensal = d.custoArrobaMes;
-          acum = d.custoArrobaAcum;
-          break;
-        case 'desembolso_cab':
-          mensal = d.desembolsoCabMes;
-          acum = d.desembolsoCabAcum;
-          break;
-        case 'desembolso_arroba':
-          mensal = d.desembolsoArrobaMes;
-          acum = d.desembolsoArrobaAcum;
-          break;
-        case 'desembolso_total':
-          mensal = d.desembolsoMes;
-          acum = d.desembolsoAcum;
-          break;
+        case 'custo_cab': mensal = d.custoCabMes; break;
+        case 'custo_arroba': mensal = d.custoArrobaMes; break;
+        case 'desembolso_cab': mensal = d.desembolsoCabMes; break;
+        case 'desembolso_arroba': mensal = d.desembolsoArrobaMes; break;
+        case 'desembolso_total': mensal = d.desembolsoMes; break;
       }
-
-      return {
-        mes: d.mesLabel,
-        Mensal: mensal,
-        Acumulado: acum,
-      };
+      return { mes: d.mesLabel, Mensal: mensal };
     });
   }, [dados, indicador]);
+
+  // Line chart data (acumulado)
+  const lineChartData = useMemo(() => {
+    return dados.map(d => {
+      let acum: number | null = null;
+      switch (indicador) {
+        case 'custo_cab': acum = d.custoCabAcum; break;
+        case 'custo_arroba': acum = d.custoArrobaAcum; break;
+        case 'desembolso_cab': acum = d.desembolsoCabAcum; break;
+        case 'desembolso_arroba': acum = d.desembolsoArrobaAcum; break;
+        case 'desembolso_total': acum = d.desembolsoAcum; break;
+      }
+      return { mes: d.mesLabel, Mensal: barChartData.find(b => b.mes === d.mesLabel)?.Mensal ?? null, Acumulado: acum };
+    });
+  }, [dados, indicador, barChartData]);
 
   const labelIndicador = INDICADORES.find(i => i.id === indicador)?.label || '';
 
@@ -188,15 +174,15 @@ export function IndicadoresMensais({
         ))}
       </div>
 
-      {/* Gráfico */}
+      {/* Gráfico de colunas (mensal) + linha (acumulado) */}
       <Card>
         <CardContent className="p-3">
           <div className="text-xs font-bold text-muted-foreground mb-2">
             {labelIndicador} — {anoFiltro}
           </div>
-          <div className="h-48">
+          <div className="h-52">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+              <BarChart data={lineChartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
                 <XAxis dataKey="mes" tick={{ fontSize: 10 }} className="text-muted-foreground" />
                 <YAxis tick={{ fontSize: 10 }} className="text-muted-foreground" width={60}
@@ -205,9 +191,10 @@ export function IndicadoresMensais({
                   formatter={(v: number) => formatMoeda(v)}
                   contentStyle={{ fontSize: 11, borderRadius: 8 }}
                 />
-                <Line type="monotone" dataKey="Mensal" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} connectNulls />
-                <Line type="monotone" dataKey="Acumulado" stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls />
-              </LineChart>
+                <Legend wrapperStyle={{ fontSize: 10 }} />
+                <Bar dataKey="Mensal" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+                <Line type="monotone" dataKey="Acumulado" stroke="hsl(var(--muted-foreground))" strokeWidth={2} strokeDasharray="4 4" dot={false} connectNulls />
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </CardContent>
@@ -235,7 +222,7 @@ export function IndicadoresMensais({
                 <TableRow>
                   <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background">Desembolso mês</TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono">
+                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono whitespace-nowrap tabular-nums">
                       {d.desembolsoMes > 0 ? formatNum(d.desembolsoMes / 1000, 0) + 'k' : '—'}
                     </TableCell>
                   ))}
@@ -243,7 +230,7 @@ export function IndicadoresMensais({
                 <TableRow>
                   <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background">Desembolso acum.</TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono">
+                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono whitespace-nowrap tabular-nums">
                       {d.desembolsoAcum > 0 ? formatNum(d.desembolsoAcum / 1000, 0) + 'k' : '—'}
                     </TableCell>
                   ))}
@@ -251,7 +238,7 @@ export function IndicadoresMensais({
                 <TableRow>
                   <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background">Custo/cab mês</TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono">
+                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono whitespace-nowrap tabular-nums">
                       {d.custoCabMes !== null ? formatMoeda(d.custoCabMes) : '—'}
                     </TableCell>
                   ))}
@@ -259,7 +246,7 @@ export function IndicadoresMensais({
                 <TableRow>
                   <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background">Custo/cab acum.</TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono">
+                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono whitespace-nowrap tabular-nums">
                       {d.custoCabAcum !== null ? formatMoeda(d.custoCabAcum) : '—'}
                     </TableCell>
                   ))}
@@ -267,7 +254,7 @@ export function IndicadoresMensais({
                 <TableRow>
                   <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background">Média mensal</TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono">
+                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono whitespace-nowrap tabular-nums">
                       {d.mediaMensal > 0 ? formatNum(d.mediaMensal / 1000, 0) + 'k' : '—'}
                     </TableCell>
                   ))}
