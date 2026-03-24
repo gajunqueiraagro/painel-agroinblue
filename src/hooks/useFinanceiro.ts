@@ -376,20 +376,27 @@ export function useFinanceiro() {
       }));
   }, [fazendaADM, lancamentosADM, areaFazendas, fazendasOperacionais]);
 
-  // --- Confirmar importação ---
+  // --- Confirmar importação (global: per-line fazenda_id) ---
   const confirmarImportacao = useCallback(async (
     nomeArquivo: string,
     linhas: LinhaImportada[],
     totalLinhas: number,
     totalErros: number,
   ) => {
-    if (!fazendaId || !user) return false;
+    if (!user) return false;
 
     try {
+      // Use the first fazenda_id as the import record's fazenda (for RLS)
+      const primaryFazendaId = linhas[0]?.fazendaId;
+      if (!primaryFazendaId) {
+        toast.error('Nenhuma linha com fazenda válida');
+        return false;
+      }
+
       const { data: imp, error: impErr } = await supabase
         .from('financeiro_importacoes')
         .insert({
-          fazenda_id: fazendaId,
+          fazenda_id: primaryFazendaId,
           nome_arquivo: nomeArquivo,
           usuario_id: user.id,
           status: 'processada',
@@ -405,7 +412,7 @@ export function useFinanceiro() {
       const batchSize = 50;
       for (let i = 0; i < linhas.length; i += batchSize) {
         const batch = linhas.slice(i, i + batchSize).map(l => ({
-          fazenda_id: fazendaId,
+          fazenda_id: l.fazendaId!,
           importacao_id: imp.id,
           origem_dado: 'import_excel',
           data_realizacao: l.dataRealizacao,
@@ -441,7 +448,33 @@ export function useFinanceiro() {
       toast.error('Erro na importação: ' + (err.message || err));
       return false;
     }
-  }, [fazendaId, user, loadData]);
+  }, [user, loadData]);
+
+  // --- Excluir importação ---
+  const excluirImportacao = useCallback(async (importacaoId: string) => {
+    try {
+      // Delete lancamentos first
+      const { error: delLanc } = await supabase
+        .from('financeiro_lancamentos')
+        .delete()
+        .eq('importacao_id', importacaoId);
+      if (delLanc) throw delLanc;
+
+      // Delete import record
+      const { error: delImp } = await supabase
+        .from('financeiro_importacoes')
+        .delete()
+        .eq('id', importacaoId);
+      if (delImp) throw delImp;
+
+      toast.success('Importação excluída com sucesso');
+      await loadData();
+      return true;
+    } catch (err: any) {
+      toast.error('Erro ao excluir: ' + (err.message || err));
+      return false;
+    }
+  }, [loadData]);
 
   // --- Indicadores ---
   const indicadores = useMemo(() => {
