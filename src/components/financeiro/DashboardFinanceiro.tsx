@@ -501,6 +501,7 @@ export function DashboardFinanceiro({
       saidas,
       saidasComRateio,
       desembolsoAcum,
+      numMeses,
       mediaMenual,
       custoCabMes,
       custoCabAcum,
