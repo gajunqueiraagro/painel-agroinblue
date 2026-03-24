@@ -31,7 +31,7 @@ const COLUNAS = [
 
 const EXEMPLO_1 = [
   '2026-01-15', '2026-02-05', 'Sal mineral', 'Agro Nutrição Ltda', 4500.00,
-  'Pago', 'Fazenda Exemplo', 'Custo', 'Banco do Brasil', '', 'Nutrição',
+  'Pago', '3M', 'Custo', 'Banco do Brasil', '', 'Nutrição',
   'Suplementação', 'Sal mineral', 'Proteinado', 'NF-001234', 'Janeiro',
   '12.345.678/0001-99', 'Mensal', 'Boleto', 'Entrega mensal', 2026, 1, '2026-01',
 ];
