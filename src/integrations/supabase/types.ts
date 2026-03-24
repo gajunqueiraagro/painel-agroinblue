@@ -305,6 +305,275 @@ export type Database = {
           },
         ]
       }
+      financeiro_centros_custo: {
+        Row: {
+          ativo: boolean
+          centro_custo: string
+          codigo: string | null
+          created_at: string
+          fazenda_id: string
+          grupo_custo: string
+          id: string
+          macro_custo: string
+          subcentro: string | null
+          tipo_operacao: string
+        }
+        Insert: {
+          ativo?: boolean
+          centro_custo: string
+          codigo?: string | null
+          created_at?: string
+          fazenda_id: string
+          grupo_custo: string
+          id?: string
+          macro_custo: string
+          subcentro?: string | null
+          tipo_operacao: string
+        }
+        Update: {
+          ativo?: boolean
+          centro_custo?: string
+          codigo?: string | null
+          created_at?: string
+          fazenda_id?: string
+          grupo_custo?: string
+          id?: string
+          macro_custo?: string
+          subcentro?: string | null
+          tipo_operacao?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_centros_custo_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financeiro_contas: {
+        Row: {
+          ativo: boolean
+          banco: string | null
+          created_at: string
+          fazenda_id: string
+          id: string
+          nome_conta: string
+          tipo: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          banco?: string | null
+          created_at?: string
+          fazenda_id: string
+          id?: string
+          nome_conta: string
+          tipo?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          banco?: string | null
+          created_at?: string
+          fazenda_id?: string
+          id?: string
+          nome_conta?: string
+          tipo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_contas_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financeiro_fornecedores: {
+        Row: {
+          ativo: boolean
+          cpf_cnpj: string | null
+          created_at: string
+          fazenda_id: string
+          id: string
+          nome: string
+        }
+        Insert: {
+          ativo?: boolean
+          cpf_cnpj?: string | null
+          created_at?: string
+          fazenda_id: string
+          id?: string
+          nome: string
+        }
+        Update: {
+          ativo?: boolean
+          cpf_cnpj?: string | null
+          created_at?: string
+          fazenda_id?: string
+          id?: string
+          nome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_fornecedores_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financeiro_importacoes: {
+        Row: {
+          created_at: string
+          data_importacao: string
+          fazenda_id: string
+          id: string
+          nome_arquivo: string
+          status: string
+          total_com_erro: number
+          total_linhas: number
+          total_validas: number
+          usuario_id: string
+        }
+        Insert: {
+          created_at?: string
+          data_importacao?: string
+          fazenda_id: string
+          id?: string
+          nome_arquivo: string
+          status?: string
+          total_com_erro?: number
+          total_linhas?: number
+          total_validas?: number
+          usuario_id: string
+        }
+        Update: {
+          created_at?: string
+          data_importacao?: string
+          fazenda_id?: string
+          id?: string
+          nome_arquivo?: string
+          status?: string
+          total_com_erro?: number
+          total_linhas?: number
+          total_validas?: number
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_importacoes_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financeiro_lancamentos: {
+        Row: {
+          ano_mes: string
+          centro_custo: string | null
+          conta_destino: string | null
+          conta_origem: string | null
+          cpf_cnpj: string | null
+          created_at: string
+          data_pagamento: string | null
+          data_realizacao: string
+          escopo_negocio: string | null
+          fazenda_id: string
+          forma_pagamento: string | null
+          fornecedor: string | null
+          grupo_custo: string | null
+          id: string
+          importacao_id: string | null
+          macro_custo: string | null
+          nota_fiscal: string | null
+          obs: string | null
+          origem_dado: string
+          produto: string | null
+          recorrencia: string | null
+          status_transacao: string | null
+          subcentro: string | null
+          tipo_operacao: string | null
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          ano_mes: string
+          centro_custo?: string | null
+          conta_destino?: string | null
+          conta_origem?: string | null
+          cpf_cnpj?: string | null
+          created_at?: string
+          data_pagamento?: string | null
+          data_realizacao: string
+          escopo_negocio?: string | null
+          fazenda_id: string
+          forma_pagamento?: string | null
+          fornecedor?: string | null
+          grupo_custo?: string | null
+          id?: string
+          importacao_id?: string | null
+          macro_custo?: string | null
+          nota_fiscal?: string | null
+          obs?: string | null
+          origem_dado?: string
+          produto?: string | null
+          recorrencia?: string | null
+          status_transacao?: string | null
+          subcentro?: string | null
+          tipo_operacao?: string | null
+          updated_at?: string
+          valor?: number
+        }
+        Update: {
+          ano_mes?: string
+          centro_custo?: string | null
+          conta_destino?: string | null
+          conta_origem?: string | null
+          cpf_cnpj?: string | null
+          created_at?: string
+          data_pagamento?: string | null
+          data_realizacao?: string
+          escopo_negocio?: string | null
+          fazenda_id?: string
+          forma_pagamento?: string | null
+          fornecedor?: string | null
+          grupo_custo?: string | null
+          id?: string
+          importacao_id?: string | null
+          macro_custo?: string | null
+          nota_fiscal?: string | null
+          obs?: string | null
+          origem_dado?: string
+          produto?: string | null
+          recorrencia?: string | null
+          status_transacao?: string | null
+          subcentro?: string | null
+          tipo_operacao?: string | null
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_lancamentos_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_lancamentos_importacao_id_fkey"
+            columns: ["importacao_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_importacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lancamentos: {
         Row: {
           acrescimos: number | null

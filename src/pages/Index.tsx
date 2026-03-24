@@ -6,6 +6,7 @@ import { MovimentacaoTab } from './MovimentacaoTab';
 import { LancamentosTab } from './LancamentosTab';
 import { FluxoAnualTab } from './FluxoAnualTab';
 import { FinanceiroTab, type SubAba } from './FinanceiroTab';
+import { FinanceiroCaixaTab } from './FinanceiroCaixaTab';
 import { AcessosTab } from './AcessosTab';
 import { AnaliseTab } from './AnaliseTab';
 import { AnaliseEntradasTab } from './AnaliseEntradasTab';
@@ -40,6 +41,7 @@ const TITLES: Record<TabId, string> = {
   chuvas: 'Chuvas',
   pastos: 'Pastos',
   conciliacao: 'Conciliação',
+  fin_caixa: 'Financeiro',
 };
 
 const Index = () => {
@@ -108,7 +110,7 @@ const Index = () => {
       {activeTab === 'desfrute' && <DesfrunteTab lancamentos={isGlobal ? lancamentosVisiveis : lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} isGlobal={isGlobal} />}
       {activeTab === 'cadastros' && <CadastrosTab />}
       {activeTab === 'conciliacao' && <ConciliacaoHubTab />}
-
+      {activeTab === 'fin_caixa' && <FinanceiroCaixaTab />}
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
   );

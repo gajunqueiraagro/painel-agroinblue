@@ -1,7 +1,7 @@
-import { BarChart3, ArrowLeftRight, PlusCircle, TrendingUp, GitCompare, ClipboardList, Users } from 'lucide-react';
+import { BarChart3, ArrowLeftRight, PlusCircle, TrendingUp, GitCompare, ClipboardList, Users, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'financeiro' | 'evolucao' | 'evolucao_categoria' | 'fluxo_anual' | 'acessos' | 'analise' | 'analise_entradas' | 'analise_saidas' | 'desfrute' | 'cadastros' | 'chuvas' | 'pastos' | 'conciliacao';
+export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'financeiro' | 'evolucao' | 'evolucao_categoria' | 'fluxo_anual' | 'acessos' | 'analise' | 'analise_entradas' | 'analise_saidas' | 'desfrute' | 'cadastros' | 'chuvas' | 'pastos' | 'conciliacao' | 'fin_caixa';
 
 interface BottomNavProps {
   activeTab: TabId;
@@ -13,6 +13,7 @@ const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
   { id: 'lancamentos', label: 'Lançar Reb.', icon: PlusCircle },
   { id: 'financeiro', label: 'Moviment.', icon: ArrowLeftRight },
   { id: 'fluxo_anual', label: 'Evol. Reb.', icon: TrendingUp },
+  { id: 'fin_caixa', label: 'Financeiro', icon: DollarSign },
   { id: 'conciliacao', label: 'Conciliar', icon: GitCompare },
   { id: 'cadastros', label: 'Cadastros', icon: ClipboardList },
   { id: 'acessos', label: 'Acessos', icon: Users },
