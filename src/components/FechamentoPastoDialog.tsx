@@ -126,7 +126,26 @@ export function FechamentoPastoDialog({
     if (ok) setStatus('rascunho');
   };
 
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
   const total = itens.reduce((s, i) => s + (i.quantidade || 0), 0);
+  const itensComQtd = itens
+    .map(item => ({ ...item, cat: categorias.find(c => c.id === item.categoria_id) }))
+    .filter(i => i.quantidade > 0)
+    .sort((a, b) => (a.cat?.ordem_exibicao ?? 99) - (b.cat?.ordem_exibicao ?? 99));
+
+  const pesoTotalEstoque = itensComQtd.reduce((s, i) => s + i.quantidade * (i.peso_medio_kg || 0), 0);
+  const pesoMedioPonderado = total > 0 ? pesoTotalEstoque / total : 0;
+  const uaTotal = itens.reduce((s, i) => s + calcUA(i.quantidade, i.peso_medio_kg), 0);
+  const uaHa = pasto.area_produtiva_ha && uaTotal > 0 ? uaTotal / pasto.area_produtiva_ha : null;
+
+  const avisos: string[] = [];
+  if (total === 0) avisos.push('Nenhum animal informado');
+  if (itensComQtd.some(i => !i.peso_medio_kg)) avisos.push('Peso médio não informado em alguma categoria');
+  if (!qualidadeMes) avisos.push('Qualidade do pasto não preenchida');
+
+  const podeFechar = total > 0 && itensComQtd.some(i => i.peso_medio_kg);
+  const tipoUsoLabel = TIPOS_USO_OPTIONS.find(t => t.value === tipoUsoMes)?.label || tipoUsoMes;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
