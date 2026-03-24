@@ -142,12 +142,17 @@ export function FechamentoPastoDialog({
   const uaTotal = itens.reduce((s, i) => s + calcUA(i.quantidade, i.peso_medio_kg), 0);
   const uaHa = pasto.area_produtiva_ha && uaTotal > 0 ? uaTotal / pasto.area_produtiva_ha : null;
 
+  const exigeRebanho = TIPOS_USO_EXIGEM_REBANHO.includes(tipoUsoMes);
+
   const avisos: string[] = [];
-  if (total === 0) avisos.push('Nenhum animal informado');
-  if (itensComQtd.some(i => !i.peso_medio_kg)) avisos.push('Peso médio não informado em alguma categoria');
+  if (total === 0 && exigeRebanho) avisos.push('Nenhum animal informado');
+  if (total === 0 && !exigeRebanho) avisos.push('Pasto sem rebanho (conforme tipo de uso selecionado)');
+  if (itensComQtd.length > 0 && itensComQtd.some(i => !i.peso_medio_kg)) avisos.push('Peso médio não informado em alguma categoria');
   if (!qualidadeMes) avisos.push('Qualidade do pasto não preenchida');
 
-  const podeFechar = total > 0 && itensComQtd.some(i => i.peso_medio_kg);
+  const podeFechar = exigeRebanho
+    ? total > 0 && itensComQtd.some(i => i.peso_medio_kg)
+    : true;
   const tipoUsoLabel = TIPOS_USO_OPTIONS.find(t => t.value === tipoUsoMes)?.label || tipoUsoMes;
 
   return (
