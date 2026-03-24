@@ -130,6 +130,148 @@ function AuditTable({ title, lancamentos, totalLabel }: { title: string; lancame
 }
 
 // ---------------------------------------------------------------------------
+// Audit sub-component for economic KPIs
+// ---------------------------------------------------------------------------
+
+function AuditEconomico({
+  ind,
+  zoo,
+  isGlobal,
+  anoFiltro,
+  mesFiltro,
+}: {
+  ind: {
+    saidasComRateio: number;
+    saidas: number;
+    rateioADM: number;
+    desembolsoAcum: number;
+    custoCabMes: number | null;
+    custoCabAcum: number | null;
+    custoArrobaProd: number | null;
+  };
+  zoo: {
+    cabMediaMes: number | null;
+    cabMediaAcum: number | null;
+    arrobasProduzidasAcum: number | null;
+    saldoAnterior?: number;
+    saldoFinalMes?: number;
+    saldoInicialAno?: number;
+    pesoInicialAno?: number;
+    pesoFinalMes?: number;
+    pesoEntradasAcum?: number;
+    pesoSaidasAcum?: number;
+    ganhoLiquidoAcum?: number;
+  };
+  isGlobal: boolean;
+  anoFiltro: string;
+  mesFiltro: string;
+}) {
+  const [open, setOpen] = useState(false);
+  if (isGlobal) return null;
+
+  const mesLabel = mesFiltro !== 'todos' ? mesFiltro : '12';
+
+  return (
+    <div className="border-t pt-2">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground hover:text-foreground transition-colors w-full"
+      >
+        🔍 Auditoria dos indicadores econômicos
+        {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+      </button>
+      {open && (
+        <div className="mt-2 space-y-3 text-[10px]">
+          {/* Custo/cab mês */}
+          <div className="bg-muted/50 rounded-md p-2 space-y-1">
+            <div className="font-bold text-xs">Custo/cab mês</div>
+            <div className="text-muted-foreground">Fórmula: desembolso_mês ÷ cab_média_mês</div>
+            <div className="grid grid-cols-2 gap-1">
+              <div>
+                <span className="text-muted-foreground">Numerador:</span>
+                <div className="font-mono font-bold">{formatMoeda(ind.saidasComRateio)}</div>
+                <div className="text-muted-foreground">
+                  Saídas próprias: {formatMoeda(ind.saidas)}
+                  {ind.rateioADM > 0 && <><br />+ Rateio ADM: {formatMoeda(ind.rateioADM)}</>}
+                </div>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Denominador:</span>
+                <div className="font-mono font-bold">{zoo.cabMediaMes !== null ? formatNum(zoo.cabMediaMes, 1) : '—'}</div>
+                <div className="text-muted-foreground">
+                  ({formatNum(zoo.saldoAnterior ?? 0, 0)} + {formatNum(zoo.saldoFinalMes ?? 0, 0)}) ÷ 2
+                </div>
+                <div className="text-muted-foreground">Origem: calcSaldoPorCategoriaLegado</div>
+              </div>
+            </div>
+            <div className="border-t pt-1 font-bold">
+              Resultado: {ind.custoCabMes !== null ? formatMoeda(ind.custoCabMes) : '—'}
+            </div>
+          </div>
+
+          {/* Custo/cab acumulado */}
+          <div className="bg-muted/50 rounded-md p-2 space-y-1">
+            <div className="font-bold text-xs">Custo/cab acumulado (jan→mês {mesLabel})</div>
+            <div className="text-muted-foreground">Fórmula: desembolso_acum ÷ cab_média_acum</div>
+            <div className="grid grid-cols-2 gap-1">
+              <div>
+                <span className="text-muted-foreground">Numerador:</span>
+                <div className="font-mono font-bold">{formatMoeda(ind.desembolsoAcum)}</div>
+                <div className="text-muted-foreground">Saídas conciliadas jan→mês + rateio ADM acum</div>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Denominador:</span>
+                <div className="font-mono font-bold">{zoo.cabMediaAcum !== null ? formatNum(zoo.cabMediaAcum, 1) : '—'}</div>
+                <div className="text-muted-foreground">
+                  ({formatNum(zoo.saldoInicialAno ?? 0, 0)} + {formatNum(zoo.saldoFinalMes ?? 0, 0)}) ÷ 2
+                </div>
+                <div className="text-muted-foreground">Origem: saldos_iniciais + calcSaldoPorCategoriaLegado</div>
+              </div>
+            </div>
+            <div className="border-t pt-1 font-bold">
+              Resultado: {ind.custoCabAcum !== null ? formatMoeda(ind.custoCabAcum) : '—'}
+            </div>
+          </div>
+
+          {/* Custo/@ produzida */}
+          <div className="bg-muted/50 rounded-md p-2 space-y-1">
+            <div className="font-bold text-xs">Custo/@ produzida (jan→mês {mesLabel})</div>
+            <div className="text-muted-foreground">Fórmula: desembolso_acum ÷ arrobas_produzidas_acum</div>
+            <div className="grid grid-cols-2 gap-1">
+              <div>
+                <span className="text-muted-foreground">Numerador:</span>
+                <div className="font-mono font-bold">{formatMoeda(ind.desembolsoAcum)}</div>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Denominador:</span>
+                <div className="font-mono font-bold">{zoo.arrobasProduzidasAcum !== null ? `${formatNum(zoo.arrobasProduzidasAcum, 1)} @` : '—'}</div>
+                <div className="text-muted-foreground">
+                  Ganho líq. peso ÷ 30
+                </div>
+                <div className="text-muted-foreground">
+                  Peso final: {formatNum(zoo.pesoFinalMes ?? 0, 0)} kg<br />
+                  Peso inicial ano: {formatNum(zoo.pesoInicialAno ?? 0, 0)} kg<br />
+                  Peso entradas: {formatNum(zoo.pesoEntradasAcum ?? 0, 0)} kg<br />
+                  Peso saídas: {formatNum(zoo.pesoSaidasAcum ?? 0, 0)} kg<br />
+                  Ganho líq.: {formatNum(zoo.ganhoLiquidoAcum ?? 0, 0)} kg
+                </div>
+                <div className="text-muted-foreground mt-1 text-amber-600 dark:text-amber-400">
+                  ⚠ Origem: cálculo local (simplificado).<br />
+                  Módulo zootécnico usa resolverPesoOficial (fechamento de pasto).
+                </div>
+              </div>
+            </div>
+            <div className="border-t pt-1 font-bold">
+              Resultado: {ind.custoArrobaProd !== null ? formatMoeda(ind.custoArrobaProd) : '—'}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -203,7 +345,7 @@ export function DashboardFinanceiro({ lancamentos, indicadores, lancamentosPecua
   // ===========================================================================
   const zoo = useMemo(() => {
     if (lancamentosPecuarios.length === 0 && saldosIniciais.length === 0) {
-      return { cabMediaMes: null, cabMediaAcum: null, arrobasProduzidasAcum: null };
+      return { cabMediaMes: null, cabMediaAcum: null, arrobasProduzidasAcum: null, saldoAnterior: 0, saldoFinalMes: 0, saldoInicialAno: 0, pesoInicialAno: 0, pesoFinalMes: 0, pesoEntradasAcum: 0, pesoSaidasAcum: 0, ganhoLiquidoAcum: 0 };
     }
 
     const ano = Number(anoFiltro);
@@ -276,7 +418,12 @@ export function DashboardFinanceiro({ lancamentos, indicadores, lancamentosPecua
       ? ganhoLiquido / 30
       : null;
 
-    return { cabMediaMes, cabMediaAcum, arrobasProduzidasAcum };
+    return {
+      cabMediaMes, cabMediaAcum, arrobasProduzidasAcum,
+      saldoAnterior, saldoFinalMes, saldoInicialAno,
+      pesoInicialAno, pesoFinalMes, pesoEntradasAcum, pesoSaidasAcum,
+      ganhoLiquidoAcum: ganhoLiquido,
+    };
   }, [lancamentosPecuarios, saldosIniciais, anoFiltro, mesFiltro]);
 
   // Indicadores filtrados
@@ -508,6 +655,9 @@ export function DashboardFinanceiro({ lancamentos, indicadores, lancamentosPecua
                   Dados zootécnicos insuficientes — cadastre saldos iniciais e lançamentos para habilitar.
                 </p>
               )}
+
+              {/* Audit expandível dos indicadores econômicos */}
+              <AuditEconomico ind={ind} zoo={zoo} isGlobal={isGlobal} anoFiltro={anoFiltro} mesFiltro={mesFiltro} />
             </CardContent>
           </Card>
 
