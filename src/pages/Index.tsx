@@ -6,6 +6,7 @@ import { MovimentacaoTab } from './MovimentacaoTab';
 import { LancamentosTab } from './LancamentosTab';
 import { FluxoAnualTab } from './FluxoAnualTab';
 import { FinanceiroTab, type SubAba } from './FinanceiroTab';
+import { FinanceiroCaixaTab } from './FinanceiroCaixaTab';
 import { AcessosTab } from './AcessosTab';
 import { AnaliseTab } from './AnaliseTab';
 import { AnaliseEntradasTab } from './AnaliseEntradasTab';
