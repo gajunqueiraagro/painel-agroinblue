@@ -4,7 +4,7 @@
 import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { TrendingDown, TrendingUp, DollarSign, BarChart3, Building2 } from 'lucide-react';
+import { TrendingDown, TrendingUp, DollarSign, BarChart3, Building2, AlertTriangle } from 'lucide-react';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_OPTIONS } from '@/lib/calculos/labels';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
@@ -33,9 +33,10 @@ interface Props {
   arrobasProduzidasAcum?: number;
   rateioADM?: RateioADM[];
   isGlobal?: boolean;
+  fazendasSemArea?: string[];
 }
 
-export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cabMediaAcum, arrobasProduzidasAcum, rateioADM = [], isGlobal = false }: Props) {
+export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cabMediaAcum, arrobasProduzidasAcum, rateioADM = [], isGlobal = false, fazendasSemArea = [] }: Props) {
   const anosDisp = useMemo(() => {
     const set = new Set<string>();
     set.add(String(new Date().getFullYear()));
@@ -154,6 +155,17 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted rounded-md px-2.5 py-1.5 w-fit">
           <Building2 className="h-3.5 w-3.5" />
           Visão Global — lançamentos originais (sem rateio)
+        </div>
+      )}
+
+      {/* Aviso fazendas sem área */}
+      {!isGlobal && fazendasSemArea.length > 0 && (
+        <div className="flex items-start gap-2 text-xs bg-destructive/5 border border-destructive/30 rounded-md px-2.5 py-2">
+          <AlertTriangle className="h-3.5 w-3.5 text-destructive mt-0.5 shrink-0" />
+          <span className="text-muted-foreground">
+            <span className="font-bold text-destructive">Rateio ADM incompleto:</span>{' '}
+            {fazendasSemArea.join(', ')} sem área produtiva cadastrada.
+          </span>
         </div>
       )}
 
