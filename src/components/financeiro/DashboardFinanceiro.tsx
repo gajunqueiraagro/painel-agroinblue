@@ -502,7 +502,7 @@ export function DashboardFinanceiro({
       arrobasProduzidasMes: zoo.arrobasProduzidasMes,
       gmdAcumulado: zoo.gmdAcumulado,
     };
-  }, [zoo, saldosIniciais, anoFiltro, mesFiltro, lancamentosPecuarios]);
+  }, [zoo, saldosIniciais, anoFiltro, mesFiltro, lancamentosPecuarios, isGlobal, arrobasGlobal.somaArrobas]);
 
   // ===========================================================================
   // FINANCEIRO — filtros de lançamentos
