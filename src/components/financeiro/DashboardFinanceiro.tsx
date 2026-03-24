@@ -320,7 +320,7 @@ export function DashboardFinanceiro({ lancamentos, indicadores, cabMediaMes, cab
               <CardContent>
                 <div className="space-y-2">
                   {ind.porMacro.map(m => {
-                    const pct = ind.desembolsoProd > 0 ? (m.valor / ind.desembolsoProd) * 100 : 0;
+                    const pct = ind.desembolsoProdComRateio > 0 ? (m.valor / ind.desembolsoProdComRateio) * 100 : 0;
                     const isRateio = m.nome === 'ADM (Rateio)';
                     return (
                       <div key={m.nome}>
