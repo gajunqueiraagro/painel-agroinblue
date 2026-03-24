@@ -60,6 +60,8 @@ export function FinanceiroCaixaTab({ cabMediaMes, cabMediaAcum, arrobasProduzida
               cabMediaMes={cabMediaMes}
               cabMediaAcum={cabMediaAcum}
               arrobasProduzidasAcum={arrobasProduzidasAcum}
+              rateioADM={rateioADM}
+              isGlobal={isGlobal}
             />
           )}
           {subTab === 'importacao' && (
