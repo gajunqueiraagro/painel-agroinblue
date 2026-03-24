@@ -27,6 +27,8 @@ import {
   isDesembolsoProdutivo,
 } from '@/hooks/useFinanceiro';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
+import { useArrobasGlobal } from '@/hooks/useArrobasGlobal';
+import { useFazenda } from '@/contexts/FazendaContext';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import type { Pasto, CategoriaRebanho } from '@/hooks/usePastos';
 
