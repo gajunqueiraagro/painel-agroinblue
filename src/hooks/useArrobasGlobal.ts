@@ -9,7 +9,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import type { Lancamento, SaldoInicial } from '@/types/cattle';
+import type { Lancamento, SaldoInicial, Categoria } from '@/types/cattle';
 import type { CategoriaRebanho } from '@/hooks/usePastos';
 import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
 import { loadPesosPastosPorCategoria, resolverPesoOficial } from '@/hooks/useFechamentoCategoria';
@@ -53,57 +53,71 @@ export function useArrobasGlobal(
   categorias: CategoriaRebanho[],
   ano: number,
   mes: number,
+  fazendaIds: string[],
 ): ArrobasGlobalResult {
   const [loading, setLoading] = useState(false);
   const [pesosPorFazenda, setPesosPorFazenda] = useState<Map<string, Record<string, number>>>(new Map());
   const [nomeFazendas, setNomeFazendas] = useState<Map<string, string>>(new Map());
-
-  // Descobrir fazendas distintas nos lançamentos/saldos
-  const fazendaIds = useMemo(() => {
-    if (!isGlobal) return [];
-    const ids = new Set<string>();
-    lancamentos.forEach(l => { if (l.fazendaId) ids.add(l.fazendaId); });
-    saldosIniciais.forEach(s => { if (s.fazendaId) ids.add(s.fazendaId); });
-    return Array.from(ids).filter(id => id !== '__global__');
-  }, [isGlobal, lancamentos, saldosIniciais]);
+  const [saldosPorFazenda, setSaldosPorFazenda] = useState<Map<string, SaldoInicial[]>>(new Map());
 
   const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
 
-  // Carregar pesos de fechamento e nomes de cada fazenda
+  // Carregar pesos de fechamento, nomes e saldos iniciais por fazenda
   const loadData = useCallback(async () => {
     if (!isGlobal || fazendaIds.length === 0 || !categorias.length) {
       setPesosPorFazenda(new Map());
+      setSaldosPorFazenda(new Map());
       return;
     }
     setLoading(true);
     try {
       // Carregar pesos de fechamento de cada fazenda em paralelo
-      const results = await Promise.all(
-        fazendaIds.map(async fid => {
-          const pesos = await loadPesosPastosPorCategoria(fid, anoMes, categorias);
-          return { fid, pesos };
-        })
-      );
-      const map = new Map<string, Record<string, number>>();
-      results.forEach(r => map.set(r.fid, r.pesos));
-      setPesosPorFazenda(map);
+      const [pesosResults, fazendasRes, saldosRes] = await Promise.all([
+        Promise.all(
+          fazendaIds.map(async fid => {
+            const pesos = await loadPesosPastosPorCategoria(fid, anoMes, categorias);
+            return { fid, pesos };
+          })
+        ),
+        supabase.from('fazendas').select('id, nome').in('id', fazendaIds),
+        supabase.from('saldos_iniciais').select('*').in('fazenda_id', fazendaIds).eq('ano', ano),
+      ]);
 
-      // Carregar nomes das fazendas
-      const { data: fazendas } = await supabase
-        .from('fazendas')
-        .select('id, nome')
-        .in('id', fazendaIds);
-      if (fazendas) {
+      // Pesos
+      const pesoMap = new Map<string, Record<string, number>>();
+      pesosResults.forEach(r => pesoMap.set(r.fid, r.pesos));
+      setPesosPorFazenda(pesoMap);
+
+      // Nomes
+      if (fazendasRes.data) {
         const nomeMap = new Map<string, string>();
-        fazendas.forEach(f => nomeMap.set(f.id, f.nome));
+        fazendasRes.data.forEach(f => nomeMap.set(f.id, f.nome));
         setNomeFazendas(nomeMap);
+      }
+
+      // Saldos iniciais agrupados por fazenda
+      if (saldosRes.data) {
+        const sMap = new Map<string, SaldoInicial[]>();
+        saldosRes.data.forEach((s: any) => {
+          const fid = s.fazenda_id as string;
+          const arr = sMap.get(fid) || [];
+          arr.push({
+            ano: s.ano,
+            categoria: s.categoria as Categoria,
+            quantidade: s.quantidade,
+            pesoMedioKg: s.peso_medio_kg ?? undefined,
+          });
+          sMap.set(fid, arr);
+        });
+        setSaldosPorFazenda(sMap);
       }
     } catch {
       setPesosPorFazenda(new Map());
+      setSaldosPorFazenda(new Map());
     } finally {
       setLoading(false);
     }
-  }, [isGlobal, fazendaIds, anoMes, categorias]);
+  }, [isGlobal, fazendaIds.join(','), anoMes, ano, categorias]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -114,12 +128,12 @@ export function useArrobasGlobal(
     }
 
     const porFazenda: ArrobasFazenda[] = [];
-    let somaValida = true;
     let soma = 0;
+    let temAlguma = false;
 
     for (const fid of fazendaIds) {
       const lancsFazenda = lancamentos.filter(l => l.fazendaId === fid);
-      const saldosFazenda = saldosIniciais.filter(s => s.fazendaId === fid);
+      const saldosFazenda = saldosPorFazenda.get(fid) || [];
       const pesosMap = pesosPorFazenda.get(fid) || {};
 
       // Peso inicial do ano (saldos iniciais)
@@ -166,16 +180,18 @@ export function useArrobasGlobal(
         ganhoLiquidoKg: ganhoLiquido,
       });
 
-      if (arrobas === null) somaValida = false;
-      else soma += arrobas;
+      if (arrobas !== null) {
+        soma += arrobas;
+        temAlguma = true;
+      }
     }
 
     return {
       porFazenda,
-      somaArrobas: somaValida ? soma : (soma > 0 ? soma : null),
+      somaArrobas: temAlguma ? soma : null,
       loading,
     };
-  }, [isGlobal, fazendaIds, lancamentos, saldosIniciais, pesosPorFazenda, nomeFazendas, ano, mes, loading]);
+  }, [isGlobal, fazendaIds, lancamentos, saldosPorFazenda, pesosPorFazenda, nomeFazendas, ano, mes, loading]);
 
   return result;
 }
