@@ -305,7 +305,7 @@ export function useIndicadoresZootecnicos(
         let total = 0;
         saldoMap.forEach((qtd, cat) => {
           const preco = precoMap.get(cat) || 0;
-          const { valor: pesoKg } = getPesoOficial(cat, saldosIniciais, lancamentos, ano, mes, pesoFechamentoMap);
+          const { valor: pesoKg } = resolverPesoOficial(cat, pesoFechamentoMap, saldosIniciais, lancamentos, ano, mes);
           total += qtd * (pesoKg || 0) * preco;
         });
         setValorRebanhoData({
