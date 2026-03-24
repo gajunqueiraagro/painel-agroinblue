@@ -143,16 +143,26 @@ function AuditTable({ title, lancamentos, totalLabel }: { title: string; lancame
 // Audit sub-component for economic KPIs
 // ---------------------------------------------------------------------------
 
+interface RebanhoMedioMensal {
+  mes: number;
+  saldoInicio: number;
+  saldoFim: number;
+  media: number;
+}
+
 interface AuditEconomicoProps {
   saidasMes: number;
   rateioMes: number;
   desembolsoAcum: number;
+  numMeses: number;
+  gastoMedioMensal: number;
   custoCabMes: number | null;
   custoCabAcum: number | null;
   custoArrobaProd: number | null;
   // Zoo oficial
   cabMediaMes: number | null;
   cabMediaAcum: number | null;
+  rebanhosMensais: RebanhoMedioMensal[];
   arrobasProduzidasAcum: number | null;
   saldoAnterior: number;
   saldoFinalMes: number;
