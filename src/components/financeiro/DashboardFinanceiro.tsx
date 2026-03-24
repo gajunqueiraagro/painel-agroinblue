@@ -464,27 +464,52 @@ export function DashboardFinanceiro({ lancamentos, indicadores, lancamentosPecua
             </Card>
           )}
 
-          {/* Indicadores cruzados */}
-          <div className="grid grid-cols-3 gap-2">
-            <Card>
-              <CardContent className="p-3">
-                <div className="text-xs text-muted-foreground mb-1">Custo/cab mês</div>
-                <p className="text-sm font-bold">{ind.custoCabMes !== null ? formatMoeda(ind.custoCabMes) : '—'}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-3">
-                <div className="text-xs text-muted-foreground mb-1">Custo/cab acum.</div>
-                <p className="text-sm font-bold">{ind.custoCabAcum !== null ? formatMoeda(ind.custoCabAcum) : '—'}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-3">
-                <div className="text-xs text-muted-foreground mb-1">Custo/@ prod.</div>
-                <p className="text-sm font-bold">{ind.custoArrobaProd !== null ? formatMoeda(ind.custoArrobaProd) : '—'}</p>
-              </CardContent>
-            </Card>
-          </div>
+          {/* Indicadores econômicos */}
+          <Card>
+            <CardContent className="p-3 space-y-3">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                <Activity className="h-3.5 w-3.5" /> Indicadores Econômicos
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="text-[10px] text-muted-foreground">Desembolso acumulado</div>
+                  <p className="text-sm font-bold">{formatMoeda(ind.desembolsoAcum)}</p>
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground">Média mensal</div>
+                  <p className="text-sm font-bold">{formatMoeda(ind.mediaMenual)}</p>
+                </div>
+              </div>
+              <div className="border-t pt-2 grid grid-cols-3 gap-2">
+                <div>
+                  <div className="text-[10px] text-muted-foreground">Custo/cab mês</div>
+                  <p className="text-sm font-bold">{ind.custoCabMes !== null ? formatMoeda(ind.custoCabMes) : '—'}</p>
+                  {zoo.cabMediaMes !== null && (
+                    <p className="text-[9px] text-muted-foreground">{formatNum(zoo.cabMediaMes, 0)} cab méd.</p>
+                  )}
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground">Custo/cab acum.</div>
+                  <p className="text-sm font-bold">{ind.custoCabAcum !== null ? formatMoeda(ind.custoCabAcum) : '—'}</p>
+                  {zoo.cabMediaAcum !== null && (
+                    <p className="text-[9px] text-muted-foreground">{formatNum(zoo.cabMediaAcum, 0)} cab méd.</p>
+                  )}
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground">Custo/@ prod.</div>
+                  <p className="text-sm font-bold">{ind.custoArrobaProd !== null ? formatMoeda(ind.custoArrobaProd) : '—'}</p>
+                  {zoo.arrobasProduzidasAcum !== null && (
+                    <p className="text-[9px] text-muted-foreground">{formatNum(zoo.arrobasProduzidasAcum, 1)} @ prod.</p>
+                  )}
+                </div>
+              </div>
+              {(zoo.cabMediaMes === null && zoo.cabMediaAcum === null && zoo.arrobasProduzidasAcum === null) && (
+                <p className="text-[10px] text-muted-foreground italic">
+                  Dados zootécnicos insuficientes — cadastre saldos iniciais e lançamentos para habilitar.
+                </p>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Auditoria expandível */}
           {!isGlobal && (
