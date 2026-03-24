@@ -143,6 +143,14 @@ export function useFinanceiro() {
     [fazendas, fazendaADM],
   );
 
+  // Fazenda map for import resolution
+  const fazendaMapForImport = useMemo(
+    () => fazendas
+      .filter(f => f.id !== '__global__' && f.codigo_importacao)
+      .map(f => ({ id: f.id, nome: f.nome, codigo: f.codigo_importacao! })),
+    [fazendas],
+  );
+
   // --- Load data ---
   const loadData = useCallback(async () => {
     if (!fazendaId) {
