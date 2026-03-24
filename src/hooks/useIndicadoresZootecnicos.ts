@@ -246,6 +246,7 @@ export function useIndicadoresZootecnicos(
     if (!fazendaId || fazendaId === '__global__' || !categorias?.length) {
       setPesoFechamentoMap({});
       setPesoFechamentoMesAntMap({});
+      setPesoFechamentoYoYMap({});
       return;
     }
 
@@ -256,15 +257,21 @@ export function useIndicadoresZootecnicos(
       if (mesAntMes < 1) { mesAntMes = 12; mesAntAno--; }
       const mesAntStr = `${mesAntAno}-${String(mesAntMes).padStart(2, '0')}`;
 
-      const [mapAtual, mapAnt] = await Promise.all([
+      // YoY: mesmo mês do ano anterior
+      const yoyStr = `${ano - 1}-${String(mes).padStart(2, '0')}`;
+
+      const [mapAtual, mapAnt, mapYoY] = await Promise.all([
         loadPesosPastosPorCategoria(fazendaId, anoMes, categorias),
         loadPesosPastosPorCategoria(fazendaId, mesAntStr, categorias),
+        loadPesosPastosPorCategoria(fazendaId, yoyStr, categorias),
       ]);
       setPesoFechamentoMap(mapAtual);
       setPesoFechamentoMesAntMap(mapAnt);
+      setPesoFechamentoYoYMap(mapYoY);
     } catch {
       setPesoFechamentoMap({});
       setPesoFechamentoMesAntMap({});
+      setPesoFechamentoYoYMap({});
     }
   }, [fazendaId, anoMes, ano, mes, categorias]);
 
