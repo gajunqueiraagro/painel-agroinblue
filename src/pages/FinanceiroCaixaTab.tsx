@@ -17,7 +17,7 @@ import { usePastos } from '@/hooks/usePastos';
 import { Loader2 } from 'lucide-react';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
-type SubTab = 'dashboard' | 'rateio' | 'importacao';
+type SubTab = 'dashboard' | 'analise' | 'rateio' | 'importacao';
 
 interface Props {
   /** Lançamentos pecuários COMPLETOS (incluindo transferências) — para cálculos zootécnicos */
