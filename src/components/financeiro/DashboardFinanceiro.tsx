@@ -418,7 +418,12 @@ export function DashboardFinanceiro({ lancamentos, indicadores, lancamentosPecua
       ? ganhoLiquido / 30
       : null;
 
-    return { cabMediaMes, cabMediaAcum, arrobasProduzidasAcum };
+    return {
+      cabMediaMes, cabMediaAcum, arrobasProduzidasAcum,
+      saldoAnterior, saldoFinalMes, saldoInicialAno,
+      pesoInicialAno, pesoFinalMes, pesoEntradasAcum, pesoSaidasAcum,
+      ganhoLiquidoAcum: ganhoLiquido,
+    };
   }, [lancamentosPecuarios, saldosIniciais, anoFiltro, mesFiltro]);
 
   // Indicadores filtrados
