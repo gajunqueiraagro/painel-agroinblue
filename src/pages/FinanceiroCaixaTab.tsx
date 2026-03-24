@@ -61,9 +61,8 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
             <DashboardFinanceiro
               lancamentos={lancamentos}
               indicadores={indicadores}
-              cabMediaMes={cabMediaMes}
-              cabMediaAcum={cabMediaAcum}
-              arrobasProduzidasAcum={arrobasProduzidasAcum}
+              lancamentosPecuarios={lancamentosPecuarios}
+              saldosIniciais={saldosIniciais}
               rateioADM={rateioADM}
               isGlobal={isGlobal}
               fazendasSemArea={fazendasSemArea}
