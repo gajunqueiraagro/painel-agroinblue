@@ -484,8 +484,12 @@ export function DashboardFinanceiro({
       ? rebanhosMensais.reduce((s, rm) => s + rm.media, 0) / rebanhosMensais.length
       : null;
 
-    // Arrobas produzidas acumuladas — direto do hook oficial
-    const arrobasProduzidasAcum = zoo.arrobasProduzidasAcumulado;
+    // Arrobas produzidas acumuladas:
+    // Global → soma das fazendas (useArrobasGlobal)
+    // Individual → direto do hook oficial
+    const arrobasProduzidasAcum = isGlobal
+      ? arrobasGlobal.somaArrobas
+      : zoo.arrobasProduzidasAcumulado;
 
     return {
       cabMediaMes,
