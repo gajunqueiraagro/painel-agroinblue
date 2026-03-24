@@ -13,6 +13,7 @@
  * - Saídas = tipo_operacao começa com "2"
  */
 import { useMemo, useState } from 'react';
+import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -143,16 +144,26 @@ function AuditTable({ title, lancamentos, totalLabel }: { title: string; lancame
 // Audit sub-component for economic KPIs
 // ---------------------------------------------------------------------------
 
+interface RebanhoMedioMensal {
+  mes: number;
+  saldoInicio: number;
+  saldoFim: number;
+  media: number;
+}
+
 interface AuditEconomicoProps {
   saidasMes: number;
   rateioMes: number;
   desembolsoAcum: number;
+  numMeses: number;
+  gastoMedioMensal: number;
   custoCabMes: number | null;
   custoCabAcum: number | null;
   custoArrobaProd: number | null;
   // Zoo oficial
   cabMediaMes: number | null;
   cabMediaAcum: number | null;
+  rebanhosMensais: RebanhoMedioMensal[];
   arrobasProduzidasAcum: number | null;
   saldoAnterior: number;
   saldoFinalMes: number;
@@ -198,7 +209,7 @@ function AuditEconomico(p: AuditEconomicoProps) {
                 <div className="text-muted-foreground">
                   ({formatNum(p.saldoAnterior, 0)} + {formatNum(p.saldoFinalMes, 0)}) ÷ 2
                 </div>
-                <div className="text-muted-foreground text-green-700 dark:text-green-400">
+                <div className="text-muted-foreground" style={{ color: 'hsl(var(--primary))' }}>
                   ✅ Fonte: useIndicadoresZootecnicos (oficial)
                 </div>
               </div>
@@ -208,28 +219,53 @@ function AuditEconomico(p: AuditEconomicoProps) {
             </div>
           </div>
 
-          {/* Custo/cab acumulado */}
+          {/* Custo/cab acumulado — NOVA FÓRMULA */}
           <div className="bg-muted/50 rounded-md p-2 space-y-1">
             <div className="font-bold text-xs">Custo/cab acumulado (jan→mês {mesLabel})</div>
-            <div className="text-muted-foreground">Fórmula: desembolso_acum ÷ cab_média_acum</div>
+            <div className="text-muted-foreground">
+              Fórmula: (desembolso_acum ÷ meses) ÷ rebanho_médio_acum
+            </div>
             <div className="grid grid-cols-2 gap-1">
               <div>
-                <span className="text-muted-foreground">Numerador:</span>
+                <span className="text-muted-foreground">Desembolso acumulado:</span>
                 <div className="font-mono font-bold">{formatMoeda(p.desembolsoAcum)}</div>
+                <span className="text-muted-foreground">Nº meses:</span>
+                <div className="font-mono font-bold">{p.numMeses}</div>
+                <span className="text-muted-foreground">Gasto médio mensal:</span>
+                <div className="font-mono font-bold">{formatMoeda(p.gastoMedioMensal)}</div>
               </div>
               <div>
-                <span className="text-muted-foreground">Denominador:</span>
+                <span className="text-muted-foreground">Rebanho médio acumulado:</span>
                 <div className="font-mono font-bold">{p.cabMediaAcum !== null ? formatNum(p.cabMediaAcum, 1) : '—'}</div>
                 <div className="text-muted-foreground">
-                  ({formatNum(p.saldoInicialAno, 0)} + {formatNum(p.saldoFinalMes, 0)}) ÷ 2
+                  = média dos rebanhos médios mensais
                 </div>
-                <div className="text-muted-foreground text-green-700 dark:text-green-400">
+                <div className="text-muted-foreground" style={{ color: 'hsl(var(--primary))' }}>
                   ✅ Fonte: useIndicadoresZootecnicos (oficial)
                 </div>
               </div>
             </div>
+            {/* Detalhe mensal */}
+            {p.rebanhosMensais.length > 0 && (
+              <div className="border-t pt-1 mt-1">
+                <div className="text-muted-foreground font-bold mb-1">Rebanho médio por mês:</div>
+                <div className="grid grid-cols-3 gap-x-2 gap-y-0.5">
+                  {p.rebanhosMensais.map(rm => (
+                    <div key={rm.mes} className="flex justify-between">
+                      <span className="text-muted-foreground">M{rm.mes}:</span>
+                      <span className="font-mono">{formatNum(rm.media, 0)} <span className="text-muted-foreground text-[8px]">({formatNum(rm.saldoInicio, 0)}+{formatNum(rm.saldoFim, 0)})/2</span></span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="border-t pt-1 font-bold">
               Resultado: {p.custoCabAcum !== null ? formatMoeda(p.custoCabAcum) : '—'}
+              {p.custoCabAcum !== null && (
+                <span className="font-normal text-muted-foreground ml-1">
+                  = {formatMoeda(p.gastoMedioMensal)} ÷ {p.cabMediaAcum !== null ? formatNum(p.cabMediaAcum, 1) : '—'}
+                </span>
+              )}
             </div>
           </div>
 
@@ -245,7 +281,7 @@ function AuditEconomico(p: AuditEconomicoProps) {
               <div>
                 <span className="text-muted-foreground">Denominador:</span>
                 <div className="font-mono font-bold">{p.arrobasProduzidasAcum !== null ? `${formatNum(p.arrobasProduzidasAcum, 1)} @` : '—'}</div>
-                <div className="text-muted-foreground text-green-700 dark:text-green-400">
+                <div className="text-muted-foreground" style={{ color: 'hsl(var(--primary))' }}>
                   ✅ Fonte: useIndicadoresZootecnicos (oficial)
                 </div>
                 <div className="text-muted-foreground">
@@ -260,6 +296,146 @@ function AuditEconomico(p: AuditEconomicoProps) {
         </div>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Audit: Arrobas produzidas Global vs Fazendas
+// ---------------------------------------------------------------------------
+
+function AuditArrobasGlobal({
+  lancamentosPecuarios,
+  saldosIniciais,
+  arrobasGlobalExibido,
+  anoFiltro,
+  mesFiltro,
+}: {
+  lancamentosPecuarios: Lancamento[];
+  saldosIniciais: SaldoInicial[];
+  arrobasGlobalExibido: number | null;
+  anoFiltro: number;
+  mesFiltro: number;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const audit = useMemo(() => {
+    // Group lancamentos by fazenda_id (for movimentações breakdown)
+    const fazendaMap = new Map<string, Lancamento[]>();
+    for (const l of lancamentosPecuarios) {
+      const fid = l.fazendaId || '__sem_fazenda__';
+      const arr = fazendaMap.get(fid) || [];
+      arr.push(l);
+      fazendaMap.set(fid, arr);
+    }
+
+    const TIPOS_ENTRADA = ['nascimento', 'compra', 'transferencia_entrada'];
+    const TIPOS_SAIDA_GMD = ['abate', 'venda', 'consumo', 'transferencia_saida', 'morte'];
+
+    const end = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}-31`;
+
+    type FarmAudit = { fazendaId: string; pesoEntradas: number; pesoSaidas: number; cabEntradas: number; cabSaidas: number };
+    const porFazenda: FarmAudit[] = [];
+
+    for (const [fid, lancs] of fazendaMap) {
+      const acum = lancs.filter(l => l.data >= `${anoFiltro}-01-01` && l.data <= end);
+      const entradas = acum.filter(l => TIPOS_ENTRADA.includes(l.tipo));
+      const saidas = acum.filter(l => TIPOS_SAIDA_GMD.includes(l.tipo));
+
+      porFazenda.push({
+        fazendaId: fid,
+        pesoEntradas: entradas.reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0),
+        pesoSaidas: saidas.reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || l.pesoCarcacaKg || 0), 0),
+        cabEntradas: entradas.reduce((s, l) => s + l.quantidade, 0),
+        cabSaidas: saidas.reduce((s, l) => s + l.quantidade, 0),
+      });
+    }
+
+    // Global peso from saldos + all lancamentos
+    const pesoInicialGlobal = saldosIniciais
+      .filter(s => s.ano === anoFiltro)
+      .reduce((s, si) => s + si.quantidade * (si.pesoMedioKg || 0), 0);
+    
+    const saldoMapGlobal = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, anoFiltro, mesFiltro);
+    const saldoFinalGlobal = Array.from(saldoMapGlobal.values()).reduce((s, v) => s + v, 0);
+
+    const allAcum = lancamentosPecuarios.filter(l => l.data >= `${anoFiltro}-01-01` && l.data <= end);
+    const pesoEntradasGlobal = allAcum.filter(l => TIPOS_ENTRADA.includes(l.tipo))
+      .reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
+    const pesoSaidasGlobal = allAcum.filter(l => TIPOS_SAIDA_GMD.includes(l.tipo))
+      .reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || l.pesoCarcacaKg || 0), 0);
+
+    return { porFazenda, pesoInicialGlobal, saldoFinalGlobal, pesoEntradasGlobal, pesoSaidasGlobal };
+  }, [lancamentosPecuarios, saldosIniciais, anoFiltro, mesFiltro]);
+
+  return (
+    <Card>
+      <CardContent className="p-3">
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex items-center justify-between w-full"
+        >
+          <div className="flex items-center gap-1.5 text-xs font-bold">
+            🔍 Auditoria: Arrobas Produzidas (Global)
+          </div>
+          {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        </button>
+        {open && (
+          <div className="mt-2 space-y-2 text-[10px]">
+            {/* Composição global */}
+            <div className="bg-muted/50 rounded-md p-2 space-y-1">
+              <div className="font-bold text-xs mb-1">Base de cálculo global</div>
+              <div className="grid grid-cols-2 gap-1">
+                <div>Peso inicial (saldos):</div>
+                <div className="font-mono text-right">{formatNum(audit.pesoInicialGlobal, 0)} kg</div>
+                <div>Peso entradas acum:</div>
+                <div className="font-mono text-right">{formatNum(audit.pesoEntradasGlobal, 0)} kg</div>
+                <div>Peso saídas acum:</div>
+                <div className="font-mono text-right">{formatNum(audit.pesoSaidasGlobal, 0)} kg</div>
+              </div>
+              <div className="border-t pt-1 mt-1">
+                <div className="flex justify-between font-bold">
+                  <span>Global exibido:</span>
+                  <span className="font-mono">{arrobasGlobalExibido !== null ? `${formatNum(arrobasGlobalExibido, 1)} @` : '—'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Movimentações por fazenda */}
+            <div className="bg-muted/50 rounded-md p-2">
+              <div className="font-bold text-xs mb-1">Movimentações por fazenda</div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-[10px] px-2 py-1.5">Fazenda</TableHead>
+                    <TableHead className="text-[10px] px-2 py-1.5 text-right">Entr. (cab)</TableHead>
+                    <TableHead className="text-[10px] px-2 py-1.5 text-right">Entr. (kg)</TableHead>
+                    <TableHead className="text-[10px] px-2 py-1.5 text-right">Saíd. (cab)</TableHead>
+                    <TableHead className="text-[10px] px-2 py-1.5 text-right">Saíd. (kg)</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {audit.porFazenda.map(f => (
+                    <TableRow key={f.fazendaId}>
+                      <TableCell className="text-[10px] px-2 py-1 font-bold max-w-[100px] truncate">{f.fazendaId.substring(0, 8)}…</TableCell>
+                      <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.cabEntradas, 0)}</TableCell>
+                      <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.pesoEntradas, 0)}</TableCell>
+                      <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.cabSaidas, 0)}</TableCell>
+                      <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.pesoSaidas, 0)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="text-muted-foreground text-[9px] border-t pt-1">
+              ⚠ O cálculo global de arrobas produzidas usa todos os lançamentos em conjunto (base única).
+              Para que Global = Σ Fazendas, cada fazenda precisa usar o mesmo resolverPesoOficial.
+              Atualmente o global não carrega pesos de fechamento por fazenda (limitação arquitetural em correção).
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -312,18 +488,32 @@ export function DashboardFinanceiro({
 
   // Derived zoo values for economic indicators
   const zooData = useMemo(() => {
+    const anoNum = Number(anoFiltro);
     const saldoInicialAno = saldosIniciais
-      .filter(s => s.ano === Number(anoFiltro))
+      .filter(s => s.ano === anoNum)
       .reduce((sum, s) => sum + s.quantidade, 0);
 
     // Cab média mês: (saldo anterior + saldo final) / 2
-    // The hook already computes this via gmdAberturaMes
     const saldoAnterior = zoo.gmdAberturaMes.estoqueInicialDetalhe.reduce((s, d) => s + d.cabecas, 0);
     const saldoFinalMes = zoo.saldoFinalMes;
     const cabMediaMes = (saldoAnterior > 0 || saldoFinalMes > 0) ? (saldoAnterior + saldoFinalMes) / 2 : null;
 
-    // Cab média acumulada: (saldo inicial ano + saldo final mês) / 2
-    const cabMediaAcum = (saldoInicialAno > 0 || saldoFinalMes > 0) ? (saldoInicialAno + saldoFinalMes) / 2 : null;
+    // Rebanho médio mensal para cada mês jan→mesNum
+    const mesLimite = mesFiltro !== 'todos' ? Number(mesFiltro) : 12;
+    const rebanhosMensais: RebanhoMedioMensal[] = [];
+    for (let m = 1; m <= mesLimite; m++) {
+      const saldoInicioMes = m === 1
+        ? saldoInicialAno
+        : Array.from(calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, anoNum, m - 1).values()).reduce((s, v) => s + v, 0);
+      const saldoFimMes = Array.from(calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, anoNum, m).values()).reduce((s, v) => s + v, 0);
+      const media = (saldoInicioMes + saldoFimMes) / 2;
+      rebanhosMensais.push({ mes: m, saldoInicio: saldoInicioMes, saldoFim: saldoFimMes, media });
+    }
+
+    // Cab média acumulada = média dos rebanhos médios mensais
+    const cabMediaAcum = rebanhosMensais.length > 0
+      ? rebanhosMensais.reduce((s, rm) => s + rm.media, 0) / rebanhosMensais.length
+      : null;
 
     // Arrobas produzidas acumuladas — direto do hook oficial
     const arrobasProduzidasAcum = zoo.arrobasProduzidasAcumulado;
@@ -331,6 +521,7 @@ export function DashboardFinanceiro({
     return {
       cabMediaMes,
       cabMediaAcum,
+      rebanhosMensais,
       arrobasProduzidasAcum,
       saldoAnterior,
       saldoFinalMes,
@@ -338,7 +529,7 @@ export function DashboardFinanceiro({
       arrobasProduzidasMes: zoo.arrobasProduzidasMes,
       gmdAcumulado: zoo.gmdAcumulado,
     };
-  }, [zoo, saldosIniciais, anoFiltro]);
+  }, [zoo, saldosIniciais, anoFiltro, mesFiltro, lancamentosPecuarios]);
 
   // ===========================================================================
   // FINANCEIRO — filtros de lançamentos
@@ -424,8 +615,9 @@ export function DashboardFinanceiro({
     const custoCabMes = zooData.cabMediaMes && zooData.cabMediaMes > 0
       ? saidasComRateio / zooData.cabMediaMes
       : null;
-    const custoCabAcum = zooData.cabMediaAcum && zooData.cabMediaAcum > 0
-      ? desembolsoAcum / zooData.cabMediaAcum
+    // NOVA FÓRMULA: (gasto médio mensal) ÷ (rebanho médio acumulado)
+    const custoCabAcum = zooData.cabMediaAcum && zooData.cabMediaAcum > 0 && numMeses > 0
+      ? mediaMenual / zooData.cabMediaAcum
       : null;
     const custoArrobaProd = zooData.arrobasProduzidasAcum && zooData.arrobasProduzidasAcum > 0
       ? desembolsoAcum / zooData.arrobasProduzidasAcum
@@ -449,6 +641,7 @@ export function DashboardFinanceiro({
       saidas,
       saidasComRateio,
       desembolsoAcum,
+      numMeses,
       mediaMenual,
       custoCabMes,
       custoCabAcum,
@@ -628,11 +821,14 @@ export function DashboardFinanceiro({
                 saidasMes={ind.saidas}
                 rateioMes={ind.rateioADM}
                 desembolsoAcum={ind.desembolsoAcum}
+                numMeses={ind.numMeses}
+                gastoMedioMensal={ind.mediaMenual}
                 custoCabMes={ind.custoCabMes}
                 custoCabAcum={ind.custoCabAcum}
                 custoArrobaProd={ind.custoArrobaProd}
                 cabMediaMes={zooData.cabMediaMes}
                 cabMediaAcum={zooData.cabMediaAcum}
+                rebanhosMensais={zooData.rebanhosMensais}
                 arrobasProduzidasAcum={zooData.arrobasProduzidasAcum}
                 saldoAnterior={zooData.saldoAnterior}
                 saldoFinalMes={zooData.saldoFinalMes}
@@ -645,6 +841,16 @@ export function DashboardFinanceiro({
             </CardContent>
           </Card>
 
+          {/* Auditoria de arrobas produzidas — Global vs Fazendas */}
+          {isGlobal && (
+            <AuditArrobasGlobal
+              lancamentosPecuarios={lancamentosPecuarios}
+              saldosIniciais={saldosIniciais}
+              arrobasGlobalExibido={zooData.arrobasProduzidasAcum}
+              anoFiltro={Number(anoFiltro)}
+              mesFiltro={mesFiltro !== 'todos' ? Number(mesFiltro) : 12}
+            />
+          )}
           {/* Auditoria expandível */}
           {!isGlobal && (
             <div className="space-y-2">
