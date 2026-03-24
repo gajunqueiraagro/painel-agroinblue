@@ -492,7 +492,7 @@ export function useIndicadoresZootecnicos(
     const pesoYoY = calcPesoMedioPonderado(
       Array.from(saldoMapYoY.entries())
         .filter(([, q]) => q > 0)
-        .map(([cat, q]) => ({ quantidade: q, pesoKg: getPesoMedioCat(cat, saldosIniciais, lancamentos, anoAnt, mes) }))
+        .map(([cat, q]) => ({ quantidade: q, pesoKg: getPesoMedioCatComPastos(cat, pesoFechamentoYoYMap, saldosIniciais, lancamentos, anoAnt, mes) }))
     );
     const compPesoMedio = pesoMedioRebanhoKg !== null && pesoYoY !== null ? buildComparacao(pesoMedioRebanhoKg, pesoYoY, 'yoy') : null;
 
