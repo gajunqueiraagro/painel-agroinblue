@@ -151,7 +151,7 @@ export function AnaliseEconomica({
   // Todos lançamentos conciliados no ano (para acumulados)
   const todosConciliadosAno = useMemo(() => {
     return lancamentos.filter(l => {
-      if (!isConciliado(l)) continue;
+      if (!isConciliado(l)) return false;
       const am = datePagtoAnoMes(l);
       return am && am.startsWith(anoFiltro);
     });
