@@ -37,9 +37,9 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, onConfirmar }:
     const buffer = await file.arrayBuffer();
     const result = parseExcel(buffer);
 
-    // Validações adicionais
-    const errosFazenda = fazendaAtual
-      ? validarFazenda(result.linhasValidas, fazendaAtual.nome)
+    const codigoFazenda = fazendaAtual?.codigo_importacao;
+    const errosFazenda = codigoFazenda
+      ? validarFazenda(result.linhasValidas, codigoFazenda)
       : [];
     const errosCentro = validarCentrosCusto(result.linhasValidas, centrosCusto);
 
