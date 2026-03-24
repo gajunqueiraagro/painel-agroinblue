@@ -75,6 +75,16 @@ export interface RateioADM {
 export interface RateioADMConferencia {
   anoMes: string;
   totalADMConciliado: number;
+  lancamentosUsados: {
+    dataPagamento: string | null;
+    produto: string | null;
+    valor: number;
+    statusTransacao: string | null;
+    fazenda: string;
+    tipoOperacao: string | null;
+    contaOrigem: string | null;
+    contaDestino: string | null;
+  }[];
   fazendas: {
     fazendaId: string;
     fazendaNome: string;
@@ -82,7 +92,7 @@ export interface RateioADMConferencia {
     percentual: number;
     valorRateado: number;
   }[];
-  fazendasSemArea: string[]; // nomes das fazendas sem area_produtiva
+  fazendasSemArea: string[];
 }
 
 // ---------------------------------------------------------------------------
