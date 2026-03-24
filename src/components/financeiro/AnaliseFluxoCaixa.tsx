@@ -5,7 +5,6 @@
  * receitas, custos, investimentos, amortizações, dividendos, captações.
  *
  * Nota: Saldo inicial é zero por padrão (não há tabela de saldos bancários).
- * O saldo se acumula mês a mês com base nas entradas e saídas.
  */
 import { useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -44,7 +43,7 @@ export function FluxoCaixa({
 }: Props) {
   const dados = useMemo(() => {
     const rows: FluxoMes[] = [];
-    let saldoAcum = 0; // Saldo inicial = 0
+    let saldoAcum = 0;
 
     for (let m = 1; m <= mesLimite; m++) {
       const mesKey = String(m).padStart(2, '0');
@@ -52,7 +51,6 @@ export function FluxoCaixa({
 
       const entradas = somaAbs(lancs.filter(isEntrada));
 
-      // Classificar saídas por macro_custo
       const saidasAll = lancs.filter(isSaida);
       let saidasCusteio = 0;
       let saidasInvestimentos = 0;
@@ -98,7 +96,6 @@ export function FluxoCaixa({
     return rows;
   }, [lancConciliadosPorMes, mesLimite]);
 
-  // Totais
   const totEntradas = dados.reduce((s, d) => s + d.entradas, 0);
   const totSaidas = dados.reduce((s, d) => s + d.totalSaidas, 0);
   const saldoFinal = dados.length > 0 ? dados[dados.length - 1].saldoAcum : 0;
@@ -110,19 +107,19 @@ export function FluxoCaixa({
         <Card>
           <CardContent className="p-3">
             <div className="text-[10px] text-muted-foreground">(+) Entradas</div>
-            <p className="text-sm font-bold text-green-700 dark:text-green-400">{formatMoeda(totEntradas)}</p>
+            <p className="text-sm font-bold text-green-700 dark:text-green-400 whitespace-nowrap tabular-nums">{formatMoeda(totEntradas)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3">
             <div className="text-[10px] text-muted-foreground">(-) Saídas</div>
-            <p className="text-sm font-bold text-red-600 dark:text-red-400">{formatMoeda(totSaidas)}</p>
+            <p className="text-sm font-bold text-red-600 dark:text-red-400 whitespace-nowrap tabular-nums">{formatMoeda(totSaidas)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3">
             <div className="text-[10px] text-muted-foreground">Saldo</div>
-            <p className={`text-sm font-bold ${saldoFinal >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+            <p className={`text-sm font-bold whitespace-nowrap tabular-nums ${saldoFinal >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
               {formatMoeda(saldoFinal)}
             </p>
           </CardContent>
@@ -139,27 +136,27 @@ export function FluxoCaixa({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-[10px] px-2 py-1.5 sticky left-0 bg-background z-10">Descrição</TableHead>
+                  <TableHead className="text-[10px] px-2 py-1.5 sticky left-0 bg-background z-10 min-w-[110px]">Descrição</TableHead>
                   {dados.map(d => (
-                    <TableHead key={d.mes} className="text-[10px] px-2 py-1.5 text-right min-w-[65px]">
+                    <TableHead key={d.mes} className="text-[10px] px-2 py-1.5 text-right min-w-[70px]">
                       {d.mesLabel}
                     </TableHead>
                   ))}
-                  <TableHead className="text-[10px] px-2 py-1.5 text-right font-bold min-w-[70px]">Total</TableHead>
+                  <TableHead className="text-[10px] px-2 py-1.5 text-right font-bold min-w-[75px]">Total</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {/* Entradas */}
                 <TableRow>
-                  <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background text-green-700 dark:text-green-400">
+                  <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background text-green-700 dark:text-green-400 whitespace-nowrap">
                     (+) Entradas
                   </TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono text-green-700 dark:text-green-400">
+                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono text-green-700 dark:text-green-400 whitespace-nowrap tabular-nums">
                       {d.entradas > 0 ? fmtK(d.entradas) : '—'}
                     </TableCell>
                   ))}
-                  <TableCell className="text-[10px] px-2 py-1 text-right font-mono font-bold text-green-700 dark:text-green-400">
+                  <TableCell className="text-[10px] px-2 py-1 text-right font-mono font-bold text-green-700 dark:text-green-400 whitespace-nowrap tabular-nums">
                     {fmtK(totEntradas)}
                   </TableCell>
                 </TableRow>
@@ -173,41 +170,41 @@ export function FluxoCaixa({
 
                 {/* Total Saídas */}
                 <TableRow className="border-t">
-                  <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background text-red-600 dark:text-red-400">
+                  <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background text-red-600 dark:text-red-400 whitespace-nowrap">
                     (-) Total Saídas
                   </TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono font-bold text-red-600 dark:text-red-400">
+                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono font-bold text-red-600 dark:text-red-400 whitespace-nowrap tabular-nums">
                       {d.totalSaidas > 0 ? fmtK(d.totalSaidas) : '—'}
                     </TableCell>
                   ))}
-                  <TableCell className="text-[10px] px-2 py-1 text-right font-mono font-bold text-red-600 dark:text-red-400">
+                  <TableCell className="text-[10px] px-2 py-1 text-right font-mono font-bold text-red-600 dark:text-red-400 whitespace-nowrap tabular-nums">
                     {fmtK(totSaidas)}
                   </TableCell>
                 </TableRow>
 
                 {/* Saldo mês */}
                 <TableRow className="border-t-2">
-                  <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background">
+                  <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background whitespace-nowrap">
                     (=) Saldo mês
                   </TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className={`text-[10px] px-2 py-1 text-right font-mono font-bold ${d.saldoMes >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                    <TableCell key={d.mes} className={`text-[10px] px-2 py-1 text-right font-mono font-bold whitespace-nowrap tabular-nums ${d.saldoMes >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                       {fmtK(d.saldoMes)}
                     </TableCell>
                   ))}
-                  <TableCell className={`text-[10px] px-2 py-1 text-right font-mono font-bold ${saldoFinal >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  <TableCell className={`text-[10px] px-2 py-1 text-right font-mono font-bold whitespace-nowrap tabular-nums ${saldoFinal >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                     {fmtK(saldoFinal)}
                   </TableCell>
                 </TableRow>
 
                 {/* Saldo acumulado */}
                 <TableRow>
-                  <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background">
+                  <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background whitespace-nowrap">
                     Saldo acumulado
                   </TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className={`text-[10px] px-2 py-1 text-right font-mono ${d.saldoAcum >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                    <TableCell key={d.mes} className={`text-[10px] px-2 py-1 text-right font-mono whitespace-nowrap tabular-nums ${d.saldoAcum >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                       {fmtK(d.saldoAcum)}
                     </TableCell>
                   ))}
@@ -218,7 +215,7 @@ export function FluxoCaixa({
           </div>
 
           <div className="text-[9px] text-muted-foreground mt-2 border-t pt-2">
-            Base: Data Pagamento · Status Conciliado · Saldo inicial = R$ 0 (sem saldo bancário cadastrado) · Inclui todos os macro_custos
+            Base: Data Pagamento · Status Conciliado · Saldo inicial = R$ 0 · Inclui todos os macro_custos (investimentos, amortizações, dividendos)
           </div>
         </CardContent>
       </Card>
@@ -240,15 +237,15 @@ function SaidaRow({ label, dados, field }: { label: string; dados: FluxoMes[]; f
 
   return (
     <TableRow>
-      <TableCell className="text-[10px] px-2 py-1 text-muted-foreground sticky left-0 bg-background">
+      <TableCell className="text-[10px] px-2 py-1 text-muted-foreground sticky left-0 bg-background whitespace-nowrap">
         {label}
       </TableCell>
       {dados.map(d => (
-        <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono text-muted-foreground">
+        <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono text-muted-foreground whitespace-nowrap tabular-nums">
           {(d[field] as number) > 0 ? fmtK(d[field] as number) : '—'}
         </TableCell>
       ))}
-      <TableCell className="text-[10px] px-2 py-1 text-right font-mono text-muted-foreground">
+      <TableCell className="text-[10px] px-2 py-1 text-right font-mono text-muted-foreground whitespace-nowrap tabular-nums">
         {fmtK(total)}
       </TableCell>
     </TableRow>
