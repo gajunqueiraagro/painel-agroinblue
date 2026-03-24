@@ -572,36 +572,16 @@ export function useIndicadoresZootecnicos(
 // Helpers de peso (internos)
 // ---------------------------------------------------------------------------
 
-/**
- * Hierarquia oficial de peso médio por categoria:
- * 1. Fechamento de pasto (prioridade máxima)
- * 2. Último lançamento com peso no período
- * 3. Saldo inicial do ano (fallback)
- */
-function getPesoOficial(
-  catCodigo: string,
-  saldosIniciais: SaldoInicial[],
-  lancamentos: Lancamento[],
-  ano: number,
-  mes: number,
-  fechamentoMap: Record<string, number>,
-): { valor: number | null; fonte: FontePeso } {
-  // 1. Fechamento de pasto
-  if (fechamentoMap[catCodigo] && fechamentoMap[catCodigo] > 0) {
-    return { valor: fechamentoMap[catCodigo], fonte: 'fechamento' };
+import type { OrigemPeso } from '@/hooks/useFechamentoCategoria';
+
+/** Mapeia OrigemPeso (do hook unificado) para FontePeso (do indicadores) */
+function origemToFonte(origem: OrigemPeso): FontePeso {
+  switch (origem) {
+    case 'pastos': return 'fechamento';
+    case 'lancamento': return 'lancamento';
+    case 'saldo_inicial': return 'saldo_inicial';
+    case 'sem_base': return 'nenhuma';
   }
-  // 2. Último lançamento com peso
-  const lancsAteMes = lancamentos.filter(
-    l => l.categoria === catCodigo && l.data <= `${ano}-${String(mes).padStart(2, '0')}-31` && l.pesoMedioKg && l.pesoMedioKg > 0,
-  );
-  if (lancsAteMes.length > 0) {
-    const sorted = [...lancsAteMes].sort((a, b) => b.data.localeCompare(a.data));
-    return { valor: sorted[0].pesoMedioKg!, fonte: 'lancamento' };
-  }
-  // 3. Saldo inicial
-  const si = saldosIniciais.find(s => s.ano === ano && s.categoria === catCodigo);
-  if (si?.pesoMedioKg && si.pesoMedioKg > 0) return { valor: si.pesoMedioKg, fonte: 'saldo_inicial' };
-  return { valor: null, fonte: 'nenhuma' };
 }
 
 function getPesoMedioCat(
@@ -611,16 +591,8 @@ function getPesoMedioCat(
   ano: number,
   mes: number,
 ): number | null {
-  const lancsAteMes = lancamentos.filter(
-    l => l.categoria === catCodigo && l.data <= `${ano}-${String(mes).padStart(2, '0')}-31` && l.pesoMedioKg && l.pesoMedioKg > 0,
-  );
-  if (lancsAteMes.length > 0) {
-    const sorted = [...lancsAteMes].sort((a, b) => b.data.localeCompare(a.data));
-    return sorted[0].pesoMedioKg!;
-  }
-  const si = saldosIniciais.find(s => s.ano === ano && s.categoria === catCodigo);
-  if (si?.pesoMedioKg && si.pesoMedioKg > 0) return si.pesoMedioKg;
-  return null;
+  const { valor } = resolverPesoOficial(catCodigo, {}, saldosIniciais, lancamentos, ano, mes);
+  return valor;
 }
 
 function getPesoMedioInicial(saldosIniciais: SaldoInicial[], ano: number): number | null {
