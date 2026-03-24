@@ -4,7 +4,7 @@
  * NÃO faz nenhum cálculo próprio, exceto peso total = cab × peso médio.
  */
 
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { AlertTriangle, Info } from 'lucide-react';
