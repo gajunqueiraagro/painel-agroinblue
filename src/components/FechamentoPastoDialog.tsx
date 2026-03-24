@@ -9,7 +9,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { CheckCircle, Lock, Copy, Save, LockOpen } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Lock, Copy, Save, LockOpen } from 'lucide-react';
+import { calcUA } from '@/lib/calculos/zootecnicos';
+import { formatNum } from '@/lib/calculos/formatters';
 
 const TIPOS_USO_OPTIONS = [
   { value: 'cria', label: 'Cria' },
