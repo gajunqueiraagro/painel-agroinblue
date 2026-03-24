@@ -99,12 +99,32 @@ export interface RateioADMConferencia {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Macro-custos que NÃO entram no desembolso produtivo.
+ * Apenas "Custeio Produtivo" entra; todo o resto é excluído.
+ */
+const MACRO_CUSTO_EXCLUIDOS = new Set([
+  'investimento na fazenda',
+  'investimento em bovinos',
+  'amortizações financeiras',
+  'dividendos',
+  'outras entradas financeiras',
+  'receitas',
+  'dedução de receitas',
+]);
+
 export const isDesembolsoProdutivo = (l: FinanceiroLancamento) => {
-  const escopo = (l.escopo_negocio || '').toLowerCase();
-  const tipo = (l.tipo_operacao || '').toLowerCase();
-  if (escopo === 'financeiro') return false;
-  if (tipo === 'receita') return false;
-  return true;
+  const macro = (l.macro_custo || '').toLowerCase().trim();
+  // Se macro_custo não preenchido, mantém comportamento legado (inclui)
+  if (!macro) {
+    const escopo = (l.escopo_negocio || '').toLowerCase();
+    const tipo = (l.tipo_operacao || '').toLowerCase();
+    if (escopo === 'financeiro') return false;
+    if (tipo === 'receita') return false;
+    return true;
+  }
+  // Com macro_custo preenchido: só entra "Custeio Produtivo"
+  return macro === 'custeio produtivo';
 };
 
 export const isDesembolsoPecuaria = (l: FinanceiroLancamento) =>
