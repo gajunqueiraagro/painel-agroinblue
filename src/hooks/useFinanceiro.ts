@@ -413,7 +413,7 @@ export function useFinanceiro() {
           anoMes,
           totalADMConciliado: totalADM,
           lancamentosUsados: lancs.map(l => ({
-            dataPagamento: l.data_pagamento, produto: l.produto, valor: Math.abs(l.valor),
+            dataRef: l.data_realizacao, dataPagamento: l.data_pagamento, produto: l.produto, valor: Math.abs(l.valor),
             statusTransacao: l.status_transacao, fazenda: admNomeFazenda,
             tipoOperacao: l.tipo_operacao, contaOrigem: l.conta_origem, contaDestino: l.conta_destino,
           })),
