@@ -12,6 +12,7 @@
  * Status = Conciliado
  */
 import { useMemo, useState } from 'react';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
 import { calcValorTotal, calcArrobasSafe } from '@/lib/calculos/economicos';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -367,6 +368,66 @@ function AuditDesembolsoProdutivo({
 }
 
 // ---------------------------------------------------------------------------
+// Sub: Mobile Detalhe Entradas/Saídas (tabbed)
+// ---------------------------------------------------------------------------
+
+function MobileDetalheEntradaSaida({ ind }: { ind: any }) {
+  const [entradaTab, setEntradaTab] = useState<'mes' | 'acum'>('mes');
+  const [saidaTab, setSaidaTab] = useState<'mes' | 'acum'>('mes');
+
+  return (
+    <div className="space-y-2">
+      {/* Entradas */}
+      <Card className="bg-card/80">
+        <CardContent className="p-3 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entradas</div>
+            <div className="flex gap-1">
+              {(['mes', 'acum'] as const).map(t => (
+                <button key={t} onClick={() => setEntradaTab(t)}
+                  className={`text-[10px] px-2 py-0.5 rounded-md font-bold transition-colors ${entradaTab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground bg-muted'}`}>
+                  {t === 'mes' ? 'Mês' : 'Acumulado'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {ind.categoriasEntrada.map((cat: string) => (
+            <div key={cat} className="flex justify-between text-xs">
+              <span className="text-muted-foreground">{cat}</span>
+              <span className="font-mono font-bold">{formatMoeda((entradaTab === 'mes' ? ind.entradaDecomp.mes : ind.entradaDecomp.acum).get(cat) || 0)}</span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Saídas */}
+      <Card className="bg-card/80">
+        <CardContent className="p-3 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Saídas</div>
+            <div className="flex gap-1">
+              {(['mes', 'acum'] as const).map(t => (
+                <button key={t} onClick={() => setSaidaTab(t)}
+                  className={`text-[10px] px-2 py-0.5 rounded-md font-bold transition-colors ${saidaTab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground bg-muted'}`}>
+                  {t === 'mes' ? 'Mês' : 'Acumulado'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {ind.categoriasSaida.map((cat: string) => (
+            <div key={cat} className="flex justify-between text-xs">
+              <span className={`text-muted-foreground ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
+              <span className="font-mono font-bold">{formatMoeda((saidaTab === 'mes' ? ind.saidaDecomp.mes : ind.saidaDecomp.acum).get(cat) || 0)}</span>
+            </div>
+          ))}
+          <div className="text-[8px] text-muted-foreground italic">* Reposição e Dedução não entram no desembolso produtivo</div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -383,6 +444,7 @@ export function DashboardFinanceiro({
   fazendaId,
 }: Props) {
   const [showAudit, setShowAudit] = useState(false);
+  const isMobile = useIsMobile();
   const { fazendas } = useFazenda();
 
   const fazendaIdsReais = useMemo(
@@ -793,7 +855,7 @@ export function DashboardFinanceiro({
       {/* ================================================================= */}
       {/* 1. CARDS PRINCIPAIS — Entradas e Saídas */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {/* ENTRADAS */}
         <Card>
           <CardContent className="p-3">
@@ -805,7 +867,10 @@ export function DashboardFinanceiro({
               <span className="text-[10px] text-muted-foreground">por mês</span>
             </div>
             <p className="text-[10px] text-muted-foreground mt-1">{entradasList.length} lançamentos</p>
-            <p className="text-[10px] text-muted-foreground mt-1.5 pt-1.5 border-t border-border/50">acumulado: {formatMoeda(ind.entradasAcum)}</p>
+            <p className="text-[10px] mt-1.5 pt-1.5 border-t border-border/50">
+              <span className="text-muted-foreground">acumulado: </span>
+              <span className="font-bold text-green-700 dark:text-green-400">{formatMoeda(ind.entradasAcum)}</span>
+            </p>
           </CardContent>
         </Card>
 
@@ -825,7 +890,10 @@ export function DashboardFinanceiro({
                 <p className="text-amber-600 dark:text-amber-400">rateio ADM: {formatMoeda(ind.rateioMes)}</p>
               )}
             </div>
-            <p className="text-[10px] text-muted-foreground mt-1.5 pt-1.5 border-t border-border/50">acumulado: {formatMoeda(ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal))}</p>
+            <p className="text-[10px] mt-1.5 pt-1.5 border-t border-border/50">
+              <span className="text-muted-foreground">acumulado: </span>
+              <span className="font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal))}</span>
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -833,67 +901,72 @@ export function DashboardFinanceiro({
       {/* ================================================================= */}
       {/* 2. CARDS MENORES — Decomposição */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-2 gap-2">
-        {/* Entradas no mês */}
-        <Card className="bg-card/80">
-          <CardContent className="p-2.5 space-y-1">
-            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entradas no mês</div>
-            {ind.categoriasEntrada.map(cat => (
-              <div key={cat} className="flex justify-between text-[10px]">
-                <span className="text-muted-foreground truncate mr-2">{cat}</span>
-                <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.entradaDecomp.mes.get(cat) || 0)}</span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+      {/* Mobile: tabbed detail blocks; Desktop: 2x2 grid */}
+      {isMobile ? (
+        <MobileDetalheEntradaSaida ind={ind} />
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          {/* Entradas no mês */}
+          <Card className="bg-card/80">
+            <CardContent className="p-2.5 space-y-1">
+              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entradas no mês</div>
+              {ind.categoriasEntrada.map(cat => (
+                <div key={cat} className="flex justify-between text-[10px]">
+                  <span className="text-muted-foreground truncate mr-2">{cat}</span>
+                  <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.entradaDecomp.mes.get(cat) || 0)}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
 
-        {/* Saídas no mês */}
-        <Card className="bg-card/80">
-          <CardContent className="p-2.5 space-y-1">
-            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Saídas no mês</div>
-            {ind.categoriasSaida.map(cat => (
-              <div key={cat} className="flex justify-between text-[10px]">
-                <span className={`text-muted-foreground truncate mr-2 ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
-                <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.saidaDecomp.mes.get(cat) || 0)}</span>
-              </div>
-            ))}
-            {(ind.categoriasSaida.includes('Reposição de Bovinos') || ind.categoriasSaida.includes('Dedução de Receitas')) && (
-              <div className="text-[8px] text-muted-foreground italic">* não entram no desembolso produtivo</div>
-            )}
-          </CardContent>
-        </Card>
+          {/* Saídas no mês */}
+          <Card className="bg-card/80">
+            <CardContent className="p-2.5 space-y-1">
+              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Saídas no mês</div>
+              {ind.categoriasSaida.map(cat => (
+                <div key={cat} className="flex justify-between text-[10px]">
+                  <span className={`text-muted-foreground truncate mr-2 ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
+                  <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.saidaDecomp.mes.get(cat) || 0)}</span>
+                </div>
+              ))}
+              {(ind.categoriasSaida.includes('Reposição de Bovinos') || ind.categoriasSaida.includes('Dedução de Receitas')) && (
+                <div className="text-[8px] text-muted-foreground italic">* não entram no desembolso produtivo</div>
+              )}
+            </CardContent>
+          </Card>
 
-        {/* Entradas acumulado */}
-        <Card className="bg-card/80">
-          <CardContent className="p-2.5 space-y-1">
-            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entradas acumulado</div>
-            {ind.categoriasEntrada.map(cat => (
-              <div key={cat} className="flex justify-between text-[10px]">
-                <span className="text-muted-foreground truncate mr-2">{cat}</span>
-                <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.entradaDecomp.acum.get(cat) || 0)}</span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+          {/* Entradas acumulado */}
+          <Card className="bg-card/80">
+            <CardContent className="p-2.5 space-y-1">
+              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entradas acumulado</div>
+              {ind.categoriasEntrada.map(cat => (
+                <div key={cat} className="flex justify-between text-[10px]">
+                  <span className="text-muted-foreground truncate mr-2">{cat}</span>
+                  <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.entradaDecomp.acum.get(cat) || 0)}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
 
-        {/* Saídas acumulado */}
-        <Card className="bg-card/80">
-          <CardContent className="p-2.5 space-y-1">
-            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Saídas acumulado</div>
-            {ind.categoriasSaida.map(cat => (
-              <div key={cat} className="flex justify-between text-[10px]">
-                <span className={`text-muted-foreground truncate mr-2 ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
-                <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.saidaDecomp.acum.get(cat) || 0)}</span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+          {/* Saídas acumulado */}
+          <Card className="bg-card/80">
+            <CardContent className="p-2.5 space-y-1">
+              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Saídas acumulado</div>
+              {ind.categoriasSaida.map(cat => (
+                <div key={cat} className="flex justify-between text-[10px]">
+                  <span className={`text-muted-foreground truncate mr-2 ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
+                  <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.saidaDecomp.acum.get(cat) || 0)}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* ================================================================= */}
       {/* 4. INDICADORES ECONÔMICOS — 2 colunas */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {/* ESQUERDA — Receitas */}
         <Card>
           <CardContent className="p-3 space-y-3">
@@ -1048,7 +1121,7 @@ export function DashboardFinanceiro({
       {/* 6. QUADRO CENTRO DE CUSTO — 2 colunas */}
       {/* ================================================================= */}
       {(ind.ccMes.length > 0 || ind.ccAcum.length > 0) && (
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <CentroCustoTable
             title="Desembolso por Centro — Mês"
             items={ind.ccMes}
