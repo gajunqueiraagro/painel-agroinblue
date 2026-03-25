@@ -128,11 +128,15 @@ export const isReceita = (l: FinanceiroLancamento) => {
   return tipo === 'receita' || tipo.startsWith('1');
 };
 
-/** ADM lancamento qualifies for rateio */
+/** ADM lancamento qualifies for rateio:
+ *  - Status = Conciliado
+ *  - Tipo começa com "2" (saída)
+ *  - Data_Ref (data_realizacao) preenchida
+ */
 const isADMConciliado = (l: FinanceiroLancamento) =>
   (l.status_transacao || '').toLowerCase() === 'conciliado' &&
-  (l.tipo_operacao || '').toLowerCase().startsWith('2') &&
-  (l.macro_custo || '').toLowerCase().trim() === 'custeio produtivo';
+  (l.tipo_operacao || '').startsWith('2') &&
+  !!l.data_realizacao;
 
 /** Extract YYYY-MM from a date string */
 const dateToAnoMes = (dateStr: string | null): string | null => {
