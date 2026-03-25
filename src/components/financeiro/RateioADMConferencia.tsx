@@ -69,7 +69,7 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho, tota
                 </p>
                 {totalLancamentosADM > 0 && (
                   <p className="text-destructive mt-1">
-                    ⚠ Existem {totalLancamentosADM} lançamentos ADM, mas nenhum atendeu todos os critérios acima.
+                    ⚠ Existem {totalLancamentosADM} lançamentos ADM carregados, mas nenhum atendeu todos os critérios acima.
                     Verifique se o campo Status está como "Conciliado" e se o Tipo começa com "2".
                   </p>
                 )}
