@@ -49,7 +49,7 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho }: Pr
         <div className="flex items-center gap-1.5 text-xs bg-muted rounded-md px-2.5 py-1.5">
           <Info className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="font-bold">Rateio ADM v1</span>
-          <span className="text-muted-foreground">— critério: área produtiva (ha)</span>
+          <span className="text-muted-foreground">— critério: rebanho médio do período</span>
         </div>
       </div>
 
