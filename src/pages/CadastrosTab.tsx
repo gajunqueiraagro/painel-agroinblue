@@ -460,6 +460,7 @@ export function CadastrosTab() {
           </Button>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

@@ -93,6 +93,7 @@ export function ZootecnicoHubTab({ onTabChange }: Props) {
           </CardContent>
         </Card>
       ))}
+      </div>
     </div>
   );
 }
