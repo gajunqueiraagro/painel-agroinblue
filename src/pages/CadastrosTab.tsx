@@ -56,7 +56,7 @@ function loadLogoBase64(): Promise<string> {
 }
 
 export function CadastrosTab() {
-  const { fazendaAtual } = useFazenda();
+  const { fazendaAtual, isGlobal } = useFazenda();
   const [data, setData] = useState<CadastroData>(EMPTY);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
