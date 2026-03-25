@@ -949,9 +949,9 @@ export function DashboardFinanceiro({
             </div>
 
             <div className="border-t pt-2">
-              {/* Desembolso Produtivo acumulado */}
+              {/* Desembolso Produtivo acumulado — MESMO destaque que mês */}
               <div className="text-[10px] text-muted-foreground">Desembolso Prod. acumulado</div>
-              <p className="text-sm font-bold">{formatMoeda(ind.desembolsoAcum)}</p>
+              <p className="text-sm font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.desembolsoAcum)}</p>
             </div>
 
             {/* Custo/cab acumulado */}
@@ -966,13 +966,13 @@ export function DashboardFinanceiro({
             {/* Média mensal — destaque */}
             <div className="bg-muted/60 rounded-md p-2">
               <div className="text-[10px] text-muted-foreground">Média mensal</div>
-              <p className="text-base font-extrabold">{formatMoeda(ind.mediaMensal)}</p>
+              <p className="text-base font-extrabold text-red-600 dark:text-red-400">{formatMoeda(ind.mediaMensal)}</p>
             </div>
 
-            {/* Custo/@ produzida */}
+            {/* Custo/@ produzida — DESTAQUE MAIOR */}
             <div>
               <div className="text-[10px] text-muted-foreground">Custo/@ produzida</div>
-              <p className="text-sm font-bold">{ind.custoArrobaProd !== null ? formatMoeda(ind.custoArrobaProd) : '—'}</p>
+              <p className="text-base font-extrabold text-red-600 dark:text-red-400">{ind.custoArrobaProd !== null ? formatMoeda(ind.custoArrobaProd) : '—'}</p>
               {zooData.arrobasProduzidasAcum !== null && (
                 <p className="text-[9px] text-muted-foreground">{formatNum(zooData.arrobasProduzidasAcum, 1)} @ produzidas</p>
               )}
