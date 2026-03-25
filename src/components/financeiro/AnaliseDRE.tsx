@@ -27,13 +27,15 @@ import {
   somaAbs,
   normMacro,
   isInvestimento,
+  isReposicaoBovinos,
+  isConciliado as isConciliadoHelper,
 } from "./analiseHelpers";
 import { VariacaoEstoqueExplicacao } from "./VariacaoEstoqueExplicacao";
 import { supabase } from "@/integrations/supabase/client";
 import type { FinanceiroLancamento, RateioADM } from "@/hooks/useFinanceiro";
 import type { Lancamento, SaldoInicial } from "@/types/cattle";
 import type { CategoriaRebanho, Pasto } from "@/hooks/usePastos";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { calcSaldoPorCategoriaLegado } from "@/lib/calculos/zootecnicos";
 
 interface Props {
@@ -54,7 +56,6 @@ type Escopo = "pecuaria" | "agricultura" | "consolidado";
 interface DRERow {
   label: string;
   valor: number;
-  valorAcum: number;
   isBold?: boolean;
   isSubtotal?: boolean;
   indent?: boolean;
@@ -70,7 +71,6 @@ function useValorRebanhoForDRE(fazendaId: string | undefined, anoFiltro: string,
     if (!fazendaId && !isGlobal) return;
 
     const anoNum = Number(anoFiltro);
-    // We need Dec of previous year (initial) + each month up to mesLimite
     const mesesNeeded: string[] = [`${anoNum - 1}-12`];
     for (let m = 1; m <= mesLimite; m++) {
       mesesNeeded.push(`${anoFiltro}-${String(m).padStart(2, "0")}`);
@@ -93,10 +93,8 @@ function useValorRebanhoForDRE(fazendaId: string | undefined, anoFiltro: string,
       for (const row of data) {
         const key = row.ano_mes;
         const arr = map.get(key) || [];
-        // For global, sum across fazendas — we group by categoria
         const existing = arr.find((a) => a.categoria === row.categoria);
         if (existing) {
-          // In global mode, take max price (they should be same across farms ideally)
           existing.preco_kg = Math.max(existing.preco_kg, row.preco_kg);
         } else {
           arr.push({ categoria: row.categoria, preco_kg: row.preco_kg });
@@ -120,13 +118,12 @@ function calcValorEstoque(
   lancamentosPecuarios: Lancamento[],
   precos: { categoria: string; preco_kg: number }[],
   ano: number,
-  mes: number, // 0 = use saldo inicial directly
+  mes: number,
 ): number {
   if (!precos || precos.length === 0) return 0;
   const precoMap = new Map(precos.map((p) => [p.categoria, p.preco_kg]));
 
   if (mes === 0) {
-    // Initial stock = saldo inicial × peso × preco
     return saldosIniciais
       .filter((s) => s.ano === ano)
       .reduce((sum, s) => {
@@ -136,15 +133,33 @@ function calcValorEstoque(
       }, 0);
   }
 
-  // End of month stock
   const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, ano, mes);
   let total = 0;
   for (const [cat, qtd] of saldoMap.entries()) {
     const preco = precoMap.get(cat) || 0;
-    // We need weight — use saldo inicial weight as fallback
     const si = saldosIniciais.find((s) => s.ano === ano && s.categoria === cat);
     const pesoKg = si?.pesoMedioKg || 0;
     total += qtd * pesoKg * preco;
+  }
+  return total;
+}
+
+// ---------------------------------------------------------------------------
+// Calculate reposição from financeiro_lancamentos (Investimento em Bovinos, Conciliado)
+// ---------------------------------------------------------------------------
+function calcReposicaoFinanceiro(
+  lancConciliadosPorMes: Map<string, FinanceiroLancamento[]>,
+  ateMes: number,
+): number {
+  let total = 0;
+  for (let m = 1; m <= ateMes; m++) {
+    const k = String(m).padStart(2, "0");
+    const lancs = lancConciliadosPorMes.get(k) || [];
+    for (const l of lancs) {
+      if (isReposicaoBovinos(l)) {
+        total += Math.abs(l.valor);
+      }
+    }
   }
   return total;
 }
@@ -163,13 +178,13 @@ export function DREAtividade({
 }: Props) {
   const [mesSelecionado, setMesSelecionado] = useState(String(mesLimite).padStart(2, "0"));
   const [escopo, setEscopo] = useState<Escopo>("pecuaria");
+  const [visao, setVisao] = useState<"mes" | "acumulado">("acumulado");
   const mesNum = Number(mesSelecionado);
   const anoNum = Number(anoFiltro);
 
-  // Fetch valor_rebanho prices
   const precosMap = useValorRebanhoForDRE(fazendaId, anoFiltro, mesLimite, isGlobal);
 
-  // Stock variation calculation
+  // Stock variation calculation — using financeiro_lancamentos for reposição
   const variacaoEstoque = useMemo(() => {
     const precosInicial = precosMap.get(`${anoNum - 1}-12`) || [];
     const precosFinal = precosMap.get(`${anoFiltro}-${String(mesNum).padStart(2, "0")}`) || [];
@@ -177,25 +192,46 @@ export function DREAtividade({
     const valorInicial = calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosInicial, anoNum, 0);
     const valorFinal = calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosFinal, anoNum, mesNum);
 
-    // Reposição = compras no período
-    const compras = lancamentosPecuarios.filter((l) => {
-      if (!l.data.startsWith(anoFiltro)) return false;
-      if (l.tipo !== "compra") return false;
-      return Number(l.data.substring(5, 7)) <= mesNum;
-    });
-    const reposicao = compras.reduce((s, l) => s + (l.valorTotal || 0), 0);
+    // Reposição = financeiro_lancamentos, macro_custo "Investimento em Bovinos", Conciliado
+    const reposicao = calcReposicaoFinanceiro(lancConciliadosPorMes, mesNum);
 
-    const variacao = valorFinal - valorInicial - reposicao;
-    const hasData = precosInicial.length > 0 && precosFinal.length > 0;
+    const variacaoBruta = valorFinal - valorInicial;
+    const variacao = variacaoBruta - reposicao;
+    const hasPrecoInicial = precosInicial.length > 0;
+    const hasPrecoFinal = precosFinal.length > 0;
+    const hasData = hasPrecoInicial && hasPrecoFinal;
 
-    return { valorInicial, valorFinal, reposicao, variacao, hasData };
-  }, [saldosIniciais, lancamentosPecuarios, precosMap, anoFiltro, anoNum, mesNum]);
+    return { valorInicial, valorFinal, variacaoBruta, reposicao, variacao, hasData, hasPrecoInicial, hasPrecoFinal };
+  }, [saldosIniciais, lancamentosPecuarios, precosMap, lancConciliadosPorMes, anoFiltro, anoNum, mesNum]);
+
+  // Stock variation for single month (approximate — only use acum for DRE)
+  const variacaoEstoqueMes = useMemo(() => {
+    if (mesNum < 1) return 0;
+    const mesAnterior = mesNum - 1;
+    const precosAnterior = mesAnterior === 0
+      ? precosMap.get(`${anoNum - 1}-12`) || []
+      : precosMap.get(`${anoFiltro}-${String(mesAnterior).padStart(2, "0")}`) || [];
+    const precosFinal = precosMap.get(`${anoFiltro}-${String(mesNum).padStart(2, "0")}`) || [];
+
+    if (precosAnterior.length === 0 || precosFinal.length === 0) return 0;
+
+    const valAnterior = mesAnterior === 0
+      ? calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosAnterior, anoNum, 0)
+      : calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosAnterior, anoNum, mesAnterior);
+    const valFinal = calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosFinal, anoNum, mesNum);
+
+    // Reposição only for this month
+    const mesKey = String(mesNum).padStart(2, "0");
+    const lancsDoMes = lancConciliadosPorMes.get(mesKey) || [];
+    const repMes = lancsDoMes.filter(l => isReposicaoBovinos(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
+
+    return valFinal - valAnterior - repMes;
+  }, [precosMap, saldosIniciais, lancamentosPecuarios, lancConciliadosPorMes, anoFiltro, anoNum, mesNum]);
 
   const dreData = useMemo(() => {
     const mesKey = mesSelecionado;
     const lancs = lancConciliadosPorMes.get(mesKey) || [];
 
-    // Acumulado
     const lancsAcum: FinanceiroLancamento[] = [];
     for (let m = 1; m <= mesNum; m++) {
       const k = String(m).padStart(2, "0");
@@ -207,7 +243,7 @@ export function DREAtividade({
       const deducoes = somaAbs(list.filter((l) => isDeducaoReceita(l)));
       const receitaLiq = receitas - deducoes;
       const custoProd = somaAbs(list.filter((l) => isCusteioProdutivo(l) && isSaida(l)));
-      const investimentos = somaAbs(list.filter((l) => isInvestimento(l) && isSaida(l)));
+      const investimentos = somaAbs(list.filter((l) => isInvestimento(l) && isSaida(l) && !isReposicaoBovinos(l)));
 
       const resultFinanceiro = list
         .filter((l) => {
@@ -238,16 +274,14 @@ export function DREAtividade({
     const despADMMes = isGlobal ? 0 : rateioMes;
     const despADMAcum = isGlobal ? 0 : rateioAcum;
 
-    // Margem Bruta = Receita Líquida - Custo Produção - Desp ADM
     const margemBrutaMes = mes.receitaLiq - mes.custoProd - despADMMes;
     const margemBrutaAcum = acum.receitaLiq - acum.custoProd - despADMAcum;
 
-    // Variação estoque
-    const varEstoqueMes = 0; // monthly not available yet
-    const varEstoqueAcum = variacaoEstoque.hasData ? variacaoEstoque.variacao : 0;
+    const varEstoqueMesVal = variacaoEstoque.hasData ? variacaoEstoqueMes : 0;
+    const varEstoqueAcumVal = variacaoEstoque.hasData ? variacaoEstoque.variacao : 0;
 
-    const resultOpAjustMes = margemBrutaMes + varEstoqueMes;
-    const resultOpAjustAcum = margemBrutaAcum + varEstoqueAcum;
+    const resultOpAjustMes = margemBrutaMes + varEstoqueMesVal;
+    const resultOpAjustAcum = margemBrutaAcum + varEstoqueAcumVal;
 
     const resultAposInvMes = resultOpAjustMes - mes.investimentos;
     const resultAposInvAcum = resultOpAjustAcum - acum.investimentos;
@@ -255,25 +289,25 @@ export function DREAtividade({
     const resultFinalMes = resultAposInvMes + mes.resultFinanceiro;
     const resultFinalAcum = resultAposInvAcum + acum.resultFinanceiro;
 
+    // Build rows based on visão
+    const pickVal = (vMes: number, vAcum: number) => visao === "mes" ? vMes : vAcum;
+
     const rows: DRERow[] = [
-      { label: "1. Receitas Operacionais", valor: mes.receitas, valorAcum: acum.receitas },
-      { label: "2. (-) Deduções de Receita", valor: -mes.deducoes, valorAcum: -acum.deducoes, indent: true },
+      { label: "1. (+) Receitas Operacionais", valor: pickVal(mes.receitas, acum.receitas) },
+      { label: "2. (-) Deduções de Receita", valor: pickVal(-mes.deducoes, -acum.deducoes), indent: true },
       {
         label: "3. (=) Receita Líquida",
-        valor: mes.receitaLiq,
-        valorAcum: acum.receitaLiq,
+        valor: pickVal(mes.receitaLiq, acum.receitaLiq),
         isBold: true,
         isSubtotal: true,
       },
-      { label: "4. (-) Custo de Produção", valor: -mes.custoProd, valorAcum: -acum.custoProd },
+      { label: "4. (-) Custo de Produção", valor: pickVal(-mes.custoProd, -acum.custoProd) },
     ];
 
-    // 5.1 Rateio ADM (only fazenda mode) — right after cost of production
     if (!isGlobal && (despADMMes > 0 || despADMAcum > 0)) {
       rows.push({
-        label: "4.1 (-) Despesas ADM Rateadas",
-        valor: -despADMMes,
-        valorAcum: -despADMAcum,
+        label: "4.1 (-) Desp. ADM Rateadas",
+        valor: pickVal(-despADMMes, -despADMAcum),
         indent: true,
       });
     }
@@ -281,39 +315,38 @@ export function DREAtividade({
     rows.push(
       {
         label: "5. (=) Margem Bruta",
-        valor: margemBrutaMes,
-        valorAcum: margemBrutaAcum,
+        valor: pickVal(margemBrutaMes, margemBrutaAcum),
         isBold: true,
         isSubtotal: true,
       },
-      { label: "6. (+/-) Variação Estoque Rebanho", valor: varEstoqueMes, valorAcum: varEstoqueAcum },
       {
-        label: "7. (=) Result. Op. Pecuário Ajust.",
-        valor: resultOpAjustMes,
-        valorAcum: resultOpAjustAcum,
-        isBold: true,
-        isSubtotal: true,
+        label: "6. (+/-) Var. Estoque Rebanho",
+        valor: pickVal(varEstoqueMesVal, varEstoqueAcumVal),
       },
-      { label: "8. (-) Investimentos", valor: -mes.investimentos, valorAcum: -acum.investimentos },
       {
-        label: "9. (=) Result. após Investimentos",
-        valor: resultAposInvMes,
-        valorAcum: resultAposInvAcum,
+        label: "7. (=) Result. Op. Ajustado",
+        valor: pickVal(resultOpAjustMes, resultOpAjustAcum),
         isBold: true,
         isSubtotal: true,
       },
-      { label: "10. (+/-) Resultado Financeiro", valor: mes.resultFinanceiro, valorAcum: acum.resultFinanceiro },
+      { label: "8. (-) Investimentos", valor: pickVal(-mes.investimentos, -acum.investimentos) },
+      {
+        label: "9. (=) Result. após Invest.",
+        valor: pickVal(resultAposInvMes, resultAposInvAcum),
+        isBold: true,
+        isSubtotal: true,
+      },
+      { label: "10. (+/-) Result. Financeiro", valor: pickVal(mes.resultFinanceiro, acum.resultFinanceiro) },
       {
         label: "11. (=) Resultado Final",
-        valor: resultFinalMes,
-        valorAcum: resultFinalAcum,
+        valor: pickVal(resultFinalMes, resultFinalAcum),
         isBold: true,
         isSubtotal: true,
       },
     );
 
     return rows;
-  }, [lancConciliadosPorMes, rateioADM, anoFiltro, mesSelecionado, mesNum, isGlobal, variacaoEstoque]);
+  }, [lancConciliadosPorMes, rateioADM, anoFiltro, mesSelecionado, mesNum, isGlobal, variacaoEstoque, variacaoEstoqueMes, visao]);
 
   const mesesOpt = Array.from({ length: mesLimite }, (_, i) => ({
     value: String(i + 1).padStart(2, "0"),
@@ -373,44 +406,53 @@ export function DREAtividade({
       {/* DRE Table */}
       <Card>
         <CardContent className="p-3">
-          <div className="text-xs font-bold mb-3">📋 DRE da Atividade Pecuária — {anoFiltro}</div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs font-bold">📋 DRE Pecuária — {anoFiltro}</div>
+            <ToggleGroup
+              type="single"
+              value={visao}
+              onValueChange={(v) => v && setVisao(v as "mes" | "acumulado")}
+              size="sm"
+              className="gap-0"
+            >
+              <ToggleGroupItem value="mes" className="text-[10px] px-2 py-1 h-auto rounded-r-none">
+                Mês
+              </ToggleGroupItem>
+              <ToggleGroupItem value="acumulado" className="text-[10px] px-2 py-1 h-auto rounded-l-none">
+                Acumulado
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
 
           <div className="space-y-0">
             {/* Header */}
-            <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 pb-1.5 border-b-2 border-foreground/20">
+            <div className="grid grid-cols-[1fr_auto] gap-x-3 pb-1.5 border-b-2 border-foreground/20">
               <div className="text-[10px] font-bold text-muted-foreground">Descrição</div>
-              <div className="text-[10px] font-bold text-muted-foreground text-right min-w-[90px]">
-                {MESES_NOMES[mesNum - 1]}
+              <div className="text-[10px] font-bold text-muted-foreground text-right min-w-[100px]">
+                {visao === "mes" ? MESES_NOMES[mesNum - 1] : `Jan–${MESES_NOMES[mesNum - 1]}`}
               </div>
-              <div className="text-[10px] font-bold text-muted-foreground text-right min-w-[90px]">Acumulado</div>
             </div>
 
             {/* Rows */}
             {dreData.map((row, i) => (
               <div
                 key={i}
-                className={`grid grid-cols-[1fr_auto_auto] gap-x-3 py-1.5 ${
+                className={`grid grid-cols-[1fr_auto] gap-x-3 py-1.5 ${
                   row.isSubtotal ? "border-t border-foreground/15 bg-muted/30" : ""
                 } ${row.indent ? "pl-3" : ""}`}
               >
                 <div className={`text-[11px] ${row.isBold ? "font-bold" : ""} leading-tight`}>{row.label}</div>
                 <div
-                  className={`text-[11px] text-right font-mono whitespace-nowrap tabular-nums min-w-[90px] ${row.isBold ? "font-bold" : ""} ${colorClass(row.valor)}`}
+                  className={`text-[11px] text-right font-mono whitespace-nowrap tabular-nums min-w-[100px] ${row.isBold ? "font-bold" : ""} ${colorClass(row.valor)}`}
                 >
                   {row.valor !== 0 ? formatMoeda(row.valor) : "—"}
-                </div>
-                <div
-                  className={`text-[11px] text-right font-mono whitespace-nowrap tabular-nums min-w-[90px] ${row.isBold ? "font-bold" : ""} ${colorClass(row.valorAcum)}`}
-                >
-                  {row.valorAcum !== 0 ? formatMoeda(row.valorAcum) : "—"}
                 </div>
               </div>
             ))}
           </div>
 
           <div className="text-[9px] text-muted-foreground mt-3 border-t pt-2">
-            Custo de Produção = "Custeio Produtivo" · Investimentos e Amortizações ficam separados · Resultado
-            Financeiro = juros + desp. financeiras (sem amortizações)
+            Custo de Produção = Custeio Produtivo · Reposição de bovinos entra na Variação de Estoque · Investimentos e Amortizações ficam separados
           </div>
         </CardContent>
       </Card>
@@ -423,7 +465,11 @@ export function DREAtividade({
         mesLimite={mesNum}
         fazendaId={fazendaId}
         precosMap={precosMap}
+        reposicaoFinanceiro={variacaoEstoque.reposicao}
       />
     </div>
   );
 }
+
+// Re-export Select for use in this file
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
