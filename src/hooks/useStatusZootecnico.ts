@@ -191,6 +191,18 @@ export function useStatusZootecnico(
   const result = useMemo(() => {
     const pendencias: Pendencia[] = [];
 
+    // Se não há fazendas com operação pecuária, tudo fechado
+    if (semPecuaria) {
+      const desc = 'Sem operação pecuária';
+      const ids = ['pastos', 'rebanho', 'peso', 'valor', 'categorias'];
+      const labels: Record<string, string> = {
+        pastos: 'Conciliação de Pastos', rebanho: 'Fechamento de Rebanho',
+        peso: 'Peso Médio', valor: 'Valor do Rebanho', categorias: 'Conciliação de Categorias',
+      };
+      ids.forEach(id => pendencias.push({ id, label: labels[id], descricao: desc, status: 'fechado' }));
+      return { status: 'fechado' as StatusGeral, pendencias, contadores: { aberto: 0, parcial: 0, fechado: 5 }, loading };
+    }
+
     // 1. Conciliação de Pastos
     let statusPastos: StatusItem = 'aberto';
     let descPastos = '';
