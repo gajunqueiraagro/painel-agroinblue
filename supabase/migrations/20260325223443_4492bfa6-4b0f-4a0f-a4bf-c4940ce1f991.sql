@@ -1,0 +1,1 @@
+UPDATE public.fazendas SET tem_pecuaria = false WHERE nome = 'Administrativo';
