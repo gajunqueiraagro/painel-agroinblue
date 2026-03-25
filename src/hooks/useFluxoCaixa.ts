@@ -103,29 +103,13 @@ export function useFluxoCaixa(
   ano: number,
   mesAte: number,
 ) {
-  // MODO GLOBAL FORÇADO — sempre usa todas as fazendas
-  const { fazendas } = useFazenda();
-
   const [saldoInicialAno, setSaldoInicialAno] = useState<number>(0);
   const [saldoInicialAusente, setSaldoInicialAusente] = useState(false);
   const [saldoInicialAudit, setSaldoInicialAudit] = useState<SaldoInicialAudit | null>(null);
   const [loadingSaldo, setLoadingSaldo] = useState(true);
 
-  // Sempre global: todas as fazendas reais
-  const todasFazendaIds = useMemo(
-    () => fazendas.filter(f => f.id !== '__global__').map(f => f.id),
-    [fazendas],
-  );
-
-  // Fetch saldo inicial de Dez do ano anterior via financeiro_saldos_bancarios (SALDO da EXPORT_APP_UNICO)
+  // Fetch saldo inicial GLOBAL de Dez do ano anterior (registros SALDO da EXPORT_APP_UNICO, sem filtro de fazenda)
   const loadSaldoInicial = useCallback(async () => {
-    if (todasFazendaIds.length === 0) {
-      setSaldoInicialAno(0);
-      setSaldoInicialAusente(true);
-      setSaldoInicialAudit({ fonte: 'financeiro_saldos_bancarios', periodo: `${ano - 1}-12`, qtdRegistros: 0, contas: [], somaTotal: 0 });
-      setLoadingSaldo(false);
-      return;
-    }
     setLoadingSaldo(true);
     try {
       const anoAnterior = ano - 1;
@@ -165,7 +149,7 @@ export function useFluxoCaixa(
     } finally {
       setLoadingSaldo(false);
     }
-  }, [todasFazendaIds, ano]);
+  }, [ano]);
 
   useEffect(() => { loadSaldoInicial(); }, [loadSaldoInicial]);
 
