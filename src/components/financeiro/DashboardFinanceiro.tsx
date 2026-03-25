@@ -795,7 +795,7 @@ export function DashboardFinanceiro({
       {/* ================================================================= */}
       {/* 1. CARDS PRINCIPAIS — Entradas e Saídas */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {/* ENTRADAS */}
         <Card>
           <CardContent className="p-3">
@@ -807,7 +807,10 @@ export function DashboardFinanceiro({
               <span className="text-[10px] text-muted-foreground">por mês</span>
             </div>
             <p className="text-[10px] text-muted-foreground mt-1">{entradasList.length} lançamentos</p>
-            <p className="text-[10px] text-muted-foreground mt-1.5 pt-1.5 border-t border-border/50">acumulado: {formatMoeda(ind.entradasAcum)}</p>
+            <p className="text-[10px] mt-1.5 pt-1.5 border-t border-border/50">
+              <span className="text-muted-foreground">acumulado: </span>
+              <span className="font-bold text-green-700 dark:text-green-400">{formatMoeda(ind.entradasAcum)}</span>
+            </p>
           </CardContent>
         </Card>
 
@@ -827,7 +830,10 @@ export function DashboardFinanceiro({
                 <p className="text-amber-600 dark:text-amber-400">rateio ADM: {formatMoeda(ind.rateioMes)}</p>
               )}
             </div>
-            <p className="text-[10px] text-muted-foreground mt-1.5 pt-1.5 border-t border-border/50">acumulado: {formatMoeda(ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal))}</p>
+            <p className="text-[10px] mt-1.5 pt-1.5 border-t border-border/50">
+              <span className="text-muted-foreground">acumulado: </span>
+              <span className="font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal))}</span>
+            </p>
           </CardContent>
         </Card>
       </div>
