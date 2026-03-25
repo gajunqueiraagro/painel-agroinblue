@@ -41,7 +41,7 @@ interface Props {
 
 export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAtualNome }: Props) {
   const isMobile = useIsMobile();
-  const { meses, loading, saldoInicialAusente } = useFluxoCaixa(lancamentos, rateioADM, ano, mesAte);
+  const { meses, loading, saldoInicialAusente, saldoInicialAudit } = useFluxoCaixa(lancamentos, rateioADM, ano, mesAte);
 
   if (loading) {
     return (
