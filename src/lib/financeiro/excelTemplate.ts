@@ -12,10 +12,11 @@ const COLS = [
 const EXAMPLES: unknown[][] = [
   ['LANCAMENTO', '2026-01', '2026-01-15', 'Banco do Brasil', '3M', '2-Saídas', 'Nutrição', 4500.00, 'Pago', 'Sal mineral', 'Agro Nutrição Ltda', 'Custeio Produtivo', 'Nutrição', 'Sal mineral', 'Proteinado', 'Entrega mensal'],
   ['LANCAMENTO', '2026-02', '2026-02-10', 'Sicredi', 'BG', '2-Saídas', 'Sanidade', 2800.00, 'Conciliado', 'Vacina aftosa', 'Vet Saúde Animal', 'Custeio Produtivo', 'Sanidade', 'Vacinação', '', 'Campanha mai/2026'],
-  ['SALDO', '2026-01', '', 'Banco do Brasil', '3M', '', '', 125000.00, '', '', '', '', '', '', '', ''],
-  ['SALDO', '2026-01', '', 'Sicredi', 'BG', '', '', 43200.50, '', '', '', '', '', '', '', ''],
-  ['RESUMO', '2026-01', '', '', '3M', '', '', 85000.00, '', '', '', '', '', '', '', 'Entradas=85000 Saidas=62000 Saldo=168200'],
-  ['RESUMO', '2026-02', '', '', 'BG', '', '', 120000.00, '', '', '', '', '', '', '', 'Entradas=120000 Saidas=74300 Saldo=213900'],
+  ['SALDO', '2026-01', '', 'Banco do Brasil', '', 'Saldo_Final', '', 125000.00, '', '', '', '', '', '', '', ''],
+  ['SALDO', '2026-01', '', 'Sicredi', '', 'Saldo_Final', '', 43200.50, '', '', '', '', '', '', '', ''],
+  ['RESUMO', '2026-01', '', '', '', 'Entradas', '', 85000.00, '', '', '', '', '', '', '', ''],
+  ['RESUMO', '2026-01', '', '', '', 'Saidas', '', 62000.00, '', '', '', '', '', '', '', ''],
+  ['RESUMO', '2026-01', '', '', '', 'Saldo_Final_Total', '', 168200.50, '', '', '', '', '', '', '', ''],
 ];
 
 const INSTRUCOES: unknown[][] = [
