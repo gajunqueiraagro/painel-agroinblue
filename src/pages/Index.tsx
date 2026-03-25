@@ -93,9 +93,10 @@ const Index = () => {
   }, []);
 
   const goToResumo = useCallback(() => setActiveTab('resumo'), []);
+  const goToZootecnico = useCallback(() => setActiveTab('zootecnico'), []);
 
   // Hide header for sub-screens that have their own back nav
-  const isSubScreen = ['zootecnico', 'analise_economica', 'fin_caixa'].includes(activeTab);
+  const isSubScreen = ['zootecnico', 'analise_economica', 'fin_caixa', 'valor_rebanho', 'conciliacao_categoria'].includes(activeTab);
 
   const headerTitle = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || TITLES[activeTab]);
 
