@@ -1,20 +1,50 @@
 /**
- * Resumo — HUB de navegação executiva.
- * 3 cards macro: Zootécnico, Financeiro, Econômico.
+ * Resumo — HUB de status operacional.
+ * 3 cards enxutos: Zootécnico, Financeiro, Econômico.
+ * Status forte (🔴🟡🟢) + botão de entrada em cada camada.
  */
 import { useState, useMemo } from 'react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { parseISO, format } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TabId } from '@/components/BottomNav';
-import { calcSaldoPorCategoriaLegado, calcSaldoMensalAcumulado } from '@/lib/calculos';
 import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
-import { Beef, DollarSign, BarChart3, ChevronRight } from 'lucide-react';
+import { useResumoStatus, StatusNivel } from '@/hooks/useResumoStatus';
+import { ChevronRight } from 'lucide-react';
 
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
   onTabChange: (tab: TabId) => void;
+}
+
+const MESES = [
+  { value: '1', label: 'Janeiro' },
+  { value: '2', label: 'Fevereiro' },
+  { value: '3', label: 'Março' },
+  { value: '4', label: 'Abril' },
+  { value: '5', label: 'Maio' },
+  { value: '6', label: 'Junho' },
+  { value: '7', label: 'Julho' },
+  { value: '8', label: 'Agosto' },
+  { value: '9', label: 'Setembro' },
+  { value: '10', label: 'Outubro' },
+  { value: '11', label: 'Novembro' },
+  { value: '12', label: 'Dezembro' },
+];
+
+function StatusBadge({ nivel }: { nivel: StatusNivel }) {
+  const config = {
+    aberto: { emoji: '🔴', label: 'Em aberto', className: 'bg-destructive/15 text-destructive' },
+    parcial: { emoji: '🟡', label: 'Parcial', className: 'bg-accent/20 text-accent-foreground' },
+    fechado: { emoji: '🟢', label: 'Fechado', className: 'bg-success/15 text-success' },
+  };
+  const c = config[nivel];
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${c.className}`}>
+      {c.emoji} {c.label}
+    </span>
+  );
 }
 
 export function ResumoTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
@@ -29,124 +59,141 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
   }, [lancamentos, saldosIniciais]);
 
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
-  const anoNum = Number(anoFiltro);
+  const [mesFiltro, setMesFiltro] = useState(String(new Date().getMonth() + 1));
 
-  // KPIs rápidos para os cards
-  const { saldoFinalAno, saldoInicialAno } = useMemo(
-    () => calcSaldoMensalAcumulado(saldosIniciais, lancamentos, anoNum),
-    [saldosIniciais, lancamentos, anoNum],
+  const anoNum = Number(anoFiltro);
+  const mesNum = Number(mesFiltro);
+
+  const { zootecnico, financeiro, economico, loading } = useResumoStatus(
+    lancamentos, saldosIniciais, anoNum, mesNum
   );
 
-  const filtradosAno = useMemo(() => {
-    return lancamentos.filter(l => {
-      try { return format(parseISO(l.data), 'yyyy') === anoFiltro; } catch { return false; }
-    });
-  }, [lancamentos, anoFiltro]);
-
-  const totalEntradas = filtradosAno
-    .filter(l => ['nascimento', 'compra', 'transferencia_entrada'].includes(l.tipo))
-    .reduce((sum, l) => sum + l.quantidade, 0);
-
-  const totalSaidas = filtradosAno
-    .filter(l => ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'].includes(l.tipo))
-    .reduce((sum, l) => sum + l.quantidade, 0);
-
-  const saldo = saldoInicialAno + totalEntradas - totalSaidas;
-
-  const cards = [
-    {
-      id: 'zootecnico' as TabId,
-      icon: Beef,
-      emoji: '🐄',
-      title: 'Zootécnico',
-      subtitle: 'Rebanho, GMD, Desfrute',
-      kpi1Label: 'Saldo atual',
-      kpi1Value: `${formatNum(saldo)} cab`,
-      kpi2Label: 'Entradas / Saídas',
-      kpi2Value: `+${formatNum(totalEntradas)} / -${formatNum(totalSaidas)}`,
-      gradient: 'from-emerald-600 to-emerald-800',
-      textColor: 'text-white',
-    },
-    {
-      id: 'fin_caixa' as TabId,
-      icon: DollarSign,
-      emoji: '💰',
-      title: 'Financeiro',
-      subtitle: 'Caixa, Fluxo, Contas',
-      kpi1Label: 'Módulo',
-      kpi1Value: 'Caixa & Fluxo',
-      kpi2Label: 'Importações e Dashboard',
-      kpi2Value: '',
-      gradient: 'from-blue-600 to-blue-800',
-      textColor: 'text-white',
-    },
-    {
-      id: 'analise_economica' as TabId,
-      icon: BarChart3,
-      emoji: '📊',
-      title: 'Econômico',
-      subtitle: 'DRE, Indicadores, Resultado',
-      kpi1Label: 'Análise',
-      kpi1Value: 'Resultado Operacional',
-      kpi2Label: 'Custo/@, Margem, Desfrute',
-      kpi2Value: '',
-      gradient: 'from-amber-600 to-amber-800',
-      textColor: 'text-white',
-    },
-  ];
-
   return (
-    <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
-      {/* Filtro ano */}
-      <div className="flex gap-3">
+    <div className="p-4 max-w-4xl mx-auto space-y-4 animate-fade-in pb-20">
+      {/* Filtros */}
+      <div className="flex gap-2 flex-wrap">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-          <SelectTrigger className="w-28 touch-target text-base font-bold">
+          <SelectTrigger className="w-24 touch-target text-sm font-bold">
             <SelectValue placeholder="Ano" />
           </SelectTrigger>
           <SelectContent>
             {anosDisponiveis.map(a => (
-              <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>
+              <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={mesFiltro} onValueChange={setMesFiltro}>
+          <SelectTrigger className="w-36 touch-target text-sm font-bold">
+            <SelectValue placeholder="Até o mês" />
+          </SelectTrigger>
+          <SelectContent>
+            {MESES.map(m => (
+              <SelectItem key={m.value} value={m.value} className="text-sm">
+                Até {m.label}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
-      {/* Cards macro */}
-      <div className="space-y-3">
-        {cards.map(card => (
-          <button
-            key={card.id}
-            onClick={() => onTabChange(card.id)}
-            className={`w-full rounded-xl bg-gradient-to-br ${card.gradient} p-5 shadow-lg transition-transform active:scale-[0.98] text-left`}
-          >
-            <div className="flex items-start justify-between">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl">{card.emoji}</span>
-                  <h2 className={`text-xl font-extrabold ${card.textColor}`}>{card.title}</h2>
-                </div>
-                <p className={`text-sm font-medium ${card.textColor} opacity-80`}>{card.subtitle}</p>
-
-                {card.kpi1Value && (
-                  <div className="mt-3 space-y-1">
-                    <p className={`text-xs font-semibold ${card.textColor} opacity-70`}>{card.kpi1Label}</p>
-                    <p className={`text-lg font-extrabold ${card.textColor}`}>{card.kpi1Value}</p>
-                  </div>
-                )}
-                {card.kpi2Value && (
-                  <div>
-                    <p className={`text-xs font-semibold ${card.textColor} opacity-70`}>{card.kpi2Label}</p>
-                    <p className={`text-sm font-bold ${card.textColor}`}>{card.kpi2Value}</p>
-                  </div>
-                )}
-                {!card.kpi2Value && card.kpi2Label && (
-                  <p className={`text-xs font-semibold ${card.textColor} opacity-70`}>{card.kpi2Label}</p>
-                )}
-              </div>
-              <ChevronRight className={`h-6 w-6 ${card.textColor} opacity-60 mt-1`} />
+      {/* Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {/* ZOOTÉCNICO */}
+        <div className="rounded-xl border bg-card p-4 space-y-3 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🐄</span>
+              <h2 className="text-base font-extrabold text-card-foreground">Zootécnico</h2>
             </div>
+            <StatusBadge nivel={zootecnico.status.nivel} />
+          </div>
+
+          <div className="space-y-1.5 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Rebanho atual</span>
+              <span className="font-bold text-card-foreground">{formatNum(zootecnico.rebanhoAtual)} cab</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Entradas</span>
+              <span className="font-semibold text-primary">+{formatNum(zootecnico.totalEntradas)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Saídas</span>
+              <span className="font-semibold text-destructive">-{formatNum(zootecnico.totalSaidas)}</span>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-muted-foreground">{zootecnico.status.descricao}</p>
+
+          <button
+            onClick={() => onTabChange('zootecnico')}
+            className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
+          >
+            Ver Painel Zootécnico <ChevronRight className="h-4 w-4" />
           </button>
-        ))}
+        </div>
+
+        {/* FINANCEIRO */}
+        <div className="rounded-xl border bg-card p-4 space-y-3 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">💰</span>
+              <h2 className="text-base font-extrabold text-card-foreground">Financeiro</h2>
+            </div>
+            <StatusBadge nivel={financeiro.status.nivel} />
+          </div>
+
+          <div className="space-y-1.5 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Entradas</span>
+              <span className="font-semibold text-primary">{formatMoeda(financeiro.totalEntradas)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Saídas</span>
+              <span className="font-semibold text-destructive">{formatMoeda(financeiro.totalSaidas)}</span>
+            </div>
+            <div className="flex justify-between border-t border-border pt-1">
+              <span className="text-muted-foreground font-semibold">Saldo</span>
+              <span className={`font-bold ${financeiro.saldoCaixa >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                {formatMoeda(financeiro.saldoCaixa)}
+              </span>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-muted-foreground">{financeiro.status.descricao}</p>
+
+          <button
+            onClick={() => onTabChange('fin_caixa')}
+            className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
+          >
+            Ver Fluxo Financeiro <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* ECONÔMICO */}
+        <div className="rounded-xl border bg-card p-4 space-y-3 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">📊</span>
+              <h2 className="text-base font-extrabold text-card-foreground">Econômico</h2>
+            </div>
+            <StatusBadge nivel={economico.status.nivel} />
+          </div>
+
+          <div className="space-y-1.5 text-sm text-muted-foreground">
+            <p>Resultado operacional consolidado a partir das bases zootécnica e financeira.</p>
+          </div>
+
+          <p className="text-[11px] text-muted-foreground">{economico.status.descricao}</p>
+
+          <button
+            onClick={() => onTabChange('analise_economica')}
+            className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
+          >
+            Ver Análise Econômica <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
   );
