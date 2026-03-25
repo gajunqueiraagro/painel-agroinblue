@@ -393,8 +393,8 @@ function MobileDetalheEntradaSaida({ ind }: { ind: any }) {
           </div>
           {ind.categoriasEntrada.map((cat: string) => (
             <div key={cat} className="flex justify-between text-xs">
-              <span className="text-muted-foreground">{cat}</span>
-              <span className="font-mono font-bold">{formatMoeda((entradaTab === 'mes' ? ind.entradaDecomp.mes : ind.entradaDecomp.acum).get(cat) || 0)}</span>
+              <span className="text-muted-foreground truncate max-w-[55%] mr-2">{cat}</span>
+              <span className="font-mono font-bold whitespace-nowrap text-green-600 dark:text-green-400">{formatMoeda((entradaTab === 'mes' ? ind.entradaDecomp.mes : ind.entradaDecomp.acum).get(cat) || 0)}</span>
             </div>
           ))}
         </CardContent>
@@ -416,8 +416,8 @@ function MobileDetalheEntradaSaida({ ind }: { ind: any }) {
           </div>
           {ind.categoriasSaida.map((cat: string) => (
             <div key={cat} className="flex justify-between text-xs">
-              <span className={`text-muted-foreground ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
-              <span className="font-mono font-bold">{formatMoeda((saidaTab === 'mes' ? ind.saidaDecomp.mes : ind.saidaDecomp.acum).get(cat) || 0)}</span>
+              <span className={`text-muted-foreground truncate max-w-[55%] mr-2 ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
+              <span className="font-mono font-bold whitespace-nowrap text-red-600 dark:text-red-400">{formatMoeda((saidaTab === 'mes' ? ind.saidaDecomp.mes : ind.saidaDecomp.acum).get(cat) || 0)}</span>
             </div>
           ))}
           <div className="text-[8px] text-muted-foreground italic">* Reposição e Dedução não entram no desembolso produtivo</div>
