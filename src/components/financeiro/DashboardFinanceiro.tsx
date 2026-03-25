@@ -20,7 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TrendingDown, TrendingUp, Building2, AlertTriangle, ChevronDown, ChevronUp, Activity, BarChart3 } from 'lucide-react';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_OPTIONS, MESES_NOMES } from '@/lib/calculos/labels';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import {
   type FinanceiroLancamento,
   type RateioADM,
@@ -594,10 +594,11 @@ export function DashboardFinanceiro({
       if (macro === 'investimento na fazenda' && escopo === 'agricultura') return 'Investimento Agrícola';
       if (macro === 'investimento na fazenda') return 'Investimento Pecuário';
       if (macro === 'investimento em bovinos') return 'Reposição de Bovinos';
+      if (macro.includes('dedu') && macro.includes('receita')) return 'Dedução de Receitas';
       return 'Outros';
     };
 
-    const categoriasSaida = ['Custeio Pecuário', 'Investimento Pecuário', 'Custeio Agrícola', 'Investimento Agrícola', 'Reposição de Bovinos'];
+    const categoriasSaida = ['Custeio Pecuário', 'Investimento Pecuário', 'Custeio Agrícola', 'Investimento Agrícola', 'Reposição de Bovinos', 'Dedução de Receitas'];
     const saidaDecomp = { mes: new Map<string, number>(), acum: new Map<string, number>() };
     for (const cat of categoriasSaida) { saidaDecomp.mes.set(cat, 0); saidaDecomp.acum.set(cat, 0); }
 
@@ -716,13 +717,18 @@ export function DashboardFinanceiro({
       if (isEntrada(l)) entry.entradas += Math.abs(l.valor);
       if (isSaida(l)) entry.saidas += Math.abs(l.valor);
     }
+    let saldoAcum = 0;
     return Array.from(monthMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([mes, v]) => ({
-        mes: MESES_NOMES[Number(mes) - 1] || mes,
-        Entradas: v.entradas,
-        Saídas: v.saidas,
-      }));
+      .map(([mes, v]) => {
+        saldoAcum += v.entradas - v.saidas;
+        return {
+          mes: MESES_NOMES[Number(mes) - 1] || mes,
+          Entradas: v.entradas,
+          Saídas: v.saidas,
+          'Saldo Acum.': saldoAcum,
+        };
+      });
   }, [lancamentos, anoFiltro]);
 
   // =========================================================================
@@ -794,9 +800,12 @@ export function DashboardFinanceiro({
             <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
               <TrendingUp className="h-3 w-3 text-green-600" /> Entradas
             </div>
-            <p className="text-lg font-bold text-green-700 dark:text-green-400">{formatMoeda(ind.totalEntradas)}</p>
-            <p className="text-[10px] text-muted-foreground">acumulado: {formatMoeda(ind.entradasAcum)}</p>
-            <p className="text-[10px] text-muted-foreground">{entradasList.length} lançamentos</p>
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-lg font-bold text-green-700 dark:text-green-400">{formatMoeda(ind.totalEntradas)}</p>
+              <span className="text-[10px] text-muted-foreground">por mês</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">{entradasList.length} lançamentos</p>
+            <p className="text-[10px] text-muted-foreground mt-1.5 pt-1.5 border-t border-border/50">acumulado: {formatMoeda(ind.entradasAcum)}</p>
           </CardContent>
         </Card>
 
@@ -806,16 +815,17 @@ export function DashboardFinanceiro({
             <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
               <TrendingDown className="h-3 w-3 text-red-600" /> Saídas
             </div>
-            <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.saidasComRateio)}</p>
-            <p className="text-[10px] text-muted-foreground">acumulado: {formatMoeda(ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal))}</p>
-            {!isGlobal && ind.rateioMes > 0 ? (
-              <div className="text-[10px] text-muted-foreground mt-0.5 space-y-0.5">
-                <p>próprio: {formatMoeda(ind.totalSaidas)} ({saidasList.length} lanç.)</p>
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.saidasComRateio)}</p>
+              <span className="text-[10px] text-muted-foreground">por mês</span>
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-1 space-y-0.5">
+              <p>próprio: {formatMoeda(ind.totalSaidas)} ({saidasList.length} lanç.)</p>
+              {!isGlobal && ind.rateioMes > 0 && (
                 <p className="text-amber-600 dark:text-amber-400">rateio ADM: {formatMoeda(ind.rateioMes)}</p>
-              </div>
-            ) : (
-              <p className="text-[10px] text-muted-foreground">{saidasList.length} lançamentos</p>
-            )}
+              )}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1.5 pt-1.5 border-t border-border/50">acumulado: {formatMoeda(ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal))}</p>
           </CardContent>
         </Card>
       </div>
@@ -843,12 +853,12 @@ export function DashboardFinanceiro({
             <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Saídas no mês</div>
             {ind.categoriasSaida.map(cat => (
               <div key={cat} className="flex justify-between text-[10px]">
-                <span className={`text-muted-foreground truncate mr-2 ${cat === 'Reposição de Bovinos' ? 'italic' : ''}`}>{cat}</span>
+                <span className={`text-muted-foreground truncate mr-2 ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
                 <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.saidaDecomp.mes.get(cat) || 0)}</span>
               </div>
             ))}
-            {ind.categoriasSaida.includes('Reposição de Bovinos') && (
-              <div className="text-[8px] text-muted-foreground italic">* não entra no desembolso produtivo</div>
+            {(ind.categoriasSaida.includes('Reposição de Bovinos') || ind.categoriasSaida.includes('Dedução de Receitas')) && (
+              <div className="text-[8px] text-muted-foreground italic">* não entram no desembolso produtivo</div>
             )}
           </CardContent>
         </Card>
@@ -872,7 +882,7 @@ export function DashboardFinanceiro({
             <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Saídas acumulado</div>
             {ind.categoriasSaida.map(cat => (
               <div key={cat} className="flex justify-between text-[10px]">
-                <span className={`text-muted-foreground truncate mr-2 ${cat === 'Reposição de Bovinos' ? 'italic' : ''}`}>{cat}</span>
+                <span className={`text-muted-foreground truncate mr-2 ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
                 <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.saidaDecomp.acum.get(cat) || 0)}</span>
               </div>
             ))}
@@ -949,9 +959,9 @@ export function DashboardFinanceiro({
             </div>
 
             <div className="border-t pt-2">
-              {/* Desembolso Produtivo acumulado */}
+              {/* Desembolso Produtivo acumulado — MESMO destaque que mês */}
               <div className="text-[10px] text-muted-foreground">Desembolso Prod. acumulado</div>
-              <p className="text-sm font-bold">{formatMoeda(ind.desembolsoAcum)}</p>
+              <p className="text-sm font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.desembolsoAcum)}</p>
             </div>
 
             {/* Custo/cab acumulado */}
@@ -966,13 +976,13 @@ export function DashboardFinanceiro({
             {/* Média mensal — destaque */}
             <div className="bg-muted/60 rounded-md p-2">
               <div className="text-[10px] text-muted-foreground">Média mensal</div>
-              <p className="text-base font-extrabold">{formatMoeda(ind.mediaMensal)}</p>
+              <p className="text-base font-extrabold text-red-600 dark:text-red-400">{formatMoeda(ind.mediaMensal)}</p>
             </div>
 
-            {/* Custo/@ produzida */}
+            {/* Custo/@ produzida — DESTAQUE MAIOR */}
             <div>
               <div className="text-[10px] text-muted-foreground">Custo/@ produzida</div>
-              <p className="text-sm font-bold">{ind.custoArrobaProd !== null ? formatMoeda(ind.custoArrobaProd) : '—'}</p>
+              <p className="text-base font-extrabold text-red-600 dark:text-red-400">{ind.custoArrobaProd !== null ? formatMoeda(ind.custoArrobaProd) : '—'}</p>
               {zooData.arrobasProduzidasAcum !== null && (
                 <p className="text-[9px] text-muted-foreground">{formatNum(zooData.arrobasProduzidasAcum, 1)} @ produzidas</p>
               )}
@@ -1018,15 +1028,17 @@ export function DashboardFinanceiro({
         <CardContent>
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} barGap={2}>
+              <ComposedChart data={chartData} barGap={2}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <YAxis yAxisId="left" tick={{ fontSize: 10 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v: number) => formatMoeda(v)} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="Entradas" fill="hsl(120, 40%, 40%)" radius={[2, 2, 0, 0]} />
-                <Bar dataKey="Saídas" fill="hsl(0, 65%, 50%)" radius={[2, 2, 0, 0]} />
-              </BarChart>
+                <Bar yAxisId="left" dataKey="Entradas" fill="hsl(120, 40%, 40%)" radius={[2, 2, 0, 0]} />
+                <Bar yAxisId="left" dataKey="Saídas" fill="hsl(0, 65%, 50%)" radius={[2, 2, 0, 0]} />
+                <Line yAxisId="right" type="monotone" dataKey="Saldo Acum." stroke="hsl(210, 70%, 50%)" strokeWidth={2} dot={{ r: 2 }} />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </CardContent>
@@ -1043,10 +1055,11 @@ export function DashboardFinanceiro({
             cabMedia={zooData.cabMediaMes}
           />
           <CentroCustoTable
-            title="Desembolso por Centro — Acumulado"
+            title="Média Mensal por Centro"
             items={ind.ccAcum}
             cabMedia={zooData.cabMediaAcum}
-            acum
+            numMeses={ind.numMeses}
+            isMedia
           />
         </div>
       )}
@@ -1140,45 +1153,49 @@ function CentroCustoTable({
   title,
   items,
   cabMedia,
-  acum,
+  numMeses,
+  isMedia,
 }: {
   title: string;
   items: { nome: string; valor: number }[];
   cabMedia: number | null;
-  acum?: boolean;
+  numMeses?: number;
+  isMedia?: boolean;
 }) {
-  const total = items.reduce((s, i) => s + i.valor, 0);
+  const divisor = isMedia && numMeses && numMeses > 0 ? numMeses : 1;
+  const displayItems = items.map(i => ({ ...i, valor: i.valor / divisor }));
+  const total = displayItems.reduce((s, i) => s + i.valor, 0);
 
   return (
     <Card>
-      <CardContent className="p-2.5">
-        <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
+      <CardContent className="p-2">
+        <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
           <BarChart3 className="h-3 w-3 inline mr-1" />{title}
         </div>
-        <div className="space-y-0.5">
+        <div className="space-y-px">
           {/* Total line */}
-          <div className="flex items-center justify-between text-[10px] font-bold border-b pb-1 mb-1">
+          <div className="flex items-center justify-between text-[9px] font-bold border-b pb-0.5 mb-0.5">
             <span>TOTAL</span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <span className="font-mono">{formatMoeda(total)}</span>
-              <span className="text-muted-foreground w-10 text-right">100%</span>
+              <span className="text-muted-foreground w-8 text-right">100%</span>
               {cabMedia && cabMedia > 0 && (
-                <span className="text-muted-foreground font-mono w-16 text-right">{formatMoeda(total / cabMedia)}/cab</span>
+                <span className="text-muted-foreground font-mono w-14 text-right text-[8px]">{formatMoeda(total / cabMedia)}/cab</span>
               )}
             </div>
           </div>
           {/* Items */}
-          {items.map(item => {
+          {displayItems.map(item => {
             const pct = total > 0 ? (item.valor / total) * 100 : 0;
             const isRateio = item.nome === 'Rateio ADM';
             return (
-              <div key={item.nome} className={`flex items-center justify-between text-[10px] ${isRateio ? 'text-amber-600 dark:text-amber-400' : ''}`}>
-                <span className="truncate mr-2 max-w-[100px]">{item.nome}</span>
-                <div className="flex items-center gap-2">
+              <div key={item.nome} className={`flex items-center justify-between text-[9px] py-px ${isRateio ? 'text-amber-600 dark:text-amber-400' : ''}`}>
+                <span className="truncate mr-1.5 max-w-[90px]">{item.nome}</span>
+                <div className="flex items-center gap-1.5">
                   <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(item.valor)}</span>
-                  <span className="text-muted-foreground w-10 text-right">{formatNum(pct, 1)}%</span>
+                  <span className="text-muted-foreground w-8 text-right">{formatNum(pct, 1)}%</span>
                   {cabMedia && cabMedia > 0 && (
-                    <span className="text-muted-foreground font-mono w-16 text-right">{formatMoeda(item.valor / cabMedia)}/cab</span>
+                    <span className="text-muted-foreground font-mono w-14 text-right text-[8px]">{formatMoeda(item.valor / cabMedia)}/cab</span>
                   )}
                 </div>
               </div>
