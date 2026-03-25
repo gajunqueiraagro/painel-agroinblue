@@ -78,6 +78,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       const valorCabeca = row.quantidadeFinal > 0 && row.pesoMedioFinalKg && precoKg > 0
         ? row.pesoMedioFinalKg * precoKg
         : 0;
+      const arrobasLinha = row.quantidadeFinal * (row.pesoMedioFinalKg || 0) / 30;
+      const precoArroba = arrobasLinha > 0 ? valorTotal / arrobasLinha : 0;
       return {
         categoriaId: row.categoriaId,
         codigo: row.categoriaCodigo,
@@ -87,6 +89,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         origemPeso: row.origemPeso,
         precoKg,
         valorCabeca,
+        precoArroba,
         valorTotal,
       };
     });
