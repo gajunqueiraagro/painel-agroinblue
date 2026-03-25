@@ -226,6 +226,14 @@ export function useResumoStatus(
   // ZOOTÉCNICO
   // -------------------------------------------------------------------------
   const zootecnico = useMemo((): ResumoZootecnico => {
+    // Fazenda não-pecuária: status especial
+    if (fazendaNaoPecuaria) {
+      return {
+        rebanhoAtual: 0, totalEntradas: 0, totalSaidas: 0,
+        status: { nivel: 'fechado', descricao: 'Fazenda selecionada não apresenta dados zootécnicos.' },
+      };
+    }
+
     const { saldoInicialAno } = calcSaldoMensalAcumulado(saldosIniciais, lancamentos, ano);
     const anoStr = String(ano);
 
@@ -244,9 +252,6 @@ export function useResumoStatus(
     const rebanhoAtual = saldoInicialAno + totalEntradas - totalSaidas;
 
     // Status: check each month in range
-    const mesAtual = new Date().getMonth() + 1;
-    const anoAtual = new Date().getFullYear();
-
     let mesesFechados = 0;
     let mesesComDados = 0;
 
@@ -256,7 +261,6 @@ export function useResumoStatus(
       const pastoInfo = fechamentoPastos[anoMes];
       const pastosFechados = pastoInfo ? pastoInfo.total > 0 && pastoInfo.fechados === pastoInfo.total : false;
 
-      // Consider month "fechado" if rebanho fechado AND pastos fechados
       if (rebanhoFechado && pastosFechados) {
         mesesFechados++;
       }
@@ -274,7 +278,7 @@ export function useResumoStatus(
     }
 
     return { rebanhoAtual, totalEntradas, totalSaidas, status: { nivel, descricao } };
-  }, [lancamentos, saldosIniciais, ano, mesAte, fechamentoRebanho, fechamentoPastos]);
+  }, [lancamentos, saldosIniciais, ano, mesAte, fechamentoRebanho, fechamentoPastos, fazendaNaoPecuaria]);
 
   // -------------------------------------------------------------------------
   // FINANCEIRO — FONTE ÚNICA: calcFinanceiroFromLancamentos
