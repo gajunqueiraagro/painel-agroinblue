@@ -298,7 +298,7 @@ export function useStatusZootecnico(
     else if (contadores.aberto === 5) status = 'aberto';
 
     return { status, pendencias, contadores, loading };
-  }, [pastosAtivos, pastosFechados, rebanhoFechamentos, itensComPeso, itensTotais, precosDefinidos, categoriasComSaldo, catsDivergentes, difTotalCabecas, saldoTotalSistema, loading]);
+  }, [semPecuaria, pastosAtivos, pastosFechados, rebanhoFechamentos, itensComPeso, itensTotais, precosDefinidos, categoriasComSaldo, catsDivergentes, difTotalCabecas, saldoTotalSistema, loading]);
 
   return result;
 }
