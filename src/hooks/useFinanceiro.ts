@@ -332,7 +332,7 @@ export function useFinanceiro() {
     const mesesADM = new Set<string>();
     for (const l of lancamentosADM) {
       if (!isADMConciliado(l)) continue;
-      const am = dateToAnoMes(l.data_pagamento);
+      const am = dataRefRateio(l);
       if (am) mesesADM.add(am);
     }
 
