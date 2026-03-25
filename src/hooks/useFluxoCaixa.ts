@@ -32,11 +32,20 @@ export interface FluxoMensal {
   saldoAcumulado: number;
 }
 
+export interface SaldoInicialAudit {
+  fonte: string;
+  periodo: string;
+  qtdRegistros: number;
+  contas: string[];
+  somaTotal: number;
+}
+
 export interface FluxoCaixaResult {
   meses: FluxoMensal[];
   loading: boolean;
   saldoInicialAno: number;
   saldoInicialAusente: boolean;
+  saldoInicialAudit: SaldoInicialAudit | null;
 }
 
 // ---------------------------------------------------------------------------
