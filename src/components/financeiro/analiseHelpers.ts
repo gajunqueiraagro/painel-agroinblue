@@ -43,6 +43,14 @@ export const isDividendo = (l: FinanceiroLancamento) =>
 export const isInvestimento = (l: FinanceiroLancamento) =>
   normMacro(l) === 'investimento na fazenda' || normMacro(l) === 'investimento em bovinos';
 
+/** É Investimento em Bovinos (Reposição) */
+export const isReposicaoBovinos = (l: FinanceiroLancamento) =>
+  normMacro(l) === 'investimento em bovinos';
+
+/** É Conciliado */
+export const isConciliado = (l: FinanceiroLancamento) =>
+  (l.status_transacao || '').toLowerCase().trim() === 'conciliado';
+
 /** É Outras Entradas Financeiras */
 export const isOutrasEntradas = (l: FinanceiroLancamento) =>
   normMacro(l) === 'outras entradas financeiras';
