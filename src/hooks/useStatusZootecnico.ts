@@ -75,6 +75,7 @@ export function useStatusZootecnico(
           setCatsDivergentes(0);
           setDifTotalCabecas(0);
           setSaldoTotalSistema(0);
+          setSemPecuaria(true);
           setLoading(false);
           return;
         }
