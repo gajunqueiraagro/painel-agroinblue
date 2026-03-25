@@ -106,7 +106,10 @@ export function ZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTabChange
         <button onClick={onBack} className="p-1.5 rounded-md hover:bg-muted transition-colors">
           <ArrowLeft className="h-5 w-5 text-foreground" />
         </button>
-        <h1 className="text-lg font-extrabold text-foreground">🐄 Zootécnico</h1>
+        <div>
+          <h1 className="text-lg font-extrabold text-foreground leading-tight">🐄 Zootécnico</h1>
+          <span className="text-xs text-muted-foreground">📍 {fazendaAtual?.nome || 'Global'}</span>
+        </div>
       </div>
 
       {/* Filtros */}
