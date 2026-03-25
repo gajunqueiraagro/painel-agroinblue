@@ -78,6 +78,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       const valorCabeca = row.quantidadeFinal > 0 && row.pesoMedioFinalKg && precoKg > 0
         ? row.pesoMedioFinalKg * precoKg
         : 0;
+      const arrobasLinha = row.quantidadeFinal * (row.pesoMedioFinalKg || 0) / 30;
+      const precoArroba = arrobasLinha > 0 ? valorTotal / arrobasLinha : 0;
       return {
         categoriaId: row.categoriaId,
         codigo: row.categoriaCodigo,
@@ -87,6 +89,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         origemPeso: row.origemPeso,
         precoKg,
         valorCabeca,
+        precoArroba,
         valorTotal,
       };
     });
@@ -113,7 +116,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     return pesoTotal > 0 ? totalRebanho / pesoTotal : 0;
   }, [allRows, totalRebanho]);
 
-  const precoMedioArroba = precoMedioKg * 30;
+  const totalArrobas = useMemo(() => allRows.reduce((sum, r) => sum + (r.saldo * r.pesoMedio / 30), 0), [allRows]);
+  const precoMedioArroba = totalArrobas > 0 ? totalRebanho / totalArrobas : 0;
   const mesLabel = MESES_COLS.find(m => m.key === mesFiltro)?.label || mesFiltro;
 
   const categoriasSemPreco = useMemo(() => {
@@ -288,8 +292,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               <th className="text-left px-3 py-2 font-semibold text-foreground">Categoria</th>
               <th className="text-right px-2 py-2 font-semibold text-foreground">Qtd</th>
               <th className="text-right px-2 py-2 font-semibold text-foreground">Peso</th>
-              <th className="text-center px-2 py-2 font-semibold text-foreground min-w-[90px]">R$/kg</th>
+              <th className="text-center px-1 py-2 font-semibold text-foreground min-w-[70px]">R$/kg</th>
               <th className="text-right px-2 py-2 font-semibold text-foreground">R$/cab</th>
+              <th className="text-right px-2 py-2 font-semibold text-foreground">R$/@</th>
               <th className="text-right px-3 py-2 font-semibold text-foreground">Valor Total</th>
             </tr>
           </thead>
@@ -320,7 +325,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                     </Tooltip>
                   ) : '-'}
                 </td>
-                <td className="px-2 py-1">
+                <td className="px-1 py-1">
                   <Input
                     type="text"
                     inputMode="decimal"
@@ -334,6 +339,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                 <td className="px-2 py-2 text-right text-muted-foreground text-xs">
                   {r.valorCabeca > 0 ? formatMoeda(r.valorCabeca) : '-'}
                 </td>
+                <td className="px-2 py-2 text-right text-muted-foreground text-xs">
+                  {r.precoArroba > 0 ? formatMoeda(r.precoArroba) : '-'}
+                </td>
                 <td className="px-3 py-2 text-right font-semibold text-foreground">
                   {r.valorTotal > 0 ? formatMoeda(r.valorTotal) : '-'}
                 </td>
@@ -345,10 +353,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               <td className="px-3 py-2 font-extrabold text-foreground">TOTAL</td>
               <td className="px-2 py-2 text-right font-extrabold text-foreground">{totalCabecas}</td>
               <td className="px-2 py-2 text-right text-xs text-muted-foreground">{formatNum(pesoMedioGeral, 1)} kg</td>
-              <td className="px-2 py-2 text-center text-xs text-muted-foreground">
+              <td className="px-1 py-2 text-center text-xs text-muted-foreground">
                 {precoMedioKg > 0 ? `${formatNum(precoMedioKg, 2)}/kg` : ''}
               </td>
               <td className="px-2 py-2 text-right text-xs font-semibold text-foreground">{formatMoeda(valorMedioCabeca)}</td>
+              <td className="px-2 py-2 text-right text-xs font-semibold text-foreground">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '-'}</td>
               <td className="px-3 py-2 text-right font-extrabold text-foreground">{formatMoeda(totalRebanho)}</td>
             </tr>
           </tfoot>
