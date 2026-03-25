@@ -49,6 +49,9 @@ export interface FinanceiroAudit {
   qtdEntradas: number;
   qtdSaidas: number;
   saldoOrigem: string;
+  saldoInicialPeriodo: string;
+  saldoInicialRegistros: number;
+  saldoInicialContas: string[];
 }
 
 export interface ResumoFinanceiro {
