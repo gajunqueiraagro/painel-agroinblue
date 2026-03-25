@@ -12,6 +12,7 @@ import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
