@@ -1223,8 +1223,67 @@ export function DashboardFinanceiro({
 }
 
 // ---------------------------------------------------------------------------
-// Sub: Centro de Custo Table
+// Sub: Mobile Centro de Custo (tabbed)
 // ---------------------------------------------------------------------------
+
+function MobileCentroCusto({ ind, zooData }: { ind: any; zooData: any }) {
+  const [tab, setTab] = useState<'mes' | 'acum'>('mes');
+  const items = tab === 'mes' ? ind.ccMes : ind.ccAcum;
+  const cabMedia = tab === 'mes' ? zooData.cabMediaMes : zooData.cabMediaAcum;
+  const divisor = tab === 'acum' && ind.numMeses > 0 ? ind.numMeses : 1;
+  const displayItems = items.map((i: any) => ({ ...i, valor: i.valor / divisor }));
+  const total = displayItems.reduce((s: number, i: any) => s + i.valor, 0);
+
+  return (
+    <Card>
+      <CardContent className="p-3 space-y-1.5">
+        <div className="flex items-center justify-between">
+          <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+            <BarChart3 className="h-3 w-3 inline mr-1" />Desembolso por Centro
+          </div>
+          <div className="flex gap-1">
+            {(['mes', 'acum'] as const).map(t => (
+              <button key={t} onClick={() => setTab(t)}
+                className={`text-[10px] px-2 py-0.5 rounded-md font-bold transition-colors ${tab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground bg-muted'}`}>
+                {t === 'mes' ? 'Mês' : 'Média'}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Total */}
+        <div className="flex items-center justify-between text-[10px] font-bold border-b pb-1 mb-1">
+          <span>TOTAL</span>
+          <div className="flex items-center gap-2">
+            <span className="font-mono">{formatMoeda(total)}</span>
+            <span className="text-muted-foreground">100%</span>
+            {cabMedia && cabMedia > 0 && (
+              <span className="text-muted-foreground font-mono text-[9px]">{formatMoeda(total / cabMedia)}/cab</span>
+            )}
+          </div>
+        </div>
+        {/* Items */}
+        {displayItems.map((item: any) => {
+          const pct = total > 0 ? (item.valor / total) * 100 : 0;
+          const isRateio = item.nome === 'Rateio ADM';
+          return (
+            <div key={item.nome} className={`flex items-center justify-between text-[10px] py-0.5 ${isRateio ? 'text-amber-600 dark:text-amber-400' : ''}`}>
+              <span className="truncate max-w-[40%] mr-1.5">{item.nome}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(item.valor)}</span>
+                <span className="text-muted-foreground w-9 text-right">{formatNum(pct, 1)}%</span>
+                {cabMedia && cabMedia > 0 && (
+                  <span className="text-muted-foreground font-mono text-[9px] w-16 text-right">{formatMoeda(item.valor / cabMedia)}/cab</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
+
 
 function CentroCustoTable({
   title,
