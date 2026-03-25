@@ -34,11 +34,24 @@ export interface ResumoZootecnico {
   status: StatusCamada;
 }
 
+export interface FinanceiroAudit {
+  base: string;
+  filtroStatus: string;
+  filtroData: string;
+  classificacao: string;
+  periodo: string;
+  totalLancamentosFiltrados: number;
+  qtdEntradas: number;
+  qtdSaidas: number;
+  saldoOrigem: string;
+}
+
 export interface ResumoFinanceiro {
   totalEntradas: number;
   totalSaidas: number;
-  saldoCaixa: number; // saldo real com saldo inicial
+  saldoCaixa: number;
   status: StatusCamada;
+  audit: FinanceiroAudit;
 }
 
 export interface ResumoEconomico {
