@@ -717,13 +717,18 @@ export function DashboardFinanceiro({
       if (isEntrada(l)) entry.entradas += Math.abs(l.valor);
       if (isSaida(l)) entry.saidas += Math.abs(l.valor);
     }
+    let saldoAcum = 0;
     return Array.from(monthMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([mes, v]) => ({
-        mes: MESES_NOMES[Number(mes) - 1] || mes,
-        Entradas: v.entradas,
-        Saídas: v.saidas,
-      }));
+      .map(([mes, v]) => {
+        saldoAcum += v.entradas - v.saidas;
+        return {
+          mes: MESES_NOMES[Number(mes) - 1] || mes,
+          Entradas: v.entradas,
+          Saídas: v.saidas,
+          'Saldo Acum.': saldoAcum,
+        };
+      });
   }, [lancamentos, anoFiltro]);
 
   // =========================================================================
