@@ -552,12 +552,13 @@ export function useFinanceiro() {
   // --- Excluir importação ---
   const excluirImportacao = useCallback(async (importacaoId: string) => {
     try {
-      // Delete lancamentos first
-      const { error: delLanc } = await supabase
-        .from('financeiro_lancamentos')
-        .delete()
-        .eq('importacao_id', importacaoId);
-      if (delLanc) throw delLanc;
+      // Delete all related data
+      const deletes = await Promise.all([
+        supabase.from('financeiro_lancamentos').delete().eq('importacao_id', importacaoId),
+        supabase.from('financeiro_saldos_bancarios').delete().eq('importacao_id', importacaoId),
+        supabase.from('financeiro_resumo_caixa').delete().eq('importacao_id', importacaoId),
+      ]);
+      for (const { error } of deletes) { if (error) throw error; }
 
       // Delete import record
       const { error: delImp } = await supabase
