@@ -3,7 +3,7 @@
  * 3 cards enxutos: Zootécnico, Financeiro, Econômico.
  * Status forte (🔴🟡🟢) + botão de entrada em cada camada.
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { parseISO, format } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,11 +11,14 @@ import { TabId } from '@/components/BottomNav';
 import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 import { useResumoStatus, StatusNivel } from '@/hooks/useResumoStatus';
 import { ChevronRight } from 'lucide-react';
+import type { FiltroGlobal } from './Index';
 
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
   onTabChange: (tab: TabId) => void;
+  filtroGlobal: FiltroGlobal;
+  onFiltroChange: (f: Partial<FiltroGlobal>) => void;
 }
 
 const MESES = [
@@ -47,7 +50,7 @@ function StatusBadge({ nivel }: { nivel: StatusNivel }) {
   );
 }
 
-export function ResumoTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
+export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlobal, onFiltroChange }: Props) {
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
@@ -58,8 +61,8 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
     return Array.from(anos).sort().reverse();
   }, [lancamentos, saldosIniciais]);
 
-  const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
-  const [mesFiltro, setMesFiltro] = useState(String(new Date().getMonth() + 1));
+  const anoFiltro = filtroGlobal.ano;
+  const mesFiltro = String(filtroGlobal.mes);
 
   const anoNum = Number(anoFiltro);
   const mesNum = Number(mesFiltro);
