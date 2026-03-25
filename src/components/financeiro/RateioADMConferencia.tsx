@@ -139,16 +139,41 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho, tota
 
       {dados && (
         <>
-          {/* Total ADM conciliado */}
+          {/* Totais do rateio no período */}
           <Card>
-            <CardContent className="p-3">
-              <div className="text-xs text-muted-foreground mb-1">Total ADM Conciliado (Saídas)</div>
-              <p className="text-xl font-bold">{formatMoeda(dados.totalADMConciliado)}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                Fazenda ADM · Tipo = 2-Saídas · Status = Conciliado · Data_Ref em {dados.anoMes}
-              </p>
+            <CardContent className="p-3 space-y-2">
+              <div className="text-xs text-muted-foreground">Resumo ADM do período ({dados.anoMes})</div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                <div className="rounded-md bg-muted p-2">
+                  <p className="text-muted-foreground">ADM encontrado</p>
+                  <p className="font-bold">{formatMoeda(dados.totalADMEncontrado)}</p>
+                  <p className="text-[10px] text-muted-foreground">{dados.qtdADMEncontrado} lançamento(s)</p>
+                </div>
+                <div className="rounded-md bg-muted p-2">
+                  <p className="text-muted-foreground">Elegível no rateio produtivo</p>
+                  <p className="font-bold">{formatMoeda(dados.totalADMElegivel)}</p>
+                  <p className="text-[10px] text-muted-foreground">{dados.qtdADMElegivel} lançamento(s)</p>
+                </div>
+                <div className="rounded-md bg-muted p-2">
+                  <p className="text-muted-foreground">Excluído do rateio</p>
+                  <p className="font-bold">{formatMoeda(dados.totalADMExcluido)}</p>
+                  <p className="text-[10px] text-muted-foreground">{dados.qtdADMExcluido} lançamento(s)</p>
+                </div>
+              </div>
+              {dados.gruposExcluidos.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground mb-1">Grupos excluídos (resumo)</p>
+                  <div className="flex flex-wrap gap-1">
+                    {dados.gruposExcluidos.slice(0, 6).map(g => (
+                      <span key={g.grupo} className="text-[10px] rounded-full bg-muted px-2 py-0.5">
+                        {g.grupo}: {formatMoeda(g.valor)} ({g.quantidade})
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
               <p className="text-[10px] text-muted-foreground">
-                {dados.lancamentosUsados.length} lançamento(s) no total
+                Filtro base: ADM + Tipo 2-Saídas + Status Conciliado + Data_Ref preenchida · Elegível: Macro_Custo em Custeio Produtivo ou Investimento na Fazenda.
               </p>
             </CardContent>
           </Card>
