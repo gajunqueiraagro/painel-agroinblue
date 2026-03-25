@@ -126,10 +126,13 @@ export function useResumoStatus(
           .in('fazenda_id', fazendaIds)
           .in('ano_mes', mesesRange),
         // Financeiro - lançamentos brutos (fonte única de verdade)
+        // Filtra por ano via data_pagamento para evitar limite de 1000 rows
         supabase
           .from('financeiro_lancamentos')
           .select('status_transacao, data_pagamento, valor, tipo_operacao')
-          .in('fazenda_id', fazendaIds),
+          .in('fazenda_id', fazendaIds)
+          .gte('data_pagamento', `${anoStr}-01-01`)
+          .lte('data_pagamento', `${anoStr}-12-31`),
       ]);
 
       // Process fechamento rebanho
