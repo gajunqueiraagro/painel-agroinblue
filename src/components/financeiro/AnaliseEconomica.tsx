@@ -85,6 +85,8 @@ export function AnaliseEconomica({
   pastos,
   categorias,
   fazendaId,
+  filtroAnoInicial,
+  filtroMesInicial,
 }: Props) {
   const [bloco, setBloco] = useState<Bloco>('indicadores');
   const { fazendas } = useFazenda();
