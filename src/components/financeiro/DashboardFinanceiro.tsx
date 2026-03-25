@@ -742,7 +742,7 @@ export function DashboardFinanceiro({
                   <Building2 className="h-3.5 w-3.5" /> Rateio ADM
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  {formatNum(rateioFiltrado[0]?.percentualFazenda || 0, 1)}% da área produtiva
+                  {formatNum(rateioFiltrado[0]?.percentualFazenda || 0, 1)}% do rebanho médio
                   → <span className="font-bold text-foreground">{formatMoeda(ind.rateioADM)}</span> absorvido
                 </p>
               </CardContent>
