@@ -258,5 +258,5 @@ export function useFluxoCaixa(
     return result;
   }, [lancamentosFinanceiros, rateioADM, ano, mesAte, saldoInicialAno]);
 
-  return { meses, loading: loadingSaldo, saldoInicialAno, saldoInicialAusente } as FluxoCaixaResult;
+  return { meses, loading: loadingSaldo, saldoInicialAno, saldoInicialAusente, saldoInicialAudit } as FluxoCaixaResult;
 }
