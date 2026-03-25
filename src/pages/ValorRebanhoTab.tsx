@@ -385,6 +385,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           </div>
         </div>
       </div>
+
+      {/* Return button */}
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2.5 transition-colors hover:bg-primary/20"
+        >
+          <ArrowLeft className="h-4 w-4" /> Retornar ao Resumo Zootécnico
+        </button>
+      )}
     </div>
   );
 }
