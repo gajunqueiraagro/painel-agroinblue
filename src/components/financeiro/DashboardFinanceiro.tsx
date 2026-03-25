@@ -841,62 +841,67 @@ export function DashboardFinanceiro({
       {/* ================================================================= */}
       {/* 2. CARDS MENORES — Decomposição */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-2 gap-2">
-        {/* Entradas no mês */}
-        <Card className="bg-card/80">
-          <CardContent className="p-2.5 space-y-1">
-            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entradas no mês</div>
-            {ind.categoriasEntrada.map(cat => (
-              <div key={cat} className="flex justify-between text-[10px]">
-                <span className="text-muted-foreground truncate mr-2">{cat}</span>
-                <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.entradaDecomp.mes.get(cat) || 0)}</span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+      {/* Mobile: tabbed detail blocks; Desktop: 2x2 grid */}
+      {isMobile ? (
+        <MobileDetalheEntradaSaida ind={ind} />
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          {/* Entradas no mês */}
+          <Card className="bg-card/80">
+            <CardContent className="p-2.5 space-y-1">
+              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entradas no mês</div>
+              {ind.categoriasEntrada.map(cat => (
+                <div key={cat} className="flex justify-between text-[10px]">
+                  <span className="text-muted-foreground truncate mr-2">{cat}</span>
+                  <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.entradaDecomp.mes.get(cat) || 0)}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
 
-        {/* Saídas no mês */}
-        <Card className="bg-card/80">
-          <CardContent className="p-2.5 space-y-1">
-            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Saídas no mês</div>
-            {ind.categoriasSaida.map(cat => (
-              <div key={cat} className="flex justify-between text-[10px]">
-                <span className={`text-muted-foreground truncate mr-2 ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
-                <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.saidaDecomp.mes.get(cat) || 0)}</span>
-              </div>
-            ))}
-            {(ind.categoriasSaida.includes('Reposição de Bovinos') || ind.categoriasSaida.includes('Dedução de Receitas')) && (
-              <div className="text-[8px] text-muted-foreground italic">* não entram no desembolso produtivo</div>
-            )}
-          </CardContent>
-        </Card>
+          {/* Saídas no mês */}
+          <Card className="bg-card/80">
+            <CardContent className="p-2.5 space-y-1">
+              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Saídas no mês</div>
+              {ind.categoriasSaida.map(cat => (
+                <div key={cat} className="flex justify-between text-[10px]">
+                  <span className={`text-muted-foreground truncate mr-2 ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
+                  <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.saidaDecomp.mes.get(cat) || 0)}</span>
+                </div>
+              ))}
+              {(ind.categoriasSaida.includes('Reposição de Bovinos') || ind.categoriasSaida.includes('Dedução de Receitas')) && (
+                <div className="text-[8px] text-muted-foreground italic">* não entram no desembolso produtivo</div>
+              )}
+            </CardContent>
+          </Card>
 
-        {/* Entradas acumulado */}
-        <Card className="bg-card/80">
-          <CardContent className="p-2.5 space-y-1">
-            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entradas acumulado</div>
-            {ind.categoriasEntrada.map(cat => (
-              <div key={cat} className="flex justify-between text-[10px]">
-                <span className="text-muted-foreground truncate mr-2">{cat}</span>
-                <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.entradaDecomp.acum.get(cat) || 0)}</span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+          {/* Entradas acumulado */}
+          <Card className="bg-card/80">
+            <CardContent className="p-2.5 space-y-1">
+              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entradas acumulado</div>
+              {ind.categoriasEntrada.map(cat => (
+                <div key={cat} className="flex justify-between text-[10px]">
+                  <span className="text-muted-foreground truncate mr-2">{cat}</span>
+                  <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.entradaDecomp.acum.get(cat) || 0)}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
 
-        {/* Saídas acumulado */}
-        <Card className="bg-card/80">
-          <CardContent className="p-2.5 space-y-1">
-            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Saídas acumulado</div>
-            {ind.categoriasSaida.map(cat => (
-              <div key={cat} className="flex justify-between text-[10px]">
-                <span className={`text-muted-foreground truncate mr-2 ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
-                <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.saidaDecomp.acum.get(cat) || 0)}</span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+          {/* Saídas acumulado */}
+          <Card className="bg-card/80">
+            <CardContent className="p-2.5 space-y-1">
+              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Saídas acumulado</div>
+              {ind.categoriasSaida.map(cat => (
+                <div key={cat} className="flex justify-between text-[10px]">
+                  <span className={`text-muted-foreground truncate mr-2 ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
+                  <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.saidaDecomp.acum.get(cat) || 0)}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* ================================================================= */}
       {/* 4. INDICADORES ECONÔMICOS — 2 colunas */}
