@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TabId } from '@/components/BottomNav';
 import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 import { useResumoStatus, StatusNivel } from '@/hooks/useResumoStatus';
+import { useFazenda } from '@/contexts/FazendaContext';
 import { ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 import type { FiltroGlobal } from './Index';
 
