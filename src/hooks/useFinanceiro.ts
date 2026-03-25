@@ -351,7 +351,7 @@ export function useFinanceiro() {
     // Collect all YYYY-MM from ADM lancamentos conciliados
     const mesesADM = new Set<string>();
     for (const l of lancamentosADM) {
-      if (!isADMConciliado(l)) continue;
+      if (!isADMBaseRateio(l)) continue;
       const am = dataRefRateio(l);
       if (am) mesesADM.add(am);
     }
