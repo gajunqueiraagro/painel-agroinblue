@@ -194,7 +194,10 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
           <div className="rounded-xl border bg-card p-4 space-y-3 shadow-sm opacity-75">
             <div className="flex items-center gap-2">
               <span className="text-xl">🐄</span>
-              <h2 className="text-base font-extrabold text-card-foreground">Zootécnico</h2>
+              <div>
+                <h2 className="text-base font-extrabold text-card-foreground leading-tight">Zootécnico</h2>
+                <span className="text-xs text-muted-foreground">📍 {fazendaAtual?.nome || 'Administrativo'}</span>
+              </div>
             </div>
             <p className="text-sm text-muted-foreground">
               Fazenda selecionada não apresenta dados zootécnicos.
