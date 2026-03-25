@@ -16,6 +16,7 @@
  * 11. (=) Resultado Final
  */
 import { useMemo, useState, useEffect } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { MESES_NOMES } from "@/lib/calculos/labels";
 import { formatMoeda } from "@/lib/calculos/formatters";
