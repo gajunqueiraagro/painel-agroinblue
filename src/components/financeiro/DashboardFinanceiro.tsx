@@ -1121,20 +1121,24 @@ export function DashboardFinanceiro({
       {/* 6. QUADRO CENTRO DE CUSTO — 2 colunas */}
       {/* ================================================================= */}
       {(ind.ccMes.length > 0 || ind.ccAcum.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <CentroCustoTable
-            title="Desembolso por Centro — Mês"
-            items={ind.ccMes}
-            cabMedia={zooData.cabMediaMes}
-          />
-          <CentroCustoTable
-            title="Média Mensal por Centro"
-            items={ind.ccAcum}
-            cabMedia={zooData.cabMediaAcum}
-            numMeses={ind.numMeses}
-            isMedia
-          />
-        </div>
+        isMobile ? (
+          <MobileCentroCusto ind={ind} zooData={zooData} />
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            <CentroCustoTable
+              title="Desembolso por Centro — Mês"
+              items={ind.ccMes}
+              cabMedia={zooData.cabMediaMes}
+            />
+            <CentroCustoTable
+              title="Média Mensal por Centro"
+              items={ind.ccAcum}
+              cabMedia={zooData.cabMediaAcum}
+              numMeses={ind.numMeses}
+              isMedia
+            />
+          </div>
+        )
       )}
 
       {/* ================================================================= */}
