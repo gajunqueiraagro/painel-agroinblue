@@ -75,7 +75,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
     <div className="p-4 max-w-4xl mx-auto space-y-4 animate-fade-in pb-20">
       {/* Filtros */}
       <div className="flex gap-2 flex-wrap">
-        <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+        <Select value={anoFiltro} onValueChange={v => onFiltroChange({ ano: v })}>
           <SelectTrigger className="w-24 touch-target text-sm font-bold">
             <SelectValue placeholder="Ano" />
           </SelectTrigger>
@@ -86,7 +86,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
           </SelectContent>
         </Select>
 
-        <Select value={mesFiltro} onValueChange={setMesFiltro}>
+        <Select value={mesFiltro} onValueChange={v => onFiltroChange({ mes: Number(v) })}>
           <SelectTrigger className="w-36 touch-target text-sm font-bold">
             <SelectValue placeholder="Até o mês" />
           </SelectTrigger>
