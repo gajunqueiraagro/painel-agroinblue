@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { calcSaldoMensalAcumulado, isEntrada, isSaida } from '@/lib/calculos';
+import { calcFinanceiroFromLancamentos, type FinanceiroLancamentoBase } from '@/lib/financeiro/filters';
 import { format, parseISO } from 'date-fns';
 
 // ---------------------------------------------------------------------------
