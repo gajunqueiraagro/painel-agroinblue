@@ -46,6 +46,7 @@ interface PreviewState {
   erros: ErroImportacao[];
   totalLinhas: number;
   resumoFazendas: { codigo: string; nome: string; qtd: number }[];
+  erroEstrutura?: ValidacaoEstrutura;
 }
 
 export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onConfirmar, onExcluir }: Props) {
