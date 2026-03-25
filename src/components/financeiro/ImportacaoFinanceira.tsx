@@ -1,5 +1,5 @@
 /**
- * Tela de importação financeira via Excel — 4 abas.
+ * Tela de importação financeira via Excel — aba única EXPORT_APP_UNICO.
  */
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
@@ -7,8 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Download, Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, Loader2, Trash2 } from 'lucide-react';
 import { downloadModeloExcel } from '@/lib/financeiro/excelTemplate';
 import {
-  parseExcel, resolverFazendas, validarCentrosCusto, validarEstruturaExcel,
-  type LinhaImportada, type SaldoBancarioImportado, type ContaImportada,
+  parseExcel, resolverFazendas, resolverFazendasExtras, validarCentrosCusto, validarEstruturaExcel,
+  type LinhaImportada, type SaldoBancarioImportado,
   type ResumoCaixaImportado, type ErroImportacao, type CentroCustoOficial, type FazendaMap,
   type ValidacaoEstrutura,
 } from '@/lib/financeiro/importParser';
@@ -31,7 +31,7 @@ interface Props {
     totalLinhas: number,
     totalErros: number,
     saldosBancarios?: SaldoBancarioImportado[],
-    contas?: ContaImportada[],
+    contas?: never[],
     resumoCaixa?: ResumoCaixaImportado[],
   ) => Promise<boolean>;
   onExcluir: (importacaoId: string) => Promise<boolean>;
@@ -41,7 +41,6 @@ interface PreviewState {
   nomeArquivo: string;
   lancamentos: LinhaImportada[];
   saldosBancarios: SaldoBancarioImportado[];
-  contas: ContaImportada[];
   resumoCaixa: ResumoCaixaImportado[];
   erros: ErroImportacao[];
   totalLinhas: number;
@@ -62,12 +61,11 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
 
     const buffer = await file.arrayBuffer();
 
-    // Validate structure first
     const validacao = validarEstruturaExcel(buffer);
     if (!validacao.valido) {
       setPreview({
         nomeArquivo: file.name,
-        lancamentos: [], saldosBancarios: [], contas: [], resumoCaixa: [],
+        lancamentos: [], saldosBancarios: [], resumoCaixa: [],
         erros: [], totalLinhas: 0, resumoFazendas: [],
         erroEstrutura: validacao,
       });
@@ -78,15 +76,21 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
     const result = parseExcel(buffer);
 
     const errosFazenda = resolverFazendas(result.lancamentos, fazendas);
+    const errosFazendaExtras = resolverFazendasExtras(result.saldosBancarios, result.resumoCaixa, fazendas);
     const errosCentro = validarCentrosCusto(result.lancamentos, centrosCusto);
 
-    // Build summary by fazenda
+    // Build summary by fazenda (from all record types)
     const fazendaCount = new Map<string, number>();
     for (const l of result.lancamentos) {
-      if (l.fazenda) {
-        fazendaCount.set(l.fazenda, (fazendaCount.get(l.fazenda) || 0) + 1);
-      }
+      if (l.fazenda) fazendaCount.set(l.fazenda, (fazendaCount.get(l.fazenda) || 0) + 1);
     }
+    for (const s of result.saldosBancarios) {
+      if (s.fazenda) fazendaCount.set(s.fazenda, (fazendaCount.get(s.fazenda) || 0) + 1);
+    }
+    for (const r of result.resumoCaixa) {
+      if (r.fazenda) fazendaCount.set(r.fazenda, (fazendaCount.get(r.fazenda) || 0) + 1);
+    }
+
     const fazendaMapByCode = new Map(fazendas.map(f => [f.codigo.toLowerCase().trim(), f]));
     const resumoFazendas = Array.from(fazendaCount.entries()).map(([codigo, qtd]) => {
       const faz = fazendaMapByCode.get(codigo.toLowerCase().trim());
@@ -97,9 +101,8 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
       nomeArquivo: file.name,
       lancamentos: result.lancamentos,
       saldosBancarios: result.saldosBancarios,
-      contas: result.contas,
       resumoCaixa: result.resumoCaixa,
-      erros: [...result.erros, ...errosFazenda, ...errosCentro],
+      erros: [...result.erros, ...errosFazenda, ...errosFazendaExtras, ...errosCentro],
       totalLinhas: result.totalLinhas,
       resumoFazendas,
     });
@@ -112,19 +115,21 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
 
     const linhasComFazenda = preview.lancamentos.filter(l => l.fazendaId);
     const linhasSemFazenda = preview.lancamentos.filter(l => !l.fazendaId);
-
     if (linhasSemFazenda.length > 0) return;
 
     setImportando(true);
     const errosBloqueantes = preview.erros.filter(e => e.campo !== 'Centro de Custo');
+    const saldosComFazenda = preview.saldosBancarios.filter(s => s.fazendaId);
+    const resumoComFazenda = preview.resumoCaixa.filter(r => r.fazendaId);
+
     const ok = await onConfirmar(
       preview.nomeArquivo,
       linhasComFazenda,
       preview.totalLinhas,
       errosBloqueantes.length,
-      preview.saldosBancarios,
-      preview.contas,
-      preview.resumoCaixa,
+      saldosComFazenda,
+      [],
+      resumoComFazenda,
     );
     if (ok) setPreview(null);
     setImportando(false);
@@ -142,6 +147,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
   const errosCentro = preview?.erros.filter(e => e.campo === 'Centro de Custo') || [];
   const hasCentroErrors = errosCentro.length > 0;
   const lancamentosReady = preview?.lancamentos.filter(l => l.fazendaId).length || 0;
+  const totalReady = lancamentosReady + (preview?.saldosBancarios.filter(s => s.fazendaId).length || 0) + (preview?.resumoCaixa.filter(r => r.fazendaId).length || 0);
 
   return (
     <div className="space-y-4">
@@ -174,11 +180,14 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
                 {preview.erroEstrutura.abasFaltando.length > 0 && (
                   <div className="bg-destructive/10 rounded-lg p-3 space-y-1">
                     <p className="text-sm font-bold text-destructive flex items-center gap-1">
-                      <AlertTriangle className="h-4 w-4" /> Abas obrigatórias ausentes:
+                      <AlertTriangle className="h-4 w-4" /> Aba obrigatória ausente:
                     </p>
                     {preview.erroEstrutura.abasFaltando.map(aba => (
                       <div key={aba} className="text-xs bg-destructive/5 rounded px-2 py-1 font-mono">{aba}</div>
                     ))}
+                    <p className="text-xs text-muted-foreground mt-1">
+                      O arquivo deve conter uma aba chamada <span className="font-mono font-bold">EXPORT_APP_UNICO</span>
+                    </p>
                   </div>
                 )}
                 {preview.erroEstrutura.colunasFaltando.length > 0 && (
@@ -188,7 +197,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
                     </p>
                     {preview.erroEstrutura.colunasFaltando.map(item => (
                       <div key={item.aba} className="text-xs bg-destructive/5 rounded px-2 py-1">
-                        <span className="font-mono font-bold">{item.aba}</span>: {item.colunas.join(', ')}
+                        {item.colunas.join(', ')}
                       </div>
                     ))}
                   </div>
@@ -199,23 +208,19 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
 
             {/* Conteúdo normal */}
             {(!preview.erroEstrutura || preview.erroEstrutura.valido) && <>
-            {/* Resumo por aba */}
-            <div className="grid grid-cols-2 gap-2 text-sm">
+            {/* Resumo por tipo de registro */}
+            <div className="grid grid-cols-3 gap-2 text-sm">
               <div className="bg-muted rounded-lg p-2 text-center">
                 <div className="font-bold text-lg">{preview.lancamentos.length}</div>
                 <div className="text-muted-foreground text-xs">Lançamentos</div>
               </div>
               <div className="bg-muted rounded-lg p-2 text-center">
                 <div className="font-bold text-lg">{preview.saldosBancarios.length}</div>
-                <div className="text-muted-foreground text-xs">Saldos Bancários</div>
-              </div>
-              <div className="bg-muted rounded-lg p-2 text-center">
-                <div className="font-bold text-lg">{preview.contas.length}</div>
-                <div className="text-muted-foreground text-xs">Contas</div>
+                <div className="text-muted-foreground text-xs">Saldos</div>
               </div>
               <div className="bg-muted rounded-lg p-2 text-center">
                 <div className="font-bold text-lg">{preview.resumoCaixa.length}</div>
-                <div className="text-muted-foreground text-xs">Resumo Caixa</div>
+                <div className="text-muted-foreground text-xs">Resumos</div>
               </div>
             </div>
 
@@ -226,7 +231,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
                 <div className="text-muted-foreground text-xs">Total linhas</div>
               </div>
               <div className="bg-green-50 dark:bg-green-950/30 rounded-lg p-2 text-center">
-                <div className="font-bold text-lg text-green-700 dark:text-green-400">{lancamentosReady}</div>
+                <div className="font-bold text-lg text-green-700 dark:text-green-400">{totalReady}</div>
                 <div className="text-muted-foreground text-xs">Prontas</div>
               </div>
               <div className="bg-red-50 dark:bg-red-950/30 rounded-lg p-2 text-center">
@@ -259,9 +264,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
                 </p>
                 {preview.erros.slice(0, 20).map((e, i) => (
                   <div key={i} className="text-xs bg-destructive/5 rounded px-2 py-1">
-                    <span className="font-bold">
-                      {e.aba ? `[${e.aba}] ` : ''}Linha {e.linha}
-                    </span> — {e.campo}: {e.mensagem}
+                    <span className="font-bold">Linha {e.linha}</span> — {e.campo}: {e.mensagem}
                   </div>
                 ))}
                 {preview.erros.length > 20 && (
@@ -317,14 +320,14 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
               <Button
                 className="flex-1"
                 onClick={handleConfirmar}
-                disabled={importando || temErrosFazenda || lancamentosReady === 0}
+                disabled={importando || temErrosFazenda || totalReady === 0}
               >
                 {importando ? (
                   <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Importando...</>
                 ) : temErrosFazenda ? (
                   <><AlertTriangle className="h-4 w-4 mr-2" /> Corrija os erros de fazenda</>
                 ) : (
-                  <><CheckCircle2 className="h-4 w-4 mr-2" /> Confirmar ({lancamentosReady} lançamentos)</>
+                  <><CheckCircle2 className="h-4 w-4 mr-2" /> Confirmar ({totalReady} registros)</>
                 )}
               </Button>
             </div>
@@ -352,7 +355,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="text-right">
-                      <p className="font-bold">{imp.total_validas} linhas</p>
+                      <p className="font-bold">{imp.total_validas} registros</p>
                       <div className="flex items-center gap-1">
                         {imp.status === 'processada' ? (
                           <CheckCircle2 className="h-3 w-3 text-green-600" />
@@ -384,7 +387,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir importação?</AlertDialogTitle>
             <AlertDialogDescription>
-              Isso removerá permanentemente <span className="font-bold">{confirmExcluir?.total_validas} lançamentos</span> vinculados
+              Isso removerá permanentemente <span className="font-bold">{confirmExcluir?.total_validas} registros</span> vinculados
               ao arquivo <span className="font-bold">{confirmExcluir?.nome_arquivo}</span>.
               <br /><br />Esta ação não pode ser desfeita.
             </AlertDialogDescription>
@@ -392,7 +395,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleExcluir} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Excluir {confirmExcluir?.total_validas} lançamentos
+              Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

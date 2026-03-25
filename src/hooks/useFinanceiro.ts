@@ -20,7 +20,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda, type Fazenda } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import type { LinhaImportada, SaldoBancarioImportado, ContaImportada, ResumoCaixaImportado, CentroCustoOficial } from '@/lib/financeiro/importParser';
+import type { LinhaImportada, SaldoBancarioImportado, ResumoCaixaImportado, CentroCustoOficial } from '@/lib/financeiro/importParser';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -428,14 +428,14 @@ export function useFinanceiro() {
       });
   }, [fazendaADM, lancamentosADM, areaFazendas, fazendasOperacionais]);
 
-  // --- Confirmar importação (4-sheet: lancamentos + saldos + contas + resumo) ---
+  // --- Confirmar importação (aba única EXPORT_APP_UNICO) ---
   const confirmarImportacao = useCallback(async (
     nomeArquivo: string,
     linhas: LinhaImportada[],
     totalLinhas: number,
     totalErros: number,
     saldosBancarios?: SaldoBancarioImportado[],
-    contasImportadas?: ContaImportada[],
+    _contas?: unknown[],
     resumoCaixa?: ResumoCaixaImportado[],
   ) => {
     if (!user) return false;
@@ -447,7 +447,7 @@ export function useFinanceiro() {
         return false;
       }
 
-      const totalValid = linhas.length + (saldosBancarios?.length || 0) + (contasImportadas?.length || 0) + (resumoCaixa?.length || 0);
+      const totalValid = linhas.length + (saldosBancarios?.length || 0) + (resumoCaixa?.length || 0);
 
       const { data: imp, error: impErr } = await supabase
         .from('financeiro_importacoes')
@@ -493,10 +493,10 @@ export function useFinanceiro() {
         if (error) throw error;
       }
 
-      // Insert saldos bancarios
+      // Insert saldos bancarios (now with per-row fazendaId)
       if (saldosBancarios && saldosBancarios.length > 0) {
         const saldoBatch = saldosBancarios.map(s => ({
-          fazenda_id: primaryFazendaId,
+          fazenda_id: s.fazendaId || primaryFazendaId,
           importacao_id: imp.id,
           conta_banco: s.contaBanco,
           ano_mes: s.anoMes,
@@ -508,26 +508,10 @@ export function useFinanceiro() {
         if (error) throw error;
       }
 
-      // Insert/update contas
-      if (contasImportadas && contasImportadas.length > 0) {
-        for (const c of contasImportadas) {
-          const { error } = await supabase.from('financeiro_contas').upsert({
-            fazenda_id: primaryFazendaId,
-            nome_conta: c.contaId,
-            banco: c.banco,
-            instrumento: c.instrumento,
-            agencia_conta: c.agenciaConta,
-            uso: c.uso,
-            tipo: c.instrumento,
-          }, { onConflict: 'id' });
-          if (error) console.warn('Conta upsert warning:', error.message);
-        }
-      }
-
       // Insert resumo caixa
       if (resumoCaixa && resumoCaixa.length > 0) {
         const resumoBatch = resumoCaixa.map(r => ({
-          fazenda_id: primaryFazendaId,
+          fazenda_id: r.fazendaId || primaryFazendaId,
           importacao_id: imp.id,
           ano_mes: r.anoMes,
           entradas: r.entradas,
