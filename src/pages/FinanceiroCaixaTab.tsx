@@ -90,7 +90,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
               saldosIniciais={saldosIniciais}
               rateioADM={rateioADM}
               isGlobal={isGlobal}
-              fazendasSemArea={fazendasSemArea}
+              fazendasSemArea={fazendasSemRebanho}
               pastos={pastos}
               categorias={categorias}
               fazendaId={fazendaId}
