@@ -859,6 +859,7 @@ export function DashboardFinanceiro({
             ))}
             {(ind.categoriasSaida.includes('Reposição de Bovinos') || ind.categoriasSaida.includes('Dedução de Receitas')) && (
               <div className="text-[8px] text-muted-foreground italic">* não entram no desembolso produtivo</div>
+            )}
           </CardContent>
         </Card>
 
