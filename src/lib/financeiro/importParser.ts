@@ -126,6 +126,54 @@ function getRows(wb: XLSX.WorkBook, name: string): unknown[][] {
   return rows.slice(1).filter(r => r.some(c => c !== null && c !== undefined && c !== ''));
 }
 
+// ── Sheet & column validation ──
+
+const REQUIRED_SHEETS = ['EXPORT_LANCAMENTOS', 'EXPORT_SALDOS_BANCARIOS', 'EXPORT_CONTAS', 'EXPORT_RESUMO_CAIXA'] as const;
+
+const REQUIRED_COLUMNS: Record<string, string[]> = {
+  EXPORT_LANCAMENTOS: ['AnoMes', 'Data Pagamento', 'Valor', 'Tipo Operação', 'Status Transação', 'Fazenda', 'Macro_Custo', 'Grupo_Custo'],
+  EXPORT_SALDOS_BANCARIOS: ['Conta Banco', 'AnoMes', 'Saldo_Final'],
+  EXPORT_CONTAS: ['Conta_ID', 'Conta_Label', 'Banco'],
+  EXPORT_RESUMO_CAIXA: ['AnoMes', 'Entradas', 'Saidas', 'Saldo_Final_Total'],
+};
+
+export interface ValidacaoEstrutura {
+  valido: boolean;
+  abasFaltando: string[];
+  colunasFaltando: { aba: string; colunas: string[] }[];
+}
+
+function getHeaderRow(wb: XLSX.WorkBook, sheetName: string): string[] {
+  if (!wb.SheetNames.includes(sheetName)) return [];
+  const ws = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as unknown[][];
+  if (rows.length === 0) return [];
+  return (rows[0] || []).map(c => String(c ?? '').trim());
+}
+
+export function validarEstruturaExcel(file: ArrayBuffer): ValidacaoEstrutura {
+  const wb = XLSX.read(file, { type: 'array' });
+  const abasFaltando: string[] = [];
+  const colunasFaltando: { aba: string; colunas: string[] }[] = [];
+
+  for (const sheet of REQUIRED_SHEETS) {
+    if (!wb.SheetNames.includes(sheet)) {
+      abasFaltando.push(sheet);
+      continue;
+    }
+    const headers = getHeaderRow(wb, sheet);
+    const headersLower = headers.map(h => h.toLowerCase().replace(/[_\s]/g, ''));
+    const required = REQUIRED_COLUMNS[sheet];
+    const missing = required.filter(col => {
+      const colNorm = col.toLowerCase().replace(/[_\s]/g, '');
+      return !headersLower.includes(colNorm);
+    });
+    if (missing.length > 0) colunasFaltando.push({ aba: sheet, colunas: missing });
+  }
+
+  return { valido: abasFaltando.length === 0 && colunasFaltando.length === 0, abasFaltando, colunasFaltando };
+}
+
 // ── Parse all 4 sheets ──
 
 export function parseExcel(file: ArrayBuffer): ResultadoParsing {
