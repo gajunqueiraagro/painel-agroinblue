@@ -135,6 +135,9 @@ function FinanceiroCard({ financeiro, onTabChange }: { financeiro: ReturnType<ty
 }
 
 export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlobal, onFiltroChange }: Props) {
+  const { fazendaAtual } = useFazenda();
+  const fazendaNaoPecuaria = fazendaAtual && fazendaAtual.id !== '__global__' && fazendaAtual.tem_pecuaria === false;
+
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
