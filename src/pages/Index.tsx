@@ -95,7 +95,7 @@ const Index = () => {
       )}
 
       {activeTab === 'resumo' && <ResumoTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
-      {activeTab === 'zootecnico' && <ZootecnicoTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onBack={goToResumo} />}
+      {activeTab === 'zootecnico' && <ZootecnicoTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onBack={goToResumo} onTabChange={handleTabChange} />}
       {activeTab === 'movimentacao' && <MovimentacaoTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} />}
       {activeTab === 'lancamentos' && (
         <LancamentosTab

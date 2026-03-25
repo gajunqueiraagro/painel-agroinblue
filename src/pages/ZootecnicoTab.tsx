@@ -1,44 +1,51 @@
 /**
- * Tela Zootécnica — visão física e operacional do rebanho.
- * 6 blocos: KPIs, Estoque Mensal, Entradas, Saídas, Desfrute, Evolução.
+ * Painel Zootécnico — Central de Status + Ação.
+ * Blocos: Status, Estoque+Lotação, Produção, Gráficos.
  */
 import { useState, useMemo } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { MESES_NOMES } from '@/lib/calculos/labels';
+import { Card, CardContent } from '@/components/ui/card';
+import { MESES_NOMES, MESES_COLS } from '@/lib/calculos/labels';
 import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 import { calcSaldoPorCategoriaLegado, calcPesoMedioPonderado, calcUA, calcUAHa, calcAreaProdutivaPecuaria } from '@/lib/calculos/zootecnicos';
-import { calcArrobasSafe, calcDesfrute, calcDesfruteArrobas, calcArrobasIniciais, calcGMD } from '@/lib/calculos/economicos';
+import { calcArrobasSafe } from '@/lib/calculos/economicos';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
+import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
 import { usePastos } from '@/hooks/usePastos';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { useArrobasGlobal } from '@/hooks/useArrobasGlobal';
-import { resolverPesoOficial } from '@/hooks/useFechamentoCategoria';
+import { KpiCard } from '@/components/indicadores/KpiCard';
+import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';
+import { HistoricoComparativo } from '@/components/indicadores/HistoricoComparativo';
 import { TabId } from '@/components/BottomNav';
-import { ArrowLeft, ChevronDown, TrendingUp, TrendingDown, Beef, BarChart2, Activity } from 'lucide-react';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import {
+  ArrowLeft, ChevronRight, AlertTriangle, CheckCircle2, Circle,
+  BarChart2, TrendingUp, TrendingDown, Beef, Activity,
+} from 'lucide-react';
+import {
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, AreaChart, Area, Legend,
+} from 'recharts';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
-import { parseISO, format } from 'date-fns';
 
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
   onBack: () => void;
+  onTabChange?: (tab: TabId) => void;
 }
 
-const TIPOS_ENTRADA = ['nascimento', 'compra', 'transferencia_entrada'];
-const TIPOS_SAIDA = ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'];
+type Vista = 'mes' | 'acumulado';
+type SubView = 'main' | 'graficos-estoque' | 'graficos-producao';
 
-export function ZootecnicoTab({ lancamentos, saldosIniciais, onBack }: Props) {
-  const { fazendaAtual, isGlobal, fazendas } = useFazenda();
+export function ZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTabChange }: Props) {
+  const { fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
 
   const anosDisp = useMemo(() => {
     const set = new Set<string>();
     set.add(String(new Date().getFullYear()));
-    lancamentos.forEach(l => { try { set.add(format(parseISO(l.data), 'yyyy')); } catch {} });
+    lancamentos.forEach(l => { try { set.add(l.data.substring(0, 4)); } catch {} });
     saldosIniciais.forEach(s => set.add(String(s.ano)));
     return Array.from(set).sort().reverse();
   }, [lancamentos, saldosIniciais]);
@@ -46,169 +53,49 @@ export function ZootecnicoTab({ lancamentos, saldosIniciais, onBack }: Props) {
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const anoNum = Number(anoFiltro);
   const mesDefault = anoNum === new Date().getFullYear() ? new Date().getMonth() + 1 : 12;
-  const [mesLimite, setMesLimite] = useState(mesDefault);
+  const [mesFiltro, setMesFiltro] = useState(mesDefault);
+  const [vista, setVista] = useState<Vista>('mes');
+  const [subView, setSubView] = useState<SubView>('main');
 
   const handleAnoChange = (val: string) => {
     setAnoFiltro(val);
     const n = Number(val);
-    setMesLimite(n === new Date().getFullYear() ? new Date().getMonth() + 1 : 12);
+    setMesFiltro(n === new Date().getFullYear() ? new Date().getMonth() + 1 : 12);
   };
 
-  const zoo = useIndicadoresZootecnicos(fazendaId, anoNum, mesLimite, lancamentos, saldosIniciais, pastos, categorias);
+  const zoo = useIndicadoresZootecnicos(fazendaId, anoNum, mesFiltro, lancamentos, saldosIniciais, pastos, categorias);
+  const statusZoo = useStatusZootecnico(fazendaId, anoNum, mesFiltro, lancamentos, saldosIniciais);
 
-  // ---- Estoque Mensal ----
-  const estoqueMensal = useMemo(() => {
-    const areaPec = calcAreaProdutivaPecuaria(pastos);
-    const rows: any[] = [];
-    let sumCab = 0, sumArrobas = 0, sumValor = 0, sumLotacao = 0, sumGmd = 0;
-    let countLotacao = 0, countGmd = 0;
-    let sumPesoPonderado = 0, sumCabPeso = 0;
+  const mesLabel = MESES_COLS.find(m => m.key === String(mesFiltro).padStart(2, '0'))?.label || '';
 
-    for (let m = 1; m <= mesLimite; m++) {
-      const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, anoNum, m);
-      const cabFinal = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
-      const saldoMapAnt = m > 1
-        ? calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, anoNum, m - 1)
-        : null;
-      const cabAnt = saldoMapAnt
-        ? Array.from(saldoMapAnt.values()).reduce((s, v) => s + v, 0)
-        : saldosIniciais.filter(s => s.ano === anoNum).reduce((s, si) => s + si.quantidade, 0);
-      const cabMedia = (cabAnt + cabFinal) / 2;
+  // Peso total derived
+  const pesoTotalKg = zoo.saldoFinalMes > 0 && zoo.pesoMedioRebanhoKg !== null
+    ? zoo.saldoFinalMes * zoo.pesoMedioRebanhoKg : null;
+  const arrobasTotalEstoque = pesoTotalKg ? pesoTotalKg / 30 : null;
+  const kgHa = pesoTotalKg && zoo.areaProdutiva > 0 ? pesoTotalKg / zoo.areaProdutiva : null;
+  const rsCab = zoo.valorRebanho !== null && zoo.saldoFinalMes > 0 ? zoo.valorRebanho / zoo.saldoFinalMes : null;
+  const rsArroba = zoo.valorRebanho !== null && arrobasTotalEstoque ? zoo.valorRebanho / arrobasTotalEstoque : null;
 
-      // Peso médio simples (sem async) — usa saldos iniciais como fallback
-      const itens = Array.from(saldoMap.entries())
-        .filter(([, q]) => q > 0)
-        .map(([cat, q]) => {
-          const si = saldosIniciais.find(s => s.ano === anoNum && s.categoria === cat);
-          return { quantidade: q, pesoKg: si?.pesoMedioKg ?? null };
-        });
-      const pesoMedio = calcPesoMedioPonderado(itens);
-      const arrobas = pesoMedio ? (cabFinal * pesoMedio) / 30 : null;
-      const lotacao = calcUAHa(calcUA(cabFinal, pesoMedio), areaPec);
+  // Helpers for navigation
+  const navTo = (tab: TabId) => {
+    if (onTabChange) onTabChange(tab);
+  };
 
-      sumCab += cabFinal;
-      if (arrobas) sumArrobas += arrobas;
-      if (pesoMedio && cabFinal > 0) { sumPesoPonderado += pesoMedio * cabFinal; sumCabPeso += cabFinal; }
-      if (lotacao) { sumLotacao += lotacao; countLotacao++; }
-
-      rows.push({
-        mes: MESES_NOMES[m - 1],
-        cabFinal,
-        cabMedia: Math.round(cabMedia),
-        pesoMedio,
-        arrobas,
-        lotacao,
-        gmd: null, // simplified
-        valorRebanho: null,
-      });
-    }
-
-    const pesoMedioTotal = sumCabPeso > 0 ? sumPesoPonderado / sumCabPeso : null;
-    const lotacaoMedia = countLotacao > 0 ? sumLotacao / countLotacao : null;
-
-    return { rows, sumCab, sumArrobas, pesoMedioTotal, lotacaoMedia };
-  }, [saldosIniciais, lancamentos, anoNum, mesLimite, pastos]);
-
-  // ---- Movimentações agrupadas ----
-  const movimentacoes = useMemo(() => {
-    const lancsAno = lancamentos.filter(l => {
-      try {
-        const d = parseISO(l.data);
-        return d.getFullYear() === anoNum && d.getMonth() + 1 <= mesLimite;
-      } catch { return false; }
-    });
-
-    const porTipo = (tipos: string[]) => {
-      const filtrados = lancsAno.filter(l => tipos.includes(l.tipo));
-      const cab = filtrados.reduce((s, l) => s + l.quantidade, 0);
-      const pesoTotal = filtrados.reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
-      const arrobas = filtrados.reduce((s, l) => s + calcArrobasSafe(l), 0);
-      const pesoMedio = cab > 0 ? pesoTotal / cab : null;
-      return { cab, pesoMedio, arrobas };
-    };
-
-    const porMes = (tipos: string[]) => {
-      const result: { mes: string; cab: number }[] = [];
-      for (let m = 1; m <= mesLimite; m++) {
-        const mesStr = `${anoNum}-${String(m).padStart(2, '0')}`;
-        const cab = lancsAno.filter(l => l.data.startsWith(mesStr) && tipos.includes(l.tipo))
-          .reduce((s, l) => s + l.quantidade, 0);
-        result.push({ mes: MESES_NOMES[m - 1], cab });
-      }
-      return result;
-    };
-
-    return {
-      nascimentos: porTipo(['nascimento']),
-      compras: porTipo(['compra']),
-      transfEntrada: porTipo(['transferencia_entrada']),
-      vendas: porTipo(['venda']),
-      abates: porTipo(['abate']),
-      consumo: porTipo(['consumo']),
-      mortes: porTipo(['morte']),
-      transfSaida: porTipo(['transferencia_saida']),
-      entradasMes: porMes(TIPOS_ENTRADA),
-      saidasMes: porMes(TIPOS_SAIDA),
-      totalEntradas: porTipo(TIPOS_ENTRADA),
-      totalSaidas: porTipo(TIPOS_SAIDA),
-    };
-  }, [lancamentos, anoNum, mesLimite]);
-
-  // ---- Evolução ----
-  const evolucao = useMemo(() => {
-    const data: { mes: string; cabecas: number; arrobas: number | null; pesoMedio: number | null }[] = [];
-    for (let m = 1; m <= mesLimite; m++) {
-      const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, anoNum, m);
-      const cab = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
-      const itens = Array.from(saldoMap.entries())
-        .filter(([, q]) => q > 0)
-        .map(([cat, q]) => {
-          const si = saldosIniciais.find(s => s.ano === anoNum && s.categoria === cat);
-          return { quantidade: q, pesoKg: si?.pesoMedioKg ?? null };
-        });
-      const pm = calcPesoMedioPonderado(itens);
-      data.push({
-        mes: MESES_NOMES[m - 1],
-        cabecas: cab,
-        arrobas: pm ? (cab * pm) / 30 : null,
-        pesoMedio: pm,
-      });
-    }
-    return data;
-  }, [saldosIniciais, lancamentos, anoNum, mesLimite]);
-
-  const [openBlock, setOpenBlock] = useState<string | null>(null);
-  const toggle = (id: string) => setOpenBlock(prev => prev === id ? null : id);
-
-  const KpiMini = ({ label, value }: { label: string; value: string }) => (
-    <div className="text-center">
-      <p className="text-[10px] text-muted-foreground font-semibold">{label}</p>
-      <p className="text-sm font-extrabold text-foreground">{value}</p>
-    </div>
-  );
-
-  const MovCard = ({ label, cab, peso, arrobas, emoji }: { label: string; cab: number; peso: number | null; arrobas: number; emoji: string }) => (
-    <div className="bg-card border rounded-lg p-3 space-y-1">
-      <div className="flex items-center gap-1.5">
-        <span>{emoji}</span>
-        <span className="text-xs font-bold text-foreground">{label}</span>
-      </div>
-      <div className="grid grid-cols-3 gap-2 text-center">
-        <div>
-          <p className="text-[10px] text-muted-foreground">Cabeças</p>
-          <p className="text-sm font-extrabold">{formatNum(cab)}</p>
-        </div>
-        <div>
-          <p className="text-[10px] text-muted-foreground">Peso Méd.</p>
-          <p className="text-sm font-bold">{peso ? `${formatNum(peso, 0)} kg` : '—'}</p>
-        </div>
-        <div>
-          <p className="text-[10px] text-muted-foreground">Arrobas</p>
-          <p className="text-sm font-bold">{formatNum(arrobas, 1)}</p>
-        </div>
-      </div>
-    </div>
-  );
+  // Sub-view: Graficos
+  if (subView !== 'main') {
+    return (
+      <GraficosView
+        subView={subView}
+        onBack={() => setSubView('main')}
+        zoo={zoo}
+        lancamentos={lancamentos}
+        saldosIniciais={saldosIniciais}
+        anoNum={anoNum}
+        mesFiltro={mesFiltro}
+        pastos={pastos}
+      />
+    );
+  }
 
   return (
     <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
@@ -228,247 +115,433 @@ export function ZootecnicoTab({ lancamentos, saldosIniciais, onBack }: Props) {
             {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Select value={String(mesLimite)} onValueChange={v => setMesLimite(Number(v))}>
-          <SelectTrigger className="w-32 text-sm font-bold"><SelectValue /></SelectTrigger>
+        <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
+          <SelectTrigger className="w-28 text-sm font-bold"><SelectValue /></SelectTrigger>
           <SelectContent>
-            {Array.from({ length: 12 }, (_, i) => (
-              <SelectItem key={i + 1} value={String(i + 1)}>Até {MESES_NOMES[i]}</SelectItem>
+            {MESES_COLS.map((m, i) => (
+              <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <span className="text-[10px] text-muted-foreground">Jan → {MESES_NOMES[mesLimite - 1]}</span>
       </div>
 
-      {/* BLOCO 1 — KPIs */}
-      <div className="bg-primary rounded-xl p-4 shadow-md">
-        <div className="flex items-center gap-2 mb-3">
-          <Beef className="h-6 w-6 text-primary-foreground" />
-          <span className="text-primary-foreground font-extrabold text-lg">Resumo do Rebanho</span>
-        </div>
-        <div className="grid grid-cols-4 gap-2">
-          <div className="text-center">
-            <p className="text-[10px] text-primary-foreground/70 font-semibold">Cab. Finais</p>
-            <p className="text-lg font-extrabold text-primary-foreground">{formatNum(zoo.saldoFinalMes)}</p>
+      {/* ===== BLOCO 1: STATUS ZOOTÉCNICO ===== */}
+      <Card className={`border-l-4 ${statusZoo.status === 'fechado' ? 'border-l-emerald-500' : statusZoo.status === 'parcial' ? 'border-l-amber-500' : 'border-l-destructive'}`}>
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Status Zootécnico</h3>
+            <StatusBadge status={statusZoo.status} />
           </div>
-          <div className="text-center">
-            <p className="text-[10px] text-primary-foreground/70 font-semibold">Peso Médio</p>
-            <p className="text-lg font-extrabold text-primary-foreground">{zoo.pesoMedioRebanhoKg ? `${formatNum(zoo.pesoMedioRebanhoKg, 0)}` : '—'}</p>
-            <p className="text-[9px] text-primary-foreground/60">kg</p>
-          </div>
-          <div className="text-center">
-            <p className="text-[10px] text-primary-foreground/70 font-semibold">Lotação</p>
-            <p className="text-lg font-extrabold text-primary-foreground">{zoo.uaHa ? formatNum(zoo.uaHa, 2) : '—'}</p>
-            <p className="text-[9px] text-primary-foreground/60">UA/ha</p>
-          </div>
-          <div className="text-center">
-            <p className="text-[10px] text-primary-foreground/70 font-semibold">GMD</p>
-            <p className="text-lg font-extrabold text-primary-foreground">{zoo.gmdAcumulado ? formatNum(zoo.gmdAcumulado, 3) : '—'}</p>
-            <p className="text-[9px] text-primary-foreground/60">kg/dia</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-primary-foreground/20">
-          <div className="text-center">
-            <p className="text-[10px] text-primary-foreground/70 font-semibold">@ Produzidas</p>
-            <p className="text-sm font-extrabold text-primary-foreground">{zoo.arrobasProduzidasAcumulado ? formatNum(zoo.arrobasProduzidasAcumulado, 0) : '—'}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-[10px] text-primary-foreground/70 font-semibold">Valor Rebanho</p>
-            <p className="text-sm font-extrabold text-primary-foreground">{zoo.valorRebanho ? formatMoeda(zoo.valorRebanho) : '—'}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-[10px] text-primary-foreground/70 font-semibold">Desfrute @</p>
-            <p className="text-sm font-extrabold text-primary-foreground">{zoo.desfruteArrobasAcumulado ? `${formatNum(zoo.desfruteArrobasAcumulado, 1)}%` : '—'}</p>
-          </div>
-        </div>
+
+          {statusZoo.pendencias.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                {statusZoo.pendencias.length} pendência(s) para fechar o mês
+              </p>
+              {statusZoo.pendencias.map(p => (
+                <div key={p.id} className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-foreground truncate">{p.label}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{p.descricao}</p>
+                    </div>
+                  </div>
+                  {p.resolverTab && (
+                    <button
+                      onClick={() => navTo(p.resolverTab as TabId)}
+                      className="text-[10px] font-bold text-primary whitespace-nowrap flex items-center gap-0.5 hover:underline"
+                    >
+                      Resolver <ChevronRight className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-xs text-emerald-600">
+              <CheckCircle2 className="h-4 w-4" />
+              <span className="font-semibold">Mês completamente fechado</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Toggle Mês | Acumulado */}
+      <div className="flex bg-muted rounded-lg p-0.5">
+        <button
+          onClick={() => setVista('mes')}
+          className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-colors ${vista === 'mes' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
+        >
+          {mesLabel}
+        </button>
+        <button
+          onClick={() => setVista('acumulado')}
+          className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-colors ${vista === 'acumulado' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
+        >
+          Acumulado
+        </button>
       </div>
 
-      {/* BLOCO 2 — Estoque Mensal */}
-      <Collapsible open={openBlock === 'estoque'} onOpenChange={() => toggle('estoque')}>
-        <CollapsibleTrigger className="w-full bg-card border rounded-lg p-3 flex items-center justify-between">
-          <span className="font-bold text-foreground text-sm">📋 Estoque Mensal</span>
-          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${openBlock === 'estoque' ? 'rotate-180' : ''}`} />
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <div className="overflow-x-auto mt-2 border rounded-lg">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs font-bold whitespace-nowrap">Mês</TableHead>
-                  <TableHead className="text-xs font-bold text-right whitespace-nowrap">Cab Final</TableHead>
-                  <TableHead className="text-xs font-bold text-right whitespace-nowrap">Cab Média</TableHead>
-                  <TableHead className="text-xs font-bold text-right whitespace-nowrap">Peso Méd.</TableHead>
-                  <TableHead className="text-xs font-bold text-right whitespace-nowrap">@ Total</TableHead>
-                  <TableHead className="text-xs font-bold text-right whitespace-nowrap">Lotação</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {estoqueMensal.rows.map((r: any, i: number) => (
-                  <TableRow key={i}>
-                    <TableCell className="text-xs font-semibold">{r.mes}</TableCell>
-                    <TableCell className="text-xs text-right tabular-nums">{formatNum(r.cabFinal)}</TableCell>
-                    <TableCell className="text-xs text-right tabular-nums">{formatNum(r.cabMedia)}</TableCell>
-                    <TableCell className="text-xs text-right tabular-nums">{r.pesoMedio ? formatNum(r.pesoMedio, 0) : '—'}</TableCell>
-                    <TableCell className="text-xs text-right tabular-nums">{r.arrobas ? formatNum(r.arrobas, 0) : '—'}</TableCell>
-                    <TableCell className="text-xs text-right tabular-nums">{r.lotacao ? formatNum(r.lotacao, 2) : '—'}</TableCell>
-                  </TableRow>
-                ))}
-                {/* Linha totalizadora */}
-                <TableRow className="bg-muted/50 font-bold">
-                  <TableCell className="text-xs font-extrabold">Total / Média</TableCell>
-                  <TableCell className="text-xs text-right font-extrabold tabular-nums">
-                    {formatNum(estoqueMensal.rows[estoqueMensal.rows.length - 1]?.cabFinal ?? 0)}
-                    <span className="text-[9px] text-muted-foreground ml-1">(último)</span>
-                  </TableCell>
-                  <TableCell className="text-xs text-right font-extrabold tabular-nums">
-                    {formatNum(Math.round(estoqueMensal.sumCab / mesLimite))}
-                    <span className="text-[9px] text-muted-foreground ml-1">(média)</span>
-                  </TableCell>
-                  <TableCell className="text-xs text-right font-extrabold tabular-nums">
-                    {estoqueMensal.pesoMedioTotal ? formatNum(estoqueMensal.pesoMedioTotal, 0) : '—'}
-                    <span className="text-[9px] text-muted-foreground ml-1">(pond.)</span>
-                  </TableCell>
-                  <TableCell className="text-xs text-right font-extrabold tabular-nums">
-                    {formatNum(estoqueMensal.sumArrobas, 0)}
-                    <span className="text-[9px] text-muted-foreground ml-1">(soma)</span>
-                  </TableCell>
-                  <TableCell className="text-xs text-right font-extrabold tabular-nums">
-                    {estoqueMensal.lotacaoMedia ? formatNum(estoqueMensal.lotacaoMedia, 2) : '—'}
-                    <span className="text-[9px] text-muted-foreground ml-1">(média)</span>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+      {/* ===== BLOCO 2: ESTOQUE + LOTAÇÃO ===== */}
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
+              Estoque {vista === 'mes' ? mesLabel : `Jan → ${mesLabel}`}
+            </h3>
+            <button
+              onClick={() => setSubView('graficos-estoque')}
+              className="text-[10px] text-primary font-bold flex items-center gap-0.5 hover:underline"
+            >
+              Ver gráficos <ChevronRight className="h-3 w-3" />
+            </button>
           </div>
-        </CollapsibleContent>
-      </Collapsible>
-
-      {/* BLOCO 3 — Entradas */}
-      <Collapsible open={openBlock === 'entradas'} onOpenChange={() => toggle('entradas')}>
-        <CollapsibleTrigger className="w-full bg-card border rounded-lg p-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-emerald-600" />
-            <span className="font-bold text-foreground text-sm">Entradas</span>
-            <span className="text-xs font-extrabold text-emerald-600">+{formatNum(movimentacoes.totalEntradas.cab)}</span>
+          <div className="grid grid-cols-3 gap-3">
+            <KpiCard label="Cabeças" valor={formatNum(zoo.saldoFinalMes)} unidade="cab"
+              comparacao={zoo.comparacoes.saldoFinalMes} />
+            <KpiCard label="Peso Médio" 
+              valor={zoo.pesoMedioRebanhoKg !== null ? formatNum(zoo.pesoMedioRebanhoKg, 1) : '—'}
+              unidade="kg" estimado={zoo.qualidade.pesoMedioEstimado}
+              comparacao={zoo.comparacoes.pesoMedioRebanhoKg}
+              semBase={zoo.pesoMedioRebanhoKg === null} />
+            <KpiCard label="Valor Rebanho"
+              valor={zoo.valorRebanho !== null ? formatMoedaCompacto(zoo.valorRebanho) : '—'}
+              comparacao={zoo.comparacoes.valorRebanho}
+              semBase={zoo.valorRebanho === null} />
           </div>
-          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${openBlock === 'entradas' ? 'rotate-180' : ''}`} />
-        </CollapsibleTrigger>
-        <CollapsibleContent className="space-y-2 mt-2">
-          <MovCard label="Nascimentos" emoji="🐄" {...movimentacoes.nascimentos} peso={movimentacoes.nascimentos.pesoMedio} />
-          <MovCard label="Compras" emoji="🛒" {...movimentacoes.compras} peso={movimentacoes.compras.pesoMedio} />
-          <MovCard label="Transf. Entrada" emoji="📥" {...movimentacoes.transfEntrada} peso={movimentacoes.transfEntrada.pesoMedio} />
+          <div className="grid grid-cols-3 gap-3">
+            <KpiCard label="R$/cab"
+              valor={rsCab !== null ? formatMoeda(rsCab) : '—'} small
+              semBase={rsCab === null} />
+            <KpiCard label="R$/@"
+              valor={rsArroba !== null ? formatMoeda(rsArroba) : '—'} small
+              semBase={rsArroba === null} />
+            <KpiCard label="Área Prod."
+              valor={formatNum(zoo.areaProdutiva, 1)} unidade="ha"
+              estimado={zoo.qualidade.areaProdutivaEstimativa} />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <KpiCard label="UA/ha"
+              valor={zoo.uaHa !== null ? formatNum(zoo.uaHa, 2) : '—'}
+              comparacao={zoo.comparacoes.uaHa}
+              semBase={zoo.uaHa === null} />
+            <KpiCard label="Kg/ha"
+              valor={kgHa !== null ? formatNum(kgHa, 0) : '—'}
+              semBase={kgHa === null} />
+            <KpiCard label="UA/ha méd."
+              valor={zoo.uaHaMediaAno !== null ? formatNum(zoo.uaHaMediaAno, 2) : '—'}
+              comparacao={zoo.comparacoes.uaHaMediaAno}
+              semBase={zoo.uaHaMediaAno === null} small />
+          </div>
+        </CardContent>
+      </Card>
 
-          {movimentacoes.entradasMes.some(m => m.cab > 0) && (
-            <div className="h-40">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={movimentacoes.entradasMes}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip />
-                  <Bar dataKey="cab" name="Cabeças" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+      {/* ===== BLOCO 3: PRODUÇÃO ===== */}
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
+              Produção {vista === 'mes' ? mesLabel : `Acumulado`}
+            </h3>
+            <button
+              onClick={() => setSubView('graficos-producao')}
+              className="text-[10px] text-primary font-bold flex items-center gap-0.5 hover:underline"
+            >
+              Ver gráficos <ChevronRight className="h-3 w-3" />
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {vista === 'mes' ? (
+              <>
+                <KpiCard label="@ produzidas"
+                  valor={zoo.arrobasProduzidasMes !== null ? formatNum(zoo.arrobasProduzidasMes, 1) : '—'}
+                  unidade="@" semBase={zoo.arrobasProduzidasMes === null} />
+                <KpiCard label="GMD"
+                  valor={zoo.gmdMes !== null ? formatNum(zoo.gmdMes, 3) : '—'}
+                  unidade="kg/dia" comparacao={zoo.comparacoes.gmdMes} />
+                <KpiCard label="@ saídas"
+                  valor={formatNum(zoo.arrobasSaidasMes, 1)} unidade="@"
+                  comparacao={zoo.comparacoes.arrobasSaidasMes} />
+              </>
+            ) : (
+              <>
+                <KpiCard label="@ produzidas"
+                  valor={zoo.arrobasProduzidasAcumulado !== null ? formatNum(zoo.arrobasProduzidasAcumulado, 1) : '—'}
+                  unidade="@" comparacao={zoo.comparacoes.arrobasProduzidasAcumulado}
+                  semBase={zoo.arrobasProduzidasAcumulado === null} />
+                <KpiCard label="@/ha"
+                  valor={zoo.arrobasHaAcumuladoAno !== null ? formatNum(zoo.arrobasHaAcumuladoAno, 2) : '—'}
+                  comparacao={zoo.comparacoes.arrobasHaAcumuladoAno}
+                  semBase={zoo.arrobasHaAcumuladoAno === null} />
+                <KpiCard label="GMD acum."
+                  valor={zoo.gmdAcumulado !== null ? formatNum(zoo.gmdAcumulado, 3) : '—'}
+                  unidade="kg/dia" comparacao={zoo.comparacoes.gmdAcumulado} />
+              </>
+            )}
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <KpiCard label="Desfrute cab."
+              valor={vista === 'mes'
+                ? (zoo.desfruteCabecasMes !== null ? formatNum(zoo.desfruteCabecasMes, 1) : '—')
+                : (zoo.desfruteCabecasAcumulado !== null ? formatNum(zoo.desfruteCabecasAcumulado, 1) : '—')}
+              unidade="%"
+              comparacao={vista === 'acumulado' ? zoo.comparacoes.desfruteCabecasAcumulado : null}
+              semBase={vista === 'mes' ? zoo.desfruteCabecasMes === null : zoo.desfruteCabecasAcumulado === null} />
+            <KpiCard label="Desfrute @"
+              valor={vista === 'mes'
+                ? (zoo.desfruteArrobasMes !== null ? formatNum(zoo.desfruteArrobasMes, 1) : '—')
+                : (zoo.desfruteArrobasAcumulado !== null ? formatNum(zoo.desfruteArrobasAcumulado, 1) : '—')}
+              unidade="%"
+              comparacao={vista === 'acumulado' ? zoo.comparacoes.desfruteArrobasAcumulado : null}
+              semBase={vista === 'mes' ? zoo.desfruteArrobasMes === null : zoo.desfruteArrobasAcumulado === null} />
+            <KpiCard label="@ desfrutadas"
+              valor={formatNum(zoo.arrobasSaidasAcumuladoAno, 1)} unidade="@"
+              comparacao={zoo.comparacoes.arrobasDesfrutadasAcum} />
+          </div>
+
+          {/* GMD detail */}
+          {zoo.qualidade.gmdDisponivel && (
+            <GmdDetalheSheet abertura={zoo.gmdAberturaMes} mesLabel={mesLabel} anoLabel={anoFiltro} />
           )}
-        </CollapsibleContent>
-      </Collapsible>
+        </CardContent>
+      </Card>
 
-      {/* BLOCO 4 — Saídas */}
-      <Collapsible open={openBlock === 'saidas'} onOpenChange={() => toggle('saidas')}>
-        <CollapsibleTrigger className="w-full bg-card border rounded-lg p-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <TrendingDown className="h-4 w-4 text-destructive" />
-            <span className="font-bold text-foreground text-sm">Saídas</span>
-            <span className="text-xs font-extrabold text-destructive">-{formatNum(movimentacoes.totalSaidas.cab)}</span>
-          </div>
-          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${openBlock === 'saidas' ? 'rotate-180' : ''}`} />
-        </CollapsibleTrigger>
-        <CollapsibleContent className="space-y-2 mt-2">
-          <MovCard label="Vendas" emoji="💰" {...movimentacoes.vendas} peso={movimentacoes.vendas.pesoMedio} />
-          <MovCard label="Abates" emoji="🔪" {...movimentacoes.abates} peso={movimentacoes.abates.pesoMedio} />
-          <MovCard label="Consumo" emoji="🍖" {...movimentacoes.consumo} peso={movimentacoes.consumo.pesoMedio} />
-          <MovCard label="Mortes" emoji="💀" {...movimentacoes.mortes} peso={movimentacoes.mortes.pesoMedio} />
-          <MovCard label="Transf. Saída" emoji="📤" {...movimentacoes.transfSaida} peso={movimentacoes.transfSaida.pesoMedio} />
+      {/* ===== BLOCO 4: Histórico Comparativo ===== */}
+      <HistoricoComparativo
+        historico={zoo.historico}
+        comparacoesHistorico={zoo.comparacoesHistorico}
+        mesAtual={mesFiltro}
+      />
 
-          {movimentacoes.saidasMes.some(m => m.cab > 0) && (
-            <div className="h-40">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={movimentacoes.saidasMes}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip />
-                  <Bar dataKey="cab" name="Cabeças" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </CollapsibleContent>
-      </Collapsible>
+      {/* Alertas */}
+      {zoo.qualidade.pesoMedioEstimado && (
+        <div className="flex items-start gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 rounded-md">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <span>Peso médio estimado — realize fechamento de pastos para maior precisão</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
-      {/* BLOCO 5 — Desfrute */}
-      <Collapsible open={openBlock === 'desfrute'} onOpenChange={() => toggle('desfrute')}>
-        <CollapsibleTrigger className="w-full bg-card border rounded-lg p-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Activity className="h-4 w-4 text-amber-600" />
-            <span className="font-bold text-foreground text-sm">Desfrute</span>
-          </div>
-          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${openBlock === 'desfrute' ? 'rotate-180' : ''}`} />
-        </CollapsibleTrigger>
-        <CollapsibleContent className="mt-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-card border rounded-lg p-3 text-center">
-              <p className="text-[10px] text-muted-foreground font-semibold">Desfrute Cab. Acum.</p>
-              <p className="text-xl font-extrabold">{zoo.desfruteCabecasAcumulado ? `${formatNum(zoo.desfruteCabecasAcumulado, 1)}%` : '—'}</p>
-            </div>
-            <div className="bg-card border rounded-lg p-3 text-center">
-              <p className="text-[10px] text-muted-foreground font-semibold">Desfrute @ Acum.</p>
-              <p className="text-xl font-extrabold">{zoo.desfruteArrobasAcumulado ? `${formatNum(zoo.desfruteArrobasAcumulado, 1)}%` : '—'}</p>
-            </div>
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
 
-      {/* BLOCO 6 — Evolução */}
-      <Collapsible open={openBlock === 'evolucao'} onOpenChange={() => toggle('evolucao')}>
-        <CollapsibleTrigger className="w-full bg-card border rounded-lg p-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <BarChart2 className="h-4 w-4 text-blue-600" />
-            <span className="font-bold text-foreground text-sm">Evolução do Rebanho</span>
-          </div>
-          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${openBlock === 'evolucao' ? 'rotate-180' : ''}`} />
-        </CollapsibleTrigger>
-        <CollapsibleContent className="mt-2 space-y-3">
-          {evolucao.length > 0 && (
+function StatusBadge({ status }: { status: 'aberto' | 'parcial' | 'fechado' }) {
+  const config = {
+    aberto: { emoji: '🔴', label: 'Em aberto', className: 'bg-destructive/15 text-destructive' },
+    parcial: { emoji: '🟡', label: 'Parcial', className: 'bg-amber-500/15 text-amber-700 dark:text-amber-400' },
+    fechado: { emoji: '🟢', label: 'Fechado', className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' },
+  };
+  const c = config[status];
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${c.className}`}>
+      {c.emoji} {c.label}
+    </span>
+  );
+}
+
+function formatMoedaCompacto(val: number): string {
+  if (val >= 1_000_000) return `R$ ${formatNum(val / 1_000_000, 2)}M`;
+  if (val >= 1_000) return `R$ ${formatNum(val / 1_000, 1)}mil`;
+  return formatMoeda(val);
+}
+
+// ---------------------------------------------------------------------------
+// Gráficos Sub-View
+// ---------------------------------------------------------------------------
+
+interface GraficosProps {
+  subView: SubView;
+  onBack: () => void;
+  zoo: ReturnType<typeof useIndicadoresZootecnicos>;
+  lancamentos: Lancamento[];
+  saldosIniciais: SaldoInicial[];
+  anoNum: number;
+  mesFiltro: number;
+  pastos: any[];
+}
+
+function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNum, mesFiltro, pastos }: GraficosProps) {
+  const isEstoque = subView === 'graficos-estoque';
+  const TIPOS_SAIDA_DESFRUTE = ['abate', 'venda', 'consumo', 'transferencia_saida'];
+
+  // Build monthly data for 2 years
+  const chartData = useMemo(() => {
+    const buildYear = (ano: number) => {
+      const data: any[] = [];
+      for (let m = 1; m <= 12; m++) {
+        const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, m);
+        const cab = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
+        const itens = Array.from(saldoMap.entries())
+          .filter(([, q]) => q > 0)
+          .map(([cat, q]) => {
+            const si = saldosIniciais.find(s => s.ano === ano && s.categoria === cat);
+            return { quantidade: q, pesoKg: si?.pesoMedioKg ?? null };
+          });
+        const pm = calcPesoMedioPonderado(itens);
+        const arrobas = pm ? (cab * pm) / 30 : null;
+        const areaPec = calcAreaProdutivaPecuaria(pastos);
+        const kgha = pm && areaPec > 0 ? (cab * pm) / areaPec : null;
+
+        // Saídas do mês
+        const mesStr = `${ano}-${String(m).padStart(2, '0')}`;
+        const saidasMes = lancamentos
+          .filter(l => l.data.startsWith(mesStr) && TIPOS_SAIDA_DESFRUTE.includes(l.tipo));
+        const arrobasSaidas = saidasMes.reduce((s, l) => s + calcArrobasSafe(l), 0);
+
+        data.push({
+          mes: MESES_NOMES[m - 1],
+          cabecas: cab,
+          arrobas: arrobas ? Math.round(arrobas) : null,
+          kgHa: kgha ? Math.round(kgha) : null,
+          arrobasSaidas: Math.round(arrobasSaidas),
+        });
+      }
+      return data;
+    };
+
+    const atual = buildYear(anoNum);
+    const anterior = buildYear(anoNum - 1);
+
+    return MESES_NOMES.map((mes, i) => ({
+      mes,
+      [`cab_${anoNum}`]: atual[i]?.cabecas ?? 0,
+      [`cab_${anoNum - 1}`]: anterior[i]?.cabecas ?? 0,
+      [`kgHa_${anoNum}`]: atual[i]?.kgHa,
+      [`kgHa_${anoNum - 1}`]: anterior[i]?.kgHa,
+      [`arrSaida_${anoNum}`]: atual[i]?.arrobasSaidas ?? 0,
+      [`arrSaida_${anoNum - 1}`]: anterior[i]?.arrobasSaidas ?? 0,
+    }));
+  }, [lancamentos, saldosIniciais, anoNum, pastos]);
+
+  // GMD / desfrute from historico
+  const gmdData = useMemo(() => {
+    if (!zoo.historico || zoo.historico.length < 2) return [];
+    const anoAtual = zoo.historico.find(h => h.ano === anoNum);
+    const anoAnt = zoo.historico.find(h => h.ano === anoNum - 1);
+    if (!anoAtual) return [];
+    return anoAtual.meses.map((m, i) => ({
+      mes: MESES_NOMES[m.mes - 1],
+      [`gmd_${anoNum}`]: m.gmdAcumulado,
+      [`gmd_${anoNum - 1}`]: anoAnt?.meses[i]?.gmdAcumulado ?? null,
+      [`desfCab_${anoNum}`]: m.desfruteCabAcum,
+      [`desfCab_${anoNum - 1}`]: anoAnt?.meses[i]?.desfruteCabAcum ?? null,
+      [`arrProd_${anoNum}`]: m.arrobasProduzidasAcum ? Math.round(m.arrobasProduzidasAcum) : null,
+      [`arrProd_${anoNum - 1}`]: anoAnt?.meses[i]?.arrobasProduzidasAcum ? Math.round(anoAnt.meses[i].arrobasProduzidasAcum!) : null,
+    }));
+  }, [zoo.historico, anoNum]);
+
+  return (
+    <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
+      <div className="flex items-center gap-2">
+        <button onClick={onBack} className="p-1.5 rounded-md hover:bg-muted transition-colors">
+          <ArrowLeft className="h-5 w-5 text-foreground" />
+        </button>
+        <h1 className="text-lg font-extrabold text-foreground">
+          {isEstoque ? '📊 Gráficos — Estoque' : '📊 Gráficos — Produção'}
+        </h1>
+      </div>
+
+      {isEstoque ? (
+        <>
+          <ChartCard title="Rebanho Mensal (cab)" data={chartData}
+            keys={[`cab_${anoNum}`, `cab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
+            type="area" />
+          <ChartCard title="Kg/ha" data={chartData}
+            keys={[`kgHa_${anoNum}`, `kgHa_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
+            type="line" />
+        </>
+      ) : (
+        <>
+          <ChartCard title="@ Saídas por Mês" data={chartData}
+            keys={[`arrSaida_${anoNum}`, `arrSaida_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
+            type="bar" />
+          {gmdData.length > 0 && (
             <>
-              <p className="text-xs font-bold text-muted-foreground">Cabeças por mês</p>
-              <div className="h-40">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={evolucao}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip />
-                    <Area type="monotone" dataKey="cabecas" name="Cabeças" fill="hsl(var(--primary))" fillOpacity={0.3} stroke="hsl(var(--primary))" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-              <p className="text-xs font-bold text-muted-foreground">Peso Médio (kg) por mês</p>
-              <div className="h-40">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={evolucao.filter(d => d.pesoMedio !== null)}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="pesoMedio" name="Peso Médio (kg)" stroke="hsl(var(--destructive))" strokeWidth={2} dot={{ r: 3 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+              <ChartCard title="@ Produzidas (acumulado)" data={gmdData}
+                keys={[`arrProd_${anoNum}`, `arrProd_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
+                type="line" />
+              <ChartCard title="GMD Acumulado (kg/dia)" data={gmdData}
+                keys={[`gmd_${anoNum}`, `gmd_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
+                type="line" decimals={3} />
+              <ChartCard title="Desfrute Cab. Acumulado (%)" data={gmdData}
+                keys={[`desfCab_${anoNum}`, `desfCab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
+                type="line" decimals={1} />
             </>
           )}
-        </CollapsibleContent>
-      </Collapsible>
+        </>
+      )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Generic Chart Card
+// ---------------------------------------------------------------------------
+
+interface ChartCardProps {
+  title: string;
+  data: any[];
+  keys: string[];
+  labels: string[];
+  type: 'area' | 'line' | 'bar';
+  decimals?: number;
+}
+
+const COLORS = ['hsl(var(--primary))', 'hsl(var(--muted-foreground))'];
+
+function ChartCard({ title, data, keys, labels, type, decimals = 0 }: ChartCardProps) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <p className="text-xs font-bold text-muted-foreground mb-2">{title}</p>
+        <div className="h-48">
+          <ResponsiveContainer width="100%" height="100%">
+            {type === 'bar' ? (
+              <BarChart data={data}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} />
+                <Tooltip formatter={(v: any) => typeof v === 'number' ? v.toLocaleString('pt-BR', { maximumFractionDigits: decimals }) : '—'} />
+                <Legend wrapperStyle={{ fontSize: 10 }} />
+                {keys.map((k, i) => (
+                  <Bar key={k} dataKey={k} name={labels[i]} fill={COLORS[i]} fillOpacity={i === 0 ? 1 : 0.4} radius={[3, 3, 0, 0]} />
+                ))}
+              </BarChart>
+            ) : type === 'area' ? (
+              <AreaChart data={data}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} />
+                <Tooltip formatter={(v: any) => typeof v === 'number' ? v.toLocaleString('pt-BR', { maximumFractionDigits: decimals }) : '—'} />
+                <Legend wrapperStyle={{ fontSize: 10 }} />
+                {keys.map((k, i) => (
+                  <Area key={k} type="monotone" dataKey={k} name={labels[i]}
+                    stroke={COLORS[i]} fill={COLORS[i]} fillOpacity={i === 0 ? 0.3 : 0.1}
+                    strokeWidth={i === 0 ? 2 : 1} strokeDasharray={i > 0 ? '4 2' : undefined} />
+                ))}
+              </AreaChart>
+            ) : (
+              <LineChart data={data}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} />
+                <Tooltip formatter={(v: any) => typeof v === 'number' ? v.toLocaleString('pt-BR', { maximumFractionDigits: decimals }) : '—'} />
+                <Legend wrapperStyle={{ fontSize: 10 }} />
+                {keys.map((k, i) => (
+                  <Line key={k} type="monotone" dataKey={k} name={labels[i]}
+                    stroke={COLORS[i]} strokeWidth={i === 0 ? 2 : 1}
+                    strokeDasharray={i > 0 ? '4 2' : undefined}
+                    dot={{ r: 2 }} connectNulls />
+                ))}
+              </LineChart>
+            )}
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
