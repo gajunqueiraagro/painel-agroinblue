@@ -140,15 +140,23 @@ export const isReceita = (l: FinanceiroLancamento) => {
   return tipo === 'receita' || tipo.startsWith('1');
 };
 
-/** ADM lancamento qualifies for rateio:
- *  - Status = Conciliado
- *  - Tipo começa com "2" (saída)
- *  - Data_Ref (data_realizacao) preenchida
- */
-const isADMConciliado = (l: FinanceiroLancamento) =>
-  (l.status_transacao || '').toLowerCase() === 'conciliado' &&
+const MACROS_RATEIO_ADM_PRODUTIVO = new Set([
+  'custeio produtivo',
+  'investimento na fazenda',
+]);
+
+/** Base ADM para avaliação de rateio */
+const isADMBaseRateio = (l: FinanceiroLancamento) =>
+  (l.status_transacao || '').toLowerCase().trim() === 'conciliado' &&
   (l.tipo_operacao || '').startsWith('2') &&
   !!l.data_realizacao;
+
+/** Elegível no rateio ADM produtivo */
+const isADMElegivelRateioProdutivo = (l: FinanceiroLancamento) => {
+  if (!isADMBaseRateio(l)) return false;
+  const macro = (l.macro_custo || '').toLowerCase().trim();
+  return MACROS_RATEIO_ADM_PRODUTIVO.has(macro);
+};
 
 /** Extract YYYY-MM from a date string */
 const dateToAnoMes = (dateStr: string | null | undefined): string | null => {
