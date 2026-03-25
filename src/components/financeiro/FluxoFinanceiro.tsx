@@ -7,7 +7,8 @@ import { useMemo } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFluxoCaixa, type FluxoMensal } from '@/hooks/useFluxoCaixa';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, AlertTriangle } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Loader2, AlertTriangle, ChevronDown } from 'lucide-react';
 import type { FinanceiroLancamento, RateioADM } from '@/hooks/useFinanceiro';
 
 // ---------------------------------------------------------------------------
@@ -40,7 +41,7 @@ interface Props {
 
 export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAtualNome }: Props) {
   const isMobile = useIsMobile();
-  const { meses, loading, saldoInicialAusente } = useFluxoCaixa(lancamentos, rateioADM, ano, mesAte);
+  const { meses, loading, saldoInicialAusente, saldoInicialAudit } = useFluxoCaixa(lancamentos, rateioADM, ano, mesAte);
 
   if (loading) {
     return (
@@ -66,8 +67,27 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
       {/* Aviso saldo inicial ausente */}
       {saldoInicialAusente && (
         <div className="text-[10px] text-muted-foreground bg-muted rounded-md px-2.5 py-1.5">
-          ⓘ Saldo inicial zerado — sem histórico de Dez/{ano - 1}
+          ⓘ Saldo inicial zerado — sem registros SALDO em Dez/{ano - 1} na EXPORT_APP_UNICO
         </div>
+      )}
+
+      {/* Auditoria do saldo inicial */}
+      {saldoInicialAudit && (
+        <Collapsible>
+          <CollapsibleTrigger className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+            <ChevronDown className="h-3 w-3" />
+            Auditoria Saldo Inicial
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-1 text-[10px] bg-muted rounded-md px-2.5 py-2 space-y-0.5">
+            <p><strong>Fonte:</strong> {saldoInicialAudit.fonte}</p>
+            <p><strong>Período:</strong> {saldoInicialAudit.periodo}</p>
+            <p><strong>Registros encontrados:</strong> {saldoInicialAudit.qtdRegistros}</p>
+            {saldoInicialAudit.contas.length > 0 && (
+              <p><strong>Contas:</strong> {saldoInicialAudit.contas.join(', ')}</p>
+            )}
+            <p><strong>Soma total:</strong> R$ {saldoInicialAudit.somaTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+          </CollapsibleContent>
+        </Collapsible>
       )}
 
       {/* Tabela Fluxo de Caixa */}
