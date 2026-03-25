@@ -208,7 +208,10 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-xl">🐄</span>
-                <h2 className="text-base font-extrabold text-card-foreground">Zootécnico</h2>
+                <div>
+                  <h2 className="text-base font-extrabold text-card-foreground leading-tight">Zootécnico</h2>
+                  <span className="text-xs text-muted-foreground">📍 {fazendaAtual?.nome || 'Global'}</span>
+                </div>
               </div>
               <StatusBadge nivel={zootecnico.status.nivel} />
             </div>
