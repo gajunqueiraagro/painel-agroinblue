@@ -8,12 +8,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Save, FileText, Share2, Pencil, Trash2, MapPin, Tag } from 'lucide-react';
+import { Save, FileText, Share2, Pencil, Trash2, MapPin, Tag, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import logoUrl from '@/assets/logo.png';
 import { PastosTab } from './PastosTab';
 import { FazendasList } from '@/components/FazendasList';
+import { AcessosTab } from './AcessosTab';
 
 interface CadastroData {
   id?: string;
