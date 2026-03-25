@@ -197,7 +197,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
       </div>
 
       {/* Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* ZOOTÉCNICO */}
         {fazendaNaoPecuaria ? (
           <div className="rounded-xl border border-border/50 bg-muted/30 p-4 space-y-3 shadow-sm">
@@ -240,7 +240,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
             <p className="text-[11px] text-muted-foreground">{zootecnico.status.descricao}</p>
 
             <button
-              onClick={() => onTabChange('zootecnico')}
+              onClick={() => onTabChange('zootecnico_hub')}
               className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
             >
               Ver Painel Zootécnico <ChevronRight className="h-4 w-4" />
@@ -250,6 +250,17 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
 
         {/* FINANCEIRO */}
         <FinanceiroCard financeiro={financeiro} onTabChange={onTabChange} isGlobal={fazendaAtual?.id === '__global__'} />
+
+        {/* OPERACIONAL (placeholder) */}
+        <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 p-4 space-y-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-xl opacity-70">🔧</span>
+            <h2 className="text-base font-extrabold text-muted-foreground">Operacional</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Em breve: resumos operacionais de campo.
+          </p>
+        </div>
 
         {/* ECONÔMICO */}
         <div className="rounded-xl border bg-card p-4 space-y-3 shadow-sm">

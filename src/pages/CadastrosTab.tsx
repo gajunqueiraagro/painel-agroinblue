@@ -8,12 +8,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Save, FileText, Share2, Pencil, Trash2, MapPin, Tag } from 'lucide-react';
+import { Save, FileText, Share2, Pencil, Trash2, MapPin, Tag, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import logoUrl from '@/assets/logo.png';
 import { PastosTab } from './PastosTab';
 import { FazendasList } from '@/components/FazendasList';
+import { AcessosTab } from './AcessosTab';
 
 interface CadastroData {
   id?: string;
@@ -55,7 +56,7 @@ function loadLogoBase64(): Promise<string> {
 }
 
 export function CadastrosTab() {
-  const { fazendaAtual } = useFazenda();
+  const { fazendaAtual, isGlobal } = useFazenda();
   const [data, setData] = useState<CadastroData>(EMPTY);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -331,14 +332,29 @@ export function CadastrosTab() {
         )}
       </div>
 
-      <Accordion type="multiple" defaultValue={['fazendas', 'dados', 'contato', 'bancario', 'roteiro', 'pastos']} className="space-y-2">
-        {/* Fazendas */}
-        <AccordionItem value="fazendas" className="border rounded-lg">
-          <AccordionTrigger className="px-4 py-3 text-sm font-bold">🏡 Fazendas</AccordionTrigger>
-          <AccordionContent className="px-4 pb-4">
-            <FazendasList />
-          </AccordionContent>
-        </AccordionItem>
+      <Accordion type="multiple" defaultValue={['fazendas', 'dados', 'contato', 'bancario', 'roteiro', 'pastos', 'acessos']} className="space-y-2">
+        {/* Fazendas - only in global mode */}
+        {isGlobal && (
+          <AccordionItem value="fazendas" className="border rounded-lg">
+            <AccordionTrigger className="px-4 py-3 text-sm font-bold">🏡 Fazendas</AccordionTrigger>
+            <AccordionContent className="px-4 pb-4">
+              <FazendasList />
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {/* Fazenda atual info when not global */}
+        {!isGlobal && fazendaAtual && (
+          <div className="rounded-lg border bg-card p-4">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🏡</span>
+              <div>
+                <p className="text-sm font-bold text-foreground">{fazendaAtual.nome}</p>
+                <p className="text-xs text-muted-foreground font-mono">{fazendaAtual.codigo_importacao || '—'}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <AccordionItem value="dados" className="border rounded-lg">
           <AccordionTrigger className="px-4 py-3 text-sm font-bold">🏠 Dados da Fazenda</AccordionTrigger>
@@ -408,6 +424,18 @@ export function CadastrosTab() {
           </AccordionTrigger>
           <AccordionContent className="px-0 pb-0">
             <PastosTab />
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Acessos */}
+        <AccordionItem value="acessos" className="border rounded-lg">
+          <AccordionTrigger className="px-4 py-3 text-sm font-bold">
+            <span className="flex items-center gap-2">
+              <Users className="h-4 w-4" /> Acessos
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="px-0 pb-0">
+            <AcessosTab />
           </AccordionContent>
         </AccordionItem>
       </Accordion>
