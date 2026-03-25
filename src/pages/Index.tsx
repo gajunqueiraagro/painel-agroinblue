@@ -174,6 +174,7 @@ const Index = () => {
           lancamentos={lancamentosVisiveis}
           saldosIniciais={saldosIniciais}
           onBack={goToZootecnico}
+          onNavigateToReclass={goToReclassFromConciliacao}
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
         />
