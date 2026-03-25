@@ -75,6 +75,7 @@ export interface RateioADMConferencia {
   anoMes: string;
   totalADMConciliado: number;
   lancamentosUsados: {
+    dataRef: string | null;
     dataPagamento: string | null;
     produto: string | null;
     valor: number;
