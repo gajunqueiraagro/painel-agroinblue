@@ -906,7 +906,7 @@ export function DashboardFinanceiro({
       {/* ================================================================= */}
       {/* 4. INDICADORES ECONÔMICOS — 2 colunas */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {/* ESQUERDA — Receitas */}
         <Card>
           <CardContent className="p-3 space-y-3">
