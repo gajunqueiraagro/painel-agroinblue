@@ -183,18 +183,6 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   return (
     <div className="p-4 max-w-4xl mx-auto space-y-4 animate-fade-in pb-20">
-      {/* Header with back button */}
-      {onBack && (
-        <div className="flex items-center gap-2">
-          <button onClick={onBack} className="p-1.5 rounded-md hover:bg-muted transition-colors">
-            <ArrowLeft className="h-5 w-5 text-foreground" />
-          </button>
-          <div>
-            <h1 className="text-lg font-extrabold text-foreground leading-tight">💰 Valor do Rebanho</h1>
-            <span className="text-xs text-muted-foreground">📍 {fazendaAtual?.nome || 'Global'}</span>
-          </div>
-        </div>
-      )}
       {/* Filtros */}
       <div className="flex gap-2 items-center flex-wrap">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>

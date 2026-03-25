@@ -12,8 +12,8 @@ import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
-import { FazendaSelector } from '@/components/FazendaSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FazendaSelector } from '@/components/FazendaSelector';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
@@ -88,24 +88,8 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
 
   return (
     <div className="max-w-full mx-auto animate-fade-in pb-20">
-      {/* ── Topo fixo: fazenda + filtros ── */}
+      {/* ── Topo fixo: filtros ── */}
       <div className="sticky top-0 z-20 bg-background border-b border-border">
-        {/* Linha 1: nome fazenda + seletor + botão retornar */}
-        <div className="flex items-center gap-2 px-4 pt-3 pb-2">
-          {onBack && (
-            <button onClick={onBack} className="p-1.5 rounded-md hover:bg-muted transition-colors shrink-0">
-              <ArrowLeft className="h-5 w-5 text-foreground" />
-            </button>
-          )}
-          <h1 className="text-base md:text-lg font-extrabold text-foreground truncate flex-1">
-            {fazendaNome}
-          </h1>
-          {fazendas.length > 1 && (
-            <div className="shrink-0">
-              <FazendaSelector />
-            </div>
-          )}
-        </div>
 
         {/* Linha 2: filtros de ano e mês — FILTRO ÚNICO */}
         <div className="flex gap-2 px-4 pb-2">

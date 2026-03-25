@@ -109,25 +109,33 @@ const Index = () => {
     setActiveTab('lancamentos');
   }, []);
 
-  // Sub-screens with own header/back
-  const subScreens: TabId[] = ['zootecnico', 'analise_economica', 'fin_caixa', 'valor_rebanho', 'conciliacao_categoria'];
-  const isSubScreen = subScreens.includes(activeTab);
+  // Sub-screens that need a back button
+  const subScreenBackMap: Partial<Record<TabId, () => void>> = {
+    zootecnico: goToZootecnicoHub,
+    analise_economica: goToResumo,
+    fin_caixa: goToResumo,
+    valor_rebanho: goToZootecnico,
+    conciliacao_categoria: goToZootecnico,
+  };
 
-  const headerTitle = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || TITLES[activeTab]);
+  const fazendaNome = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || '');
+  const mesLabel = ['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][filtroGlobal.mes] || '';
+  const periodoLabel = `${mesLabel}/${filtroGlobal.ano}`;
 
   return (
     <div className="min-h-screen bg-background">
       <SyncStatus online={online} pendingCount={pendingCount} syncing={syncing} onSync={syncQueue} />
-      {!isSubScreen && (
-        <Header
-          title={headerTitle}
-          rightAction={
-            <div className="flex items-center gap-2">
-              {fazendas.length > 1 && <FazendaSelector />}
-            </div>
-          }
-        />
-      )}
+      <Header
+        title={TITLES[activeTab]}
+        fazendaNome={fazendaNome}
+        periodo={periodoLabel}
+        onBack={subScreenBackMap[activeTab]}
+        rightAction={
+          <div className="flex items-center gap-2">
+            {fazendas.length > 1 && <FazendaSelector />}
+          </div>
+        }
+      />
 
       {activeTab === 'resumo' && (
         <ResumoTab
