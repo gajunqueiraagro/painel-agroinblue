@@ -119,7 +119,6 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
 
     setImportando(true);
     const errosBloqueantes = preview.erros.filter(e => e.campo !== 'Centro de Custo');
-    const saldosComFazenda = preview.saldosBancarios.filter(s => s.fazendaId);
     const resumoComFazenda = preview.resumoCaixa.filter(r => r.fazendaId);
 
     const ok = await onConfirmar(
@@ -127,7 +126,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
       linhasComFazenda,
       preview.totalLinhas,
       errosBloqueantes.length,
-      saldosComFazenda,
+      preview.saldosBancarios,
       [],
       resumoComFazenda,
     );
