@@ -216,51 +216,31 @@ export function useResumoStatus(
   }, [lancamentos, saldosIniciais, ano, mesAte, fechamentoRebanho, fechamentoPastos]);
 
   // -------------------------------------------------------------------------
-  // FINANCEIRO
+  // FINANCEIRO — FONTE ÚNICA: calcFinanceiroFromLancamentos
   // -------------------------------------------------------------------------
   const financeiro = useMemo((): ResumoFinanceiro => {
     const mesAtual = new Date().getMonth() + 1;
     const anoAtual = new Date().getFullYear();
     const anoStr = String(ano);
 
-    let totalEntradas = 0;
-    let totalSaidas = 0;
-    let saldoCaixa = 0;
+    // Usar a mesma lógica do Dashboard: filtros compartilhados
+    const calc = calcFinanceiroFromLancamentos(finLancamentos, ano, mesAte);
 
-    if (resumoCaixa.length > 0) {
-      resumoCaixa.forEach(rc => {
-        totalEntradas += rc.entradas;
-        totalSaidas += rc.saidas;
-      });
-      const sorted = [...resumoCaixa].sort((a, b) => a.ano_mes.localeCompare(b.ano_mes));
-      saldoCaixa = sorted[sorted.length - 1]?.saldo_final_total ?? 0;
-    } else {
-      // Fallback: calculate from conciliado lancamentos
-      const conciliados = finLancamentos.filter(
-        l => (l.status_transacao || '').toLowerCase().trim() === 'conciliado' && l.data_pagamento
-      );
-      conciliados.forEach(l => {
-        const tipo = (l.tipo_operacao || '').toLowerCase().trim();
-        if (tipo === 'entrada' || tipo === 'receita') {
-          totalEntradas += Math.abs(l.valor);
-        } else if (tipo === 'saida' || tipo === 'saída' || tipo === 'despesa') {
-          totalSaidas += Math.abs(l.valor);
-        } else if (l.valor > 0) {
-          totalEntradas += l.valor;
-        } else {
-          totalSaidas += Math.abs(l.valor);
-        }
-      });
-      saldoCaixa = totalEntradas - totalSaidas;
-    }
+    // Saldo = entradas - saídas (calculado dos lançamentos, sem tabela resumo_caixa)
+    // Documentação: saldo é diferença simples E/S do período, não inclui saldo inicial
+    // de caixa (que pertence ao módulo Fluxo de Caixa Global).
+    const saldoCaixa = calc.saldo;
 
-    // Status: check conciliation per month
+    // Status: check conciliation per month using data_pagamento
     let mesesFechados = 0;
     let mesesComLancamentos = 0;
 
     for (let m = 1; m <= mesAte; m++) {
       const anoMes = `${anoStr}-${String(m).padStart(2, '0')}`;
-      const lancsMes = finLancamentos.filter(l => l.ano_mes === anoMes);
+      const lancsMes = finLancamentos.filter(l => {
+        const am = datePagtoAnoMes(l);
+        return am === anoMes;
+      });
       if (lancsMes.length === 0) continue;
 
       mesesComLancamentos++;
@@ -268,9 +248,7 @@ export function useResumoStatus(
       if (ano === anoAtual && m === mesAtual) continue;
 
       const relevantes = lancsMes.filter(l => !isExclusoOperacional(l.status_transacao));
-      const todosConciliados = relevantes.every(
-        l => (l.status_transacao || '').toLowerCase().trim() === 'conciliado'
-      );
+      const todosConciliados = relevantes.every(l => isConciliado(l));
       if (todosConciliados) mesesFechados++;
     }
 
@@ -289,8 +267,19 @@ export function useResumoStatus(
       }
     }
 
-    return { totalEntradas, totalSaidas, saldoCaixa, status: { nivel, descricao } };
-  }, [finLancamentos, resumoCaixa, ano, mesAte]);
+    return {
+      totalEntradas: calc.totalEntradas,
+      totalSaidas: calc.totalSaidas,
+      saldoCaixa,
+      status: { nivel, descricao },
+      audit: {
+        ...calc.audit,
+        qtdEntradas: calc.qtdEntradas,
+        qtdSaidas: calc.qtdSaidas,
+        saldoOrigem: 'Calculado: Entradas − Saídas (sem saldo inicial de caixa)',
+      },
+    };
+  }, [finLancamentos, ano, mesAte]);
 
   // -------------------------------------------------------------------------
   // ECONÔMICO
