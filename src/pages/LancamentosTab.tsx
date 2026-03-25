@@ -19,7 +19,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Separator } from '@/components/ui/separator';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronRight, ChevronDown, ArrowLeft } from 'lucide-react';
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -29,6 +29,8 @@ interface Props {
   onAdicionar: (l: Omit<Lancamento, 'id'>) => void;
   onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
   onRemover: (id: string) => void;
+  abaInicial?: Aba;
+  onBackToConciliacao?: () => void;
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
@@ -56,12 +58,12 @@ function getCamposFazenda(tipo: TipoMovimentacao, nomeFazenda: string) {
   }
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, abaInicial, onBackToConciliacao }: Props) {
   const { fazendaAtual, fazendas } = useFazenda();
   const nomeFazenda = fazendaAtual?.nome || '';
   const outrasFazendas = useMemo(() => fazendas.filter(f => f.id !== fazendaAtual?.id), [fazendas, fazendaAtual]);
 
-  const [aba, setAba] = useState<Aba>('entrada');
+  const [aba, setAba] = useState<Aba>(abaInicial || 'entrada');
   const [tipo, setTipo] = useState<TipoMovimentacao>('nascimento');
   const [categoria, setCategoria] = useState<Categoria>('bois');
   const [quantidade, setQuantidade] = useState('');
@@ -201,6 +203,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover }
 
   return (
     <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
+      {onBackToConciliacao && (
+        <button
+          onClick={onBackToConciliacao}
+          className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2.5 transition-colors hover:bg-primary/20 mb-2"
+        >
+          <ArrowLeft className="h-4 w-4" /> Retornar à Conciliação de Categoria
+        </button>
+      )}
       <div className="grid grid-cols-4 gap-1 bg-muted rounded-lg p-1">
         {abas.map(a => (
           <button

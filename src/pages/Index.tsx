@@ -58,6 +58,7 @@ const TITLES: Record<TabId, string> = {
 const Index = () => {
   const [activeTab, setActiveTab] = useState<TabId>('resumo');
   const [subAbaFinanceiro, setSubAbaFinanceiro] = useState<SubAba | undefined>(undefined);
+  const [lancamentosFromConciliacao, setLancamentosFromConciliacao] = useState(false);
   const { user } = useAuth();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial, loadData } = useLancamentos();
@@ -89,11 +90,17 @@ const Index = () => {
 
   const handleTabChange = useCallback((tab: TabId) => {
     if (tab !== 'financeiro') setSubAbaFinanceiro(undefined);
+    if (tab !== 'lancamentos') setLancamentosFromConciliacao(false);
     setActiveTab(tab);
   }, []);
 
   const goToResumo = useCallback(() => setActiveTab('resumo'), []);
   const goToZootecnico = useCallback(() => setActiveTab('zootecnico'), []);
+  const goToConciliacaoCategoria = useCallback(() => setActiveTab('conciliacao_categoria'), []);
+  const goToReclassFromConciliacao = useCallback(() => {
+    setLancamentosFromConciliacao(true);
+    setActiveTab('lancamentos');
+  }, []);
 
   // Hide header for sub-screens that have their own back nav
   const isSubScreen = ['zootecnico', 'analise_economica', 'fin_caixa', 'valor_rebanho', 'conciliacao_categoria'].includes(activeTab);
@@ -140,6 +147,8 @@ const Index = () => {
           onAdicionar={isGlobal ? async () => {} : adicionarLancamento}
           onEditar={isGlobal ? async () => {} : editarLancamento}
           onRemover={isGlobal ? async () => {} : removerLancamento}
+          abaInicial={lancamentosFromConciliacao ? 'reclassificacao' : undefined}
+          onBackToConciliacao={lancamentosFromConciliacao ? goToConciliacaoCategoria : undefined}
         />
       )}
       {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} />}
@@ -165,6 +174,7 @@ const Index = () => {
           lancamentos={lancamentosVisiveis}
           saldosIniciais={saldosIniciais}
           onBack={goToZootecnico}
+          onNavigateToReclass={goToReclassFromConciliacao}
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
         />
