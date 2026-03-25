@@ -115,7 +115,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
 
     const linhasComFazenda = preview.lancamentos.filter(l => l.fazendaId);
     const linhasSemFazenda = preview.lancamentos.filter(l => !l.fazendaId);
-    if (linhasSemFazenda.length > 0) return;
+    if (linhasSemFazenda.length > 0 && preview.lancamentos.length > 0) return;
 
     setImportando(true);
     const errosBloqueantes = preview.erros.filter(e => e.campo !== 'Centro de Custo');
@@ -143,11 +143,11 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
     setConfirmExcluir(null);
   };
 
-  const temErrosFazenda = preview?.erros.some(e => e.campo === 'Fazenda') || false;
+  const temErrosFazenda = preview?.lancamentos.some(l => !l.fazendaId) || false;
   const errosCentro = preview?.erros.filter(e => e.campo === 'Centro de Custo') || [];
   const hasCentroErrors = errosCentro.length > 0;
   const lancamentosReady = preview?.lancamentos.filter(l => l.fazendaId).length || 0;
-  const totalReady = lancamentosReady + (preview?.saldosBancarios.filter(s => s.fazendaId).length || 0) + (preview?.resumoCaixa.filter(r => r.fazendaId).length || 0);
+  const totalReady = lancamentosReady + (preview?.saldosBancarios.length || 0) + (preview?.resumoCaixa.length || 0);
 
   return (
     <div className="space-y-4">

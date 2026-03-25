@@ -441,9 +441,13 @@ export function useFinanceiro() {
     if (!user) return false;
 
     try {
-      const primaryFazendaId = linhas[0]?.fazendaId;
+      // Get primary fazenda from lancamentos, or fall back to first fazenda with data
+      const primaryFazendaId = linhas[0]?.fazendaId
+        || saldosBancarios?.find(s => s.fazendaId)?.fazendaId
+        || resumoCaixa?.find(r => r.fazendaId)?.fazendaId
+        || fazendas.find(f => f.id !== '__global__')?.id;
       if (!primaryFazendaId) {
-        toast.error('Nenhuma linha com fazenda válida');
+        toast.error('Nenhum registro com fazenda válida');
         return false;
       }
 
