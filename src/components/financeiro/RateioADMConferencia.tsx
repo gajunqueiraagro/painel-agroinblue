@@ -22,7 +22,7 @@ interface Props {
   fazendasSemRebanho: string[];
 }
 
-export function RateioADMConferenciaView({ conferencia, fazendasSemArea }: Props) {
+export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho }: Props) {
   const meses = useMemo(() => conferencia.map(c => c.anoMes), [conferencia]);
   const [mesSelecionado, setMesSelecionado] = useState(meses[0] || '');
   const [showAudit, setShowAudit] = useState(false);
