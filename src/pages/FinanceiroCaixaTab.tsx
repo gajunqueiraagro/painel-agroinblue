@@ -14,7 +14,7 @@ import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ArrowLeft } from 'lucide-react';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
 type SubTab = 'dashboard' | 'analise' | 'rateio' | 'importacao';
@@ -23,9 +23,12 @@ interface Props {
   /** Lançamentos pecuários COMPLETOS (incluindo transferências) — para cálculos zootécnicos */
   lancamentosPecuarios?: Lancamento[];
   saldosIniciais?: SaldoInicial[];
+  onBack?: () => void;
+  filtroAnoInicial?: string;
+  filtroMesInicial?: number;
 }
 
-export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [] }: Props) {
+export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [], onBack, filtroAnoInicial, filtroMesInicial }: Props) {
   const [subTab, setSubTab] = useState<SubTab>('dashboard');
   const { fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
