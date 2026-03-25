@@ -493,10 +493,10 @@ export function useFinanceiro() {
         if (error) throw error;
       }
 
-      // Insert saldos bancarios
+      // Insert saldos bancarios (now with per-row fazendaId)
       if (saldosBancarios && saldosBancarios.length > 0) {
         const saldoBatch = saldosBancarios.map(s => ({
-          fazenda_id: primaryFazendaId,
+          fazenda_id: s.fazendaId || primaryFazendaId,
           importacao_id: imp.id,
           conta_banco: s.contaBanco,
           ano_mes: s.anoMes,
@@ -506,22 +506,6 @@ export function useFinanceiro() {
           onConflict: 'fazenda_id,conta_banco,ano_mes',
         });
         if (error) throw error;
-      }
-
-      // Insert/update contas
-      if (contasImportadas && contasImportadas.length > 0) {
-        for (const c of contasImportadas) {
-          const { error } = await supabase.from('financeiro_contas').upsert({
-            fazenda_id: primaryFazendaId,
-            nome_conta: c.contaId,
-            banco: c.banco,
-            instrumento: c.instrumento,
-            agencia_conta: c.agenciaConta,
-            uso: c.uso,
-            tipo: c.instrumento,
-          }, { onConflict: 'id' });
-          if (error) console.warn('Conta upsert warning:', error.message);
-        }
       }
 
       // Insert resumo caixa
