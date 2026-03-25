@@ -1037,6 +1037,12 @@ export function DashboardFinanceiro({
               <p className="text-sm font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.desembolsoAcum)}</p>
             </div>
 
+            {/* Média mensal — destaque (logo após acumulado) */}
+            <div className="bg-muted/60 rounded-md p-2">
+              <div className="text-[10px] text-muted-foreground">Média mensal</div>
+              <p className="text-base font-extrabold text-red-600 dark:text-red-400">{formatMoeda(ind.mediaMensal)}</p>
+            </div>
+
             {/* Custo/cab acumulado */}
             <div>
               <div className="text-[10px] text-muted-foreground">Custo/cab acumulado</div>
@@ -1044,12 +1050,6 @@ export function DashboardFinanceiro({
               {zooData.cabMediaAcum !== null && (
                 <p className="text-[9px] text-muted-foreground">{formatNum(zooData.cabMediaAcum, 0)} cab méd.</p>
               )}
-            </div>
-
-            {/* Média mensal — destaque */}
-            <div className="bg-muted/60 rounded-md p-2">
-              <div className="text-[10px] text-muted-foreground">Média mensal</div>
-              <p className="text-base font-extrabold text-red-600 dark:text-red-400">{formatMoeda(ind.mediaMensal)}</p>
             </div>
 
             {/* Custo/@ produzida — DESTAQUE MAIOR */}
