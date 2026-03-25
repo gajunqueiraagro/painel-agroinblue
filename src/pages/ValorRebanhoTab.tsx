@@ -325,7 +325,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                     </Tooltip>
                   ) : '-'}
                 </td>
-                <td className="px-2 py-1">
+                <td className="px-1 py-1">
                   <Input
                     type="text"
                     inputMode="decimal"
@@ -338,6 +338,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                 </td>
                 <td className="px-2 py-2 text-right text-muted-foreground text-xs">
                   {r.valorCabeca > 0 ? formatMoeda(r.valorCabeca) : '-'}
+                </td>
+                <td className="px-2 py-2 text-right text-muted-foreground text-xs">
+                  {r.precoArroba > 0 ? formatMoeda(r.precoArroba) : '-'}
                 </td>
                 <td className="px-3 py-2 text-right font-semibold text-foreground">
                   {r.valorTotal > 0 ? formatMoeda(r.valorTotal) : '-'}
