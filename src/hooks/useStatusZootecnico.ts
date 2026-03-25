@@ -171,10 +171,9 @@ export function useStatusZootecnico(
       }
 
       // 5. Valor do rebanho (precos)
-      const vrQuery = isGlobal
-        ? supabase.from('valor_rebanho_mensal').select('categoria').eq('ano_mes', anoMes)
-        : supabase.from('valor_rebanho_mensal').select('categoria').eq('ano_mes', anoMes).eq('fazenda_id', fazendaId);
+      const vrQuery = fqPec(supabase.from('valor_rebanho_mensal').select('categoria').eq('ano_mes', anoMes));
       const { data: vrData } = await vrQuery;
+      setPrecosDefinidos((vrData || []).length);
       setPrecosDefinidos((vrData || []).length);
 
     } catch (e) {
