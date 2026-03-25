@@ -110,7 +110,7 @@ export function useResumoStatus(
         // Financeiro - status conciliação
         supabase
           .from('financeiro_lancamentos')
-          .select('status_transacao, ano_mes, data_pagamento')
+          .select('status_transacao, ano_mes, data_pagamento, valor, tipo_operacao')
           .in('fazenda_id', fazendaIds)
           .gte('ano_mes', mesesRange[0] || '')
           .lte('ano_mes', mesesRange[mesesRange.length - 1] || ''),
