@@ -147,6 +147,8 @@ const Index = () => {
           onAdicionar={isGlobal ? async () => {} : adicionarLancamento}
           onEditar={isGlobal ? async () => {} : editarLancamento}
           onRemover={isGlobal ? async () => {} : removerLancamento}
+          abaInicial={lancamentosFromConciliacao ? 'reclassificacao' : undefined}
+          onBackToConciliacao={lancamentosFromConciliacao ? goToConciliacaoCategoria : undefined}
         />
       )}
       {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} />}
