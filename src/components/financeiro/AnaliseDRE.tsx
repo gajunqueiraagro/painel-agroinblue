@@ -473,4 +473,3 @@ export function DREAtividade({
 }
 
 // Re-export Select for use in this file
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
