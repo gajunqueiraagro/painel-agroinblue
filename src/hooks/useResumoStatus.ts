@@ -93,7 +93,6 @@ export function useResumoStatus(
   const [fechamentoPastos, setFechamentoPastos] = useState<Record<string, { total: number; fechados: number }>>({}); 
   const [finLancamentos, setFinLancamentos] = useState<FinanceiroLancamentoBase[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loading, setLoading] = useState(true);
 
   const fazendaIds = useMemo(() => {
     if (isGlobal) return fazendas.filter(f => f.id !== '__global__').map(f => f.id);
