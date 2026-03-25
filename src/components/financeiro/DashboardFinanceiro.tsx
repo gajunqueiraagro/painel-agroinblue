@@ -1055,10 +1055,11 @@ export function DashboardFinanceiro({
             cabMedia={zooData.cabMediaMes}
           />
           <CentroCustoTable
-            title="Desembolso por Centro — Acumulado"
+            title="Média Mensal por Centro"
             items={ind.ccAcum}
             cabMedia={zooData.cabMediaAcum}
-            acum
+            numMeses={ind.numMeses}
+            isMedia
           />
         </div>
       )}
