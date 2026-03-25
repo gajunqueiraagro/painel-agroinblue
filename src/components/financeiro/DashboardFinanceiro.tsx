@@ -384,6 +384,7 @@ export function DashboardFinanceiro({
   fazendaId,
 }: Props) {
   const [showAudit, setShowAudit] = useState(false);
+  const isMobile = useIsMobile();
   const { fazendas } = useFazenda();
 
   const fazendaIdsReais = useMemo(
