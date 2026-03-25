@@ -31,7 +31,7 @@ const ORIGEM_LABEL: Record<OrigemPeso, string> = {
   sem_base: 'Sem dados',
 };
 
-export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
+export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAnoInicial, filtroMesInicial }: Props) {
   const { fazendaAtual, isGlobal } = useFazenda();
   const { categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
