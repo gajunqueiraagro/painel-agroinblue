@@ -61,10 +61,6 @@ export function ZootecnicoHubTab({ onTabChange }: Props) {
 
   return (
     <div className="max-w-lg mx-auto animate-fade-in pb-20">
-      <div className="sticky top-0 z-20 bg-background border-b border-border px-4 pt-3 pb-2">
-        <h1 className="text-lg font-extrabold text-foreground">🐄 Zootécnico</h1>
-        <span className="text-xs text-muted-foreground">📍 {fazendaAtual?.nome || 'Global'}</span>
-      </div>
 
       <div className="p-4 space-y-4">
         {GROUPS.map(group => (

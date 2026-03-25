@@ -215,17 +215,6 @@ export function ConciliacaoCategoriaTab({ lancamentos, saldosIniciais, onBack, o
 
   return (
     <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
-      {/* Header */}
-      <div className="flex items-center gap-2">
-        <button onClick={onBack} className="p-1.5 rounded-md hover:bg-muted transition-colors">
-          <ArrowLeft className="h-5 w-5 text-foreground" />
-        </button>
-        <div className="flex-1">
-          <h1 className="text-lg font-extrabold text-foreground leading-tight">📋 Conciliação de Categoria</h1>
-          <span className="text-xs text-muted-foreground">📍 {fazendaAtual?.nome || 'Global'}</span>
-        </div>
-      </div>
-
       {/* Filtros */}
       <div className="flex gap-2 items-center flex-wrap">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>

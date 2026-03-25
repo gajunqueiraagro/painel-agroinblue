@@ -26,13 +26,6 @@ export function AnaliseEconomicaTab({ lancamentosPecuarios, saldosIniciais, onBa
 
   return (
     <div className="p-4 max-w-full mx-auto space-y-3 animate-fade-in pb-20">
-      {/* Header */}
-      <div className="flex items-center gap-2">
-        <button onClick={onBack} className="p-1.5 rounded-md hover:bg-muted transition-colors">
-          <ArrowLeft className="h-5 w-5 text-foreground" />
-        </button>
-        <h1 className="text-lg font-extrabold text-foreground">📊 Econômico</h1>
-      </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
