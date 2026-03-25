@@ -19,7 +19,7 @@ import type { RateioADMConferencia } from '@/hooks/useFinanceiro';
 
 interface Props {
   conferencia: RateioADMConferencia[];
-  fazendasSemArea: string[];
+  fazendasSemRebanho: string[];
 }
 
 export function RateioADMConferenciaView({ conferencia, fazendasSemArea }: Props) {
