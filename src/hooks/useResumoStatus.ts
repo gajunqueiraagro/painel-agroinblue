@@ -146,6 +146,8 @@ export function useResumoStatus(
         status_transacao: r.status_transacao,
         ano_mes: r.ano_mes,
         data_pagamento: r.data_pagamento,
+        valor: Number(r.valor) || 0,
+        tipo_operacao: r.tipo_operacao,
       })));
 
       setResumoCaixa((rcResult.data || []).map((r: any) => ({
