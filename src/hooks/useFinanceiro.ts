@@ -73,7 +73,17 @@ export interface RateioADM {
 /** Dados completos do rateio para conferência (todas as fazendas) */
 export interface RateioADMConferencia {
   anoMes: string;
-  totalADMConciliado: number;
+  totalADMEncontrado: number;
+  totalADMElegivel: number;
+  totalADMExcluido: number;
+  qtdADMEncontrado: number;
+  qtdADMElegivel: number;
+  qtdADMExcluido: number;
+  gruposExcluidos: {
+    grupo: string;
+    valor: number;
+    quantidade: number;
+  }[];
   lancamentosUsados: {
     dataRef: string | null;
     dataPagamento: string | null;
@@ -84,6 +94,7 @@ export interface RateioADMConferencia {
     tipoOperacao: string | null;
     contaOrigem: string | null;
     contaDestino: string | null;
+    macroCusto: string | null;
   }[];
   fazendas: {
     fazendaId: string;
