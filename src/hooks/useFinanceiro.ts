@@ -139,10 +139,14 @@ const isADMConciliado = (l: FinanceiroLancamento) =>
   !!l.data_realizacao;
 
 /** Extract YYYY-MM from a date string */
-const dateToAnoMes = (dateStr: string | null): string | null => {
+const dateToAnoMes = (dateStr: string | null | undefined): string | null => {
   if (!dateStr || dateStr.length < 7) return null;
   return dateStr.substring(0, 7);
 };
+
+/** Data de referência do lançamento para rateio (Data_Ref = data_realizacao) */
+const dataRefRateio = (l: FinanceiroLancamento): string | null =>
+  dateToAnoMes(l.data_realizacao);
 
 // Tipos de movimentação pecuária
 const TIPOS_ENTRADA_PEC = new Set(['nascimento', 'compra', 'transferencia_entrada']);
