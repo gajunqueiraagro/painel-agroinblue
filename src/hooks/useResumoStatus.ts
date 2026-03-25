@@ -253,7 +253,7 @@ export function useResumoStatus(
       if (ano === anoAtual && m === mesAtual) continue;
 
       const relevantes = lancsMes.filter(l => !isExclusoOperacional(l.status_transacao));
-      const todosConciliados = relevantes.every(l => isConciliado(l));
+      const todosConciliados = relevantes.every(l => isConciliadoFin(l));
       if (todosConciliados) mesesFechados++;
     }
 
