@@ -100,35 +100,40 @@ export function ZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTabChange
   }
 
   return (
-    <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
-      {/* Header */}
-      <div className="flex items-center gap-2">
-        <button onClick={onBack} className="p-1.5 rounded-md hover:bg-muted transition-colors">
-          <ArrowLeft className="h-5 w-5 text-foreground" />
-        </button>
-        <div>
-          <h1 className="text-lg font-extrabold text-foreground leading-tight">🐄 Zootécnico</h1>
-          <span className="text-xs text-muted-foreground">📍 {fazendaAtual?.nome || 'Global'}</span>
+    <div className="max-w-lg mx-auto animate-fade-in pb-20">
+      {/* Sticky header + filters */}
+      <div className="sticky top-0 z-20 bg-background border-b border-border px-4 pt-3 pb-2 space-y-2">
+        {/* Header */}
+        <div className="flex items-center gap-2">
+          <button onClick={onBack} className="p-1.5 rounded-md hover:bg-muted transition-colors">
+            <ArrowLeft className="h-5 w-5 text-foreground" />
+          </button>
+          <div>
+            <h1 className="text-lg font-extrabold text-foreground leading-tight">🐄 Zootécnico</h1>
+            <span className="text-xs text-muted-foreground">📍 {fazendaAtual?.nome || 'Global'}</span>
+          </div>
+        </div>
+
+        {/* Filtros */}
+        <div className="flex gap-2 items-center flex-wrap">
+          <Select value={anoFiltro} onValueChange={handleAnoChange}>
+            <SelectTrigger className="w-24 text-base font-bold"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
+            <SelectTrigger className="w-28 text-sm font-bold"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {MESES_COLS.map((m, i) => (
+                <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
-      {/* Filtros */}
-      <div className="flex gap-2 items-center flex-wrap">
-        <Select value={anoFiltro} onValueChange={handleAnoChange}>
-          <SelectTrigger className="w-24 text-base font-bold"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
-          <SelectTrigger className="w-28 text-sm font-bold"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {MESES_COLS.map((m, i) => (
-              <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <div className="p-4 space-y-4">
 
       {/* ===== BLOCO 1: STATUS ZOOTÉCNICO ===== */}
       <Card className={`border-l-4 ${statusZoo.status === 'fechado' ? 'border-l-emerald-500' : statusZoo.status === 'parcial' ? 'border-l-amber-500' : 'border-l-destructive'}`}>
