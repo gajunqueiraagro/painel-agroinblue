@@ -121,7 +121,7 @@ export function useResumoStatus(
       const anoStr = String(ano);
       const mesesRange = Array.from({ length: mesAte }, (_, i) => `${anoStr}-${String(i + 1).padStart(2, '0')}`);
 
-      const [vrfResult, fpResult, flResult] = await Promise.all([
+      const [vrfResult, fpResult, flResult, saldoResult] = await Promise.all([
         // Fechamento rebanho (valor_rebanho_fechamento)
         supabase
           .from('valor_rebanho_fechamento')
@@ -135,13 +135,17 @@ export function useResumoStatus(
           .in('fazenda_id', fazendaIds)
           .in('ano_mes', mesesRange),
         // Financeiro - lançamentos brutos (fonte única de verdade)
-        // Filtra por ano via data_pagamento para evitar limite de 1000 rows
         supabase
           .from('financeiro_lancamentos')
           .select('status_transacao, data_pagamento, valor, tipo_operacao')
           .in('fazenda_id', fazendaIds)
           .gte('data_pagamento', `${anoStr}-01-01`)
           .lte('data_pagamento', `${anoStr}-12-31`),
+        // Saldo inicial global: registros SALDO da EXPORT_APP_UNICO (Dez ano anterior)
+        supabase
+          .from('financeiro_saldos_bancarios')
+          .select('saldo_final, conta_banco')
+          .eq('ano_mes', `${ano - 1}-12`),
       ]);
 
       // Process fechamento rebanho
