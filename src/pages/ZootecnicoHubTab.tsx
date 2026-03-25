@@ -60,39 +60,41 @@ export function ZootecnicoHubTab({ onTabChange }: Props) {
   const { fazendaAtual } = useFazenda();
 
   return (
-    <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
-      <div>
+    <div className="max-w-lg mx-auto animate-fade-in pb-20">
+      <div className="sticky top-0 z-20 bg-background border-b border-border px-4 pt-3 pb-2">
         <h1 className="text-lg font-extrabold text-foreground">🐄 Zootécnico</h1>
         <span className="text-xs text-muted-foreground">📍 {fazendaAtual?.nome || 'Global'}</span>
       </div>
 
-      {GROUPS.map(group => (
-        <Card key={group.title}>
-          <CardContent className="p-4 space-y-2">
-            <h3 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
-              {group.emoji} {group.title}
-            </h3>
-            <div className="space-y-1">
-              {group.items.map(item => (
-                <button
-                  key={item.tab}
-                  onClick={() => onTabChange(item.tab)}
-                  className="w-full flex items-center justify-between bg-muted/40 hover:bg-muted/70 rounded-lg px-3 py-2.5 transition-colors group"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <item.icon className="h-4 w-4 text-primary shrink-0" />
-                    <div className="text-left min-w-0">
-                      <p className="text-sm font-semibold text-foreground">{item.label}</p>
-                      <p className="text-[10px] text-muted-foreground truncate">{item.description}</p>
+      <div className="p-4 space-y-4">
+        {GROUPS.map(group => (
+          <Card key={group.title}>
+            <CardContent className="p-4 space-y-2">
+              <h3 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
+                {group.emoji} {group.title}
+              </h3>
+              <div className="space-y-1">
+                {group.items.map(item => (
+                  <button
+                    key={item.tab}
+                    onClick={() => onTabChange(item.tab)}
+                    className="w-full flex items-center justify-between bg-muted/40 hover:bg-muted/70 rounded-lg px-3 py-2.5 transition-colors group"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <item.icon className="h-4 w-4 text-primary shrink-0" />
+                      <div className="text-left min-w-0">
+                        <p className="text-sm font-semibold text-foreground">{item.label}</p>
+                        <p className="text-[10px] text-muted-foreground truncate">{item.description}</p>
+                      </div>
                     </div>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0" />
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0" />
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }
