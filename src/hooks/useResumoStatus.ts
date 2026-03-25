@@ -91,8 +91,8 @@ export function useResumoStatus(
   // DB-fetched data for status calculation
   const [fechamentoRebanho, setFechamentoRebanho] = useState<Record<string, string>>({}); // anoMes → status
   const [fechamentoPastos, setFechamentoPastos] = useState<Record<string, { total: number; fechados: number }>>({}); 
-  const [finLancamentos, setFinLancamentos] = useState<{ status_transacao: string | null; ano_mes: string; data_pagamento: string | null; valor: number; tipo_operacao: string | null }[]>([]);
-  const [resumoCaixa, setResumoCaixa] = useState<{ ano_mes: string; entradas: number; saidas: number; saldo_final_total: number }[]>([]);
+  const [finLancamentos, setFinLancamentos] = useState<FinanceiroLancamentoBase[]>([]);
+  const [loading, setLoading] = useState(true);
   const [loading, setLoading] = useState(true);
 
   const fazendaIds = useMemo(() => {
