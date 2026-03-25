@@ -111,7 +111,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
           {subTab === 'rateio' && (
             <RateioADMConferenciaView
               conferencia={rateioConferencia}
-              fazendasSemArea={fazendasSemRebanho}
+              fazendasSemRebanho={fazendasSemRebanho}
             />
           )}
           {subTab === 'importacao' && (
