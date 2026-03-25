@@ -49,7 +49,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
     totalLancamentosADM,
   } = useFinanceiro();
 
-  // Local filter state (initialized from global)
+  // Filtro único — herdado do Resumo, ajustável localmente
   const [localAno, setLocalAno] = useState(filtroAnoInicial || String(new Date().getFullYear()));
   const [localMes, setLocalMes] = useState(filtroMesInicial || new Date().getMonth() + 1);
 
@@ -107,7 +107,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
           )}
         </div>
 
-        {/* Linha 2: filtros de ano e mês */}
+        {/* Linha 2: filtros de ano e mês — FILTRO ÚNICO */}
         <div className="flex gap-2 px-4 pb-2">
           <Select value={localAno} onValueChange={setLocalAno}>
             <SelectTrigger className="w-24 h-8 text-xs font-bold">
@@ -171,6 +171,8 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
                 pastos={pastos}
                 categorias={categorias}
                 fazendaId={fazendaId}
+                ano={Number(localAno)}
+                mesAte={localMes}
               />
             </div>
           )}
@@ -180,6 +182,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
               rateioADM={rateioADM}
               ano={Number(localAno)}
               mesAte={localMes}
+              fazendaAtualNome={isGlobal ? undefined : fazendaAtual?.nome}
             />
           )}
           {subTab === 'rateio' && (
