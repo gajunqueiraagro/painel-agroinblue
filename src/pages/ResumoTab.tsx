@@ -50,6 +50,71 @@ function StatusBadge({ nivel }: { nivel: StatusNivel }) {
   );
 }
 
+function FinanceiroCard({ financeiro, onTabChange }: { financeiro: ReturnType<typeof useResumoStatus>['financeiro']; onTabChange: (tab: TabId) => void }) {
+  const [auditOpen, setAuditOpen] = useState(false);
+  const a = financeiro.audit;
+
+  return (
+    <div className="rounded-xl border bg-card p-4 space-y-3 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">💰</span>
+          <h2 className="text-base font-extrabold text-card-foreground">Financeiro</h2>
+        </div>
+        <StatusBadge nivel={financeiro.status.nivel} />
+      </div>
+
+      <div className="space-y-1.5 text-sm">
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Entradas</span>
+          <span className="font-semibold text-green-600 dark:text-green-400">{formatMoeda(financeiro.totalEntradas)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Saídas</span>
+          <span className="font-semibold text-red-600 dark:text-red-400">{formatMoeda(financeiro.totalSaidas)}</span>
+        </div>
+        <div className="flex justify-between border-t border-border pt-1">
+          <span className="text-muted-foreground font-semibold">Saldo</span>
+          <span className={`font-bold ${financeiro.saldoCaixa >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+            {formatMoeda(financeiro.saldoCaixa)}
+          </span>
+        </div>
+      </div>
+
+      <p className="text-[11px] text-muted-foreground">{financeiro.status.descricao}</p>
+
+      {/* Auditoria expandível */}
+      <button
+        onClick={() => setAuditOpen(!auditOpen)}
+        className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground hover:text-foreground transition-colors w-full"
+      >
+        🔍 Auditoria
+        {auditOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+      </button>
+      {auditOpen && (
+        <div className="bg-muted/50 rounded-md p-2 space-y-1 text-[10px] text-muted-foreground">
+          <div><strong>Base:</strong> {a.base}</div>
+          <div><strong>Status:</strong> {a.filtroStatus}</div>
+          <div><strong>Data base:</strong> {a.filtroData}</div>
+          <div><strong>Classificação:</strong> {a.classificacao}</div>
+          <div><strong>Período:</strong> {a.periodo}</div>
+          <div><strong>Lançamentos filtrados:</strong> {a.totalLancamentosFiltrados}</div>
+          <div><strong>Entradas:</strong> {a.qtdEntradas} lanç. → {formatMoeda(financeiro.totalEntradas)}</div>
+          <div><strong>Saídas:</strong> {a.qtdSaidas} lanç. → {formatMoeda(financeiro.totalSaidas)}</div>
+          <div><strong>Saldo:</strong> {a.saldoOrigem}</div>
+        </div>
+      )}
+
+      <button
+        onClick={() => onTabChange('fin_caixa')}
+        className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
+      >
+        Ver Fluxo Financeiro <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
 export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlobal, onFiltroChange }: Props) {
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
