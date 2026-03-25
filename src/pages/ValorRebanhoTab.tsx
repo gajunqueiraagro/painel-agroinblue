@@ -116,7 +116,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     return pesoTotal > 0 ? totalRebanho / pesoTotal : 0;
   }, [allRows, totalRebanho]);
 
-  const precoMedioArroba = precoMedioKg * 30;
+  const totalArrobas = useMemo(() => allRows.reduce((sum, r) => sum + (r.saldo * r.pesoMedio / 30), 0), [allRows]);
+  const precoMedioArroba = totalArrobas > 0 ? totalRebanho / totalArrobas : 0;
   const mesLabel = MESES_COLS.find(m => m.key === mesFiltro)?.label || mesFiltro;
 
   const categoriasSemPreco = useMemo(() => {
