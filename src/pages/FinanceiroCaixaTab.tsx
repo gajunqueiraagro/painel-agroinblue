@@ -1,26 +1,23 @@
 /**
  * Módulo Financeiro — container principal com sub-abas.
- * Fase 1: Importação + Dashboard + Rateio ADM v1.
- *
- * Arquitetura: dados zootécnicos vêm exclusivamente de useIndicadoresZootecnicos.
- * Nenhum cálculo paralelo de saldos/pesos/arrobas é feito aqui.
+ * Sub-aba padrão: Fluxo de Caixa (13 linhas + gráfico).
  */
 import { useState, useMemo } from 'react';
 import { ImportacaoFinanceira } from '@/components/financeiro/ImportacaoFinanceira';
 import { DashboardFinanceiro } from '@/components/financeiro/DashboardFinanceiro';
 import { RateioADMConferenciaView } from '@/components/financeiro/RateioADMConferencia';
 import { AnaliseEconomica } from '@/components/financeiro/AnaliseEconomica';
+import { FluxoFinanceiro } from '@/components/financeiro/FluxoFinanceiro';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
-type SubTab = 'dashboard' | 'analise' | 'rateio' | 'importacao';
+type SubTab = 'fluxo' | 'dashboard' | 'analise' | 'rateio' | 'importacao';
 
 interface Props {
-  /** Lançamentos pecuários COMPLETOS (incluindo transferências) — para cálculos zootécnicos */
   lancamentosPecuarios?: Lancamento[];
   saldosIniciais?: SaldoInicial[];
   onBack?: () => void;
@@ -29,7 +26,7 @@ interface Props {
 }
 
 export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [], onBack, filtroAnoInicial, filtroMesInicial }: Props) {
-  const [subTab, setSubTab] = useState<SubTab>('dashboard');
+  const [subTab, setSubTab] = useState<SubTab>('fluxo');
   const { fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
@@ -40,10 +37,10 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
     totalLancamentosADM,
   } = useFinanceiro();
 
-  // Dados zootécnicos oficiais — FONTE ÚNICA
-  // Nota: o hook recebe ano/mes dinâmicos, mas o Dashboard controla o período.
-  // Passamos o hook com todos os meses possíveis; o Dashboard vai filtrar internamente.
-  // Para o hook, usamos o ano/mês correntes como default.
+  // Local filter state (initialized from global)
+  const [localAno, setLocalAno] = useState(filtroAnoInicial || String(new Date().getFullYear()));
+  const [localMes, setLocalMes] = useState(filtroMesInicial || new Date().getMonth() + 1);
+
   const anoAtual = new Date().getFullYear();
   const mesAtual = new Date().getMonth() + 1;
 
@@ -52,41 +49,53 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
     lancamentosPecuarios, saldosIniciais, pastos, categorias,
   );
 
+  // Available years from lancamentos
+  const anosDisponiveis = useMemo(() => {
+    const anos = new Set<string>();
+    anos.add(String(anoAtual));
+    if (filtroAnoInicial) anos.add(filtroAnoInicial);
+    lancamentos.forEach(l => {
+      if (l.data_pagamento && l.data_pagamento.length >= 4) {
+        anos.add(l.data_pagamento.substring(0, 4));
+      }
+      if (l.ano_mes && l.ano_mes.length >= 4) {
+        anos.add(l.ano_mes.substring(0, 4));
+      }
+    });
+    return Array.from(anos).sort().reverse();
+  }, [lancamentos, anoAtual, filtroAnoInicial]);
+
   const tabs: { id: SubTab; label: string; icon: string }[] = [
+    { id: 'fluxo', label: 'Fluxo', icon: '💰' },
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'analise', label: 'Análise', icon: '📈' },
     ...(fazendaADM ? [{ id: 'rateio' as SubTab, label: 'Rateio ADM', icon: '🏢' }] : []),
     { id: 'importacao', label: 'Importação', icon: '📥' },
   ];
 
-  const gridCols = tabs.length === 4 ? 'grid-cols-4' : 'grid-cols-3';
+  const gridCols = `grid-cols-${tabs.length}`;
 
   return (
-    <div className="p-4 max-w-full mx-auto space-y-3 animate-fade-in pb-20">
-      {/* Header with back button */}
-      {onBack && (
-        <div className="flex items-center gap-2">
-          <button onClick={onBack} className="p-1.5 rounded-md hover:bg-muted transition-colors">
-            <ArrowLeft className="h-5 w-5 text-foreground" />
-          </button>
-          <h1 className="text-lg font-extrabold text-foreground">💰 Financeiro</h1>
+    <div className="max-w-full mx-auto animate-fade-in pb-20">
+      {subTab !== 'fluxo' && (
+        <div className="p-4 space-y-3">
+          <div className={`grid ${gridCols} gap-1 bg-muted rounded-lg p-1`}>
+            {tabs.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setSubTab(t.id)}
+                className={`py-2 px-2 rounded-md text-xs font-bold transition-colors touch-target ${
+                  subTab === t.id
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground'
+                }`}
+              >
+                {t.icon} {t.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
-      <div className={`grid ${gridCols} gap-1 bg-muted rounded-lg p-1`}>
-        {tabs.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setSubTab(t.id)}
-            className={`py-2 px-3 rounded-md text-xs font-bold transition-colors touch-target ${
-              subTab === t.id
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground'
-            }`}
-          >
-            {t.icon} {t.label}
-          </button>
-        ))}
-      </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
@@ -94,49 +103,86 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
         </div>
       ) : (
         <>
-          {subTab === 'dashboard' && (
-            <DashboardFinanceiro
+          {subTab === 'fluxo' && (
+            <FluxoFinanceiro
               lancamentos={lancamentos}
-              indicadores={indicadores}
-              lancamentosPecuarios={lancamentosPecuarios}
-              saldosIniciais={saldosIniciais}
               rateioADM={rateioADM}
-              isGlobal={isGlobal}
-              fazendasSemArea={fazendasSemRebanho}
-              pastos={pastos}
-              categorias={categorias}
-              fazendaId={fazendaId}
+              ano={Number(localAno)}
+              mesAte={localMes}
+              onAnoChange={setLocalAno}
+              onMesChange={setLocalMes}
+              anosDisponiveis={anosDisponiveis}
+              onBack={onBack}
             />
+          )}
+          {subTab === 'dashboard' && (
+            <div className="p-4">
+              <DashboardFinanceiro
+                lancamentos={lancamentos}
+                indicadores={indicadores}
+                lancamentosPecuarios={lancamentosPecuarios}
+                saldosIniciais={saldosIniciais}
+                rateioADM={rateioADM}
+                isGlobal={isGlobal}
+                fazendasSemArea={fazendasSemRebanho}
+                pastos={pastos}
+                categorias={categorias}
+                fazendaId={fazendaId}
+              />
+            </div>
           )}
           {subTab === 'analise' && (
-            <AnaliseEconomica
-              lancamentos={lancamentos}
-              lancamentosPecuarios={lancamentosPecuarios}
-              saldosIniciais={saldosIniciais}
-              rateioADM={rateioADM}
-              isGlobal={isGlobal}
-              pastos={pastos}
-              categorias={categorias}
-              fazendaId={fazendaId}
-            />
+            <div className="p-4">
+              <AnaliseEconomica
+                lancamentos={lancamentos}
+                lancamentosPecuarios={lancamentosPecuarios}
+                saldosIniciais={saldosIniciais}
+                rateioADM={rateioADM}
+                isGlobal={isGlobal}
+                pastos={pastos}
+                categorias={categorias}
+                fazendaId={fazendaId}
+              />
+            </div>
           )}
           {subTab === 'rateio' && (
-            <RateioADMConferenciaView
-              conferencia={rateioConferencia}
-              fazendasSemRebanho={fazendasSemRebanho}
-              totalLancamentosADM={totalLancamentosADM}
-            />
+            <div className="p-4">
+              <RateioADMConferenciaView
+                conferencia={rateioConferencia}
+                fazendasSemRebanho={fazendasSemRebanho}
+                totalLancamentosADM={totalLancamentosADM}
+              />
+            </div>
           )}
           {subTab === 'importacao' && (
-            <ImportacaoFinanceira
-              importacoes={importacoes}
-              centrosCusto={centrosCusto}
-              fazendas={fazendaMapForImport}
-              onConfirmar={confirmarImportacao}
-              onExcluir={excluirImportacao}
-            />
+            <div className="p-4">
+              <ImportacaoFinanceira
+                importacoes={importacoes}
+                centrosCusto={centrosCusto}
+                fazendas={fazendaMapForImport}
+                onConfirmar={confirmarImportacao}
+                onExcluir={excluirImportacao}
+              />
+            </div>
           )}
         </>
+      )}
+
+      {/* Sub-tab switcher shown at bottom of fluxo view */}
+      {subTab === 'fluxo' && (
+        <div className="px-4 pb-4">
+          <div className="flex gap-2 flex-wrap">
+            {tabs.filter(t => t.id !== 'fluxo').map(t => (
+              <button
+                key={t.id}
+                onClick={() => setSubTab(t.id)}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold text-muted-foreground bg-muted hover:bg-muted/80 transition-colors"
+              >
+                {t.icon} {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
