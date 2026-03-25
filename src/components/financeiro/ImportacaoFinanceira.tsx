@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Download, Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, Loader2, Trash2 } from 'lucide-react';
 import { downloadModeloExcel } from '@/lib/financeiro/excelTemplate';
 import {
-  parseExcel, resolverFazendas, validarCentrosCusto,
+  parseExcel, resolverFazendas, validarCentrosCusto, validarEstruturaExcel,
   type LinhaImportada, type SaldoBancarioImportado, type ContaImportada,
   type ResumoCaixaImportado, type ErroImportacao, type CentroCustoOficial, type FazendaMap,
+  type ValidacaoEstrutura,
 } from '@/lib/financeiro/importParser';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import type { ImportacaoRecord } from '@/hooks/useFinanceiro';
@@ -45,6 +46,7 @@ interface PreviewState {
   erros: ErroImportacao[];
   totalLinhas: number;
   resumoFazendas: { codigo: string; nome: string; qtd: number }[];
+  erroEstrutura?: ValidacaoEstrutura;
 }
 
 export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onConfirmar, onExcluir }: Props) {
@@ -59,6 +61,20 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
     if (!file) return;
 
     const buffer = await file.arrayBuffer();
+
+    // Validate structure first
+    const validacao = validarEstruturaExcel(buffer);
+    if (!validacao.valido) {
+      setPreview({
+        nomeArquivo: file.name,
+        lancamentos: [], saldosBancarios: [], contas: [], resumoCaixa: [],
+        erros: [], totalLinhas: 0, resumoFazendas: [],
+        erroEstrutura: validacao,
+      });
+      if (fileRef.current) fileRef.current.value = '';
+      return;
+    }
+
     const result = parseExcel(buffer);
 
     const errosFazenda = resolverFazendas(result.lancamentos, fazendas);
@@ -152,6 +168,37 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            {/* Erro de estrutura */}
+            {preview.erroEstrutura && !preview.erroEstrutura.valido && (
+              <div className="space-y-2">
+                {preview.erroEstrutura.abasFaltando.length > 0 && (
+                  <div className="bg-destructive/10 rounded-lg p-3 space-y-1">
+                    <p className="text-sm font-bold text-destructive flex items-center gap-1">
+                      <AlertTriangle className="h-4 w-4" /> Abas obrigatórias ausentes:
+                    </p>
+                    {preview.erroEstrutura.abasFaltando.map(aba => (
+                      <div key={aba} className="text-xs bg-destructive/5 rounded px-2 py-1 font-mono">{aba}</div>
+                    ))}
+                  </div>
+                )}
+                {preview.erroEstrutura.colunasFaltando.length > 0 && (
+                  <div className="bg-destructive/10 rounded-lg p-3 space-y-1">
+                    <p className="text-sm font-bold text-destructive flex items-center gap-1">
+                      <AlertTriangle className="h-4 w-4" /> Colunas obrigatórias ausentes:
+                    </p>
+                    {preview.erroEstrutura.colunasFaltando.map(item => (
+                      <div key={item.aba} className="text-xs bg-destructive/5 rounded px-2 py-1">
+                        <span className="font-mono font-bold">{item.aba}</span>: {item.colunas.join(', ')}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <Button variant="outline" className="w-full" onClick={() => setPreview(null)}>Fechar</Button>
+              </div>
+            )}
+
+            {/* Conteúdo normal */}
+            {(!preview.erroEstrutura || preview.erroEstrutura.valido) && <>
             {/* Resumo por aba */}
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="bg-muted rounded-lg p-2 text-center">
@@ -281,6 +328,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
                 )}
               </Button>
             </div>
+            </>}
           </CardContent>
         </Card>
       )}
