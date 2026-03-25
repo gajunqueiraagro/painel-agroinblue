@@ -51,6 +51,8 @@ const TITLES: Record<TabId, string> = {
   pastos: 'Pastos',
   conciliacao: 'Conciliação',
   fin_caixa: 'Financeiro',
+  valor_rebanho: 'Valor do Rebanho',
+  conciliacao_categoria: 'Conciliação de Categoria',
 };
 
 const Index = () => {
