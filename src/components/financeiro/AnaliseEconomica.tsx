@@ -101,13 +101,13 @@ export function AnaliseEconomica({
     return Array.from(set).sort().reverse();
   }, [lancamentos]);
 
-  const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
+  const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(new Date().getFullYear()));
   const anoNum = Number(anoFiltro);
 
   // Mês limite — controlado pelo usuário
-  const mesDefault = anoNum === new Date().getFullYear()
+  const mesDefault = filtroMesInicial || (anoNum === new Date().getFullYear()
     ? new Date().getMonth() + 1
-    : 12;
+    : 12);
   const [mesLimite, setMesLimite] = useState(mesDefault);
 
   // Sync default when ano changes
