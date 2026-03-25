@@ -332,14 +332,29 @@ export function CadastrosTab() {
         )}
       </div>
 
-      <Accordion type="multiple" defaultValue={['fazendas', 'dados', 'contato', 'bancario', 'roteiro', 'pastos']} className="space-y-2">
-        {/* Fazendas */}
-        <AccordionItem value="fazendas" className="border rounded-lg">
-          <AccordionTrigger className="px-4 py-3 text-sm font-bold">🏡 Fazendas</AccordionTrigger>
-          <AccordionContent className="px-4 pb-4">
-            <FazendasList />
-          </AccordionContent>
-        </AccordionItem>
+      <Accordion type="multiple" defaultValue={['fazendas', 'dados', 'contato', 'bancario', 'roteiro', 'pastos', 'acessos']} className="space-y-2">
+        {/* Fazendas - only in global mode */}
+        {isGlobal && (
+          <AccordionItem value="fazendas" className="border rounded-lg">
+            <AccordionTrigger className="px-4 py-3 text-sm font-bold">🏡 Fazendas</AccordionTrigger>
+            <AccordionContent className="px-4 pb-4">
+              <FazendasList />
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {/* Fazenda atual info when not global */}
+        {!isGlobal && fazendaAtual && (
+          <div className="rounded-lg border bg-card p-4">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🏡</span>
+              <div>
+                <p className="text-sm font-bold text-foreground">{fazendaAtual.nome}</p>
+                <p className="text-xs text-muted-foreground font-mono">{fazendaAtual.codigo_importacao || '—'}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <AccordionItem value="dados" className="border rounded-lg">
           <AccordionTrigger className="px-4 py-3 text-sm font-bold">🏠 Dados da Fazenda</AccordionTrigger>
@@ -409,6 +424,18 @@ export function CadastrosTab() {
           </AccordionTrigger>
           <AccordionContent className="px-0 pb-0">
             <PastosTab />
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Acessos */}
+        <AccordionItem value="acessos" className="border rounded-lg">
+          <AccordionTrigger className="px-4 py-3 text-sm font-bold">
+            <span className="flex items-center gap-2">
+              <Users className="h-4 w-4" /> Acessos
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="px-0 pb-0">
+            <AcessosTab />
           </AccordionContent>
         </AccordionItem>
       </Accordion>
