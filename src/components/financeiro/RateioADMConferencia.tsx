@@ -222,8 +222,8 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho, tota
                   </Table>
                 </div>
                 <div className="border-t mt-2 pt-2 flex justify-between text-xs">
-                  <span className="font-bold">{dados.lancamentosUsados.length} lançamentos</span>
-                  <span className="font-bold">{formatMoeda(dados.totalADMConciliado)}</span>
+                  <span className="font-bold">{dados.lancamentosUsados.length} lançamentos elegíveis</span>
+                  <span className="font-bold">{formatMoeda(dados.totalADMElegivel)}</span>
                 </div>
               </CardContent>
             )}
