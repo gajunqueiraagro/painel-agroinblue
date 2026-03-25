@@ -10,17 +10,18 @@
  * Entradas = tipo_operacao starts with "1"
  * Saídas = tipo_operacao starts with "2"
  * Status = Conciliado
+ *
+ * FILTRO ÚNICO: recebe ano e mesAte via props do container (FinanceiroCaixaTab).
  */
 import { useMemo, useState } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
 import { calcValorTotal, calcArrobasSafe } from '@/lib/calculos/economicos';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TrendingDown, TrendingUp, Building2, AlertTriangle, ChevronDown, ChevronUp, Activity, BarChart3 } from 'lucide-react';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
-import { MESES_OPTIONS, MESES_NOMES } from '@/lib/calculos/labels';
+import { MESES_NOMES } from '@/lib/calculos/labels';
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import {
   type FinanceiroLancamento,
@@ -72,6 +73,10 @@ interface Props {
   pastos?: Pasto[];
   categorias?: CategoriaRebanho[];
   fazendaId?: string;
+  /** Ano do filtro — vem do container */
+  ano: number;
+  /** Mês limite (1-12) — vem do container */
+  mesAte: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -199,7 +204,7 @@ function AuditReceitaCompetencia({
           <div className="text-muted-foreground mt-1">
             Critério: tipo ∈ [abate, venda, consumo] · ano = {ano} · mês ≤ {mesLimite}
           </div>
-          <div className="text-muted-foreground" style={{ color: 'hsl(var(--primary))' }}>
+          <div style={{ color: 'hsl(var(--primary))' }}>
             ✅ Fonte: calcValorTotal (hierarquia: valor_total → cálculo por @ → preço/cab)
           </div>
           <div className="text-muted-foreground mt-1">{dados.filtrados.length} lançamentos pecuários</div>
@@ -247,11 +252,10 @@ function AuditDesembolsoProdutivo({
   arrobasProduzidasAcum: number | null;
   saldoAnterior: number;
   saldoFinalMes: number;
-  mesFiltro: string;
+  mesFiltro: number;
   isGlobal: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const mesLabel = mesFiltro !== 'todos' ? mesFiltro : '12';
 
   return (
     <div className="border-t pt-2 mt-2">
@@ -295,7 +299,7 @@ function AuditDesembolsoProdutivo({
                 <span className="text-muted-foreground">Denominador:</span>
                 <div className="font-mono font-bold">{cabMediaMes !== null ? formatNum(cabMediaMes, 1) : '—'}</div>
                 <div className="text-muted-foreground">({formatNum(saldoAnterior, 0)} + {formatNum(saldoFinalMes, 0)}) ÷ 2</div>
-                <div className="text-muted-foreground" style={{ color: 'hsl(var(--primary))' }}>✅ Fonte: zootécnico oficial</div>
+                <div style={{ color: 'hsl(var(--primary))' }}>✅ Fonte: zootécnico oficial</div>
               </div>
             </div>
             <div className="border-t pt-1 font-bold">Resultado: {custoCabMes !== null ? formatMoeda(custoCabMes) : '—'}</div>
@@ -303,7 +307,7 @@ function AuditDesembolsoProdutivo({
 
           {/* Custo/cab acumulado */}
           <div className="bg-muted/50 rounded-md p-2 space-y-1">
-            <div className="font-bold text-xs">Custo/cab acumulado (jan→mês {mesLabel})</div>
+            <div className="font-bold text-xs">Custo/cab acumulado (jan→mês {mesFiltro})</div>
             <div className="text-muted-foreground">Fórmula: (desembolso_acum ÷ meses) ÷ rebanho_médio_acum</div>
             <div className="grid grid-cols-2 gap-1">
               <div>
@@ -318,7 +322,7 @@ function AuditDesembolsoProdutivo({
                 <span className="text-muted-foreground">Rebanho médio acum:</span>
                 <div className="font-mono font-bold">{cabMediaAcum !== null ? formatNum(cabMediaAcum, 1) : '—'}</div>
                 <div className="text-muted-foreground">= média dos rebanhos médios mensais</div>
-                <div className="text-muted-foreground" style={{ color: 'hsl(var(--primary))' }}>✅ Fonte: zootécnico oficial</div>
+                <div style={{ color: 'hsl(var(--primary))' }}>✅ Fonte: zootécnico oficial</div>
               </div>
             </div>
             {rebanhosMensais.length > 0 && (
@@ -346,7 +350,7 @@ function AuditDesembolsoProdutivo({
 
           {/* Custo/@ produzida */}
           <div className="bg-muted/50 rounded-md p-2 space-y-1">
-            <div className="font-bold text-xs">Custo/@ produzida (jan→mês {mesLabel})</div>
+            <div className="font-bold text-xs">Custo/@ produzida (jan→mês {mesFiltro})</div>
             <div className="text-muted-foreground">Fórmula: desembolso_acum ÷ arrobas_produzidas_acum</div>
             <div className="grid grid-cols-2 gap-1">
               <div>
@@ -356,7 +360,7 @@ function AuditDesembolsoProdutivo({
               <div>
                 <span className="text-muted-foreground">Denominador:</span>
                 <div className="font-mono font-bold">{arrobasProduzidasAcum !== null ? `${formatNum(arrobasProduzidasAcum, 1)} @` : '—'}</div>
-                <div className="text-muted-foreground" style={{ color: 'hsl(var(--primary))' }}>✅ Fonte: zootécnico oficial</div>
+                <div style={{ color: 'hsl(var(--primary))' }}>✅ Fonte: zootécnico oficial</div>
               </div>
             </div>
             <div className="border-t pt-1 font-bold">Resultado: {custoArrobaProd !== null ? formatMoeda(custoArrobaProd) : '—'}</div>
@@ -368,62 +372,161 @@ function AuditDesembolsoProdutivo({
 }
 
 // ---------------------------------------------------------------------------
-// Sub: Mobile Detalhe Entradas/Saídas (tabbed)
+// Sub: Toggle button group
 // ---------------------------------------------------------------------------
 
-function MobileDetalheEntradaSaida({ ind }: { ind: any }) {
+function ToggleGroup({ value, onChange }: { value: 'mes' | 'acum'; onChange: (v: 'mes' | 'acum') => void }) {
+  return (
+    <div className="flex gap-1">
+      {(['mes', 'acum'] as const).map(t => (
+        <button key={t} onClick={() => onChange(t)}
+          className={`text-[10px] px-2 py-0.5 rounded-md font-bold transition-colors ${value === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground bg-muted'}`}>
+          {t === 'mes' ? 'Mês' : 'Acumulado'}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sub: Unified Entradas/Saídas card with toggle
+// ---------------------------------------------------------------------------
+
+function CardEntradaSaidaToggle({ ind, isGlobal }: { ind: any; isGlobal: boolean }) {
   const [entradaTab, setEntradaTab] = useState<'mes' | 'acum'>('mes');
   const [saidaTab, setSaidaTab] = useState<'mes' | 'acum'>('mes');
 
   return (
-    <div className="space-y-2">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
       {/* Entradas */}
-      <Card className="bg-card/80">
+      <Card>
         <CardContent className="p-3 space-y-1.5">
           <div className="flex items-center justify-between">
-            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entradas</div>
-            <div className="flex gap-1">
-              {(['mes', 'acum'] as const).map(t => (
-                <button key={t} onClick={() => setEntradaTab(t)}
-                  className={`text-[10px] px-2 py-0.5 rounded-md font-bold transition-colors ${entradaTab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground bg-muted'}`}>
-                  {t === 'mes' ? 'Mês' : 'Acumulado'}
-                </button>
-              ))}
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <TrendingUp className="h-3 w-3 text-green-600" /> Entradas
             </div>
+            <ToggleGroup value={entradaTab} onChange={setEntradaTab} />
           </div>
-          {ind.categoriasEntrada.map((cat: string) => (
-            <div key={cat} className="flex justify-between text-xs">
-              <span className="text-muted-foreground truncate max-w-[55%] mr-2">{cat}</span>
-              <span className="font-mono font-bold whitespace-nowrap text-green-600 dark:text-green-400">{formatMoeda((entradaTab === 'mes' ? ind.entradaDecomp.mes : ind.entradaDecomp.acum).get(cat) || 0)}</span>
-            </div>
-          ))}
+          <p className="text-lg font-bold text-green-700 dark:text-green-400">
+            {formatMoeda(entradaTab === 'mes' ? ind.totalEntradas : ind.entradasAcum)}
+          </p>
+          <div className="space-y-0.5">
+            {ind.categoriasEntrada.map((cat: string) => (
+              <div key={cat} className="flex justify-between text-xs">
+                <span className="text-muted-foreground truncate max-w-[55%] mr-2">{cat}</span>
+                <span className="font-mono font-bold whitespace-nowrap text-green-600 dark:text-green-400">
+                  {formatMoeda((entradaTab === 'mes' ? ind.entradaDecomp.mes : ind.entradaDecomp.acum).get(cat) || 0)}
+                </span>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
 
       {/* Saídas */}
-      <Card className="bg-card/80">
+      <Card>
         <CardContent className="p-3 space-y-1.5">
           <div className="flex items-center justify-between">
-            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Saídas</div>
-            <div className="flex gap-1">
-              {(['mes', 'acum'] as const).map(t => (
-                <button key={t} onClick={() => setSaidaTab(t)}
-                  className={`text-[10px] px-2 py-0.5 rounded-md font-bold transition-colors ${saidaTab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground bg-muted'}`}>
-                  {t === 'mes' ? 'Mês' : 'Acumulado'}
-                </button>
-              ))}
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <TrendingDown className="h-3 w-3 text-red-600" /> Saídas
+            </div>
+            <ToggleGroup value={saidaTab} onChange={setSaidaTab} />
+          </div>
+          <p className="text-lg font-bold text-red-600 dark:text-red-400">
+            {formatMoeda(saidaTab === 'mes' ? ind.saidasComRateio : (ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal)))}
+          </p>
+          <div className="space-y-0.5">
+            {ind.categoriasSaida.map((cat: string) => (
+              <div key={cat} className="flex justify-between text-xs">
+                <span className={`text-muted-foreground truncate max-w-[55%] mr-2 ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
+                <span className="font-mono font-bold whitespace-nowrap text-red-600 dark:text-red-400">
+                  {formatMoeda((saidaTab === 'mes' ? ind.saidaDecomp.mes : ind.saidaDecomp.acum).get(cat) || 0)}
+                </span>
+              </div>
+            ))}
+            {/* Próprio / Rateio ADM */}
+            <div className="border-t border-border/50 pt-1 mt-1 space-y-0.5">
+              <div className="flex justify-between text-[10px]">
+                <span className="text-muted-foreground">Próprio</span>
+                <span className="font-mono font-bold text-red-600 dark:text-red-400">
+                  {formatMoeda(saidaTab === 'mes' ? ind.totalSaidas : ind.saidasAcum)}
+                </span>
+              </div>
+              {!isGlobal && (saidaTab === 'mes' ? ind.rateioMes : ind.rateioAcumVal) > 0 && (
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-amber-600 dark:text-amber-400">Rateio ADM</span>
+                  <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
+                    {formatMoeda(saidaTab === 'mes' ? ind.rateioMes : ind.rateioAcumVal)}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
-          {ind.categoriasSaida.map((cat: string) => (
-            <div key={cat} className="flex justify-between text-xs">
-              <span className={`text-muted-foreground truncate max-w-[55%] mr-2 ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
-              <span className="font-mono font-bold whitespace-nowrap text-red-600 dark:text-red-400">{formatMoeda((saidaTab === 'mes' ? ind.saidaDecomp.mes : ind.saidaDecomp.acum).get(cat) || 0)}</span>
-            </div>
-          ))}
           <div className="text-[8px] text-muted-foreground italic">* Reposição e Dedução não entram no desembolso produtivo</div>
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sub: Unified Centro de Custo with toggle
+// ---------------------------------------------------------------------------
+
+function CentroCustoUnificado({ ind, zooData }: { ind: any; zooData: any }) {
+  const [tab, setTab] = useState<'mes' | 'acum'>('mes');
+  const items = tab === 'mes' ? ind.ccMes : ind.ccAcum;
+  const cabMedia = tab === 'mes' ? zooData.cabMediaMes : zooData.cabMediaAcum;
+  const divisor = tab === 'acum' && ind.numMeses > 0 ? ind.numMeses : 1;
+  const displayItems = items.map((i: any) => ({ ...i, valor: i.valor / divisor }));
+  const total = displayItems.reduce((s: number, i: any) => s + i.valor, 0);
+
+  return (
+    <Card>
+      <CardContent className="p-3 space-y-1.5">
+        <div className="flex items-center justify-between">
+          <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+            <BarChart3 className="h-3 w-3 inline mr-1" />Desembolso por Centro
+          </div>
+          <div className="flex gap-1">
+            {(['mes', 'acum'] as const).map(t => (
+              <button key={t} onClick={() => setTab(t)}
+                className={`text-[10px] px-2 py-0.5 rounded-md font-bold transition-colors ${tab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground bg-muted'}`}>
+                {t === 'mes' ? 'Mês' : 'Média'}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Total */}
+        <div className="flex items-center justify-between text-[10px] font-bold border-b pb-1 mb-1">
+          <span className="text-red-600 dark:text-red-400">TOTAL</span>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-red-600 dark:text-red-400">{formatMoeda(total)}</span>
+            <span className="text-muted-foreground">100%</span>
+            {cabMedia && cabMedia > 0 && (
+              <span className="text-muted-foreground font-mono text-[9px]">{formatMoeda(total / cabMedia)}/cab</span>
+            )}
+          </div>
+        </div>
+        {/* Items */}
+        {displayItems.map((item: any) => {
+          const pct = total > 0 ? (item.valor / total) * 100 : 0;
+          const isRateio = item.nome === 'Rateio ADM';
+          return (
+            <div key={item.nome} className={`flex items-center justify-between text-[10px] py-0.5 ${isRateio ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
+              <span className="truncate max-w-[40%] mr-1.5">{item.nome}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(item.valor)}</span>
+                <span className="text-muted-foreground w-9 text-right">{formatNum(pct, 1)}%</span>
+                {cabMedia && cabMedia > 0 && (
+                  <span className="text-muted-foreground font-mono text-[9px] w-16 text-right">{formatMoeda(item.valor / cabMedia)}/cab</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -442,6 +545,8 @@ export function DashboardFinanceiro({
   pastos = [],
   categorias = [],
   fazendaId,
+  ano,
+  mesAte,
 }: Props) {
   const [showAudit, setShowAudit] = useState(false);
   const isMobile = useIsMobile();
@@ -452,56 +557,43 @@ export function DashboardFinanceiro({
     [fazendas],
   );
 
-  const anosDisp = useMemo(() => {
-    const set = new Set<string>();
-    set.add(String(new Date().getFullYear()));
-    lancamentos.forEach(l => {
-      if (l.data_pagamento) set.add(l.data_pagamento.substring(0, 4));
-      if (l.ano_mes) set.add(l.ano_mes.substring(0, 4));
-    });
-    return Array.from(set).sort().reverse();
-  }, [lancamentos]);
+  // Use props instead of internal state
+  const anoFiltro = String(ano);
+  const mesLimite = mesAte;
+  const mesNum = mesAte;
 
-  const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
-  const [mesFiltro, setMesFiltro] = useState('todos');
-
-  const periodoAlvo = useMemo(
-    () => mesFiltro !== 'todos' ? `${anoFiltro}-${mesFiltro}` : anoFiltro,
-    [anoFiltro, mesFiltro],
-  );
+  // Period target for filtering
+  const periodoMes = `${anoFiltro}-${String(mesAte).padStart(2, '0')}`;
 
   // =========================================================================
   // ZOOTÉCNICO — FONTE ÚNICA
   // =========================================================================
-  const mesNum = mesFiltro !== 'todos' ? Number(mesFiltro) : new Date().getMonth() + 1;
 
   const zoo = useIndicadoresZootecnicos(
-    fazendaId, Number(anoFiltro), mesNum,
+    fazendaId, ano, mesNum,
     lancamentosPecuarios, saldosIniciais, pastos, categorias,
   );
 
   const arrobasGlobal = useArrobasGlobal(
     isGlobal, lancamentosPecuarios, saldosIniciais, categorias,
-    Number(anoFiltro), mesNum, fazendaIdsReais,
+    ano, mesNum, fazendaIdsReais,
   );
 
   const zooData = useMemo(() => {
-    const anoNum = Number(anoFiltro);
     const saldoInicialAno = saldosIniciais
-      .filter(s => s.ano === anoNum)
+      .filter(s => s.ano === ano)
       .reduce((sum, s) => sum + s.quantidade, 0);
 
     const saldoAnterior = zoo.gmdAberturaMes.estoqueInicialDetalhe.reduce((s, d) => s + d.cabecas, 0);
     const saldoFinalMes = zoo.saldoFinalMes;
     const cabMediaMes = (saldoAnterior > 0 || saldoFinalMes > 0) ? (saldoAnterior + saldoFinalMes) / 2 : null;
 
-    const mesLimite = mesFiltro !== 'todos' ? Number(mesFiltro) : 12;
     const rebanhosMensais: RebanhoMedioMensal[] = [];
     for (let m = 1; m <= mesLimite; m++) {
       const saldoInicioMes = m === 1
         ? saldoInicialAno
-        : Array.from(calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, anoNum, m - 1).values()).reduce((s, v) => s + v, 0);
-      const saldoFimMes = Array.from(calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, anoNum, m).values()).reduce((s, v) => s + v, 0);
+        : Array.from(calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, ano, m - 1).values()).reduce((s, v) => s + v, 0);
+      const saldoFimMes = Array.from(calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, ano, m).values()).reduce((s, v) => s + v, 0);
       const media = (saldoInicioMes + saldoFimMes) / 2;
       rebanhosMensais.push({ mes: m, saldoInicio: saldoInicioMes, saldoFim: saldoFimMes, media });
     }
@@ -520,30 +612,36 @@ export function DashboardFinanceiro({
       arrobasProduzidasMes: zoo.arrobasProduzidasMes,
       gmdAcumulado: zoo.gmdAcumulado,
     };
-  }, [zoo, saldosIniciais, anoFiltro, mesFiltro, lancamentosPecuarios, isGlobal, arrobasGlobal.somaArrobas]);
+  }, [zoo, saldosIniciais, ano, mesLimite, lancamentosPecuarios, isGlobal, arrobasGlobal.somaArrobas]);
 
   // =========================================================================
-  // FINANCEIRO — filtros
+  // FINANCEIRO — filtros (mês selecionado)
   // =========================================================================
 
-  const todosNoPeriodo = useMemo(() =>
+  const filtradosMes = useMemo(() =>
+    lancamentos.filter(l => {
+      if (!isConciliado(l)) return false;
+      const am = datePagtoAnoMes(l);
+      return am === periodoMes;
+    }), [lancamentos, periodoMes]);
+
+  const todosNoPeriodoMes = useMemo(() =>
     lancamentos.filter(l => {
       const am = datePagtoAnoMes(l);
-      return am && am.startsWith(periodoAlvo);
-    }), [lancamentos, periodoAlvo]);
+      return am === periodoMes;
+    }), [lancamentos, periodoMes]);
 
-  const filtrados = useMemo(() => todosNoPeriodo.filter(isConciliado), [todosNoPeriodo]);
-  const entradasList = useMemo(() => filtrados.filter(isEntrada), [filtrados]);
-  const saidasList = useMemo(() => filtrados.filter(isSaida), [filtrados]);
+  const entradasListMes = useMemo(() => filtradosMes.filter(isEntrada), [filtradosMes]);
+  const saidasListMes = useMemo(() => filtradosMes.filter(isSaida), [filtradosMes]);
 
-  // Rateio filtrado
-  const rateioFiltrado = useMemo(() => rateioADM.filter(r => r.anoMes.startsWith(periodoAlvo)), [rateioADM, periodoAlvo]);
-  const totalRateioFiltrado = useMemo(() => rateioFiltrado.reduce((s, r) => s + r.valorRateado, 0), [rateioFiltrado]);
+  // Rateio filtrado (mês)
+  const rateioFiltradoMes = useMemo(() => rateioADM.filter(r => r.anoMes === periodoMes), [rateioADM, periodoMes]);
+  const totalRateioMes = useMemo(() => rateioFiltradoMes.reduce((s, r) => s + r.valorRateado, 0), [rateioFiltradoMes]);
 
   // Status audit
   const auditStatus = useMemo(() => {
     const map = new Map<string, { count: number; total: number }>();
-    for (const l of todosNoPeriodo) {
+    for (const l of todosNoPeriodoMes) {
       const status = (l.status_transacao || '(vazio)').trim();
       const entry = map.get(status) || { count: 0, total: 0 };
       entry.count++;
@@ -551,25 +649,24 @@ export function DashboardFinanceiro({
       map.set(status, entry);
     }
     return Array.from(map.entries()).map(([status, v]) => ({ status, ...v })).sort((a, b) => b.total - a.total);
-  }, [todosNoPeriodo]);
+  }, [todosNoPeriodoMes]);
 
   // =========================================================================
   // INDICADORES CALCULADOS
   // =========================================================================
 
   const ind = useMemo(() => {
-    const totalEntradas = entradasList.reduce((s, l) => s + Math.abs(l.valor), 0);
-    const totalSaidas = saidasList.reduce((s, l) => s + Math.abs(l.valor), 0);
-    const saidasComRateio = totalSaidas + totalRateioFiltrado;
+    const totalEntradas = entradasListMes.reduce((s, l) => s + Math.abs(l.valor), 0);
+    const totalSaidas = saidasListMes.reduce((s, l) => s + Math.abs(l.valor), 0);
+    const saidasComRateio = totalSaidas + totalRateioMes;
 
     // --- Desembolso produtivo mês ---
-    const desembolsoProdMesProprio = filtrados
+    const desembolsoProdMesProprio = filtradosMes
       .filter(l => isDesembolsoProdutivo(l))
       .reduce((s, l) => s + Math.abs(l.valor), 0);
-    const desembolsoProdMes = desembolsoProdMesProprio + totalRateioFiltrado;
+    const desembolsoProdMes = desembolsoProdMesProprio + totalRateioMes;
 
     // --- Desembolso produtivo acumulado ---
-    const mesLimite = mesFiltro !== 'todos' ? Number(mesFiltro) : 12;
     const desembolsoProdAcumProprio = lancamentos
       .filter(l => {
         if (!isConciliado(l) || !isDesembolsoProdutivo(l)) return false;
@@ -585,7 +682,7 @@ export function DashboardFinanceiro({
 
     const desembolsoAcum = desembolsoProdAcumProprio + rateioAcumVal;
 
-    const numMeses = mesFiltro !== 'todos' ? Number(mesFiltro) : 12;
+    const numMeses = mesLimite;
     const mediaMensal = numMeses > 0 ? desembolsoAcum / numMeses : 0;
 
     // --- Indicadores econômicos ---
@@ -630,7 +727,7 @@ export function DashboardFinanceiro({
     const categoriasEntrada = ['Receitas Pecuárias', 'Receitas Agrícolas', 'Outras Receitas'];
     for (const cat of categoriasEntrada) { entradaDecomp.mes.set(cat, 0); entradaDecomp.acum.set(cat, 0); }
 
-    for (const l of entradasList) {
+    for (const l of entradasListMes) {
       const cat = classifyEntrada(l);
       entradaDecomp.mes.set(cat, (entradaDecomp.mes.get(cat) || 0) + Math.abs(l.valor));
     }
@@ -651,7 +748,7 @@ export function DashboardFinanceiro({
       const escopo = normEscopo(l);
       if (macro === 'custeio produtivo' && escopo === 'pecuaria') return 'Custeio Pecuário';
       if (macro === 'custeio produtivo' && escopo === 'agricultura') return 'Custeio Agrícola';
-      if (macro === 'custeio produtivo') return 'Custeio Pecuário'; // default
+      if (macro === 'custeio produtivo') return 'Custeio Pecuário';
       if (macro === 'investimento na fazenda' && escopo === 'pecuaria') return 'Investimento Pecuário';
       if (macro === 'investimento na fazenda' && escopo === 'agricultura') return 'Investimento Agrícola';
       if (macro === 'investimento na fazenda') return 'Investimento Pecuário';
@@ -664,7 +761,7 @@ export function DashboardFinanceiro({
     const saidaDecomp = { mes: new Map<string, number>(), acum: new Map<string, number>() };
     for (const cat of categoriasSaida) { saidaDecomp.mes.set(cat, 0); saidaDecomp.acum.set(cat, 0); }
 
-    for (const l of saidasList) {
+    for (const l of saidasListMes) {
       const cat = classifySaida(l);
       if (categoriasSaida.includes(cat)) saidaDecomp.mes.set(cat, (saidaDecomp.mes.get(cat) || 0) + Math.abs(l.valor));
     }
@@ -686,8 +783,7 @@ export function DashboardFinanceiro({
         if (!tiposReceitaComp.includes(l.tipo)) return false;
         const lAno = Number(l.data.substring(0, 4));
         const lMes = Number(l.data.substring(5, 7));
-        if (mesFiltro === 'todos') return lAno === Number(anoFiltro);
-        return lAno === Number(anoFiltro) && lMes === Number(mesFiltro);
+        return lAno === ano && lMes === mesAte;
       })
       .reduce((s, l) => s + calcValorTotal(l), 0);
 
@@ -696,12 +792,12 @@ export function DashboardFinanceiro({
         if (!tiposReceitaComp.includes(l.tipo)) return false;
         const lAno = Number(l.data.substring(0, 4));
         const lMes = Number(l.data.substring(5, 7));
-        return lAno === Number(anoFiltro) && lMes <= mesLimite;
+        return lAno === ano && lMes <= mesLimite;
       })
       .reduce((s, l) => s + calcValorTotal(l), 0);
 
     // --- Receitas Pecuárias por Caixa ---
-    const recPecCaixaMes = entradasList
+    const recPecCaixaMes = entradasListMes
       .filter(l => normMacro(l) === 'receitas' && (normEscopo(l) === 'pecuaria' || !l.escopo_negocio))
       .reduce((s, l) => s + Math.abs(l.valor), 0);
 
@@ -720,7 +816,7 @@ export function DashboardFinanceiro({
     const ccMesMap = new Map<string, number>();
     const ccAcumMap = new Map<string, number>();
 
-    for (const l of saidasList) {
+    for (const l of saidasListMes) {
       if (!isDesembolsoProdutivo(l)) continue;
       const cc = (l.centro_custo || 'Não classificado').trim();
       ccMesMap.set(cc, (ccMesMap.get(cc) || 0) + Math.abs(l.valor));
@@ -737,8 +833,8 @@ export function DashboardFinanceiro({
     });
 
     // Add rateio as separate line
-    if (!isGlobal && totalRateioFiltrado > 0) {
-      ccMesMap.set('Rateio ADM', totalRateioFiltrado);
+    if (!isGlobal && totalRateioMes > 0) {
+      ccMesMap.set('Rateio ADM', totalRateioMes);
     }
     if (!isGlobal && rateioAcumVal > 0) {
       ccAcumMap.set('Rateio ADM', rateioAcumVal);
@@ -757,9 +853,9 @@ export function DashboardFinanceiro({
       recPecCompetenciaMes, recPecCompetenciaAcum,
       recPecCaixaMes, recPecCaixaAcum,
       ccMes, ccAcum,
-      rateioMes: totalRateioFiltrado,
+      rateioMes: totalRateioMes,
     };
-  }, [entradasList, saidasList, filtrados, lancamentos, anoFiltro, mesFiltro, zooData, totalRateioFiltrado, rateioADM, lancamentosPecuarios, isGlobal]);
+  }, [entradasListMes, saidasListMes, filtradosMes, lancamentos, anoFiltro, mesLimite, zooData, totalRateioMes, rateioADM, lancamentosPecuarios, isGlobal, ano, mesAte]);
 
   // =========================================================================
   // GRÁFICO — Jan → Dez fixo
@@ -806,8 +902,6 @@ export function DashboardFinanceiro({
     );
   }
 
-  const mesLimite = mesFiltro !== 'todos' ? Number(mesFiltro) : 12;
-
   return (
     <div className="space-y-4">
       {/* Badge modo */}
@@ -828,143 +922,17 @@ export function DashboardFinanceiro({
         </div>
       )}
 
-      {/* Filtros */}
-      <div className="flex gap-2">
-        <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-          <SelectTrigger className="w-28 text-base font-bold">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={mesFiltro} onValueChange={setMesFiltro}>
-          <SelectTrigger className="flex-1 text-base font-bold">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {MESES_OPTIONS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-
       <div className="text-[10px] text-muted-foreground bg-muted rounded-md px-2.5 py-1.5">
         Filtros: Status = Conciliado · Base = Data Pagamento · Entradas = 1-* · Saídas = 2-*
       </div>
 
       {/* ================================================================= */}
-      {/* 1. CARDS PRINCIPAIS — Entradas e Saídas */}
+      {/* 1. CARDS ENTRADAS / SAÍDAS — com toggle Mês/Acumulado */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        {/* ENTRADAS */}
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
-              <TrendingUp className="h-3 w-3 text-green-600" /> Entradas
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <p className="text-lg font-bold text-green-700 dark:text-green-400">{formatMoeda(ind.totalEntradas)}</p>
-              <span className="text-[10px] text-muted-foreground">por mês</span>
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-1">{entradasList.length} lançamentos</p>
-            <p className="text-[10px] mt-1.5 pt-1.5 border-t border-border/50">
-              <span className="text-muted-foreground">acumulado: </span>
-              <span className="font-bold text-green-700 dark:text-green-400">{formatMoeda(ind.entradasAcum)}</span>
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* SAÍDAS */}
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
-              <TrendingDown className="h-3 w-3 text-red-600" /> Saídas
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.saidasComRateio)}</p>
-              <span className="text-[10px] text-muted-foreground">por mês</span>
-            </div>
-            <div className="text-[10px] text-muted-foreground mt-1 space-y-0.5">
-              <p>próprio: {formatMoeda(ind.totalSaidas)} ({saidasList.length} lanç.)</p>
-              {!isGlobal && ind.rateioMes > 0 && (
-                <p className="text-amber-600 dark:text-amber-400">rateio ADM: {formatMoeda(ind.rateioMes)}</p>
-              )}
-            </div>
-            <p className="text-[10px] mt-1.5 pt-1.5 border-t border-border/50">
-              <span className="text-muted-foreground">acumulado: </span>
-              <span className="font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal))}</span>
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <CardEntradaSaidaToggle ind={ind} isGlobal={isGlobal} />
 
       {/* ================================================================= */}
-      {/* 2. CARDS MENORES — Decomposição */}
-      {/* ================================================================= */}
-      {/* Mobile: tabbed detail blocks; Desktop: 2x2 grid */}
-      {isMobile ? (
-        <MobileDetalheEntradaSaida ind={ind} />
-      ) : (
-        <div className="grid grid-cols-2 gap-2">
-          {/* Entradas no mês */}
-          <Card className="bg-card/80">
-            <CardContent className="p-2.5 space-y-1">
-              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entradas no mês</div>
-              {ind.categoriasEntrada.map(cat => (
-                <div key={cat} className="flex justify-between text-[10px]">
-                  <span className="text-muted-foreground truncate mr-2">{cat}</span>
-                  <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.entradaDecomp.mes.get(cat) || 0)}</span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          {/* Saídas no mês */}
-          <Card className="bg-card/80">
-            <CardContent className="p-2.5 space-y-1">
-              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Saídas no mês</div>
-              {ind.categoriasSaida.map(cat => (
-                <div key={cat} className="flex justify-between text-[10px]">
-                  <span className={`text-muted-foreground truncate mr-2 ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
-                  <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.saidaDecomp.mes.get(cat) || 0)}</span>
-                </div>
-              ))}
-              {(ind.categoriasSaida.includes('Reposição de Bovinos') || ind.categoriasSaida.includes('Dedução de Receitas')) && (
-                <div className="text-[8px] text-muted-foreground italic">* não entram no desembolso produtivo</div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Entradas acumulado */}
-          <Card className="bg-card/80">
-            <CardContent className="p-2.5 space-y-1">
-              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entradas acumulado</div>
-              {ind.categoriasEntrada.map(cat => (
-                <div key={cat} className="flex justify-between text-[10px]">
-                  <span className="text-muted-foreground truncate mr-2">{cat}</span>
-                  <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.entradaDecomp.acum.get(cat) || 0)}</span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          {/* Saídas acumulado */}
-          <Card className="bg-card/80">
-            <CardContent className="p-2.5 space-y-1">
-              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Saídas acumulado</div>
-              {ind.categoriasSaida.map(cat => (
-                <div key={cat} className="flex justify-between text-[10px]">
-                  <span className={`text-muted-foreground truncate mr-2 ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
-                  <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.saidaDecomp.acum.get(cat) || 0)}</span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* ================================================================= */}
-      {/* 4. INDICADORES ECONÔMICOS — 2 colunas */}
+      {/* 2. INDICADORES ECONÔMICOS — 2 colunas */}
       {/* ================================================================= */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {/* ESQUERDA — Receitas */}
@@ -1003,7 +971,7 @@ export function DashboardFinanceiro({
             {/* Auditoria Receita Competência */}
             <AuditReceitaCompetencia
               lancPecuarios={lancamentosPecuarios}
-              ano={Number(anoFiltro)}
+              ano={ano}
               mesLimite={mesLimite}
             />
           </CardContent>
@@ -1032,12 +1000,12 @@ export function DashboardFinanceiro({
             </div>
 
             <div className="border-t pt-2">
-              {/* Desembolso Produtivo acumulado — MESMO destaque que mês */}
+              {/* Desembolso Produtivo acumulado */}
               <div className="text-[10px] text-muted-foreground">Desembolso Prod. acumulado</div>
               <p className="text-sm font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.desembolsoAcum)}</p>
             </div>
 
-            {/* Média mensal — destaque (logo após acumulado) */}
+            {/* Média mensal */}
             <div className="bg-muted/60 rounded-md p-2">
               <div className="text-[10px] text-muted-foreground">Média mensal</div>
               <p className="text-base font-extrabold text-red-600 dark:text-red-400">{formatMoeda(ind.mediaMensal)}</p>
@@ -1052,7 +1020,7 @@ export function DashboardFinanceiro({
               )}
             </div>
 
-            {/* Custo/@ produzida — DESTAQUE MAIOR */}
+            {/* Custo/@ produzida */}
             <div>
               <div className="text-[10px] text-muted-foreground">Custo/@ produzida</div>
               <p className="text-base font-extrabold text-red-600 dark:text-red-400">{ind.custoArrobaProd !== null ? formatMoeda(ind.custoArrobaProd) : '—'}</p>
@@ -1084,7 +1052,7 @@ export function DashboardFinanceiro({
               arrobasProduzidasAcum={zooData.arrobasProduzidasAcum}
               saldoAnterior={zooData.saldoAnterior}
               saldoFinalMes={zooData.saldoFinalMes}
-              mesFiltro={mesFiltro}
+              mesFiltro={mesAte}
               isGlobal={isGlobal}
             />
           </CardContent>
@@ -1092,7 +1060,7 @@ export function DashboardFinanceiro({
       </div>
 
       {/* ================================================================= */}
-      {/* 5. GRÁFICO — Jan → Dez fixo */}
+      {/* 3. GRÁFICO — Jan → Dez fixo */}
       {/* ================================================================= */}
       <Card>
         <CardHeader className="pb-2">
@@ -1118,27 +1086,10 @@ export function DashboardFinanceiro({
       </Card>
 
       {/* ================================================================= */}
-      {/* 6. QUADRO CENTRO DE CUSTO — 2 colunas */}
+      {/* 4. QUADRO CENTRO DE CUSTO — card único com toggle */}
       {/* ================================================================= */}
       {(ind.ccMes.length > 0 || ind.ccAcum.length > 0) && (
-        isMobile ? (
-          <MobileCentroCusto ind={ind} zooData={zooData} />
-        ) : (
-          <div className="grid grid-cols-2 gap-2">
-            <CentroCustoTable
-              title="Desembolso por Centro — Mês"
-              items={ind.ccMes}
-              cabMedia={zooData.cabMediaMes}
-            />
-            <CentroCustoTable
-              title="Média Mensal por Centro"
-              items={ind.ccAcum}
-              cabMedia={zooData.cabMediaAcum}
-              numMeses={ind.numMeses}
-              isMedia
-            />
-          </div>
-        )
+        <CentroCustoUnificado ind={ind} zooData={zooData} />
       )}
 
       {/* ================================================================= */}
@@ -1183,13 +1134,13 @@ export function DashboardFinanceiro({
                     </TableBody>
                   </Table>
                   <div className="border-t mt-2 pt-2 text-[10px] text-muted-foreground">
-                    Total no período: {todosNoPeriodo.length} · Usados (Conciliado): {filtrados.length}
+                    Total no período: {todosNoPeriodoMes.length} · Usados (Conciliado): {filtradosMes.length}
                   </div>
                 </CardContent>
               </Card>
 
-              <AuditTable title="Entradas próprias (1-*)" lancamentos={entradasList} totalLabel="Total entradas" />
-              <AuditTable title="Saídas próprias (2-*)" lancamentos={saidasList} totalLabel="Total saídas" />
+              <AuditTable title="Entradas próprias (1-*)" lancamentos={entradasListMes} totalLabel="Total entradas" />
+              <AuditTable title="Saídas próprias (2-*)" lancamentos={saidasListMes} totalLabel="Total saídas" />
 
               <Card className="bg-muted/50">
                 <CardContent className="p-3 space-y-1">
@@ -1219,126 +1170,5 @@ export function DashboardFinanceiro({
         </div>
       )}
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sub: Mobile Centro de Custo (tabbed)
-// ---------------------------------------------------------------------------
-
-function MobileCentroCusto({ ind, zooData }: { ind: any; zooData: any }) {
-  const [tab, setTab] = useState<'mes' | 'acum'>('mes');
-  const items = tab === 'mes' ? ind.ccMes : ind.ccAcum;
-  const cabMedia = tab === 'mes' ? zooData.cabMediaMes : zooData.cabMediaAcum;
-  const divisor = tab === 'acum' && ind.numMeses > 0 ? ind.numMeses : 1;
-  const displayItems = items.map((i: any) => ({ ...i, valor: i.valor / divisor }));
-  const total = displayItems.reduce((s: number, i: any) => s + i.valor, 0);
-
-  return (
-    <Card>
-      <CardContent className="p-3 space-y-1.5">
-        <div className="flex items-center justify-between">
-          <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-            <BarChart3 className="h-3 w-3 inline mr-1" />Desembolso por Centro
-          </div>
-          <div className="flex gap-1">
-            {(['mes', 'acum'] as const).map(t => (
-              <button key={t} onClick={() => setTab(t)}
-                className={`text-[10px] px-2 py-0.5 rounded-md font-bold transition-colors ${tab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground bg-muted'}`}>
-                {t === 'mes' ? 'Mês' : 'Média'}
-              </button>
-            ))}
-          </div>
-        </div>
-        {/* Total */}
-        <div className="flex items-center justify-between text-[10px] font-bold border-b pb-1 mb-1">
-          <span>TOTAL</span>
-          <div className="flex items-center gap-2">
-            <span className="font-mono">{formatMoeda(total)}</span>
-            <span className="text-muted-foreground">100%</span>
-            {cabMedia && cabMedia > 0 && (
-              <span className="text-muted-foreground font-mono text-[9px]">{formatMoeda(total / cabMedia)}/cab</span>
-            )}
-          </div>
-        </div>
-        {/* Items */}
-        {displayItems.map((item: any) => {
-          const pct = total > 0 ? (item.valor / total) * 100 : 0;
-          const isRateio = item.nome === 'Rateio ADM';
-          return (
-            <div key={item.nome} className={`flex items-center justify-between text-[10px] py-0.5 ${isRateio ? 'text-amber-600 dark:text-amber-400' : ''}`}>
-              <span className="truncate max-w-[40%] mr-1.5">{item.nome}</span>
-              <div className="flex items-center gap-2">
-                <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(item.valor)}</span>
-                <span className="text-muted-foreground w-9 text-right">{formatNum(pct, 1)}%</span>
-                {cabMedia && cabMedia > 0 && (
-                  <span className="text-muted-foreground font-mono text-[9px] w-16 text-right">{formatMoeda(item.valor / cabMedia)}/cab</span>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </CardContent>
-    </Card>
-  );
-}
-
-
-
-function CentroCustoTable({
-  title,
-  items,
-  cabMedia,
-  numMeses,
-  isMedia,
-}: {
-  title: string;
-  items: { nome: string; valor: number }[];
-  cabMedia: number | null;
-  numMeses?: number;
-  isMedia?: boolean;
-}) {
-  const divisor = isMedia && numMeses && numMeses > 0 ? numMeses : 1;
-  const displayItems = items.map(i => ({ ...i, valor: i.valor / divisor }));
-  const total = displayItems.reduce((s, i) => s + i.valor, 0);
-
-  return (
-    <Card>
-      <CardContent className="p-2">
-        <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
-          <BarChart3 className="h-3 w-3 inline mr-1" />{title}
-        </div>
-        <div className="space-y-px">
-          {/* Total line */}
-          <div className="flex items-center justify-between text-[9px] font-bold border-b pb-0.5 mb-0.5">
-            <span>TOTAL</span>
-            <div className="flex items-center gap-1.5">
-              <span className="font-mono">{formatMoeda(total)}</span>
-              <span className="text-muted-foreground w-8 text-right">100%</span>
-              {cabMedia && cabMedia > 0 && (
-                <span className="text-muted-foreground font-mono w-14 text-right text-[8px]">{formatMoeda(total / cabMedia)}/cab</span>
-              )}
-            </div>
-          </div>
-          {/* Items */}
-          {displayItems.map(item => {
-            const pct = total > 0 ? (item.valor / total) * 100 : 0;
-            const isRateio = item.nome === 'Rateio ADM';
-            return (
-              <div key={item.nome} className={`flex items-center justify-between text-[9px] py-px ${isRateio ? 'text-amber-600 dark:text-amber-400' : ''}`}>
-                <span className="truncate mr-1.5 max-w-[90px]">{item.nome}</span>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(item.valor)}</span>
-                  <span className="text-muted-foreground w-8 text-right">{formatNum(pct, 1)}%</span>
-                  {cabMedia && cabMedia > 0 && (
-                    <span className="text-muted-foreground font-mono w-14 text-right text-[8px]">{formatMoeda(item.valor / cabMedia)}/cab</span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </CardContent>
-    </Card>
   );
 }
