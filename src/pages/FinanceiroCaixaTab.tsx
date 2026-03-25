@@ -32,7 +32,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
   const fazendaId = fazendaAtual?.id;
   const {
     importacoes, lancamentos, centrosCusto, indicadores,
-    rateioADM, rateioConferencia, fazendasSemArea, fazendaMapForImport,
+    rateioADM, rateioConferencia, fazendasSemRebanho, fazendaMapForImport,
     loading, confirmarImportacao, excluirImportacao, isGlobal, fazendaADM,
   } = useFinanceiro();
 

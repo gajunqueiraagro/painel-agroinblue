@@ -209,9 +209,9 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho }: Pr
           {/* Nota de verificação */}
           <div className="text-[10px] text-muted-foreground text-center space-y-0.5">
             <p>Soma dos percentuais: {formatNum(dados.fazendas.reduce((s, f) => s + f.percentual, 0), 1)}%</p>
-            {dados.fazendasSemArea.length > 0 && (
+            {dados.fazendasSemRebanho.length > 0 && (
               <p className="text-destructive">
-                ⚠ {dados.fazendasSemArea.length} fazenda(s) excluída(s) do rateio por falta de área
+                ⚠ {dados.fazendasSemRebanho.length} fazenda(s) excluída(s) do rateio por falta de rebanho
               </p>
             )}
           </div>
