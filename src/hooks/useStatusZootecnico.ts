@@ -301,7 +301,7 @@ export function useStatusZootecnico(
       statusCats = pctDiv > 0.05 ? 'aberto' : 'parcial';
       descCats = `${catsDivergentes} categoria(s) divergente(s) · ${difTotalCabecas} cab`;
     }
-    pendencias.push({ id: 'categorias', label: 'Conciliação de Categorias', descricao: descCats, status: statusCats, resolverTab: 'conciliacao' });
+    pendencias.push({ id: 'categorias', label: 'Conciliação de Categorias', descricao: descCats, status: statusCats, resolverTab: 'conciliacao_categoria' });
 
     // Contadores
     const contadores = { aberto: 0, parcial: 0, fechado: 0 };
