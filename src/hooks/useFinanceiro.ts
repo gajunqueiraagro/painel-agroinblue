@@ -428,14 +428,14 @@ export function useFinanceiro() {
       });
   }, [fazendaADM, lancamentosADM, areaFazendas, fazendasOperacionais]);
 
-  // --- Confirmar importação (4-sheet: lancamentos + saldos + contas + resumo) ---
+  // --- Confirmar importação (aba única EXPORT_APP_UNICO) ---
   const confirmarImportacao = useCallback(async (
     nomeArquivo: string,
     linhas: LinhaImportada[],
     totalLinhas: number,
     totalErros: number,
     saldosBancarios?: SaldoBancarioImportado[],
-    contasImportadas?: ContaImportada[],
+    _contas?: unknown[],
     resumoCaixa?: ResumoCaixaImportado[],
   ) => {
     if (!user) return false;
