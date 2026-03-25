@@ -1153,45 +1153,49 @@ function CentroCustoTable({
   title,
   items,
   cabMedia,
-  acum,
+  numMeses,
+  isMedia,
 }: {
   title: string;
   items: { nome: string; valor: number }[];
   cabMedia: number | null;
-  acum?: boolean;
+  numMeses?: number;
+  isMedia?: boolean;
 }) {
-  const total = items.reduce((s, i) => s + i.valor, 0);
+  const divisor = isMedia && numMeses && numMeses > 0 ? numMeses : 1;
+  const displayItems = items.map(i => ({ ...i, valor: i.valor / divisor }));
+  const total = displayItems.reduce((s, i) => s + i.valor, 0);
 
   return (
     <Card>
-      <CardContent className="p-2.5">
-        <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
+      <CardContent className="p-2">
+        <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
           <BarChart3 className="h-3 w-3 inline mr-1" />{title}
         </div>
-        <div className="space-y-0.5">
+        <div className="space-y-px">
           {/* Total line */}
-          <div className="flex items-center justify-between text-[10px] font-bold border-b pb-1 mb-1">
+          <div className="flex items-center justify-between text-[9px] font-bold border-b pb-0.5 mb-0.5">
             <span>TOTAL</span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <span className="font-mono">{formatMoeda(total)}</span>
-              <span className="text-muted-foreground w-10 text-right">100%</span>
+              <span className="text-muted-foreground w-8 text-right">100%</span>
               {cabMedia && cabMedia > 0 && (
-                <span className="text-muted-foreground font-mono w-16 text-right">{formatMoeda(total / cabMedia)}/cab</span>
+                <span className="text-muted-foreground font-mono w-14 text-right text-[8px]">{formatMoeda(total / cabMedia)}/cab</span>
               )}
             </div>
           </div>
           {/* Items */}
-          {items.map(item => {
+          {displayItems.map(item => {
             const pct = total > 0 ? (item.valor / total) * 100 : 0;
             const isRateio = item.nome === 'Rateio ADM';
             return (
-              <div key={item.nome} className={`flex items-center justify-between text-[10px] ${isRateio ? 'text-amber-600 dark:text-amber-400' : ''}`}>
-                <span className="truncate mr-2 max-w-[100px]">{item.nome}</span>
-                <div className="flex items-center gap-2">
+              <div key={item.nome} className={`flex items-center justify-between text-[9px] py-px ${isRateio ? 'text-amber-600 dark:text-amber-400' : ''}`}>
+                <span className="truncate mr-1.5 max-w-[90px]">{item.nome}</span>
+                <div className="flex items-center gap-1.5">
                   <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(item.valor)}</span>
-                  <span className="text-muted-foreground w-10 text-right">{formatNum(pct, 1)}%</span>
+                  <span className="text-muted-foreground w-8 text-right">{formatNum(pct, 1)}%</span>
                   {cabMedia && cabMedia > 0 && (
-                    <span className="text-muted-foreground font-mono w-16 text-right">{formatMoeda(item.valor / cabMedia)}/cab</span>
+                    <span className="text-muted-foreground font-mono w-14 text-right text-[8px]">{formatMoeda(item.valor / cabMedia)}/cab</span>
                   )}
                 </div>
               </div>
