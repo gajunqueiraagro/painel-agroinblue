@@ -12,6 +12,7 @@
  * Status = Conciliado
  */
 import { useMemo, useState } from 'react';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
 import { calcValorTotal, calcArrobasSafe } from '@/lib/calculos/economicos';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
