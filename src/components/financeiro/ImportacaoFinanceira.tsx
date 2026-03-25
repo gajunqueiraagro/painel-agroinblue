@@ -1,6 +1,5 @@
 /**
- * Tela de importação financeira via Excel.
- * Importação global: cada linha é vinculada à fazenda pelo codigo_importacao.
+ * Tela de importação financeira via Excel — 4 abas.
  */
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
@@ -9,7 +8,8 @@ import { Download, Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, Loader2
 import { downloadModeloExcel } from '@/lib/financeiro/excelTemplate';
 import {
   parseExcel, resolverFazendas, validarCentrosCusto,
-  type LinhaImportada, type ErroImportacao, type CentroCustoOficial, type FazendaMap,
+  type LinhaImportada, type SaldoBancarioImportado, type ContaImportada,
+  type ResumoCaixaImportado, type ErroImportacao, type CentroCustoOficial, type FazendaMap,
 } from '@/lib/financeiro/importParser';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import type { ImportacaoRecord } from '@/hooks/useFinanceiro';
@@ -24,19 +24,32 @@ interface Props {
   importacoes: ImportacaoRecord[];
   centrosCusto: CentroCustoOficial[];
   fazendas: FazendaMap[];
-  onConfirmar: (nomeArquivo: string, linhas: LinhaImportada[], totalLinhas: number, totalErros: number) => Promise<boolean>;
+  onConfirmar: (
+    nomeArquivo: string,
+    linhas: LinhaImportada[],
+    totalLinhas: number,
+    totalErros: number,
+    saldosBancarios?: SaldoBancarioImportado[],
+    contas?: ContaImportada[],
+    resumoCaixa?: ResumoCaixaImportado[],
+  ) => Promise<boolean>;
   onExcluir: (importacaoId: string) => Promise<boolean>;
+}
+
+interface PreviewState {
+  nomeArquivo: string;
+  lancamentos: LinhaImportada[];
+  saldosBancarios: SaldoBancarioImportado[];
+  contas: ContaImportada[];
+  resumoCaixa: ResumoCaixaImportado[];
+  erros: ErroImportacao[];
+  totalLinhas: number;
+  resumoFazendas: { codigo: string; nome: string; qtd: number }[];
 }
 
 export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onConfirmar, onExcluir }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<{
-    nomeArquivo: string;
-    linhas: LinhaImportada[];
-    erros: ErroImportacao[];
-    totalLinhas: number;
-    resumoFazendas: { codigo: string; nome: string; qtd: number }[];
-  } | null>(null);
+  const [preview, setPreview] = useState<PreviewState | null>(null);
   const [importando, setImportando] = useState(false);
   const [excluindo, setExcluindo] = useState<string | null>(null);
   const [confirmExcluir, setConfirmExcluir] = useState<ImportacaoRecord | null>(null);
@@ -48,13 +61,12 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
     const buffer = await file.arrayBuffer();
     const result = parseExcel(buffer);
 
-    // Resolve fazendas by codigo_importacao
-    const errosFazenda = resolverFazendas(result.linhasValidas, fazendas);
-    const errosCentro = validarCentrosCusto(result.linhasValidas, centrosCusto);
+    const errosFazenda = resolverFazendas(result.lancamentos, fazendas);
+    const errosCentro = validarCentrosCusto(result.lancamentos, centrosCusto);
 
     // Build summary by fazenda
     const fazendaCount = new Map<string, number>();
-    for (const l of result.linhasValidas) {
+    for (const l of result.lancamentos) {
       if (l.fazenda) {
         fazendaCount.set(l.fazenda, (fazendaCount.get(l.fazenda) || 0) + 1);
       }
@@ -67,7 +79,10 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
 
     setPreview({
       nomeArquivo: file.name,
-      linhas: result.linhasValidas,
+      lancamentos: result.lancamentos,
+      saldosBancarios: result.saldosBancarios,
+      contas: result.contas,
+      resumoCaixa: result.resumoCaixa,
       erros: [...result.erros, ...errosFazenda, ...errosCentro],
       totalLinhas: result.totalLinhas,
       resumoFazendas,
@@ -79,14 +94,10 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
   const handleConfirmar = async () => {
     if (!preview) return;
 
-    // Block if any line has unresolved fazenda
-    const linhasComFazenda = preview.linhas.filter(l => l.fazendaId);
-    const linhasSemFazenda = preview.linhas.filter(l => !l.fazendaId);
+    const linhasComFazenda = preview.lancamentos.filter(l => l.fazendaId);
+    const linhasSemFazenda = preview.lancamentos.filter(l => !l.fazendaId);
 
-    if (linhasSemFazenda.length > 0) {
-      // Can't import if there are unresolved fazendas
-      return;
-    }
+    if (linhasSemFazenda.length > 0) return;
 
     setImportando(true);
     const errosBloqueantes = preview.erros.filter(e => e.campo !== 'Centro de Custo');
@@ -95,6 +106,9 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
       linhasComFazenda,
       preview.totalLinhas,
       errosBloqueantes.length,
+      preview.saldosBancarios,
+      preview.contas,
+      preview.resumoCaixa,
     );
     if (ok) setPreview(null);
     setImportando(false);
@@ -111,6 +125,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
   const temErrosFazenda = preview?.erros.some(e => e.campo === 'Fazenda') || false;
   const errosCentro = preview?.erros.filter(e => e.campo === 'Centro de Custo') || [];
   const hasCentroErrors = errosCentro.length > 0;
+  const lancamentosReady = preview?.lancamentos.filter(l => l.fazendaId).length || 0;
 
   return (
     <div className="space-y-4">
@@ -124,13 +139,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
           <Upload className="h-4 w-4 mr-2" />
           Importar Excel
         </Button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".xlsx,.xls"
-          className="hidden"
-          onChange={handleFile}
-        />
+        <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFile} />
       </div>
 
       {/* Prévia */}
@@ -143,14 +152,34 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {/* Resumo */}
+            {/* Resumo por aba */}
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="bg-muted rounded-lg p-2 text-center">
+                <div className="font-bold text-lg">{preview.lancamentos.length}</div>
+                <div className="text-muted-foreground text-xs">Lançamentos</div>
+              </div>
+              <div className="bg-muted rounded-lg p-2 text-center">
+                <div className="font-bold text-lg">{preview.saldosBancarios.length}</div>
+                <div className="text-muted-foreground text-xs">Saldos Bancários</div>
+              </div>
+              <div className="bg-muted rounded-lg p-2 text-center">
+                <div className="font-bold text-lg">{preview.contas.length}</div>
+                <div className="text-muted-foreground text-xs">Contas</div>
+              </div>
+              <div className="bg-muted rounded-lg p-2 text-center">
+                <div className="font-bold text-lg">{preview.resumoCaixa.length}</div>
+                <div className="text-muted-foreground text-xs">Resumo Caixa</div>
+              </div>
+            </div>
+
+            {/* Status */}
             <div className="grid grid-cols-3 gap-2 text-sm">
               <div className="bg-muted rounded-lg p-2 text-center">
                 <div className="font-bold text-lg">{preview.totalLinhas}</div>
                 <div className="text-muted-foreground text-xs">Total linhas</div>
               </div>
               <div className="bg-green-50 dark:bg-green-950/30 rounded-lg p-2 text-center">
-                <div className="font-bold text-lg text-green-700 dark:text-green-400">{preview.linhas.filter(l => l.fazendaId).length}</div>
+                <div className="font-bold text-lg text-green-700 dark:text-green-400">{lancamentosReady}</div>
                 <div className="text-muted-foreground text-xs">Prontas</div>
               </div>
               <div className="bg-red-50 dark:bg-red-950/30 rounded-lg p-2 text-center">
@@ -183,46 +212,44 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
                 </p>
                 {preview.erros.slice(0, 20).map((e, i) => (
                   <div key={i} className="text-xs bg-destructive/5 rounded px-2 py-1">
-                    <span className="font-bold">Linha {e.linha}</span> — {e.campo}: {e.mensagem}
+                    <span className="font-bold">
+                      {e.aba ? `[${e.aba}] ` : ''}Linha {e.linha}
+                    </span> — {e.campo}: {e.mensagem}
                   </div>
                 ))}
                 {preview.erros.length > 20 && (
-                  <div className="text-xs text-muted-foreground">
-                    ... e mais {preview.erros.length - 20} erros
-                  </div>
+                  <div className="text-xs text-muted-foreground">... e mais {preview.erros.length - 20} erros</div>
                 )}
               </div>
             )}
 
-            {/* Preview table */}
-            {preview.linhas.length > 0 && (
+            {/* Preview table - lancamentos */}
+            {preview.lancamentos.length > 0 && (
               <div className="overflow-x-auto max-h-48">
                 <table className="w-full text-xs border-collapse">
                   <thead>
                     <tr className="border-b bg-muted/50">
                       <th className="p-1 text-left">Fazenda</th>
-                      <th className="p-1 text-left">Data</th>
+                      <th className="p-1 text-left">AnoMes</th>
                       <th className="p-1 text-left">Produto</th>
                       <th className="p-1 text-right">Valor</th>
-                      <th className="p-1 text-left">AnoMes</th>
+                      <th className="p-1 text-left">Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {preview.linhas.slice(0, 10).map((l, i) => (
+                    {preview.lancamentos.slice(0, 10).map((l, i) => (
                       <tr key={i} className={`border-b ${!l.fazendaId ? 'bg-destructive/5' : ''}`}>
                         <td className="p-1 font-mono font-bold">{l.fazenda || '-'}</td>
-                        <td className="p-1">{l.dataRealizacao}</td>
+                        <td className="p-1">{l.anoMes}</td>
                         <td className="p-1 truncate max-w-[100px]">{l.produto || '-'}</td>
                         <td className="p-1 text-right font-bold">{formatMoeda(l.valor)}</td>
-                        <td className="p-1">{l.anoMes}</td>
+                        <td className="p-1">{l.statusTransacao || '-'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                {preview.linhas.length > 10 && (
-                  <p className="text-xs text-muted-foreground p-1">
-                    Mostrando 10 de {preview.linhas.length} linhas
-                  </p>
+                {preview.lancamentos.length > 10 && (
+                  <p className="text-xs text-muted-foreground p-1">Mostrando 10 de {preview.lancamentos.length} lançamentos</p>
                 )}
               </div>
             )}
@@ -239,20 +266,18 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
 
             {/* Actions */}
             <div className="flex gap-2 pt-2">
-              <Button variant="outline" className="flex-1" onClick={() => setPreview(null)}>
-                Cancelar
-              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setPreview(null)}>Cancelar</Button>
               <Button
                 className="flex-1"
                 onClick={handleConfirmar}
-                disabled={importando || temErrosFazenda || preview.linhas.filter(l => l.fazendaId).length === 0}
+                disabled={importando || temErrosFazenda || lancamentosReady === 0}
               >
                 {importando ? (
                   <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Importando...</>
                 ) : temErrosFazenda ? (
                   <><AlertTriangle className="h-4 w-4 mr-2" /> Corrija os erros de fazenda</>
                 ) : (
-                  <><CheckCircle2 className="h-4 w-4 mr-2" /> Confirmar ({preview.linhas.filter(l => l.fazendaId).length} linhas)</>
+                  <><CheckCircle2 className="h-4 w-4 mr-2" /> Confirmar ({lancamentosReady} lançamentos)</>
                 )}
               </Button>
             </div>
@@ -274,9 +299,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
                     <FileSpreadsheet className="h-4 w-4 text-muted-foreground shrink-0" />
                     <div className="min-w-0">
                       <p className="font-bold truncate">{imp.nome_arquivo}</p>
-                      <p className="text-muted-foreground">
-                        {format(new Date(imp.data_importacao), 'dd/MM/yyyy HH:mm')}
-                      </p>
+                      <p className="text-muted-foreground">{format(new Date(imp.data_importacao), 'dd/MM/yyyy HH:mm')}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -292,17 +315,12 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
                       </div>
                     </div>
                     <Button
-                      variant="ghost"
-                      size="icon"
+                      variant="ghost" size="icon"
                       className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                       onClick={() => setConfirmExcluir(imp)}
                       disabled={excluindo === imp.id}
                     >
-                      {excluindo === imp.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-3.5 w-3.5" />
-                      )}
+                      {excluindo === imp.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                     </Button>
                   </div>
                 </div>
@@ -320,16 +338,12 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
             <AlertDialogDescription>
               Isso removerá permanentemente <span className="font-bold">{confirmExcluir?.total_validas} lançamentos</span> vinculados
               ao arquivo <span className="font-bold">{confirmExcluir?.nome_arquivo}</span>.
-              <br /><br />
-              Esta ação não pode ser desfeita.
+              <br /><br />Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleExcluir}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
+            <AlertDialogAction onClick={handleExcluir} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Excluir {confirmExcluir?.total_validas} lançamentos
             </AlertDialogAction>
           </AlertDialogFooter>
