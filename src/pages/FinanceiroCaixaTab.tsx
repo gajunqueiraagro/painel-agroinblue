@@ -1,21 +1,23 @@
 /**
- * Módulo Financeiro — container principal com sub-abas.
- * Sub-aba padrão: Fluxo de Caixa (13 linhas + gráfico).
+ * Módulo Financeiro — container principal com sub-abas horizontais no topo.
+ * Topo fixo: nome fazenda + seletor fazenda/global + filtro ano + filtro mês.
+ * Sub-abas: Dashboard | Fluxo de Caixa | Rateio ADM | Importação
  */
 import { useState, useMemo } from 'react';
 import { ImportacaoFinanceira } from '@/components/financeiro/ImportacaoFinanceira';
 import { DashboardFinanceiro } from '@/components/financeiro/DashboardFinanceiro';
 import { RateioADMConferenciaView } from '@/components/financeiro/RateioADMConferencia';
-import { AnaliseEconomica } from '@/components/financeiro/AnaliseEconomica';
 import { FluxoFinanceiro } from '@/components/financeiro/FluxoFinanceiro';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
-import { Loader2 } from 'lucide-react';
+import { FazendaSelector } from '@/components/FazendaSelector';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
-type SubTab = 'fluxo' | 'dashboard' | 'analise' | 'rateio' | 'importacao';
+type SubTab = 'dashboard' | 'fluxo' | 'rateio' | 'importacao';
 
 interface Props {
   lancamentosPecuarios?: Lancamento[];
@@ -25,15 +27,25 @@ interface Props {
   filtroMesInicial?: number;
 }
 
+const MESES_FILTRO = [
+  { value: '1', label: 'Janeiro' }, { value: '2', label: 'Fevereiro' },
+  { value: '3', label: 'Março' }, { value: '4', label: 'Abril' },
+  { value: '5', label: 'Maio' }, { value: '6', label: 'Junho' },
+  { value: '7', label: 'Julho' }, { value: '8', label: 'Agosto' },
+  { value: '9', label: 'Setembro' }, { value: '10', label: 'Outubro' },
+  { value: '11', label: 'Novembro' }, { value: '12', label: 'Dezembro' },
+];
+
 export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [], onBack, filtroAnoInicial, filtroMesInicial }: Props) {
-  const [subTab, setSubTab] = useState<SubTab>('fluxo');
-  const { fazendaAtual } = useFazenda();
+  const [subTab, setSubTab] = useState<SubTab>('dashboard');
+  const { fazendaAtual, fazendas } = useFazenda();
   const { pastos, categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
+  const isGlobal = fazendaId === '__global__';
   const {
     importacoes, lancamentos, centrosCusto, indicadores,
     rateioADM, rateioConferencia, fazendasSemRebanho, fazendaMapForImport,
-    loading, confirmarImportacao, excluirImportacao, isGlobal, fazendaADM,
+    loading, confirmarImportacao, excluirImportacao, fazendaADM,
     totalLancamentosADM,
   } = useFinanceiro();
 
@@ -65,56 +77,87 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
     return Array.from(anos).sort().reverse();
   }, [lancamentos, anoAtual, filtroAnoInicial]);
 
-  const tabs: { id: SubTab; label: string; icon: string }[] = [
-    { id: 'fluxo', label: 'Fluxo', icon: '💰' },
-    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-    { id: 'analise', label: 'Análise', icon: '📈' },
-    ...(fazendaADM ? [{ id: 'rateio' as SubTab, label: 'Rateio ADM', icon: '🏢' }] : []),
-    { id: 'importacao', label: 'Importação', icon: '📥' },
+  const tabs: { id: SubTab; label: string }[] = [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'fluxo', label: 'Fluxo de Caixa' },
+    ...(fazendaADM ? [{ id: 'rateio' as SubTab, label: 'Rateio ADM' }] : []),
+    { id: 'importacao', label: 'Importação' },
   ];
 
-  const gridCols = `grid-cols-${tabs.length}`;
+  const fazendaNome = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || 'Fazenda');
 
   return (
     <div className="max-w-full mx-auto animate-fade-in pb-20">
-      {subTab !== 'fluxo' && (
-        <div className="p-4 space-y-3">
-          <div className={`grid ${gridCols} gap-1 bg-muted rounded-lg p-1`}>
-            {tabs.map(t => (
-              <button
-                key={t.id}
-                onClick={() => setSubTab(t.id)}
-                className={`py-2 px-2 rounded-md text-xs font-bold transition-colors touch-target ${
-                  subTab === t.id
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground'
-                }`}
-              >
-                {t.icon} {t.label}
-              </button>
-            ))}
-          </div>
+      {/* ── Topo fixo: fazenda + filtros ── */}
+      <div className="sticky top-0 z-20 bg-background border-b border-border">
+        {/* Linha 1: nome fazenda + seletor + botão retornar */}
+        <div className="flex items-center gap-2 px-4 pt-3 pb-2">
+          {onBack && (
+            <button onClick={onBack} className="p-1.5 rounded-md hover:bg-muted transition-colors shrink-0">
+              <ArrowLeft className="h-5 w-5 text-foreground" />
+            </button>
+          )}
+          <h1 className="text-base md:text-lg font-extrabold text-foreground truncate flex-1">
+            {fazendaNome}
+          </h1>
+          {fazendas.length > 1 && (
+            <div className="shrink-0">
+              <FazendaSelector />
+            </div>
+          )}
         </div>
-      )}
 
+        {/* Linha 2: filtros de ano e mês */}
+        <div className="flex gap-2 px-4 pb-2">
+          <Select value={localAno} onValueChange={setLocalAno}>
+            <SelectTrigger className="w-24 h-8 text-xs font-bold">
+              <SelectValue placeholder="Ano" />
+            </SelectTrigger>
+            <SelectContent>
+              {anosDisponiveis.map(a => (
+                <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={String(localMes)} onValueChange={v => setLocalMes(Number(v))}>
+            <SelectTrigger className="w-36 h-8 text-xs font-bold">
+              <SelectValue placeholder="Até o mês" />
+            </SelectTrigger>
+            <SelectContent>
+              {MESES_FILTRO.map(m => (
+                <SelectItem key={m.value} value={m.value} className="text-xs">
+                  Até {m.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Linha 3: sub-abas horizontais */}
+        <div className="flex gap-0 px-4 overflow-x-auto">
+          {tabs.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setSubTab(t.id)}
+              className={`px-3 py-2 text-xs font-bold whitespace-nowrap border-b-2 transition-colors ${
+                subTab === t.id
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Conteúdo ── */}
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : (
         <>
-          {subTab === 'fluxo' && (
-            <FluxoFinanceiro
-              lancamentos={lancamentos}
-              rateioADM={rateioADM}
-              ano={Number(localAno)}
-              mesAte={localMes}
-              onAnoChange={setLocalAno}
-              onMesChange={setLocalMes}
-              anosDisponiveis={anosDisponiveis}
-              onBack={onBack}
-            />
-          )}
           {subTab === 'dashboard' && (
             <div className="p-4">
               <DashboardFinanceiro
@@ -131,19 +174,13 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
               />
             </div>
           )}
-          {subTab === 'analise' && (
-            <div className="p-4">
-              <AnaliseEconomica
-                lancamentos={lancamentos}
-                lancamentosPecuarios={lancamentosPecuarios}
-                saldosIniciais={saldosIniciais}
-                rateioADM={rateioADM}
-                isGlobal={isGlobal}
-                pastos={pastos}
-                categorias={categorias}
-                fazendaId={fazendaId}
-              />
-            </div>
+          {subTab === 'fluxo' && (
+            <FluxoFinanceiro
+              lancamentos={lancamentos}
+              rateioADM={rateioADM}
+              ano={Number(localAno)}
+              mesAte={localMes}
+            />
           )}
           {subTab === 'rateio' && (
             <div className="p-4">
@@ -166,23 +203,6 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
             </div>
           )}
         </>
-      )}
-
-      {/* Sub-tab switcher shown at bottom of fluxo view */}
-      {subTab === 'fluxo' && (
-        <div className="px-4 pb-4">
-          <div className="flex gap-2 flex-wrap">
-            {tabs.filter(t => t.id !== 'fluxo').map(t => (
-              <button
-                key={t.id}
-                onClick={() => setSubTab(t.id)}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold text-muted-foreground bg-muted hover:bg-muted/80 transition-colors"
-              >
-                {t.icon} {t.label}
-              </button>
-            ))}
-          </div>
-        </div>
       )}
     </div>
   );
