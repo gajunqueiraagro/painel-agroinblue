@@ -2,11 +2,13 @@ import { useState, useCallback, useMemo } from 'react';
 import { BottomNav, TabId } from '@/components/BottomNav';
 import { Header } from '@/components/Header';
 import { ResumoTab } from './ResumoTab';
+import { ZootecnicoTab } from './ZootecnicoTab';
 import { MovimentacaoTab } from './MovimentacaoTab';
 import { LancamentosTab } from './LancamentosTab';
 import { FluxoAnualTab } from './FluxoAnualTab';
 import { FinanceiroTab, type SubAba } from './FinanceiroTab';
 import { FinanceiroCaixaTab } from './FinanceiroCaixaTab';
+import { AnaliseEconomicaTab } from './AnaliseEconomicaTab';
 import { AcessosTab } from './AcessosTab';
 import { AnaliseTab } from './AnaliseTab';
 import { AnaliseEntradasTab } from './AnaliseEntradasTab';
@@ -15,8 +17,6 @@ import { DesfrunteTab } from './DesfrunteTab';
 import { CadastrosTab } from './CadastrosTab';
 import { ConciliacaoHubTab } from './ConciliacaoHubTab';
 
-import { SaldoInicialForm } from '@/components/SaldoInicialForm';
-import { ExportMenu } from '@/components/ExportMenu';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { SyncStatus } from '@/components/SyncStatus';
 import { useLancamentos } from '@/hooks/useLancamentos';
@@ -26,6 +26,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const TITLES: Record<TabId, string> = {
   resumo: 'Controle de Rebanho',
+  zootecnico: 'Zootécnico',
   movimentacao: 'Fluxo Mensal',
   lancamentos: 'Lançar Rebanho',
   financeiro: 'Movimentações',
@@ -36,6 +37,7 @@ const TITLES: Record<TabId, string> = {
   analise: 'Análise Gráfica',
   analise_entradas: 'Análise de Entradas',
   analise_saidas: 'Análise de Saídas',
+  analise_economica: 'Econômico',
   desfrute: 'Desfrute',
   cadastros: 'Cadastros',
   chuvas: 'Chuvas',
@@ -71,27 +73,29 @@ const Index = () => {
     setActiveTab(tab);
   }, []);
 
+  const goToResumo = useCallback(() => setActiveTab('resumo'), []);
+
+  // Hide header for sub-screens that have their own back nav
+  const isSubScreen = ['zootecnico', 'analise_economica'].includes(activeTab);
+
   const headerTitle = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || TITLES[activeTab]);
 
   return (
     <div className="min-h-screen bg-background">
       <SyncStatus online={online} pendingCount={pendingCount} syncing={syncing} onSync={syncQueue} />
-      <Header
-        title={headerTitle}
-        rightAction={
-          <div className="flex items-center gap-2">
-            {activeTab === 'resumo' && !isGlobal && (
-              <>
-                <ExportMenu lancamentos={lancamentos} saldosIniciais={saldosIniciais} />
-                {isDonoOuGerente && <SaldoInicialForm saldosIniciais={saldosIniciais} onSetSaldo={setSaldoInicial} />}
-              </>
-            )}
-            {fazendas.length > 1 && <FazendaSelector />}
-          </div>
-        }
-      />
+      {!isSubScreen && (
+        <Header
+          title={headerTitle}
+          rightAction={
+            <div className="flex items-center gap-2">
+              {fazendas.length > 1 && <FazendaSelector />}
+            </div>
+          }
+        />
+      )}
 
       {activeTab === 'resumo' && <ResumoTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
+      {activeTab === 'zootecnico' && <ZootecnicoTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onBack={goToResumo} />}
       {activeTab === 'movimentacao' && <MovimentacaoTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} />}
       {activeTab === 'lancamentos' && (
         <LancamentosTab
@@ -111,6 +115,7 @@ const Index = () => {
       {activeTab === 'cadastros' && <CadastrosTab />}
       {activeTab === 'conciliacao' && <ConciliacaoHubTab />}
       {activeTab === 'fin_caixa' && <FinanceiroCaixaTab lancamentosPecuarios={lancamentos} saldosIniciais={saldosIniciais} />}
+      {activeTab === 'analise_economica' && <AnaliseEconomicaTab lancamentosPecuarios={lancamentos} saldosIniciais={saldosIniciais} onBack={goToResumo} />}
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
   );
