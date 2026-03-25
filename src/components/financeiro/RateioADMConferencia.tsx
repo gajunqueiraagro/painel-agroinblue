@@ -54,25 +54,25 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho }: Pr
       </div>
 
       {/* Aviso fazendas sem área */}
-      {fazendasSemArea.length > 0 && (
+      {fazendasSemRebanho.length > 0 && (
         <Card className="border-destructive/50 bg-destructive/5">
           <CardContent className="p-3">
             <div className="flex items-start gap-2">
               <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
               <div>
-                <p className="text-xs font-bold text-destructive">Fazendas sem área produtiva</p>
+                <p className="text-xs font-bold text-destructive">Fazendas sem rebanho cadastrado</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Estas fazendas não participam do rateio e seus custos estão subestimados:
+                  Estas fazendas não participam do rateio por não possuírem rebanho médio no período:
                 </p>
                 <div className="flex flex-wrap gap-1 mt-1.5">
-                  {fazendasSemArea.map(nome => (
+                  {fazendasSemRebanho.map(nome => (
                     <span key={nome} className="text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded-full font-medium">
                       {nome}
                     </span>
                   ))}
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-1.5">
-                  Preencha a Área Produtiva em Cadastros → Fazenda para corrigir.
+                  Cadastre saldos iniciais e lançamentos pecuários para que estas fazendas entrem no rateio.
                 </p>
               </div>
             </div>
