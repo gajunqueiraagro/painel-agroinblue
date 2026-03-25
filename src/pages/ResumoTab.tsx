@@ -51,7 +51,7 @@ function StatusBadge({ nivel }: { nivel: StatusNivel }) {
   );
 }
 
-function FinanceiroCard({ financeiro, onTabChange }: { financeiro: ReturnType<typeof useResumoStatus>['financeiro']; onTabChange: (tab: TabId) => void }) {
+function FinanceiroCard({ financeiro, onTabChange, isGlobal }: { financeiro: ReturnType<typeof useResumoStatus>['financeiro']; onTabChange: (tab: TabId) => void; isGlobal: boolean }) {
   const [auditOpen, setAuditOpen] = useState(false);
   const a = financeiro.audit;
 
@@ -80,16 +80,25 @@ function FinanceiroCard({ financeiro, onTabChange }: { financeiro: ReturnType<ty
             {formatMoeda(financeiro.resultado)}
           </span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Saldo Inicial</span>
-          <span className="font-semibold text-card-foreground">{formatMoeda(financeiro.saldoInicial)}</span>
-        </div>
-        <div className="flex justify-between border-t border-border pt-1">
-          <span className="text-muted-foreground font-bold">Caixa Atual</span>
-          <span className={`font-extrabold ${financeiro.caixaAtual >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-            {formatMoeda(financeiro.caixaAtual)}
-          </span>
-        </div>
+        {isGlobal ? (
+          <>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Saldo Inicial</span>
+              <span className="font-semibold text-card-foreground">{formatMoeda(financeiro.saldoInicial)}</span>
+            </div>
+            <div className="flex justify-between border-t border-border pt-1">
+              <span className="text-muted-foreground font-bold">Caixa Atual</span>
+              <span className={`font-extrabold ${financeiro.caixaAtual >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                {formatMoeda(financeiro.caixaAtual)}
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground pt-1 border-t border-border">
+            <span>🔒</span>
+            <span>Valores de caixa consolidados disponíveis apenas no modo global</span>
+          </div>
+        )}
       </div>
 
       <p className="text-[11px] text-muted-foreground">{financeiro.status.descricao}</p>
@@ -240,7 +249,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
         )}
 
         {/* FINANCEIRO */}
-        <FinanceiroCard financeiro={financeiro} onTabChange={onTabChange} />
+        <FinanceiroCard financeiro={financeiro} onTabChange={onTabChange} isGlobal={fazendaAtual?.id === '__global__'} />
 
         {/* ECONÔMICO */}
         <div className="rounded-xl border bg-card p-4 space-y-3 shadow-sm">
