@@ -218,73 +218,100 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
     const r = dataRows[i];
     const linhaNum = i + 2;
     const tipoRegistro = (str(col(r, colMap, 'Tipo_Registro')) || '').toUpperCase();
-    const anoMes = parseAnoMes(col(r, colMap, 'AnoMes'));
-    const valor = parseValor(col(r, colMap, 'Valor'));
-    const fazenda = str(col(r, colMap, 'Fazenda'));
 
     if (!tipoRegistro) {
       erros.push({ linha: linhaNum, campo: 'Tipo_Registro', mensagem: 'Tipo de registro ausente', aba: sheetName });
       continue;
     }
-    if (!anoMes) erros.push({ linha: linhaNum, campo: 'AnoMes', mensagem: 'Competência inválida ou ausente', aba: sheetName });
-    if (valor === null) erros.push({ linha: linhaNum, campo: 'Valor', mensagem: 'Valor inválido ou ausente', aba: sheetName });
-    if (!fazenda) erros.push({ linha: linhaNum, campo: 'Fazenda', mensagem: 'Código da fazenda ausente', aba: sheetName });
 
-    if (!anoMes || valor === null || !fazenda) continue;
+    const errPrefix = `[${tipoRegistro}]`;
+
+    // Common fields
+    const anoMes = parseAnoMes(col(r, colMap, 'AnoMes'));
+    const valor = parseValor(col(r, colMap, 'Valor'));
+    const tipo = str(col(r, colMap, 'Tipo'));
+    const fazenda = str(col(r, colMap, 'Fazenda'));
+    const conta = str(col(r, colMap, 'Conta'));
 
     if (tipoRegistro === 'LANCAMENTO') {
-      const tipoOp = str(col(r, colMap, 'Tipo'));
+      // Required: Tipo_Registro, AnoMes, Data_Ref, Conta, Tipo, Valor, Status, Fazenda
+      let hasError = false;
+      const dataRef = parseDate(col(r, colMap, 'Data_Ref'));
+      const status = str(col(r, colMap, 'Status'));
+
+      if (!anoMes) { erros.push({ linha: linhaNum, campo: 'AnoMes', mensagem: `${errPrefix} Competência inválida ou ausente`, aba: sheetName }); hasError = true; }
+      if (!dataRef) { erros.push({ linha: linhaNum, campo: 'Data_Ref', mensagem: `${errPrefix} Data de referência ausente`, aba: sheetName }); hasError = true; }
+      if (!conta) { erros.push({ linha: linhaNum, campo: 'Conta', mensagem: `${errPrefix} Conta ausente`, aba: sheetName }); hasError = true; }
+      if (!tipo) { erros.push({ linha: linhaNum, campo: 'Tipo', mensagem: `${errPrefix} Tipo de operação ausente`, aba: sheetName }); hasError = true; }
+      if (valor === null) { erros.push({ linha: linhaNum, campo: 'Valor', mensagem: `${errPrefix} Valor inválido ou ausente`, aba: sheetName }); hasError = true; }
+      if (!status) { erros.push({ linha: linhaNum, campo: 'Status', mensagem: `${errPrefix} Status ausente`, aba: sheetName }); hasError = true; }
+      if (!fazenda) { erros.push({ linha: linhaNum, campo: 'Fazenda', mensagem: `${errPrefix} Código da fazenda ausente`, aba: sheetName }); hasError = true; }
+      if (hasError) continue;
+
       const macro = str(col(r, colMap, 'Macro_Custo'));
       lancamentos.push({
         linha: linhaNum,
-        anoMes,
-        dataPagamento: parseDate(col(r, colMap, 'Data_Ref')),
-        valor,
-        statusTransacao: str(col(r, colMap, 'Status')),
+        anoMes: anoMes!,
+        dataPagamento: dataRef,
+        valor: valor!,
+        statusTransacao: status,
         fazenda,
         fazendaId: null,
-        tipoOperacao: tipoOp,
+        tipoOperacao: tipo,
         macroCusto: macro,
         grupoCusto: str(col(r, colMap, 'Grupo_Custo')),
         centroCusto: str(col(r, colMap, 'Centro_Custo')),
         subcentro: str(col(r, colMap, 'Subcentro')),
-        contaOrigem: str(col(r, colMap, 'Conta')),
+        contaOrigem: conta,
         contaDestino: null,
         fornecedor: str(col(r, colMap, 'Fornecedor')),
         produto: str(col(r, colMap, 'Produto')),
         obs: str(col(r, colMap, 'Obs')),
-        escopoNegocio: inferirEscopo(tipoOp, macro),
+        escopoNegocio: inferirEscopo(tipo, macro),
       });
+
     } else if (tipoRegistro === 'SALDO') {
-      const conta = str(col(r, colMap, 'Conta'));
-      if (!conta) {
-        erros.push({ linha: linhaNum, campo: 'Conta', mensagem: 'Conta bancária obrigatória para SALDO', aba: sheetName });
-        continue;
-      }
+      // Required: Tipo_Registro, AnoMes, Conta, Tipo, Valor
+      let hasError = false;
+      if (!anoMes) { erros.push({ linha: linhaNum, campo: 'AnoMes', mensagem: `${errPrefix} Competência inválida ou ausente`, aba: sheetName }); hasError = true; }
+      if (!conta) { erros.push({ linha: linhaNum, campo: 'Conta', mensagem: `${errPrefix} Conta bancária ausente`, aba: sheetName }); hasError = true; }
+      if (!tipo) { erros.push({ linha: linhaNum, campo: 'Tipo', mensagem: `${errPrefix} Tipo ausente (ex: Saldo_Final)`, aba: sheetName }); hasError = true; }
+      if (valor === null) { erros.push({ linha: linhaNum, campo: 'Valor', mensagem: `${errPrefix} Valor inválido ou ausente`, aba: sheetName }); hasError = true; }
+      if (hasError) continue;
+
       saldosBancarios.push({
         linha: linhaNum,
-        contaBanco: conta,
-        anoMes,
-        saldoFinal: valor,
+        contaBanco: conta!,
+        anoMes: anoMes!,
+        saldoFinal: valor!,
         fazenda,
         fazendaId: null,
       });
+
     } else if (tipoRegistro === 'RESUMO') {
-      // Parse entradas/saidas/saldo from Obs or use valor
-      const obsText = str(col(r, colMap, 'Obs')) || '';
-      const entMatch = obsText.match(/Entradas\s*=\s*([\d.]+)/i);
-      const saiMatch = obsText.match(/Saidas\s*=\s*([\d.]+)/i);
-      const salMatch = obsText.match(/Saldo\s*=\s*([\d.]+)/i);
+      // Required: Tipo_Registro, AnoMes, Tipo, Valor
+      let hasError = false;
+      if (!anoMes) { erros.push({ linha: linhaNum, campo: 'AnoMes', mensagem: `${errPrefix} Competência inválida ou ausente`, aba: sheetName }); hasError = true; }
+      if (!tipo) { erros.push({ linha: linhaNum, campo: 'Tipo', mensagem: `${errPrefix} Tipo ausente (ex: Entradas, Saidas, Saldo_Final_Total)`, aba: sheetName }); hasError = true; }
+      if (valor === null) { erros.push({ linha: linhaNum, campo: 'Valor', mensagem: `${errPrefix} Valor inválido ou ausente`, aba: sheetName }); hasError = true; }
+      if (hasError) continue;
+
+      // Group resumo by anoMes+fazenda — each row is one metric type
+      const tipoNorm = (tipo || '').toLowerCase().replace(/[_\s]/g, '');
+      const entradas = tipoNorm === 'entradas' ? valor! : 0;
+      const saidas = tipoNorm === 'saidas' ? valor! : 0;
+      const saldoFinal = (tipoNorm === 'saldofinaltotal' || tipoNorm === 'saldoinicialtotal') ? valor! : 0;
 
       resumoCaixa.push({
         linha: linhaNum,
-        anoMes,
-        entradas: entMatch ? parseFloat(entMatch[1]) : (valor > 0 ? valor : 0),
-        saidas: saiMatch ? parseFloat(saiMatch[1]) : 0,
-        saldoFinalTotal: salMatch ? parseFloat(salMatch[1]) : valor,
+        anoMes: anoMes!,
+        entradas,
+        saidas,
+        saldoFinalTotal: saldoFinal,
         fazenda,
         fazendaId: null,
       });
+
     } else {
       erros.push({ linha: linhaNum, campo: 'Tipo_Registro', mensagem: `Tipo desconhecido: "${tipoRegistro}". Use LANCAMENTO, SALDO ou RESUMO`, aba: sheetName });
     }
