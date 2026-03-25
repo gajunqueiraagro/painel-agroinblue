@@ -8,6 +8,7 @@ export interface Fazenda {
   nome: string;
   owner_id: string;
   codigo_importacao?: string | null;
+  tem_pecuaria?: boolean;
   papel?: string;
 }
 
