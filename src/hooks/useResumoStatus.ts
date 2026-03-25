@@ -292,19 +292,26 @@ export function useResumoStatus(
       }
     }
 
+    const anoMesSaldo = `${ano - 1}-12`;
     return {
       totalEntradas: calc.totalEntradas,
       totalSaidas: calc.totalSaidas,
+      resultado,
+      saldoInicial: saldoInicialGlobal,
+      caixaAtual,
       saldoCaixa,
       status: { nivel, descricao },
       audit: {
         ...calc.audit,
         qtdEntradas: calc.qtdEntradas,
         qtdSaidas: calc.qtdSaidas,
-        saldoOrigem: 'Calculado: Entradas − Saídas (sem saldo inicial de caixa)',
+        saldoOrigem: 'Saldo Inicial + Resultado (Entradas − Saídas)',
+        saldoInicialPeriodo: `Dez/${ano - 1} (${anoMesSaldo})`,
+        saldoInicialRegistros,
+        saldoInicialContas,
       },
     };
-  }, [finLancamentos, ano, mesAte]);
+  }, [finLancamentos, ano, mesAte, saldoInicialGlobal, saldoInicialRegistros, saldoInicialContas]);
 
   // -------------------------------------------------------------------------
   // ECONÔMICO
