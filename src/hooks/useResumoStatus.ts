@@ -77,7 +77,7 @@ export function useResumoStatus(
   // DB-fetched data for status calculation
   const [fechamentoRebanho, setFechamentoRebanho] = useState<Record<string, string>>({}); // anoMes → status
   const [fechamentoPastos, setFechamentoPastos] = useState<Record<string, { total: number; fechados: number }>>({}); 
-  const [finLancamentos, setFinLancamentos] = useState<{ status_transacao: string | null; ano_mes: string; data_pagamento: string | null }[]>([]);
+  const [finLancamentos, setFinLancamentos] = useState<{ status_transacao: string | null; ano_mes: string; data_pagamento: string | null; valor: number; tipo_operacao: string | null }[]>([]);
   const [resumoCaixa, setResumoCaixa] = useState<{ ano_mes: string; entradas: number; saidas: number; saldo_final_total: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -110,7 +110,7 @@ export function useResumoStatus(
         // Financeiro - status conciliação
         supabase
           .from('financeiro_lancamentos')
-          .select('status_transacao, ano_mes, data_pagamento')
+          .select('status_transacao, ano_mes, data_pagamento, valor, tipo_operacao')
           .in('fazenda_id', fazendaIds)
           .gte('ano_mes', mesesRange[0] || '')
           .lte('ano_mes', mesesRange[mesesRange.length - 1] || ''),
@@ -146,6 +146,8 @@ export function useResumoStatus(
         status_transacao: r.status_transacao,
         ano_mes: r.ano_mes,
         data_pagamento: r.data_pagamento,
+        valor: Number(r.valor) || 0,
+        tipo_operacao: r.tipo_operacao,
       })));
 
       setResumoCaixa((rcResult.data || []).map((r: any) => ({
@@ -225,7 +227,6 @@ export function useResumoStatus(
     const anoAtual = new Date().getFullYear();
     const anoStr = String(ano);
 
-    // Totals from financeiro_resumo_caixa (more accurate, includes saldo inicial)
     let totalEntradas = 0;
     let totalSaidas = 0;
     let saldoCaixa = 0;
@@ -235,9 +236,26 @@ export function useResumoStatus(
         totalEntradas += rc.entradas;
         totalSaidas += rc.saidas;
       });
-      // Saldo = último saldo_final_total no range
       const sorted = [...resumoCaixa].sort((a, b) => a.ano_mes.localeCompare(b.ano_mes));
       saldoCaixa = sorted[sorted.length - 1]?.saldo_final_total ?? 0;
+    } else {
+      // Fallback: calculate from conciliado lancamentos
+      const conciliados = finLancamentos.filter(
+        l => (l.status_transacao || '').toLowerCase().trim() === 'conciliado' && l.data_pagamento
+      );
+      conciliados.forEach(l => {
+        const tipo = (l.tipo_operacao || '').toLowerCase().trim();
+        if (tipo === 'entrada' || tipo === 'receita') {
+          totalEntradas += Math.abs(l.valor);
+        } else if (tipo === 'saida' || tipo === 'saída' || tipo === 'despesa') {
+          totalSaidas += Math.abs(l.valor);
+        } else if (l.valor > 0) {
+          totalEntradas += l.valor;
+        } else {
+          totalSaidas += Math.abs(l.valor);
+        }
+      });
+      saldoCaixa = totalEntradas - totalSaidas;
     }
 
     // Status: check conciliation per month
@@ -251,10 +269,8 @@ export function useResumoStatus(
 
       mesesComLancamentos++;
 
-      // For current month: never auto-close
       if (ano === anoAtual && m === mesAtual) continue;
 
-      // Check if all are conciliados (excluding operational exceptions)
       const relevantes = lancsMes.filter(l => !isExclusoOperacional(l.status_transacao));
       const todosConciliados = relevantes.every(
         l => (l.status_transacao || '').toLowerCase().trim() === 'conciliado'
