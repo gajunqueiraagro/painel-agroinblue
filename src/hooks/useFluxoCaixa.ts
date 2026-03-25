@@ -108,6 +108,7 @@ export function useFluxoCaixa(
 
   const [saldoInicialAno, setSaldoInicialAno] = useState<number>(0);
   const [saldoInicialAusente, setSaldoInicialAusente] = useState(false);
+  const [saldoInicialAudit, setSaldoInicialAudit] = useState<SaldoInicialAudit | null>(null);
   const [loadingSaldo, setLoadingSaldo] = useState(true);
 
   // Sempre global: todas as fazendas reais
@@ -116,11 +117,12 @@ export function useFluxoCaixa(
     [fazendas],
   );
 
-  // Fetch saldo final de Dez do ano anterior — SEMPRE GLOBAL
+  // Fetch saldo inicial de Dez do ano anterior via financeiro_saldos_bancarios (SALDO da EXPORT_APP_UNICO)
   const loadSaldoInicial = useCallback(async () => {
     if (todasFazendaIds.length === 0) {
       setSaldoInicialAno(0);
       setSaldoInicialAusente(true);
+      setSaldoInicialAudit({ fonte: 'financeiro_saldos_bancarios', periodo: `${ano - 1}-12`, qtdRegistros: 0, contas: [], somaTotal: 0 });
       setLoadingSaldo(false);
       return;
     }
@@ -129,22 +131,38 @@ export function useFluxoCaixa(
       const anoAnterior = ano - 1;
       const anoMesDez = `${anoAnterior}-12`;
       const { data } = await supabase
-        .from('financeiro_resumo_caixa')
-        .select('saldo_final_total')
+        .from('financeiro_saldos_bancarios')
+        .select('saldo_final, conta_banco')
         .in('fazenda_id', todasFazendaIds)
         .eq('ano_mes', anoMesDez);
 
       if (data && data.length > 0) {
-        const total = data.reduce((s, r) => s + (Number(r.saldo_final_total) || 0), 0);
+        const total = data.reduce((s, r) => s + (Number(r.saldo_final) || 0), 0);
+        const contas = data.map(r => r.conta_banco).filter(Boolean);
         setSaldoInicialAno(total);
         setSaldoInicialAusente(false);
+        setSaldoInicialAudit({
+          fonte: 'financeiro_saldos_bancarios (SALDO da EXPORT_APP_UNICO)',
+          periodo: anoMesDez,
+          qtdRegistros: data.length,
+          contas,
+          somaTotal: total,
+        });
       } else {
         setSaldoInicialAno(0);
         setSaldoInicialAusente(true);
+        setSaldoInicialAudit({
+          fonte: 'financeiro_saldos_bancarios (SALDO da EXPORT_APP_UNICO)',
+          periodo: anoMesDez,
+          qtdRegistros: 0,
+          contas: [],
+          somaTotal: 0,
+        });
       }
     } catch {
       setSaldoInicialAno(0);
       setSaldoInicialAusente(true);
+      setSaldoInicialAudit(null);
     } finally {
       setLoadingSaldo(false);
     }
