@@ -859,7 +859,11 @@ export function DashboardFinanceiro({
             ))}
             {(ind.categoriasSaida.includes('Reposição de Bovinos') || ind.categoriasSaida.includes('Dedução de Receitas')) && (
               <div className="text-[8px] text-muted-foreground italic">* não entram no desembolso produtivo</div>
-            )}
+          </CardContent>
+        </Card>
+
+        {/* Entradas acumulado */}
+        <Card className="bg-card/80">
           <CardContent className="p-2.5 space-y-1">
             <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entradas acumulado</div>
             {ind.categoriasEntrada.map(cat => (
