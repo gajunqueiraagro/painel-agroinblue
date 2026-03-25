@@ -38,19 +38,18 @@ import type { Pasto, CategoriaRebanho } from '@/hooks/usePastos';
 // Helpers
 // ---------------------------------------------------------------------------
 
-const isConciliado = (l: FinanceiroLancamento) =>
-  (l.status_transacao || '').toLowerCase() === 'conciliado';
+// Use shared filters — FONTE ÚNICA DE VERDADE (src/lib/financeiro/filters.ts)
+import {
+  isConciliado as isConciliadoShared,
+  isEntradaFinanceira,
+  isSaidaFinanceira,
+  datePagtoAnoMes as datePagtoAnoMesShared,
+} from '@/lib/financeiro/filters';
 
-const isEntrada = (l: FinanceiroLancamento) =>
-  (l.tipo_operacao || '').startsWith('1');
-
-const isSaida = (l: FinanceiroLancamento) =>
-  (l.tipo_operacao || '').startsWith('2');
-
-const datePagtoAnoMes = (l: FinanceiroLancamento): string | null => {
-  if (!l.data_pagamento || l.data_pagamento.length < 7) return null;
-  return l.data_pagamento.substring(0, 7);
-};
+const isConciliado = (l: FinanceiroLancamento) => isConciliadoShared(l);
+const isEntrada = (l: FinanceiroLancamento) => isEntradaFinanceira(l);
+const isSaida = (l: FinanceiroLancamento) => isSaidaFinanceira(l);
+const datePagtoAnoMes = (l: FinanceiroLancamento) => datePagtoAnoMesShared(l);
 
 const normMacro = (l: FinanceiroLancamento) =>
   (l.macro_custo || '').toLowerCase().trim();

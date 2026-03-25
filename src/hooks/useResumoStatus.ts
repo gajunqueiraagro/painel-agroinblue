@@ -13,6 +13,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { calcSaldoMensalAcumulado, isEntrada, isSaida } from '@/lib/calculos';
+import {
+  calcFinanceiroFromLancamentos,
+  isConciliado as isConciliadoFin,
+  datePagtoAnoMes,
+  type FinanceiroLancamentoBase,
+} from '@/lib/financeiro/filters';
 import { format, parseISO } from 'date-fns';
 
 // ---------------------------------------------------------------------------
@@ -33,11 +39,24 @@ export interface ResumoZootecnico {
   status: StatusCamada;
 }
 
+export interface FinanceiroAudit {
+  base: string;
+  filtroStatus: string;
+  filtroData: string;
+  classificacao: string;
+  periodo: string;
+  totalLancamentosFiltrados: number;
+  qtdEntradas: number;
+  qtdSaidas: number;
+  saldoOrigem: string;
+}
+
 export interface ResumoFinanceiro {
   totalEntradas: number;
   totalSaidas: number;
-  saldoCaixa: number; // saldo real com saldo inicial
+  saldoCaixa: number;
   status: StatusCamada;
+  audit: FinanceiroAudit;
 }
 
 export interface ResumoEconomico {
@@ -77,8 +96,7 @@ export function useResumoStatus(
   // DB-fetched data for status calculation
   const [fechamentoRebanho, setFechamentoRebanho] = useState<Record<string, string>>({}); // anoMes → status
   const [fechamentoPastos, setFechamentoPastos] = useState<Record<string, { total: number; fechados: number }>>({}); 
-  const [finLancamentos, setFinLancamentos] = useState<{ status_transacao: string | null; ano_mes: string; data_pagamento: string | null; valor: number; tipo_operacao: string | null }[]>([]);
-  const [resumoCaixa, setResumoCaixa] = useState<{ ano_mes: string; entradas: number; saidas: number; saldo_final_total: number }[]>([]);
+  const [finLancamentos, setFinLancamentos] = useState<FinanceiroLancamentoBase[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fazendaIds = useMemo(() => {
@@ -94,7 +112,7 @@ export function useResumoStatus(
       const anoStr = String(ano);
       const mesesRange = Array.from({ length: mesAte }, (_, i) => `${anoStr}-${String(i + 1).padStart(2, '0')}`);
 
-      const [vrfResult, fpResult, flResult, rcResult] = await Promise.all([
+      const [vrfResult, fpResult, flResult] = await Promise.all([
         // Fechamento rebanho (valor_rebanho_fechamento)
         supabase
           .from('valor_rebanho_fechamento')
@@ -107,26 +125,20 @@ export function useResumoStatus(
           .select('ano_mes, status, fazenda_id')
           .in('fazenda_id', fazendaIds)
           .in('ano_mes', mesesRange),
-        // Financeiro - status conciliação
+        // Financeiro - lançamentos brutos (fonte única de verdade)
+        // Filtra por ano via data_pagamento para evitar limite de 1000 rows
         supabase
           .from('financeiro_lancamentos')
-          .select('status_transacao, ano_mes, data_pagamento, valor, tipo_operacao')
+          .select('status_transacao, data_pagamento, valor, tipo_operacao')
           .in('fazenda_id', fazendaIds)
-          .gte('ano_mes', mesesRange[0] || '')
-          .lte('ano_mes', mesesRange[mesesRange.length - 1] || ''),
-        // Resumo caixa
-        supabase
-          .from('financeiro_resumo_caixa')
-          .select('ano_mes, entradas, saidas, saldo_final_total')
-          .in('fazenda_id', fazendaIds)
-          .in('ano_mes', mesesRange),
+          .gte('data_pagamento', `${anoStr}-01-01`)
+          .lte('data_pagamento', `${anoStr}-12-31`),
       ]);
 
       // Process fechamento rebanho
       const vrfMap: Record<string, string> = {};
       (vrfResult.data || []).forEach((r: any) => {
         const key = r.ano_mes;
-        // For global: only "fechado" if ALL fazendas are fechado for this month
         if (vrfMap[key] === undefined) vrfMap[key] = r.status;
         else if (vrfMap[key] === 'fechado' && r.status !== 'fechado') vrfMap[key] = r.status;
       });
@@ -144,17 +156,9 @@ export function useResumoStatus(
 
       setFinLancamentos((flResult.data || []).map((r: any) => ({
         status_transacao: r.status_transacao,
-        ano_mes: r.ano_mes,
-        data_pagamento: r.data_pagamento,
+        data_pagamento: r.data_pagamento ? String(r.data_pagamento) : null,
         valor: Number(r.valor) || 0,
         tipo_operacao: r.tipo_operacao,
-      })));
-
-      setResumoCaixa((rcResult.data || []).map((r: any) => ({
-        ano_mes: r.ano_mes,
-        entradas: Number(r.entradas) || 0,
-        saidas: Number(r.saidas) || 0,
-        saldo_final_total: Number(r.saldo_final_total) || 0,
       })));
     } catch (e) {
       console.error('useResumoStatus load error', e);
@@ -220,51 +224,31 @@ export function useResumoStatus(
   }, [lancamentos, saldosIniciais, ano, mesAte, fechamentoRebanho, fechamentoPastos]);
 
   // -------------------------------------------------------------------------
-  // FINANCEIRO
+  // FINANCEIRO — FONTE ÚNICA: calcFinanceiroFromLancamentos
   // -------------------------------------------------------------------------
   const financeiro = useMemo((): ResumoFinanceiro => {
     const mesAtual = new Date().getMonth() + 1;
     const anoAtual = new Date().getFullYear();
     const anoStr = String(ano);
 
-    let totalEntradas = 0;
-    let totalSaidas = 0;
-    let saldoCaixa = 0;
+    // Usar a mesma lógica do Dashboard: filtros compartilhados
+    const calc = calcFinanceiroFromLancamentos(finLancamentos, ano, mesAte);
 
-    if (resumoCaixa.length > 0) {
-      resumoCaixa.forEach(rc => {
-        totalEntradas += rc.entradas;
-        totalSaidas += rc.saidas;
-      });
-      const sorted = [...resumoCaixa].sort((a, b) => a.ano_mes.localeCompare(b.ano_mes));
-      saldoCaixa = sorted[sorted.length - 1]?.saldo_final_total ?? 0;
-    } else {
-      // Fallback: calculate from conciliado lancamentos
-      const conciliados = finLancamentos.filter(
-        l => (l.status_transacao || '').toLowerCase().trim() === 'conciliado' && l.data_pagamento
-      );
-      conciliados.forEach(l => {
-        const tipo = (l.tipo_operacao || '').toLowerCase().trim();
-        if (tipo === 'entrada' || tipo === 'receita') {
-          totalEntradas += Math.abs(l.valor);
-        } else if (tipo === 'saida' || tipo === 'saída' || tipo === 'despesa') {
-          totalSaidas += Math.abs(l.valor);
-        } else if (l.valor > 0) {
-          totalEntradas += l.valor;
-        } else {
-          totalSaidas += Math.abs(l.valor);
-        }
-      });
-      saldoCaixa = totalEntradas - totalSaidas;
-    }
+    // Saldo = entradas - saídas (calculado dos lançamentos, sem tabela resumo_caixa)
+    // Documentação: saldo é diferença simples E/S do período, não inclui saldo inicial
+    // de caixa (que pertence ao módulo Fluxo de Caixa Global).
+    const saldoCaixa = calc.saldo;
 
-    // Status: check conciliation per month
+    // Status: check conciliation per month using data_pagamento
     let mesesFechados = 0;
     let mesesComLancamentos = 0;
 
     for (let m = 1; m <= mesAte; m++) {
       const anoMes = `${anoStr}-${String(m).padStart(2, '0')}`;
-      const lancsMes = finLancamentos.filter(l => l.ano_mes === anoMes);
+      const lancsMes = finLancamentos.filter(l => {
+        const am = datePagtoAnoMes(l);
+        return am === anoMes;
+      });
       if (lancsMes.length === 0) continue;
 
       mesesComLancamentos++;
@@ -272,9 +256,7 @@ export function useResumoStatus(
       if (ano === anoAtual && m === mesAtual) continue;
 
       const relevantes = lancsMes.filter(l => !isExclusoOperacional(l.status_transacao));
-      const todosConciliados = relevantes.every(
-        l => (l.status_transacao || '').toLowerCase().trim() === 'conciliado'
-      );
+      const todosConciliados = relevantes.every(l => isConciliadoFin(l));
       if (todosConciliados) mesesFechados++;
     }
 
@@ -293,8 +275,19 @@ export function useResumoStatus(
       }
     }
 
-    return { totalEntradas, totalSaidas, saldoCaixa, status: { nivel, descricao } };
-  }, [finLancamentos, resumoCaixa, ano, mesAte]);
+    return {
+      totalEntradas: calc.totalEntradas,
+      totalSaidas: calc.totalSaidas,
+      saldoCaixa,
+      status: { nivel, descricao },
+      audit: {
+        ...calc.audit,
+        qtdEntradas: calc.qtdEntradas,
+        qtdSaidas: calc.qtdSaidas,
+        saldoOrigem: 'Calculado: Entradas − Saídas (sem saldo inicial de caixa)',
+      },
+    };
+  }, [finLancamentos, ano, mesAte]);
 
   // -------------------------------------------------------------------------
   // ECONÔMICO
