@@ -368,6 +368,66 @@ function AuditDesembolsoProdutivo({
 }
 
 // ---------------------------------------------------------------------------
+// Sub: Mobile Detalhe Entradas/Saídas (tabbed)
+// ---------------------------------------------------------------------------
+
+function MobileDetalheEntradaSaida({ ind }: { ind: any }) {
+  const [entradaTab, setEntradaTab] = useState<'mes' | 'acum'>('mes');
+  const [saidaTab, setSaidaTab] = useState<'mes' | 'acum'>('mes');
+
+  return (
+    <div className="space-y-2">
+      {/* Entradas */}
+      <Card className="bg-card/80">
+        <CardContent className="p-3 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entradas</div>
+            <div className="flex gap-1">
+              {(['mes', 'acum'] as const).map(t => (
+                <button key={t} onClick={() => setEntradaTab(t)}
+                  className={`text-[10px] px-2 py-0.5 rounded-md font-bold transition-colors ${entradaTab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground bg-muted'}`}>
+                  {t === 'mes' ? 'Mês' : 'Acumulado'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {ind.categoriasEntrada.map((cat: string) => (
+            <div key={cat} className="flex justify-between text-xs">
+              <span className="text-muted-foreground">{cat}</span>
+              <span className="font-mono font-bold">{formatMoeda((entradaTab === 'mes' ? ind.entradaDecomp.mes : ind.entradaDecomp.acum).get(cat) || 0)}</span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Saídas */}
+      <Card className="bg-card/80">
+        <CardContent className="p-3 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Saídas</div>
+            <div className="flex gap-1">
+              {(['mes', 'acum'] as const).map(t => (
+                <button key={t} onClick={() => setSaidaTab(t)}
+                  className={`text-[10px] px-2 py-0.5 rounded-md font-bold transition-colors ${saidaTab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground bg-muted'}`}>
+                  {t === 'mes' ? 'Mês' : 'Acumulado'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {ind.categoriasSaida.map((cat: string) => (
+            <div key={cat} className="flex justify-between text-xs">
+              <span className={`text-muted-foreground ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
+              <span className="font-mono font-bold">{formatMoeda((saidaTab === 'mes' ? ind.saidaDecomp.mes : ind.saidaDecomp.acum).get(cat) || 0)}</span>
+            </div>
+          ))}
+          <div className="text-[8px] text-muted-foreground italic">* Reposição e Dedução não entram no desembolso produtivo</div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
