@@ -594,10 +594,11 @@ export function DashboardFinanceiro({
       if (macro === 'investimento na fazenda' && escopo === 'agricultura') return 'Investimento Agrícola';
       if (macro === 'investimento na fazenda') return 'Investimento Pecuário';
       if (macro === 'investimento em bovinos') return 'Reposição de Bovinos';
+      if (macro.includes('dedu') && macro.includes('receita')) return 'Dedução de Receitas';
       return 'Outros';
     };
 
-    const categoriasSaida = ['Custeio Pecuário', 'Investimento Pecuário', 'Custeio Agrícola', 'Investimento Agrícola', 'Reposição de Bovinos'];
+    const categoriasSaida = ['Custeio Pecuário', 'Investimento Pecuário', 'Custeio Agrícola', 'Investimento Agrícola', 'Reposição de Bovinos', 'Dedução de Receitas'];
     const saidaDecomp = { mes: new Map<string, number>(), acum: new Map<string, number>() };
     for (const cat of categoriasSaida) { saidaDecomp.mes.set(cat, 0); saidaDecomp.acum.set(cat, 0); }
 
