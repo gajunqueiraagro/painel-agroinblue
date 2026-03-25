@@ -173,6 +173,12 @@ export function useResumoStatus(
         valor: Number(r.valor) || 0,
         tipo_operacao: r.tipo_operacao,
       })));
+
+      // Process saldo inicial global (mesma lógica do useFluxoCaixa)
+      const saldoData = saldoResult.data || [];
+      setSaldoInicialRegistros(saldoData.length);
+      setSaldoInicialContas(saldoData.map((r: any) => r.conta_banco).filter(Boolean));
+      setSaldoInicialGlobal(saldoData.reduce((s: number, r: any) => s + (Number(r.saldo_final) || 0), 0));
     } catch (e) {
       console.error('useResumoStatus load error', e);
     } finally {
