@@ -53,6 +53,7 @@ export function useStatusZootecnico(
 
   const load = useCallback(async () => {
     if (!fazendaId) { setLoading(false); return; }
+    setLoading(true);
     setSemPecuaria(false);
     try {
       // Build fazenda filter helper
