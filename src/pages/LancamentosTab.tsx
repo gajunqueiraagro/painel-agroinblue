@@ -58,12 +58,12 @@ function getCamposFazenda(tipo: TipoMovimentacao, nomeFazenda: string) {
   }
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, abaInicial, onBackToConciliacao }: Props) {
   const { fazendaAtual, fazendas } = useFazenda();
   const nomeFazenda = fazendaAtual?.nome || '';
   const outrasFazendas = useMemo(() => fazendas.filter(f => f.id !== fazendaAtual?.id), [fazendas, fazendaAtual]);
 
-  const [aba, setAba] = useState<Aba>('entrada');
+  const [aba, setAba] = useState<Aba>(abaInicial || 'entrada');
   const [tipo, setTipo] = useState<TipoMovimentacao>('nascimento');
   const [categoria, setCategoria] = useState<Categoria>('bois');
   const [quantidade, setQuantidade] = useState('');
