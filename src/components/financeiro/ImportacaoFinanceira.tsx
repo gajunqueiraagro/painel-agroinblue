@@ -115,7 +115,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
 
     const linhasComFazenda = preview.lancamentos.filter(l => l.fazendaId);
     const linhasSemFazenda = preview.lancamentos.filter(l => !l.fazendaId);
-    if (linhasSemFazenda.length > 0) return;
+    if (linhasSemFazenda.length > 0 && preview.lancamentos.length > 0) return;
 
     setImportando(true);
     const errosBloqueantes = preview.erros.filter(e => e.campo !== 'Centro de Custo');
