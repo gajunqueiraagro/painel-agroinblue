@@ -853,7 +853,7 @@ export function DashboardFinanceiro({
             <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Saídas no mês</div>
             {ind.categoriasSaida.map(cat => (
               <div key={cat} className="flex justify-between text-[10px]">
-                <span className={`text-muted-foreground truncate mr-2 ${cat === 'Reposição de Bovinos' ? 'italic' : ''}`}>{cat}</span>
+                <span className={`text-muted-foreground truncate mr-2 ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
                 <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.saidaDecomp.mes.get(cat) || 0)}</span>
               </div>
             ))}
