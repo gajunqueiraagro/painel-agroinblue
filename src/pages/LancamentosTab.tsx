@@ -29,6 +29,8 @@ interface Props {
   onAdicionar: (l: Omit<Lancamento, 'id'>) => void;
   onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
   onRemover: (id: string) => void;
+  abaInicial?: Aba;
+  onBackToConciliacao?: () => void;
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
