@@ -103,6 +103,9 @@ export function useResumoStatus(
   const [fechamentoRebanho, setFechamentoRebanho] = useState<Record<string, string>>({}); // anoMes → status
   const [fechamentoPastos, setFechamentoPastos] = useState<Record<string, { total: number; fechados: number }>>({}); 
   const [finLancamentos, setFinLancamentos] = useState<FinanceiroLancamentoBase[]>([]);
+  const [saldoInicialGlobal, setSaldoInicialGlobal] = useState(0);
+  const [saldoInicialContas, setSaldoInicialContas] = useState<string[]>([]);
+  const [saldoInicialRegistros, setSaldoInicialRegistros] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const fazendaIds = useMemo(() => {
