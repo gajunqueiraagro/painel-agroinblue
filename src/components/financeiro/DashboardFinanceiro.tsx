@@ -20,7 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TrendingDown, TrendingUp, Building2, AlertTriangle, ChevronDown, ChevronUp, Activity, BarChart3 } from 'lucide-react';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_OPTIONS, MESES_NOMES } from '@/lib/calculos/labels';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import {
   type FinanceiroLancamento,
   type RateioADM,
