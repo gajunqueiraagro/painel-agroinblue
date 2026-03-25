@@ -1,13 +1,13 @@
 /**
- * Fluxo de Caixa — tabela 13 linhas, jan-dez + coluna Total.
+ * Fluxo de Caixa Global — tabela 12 linhas, jan-dez + coluna Total.
  * Base: data_pagamento + Conciliado.
- * Sem gráfico — foco total na tabela.
+ * SEMPRE GLOBAL — independente da fazenda selecionada.
  */
 import { useMemo } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFluxoCaixa, type FluxoMensal } from '@/hooks/useFluxoCaixa';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
 import type { FinanceiroLancamento, RateioADM } from '@/hooks/useFinanceiro';
 
 // ---------------------------------------------------------------------------
@@ -21,9 +21,6 @@ const fmtK = (v: number): string => {
   return v.toFixed(0);
 };
 
-const fmtMoeda = (v: number) =>
-  v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -33,15 +30,17 @@ interface Props {
   rateioADM: RateioADM[];
   ano: number;
   mesAte: number;
+  /** Nome da fazenda atual — se presente, significa que o usuário está numa fazenda específica */
+  fazendaAtualNome?: string;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte }: Props) {
+export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAtualNome }: Props) {
   const isMobile = useIsMobile();
-  const { meses, loading } = useFluxoCaixa(lancamentos, rateioADM, ano, mesAte);
+  const { meses, loading, saldoInicialAusente } = useFluxoCaixa(lancamentos, rateioADM, ano, mesAte);
 
   if (loading) {
     return (
@@ -52,11 +51,31 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte }: Props) 
   }
 
   return (
-    <div className="p-4 max-w-full mx-auto space-y-4 animate-fade-in">
-      {/* Tabela Fluxo de Caixa 13 linhas */}
+    <div className="p-4 max-w-full mx-auto space-y-3 animate-fade-in">
+      {/* Banner: fluxo é sempre global */}
+      {fazendaAtualNome && (
+        <div className="flex items-start gap-2 text-xs bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
+          <AlertTriangle className="h-3.5 w-3.5 text-amber-600 mt-0.5 shrink-0" />
+          <span className="text-amber-800 dark:text-amber-300">
+            O Fluxo de Caixa representa o <strong>caixa global consolidado</strong> da operação.
+            A visão por fazenda é usada apenas para análise operacional e econômica.
+          </span>
+        </div>
+      )}
+
+      {/* Aviso saldo inicial ausente */}
+      {saldoInicialAusente && (
+        <div className="text-[10px] text-muted-foreground bg-muted rounded-md px-2.5 py-1.5">
+          ⓘ Saldo inicial zerado — sem histórico de Dez/{ano - 1}
+        </div>
+      )}
+
+      {/* Tabela Fluxo de Caixa */}
       <Card>
         <CardContent className="pt-4 pb-2 overflow-x-auto">
-          <h3 className="text-sm md:text-base font-bold text-card-foreground mb-3">Fluxo de Caixa</h3>
+          <h3 className="text-sm md:text-base font-bold text-card-foreground mb-3">
+            Fluxo de Caixa Global
+          </h3>
           <FluxoTable meses={meses} mesAte={mesAte} isMobile={isMobile} />
         </CardContent>
       </Card>
@@ -65,7 +84,7 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte }: Props) 
 }
 
 // ---------------------------------------------------------------------------
-// Tabela 13 linhas + coluna Total
+// Tabela 12 linhas + coluna Total
 // ---------------------------------------------------------------------------
 
 interface RowDef {
@@ -96,21 +115,17 @@ function getValueColor(val: number, row: RowDef, isAfter: boolean): string {
   if (val === 0) return 'text-muted-foreground';
   if (row.tipo === 'entrada') return 'text-green-600 dark:text-green-400';
   if (row.tipo === 'saida') return 'text-red-600 dark:text-red-400';
-  // saldo: color by sign
   return val >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
 }
 
 function FluxoTable({ meses, mesAte, isMobile }: { meses: FluxoMensal[]; mesAte: number; isMobile: boolean }) {
-  // Compute totals for the period (jan → mesAte)
   const totals = useMemo(() => {
     const upTo = meses.filter(m => m.mes <= mesAte);
     const result: Record<string, number> = {};
     for (const row of ROWS) {
       if (row.key === 'saldoInicial') {
-        // Saldo Inicial = saldo inicial de janeiro
         result[row.key] = meses.length > 0 ? meses[0].saldoInicial : 0;
       } else if (row.key === 'saldoFinal') {
-        // Saldo Final = saldo final do último mês
         result[row.key] = upTo.length > 0 ? upTo[upTo.length - 1].saldoFinal : 0;
       } else if (row.key === 'saldoAcumulado') {
         result[row.key] = upTo.length > 0 ? upTo[upTo.length - 1].saldoAcumulado : 0;
@@ -172,7 +187,6 @@ function FluxoTable({ meses, mesAte, isMobile }: { meses: FluxoMensal[]; mesAte:
                   </td>
                 );
               })}
-              {/* Total column */}
               <td className={`${cellPad} text-right ${row.bold ? 'font-bold' : 'font-normal'} bg-muted/50 ${getValueColor(totals[row.key] || 0, row, false)}`}>
                 {fmtK(totals[row.key] || 0)}
               </td>

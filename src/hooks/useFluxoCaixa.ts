@@ -1,7 +1,10 @@
 /**
- * Hook para o Fluxo de Caixa — 13 linhas, jan-dez.
+ * Hook para o Fluxo de Caixa — 12 linhas, jan-dez.
  * Base: data_pagamento + status_transacao = 'Conciliado'.
  * Saldo Inicial Jan = saldo final Dez do ano anterior (financeiro_resumo_caixa).
+ *
+ * REGRA: O fluxo de caixa é SEMPRE GLOBAL (todas as fazendas),
+ * independentemente da fazenda selecionada.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,7 +16,7 @@ import type { FinanceiroLancamento, RateioADM } from '@/hooks/useFinanceiro';
 // ---------------------------------------------------------------------------
 
 export interface FluxoMensal {
-  mes: number; // 1-12
+  mes: number;
   label: string;
   saldoInicial: number;
   receitas: number;
@@ -29,9 +32,11 @@ export interface FluxoMensal {
   saldoAcumulado: number;
 }
 
-export interface FluxoCaixaData {
+export interface FluxoCaixaResult {
   meses: FluxoMensal[];
   loading: boolean;
+  saldoInicialAno: number;
+  saldoInicialAusente: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,21 +94,27 @@ export function useFluxoCaixa(
   ano: number,
   mesAte: number,
 ) {
-  const { fazendaAtual, fazendas } = useFazenda();
-  const fazendaId = fazendaAtual?.id;
-  const isGlobal = fazendaId === '__global__';
+  // MODO GLOBAL FORÇADO — sempre usa todas as fazendas
+  const { fazendas } = useFazenda();
 
   const [saldoInicialAno, setSaldoInicialAno] = useState<number>(0);
+  const [saldoInicialAusente, setSaldoInicialAusente] = useState(false);
   const [loadingSaldo, setLoadingSaldo] = useState(true);
 
-  const fazendaIds = useMemo(() => {
-    if (isGlobal) return fazendas.filter(f => f.id !== '__global__').map(f => f.id);
-    return fazendaId ? [fazendaId] : [];
-  }, [fazendaId, isGlobal, fazendas]);
+  // Sempre global: todas as fazendas reais
+  const todasFazendaIds = useMemo(
+    () => fazendas.filter(f => f.id !== '__global__').map(f => f.id),
+    [fazendas],
+  );
 
-  // Fetch saldo final de Dez do ano anterior
+  // Fetch saldo final de Dez do ano anterior — SEMPRE GLOBAL
   const loadSaldoInicial = useCallback(async () => {
-    if (fazendaIds.length === 0) { setSaldoInicialAno(0); setLoadingSaldo(false); return; }
+    if (todasFazendaIds.length === 0) {
+      setSaldoInicialAno(0);
+      setSaldoInicialAusente(true);
+      setLoadingSaldo(false);
+      return;
+    }
     setLoadingSaldo(true);
     try {
       const anoAnterior = ano - 1;
@@ -111,25 +122,28 @@ export function useFluxoCaixa(
       const { data } = await supabase
         .from('financeiro_resumo_caixa')
         .select('saldo_final_total')
-        .in('fazenda_id', fazendaIds)
+        .in('fazenda_id', todasFazendaIds)
         .eq('ano_mes', anoMesDez);
 
       if (data && data.length > 0) {
         const total = data.reduce((s, r) => s + (Number(r.saldo_final_total) || 0), 0);
         setSaldoInicialAno(total);
+        setSaldoInicialAusente(false);
       } else {
         setSaldoInicialAno(0);
+        setSaldoInicialAusente(true);
       }
     } catch {
       setSaldoInicialAno(0);
+      setSaldoInicialAusente(true);
     } finally {
       setLoadingSaldo(false);
     }
-  }, [fazendaIds, ano]);
+  }, [todasFazendaIds, ano]);
 
   useEffect(() => { loadSaldoInicial(); }, [loadSaldoInicial]);
 
-  // Compute 13-line fluxo
+  // Compute 12-line fluxo
   const meses = useMemo((): FluxoMensal[] => {
     const anoStr = String(ano);
 
@@ -217,5 +231,5 @@ export function useFluxoCaixa(
     return result;
   }, [lancamentosFinanceiros, rateioADM, ano, mesAte, saldoInicialAno]);
 
-  return { meses, loading: loadingSaldo, saldoInicialAno };
+  return { meses, loading: loadingSaldo, saldoInicialAno, saldoInicialAusente } as FluxoCaixaResult;
 }
