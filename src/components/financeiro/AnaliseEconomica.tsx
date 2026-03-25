@@ -34,6 +34,8 @@ interface Props {
   pastos: Pasto[];
   categorias: CategoriaRebanho[];
   fazendaId?: string;
+  filtroAnoInicial?: string;
+  filtroMesInicial?: number;
 }
 
 // ---------------------------------------------------------------------------

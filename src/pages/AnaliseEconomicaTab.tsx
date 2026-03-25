@@ -48,6 +48,8 @@ export function AnaliseEconomicaTab({ lancamentosPecuarios, saldosIniciais, onBa
           pastos={pastos}
           categorias={categorias}
           fazendaId={fazendaId}
+          filtroAnoInicial={filtroAnoInicial}
+          filtroMesInicial={filtroMesInicial}
         />
       )}
     </div>
