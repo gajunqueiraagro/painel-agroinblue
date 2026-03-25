@@ -32,12 +32,14 @@ interface Props {
   saldosIniciais: SaldoInicial[];
   onBack: () => void;
   onTabChange?: (tab: TabId) => void;
+  filtroAnoInicial?: string;
+  filtroMesInicial?: number;
 }
 
 type Vista = 'mes' | 'acumulado';
 type SubView = 'main' | 'graficos-estoque' | 'graficos-producao';
 
-export function ZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTabChange }: Props) {
+export function ZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTabChange, filtroAnoInicial, filtroMesInicial }: Props) {
   const { fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
@@ -50,9 +52,9 @@ export function ZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTabChange
     return Array.from(set).sort().reverse();
   }, [lancamentos, saldosIniciais]);
 
-  const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
+  const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(new Date().getFullYear()));
   const anoNum = Number(anoFiltro);
-  const mesDefault = anoNum === new Date().getFullYear() ? new Date().getMonth() + 1 : 12;
+  const mesDefault = filtroMesInicial || (anoNum === new Date().getFullYear() ? new Date().getMonth() + 1 : 12);
   const [mesFiltro, setMesFiltro] = useState(mesDefault);
   const [vista, setVista] = useState<Vista>('mes');
   const [subView, setSubView] = useState<SubView>('main');

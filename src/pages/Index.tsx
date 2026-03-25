@@ -24,6 +24,11 @@ import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
 
+export interface FiltroGlobal {
+  ano: string;
+  mes: number;
+}
+
 const TITLES: Record<TabId, string> = {
   resumo: 'Controle de Rebanho',
   zootecnico: 'Zootécnico',
@@ -54,6 +59,16 @@ const Index = () => {
   const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial, loadData } = useLancamentos();
   const { pendingCount, syncing, online, syncQueue } = useOfflineSync(fazendaAtual?.id === '__global__' ? undefined : fazendaAtual?.id, loadData);
 
+  // ── Filtro Global (ano + mês) ──
+  const [filtroGlobal, setFiltroGlobal] = useState<FiltroGlobal>({
+    ano: String(new Date().getFullYear()),
+    mes: new Date().getMonth() + 1,
+  });
+
+  const handleFiltroChange = useCallback((f: Partial<FiltroGlobal>) => {
+    setFiltroGlobal(prev => ({ ...prev, ...f }));
+  }, []);
+
   const papel = fazendaAtual?.papel;
   const isDono = fazendaAtual?.owner_id === user?.id;
   const isDonoOuGerente = isDono || papel === 'gerente';
@@ -76,7 +91,7 @@ const Index = () => {
   const goToResumo = useCallback(() => setActiveTab('resumo'), []);
 
   // Hide header for sub-screens that have their own back nav
-  const isSubScreen = ['zootecnico', 'analise_economica'].includes(activeTab);
+  const isSubScreen = ['zootecnico', 'analise_economica', 'fin_caixa'].includes(activeTab);
 
   const headerTitle = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || TITLES[activeTab]);
 
@@ -94,8 +109,25 @@ const Index = () => {
         />
       )}
 
-      {activeTab === 'resumo' && <ResumoTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
-      {activeTab === 'zootecnico' && <ZootecnicoTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onBack={goToResumo} onTabChange={handleTabChange} />}
+      {activeTab === 'resumo' && (
+        <ResumoTab
+          lancamentos={lancamentosVisiveis}
+          saldosIniciais={saldosIniciais}
+          onTabChange={handleTabChange}
+          filtroGlobal={filtroGlobal}
+          onFiltroChange={handleFiltroChange}
+        />
+      )}
+      {activeTab === 'zootecnico' && (
+        <ZootecnicoTab
+          lancamentos={lancamentosVisiveis}
+          saldosIniciais={saldosIniciais}
+          onBack={goToResumo}
+          onTabChange={handleTabChange}
+          filtroAnoInicial={filtroGlobal.ano}
+          filtroMesInicial={filtroGlobal.mes}
+        />
+      )}
       {activeTab === 'movimentacao' && <MovimentacaoTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} />}
       {activeTab === 'lancamentos' && (
         <LancamentosTab
@@ -114,8 +146,24 @@ const Index = () => {
       {activeTab === 'desfrute' && <DesfrunteTab lancamentos={isGlobal ? lancamentosVisiveis : lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} isGlobal={isGlobal} />}
       {activeTab === 'cadastros' && <CadastrosTab />}
       {activeTab === 'conciliacao' && <ConciliacaoHubTab />}
-      {activeTab === 'fin_caixa' && <FinanceiroCaixaTab lancamentosPecuarios={lancamentos} saldosIniciais={saldosIniciais} />}
-      {activeTab === 'analise_economica' && <AnaliseEconomicaTab lancamentosPecuarios={lancamentos} saldosIniciais={saldosIniciais} onBack={goToResumo} />}
+      {activeTab === 'fin_caixa' && (
+        <FinanceiroCaixaTab
+          lancamentosPecuarios={lancamentos}
+          saldosIniciais={saldosIniciais}
+          onBack={goToResumo}
+          filtroAnoInicial={filtroGlobal.ano}
+          filtroMesInicial={filtroGlobal.mes}
+        />
+      )}
+      {activeTab === 'analise_economica' && (
+        <AnaliseEconomicaTab
+          lancamentosPecuarios={lancamentos}
+          saldosIniciais={saldosIniciais}
+          onBack={goToResumo}
+          filtroAnoInicial={filtroGlobal.ano}
+          filtroMesInicial={filtroGlobal.mes}
+        />
+      )}
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
   );

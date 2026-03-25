@@ -3,7 +3,7 @@
  * 3 cards enxutos: Zootécnico, Financeiro, Econômico.
  * Status forte (🔴🟡🟢) + botão de entrada em cada camada.
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { parseISO, format } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,11 +11,14 @@ import { TabId } from '@/components/BottomNav';
 import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 import { useResumoStatus, StatusNivel } from '@/hooks/useResumoStatus';
 import { ChevronRight } from 'lucide-react';
+import type { FiltroGlobal } from './Index';
 
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
   onTabChange: (tab: TabId) => void;
+  filtroGlobal: FiltroGlobal;
+  onFiltroChange: (f: Partial<FiltroGlobal>) => void;
 }
 
 const MESES = [
@@ -47,7 +50,7 @@ function StatusBadge({ nivel }: { nivel: StatusNivel }) {
   );
 }
 
-export function ResumoTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
+export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlobal, onFiltroChange }: Props) {
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
@@ -58,8 +61,8 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
     return Array.from(anos).sort().reverse();
   }, [lancamentos, saldosIniciais]);
 
-  const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
-  const [mesFiltro, setMesFiltro] = useState(String(new Date().getMonth() + 1));
+  const anoFiltro = filtroGlobal.ano;
+  const mesFiltro = String(filtroGlobal.mes);
 
   const anoNum = Number(anoFiltro);
   const mesNum = Number(mesFiltro);
@@ -72,7 +75,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
     <div className="p-4 max-w-4xl mx-auto space-y-4 animate-fade-in pb-20">
       {/* Filtros */}
       <div className="flex gap-2 flex-wrap">
-        <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+        <Select value={anoFiltro} onValueChange={v => onFiltroChange({ ano: v })}>
           <SelectTrigger className="w-24 touch-target text-sm font-bold">
             <SelectValue placeholder="Ano" />
           </SelectTrigger>
@@ -83,7 +86,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange }: Props) {
           </SelectContent>
         </Select>
 
-        <Select value={mesFiltro} onValueChange={setMesFiltro}>
+        <Select value={mesFiltro} onValueChange={v => onFiltroChange({ mes: Number(v) })}>
           <SelectTrigger className="w-36 touch-target text-sm font-bold">
             <SelectValue placeholder="Até o mês" />
           </SelectTrigger>
