@@ -3,6 +3,7 @@ import { BottomNav, TabId } from '@/components/BottomNav';
 import { Header } from '@/components/Header';
 import { ResumoTab } from './ResumoTab';
 import { ZootecnicoTab } from './ZootecnicoTab';
+import { ZootecnicoHubTab } from './ZootecnicoHubTab';
 import { MovimentacaoTab } from './MovimentacaoTab';
 import { LancamentosTab } from './LancamentosTab';
 import { FluxoAnualTab } from './FluxoAnualTab';
@@ -15,9 +16,14 @@ import { AnaliseEntradasTab } from './AnaliseEntradasTab';
 import { AnaliseSaidasTab } from './AnaliseSaidasTab';
 import { DesfrunteTab } from './DesfrunteTab';
 import { CadastrosTab } from './CadastrosTab';
-import { ConciliacaoHubTab } from './ConciliacaoHubTab';
+import { ConciliacaoTab } from './ConciliacaoTab';
+import { FechamentoTab } from './FechamentoTab';
+import { MapaPastosTab } from './MapaPastosTab';
+import { ResumoPastosTab } from './ResumoPastosTab';
+import { AnaliseOperacionalTab } from './AnaliseOperacionalTab';
 import { ValorRebanhoTab } from './ValorRebanhoTab';
 import { ConciliacaoCategoriaTab } from './ConciliacaoCategoriaTab';
+import { ChuvasTab } from './ChuvasTab';
 
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { SyncStatus } from '@/components/SyncStatus';
@@ -33,7 +39,8 @@ export interface FiltroGlobal {
 
 const TITLES: Record<TabId, string> = {
   resumo: 'Controle de Rebanho',
-  zootecnico: 'Zootécnico',
+  zootecnico: 'Painel Zootécnico',
+  zootecnico_hub: 'Zootécnico',
   movimentacao: 'Fluxo Mensal',
   lancamentos: 'Lançar Rebanho',
   financeiro: 'Movimentações',
@@ -53,6 +60,10 @@ const TITLES: Record<TabId, string> = {
   fin_caixa: 'Financeiro',
   valor_rebanho: 'Valor do Rebanho',
   conciliacao_categoria: 'Conciliação de Categoria',
+  analise_operacional: 'Análise Operacional',
+  fechamento: 'Lançamento de Pasto',
+  mapa_pastos: 'Mapa de Pastos',
+  resumo_pastos: 'Resumo de Pastos',
 };
 
 const Index = () => {
@@ -64,7 +75,6 @@ const Index = () => {
   const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial, loadData } = useLancamentos();
   const { pendingCount, syncing, online, syncQueue } = useOfflineSync(fazendaAtual?.id === '__global__' ? undefined : fazendaAtual?.id, loadData);
 
-  // ── Filtro Global (ano + mês) ──
   const [filtroGlobal, setFiltroGlobal] = useState<FiltroGlobal>({
     ano: String(new Date().getFullYear()),
     mes: new Date().getMonth() + 1,
@@ -73,10 +83,6 @@ const Index = () => {
   const handleFiltroChange = useCallback((f: Partial<FiltroGlobal>) => {
     setFiltroGlobal(prev => ({ ...prev, ...f }));
   }, []);
-
-  const papel = fazendaAtual?.papel;
-  const isDono = fazendaAtual?.owner_id === user?.id;
-  const isDonoOuGerente = isDono || papel === 'gerente';
 
   const lancamentosVisiveis = useMemo(() => {
     if (!isGlobal) return lancamentos;
@@ -95,6 +101,7 @@ const Index = () => {
   }, []);
 
   const goToResumo = useCallback(() => setActiveTab('resumo'), []);
+  const goToZootecnicoHub = useCallback(() => setActiveTab('zootecnico_hub'), []);
   const goToZootecnico = useCallback(() => setActiveTab('zootecnico'), []);
   const goToConciliacaoCategoria = useCallback(() => setActiveTab('conciliacao_categoria'), []);
   const goToReclassFromConciliacao = useCallback(() => {
@@ -102,8 +109,9 @@ const Index = () => {
     setActiveTab('lancamentos');
   }, []);
 
-  // Hide header for sub-screens that have their own back nav
-  const isSubScreen = ['zootecnico', 'analise_economica', 'fin_caixa', 'valor_rebanho', 'conciliacao_categoria'].includes(activeTab);
+  // Sub-screens with own header/back
+  const subScreens: TabId[] = ['zootecnico', 'analise_economica', 'fin_caixa', 'valor_rebanho', 'conciliacao_categoria'];
+  const isSubScreen = subScreens.includes(activeTab);
 
   const headerTitle = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || TITLES[activeTab]);
 
@@ -130,11 +138,14 @@ const Index = () => {
           onFiltroChange={handleFiltroChange}
         />
       )}
+      {activeTab === 'zootecnico_hub' && (
+        <ZootecnicoHubTab onTabChange={handleTabChange} />
+      )}
       {activeTab === 'zootecnico' && (
         <ZootecnicoTab
           lancamentos={lancamentosVisiveis}
           saldosIniciais={saldosIniciais}
-          onBack={goToResumo}
+          onBack={goToZootecnicoHub}
           onTabChange={handleTabChange}
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
@@ -159,7 +170,12 @@ const Index = () => {
       {activeTab === 'analise_saidas' && <AnaliseSaidasTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
       {activeTab === 'desfrute' && <DesfrunteTab lancamentos={isGlobal ? lancamentosVisiveis : lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} isGlobal={isGlobal} />}
       {activeTab === 'cadastros' && <CadastrosTab />}
-      {activeTab === 'conciliacao' && <ConciliacaoHubTab />}
+      {activeTab === 'chuvas' && <ChuvasTab />}
+      {activeTab === 'fechamento' && <FechamentoTab />}
+      {activeTab === 'mapa_pastos' && <MapaPastosTab />}
+      {activeTab === 'resumo_pastos' && <ResumoPastosTab />}
+      {activeTab === 'analise_operacional' && <AnaliseOperacionalTab />}
+      {activeTab === 'conciliacao' && <ConciliacaoTab />}
       {activeTab === 'valor_rebanho' && (
         <ValorRebanhoTab
           lancamentos={lancamentos}
