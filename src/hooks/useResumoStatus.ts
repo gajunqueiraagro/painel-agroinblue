@@ -57,6 +57,9 @@ export interface FinanceiroAudit {
 export interface ResumoFinanceiro {
   totalEntradas: number;
   totalSaidas: number;
+  resultado: number;
+  saldoInicial: number;
+  caixaAtual: number;
   saldoCaixa: number;
   status: StatusCamada;
   audit: FinanceiroAudit;
