@@ -11,7 +11,7 @@
  *   proporcional ao rebanho médio.
  * - Somente lançamentos ADM com status_transacao = "conciliado" entram no rateio.
  * - O período do rateio usa data_pagamento (não data_realizacao nem ano_mes).
- * - Desembolso produtivo = macro_custo "Custeio Produtivo" + tipo_operacao 2-Saídas
+ * - Desembolso produtivo = macro_custo "Custeio Produtivo" + tipo_operacao 2-Saídas.
  * ═══════════════════════════════════════════════════════════════════════
  */
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -19,9 +19,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda, type Fazenda } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
 import type { LinhaImportada, SaldoBancarioImportado, ResumoCaixaImportado, CentroCustoOficial } from '@/lib/financeiro/importParser';
-import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -96,6 +94,10 @@ export interface RateioADMConferencia {
   fazendasSemRebanho: string[];
 }
 
+/** Raw saldo/lancamento from DB for rebanho calc */
+interface RawSaldo { fazenda_id: string; ano: number; categoria: string; quantidade: number }
+interface RawLancPec { fazenda_id: string; data: string; tipo: string; quantidade: number; categoria: string; categoria_destino: string | null }
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -115,7 +117,6 @@ export const isDesembolsoProdutivo = (l: FinanceiroLancamento) => {
     if (escopo === 'financeiro') return false;
     return true;
   }
-  // Com macro_custo preenchido: só entra "Custeio Produtivo"
   return macro === 'custeio produtivo';
 };
 
@@ -127,67 +128,79 @@ export const isReceita = (l: FinanceiroLancamento) => {
   return tipo === 'receita' || tipo.startsWith('1');
 };
 
-/** Check if ADM lancamento qualifies for rateio:
- *  - Status Transação = Conciliado
- *  - Tipo Operação = 2-Saídas
- *  - macro_custo = "Custeio Produtivo" (only operational costs)
- */
+/** ADM lancamento qualifies for rateio */
 const isADMConciliado = (l: FinanceiroLancamento) =>
   (l.status_transacao || '').toLowerCase() === 'conciliado' &&
   (l.tipo_operacao || '').toLowerCase().startsWith('2') &&
   (l.macro_custo || '').toLowerCase().trim() === 'custeio produtivo';
 
-/** Extract YYYY-MM from a date string (YYYY-MM-DD) */
+/** Extract YYYY-MM from a date string */
 const dateToAnoMes = (dateStr: string | null): string | null => {
   if (!dateStr || dateStr.length < 7) return null;
   return dateStr.substring(0, 7);
 };
 
-/** Calcula rebanho médio de uma fazenda num dado mês */
-function calcRebanhoMedioFazenda(
-  saldosIniciais: SaldoInicial[],
-  lancamentosPecuarios: Lancamento[],
+// Tipos de movimentação pecuária
+const TIPOS_ENTRADA_PEC = new Set(['nascimento', 'compra', 'transferencia_entrada']);
+const TIPOS_SAIDA_PEC = new Set(['abate', 'venda', 'transferencia_saida', 'consumo', 'morte']);
+
+/** Calcula saldo total de uma fazenda até ano/mes usando dados raw do DB */
+function calcSaldoFazendaRaw(
+  saldos: RawSaldo[],
+  lancs: RawLancPec[],
   fazendaId: string,
   ano: number,
   mes: number,
 ): number {
-  const si = saldosIniciais.filter(s => s.fazenda_id === fazendaId);
-  const lp = lancamentosPecuarios.filter(l => l.fazenda_id === fazendaId);
-
-  const saldoInicialAno = si
-    .filter(s => s.ano === ano)
+  const si = saldos
+    .filter(s => s.fazenda_id === fazendaId && s.ano === ano)
     .reduce((sum, s) => sum + s.quantidade, 0);
 
-  const saldoInicio = mes === 1
-    ? saldoInicialAno
-    : Array.from(calcSaldoPorCategoriaLegado(si, lp, ano, mes - 1).values()).reduce((s, v) => s + v, 0);
-  const saldoFim = Array.from(calcSaldoPorCategoriaLegado(si, lp, ano, mes).values()).reduce((s, v) => s + v, 0);
+  const endDate = `${ano}-${String(mes).padStart(2, '0')}-31`;
+  const startDate = `${ano}-01-01`;
 
-  return (saldoInicio + saldoFim) / 2;
+  let saldo = si;
+  for (const l of lancs) {
+    if (l.fazenda_id !== fazendaId) continue;
+    if (l.data < startDate || l.data > endDate) continue;
+    if (TIPOS_ENTRADA_PEC.has(l.tipo)) saldo += l.quantidade;
+    else if (TIPOS_SAIDA_PEC.has(l.tipo)) saldo -= l.quantidade;
+    // reclassificacao doesn't change total
+  }
+  return saldo;
+}
+
+/** Rebanho médio de uma fazenda num dado mês */
+function calcRebanhoMedioFazenda(
+  saldos: RawSaldo[],
+  lancs: RawLancPec[],
+  fazendaId: string,
+  ano: number,
+  mes: number,
+): number {
+  const saldoInicioMes = mes === 1
+    ? saldos.filter(s => s.fazenda_id === fazendaId && s.ano === ano).reduce((sum, s) => sum + s.quantidade, 0)
+    : calcSaldoFazendaRaw(saldos, lancs, fazendaId, ano, mes - 1);
+  const saldoFimMes = calcSaldoFazendaRaw(saldos, lancs, fazendaId, ano, mes);
+  return (saldoInicioMes + saldoFimMes) / 2;
 }
 
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
 
-interface UseFinanceiroOptions {
-  lancamentosPecuarios?: Lancamento[];
-  saldosIniciais?: SaldoInicial[];
-}
-
-export function useFinanceiro(options?: UseFinanceiroOptions) {
+export function useFinanceiro() {
   const { fazendaAtual, fazendas } = useFazenda();
   const { user } = useAuth();
   const fazendaId = fazendaAtual?.id;
   const isGlobal = fazendaId === '__global__';
 
-  const pecLancs = options?.lancamentosPecuarios || [];
-  const pecSaldos = options?.saldosIniciais || [];
-
   const [importacoes, setImportacoes] = useState<ImportacaoRecord[]>([]);
   const [lancamentos, setLancamentos] = useState<FinanceiroLancamento[]>([]);
   const [centrosCusto, setCentrosCusto] = useState<CentroCustoOficial[]>([]);
   const [lancamentosADM, setLancamentosADM] = useState<FinanceiroLancamento[]>([]);
+  const [rawSaldos, setRawSaldos] = useState<RawSaldo[]>([]);
+  const [rawLancsPec, setRawLancsPec] = useState<RawLancPec[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Identify ADM fazenda and operational fazendas
@@ -216,44 +229,38 @@ export function useFinanceiro(options?: UseFinanceiroOptions) {
       setLancamentos([]);
       setCentrosCusto([]);
       setLancamentosADM([]);
+      setRawSaldos([]);
+      setRawLancsPec([]);
       return;
     }
     setLoading(true);
     try {
       const allFazendaIds = fazendas.filter(f => f.id !== '__global__').map(f => f.id);
+      const opIds = fazendasOperacionais.map(f => f.id);
 
       if (isGlobal) {
         if (allFazendaIds.length === 0) {
-          setLancamentos([]);
-          setImportacoes([]);
-          setCentrosCusto([]);
-          setLancamentosADM([]);
+          setLancamentos([]); setImportacoes([]); setCentrosCusto([]);
+          setLancamentosADM([]); setRawSaldos([]); setRawLancsPec([]);
           setLoading(false);
           return;
         }
 
-        const [lancResult, ccResult, impResult] = await Promise.all([
-          supabase
-            .from('financeiro_lancamentos')
-            .select('*')
-            .in('fazenda_id', allFazendaIds)
-            .order('data_realizacao', { ascending: false }),
-          supabase
-            .from('financeiro_centros_custo')
-            .select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro')
-            .in('fazenda_id', allFazendaIds)
-            .eq('ativo', true),
-          supabase
-            .from('financeiro_importacoes')
-            .select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro')
-            .in('fazenda_id', allFazendaIds)
-            .order('data_importacao', { ascending: false }),
+        const [lancResult, ccResult, impResult, saldoResult, lancPecResult] = await Promise.all([
+          supabase.from('financeiro_lancamentos').select('*').in('fazenda_id', allFazendaIds).order('data_realizacao', { ascending: false }),
+          supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').in('fazenda_id', allFazendaIds).eq('ativo', true),
+          supabase.from('financeiro_importacoes').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').in('fazenda_id', allFazendaIds).order('data_importacao', { ascending: false }),
+          // Raw pecuário data for rebanho calculation
+          opIds.length > 0 ? supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
+          opIds.length > 0 ? supabase.from('lancamentos').select('fazenda_id, data, tipo, quantidade, categoria, categoria_destino').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
         ]);
 
         const allLancs = (lancResult.data as FinanceiroLancamento[]) || [];
         setLancamentos(allLancs);
         setCentrosCusto((ccResult.data as CentroCustoOficial[]) || []);
         setImportacoes((impResult.data as ImportacaoRecord[]) || []);
+        setRawSaldos((saldoResult.data as RawSaldo[]) || []);
+        setRawLancsPec((lancPecResult.data as RawLancPec[]) || []);
 
         if (fazendaADM) {
           setLancamentosADM(allLancs.filter(l => l.fazenda_id === fazendaADM.id));
@@ -261,34 +268,27 @@ export function useFinanceiro(options?: UseFinanceiroOptions) {
           setLancamentosADM([]);
         }
       } else {
-        // Per-fazenda: own lancamentos + ADM for rateio + global importacoes
+        // Per-fazenda
         const promises: PromiseLike<any>[] = [
-          supabase
-            .from('financeiro_lancamentos')
-            .select('*')
-            .eq('fazenda_id', fazendaId)
-            .order('data_realizacao', { ascending: false }),
-          supabase
-            .from('financeiro_centros_custo')
-            .select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro')
-            .eq('fazenda_id', fazendaId)
-            .eq('ativo', true),
-          supabase
-            .from('financeiro_importacoes')
-            .select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro')
-            .in('fazenda_id', allFazendaIds)
-            .order('data_importacao', { ascending: false }),
+          supabase.from('financeiro_lancamentos').select('*').eq('fazenda_id', fazendaId).order('data_realizacao', { ascending: false }),
+          supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').eq('fazenda_id', fazendaId).eq('ativo', true),
+          supabase.from('financeiro_importacoes').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').in('fazenda_id', allFazendaIds).order('data_importacao', { ascending: false }),
         ];
 
         const needsRateio = fazendaADM && fazendaADM.id !== fazendaId;
         if (needsRateio) {
           promises.push(
-            supabase
-              .from('financeiro_lancamentos')
-              .select('*')
-              .eq('fazenda_id', fazendaADM.id)
-              .order('data_realizacao', { ascending: false }),
+            supabase.from('financeiro_lancamentos').select('*').eq('fazenda_id', fazendaADM.id).order('data_realizacao', { ascending: false }),
           );
+          // Load raw pecuário for rebanho calc
+          if (opIds.length > 0) {
+            promises.push(
+              supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds),
+            );
+            promises.push(
+              supabase.from('lancamentos').select('fazenda_id, data, tipo, quantidade, categoria, categoria_destino').in('fazenda_id', opIds),
+            );
+          }
         }
 
         const results = await Promise.all(promises);
@@ -299,8 +299,12 @@ export function useFinanceiro(options?: UseFinanceiroOptions) {
 
         if (needsRateio) {
           setLancamentosADM((results[3]?.data as FinanceiroLancamento[]) || []);
+          setRawSaldos((results[4]?.data as RawSaldo[]) || []);
+          setRawLancsPec((results[5]?.data as RawLancPec[]) || []);
         } else {
           setLancamentosADM([]);
+          setRawSaldos([]);
+          setRawLancsPec([]);
         }
       }
     } catch {
@@ -308,16 +312,15 @@ export function useFinanceiro(options?: UseFinanceiroOptions) {
     } finally {
       setLoading(false);
     }
-  }, [fazendaId, isGlobal, fazendas, fazendaADM]);
+  }, [fazendaId, isGlobal, fazendas, fazendaADM, fazendasOperacionais]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // --- Rebanho médio por fazenda (para rateio ADM) ---
-  // Computa para cada mês que tem lançamento ADM
+  // --- Rebanho médio por fazenda por mês (para rateio ADM v2) ---
   const rebanhoMedioPorFazendaMes = useMemo(() => {
-    if (!fazendaADM || pecSaldos.length === 0) return new Map<string, Map<string, number>>();
+    if (!fazendaADM || rawSaldos.length === 0) return new Map<string, Map<string, number>>();
 
-    // Collect all YYYY-MM from ADM lancamentos
+    // Collect all YYYY-MM from ADM lancamentos conciliados
     const mesesADM = new Set<string>();
     for (const l of lancamentosADM) {
       if (!isADMConciliado(l)) continue;
@@ -325,34 +328,31 @@ export function useFinanceiro(options?: UseFinanceiroOptions) {
       if (am) mesesADM.add(am);
     }
 
-    // For each month, compute rebanho médio per operational fazenda
     const result = new Map<string, Map<string, number>>();
     for (const am of mesesADM) {
       const ano = Number(am.substring(0, 4));
       const mes = Number(am.substring(5, 7));
       const fazMap = new Map<string, number>();
       for (const f of fazendasOperacionais) {
-        const rm = calcRebanhoMedioFazenda(pecSaldos, pecLancs, f.id, ano, mes);
+        const rm = calcRebanhoMedioFazenda(rawSaldos, rawLancsPec, f.id, ano, mes);
         if (rm > 0) fazMap.set(f.id, rm);
       }
       result.set(am, fazMap);
     }
     return result;
-  }, [fazendaADM, lancamentosADM, pecSaldos, pecLancs, fazendasOperacionais]);
+  }, [fazendaADM, lancamentosADM, rawSaldos, rawLancsPec, fazendasOperacionais]);
 
   // --- Rateio ADM (for current fazenda) ---
   const rateioADM = useMemo((): RateioADM[] => {
     if (isGlobal || !fazendaId || !fazendaADM || fazendaADM.id === fazendaId) return [];
     if (lancamentosADM.length === 0) return [];
 
-    // Group ADM conciliado costs by data_pagamento → YYYY-MM
     const admPorMes = new Map<string, number>();
     for (const l of lancamentosADM) {
       if (!isADMConciliado(l)) continue;
       const am = dateToAnoMes(l.data_pagamento);
       if (!am) continue;
-      const v = Math.abs(l.valor);
-      admPorMes.set(am, (admPorMes.get(am) || 0) + v);
+      admPorMes.set(am, (admPorMes.get(am) || 0) + Math.abs(l.valor));
     }
 
     return Array.from(admPorMes.entries()).map(([anoMes, valorTotal]) => {
@@ -363,22 +363,15 @@ export function useFinanceiro(options?: UseFinanceiroOptions) {
       const rebanhoTotal = Array.from(fazMap.values()).reduce((s, v) => s + v, 0);
       const percentual = rebanhoTotal > 0 ? (rebanhoFaz / rebanhoTotal) * 100 : 0;
 
-      return {
-        anoMes,
-        valorTotal,
-        percentualFazenda: percentual,
-        valorRateado: valorTotal * (percentual / 100),
-      };
+      return { anoMes, valorTotal, percentualFazenda: percentual, valorRateado: valorTotal * (percentual / 100) };
     });
   }, [isGlobal, fazendaId, fazendaADM, lancamentosADM, rebanhoMedioPorFazendaMes]);
 
-  // --- Rateio ADM conferência (all fazendas, for review view) ---
+  // --- Rateio ADM conferência (all fazendas) ---
   const rateioConferencia = useMemo((): RateioADMConferencia[] => {
     if (!fazendaADM || lancamentosADM.length === 0) return [];
 
     const admNomeFazenda = fazendaADM.nome;
-
-    // Group ADM conciliado by data_pagamento → YYYY-MM
     const admPorMes = new Map<string, FinanceiroLancamento[]>();
     for (const l of lancamentosADM) {
       if (!isADMConciliado(l)) continue;
@@ -401,13 +394,7 @@ export function useFinanceiro(options?: UseFinanceiroOptions) {
           .map(f => {
             const rm = fazMap!.get(f.id) || 0;
             const pct = rebanhoTotal > 0 ? (rm / rebanhoTotal) * 100 : 0;
-            return {
-              fazendaId: f.id,
-              fazendaNome: f.nome,
-              rebanhoMedio: rm,
-              percentual: pct,
-              valorRateado: totalADM * (pct / 100),
-            };
+            return { fazendaId: f.id, fazendaNome: f.nome, rebanhoMedio: rm, percentual: pct, valorRateado: totalADM * (pct / 100) };
           });
 
         const semRebanho = fazendasOperacionais
@@ -418,14 +405,9 @@ export function useFinanceiro(options?: UseFinanceiroOptions) {
           anoMes,
           totalADMConciliado: totalADM,
           lancamentosUsados: lancs.map(l => ({
-            dataPagamento: l.data_pagamento,
-            produto: l.produto,
-            valor: Math.abs(l.valor),
-            statusTransacao: l.status_transacao,
-            fazenda: admNomeFazenda,
-            tipoOperacao: l.tipo_operacao,
-            contaOrigem: l.conta_origem,
-            contaDestino: l.conta_destino,
+            dataPagamento: l.data_pagamento, produto: l.produto, valor: Math.abs(l.valor),
+            statusTransacao: l.status_transacao, fazenda: admNomeFazenda,
+            tipoOperacao: l.tipo_operacao, contaOrigem: l.conta_origem, contaDestino: l.conta_destino,
           })),
           fazendas: fazendasComRebanho,
           fazendasSemRebanho: semRebanho,
@@ -433,21 +415,19 @@ export function useFinanceiro(options?: UseFinanceiroOptions) {
       });
   }, [fazendaADM, lancamentosADM, rebanhoMedioPorFazendaMes, fazendasOperacionais]);
 
-  // --- Fazendas sem rebanho (para aviso) ---
+  // --- Fazendas sem rebanho (aviso) ---
   const fazendasSemRebanho = useMemo(() => {
     if (!fazendaADM || rebanhoMedioPorFazendaMes.size === 0) return [];
-    // Check the most recent month
     const meses = Array.from(rebanhoMedioPorFazendaMes.keys()).sort();
     if (meses.length === 0) return [];
-    const lastMonth = meses[meses.length - 1];
-    const fazMap = rebanhoMedioPorFazendaMes.get(lastMonth);
+    const fazMap = rebanhoMedioPorFazendaMes.get(meses[meses.length - 1]);
     if (!fazMap) return [];
     return fazendasOperacionais
       .filter(f => !fazMap.has(f.id) || (fazMap.get(f.id) || 0) <= 0)
       .map(f => f.nome);
   }, [fazendasOperacionais, rebanhoMedioPorFazendaMes, fazendaADM]);
 
-  // --- Confirmar importação (aba única EXPORT_APP_UNICO) ---
+  // --- Confirmar importação ---
   const confirmarImportacao = useCallback(async (
     nomeArquivo: string,
     linhas: LinhaImportada[],
@@ -487,7 +467,6 @@ export function useFinanceiro(options?: UseFinanceiroOptions) {
 
       if (impErr) throw impErr;
 
-      // Insert lancamentos
       const batchSize = 50;
       for (let i = 0; i < linhas.length; i += batchSize) {
         const batch = linhas.slice(i, i + batchSize).map(l => ({
@@ -515,7 +494,6 @@ export function useFinanceiro(options?: UseFinanceiroOptions) {
         if (error) throw error;
       }
 
-      // Insert saldos bancarios
       if (saldosBancarios && saldosBancarios.length > 0) {
         const saldoBatch = saldosBancarios.map(s => ({
           fazenda_id: s.fazendaId || primaryFazendaId,
@@ -530,7 +508,6 @@ export function useFinanceiro(options?: UseFinanceiroOptions) {
         if (error) throw error;
       }
 
-      // Insert resumo caixa
       if (resumoCaixa && resumoCaixa.length > 0) {
         const resumoBatch = resumoCaixa.map(r => ({
           fazenda_id: r.fazendaId || primaryFazendaId,
@@ -603,14 +580,7 @@ export function useFinanceiro(options?: UseFinanceiroOptions) {
       const rateioMes = rateioADM.find(r => r.anoMes === am);
       const rateioValor = rateioMes?.valorRateado || 0;
 
-      return {
-        anoMes: am,
-        entradas,
-        saidas: saidas + rateioValor,
-        desembolsoProd: desembolsoProd + rateioValor,
-        desembolsoPec: desembolsoPec + rateioValor,
-        rateioADM: rateioValor,
-      };
+      return { anoMes: am, entradas, saidas: saidas + rateioValor, desembolsoProd: desembolsoProd + rateioValor, desembolsoPec: desembolsoPec + rateioValor, rateioADM: rateioValor };
     });
 
     const porMacro = new Map<string, number>();
@@ -641,19 +611,9 @@ export function useFinanceiro(options?: UseFinanceiroOptions) {
   }, [lancamentos, rateioADM]);
 
   return {
-    importacoes,
-    lancamentos,
-    centrosCusto,
-    indicadores,
-    rateioADM,
-    rateioConferencia,
-    fazendasSemRebanho,
-    fazendaMapForImport,
-    loading,
-    confirmarImportacao,
-    excluirImportacao,
-    reloadData: loadData,
-    isGlobal,
-    fazendaADM,
+    importacoes, lancamentos, centrosCusto, indicadores,
+    rateioADM, rateioConferencia, fazendasSemRebanho,
+    fazendaMapForImport, loading, confirmarImportacao, excluirImportacao,
+    reloadData: loadData, isGlobal, fazendaADM,
   };
 }
