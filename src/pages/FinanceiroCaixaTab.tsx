@@ -63,7 +63,15 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
 
   return (
     <div className="p-4 max-w-full mx-auto space-y-3 animate-fade-in pb-20">
-      {/* Sub-tabs */}
+      {/* Header with back button */}
+      {onBack && (
+        <div className="flex items-center gap-2">
+          <button onClick={onBack} className="p-1.5 rounded-md hover:bg-muted transition-colors">
+            <ArrowLeft className="h-5 w-5 text-foreground" />
+          </button>
+          <h1 className="text-lg font-extrabold text-foreground">💰 Financeiro</h1>
+        </div>
+      )}
       <div className={`grid ${gridCols} gap-1 bg-muted rounded-lg p-1`}>
         {tabs.map(t => (
           <button

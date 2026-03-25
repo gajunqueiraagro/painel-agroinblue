@@ -14,9 +14,11 @@ interface Props {
   lancamentosPecuarios: Lancamento[];
   saldosIniciais: SaldoInicial[];
   onBack: () => void;
+  filtroAnoInicial?: string;
+  filtroMesInicial?: number;
 }
 
-export function AnaliseEconomicaTab({ lancamentosPecuarios, saldosIniciais, onBack }: Props) {
+export function AnaliseEconomicaTab({ lancamentosPecuarios, saldosIniciais, onBack, filtroAnoInicial, filtroMesInicial }: Props) {
   const { fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
