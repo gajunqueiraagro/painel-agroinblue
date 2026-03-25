@@ -19,10 +19,10 @@ import type { RateioADMConferencia } from '@/hooks/useFinanceiro';
 
 interface Props {
   conferencia: RateioADMConferencia[];
-  fazendasSemArea: string[];
+  fazendasSemRebanho: string[];
 }
 
-export function RateioADMConferenciaView({ conferencia, fazendasSemArea }: Props) {
+export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho }: Props) {
   const meses = useMemo(() => conferencia.map(c => c.anoMes), [conferencia]);
   const [mesSelecionado, setMesSelecionado] = useState(meses[0] || '');
   const [showAudit, setShowAudit] = useState(false);
@@ -49,30 +49,30 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemArea }: Props
         <div className="flex items-center gap-1.5 text-xs bg-muted rounded-md px-2.5 py-1.5">
           <Info className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="font-bold">Rateio ADM v1</span>
-          <span className="text-muted-foreground">— critério: área produtiva (ha)</span>
+          <span className="text-muted-foreground">— critério: rebanho médio do período</span>
         </div>
       </div>
 
       {/* Aviso fazendas sem área */}
-      {fazendasSemArea.length > 0 && (
+      {fazendasSemRebanho.length > 0 && (
         <Card className="border-destructive/50 bg-destructive/5">
           <CardContent className="p-3">
             <div className="flex items-start gap-2">
               <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
               <div>
-                <p className="text-xs font-bold text-destructive">Fazendas sem área produtiva</p>
+                <p className="text-xs font-bold text-destructive">Fazendas sem rebanho cadastrado</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Estas fazendas não participam do rateio e seus custos estão subestimados:
+                  Estas fazendas não participam do rateio por não possuírem rebanho médio no período:
                 </p>
                 <div className="flex flex-wrap gap-1 mt-1.5">
-                  {fazendasSemArea.map(nome => (
+                  {fazendasSemRebanho.map(nome => (
                     <span key={nome} className="text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded-full font-medium">
                       {nome}
                     </span>
                   ))}
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-1.5">
-                  Preencha a Área Produtiva em Cadastros → Fazenda para corrigir.
+                  Cadastre saldos iniciais e lançamentos pecuários para que estas fazendas entrem no rateio.
                 </p>
               </div>
             </div>
@@ -175,7 +175,7 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemArea }: Props
                     <div className="flex justify-between items-baseline">
                       <span className="text-xs font-bold">{f.fazendaNome}</span>
                       <span className="text-xs text-muted-foreground">
-                        {formatNum(f.areaProdutiva, 0)} ha
+                        {formatNum(f.rebanhoMedio, 0)} cab méd.
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -209,9 +209,9 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemArea }: Props
           {/* Nota de verificação */}
           <div className="text-[10px] text-muted-foreground text-center space-y-0.5">
             <p>Soma dos percentuais: {formatNum(dados.fazendas.reduce((s, f) => s + f.percentual, 0), 1)}%</p>
-            {dados.fazendasSemArea.length > 0 && (
+            {dados.fazendasSemRebanho.length > 0 && (
               <p className="text-destructive">
-                ⚠ {dados.fazendasSemArea.length} fazenda(s) excluída(s) do rateio por falta de área
+                ⚠ {dados.fazendasSemRebanho.length} fazenda(s) excluída(s) do rateio por falta de rebanho
               </p>
             )}
           </div>

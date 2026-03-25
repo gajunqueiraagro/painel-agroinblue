@@ -32,7 +32,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
   const fazendaId = fazendaAtual?.id;
   const {
     importacoes, lancamentos, centrosCusto, indicadores,
-    rateioADM, rateioConferencia, fazendasSemArea, fazendaMapForImport,
+    rateioADM, rateioConferencia, fazendasSemRebanho, fazendaMapForImport,
     loading, confirmarImportacao, excluirImportacao, isGlobal, fazendaADM,
   } = useFinanceiro();
 
@@ -90,7 +90,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
               saldosIniciais={saldosIniciais}
               rateioADM={rateioADM}
               isGlobal={isGlobal}
-              fazendasSemArea={fazendasSemArea}
+              fazendasSemArea={fazendasSemRebanho}
               pastos={pastos}
               categorias={categorias}
               fazendaId={fazendaId}
@@ -111,7 +111,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
           {subTab === 'rateio' && (
             <RateioADMConferenciaView
               conferencia={rateioConferencia}
-              fazendasSemArea={fazendasSemArea}
+              fazendasSemRebanho={fazendasSemRebanho}
             />
           )}
           {subTab === 'importacao' && (
