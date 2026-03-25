@@ -250,13 +250,11 @@ export function useResumoStatus(
     const anoAtual = new Date().getFullYear();
     const anoStr = String(ano);
 
-    // Usar a mesma lógica do Dashboard: filtros compartilhados
     const calc = calcFinanceiroFromLancamentos(finLancamentos, ano, mesAte);
 
-    // Saldo = entradas - saídas (calculado dos lançamentos, sem tabela resumo_caixa)
-    // Documentação: saldo é diferença simples E/S do período, não inclui saldo inicial
-    // de caixa (que pertence ao módulo Fluxo de Caixa Global).
-    const saldoCaixa = calc.saldo;
+    const resultado = calc.saldo; // Entradas - Saídas
+    const caixaAtual = saldoInicialGlobal + resultado;
+    const saldoCaixa = caixaAtual; // backward compat
 
     // Status: check conciliation per month using data_pagamento
     let mesesFechados = 0;
