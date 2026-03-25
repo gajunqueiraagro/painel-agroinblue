@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Download, Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, Loader2, Trash2 } from 'lucide-react';
 import { downloadModeloExcel } from '@/lib/financeiro/excelTemplate';
 import {
-  parseExcel, resolverFazendas, validarCentrosCusto,
+  parseExcel, resolverFazendas, validarCentrosCusto, validarEstruturaExcel,
   type LinhaImportada, type SaldoBancarioImportado, type ContaImportada,
   type ResumoCaixaImportado, type ErroImportacao, type CentroCustoOficial, type FazendaMap,
+  type ValidacaoEstrutura,
 } from '@/lib/financeiro/importParser';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import type { ImportacaoRecord } from '@/hooks/useFinanceiro';
