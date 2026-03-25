@@ -75,7 +75,7 @@ interface Props {
   saldosIniciais?: SaldoInicial[];
   rateioADM?: RateioADM[];
   isGlobal?: boolean;
-  fazendasSemArea?: string[];
+  fazendasSemArea?: string[]; // legacy prop name kept for compat
   /** Dados necessários para useIndicadoresZootecnicos */
   pastos?: Pasto[];
   categorias?: CategoriaRebanho[];
