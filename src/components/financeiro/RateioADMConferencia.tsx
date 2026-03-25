@@ -247,7 +247,7 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho, tota
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-2.5 bg-muted rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-amber-500 rounded-full transition-all"
+                          className="h-full bg-primary rounded-full transition-all"
                           style={{ width: `${Math.min(f.percentual, 100)}%` }}
                         />
                       </div>
