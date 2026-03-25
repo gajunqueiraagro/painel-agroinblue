@@ -292,8 +292,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               <th className="text-left px-3 py-2 font-semibold text-foreground">Categoria</th>
               <th className="text-right px-2 py-2 font-semibold text-foreground">Qtd</th>
               <th className="text-right px-2 py-2 font-semibold text-foreground">Peso</th>
-              <th className="text-center px-2 py-2 font-semibold text-foreground min-w-[90px]">R$/kg</th>
+              <th className="text-center px-1 py-2 font-semibold text-foreground min-w-[70px]">R$/kg</th>
               <th className="text-right px-2 py-2 font-semibold text-foreground">R$/cab</th>
+              <th className="text-right px-2 py-2 font-semibold text-foreground">R$/@</th>
               <th className="text-right px-3 py-2 font-semibold text-foreground">Valor Total</th>
             </tr>
           </thead>
