@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-import { Save, Copy, Eye, EyeOff, Info, Lock, Unlock, AlertTriangle } from 'lucide-react';
+import { Save, Copy, Eye, EyeOff, Info, Lock, Unlock, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
@@ -18,6 +18,9 @@ import { useFechamentoCategoria, type OrigemPeso } from '@/hooks/useFechamentoCa
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
+  onBack?: () => void;
+  filtroAnoInicial?: string;
+  filtroMesInicial?: number;
 }
 
 /** Mapeia OrigemPeso → label amigável */
@@ -28,7 +31,7 @@ const ORIGEM_LABEL: Record<OrigemPeso, string> = {
   sem_base: 'Sem dados',
 };
 
-export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
+export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAnoInicial, filtroMesInicial }: Props) {
   const { fazendaAtual, isGlobal } = useFazenda();
   const { categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
@@ -41,8 +44,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
     return Array.from(anos).sort().reverse();
   }, [lancamentos, saldosIniciais]);
 
-  const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
-  const mesAtual = String(new Date().getMonth() + 1).padStart(2, '0');
+  const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(new Date().getFullYear()));
+  const mesAtual = filtroMesInicial ? String(filtroMesInicial).padStart(2, '0') : String(new Date().getMonth() + 1).padStart(2, '0');
   const [mesFiltro, setMesFiltro] = useState(mesAtual);
   const [mostrarZerados, setMostrarZerados] = useState(false);
 
@@ -176,6 +179,18 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
 
   return (
     <div className="p-4 max-w-4xl mx-auto space-y-4 animate-fade-in pb-20">
+      {/* Header with back button */}
+      {onBack && (
+        <div className="flex items-center gap-2">
+          <button onClick={onBack} className="p-1.5 rounded-md hover:bg-muted transition-colors">
+            <ArrowLeft className="h-5 w-5 text-foreground" />
+          </button>
+          <div>
+            <h1 className="text-lg font-extrabold text-foreground leading-tight">💰 Valor do Rebanho</h1>
+            <span className="text-xs text-muted-foreground">📍 {fazendaAtual?.nome || 'Global'}</span>
+          </div>
+        </div>
+      )}
       {/* Filtros */}
       <div className="flex gap-2 items-center flex-wrap">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
@@ -370,6 +385,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Return button */}
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2.5 transition-colors hover:bg-primary/20"
+        >
+          <ArrowLeft className="h-4 w-4" /> Retornar ao Resumo Zootécnico
+        </button>
+      )}
     </div>
   );
 }

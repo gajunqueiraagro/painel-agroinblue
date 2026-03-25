@@ -16,6 +16,8 @@ import { AnaliseSaidasTab } from './AnaliseSaidasTab';
 import { DesfrunteTab } from './DesfrunteTab';
 import { CadastrosTab } from './CadastrosTab';
 import { ConciliacaoHubTab } from './ConciliacaoHubTab';
+import { ValorRebanhoTab } from './ValorRebanhoTab';
+import { ConciliacaoCategoriaTab } from './ConciliacaoCategoriaTab';
 
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { SyncStatus } from '@/components/SyncStatus';
@@ -49,6 +51,8 @@ const TITLES: Record<TabId, string> = {
   pastos: 'Pastos',
   conciliacao: 'Conciliação',
   fin_caixa: 'Financeiro',
+  valor_rebanho: 'Valor do Rebanho',
+  conciliacao_categoria: 'Conciliação de Categoria',
 };
 
 const Index = () => {
@@ -89,9 +93,10 @@ const Index = () => {
   }, []);
 
   const goToResumo = useCallback(() => setActiveTab('resumo'), []);
+  const goToZootecnico = useCallback(() => setActiveTab('zootecnico'), []);
 
   // Hide header for sub-screens that have their own back nav
-  const isSubScreen = ['zootecnico', 'analise_economica', 'fin_caixa'].includes(activeTab);
+  const isSubScreen = ['zootecnico', 'analise_economica', 'fin_caixa', 'valor_rebanho', 'conciliacao_categoria'].includes(activeTab);
 
   const headerTitle = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || TITLES[activeTab]);
 
@@ -146,6 +151,24 @@ const Index = () => {
       {activeTab === 'desfrute' && <DesfrunteTab lancamentos={isGlobal ? lancamentosVisiveis : lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} isGlobal={isGlobal} />}
       {activeTab === 'cadastros' && <CadastrosTab />}
       {activeTab === 'conciliacao' && <ConciliacaoHubTab />}
+      {activeTab === 'valor_rebanho' && (
+        <ValorRebanhoTab
+          lancamentos={lancamentos}
+          saldosIniciais={saldosIniciais}
+          onBack={goToZootecnico}
+          filtroAnoInicial={filtroGlobal.ano}
+          filtroMesInicial={filtroGlobal.mes}
+        />
+      )}
+      {activeTab === 'conciliacao_categoria' && (
+        <ConciliacaoCategoriaTab
+          lancamentos={lancamentosVisiveis}
+          saldosIniciais={saldosIniciais}
+          onBack={goToZootecnico}
+          filtroAnoInicial={filtroGlobal.ano}
+          filtroMesInicial={filtroGlobal.mes}
+        />
+      )}
       {activeTab === 'fin_caixa' && (
         <FinanceiroCaixaTab
           lancamentosPecuarios={lancamentos}
