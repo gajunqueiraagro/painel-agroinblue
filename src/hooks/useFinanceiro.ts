@@ -402,7 +402,7 @@ export function useFinanceiro() {
     const admNomeFazenda = fazendaADM.nome;
     const admPorMes = new Map<string, FinanceiroLancamento[]>();
     for (const l of lancamentosADM) {
-      if (!isADMConciliado(l)) continue;
+      if (!isADMBaseRateio(l)) continue;
       const am = dataRefRateio(l);
       if (!am) continue;
       const arr = admPorMes.get(am) || [];
