@@ -1,25 +1,25 @@
 /**
- * Dashboard financeiro — indicadores, rateio ADM e visão hierárquica.
+ * Dashboard financeiro — redesign completo.
  *
  * ARQUITETURA:
  * - Dados FINANCEIROS: filtrados localmente (conciliado + data pagamento)
  * - Dados ZOOTÉCNICOS: exclusivamente de useIndicadoresZootecnicos (fonte única)
  * - PROIBIDO: cálculo local de saldos, pesos, arrobas ou cabeças médias
  *
- * Regras de filtragem financeira:
- * - Status Transação = Conciliado
- * - Data base = Data Pagamento (YYYY-MM)
- * - Entradas = tipo_operacao começa com "1"
- * - Saídas = tipo_operacao começa com "2"
+ * Data base financeira: data_pagamento (YYYY-MM)
+ * Entradas = tipo_operacao starts with "1"
+ * Saídas = tipo_operacao starts with "2"
+ * Status = Conciliado
  */
 import { useMemo, useState } from 'react';
 import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
+import { calcValorTotal, calcArrobasSafe } from '@/lib/calculos/economicos';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TrendingDown, TrendingUp, DollarSign, BarChart3, Building2, AlertTriangle, ChevronDown, ChevronUp, Activity } from 'lucide-react';
+import { TrendingDown, TrendingUp, Building2, AlertTriangle, ChevronDown, ChevronUp, Activity, BarChart3 } from 'lucide-react';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
-import { MESES_OPTIONS } from '@/lib/calculos/labels';
+import { MESES_OPTIONS, MESES_NOMES } from '@/lib/calculos/labels';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import {
   type FinanceiroLancamento,
@@ -33,26 +33,28 @@ import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import type { Pasto, CategoriaRebanho } from '@/hooks/usePastos';
 
 // ---------------------------------------------------------------------------
-// Helpers — correct classification
+// Helpers
 // ---------------------------------------------------------------------------
 
-/** Conciliado check */
 const isConciliado = (l: FinanceiroLancamento) =>
   (l.status_transacao || '').toLowerCase() === 'conciliado';
 
-/** Entrada = tipo_operacao starts with "1" */
 const isEntrada = (l: FinanceiroLancamento) =>
   (l.tipo_operacao || '').startsWith('1');
 
-/** Saída = tipo_operacao starts with "2" */
 const isSaida = (l: FinanceiroLancamento) =>
   (l.tipo_operacao || '').startsWith('2');
 
-/** Extract YYYY-MM from date string */
 const datePagtoAnoMes = (l: FinanceiroLancamento): string | null => {
   if (!l.data_pagamento || l.data_pagamento.length < 7) return null;
   return l.data_pagamento.substring(0, 7);
 };
+
+const normMacro = (l: FinanceiroLancamento) =>
+  (l.macro_custo || '').toLowerCase().trim();
+
+const normEscopo = (l: FinanceiroLancamento) =>
+  (l.escopo_negocio || '').toLowerCase().trim();
 
 // ---------------------------------------------------------------------------
 // Props
@@ -60,43 +62,40 @@ const datePagtoAnoMes = (l: FinanceiroLancamento): string | null => {
 
 interface Props {
   lancamentos: FinanceiroLancamento[];
-  indicadores: {
-    resumoMensal: { anoMes: string; entradas: number; saidas: number; desembolsoProd: number; desembolsoPec: number; rateioADM?: number }[];
-    totalDesembolsoProd: number;
-    totalDesembolsoPec: number;
-    totalReceitas: number;
-    totalRateioADM?: number;
-    porMacro: { nome: string; valor: number }[];
-    porGrupo: { nome: string; valor: number }[];
-    porCentro: { nome: string; valor: number }[];
-  } | null;
-  /** Lançamentos pecuários COMPLETOS (com transferências) — para useIndicadoresZootecnicos */
+  indicadores: any;
   lancamentosPecuarios?: Lancamento[];
   saldosIniciais?: SaldoInicial[];
   rateioADM?: RateioADM[];
   isGlobal?: boolean;
-  fazendasSemArea?: string[]; // legacy prop name kept for compat
-  /** Dados necessários para useIndicadoresZootecnicos */
+  fazendasSemArea?: string[];
   pastos?: Pasto[];
   categorias?: CategoriaRebanho[];
   fazendaId?: string;
 }
 
 // ---------------------------------------------------------------------------
-// Audit table sub-component
+// Rebanho médio mensal type
 // ---------------------------------------------------------------------------
 
-function AuditTable({ title, lancamentos, totalLabel }: { title: string; lancamentos: FinanceiroLancamento[]; totalLabel: string }) {
-  const [open, setOpen] = useState(false);
-  const total = lancamentos.reduce((s, l) => s + Math.abs(l.valor), 0);
+interface RebanhoMedioMensal {
+  mes: number;
+  saldoInicio: number;
+  saldoFim: number;
+  media: number;
+}
 
+// ---------------------------------------------------------------------------
+// Sub: AuditTable (expandable)
+// ---------------------------------------------------------------------------
+
+function AuditTable({ title, lancamentos: lancs, totalLabel }: { title: string; lancamentos: FinanceiroLancamento[]; totalLabel: string }) {
+  const [open, setOpen] = useState(false);
+  const total = lancs.reduce((s, l) => s + Math.abs(l.valor), 0);
   return (
     <Card>
       <CardHeader className="pb-2">
         <button onClick={() => setOpen(!open)} className="flex items-center justify-between w-full">
-          <CardTitle className="text-sm">
-            🔍 {title} ({lancamentos.length})
-          </CardTitle>
+          <CardTitle className="text-sm">🔍 {title} ({lancs.length})</CardTitle>
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold">{formatMoeda(total)}</span>
             {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -113,28 +112,26 @@ function AuditTable({ title, lancamentos, totalLabel }: { title: string; lancame
                   <TableHead className="text-[10px] px-2 py-1.5">Produto</TableHead>
                   <TableHead className="text-[10px] px-2 py-1.5 text-right">Valor</TableHead>
                   <TableHead className="text-[10px] px-2 py-1.5">Status</TableHead>
-                  <TableHead className="text-[10px] px-2 py-1.5">Tipo Op.</TableHead>
-                  <TableHead className="text-[10px] px-2 py-1.5">Conta Origem</TableHead>
-                  <TableHead className="text-[10px] px-2 py-1.5">Conta Destino</TableHead>
+                  <TableHead className="text-[10px] px-2 py-1.5">Macro</TableHead>
+                  <TableHead className="text-[10px] px-2 py-1.5">Centro</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {lancamentos.map((l) => (
+                {lancs.map((l) => (
                   <TableRow key={l.id}>
                     <TableCell className="text-[10px] px-2 py-1">{l.data_pagamento || '-'}</TableCell>
                     <TableCell className="text-[10px] px-2 py-1 max-w-[120px] truncate">{l.produto || '-'}</TableCell>
                     <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatMoeda(Math.abs(l.valor))}</TableCell>
                     <TableCell className="text-[10px] px-2 py-1">{l.status_transacao || '-'}</TableCell>
-                    <TableCell className="text-[10px] px-2 py-1">{l.tipo_operacao || '-'}</TableCell>
-                    <TableCell className="text-[10px] px-2 py-1 max-w-[100px] truncate">{l.conta_origem || '-'}</TableCell>
-                    <TableCell className="text-[10px] px-2 py-1 max-w-[100px] truncate">{l.conta_destino || '-'}</TableCell>
+                    <TableCell className="text-[10px] px-2 py-1 max-w-[100px] truncate">{l.macro_custo || '-'}</TableCell>
+                    <TableCell className="text-[10px] px-2 py-1 max-w-[100px] truncate">{l.centro_custo || '-'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
           <div className="border-t mt-2 pt-2 flex justify-between text-xs">
-            <span className="font-bold">{lancamentos.length} lançamentos</span>
+            <span className="font-bold">{lancs.length} lançamentos</span>
             <span className="font-bold">{totalLabel}: {formatMoeda(total)}</span>
           </div>
         </CardContent>
@@ -144,55 +141,146 @@ function AuditTable({ title, lancamentos, totalLabel }: { title: string; lancame
 }
 
 // ---------------------------------------------------------------------------
-// Audit sub-component for economic KPIs
+// Sub: Receitas Pecuárias por Competência — Audit
 // ---------------------------------------------------------------------------
 
-interface RebanhoMedioMensal {
-  mes: number;
-  saldoInicio: number;
-  saldoFim: number;
-  media: number;
+function AuditReceitaCompetencia({
+  lancPecuarios,
+  ano,
+  mesLimite,
+}: {
+  lancPecuarios: Lancamento[];
+  ano: number;
+  mesLimite: number;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const dados = useMemo(() => {
+    const tiposReceita = ['abate', 'venda', 'consumo'];
+    const filtrados = lancPecuarios.filter(l => {
+      if (!tiposReceita.includes(l.tipo)) return false;
+      const lAno = Number(l.data.substring(0, 4));
+      const lMes = Number(l.data.substring(5, 7));
+      return lAno === ano && lMes <= mesLimite;
+    });
+    const totalCabecas = filtrados.reduce((s, l) => s + l.quantidade, 0);
+    const totalArrobas = filtrados.reduce((s, l) => s + calcArrobasSafe(l), 0);
+    const totalValor = filtrados.reduce((s, l) => s + calcValorTotal(l), 0);
+    return { filtrados, totalCabecas, totalArrobas, totalValor };
+  }, [lancPecuarios, ano, mesLimite]);
+
+  return (
+    <div className="border-t pt-2 mt-2">
+      <button onClick={() => setOpen(!open)} className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground hover:text-foreground w-full">
+        🔍 Auditoria Receita Competência
+        {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+      </button>
+      {open && (
+        <div className="mt-2 bg-muted/50 rounded-md p-2 space-y-1 text-[10px]">
+          <div className="font-bold text-xs">Receitas Pecuárias por Competência (jan→mês {mesLimite})</div>
+          <div className="text-muted-foreground">
+            Fórmula: Σ calcValorTotal(l) para lançamentos de abate, venda e consumo do módulo pecuário
+          </div>
+          <div className="grid grid-cols-3 gap-2 mt-1">
+            <div>
+              <span className="text-muted-foreground">Cabeças:</span>
+              <div className="font-mono font-bold">{formatNum(dados.totalCabecas, 0)}</div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Arrobas:</span>
+              <div className="font-mono font-bold">{formatNum(dados.totalArrobas, 1)} @</div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Valor total:</span>
+              <div className="font-mono font-bold">{formatMoeda(dados.totalValor)}</div>
+            </div>
+          </div>
+          <div className="text-muted-foreground mt-1">
+            Critério: tipo ∈ [abate, venda, consumo] · ano = {ano} · mês ≤ {mesLimite}
+          </div>
+          <div className="text-muted-foreground" style={{ color: 'hsl(var(--primary))' }}>
+            ✅ Fonte: calcValorTotal (hierarquia: valor_total → cálculo por @ → preço/cab)
+          </div>
+          <div className="text-muted-foreground mt-1">{dados.filtrados.length} lançamentos pecuários</div>
+        </div>
+      )}
+    </div>
+  );
 }
 
-interface AuditEconomicoProps {
-  saidasMes: number;
+// ---------------------------------------------------------------------------
+// Sub: Audit Desembolso Produtivo
+// ---------------------------------------------------------------------------
+
+function AuditDesembolsoProdutivo({
+  desembolsoMes,
+  rateioMes,
+  desembolsoAcum,
+  rateioAcum,
+  numMeses,
+  mediaMensal,
+  custoCabMes,
+  custoCabAcum,
+  custoArrobaProd,
+  cabMediaMes,
+  cabMediaAcum,
+  rebanhosMensais,
+  arrobasProduzidasAcum,
+  saldoAnterior,
+  saldoFinalMes,
+  mesFiltro,
+  isGlobal: isG,
+}: {
+  desembolsoMes: number;
   rateioMes: number;
   desembolsoAcum: number;
+  rateioAcum: number;
   numMeses: number;
-  gastoMedioMensal: number;
+  mediaMensal: number;
   custoCabMes: number | null;
   custoCabAcum: number | null;
   custoArrobaProd: number | null;
-  // Zoo oficial
   cabMediaMes: number | null;
   cabMediaAcum: number | null;
   rebanhosMensais: RebanhoMedioMensal[];
   arrobasProduzidasAcum: number | null;
   saldoAnterior: number;
   saldoFinalMes: number;
-  saldoInicialAno: number;
-  arrobasProduzidasMesZoo: number | null;
-  gmdAcumZoo: number | null;
-  isGlobal: boolean;
   mesFiltro: string;
-}
-
-function AuditEconomico(p: AuditEconomicoProps) {
+  isGlobal: boolean;
+}) {
   const [open, setOpen] = useState(false);
-
-  const mesLabel = p.mesFiltro !== 'todos' ? p.mesFiltro : '12';
+  const mesLabel = mesFiltro !== 'todos' ? mesFiltro : '12';
 
   return (
-    <div className="border-t pt-2">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground hover:text-foreground transition-colors w-full"
-      >
-        🔍 Auditoria dos indicadores econômicos
+    <div className="border-t pt-2 mt-2">
+      <button onClick={() => setOpen(!open)} className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground hover:text-foreground w-full">
+        🔍 Auditoria Desembolso Produtivo e Indicadores
         {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
       </button>
       {open && (
         <div className="mt-2 space-y-3 text-[10px]">
+          {/* Desembolso mês */}
+          <div className="bg-muted/50 rounded-md p-2 space-y-1">
+            <div className="font-bold text-xs">Desembolso Produtivo — Mês</div>
+            <div className="text-muted-foreground">
+              Filtro: saídas conciliadas · macro_custo ∈ [Custeio Produtivo, Investimento na Fazenda]
+            </div>
+            <div className="grid grid-cols-2 gap-1">
+              <div>
+                <span className="text-muted-foreground">Saídas próprias:</span>
+                <div className="font-mono font-bold">{formatMoeda(desembolsoMes)}</div>
+              </div>
+              {!isG && rateioMes > 0 && (
+                <div>
+                  <span className="text-muted-foreground">+ Rateio ADM:</span>
+                  <div className="font-mono font-bold text-amber-600">{formatMoeda(rateioMes)}</div>
+                </div>
+              )}
+            </div>
+            <div className="border-t pt-1 font-bold">Total mês: {formatMoeda(desembolsoMes + rateioMes)}</div>
+          </div>
+
           {/* Custo/cab mês */}
           <div className="bg-muted/50 rounded-md p-2 space-y-1">
             <div className="font-bold text-xs">Custo/cab mês</div>
@@ -200,60 +288,43 @@ function AuditEconomico(p: AuditEconomicoProps) {
             <div className="grid grid-cols-2 gap-1">
               <div>
                 <span className="text-muted-foreground">Numerador:</span>
-                <div className="font-mono font-bold">{formatMoeda(p.saidasMes + p.rateioMes)}</div>
-                <div className="text-muted-foreground">
-                  Saídas próprias: {formatMoeda(p.saidasMes)}
-                  {p.rateioMes > 0 && <><br />+ Rateio ADM: {formatMoeda(p.rateioMes)}</>}
-                </div>
+                <div className="font-mono font-bold">{formatMoeda(desembolsoMes + rateioMes)}</div>
               </div>
               <div>
                 <span className="text-muted-foreground">Denominador:</span>
-                <div className="font-mono font-bold">{p.cabMediaMes !== null ? formatNum(p.cabMediaMes, 1) : '—'}</div>
-                <div className="text-muted-foreground">
-                  ({formatNum(p.saldoAnterior, 0)} + {formatNum(p.saldoFinalMes, 0)}) ÷ 2
-                </div>
-                <div className="text-muted-foreground" style={{ color: 'hsl(var(--primary))' }}>
-                  ✅ Fonte: useIndicadoresZootecnicos (oficial)
-                </div>
+                <div className="font-mono font-bold">{cabMediaMes !== null ? formatNum(cabMediaMes, 1) : '—'}</div>
+                <div className="text-muted-foreground">({formatNum(saldoAnterior, 0)} + {formatNum(saldoFinalMes, 0)}) ÷ 2</div>
+                <div className="text-muted-foreground" style={{ color: 'hsl(var(--primary))' }}>✅ Fonte: zootécnico oficial</div>
               </div>
             </div>
-            <div className="border-t pt-1 font-bold">
-              Resultado: {p.custoCabMes !== null ? formatMoeda(p.custoCabMes) : '—'}
-            </div>
+            <div className="border-t pt-1 font-bold">Resultado: {custoCabMes !== null ? formatMoeda(custoCabMes) : '—'}</div>
           </div>
 
-          {/* Custo/cab acumulado — NOVA FÓRMULA */}
+          {/* Custo/cab acumulado */}
           <div className="bg-muted/50 rounded-md p-2 space-y-1">
             <div className="font-bold text-xs">Custo/cab acumulado (jan→mês {mesLabel})</div>
-            <div className="text-muted-foreground">
-              Fórmula: (desembolso_acum ÷ meses) ÷ rebanho_médio_acum
-            </div>
+            <div className="text-muted-foreground">Fórmula: (desembolso_acum ÷ meses) ÷ rebanho_médio_acum</div>
             <div className="grid grid-cols-2 gap-1">
               <div>
-                <span className="text-muted-foreground">Desembolso acumulado:</span>
-                <div className="font-mono font-bold">{formatMoeda(p.desembolsoAcum)}</div>
+                <span className="text-muted-foreground">Desembolso acum:</span>
+                <div className="font-mono font-bold">{formatMoeda(desembolsoAcum)}</div>
                 <span className="text-muted-foreground">Nº meses:</span>
-                <div className="font-mono font-bold">{p.numMeses}</div>
-                <span className="text-muted-foreground">Gasto médio mensal:</span>
-                <div className="font-mono font-bold">{formatMoeda(p.gastoMedioMensal)}</div>
+                <div className="font-mono font-bold">{numMeses}</div>
+                <span className="text-muted-foreground">Média mensal:</span>
+                <div className="font-mono font-bold">{formatMoeda(mediaMensal)}</div>
               </div>
               <div>
-                <span className="text-muted-foreground">Rebanho médio acumulado:</span>
-                <div className="font-mono font-bold">{p.cabMediaAcum !== null ? formatNum(p.cabMediaAcum, 1) : '—'}</div>
-                <div className="text-muted-foreground">
-                  = média dos rebanhos médios mensais
-                </div>
-                <div className="text-muted-foreground" style={{ color: 'hsl(var(--primary))' }}>
-                  ✅ Fonte: useIndicadoresZootecnicos (oficial)
-                </div>
+                <span className="text-muted-foreground">Rebanho médio acum:</span>
+                <div className="font-mono font-bold">{cabMediaAcum !== null ? formatNum(cabMediaAcum, 1) : '—'}</div>
+                <div className="text-muted-foreground">= média dos rebanhos médios mensais</div>
+                <div className="text-muted-foreground" style={{ color: 'hsl(var(--primary))' }}>✅ Fonte: zootécnico oficial</div>
               </div>
             </div>
-            {/* Detalhe mensal */}
-            {p.rebanhosMensais.length > 0 && (
+            {rebanhosMensais.length > 0 && (
               <div className="border-t pt-1 mt-1">
                 <div className="text-muted-foreground font-bold mb-1">Rebanho médio por mês:</div>
                 <div className="grid grid-cols-3 gap-x-2 gap-y-0.5">
-                  {p.rebanhosMensais.map(rm => (
+                  {rebanhosMensais.map(rm => (
                     <div key={rm.mes} className="flex justify-between">
                       <span className="text-muted-foreground">M{rm.mes}:</span>
                       <span className="font-mono">{formatNum(rm.media, 0)} <span className="text-muted-foreground text-[8px]">({formatNum(rm.saldoInicio, 0)}+{formatNum(rm.saldoFim, 0)})/2</span></span>
@@ -263,10 +334,10 @@ function AuditEconomico(p: AuditEconomicoProps) {
               </div>
             )}
             <div className="border-t pt-1 font-bold">
-              Resultado: {p.custoCabAcum !== null ? formatMoeda(p.custoCabAcum) : '—'}
-              {p.custoCabAcum !== null && (
+              Resultado: {custoCabAcum !== null ? formatMoeda(custoCabAcum) : '—'}
+              {custoCabAcum !== null && (
                 <span className="font-normal text-muted-foreground ml-1">
-                  = {formatMoeda(p.gastoMedioMensal)} ÷ {p.cabMediaAcum !== null ? formatNum(p.cabMediaAcum, 1) : '—'}
+                  = {formatMoeda(mediaMensal)} ÷ {cabMediaAcum !== null ? formatNum(cabMediaAcum, 1) : '—'}
                 </span>
               )}
             </div>
@@ -279,117 +350,19 @@ function AuditEconomico(p: AuditEconomicoProps) {
             <div className="grid grid-cols-2 gap-1">
               <div>
                 <span className="text-muted-foreground">Numerador:</span>
-                <div className="font-mono font-bold">{formatMoeda(p.desembolsoAcum)}</div>
+                <div className="font-mono font-bold">{formatMoeda(desembolsoAcum)}</div>
               </div>
               <div>
                 <span className="text-muted-foreground">Denominador:</span>
-                <div className="font-mono font-bold">{p.arrobasProduzidasAcum !== null ? `${formatNum(p.arrobasProduzidasAcum, 1)} @` : '—'}</div>
-                <div className="text-muted-foreground" style={{ color: 'hsl(var(--primary))' }}>
-                  ✅ Fonte: useIndicadoresZootecnicos (oficial)
-                </div>
-                <div className="text-muted-foreground">
-                  Usa resolverPesoOficial (fechamento {'>'} lançamento {'>'} saldo_inicial)
-                </div>
+                <div className="font-mono font-bold">{arrobasProduzidasAcum !== null ? `${formatNum(arrobasProduzidasAcum, 1)} @` : '—'}</div>
+                <div className="text-muted-foreground" style={{ color: 'hsl(var(--primary))' }}>✅ Fonte: zootécnico oficial</div>
               </div>
             </div>
-            <div className="border-t pt-1 font-bold">
-              Resultado: {p.custoArrobaProd !== null ? formatMoeda(p.custoArrobaProd) : '—'}
-            </div>
+            <div className="border-t pt-1 font-bold">Resultado: {custoArrobaProd !== null ? formatMoeda(custoArrobaProd) : '—'}</div>
           </div>
         </div>
       )}
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Audit: Arrobas produzidas Global = Σ Fazendas
-// ---------------------------------------------------------------------------
-
-function AuditArrobasGlobal({
-  porFazenda,
-  somaArrobas,
-  arrobasGlobalExibido,
-  loading: loadingArrobas,
-}: {
-  porFazenda: { fazendaId: string; fazendaNome: string; arrobasProduzidas: number | null; pesoFinalEstoque: number; pesoInicialEstoque: number; pesoEntradas: number; pesoSaidas: number; ganhoLiquidoKg: number }[];
-  somaArrobas: number | null;
-  arrobasGlobalExibido: number | null;
-  loading: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <Card>
-      <CardContent className="p-3">
-        <button
-          onClick={() => setOpen(!open)}
-          className="flex items-center justify-between w-full"
-        >
-          <div className="flex items-center gap-1.5 text-xs font-bold">
-            🔍 Auditoria: Arrobas Produzidas (Global = Σ Fazendas)
-          </div>
-          {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-        </button>
-        {open && (
-          <div className="mt-2 space-y-2 text-[10px]">
-            {loadingArrobas ? (
-              <div className="text-center py-4 text-muted-foreground">Carregando pesos por fazenda…</div>
-            ) : (
-              <>
-                {/* Tabela por fazenda */}
-                <div className="bg-muted/50 rounded-md p-2">
-                  <div className="font-bold text-xs mb-1">Arrobas produzidas por fazenda</div>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-[10px] px-2 py-1.5">Fazenda</TableHead>
-                        <TableHead className="text-[10px] px-2 py-1.5 text-right">Peso Ini (kg)</TableHead>
-                        <TableHead className="text-[10px] px-2 py-1.5 text-right">Peso Fin (kg)</TableHead>
-                        <TableHead className="text-[10px] px-2 py-1.5 text-right">Entr. (kg)</TableHead>
-                        <TableHead className="text-[10px] px-2 py-1.5 text-right">Saíd. (kg)</TableHead>
-                        <TableHead className="text-[10px] px-2 py-1.5 text-right">Ganho (kg)</TableHead>
-                        <TableHead className="text-[10px] px-2 py-1.5 text-right font-bold">@ Prod.</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {porFazenda.map(f => (
-                        <TableRow key={f.fazendaId}>
-                          <TableCell className="text-[10px] px-2 py-1 font-bold max-w-[120px] truncate">{f.fazendaNome}</TableCell>
-                          <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.pesoInicialEstoque, 0)}</TableCell>
-                          <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.pesoFinalEstoque, 0)}</TableCell>
-                          <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.pesoEntradas, 0)}</TableCell>
-                          <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.pesoSaidas, 0)}</TableCell>
-                          <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatNum(f.ganhoLiquidoKg, 0)}</TableCell>
-                          <TableCell className="text-[10px] px-2 py-1 text-right font-mono font-bold">
-                            {f.arrobasProduzidas !== null ? formatNum(f.arrobasProduzidas, 1) : '—'}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                {/* Totalizador */}
-                <div className="bg-muted/50 rounded-md p-2 space-y-1">
-                  <div className="flex justify-between font-bold text-xs">
-                    <span>Σ Fazendas (soma):</span>
-                    <span className="font-mono">{somaArrobas !== null ? `${formatNum(somaArrobas, 1)} @` : '—'}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span>Global exibido:</span>
-                    <span className="font-mono font-bold">{arrobasGlobalExibido !== null ? `${formatNum(arrobasGlobalExibido, 1)} @` : '—'}</span>
-                  </div>
-                  <div className="text-[9px] text-muted-foreground border-t pt-1 mt-1" style={{ color: 'hsl(var(--primary))' }}>
-                    ✅ Global = soma exata das fazendas (cada uma com resolverPesoOficial próprio)
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 
@@ -412,7 +385,6 @@ export function DashboardFinanceiro({
   const [showAudit, setShowAudit] = useState(false);
   const { fazendas } = useFazenda();
 
-  // IDs das fazendas reais (excluindo __global__)
   const fazendaIdsReais = useMemo(
     () => fazendas.filter(f => f.id !== '__global__').map(f => f.id),
     [fazendas],
@@ -431,15 +403,14 @@ export function DashboardFinanceiro({
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState('todos');
 
-  // Build target period string: "YYYY-MM" or just "YYYY"
   const periodoAlvo = useMemo(
     () => mesFiltro !== 'todos' ? `${anoFiltro}-${mesFiltro}` : anoFiltro,
     [anoFiltro, mesFiltro],
   );
 
-  // ===========================================================================
-  // ZOOTÉCNICO — FONTE ÚNICA OFICIAL (useIndicadoresZootecnicos)
-  // ===========================================================================
+  // =========================================================================
+  // ZOOTÉCNICO — FONTE ÚNICA
+  // =========================================================================
   const mesNum = mesFiltro !== 'todos' ? Number(mesFiltro) : new Date().getMonth() + 1;
 
   const zoo = useIndicadoresZootecnicos(
@@ -447,27 +418,21 @@ export function DashboardFinanceiro({
     lancamentosPecuarios, saldosIniciais, pastos, categorias,
   );
 
-  // ===========================================================================
-  // GLOBAL: arrobas produzidas = Σ fazendas (com pesos oficiais por fazenda)
-  // ===========================================================================
   const arrobasGlobal = useArrobasGlobal(
     isGlobal, lancamentosPecuarios, saldosIniciais, categorias,
     Number(anoFiltro), mesNum, fazendaIdsReais,
   );
 
-  // Derived zoo values for economic indicators
   const zooData = useMemo(() => {
     const anoNum = Number(anoFiltro);
     const saldoInicialAno = saldosIniciais
       .filter(s => s.ano === anoNum)
       .reduce((sum, s) => sum + s.quantidade, 0);
 
-    // Cab média mês: (saldo anterior + saldo final) / 2
     const saldoAnterior = zoo.gmdAberturaMes.estoqueInicialDetalhe.reduce((s, d) => s + d.cabecas, 0);
     const saldoFinalMes = zoo.saldoFinalMes;
     const cabMediaMes = (saldoAnterior > 0 || saldoFinalMes > 0) ? (saldoAnterior + saldoFinalMes) / 2 : null;
 
-    // Rebanho médio mensal para cada mês jan→mesNum
     const mesLimite = mesFiltro !== 'todos' ? Number(mesFiltro) : 12;
     const rebanhosMensais: RebanhoMedioMensal[] = [];
     for (let m = 1; m <= mesLimite; m++) {
@@ -479,54 +444,41 @@ export function DashboardFinanceiro({
       rebanhosMensais.push({ mes: m, saldoInicio: saldoInicioMes, saldoFim: saldoFimMes, media });
     }
 
-    // Cab média acumulada = média dos rebanhos médios mensais
     const cabMediaAcum = rebanhosMensais.length > 0
       ? rebanhosMensais.reduce((s, rm) => s + rm.media, 0) / rebanhosMensais.length
       : null;
 
-    // Arrobas produzidas acumuladas:
-    // Global → soma das fazendas (useArrobasGlobal)
-    // Individual → direto do hook oficial
     const arrobasProduzidasAcum = isGlobal
       ? arrobasGlobal.somaArrobas
       : zoo.arrobasProduzidasAcumulado;
 
     return {
-      cabMediaMes,
-      cabMediaAcum,
-      rebanhosMensais,
-      arrobasProduzidasAcum,
-      saldoAnterior,
-      saldoFinalMes,
-      saldoInicialAno,
+      cabMediaMes, cabMediaAcum, rebanhosMensais, arrobasProduzidasAcum,
+      saldoAnterior, saldoFinalMes, saldoInicialAno,
       arrobasProduzidasMes: zoo.arrobasProduzidasMes,
       gmdAcumulado: zoo.gmdAcumulado,
     };
   }, [zoo, saldosIniciais, anoFiltro, mesFiltro, lancamentosPecuarios, isGlobal, arrobasGlobal.somaArrobas]);
 
-  // ===========================================================================
-  // FINANCEIRO — filtros de lançamentos
-  // ===========================================================================
+  // =========================================================================
+  // FINANCEIRO — filtros
+  // =========================================================================
 
-  // All lancamentos in the period (any status) — for audit
-  const todosNoPeriodo = useMemo(() => {
-    return lancamentos.filter(l => {
+  const todosNoPeriodo = useMemo(() =>
+    lancamentos.filter(l => {
       const am = datePagtoAnoMes(l);
-      if (!am) return false;
-      return am.startsWith(periodoAlvo);
-    });
-  }, [lancamentos, periodoAlvo]);
+      return am && am.startsWith(periodoAlvo);
+    }), [lancamentos, periodoAlvo]);
 
-  // Filter lancamentos: conciliado + data_pagamento in period
-  const filtrados = useMemo(() => {
-    return todosNoPeriodo.filter(l => isConciliado(l));
-  }, [todosNoPeriodo]);
-
-  // Split into entries and exits
+  const filtrados = useMemo(() => todosNoPeriodo.filter(isConciliado), [todosNoPeriodo]);
   const entradasList = useMemo(() => filtrados.filter(isEntrada), [filtrados]);
   const saidasList = useMemo(() => filtrados.filter(isSaida), [filtrados]);
 
-  // Status audit breakdown
+  // Rateio filtrado
+  const rateioFiltrado = useMemo(() => rateioADM.filter(r => r.anoMes.startsWith(periodoAlvo)), [rateioADM, periodoAlvo]);
+  const totalRateioFiltrado = useMemo(() => rateioFiltrado.reduce((s, r) => s + r.valorRateado, 0), [rateioFiltrado]);
+
+  // Status audit
   const auditStatus = useMemo(() => {
     const map = new Map<string, { count: number; total: number }>();
     for (const l of todosNoPeriodo) {
@@ -536,126 +488,257 @@ export function DashboardFinanceiro({
       entry.total += Math.abs(l.valor);
       map.set(status, entry);
     }
-    return Array.from(map.entries())
-      .map(([status, v]) => ({ status, ...v }))
-      .sort((a, b) => b.total - a.total);
+    return Array.from(map.entries()).map(([status, v]) => ({ status, ...v })).sort((a, b) => b.total - a.total);
   }, [todosNoPeriodo]);
 
-  // Rateio filtrado pelo período
-  const rateioFiltrado = useMemo(() => {
-    return rateioADM.filter(r => r.anoMes.startsWith(periodoAlvo));
-  }, [rateioADM, periodoAlvo]);
+  // =========================================================================
+  // INDICADORES CALCULADOS
+  // =========================================================================
 
-  const totalRateioFiltrado = useMemo(
-    () => rateioFiltrado.reduce((s, r) => s + r.valorRateado, 0),
-    [rateioFiltrado],
-  );
-
-  // Indicadores financeiros + econômicos (usando zoo oficial)
   const ind = useMemo(() => {
-    if (!indicadores) return null;
+    const totalEntradas = entradasList.reduce((s, l) => s + Math.abs(l.valor), 0);
+    const totalSaidas = saidasList.reduce((s, l) => s + Math.abs(l.valor), 0);
+    const saidasComRateio = totalSaidas + totalRateioFiltrado;
 
-    const entradas = entradasList.reduce((s, l) => s + Math.abs(l.valor), 0);
-    const saidas = saidasList.reduce((s, l) => s + Math.abs(l.valor), 0);
-    const saidasComRateio = saidas + totalRateioFiltrado;
-
-    // Desembolso produtivo do mês (apenas macro_custo = "Custeio Produtivo" ou legado)
-    const desembolsoProdMes = filtrados
+    // --- Desembolso produtivo mês ---
+    const desembolsoProdMesProprio = filtrados
       .filter(l => isDesembolsoProdutivo(l))
-      .reduce((s, l) => s + Math.abs(l.valor), 0) + totalRateioFiltrado;
+      .reduce((s, l) => s + Math.abs(l.valor), 0);
+    const desembolsoProdMes = desembolsoProdMesProprio + totalRateioFiltrado;
 
-    // Desembolso produtivo acumulado (apenas macro_custo = "Custeio Produtivo")
+    // --- Desembolso produtivo acumulado ---
     const mesLimite = mesFiltro !== 'todos' ? Number(mesFiltro) : 12;
-    const desembolsoProdAcum = lancamentos
+    const desembolsoProdAcumProprio = lancamentos
       .filter(l => {
-        if (!isConciliado(l)) return false;
-        if (!isDesembolsoProdutivo(l)) return false;
+        if (!isConciliado(l) || !isDesembolsoProdutivo(l)) return false;
         const am = datePagtoAnoMes(l);
         if (!am || !am.startsWith(anoFiltro)) return false;
-        const lMes = Number(am.substring(5, 7));
-        return lMes <= mesLimite;
+        return Number(am.substring(5, 7)) <= mesLimite;
       })
       .reduce((s, l) => s + Math.abs(l.valor), 0);
-    const rateioAcum = rateioADM
-      .filter(r => {
-        if (!r.anoMes.startsWith(anoFiltro)) return false;
-        const rMes = Number(r.anoMes.substring(5, 7));
-        return rMes <= mesLimite;
-      })
+
+    const rateioAcumVal = rateioADM
+      .filter(r => r.anoMes.startsWith(anoFiltro) && Number(r.anoMes.substring(5, 7)) <= mesLimite)
       .reduce((s, r) => s + r.valorRateado, 0);
-    const desembolsoAcum = desembolsoProdAcum + rateioAcum;
 
-    // Número de meses no acumulado
+    const desembolsoAcum = desembolsoProdAcumProprio + rateioAcumVal;
+
     const numMeses = mesFiltro !== 'todos' ? Number(mesFiltro) : 12;
-    const mediaMenual = numMeses > 0 ? desembolsoAcum / numMeses : 0;
+    const mediaMensal = numMeses > 0 ? desembolsoAcum / numMeses : 0;
 
-    // Indicadores econômicos — denominadores do zootécnico oficial
+    // --- Indicadores econômicos ---
     const custoCabMes = zooData.cabMediaMes && zooData.cabMediaMes > 0
-      ? desembolsoProdMes / zooData.cabMediaMes
-      : null;
-    // NOVA FÓRMULA: (gasto médio mensal) ÷ (rebanho médio acumulado)
+      ? desembolsoProdMes / zooData.cabMediaMes : null;
     const custoCabAcum = zooData.cabMediaAcum && zooData.cabMediaAcum > 0 && numMeses > 0
-      ? mediaMenual / zooData.cabMediaAcum
-      : null;
+      ? mediaMensal / zooData.cabMediaAcum : null;
     const custoArrobaProd = zooData.arrobasProduzidasAcum && zooData.arrobasProduzidasAcum > 0
-      ? desembolsoAcum / zooData.arrobasProduzidasAcum
-      : null;
+      ? desembolsoAcum / zooData.arrobasProduzidasAcum : null;
 
-    // Hierarquia macro (saídas only)
-    const macroMap = new Map<string, number>();
+    // --- Entradas acumuladas ---
+    const entradasAcum = lancamentos
+      .filter(l => {
+        if (!isConciliado(l) || !isEntrada(l)) return false;
+        const am = datePagtoAnoMes(l);
+        if (!am || !am.startsWith(anoFiltro)) return false;
+        return Number(am.substring(5, 7)) <= mesLimite;
+      })
+      .reduce((s, l) => s + Math.abs(l.valor), 0);
+
+    // --- Saídas acumuladas ---
+    const saidasAcum = lancamentos
+      .filter(l => {
+        if (!isConciliado(l) || !isSaida(l)) return false;
+        const am = datePagtoAnoMes(l);
+        if (!am || !am.startsWith(anoFiltro)) return false;
+        return Number(am.substring(5, 7)) <= mesLimite;
+      })
+      .reduce((s, l) => s + Math.abs(l.valor), 0);
+
+    // --- Decomposição entradas ---
+    const classifyEntrada = (l: FinanceiroLancamento) => {
+      const macro = normMacro(l);
+      const escopo = normEscopo(l);
+      if (macro === 'receitas' && escopo === 'pecuaria') return 'Receitas Pecuárias';
+      if (macro === 'receitas' && escopo === 'agricultura') return 'Receitas Agrícolas';
+      if (macro === 'receitas') return 'Outras Receitas';
+      return 'Outras Receitas';
+    };
+
+    const entradaDecomp = { mes: new Map<string, number>(), acum: new Map<string, number>() };
+    const categoriasEntrada = ['Receitas Pecuárias', 'Receitas Agrícolas', 'Outras Receitas'];
+    for (const cat of categoriasEntrada) { entradaDecomp.mes.set(cat, 0); entradaDecomp.acum.set(cat, 0); }
+
+    for (const l of entradasList) {
+      const cat = classifyEntrada(l);
+      entradaDecomp.mes.set(cat, (entradaDecomp.mes.get(cat) || 0) + Math.abs(l.valor));
+    }
+
+    lancamentos.filter(l => {
+      if (!isConciliado(l) || !isEntrada(l)) return false;
+      const am = datePagtoAnoMes(l);
+      if (!am || !am.startsWith(anoFiltro)) return false;
+      return Number(am.substring(5, 7)) <= mesLimite;
+    }).forEach(l => {
+      const cat = classifyEntrada(l);
+      entradaDecomp.acum.set(cat, (entradaDecomp.acum.get(cat) || 0) + Math.abs(l.valor));
+    });
+
+    // --- Decomposição saídas ---
+    const classifySaida = (l: FinanceiroLancamento) => {
+      const macro = normMacro(l);
+      const escopo = normEscopo(l);
+      if (macro === 'custeio produtivo' && escopo === 'pecuaria') return 'Custeio Pecuário';
+      if (macro === 'custeio produtivo' && escopo === 'agricultura') return 'Custeio Agrícola';
+      if (macro === 'custeio produtivo') return 'Custeio Pecuário'; // default
+      if (macro === 'investimento na fazenda' && escopo === 'pecuaria') return 'Investimento Pecuário';
+      if (macro === 'investimento na fazenda' && escopo === 'agricultura') return 'Investimento Agrícola';
+      if (macro === 'investimento na fazenda') return 'Investimento Pecuário';
+      if (macro === 'investimento em bovinos') return 'Reposição de Bovinos';
+      return 'Outros';
+    };
+
+    const categoriasSaida = ['Custeio Pecuário', 'Investimento Pecuário', 'Custeio Agrícola', 'Investimento Agrícola', 'Reposição de Bovinos'];
+    const saidaDecomp = { mes: new Map<string, number>(), acum: new Map<string, number>() };
+    for (const cat of categoriasSaida) { saidaDecomp.mes.set(cat, 0); saidaDecomp.acum.set(cat, 0); }
+
     for (const l of saidasList) {
-      if (!l.macro_custo) continue;
-      macroMap.set(l.macro_custo, (macroMap.get(l.macro_custo) || 0) + Math.abs(l.valor));
+      const cat = classifySaida(l);
+      if (categoriasSaida.includes(cat)) saidaDecomp.mes.set(cat, (saidaDecomp.mes.get(cat) || 0) + Math.abs(l.valor));
     }
-    if (totalRateioFiltrado > 0) {
-      macroMap.set('ADM (Rateio)', (macroMap.get('ADM (Rateio)') || 0) + totalRateioFiltrado);
+
+    lancamentos.filter(l => {
+      if (!isConciliado(l) || !isSaida(l)) return false;
+      const am = datePagtoAnoMes(l);
+      if (!am || !am.startsWith(anoFiltro)) return false;
+      return Number(am.substring(5, 7)) <= mesLimite;
+    }).forEach(l => {
+      const cat = classifySaida(l);
+      if (categoriasSaida.includes(cat)) saidaDecomp.acum.set(cat, (saidaDecomp.acum.get(cat) || 0) + Math.abs(l.valor));
+    });
+
+    // --- Receitas Pecuárias por Competência ---
+    const tiposReceitaComp = ['abate', 'venda', 'consumo'];
+    const recPecCompetenciaMes = lancamentosPecuarios
+      .filter(l => {
+        if (!tiposReceitaComp.includes(l.tipo)) return false;
+        const lAno = Number(l.data.substring(0, 4));
+        const lMes = Number(l.data.substring(5, 7));
+        if (mesFiltro === 'todos') return lAno === Number(anoFiltro);
+        return lAno === Number(anoFiltro) && lMes === Number(mesFiltro);
+      })
+      .reduce((s, l) => s + calcValorTotal(l), 0);
+
+    const recPecCompetenciaAcum = lancamentosPecuarios
+      .filter(l => {
+        if (!tiposReceitaComp.includes(l.tipo)) return false;
+        const lAno = Number(l.data.substring(0, 4));
+        const lMes = Number(l.data.substring(5, 7));
+        return lAno === Number(anoFiltro) && lMes <= mesLimite;
+      })
+      .reduce((s, l) => s + calcValorTotal(l), 0);
+
+    // --- Receitas Pecuárias por Caixa ---
+    const recPecCaixaMes = entradasList
+      .filter(l => normMacro(l) === 'receitas' && (normEscopo(l) === 'pecuaria' || !l.escopo_negocio))
+      .reduce((s, l) => s + Math.abs(l.valor), 0);
+
+    const recPecCaixaAcum = lancamentos
+      .filter(l => {
+        if (!isConciliado(l) || !isEntrada(l)) return false;
+        if (normMacro(l) !== 'receitas') return false;
+        if (normEscopo(l) !== 'pecuaria' && l.escopo_negocio) return false;
+        const am = datePagtoAnoMes(l);
+        if (!am || !am.startsWith(anoFiltro)) return false;
+        return Number(am.substring(5, 7)) <= mesLimite;
+      })
+      .reduce((s, l) => s + Math.abs(l.valor), 0);
+
+    // --- Centro de custo (mês e acumulado) ---
+    const ccMesMap = new Map<string, number>();
+    const ccAcumMap = new Map<string, number>();
+
+    for (const l of saidasList) {
+      if (!isDesembolsoProdutivo(l)) continue;
+      const cc = (l.centro_custo || 'Não classificado').trim();
+      ccMesMap.set(cc, (ccMesMap.get(cc) || 0) + Math.abs(l.valor));
     }
-    const porMacro = Array.from(macroMap.entries())
-      .map(([nome, valor]) => ({ nome, valor }))
-      .sort((a, b) => b.valor - a.valor);
+
+    lancamentos.filter(l => {
+      if (!isConciliado(l) || !isSaida(l) || !isDesembolsoProdutivo(l)) return false;
+      const am = datePagtoAnoMes(l);
+      if (!am || !am.startsWith(anoFiltro)) return false;
+      return Number(am.substring(5, 7)) <= mesLimite;
+    }).forEach(l => {
+      const cc = (l.centro_custo || 'Não classificado').trim();
+      ccAcumMap.set(cc, (ccAcumMap.get(cc) || 0) + Math.abs(l.valor));
+    });
+
+    // Add rateio as separate line
+    if (!isGlobal && totalRateioFiltrado > 0) {
+      ccMesMap.set('Rateio ADM', totalRateioFiltrado);
+    }
+    if (!isGlobal && rateioAcumVal > 0) {
+      ccAcumMap.set('Rateio ADM', rateioAcumVal);
+    }
+
+    const ccMes = Array.from(ccMesMap.entries()).map(([nome, valor]) => ({ nome, valor })).sort((a, b) => b.valor - a.valor);
+    const ccAcum = Array.from(ccAcumMap.entries()).map(([nome, valor]) => ({ nome, valor })).sort((a, b) => b.valor - a.valor);
 
     return {
-      entradas,
-      saidas,
-      saidasComRateio,
-      desembolsoAcum,
-      numMeses,
-      mediaMenual,
-      custoCabMes,
-      custoCabAcum,
-      custoArrobaProd,
-      porMacro,
-      rateioADM: totalRateioFiltrado,
+      totalEntradas, totalSaidas, saidasComRateio,
+      entradasAcum, saidasAcum,
+      desembolsoProdMes, desembolsoProdMesProprio, desembolsoAcum, desembolsoProdAcumProprio, rateioAcumVal,
+      numMeses, mediaMensal,
+      custoCabMes, custoCabAcum, custoArrobaProd,
+      entradaDecomp, saidaDecomp, categoriasEntrada, categoriasSaida,
+      recPecCompetenciaMes, recPecCompetenciaAcum,
+      recPecCaixaMes, recPecCaixaAcum,
+      ccMes, ccAcum,
+      rateioMes: totalRateioFiltrado,
     };
-  }, [entradasList, saidasList, indicadores, lancamentos, anoFiltro, mesFiltro, zooData, totalRateioFiltrado, rateioADM]);
+  }, [entradasList, saidasList, filtrados, lancamentos, anoFiltro, mesFiltro, zooData, totalRateioFiltrado, rateioADM, lancamentosPecuarios, isGlobal]);
 
-  // Chart data
+  // =========================================================================
+  // GRÁFICO — Jan → Dez fixo
+  // =========================================================================
   const chartData = useMemo(() => {
-    const months = new Map<string, { entradas: number; saidas: number }>();
+    const monthMap = new Map<string, { entradas: number; saidas: number }>();
+    for (let m = 1; m <= 12; m++) {
+      monthMap.set(String(m).padStart(2, '0'), { entradas: 0, saidas: 0 });
+    }
     for (const l of lancamentos) {
       if (!isConciliado(l)) continue;
       const am = datePagtoAnoMes(l);
       if (!am || !am.startsWith(anoFiltro)) continue;
       const m = am.substring(5);
-      const entry = months.get(m) || { entradas: 0, saidas: 0 };
+      const entry = monthMap.get(m);
+      if (!entry) continue;
       if (isEntrada(l)) entry.entradas += Math.abs(l.valor);
       if (isSaida(l)) entry.saidas += Math.abs(l.valor);
-      months.set(m, entry);
     }
-    return Array.from(months.entries())
+    return Array.from(monthMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([mes, v]) => ({ mes, Entradas: v.entradas, Saídas: v.saidas }));
+      .map(([mes, v]) => ({
+        mes: MESES_NOMES[Number(mes) - 1] || mes,
+        Entradas: v.entradas,
+        Saídas: v.saidas,
+      }));
   }, [lancamentos, anoFiltro]);
 
+  // =========================================================================
+  // Empty state
+  // =========================================================================
   if (lancamentos.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
-        <DollarSign className="h-12 w-12 mx-auto mb-3 opacity-30" />
+        <TrendingUp className="h-12 w-12 mx-auto mb-3 opacity-30" />
         <p className="font-bold">Nenhum dado financeiro</p>
         <p className="text-sm">Importe um Excel na aba Importação para começar.</p>
       </div>
     );
   }
+
+  const mesLimite = mesFiltro !== 'todos' ? Number(mesFiltro) : 12;
 
   return (
     <div className="space-y-4">
@@ -667,7 +750,6 @@ export function DashboardFinanceiro({
         </div>
       )}
 
-      {/* Aviso fazendas sem área */}
       {!isGlobal && fazendasSemArea && fazendasSemArea.length > 0 && (
         <div className="flex items-start gap-2 text-xs bg-destructive/5 border border-destructive/30 rounded-md px-2.5 py-2">
           <AlertTriangle className="h-3.5 w-3.5 text-destructive mt-0.5 shrink-0" />
@@ -698,287 +780,412 @@ export function DashboardFinanceiro({
         </Select>
       </div>
 
-      {/* Critério info */}
       <div className="text-[10px] text-muted-foreground bg-muted rounded-md px-2.5 py-1.5">
         Filtros: Status = Conciliado · Base = Data Pagamento · Entradas = 1-* · Saídas = 2-*
       </div>
 
-      {ind && (
-        <>
-          {/* Cards principais */}
-          <div className="grid grid-cols-2 gap-2">
-            <Card>
-              <CardContent className="p-3">
-                <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
-                  <TrendingUp className="h-3 w-3 text-green-600" /> Entradas
-                </div>
-                <p className="text-lg font-bold text-green-700 dark:text-green-400">{formatMoeda(ind.entradas)}</p>
-                <p className="text-[10px] text-muted-foreground">{entradasList.length} lançamentos</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-3">
-                <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
-                  <TrendingDown className="h-3 w-3 text-red-600" /> Saídas
-                </div>
-                <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.saidasComRateio)}</p>
-                {!isGlobal && ind.rateioADM > 0 ? (
-                  <div className="text-[10px] text-muted-foreground mt-0.5 space-y-0.5">
-                    <p>Próprio: {formatMoeda(ind.saidas)} ({saidasList.length} lanç.)</p>
-                    <p className="text-amber-600 dark:text-amber-400">+ Rateio ADM: {formatMoeda(ind.rateioADM)}</p>
-                  </div>
-                ) : (
-                  <p className="text-[10px] text-muted-foreground">{saidasList.length} lançamentos</p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+      {/* ================================================================= */}
+      {/* 1. CARDS PRINCIPAIS — Entradas e Saídas */}
+      {/* ================================================================= */}
+      <div className="grid grid-cols-2 gap-2">
+        {/* ENTRADAS */}
+        <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+              <TrendingUp className="h-3 w-3 text-green-600" /> Entradas
+            </div>
+            <p className="text-lg font-bold text-green-700 dark:text-green-400">{formatMoeda(ind.totalEntradas)}</p>
+            <p className="text-[10px] text-muted-foreground">acumulado: {formatMoeda(ind.entradasAcum)}</p>
+            <p className="text-[10px] text-muted-foreground">{entradasList.length} lançamentos</p>
+          </CardContent>
+        </Card>
 
-          {/* Rateio ADM info card */}
-          {!isGlobal && ind.rateioADM > 0 && rateioFiltrado.length > 0 && (
-            <Card className="border-dashed border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
-              <CardContent className="p-3">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-400 mb-1">
-                  <Building2 className="h-3.5 w-3.5" /> Rateio ADM
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {formatNum(rateioFiltrado[0]?.percentualFazenda || 0, 1)}% do rebanho médio
-                  → <span className="font-bold text-foreground">{formatMoeda(ind.rateioADM)}</span> absorvido
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Indicadores econômicos */}
-          <Card>
-            <CardContent className="p-3 space-y-3">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                <Activity className="h-3.5 w-3.5" /> Indicadores Econômicos
+        {/* SAÍDAS */}
+        <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+              <TrendingDown className="h-3 w-3 text-red-600" /> Saídas
+            </div>
+            <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.saidasComRateio)}</p>
+            <p className="text-[10px] text-muted-foreground">acumulado: {formatMoeda(ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal))}</p>
+            {!isGlobal && ind.rateioMes > 0 ? (
+              <div className="text-[10px] text-muted-foreground mt-0.5 space-y-0.5">
+                <p>próprio: {formatMoeda(ind.totalSaidas)} ({saidasList.length} lanç.)</p>
+                <p className="text-amber-600 dark:text-amber-400">rateio ADM: {formatMoeda(ind.rateioMes)}</p>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <div className="text-[10px] text-muted-foreground">Desembolso acumulado</div>
-                  <p className="text-sm font-bold">{formatMoeda(ind.desembolsoAcum)}</p>
-                </div>
-                <div>
-                  <div className="text-[10px] text-muted-foreground">Média mensal</div>
-                  <p className="text-sm font-bold">{formatMoeda(ind.mediaMenual)}</p>
-                </div>
-              </div>
-              <div className="border-t pt-2 grid grid-cols-3 gap-2">
-                <div>
-                  <div className="text-[10px] text-muted-foreground">Custo/cab mês</div>
-                  <p className="text-sm font-bold">{ind.custoCabMes !== null ? formatMoeda(ind.custoCabMes) : '—'}</p>
-                  {zooData.cabMediaMes !== null && (
-                    <p className="text-[9px] text-muted-foreground">{formatNum(zooData.cabMediaMes, 0)} cab méd.</p>
-                  )}
-                </div>
-                <div>
-                  <div className="text-[10px] text-muted-foreground">Custo/cab acum.</div>
-                  <p className="text-sm font-bold">{ind.custoCabAcum !== null ? formatMoeda(ind.custoCabAcum) : '—'}</p>
-                  {zooData.cabMediaAcum !== null && (
-                    <p className="text-[9px] text-muted-foreground">{formatNum(zooData.cabMediaAcum, 0)} cab méd.</p>
-                  )}
-                </div>
-                <div>
-                  <div className="text-[10px] text-muted-foreground">Custo/@ prod.</div>
-                  <p className="text-sm font-bold">{ind.custoArrobaProd !== null ? formatMoeda(ind.custoArrobaProd) : '—'}</p>
-                  {zooData.arrobasProduzidasAcum !== null && (
-                    <p className="text-[9px] text-muted-foreground">{formatNum(zooData.arrobasProduzidasAcum, 1)} @ prod.</p>
-                  )}
-                </div>
-              </div>
-              {(zooData.cabMediaMes === null && zooData.cabMediaAcum === null && zooData.arrobasProduzidasAcum === null) && (
-                <p className="text-[10px] text-muted-foreground italic">
-                  Dados zootécnicos insuficientes — cadastre saldos iniciais e lançamentos para habilitar.
-                </p>
-              )}
+            ) : (
+              <p className="text-[10px] text-muted-foreground">{saidasList.length} lançamentos</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
-              {/* Audit expandível dos indicadores econômicos */}
-              <AuditEconomico
-                saidasMes={ind.saidas}
-                rateioMes={ind.rateioADM}
-                desembolsoAcum={ind.desembolsoAcum}
-                numMeses={ind.numMeses}
-                gastoMedioMensal={ind.mediaMenual}
-                custoCabMes={ind.custoCabMes}
-                custoCabAcum={ind.custoCabAcum}
-                custoArrobaProd={ind.custoArrobaProd}
-                cabMediaMes={zooData.cabMediaMes}
-                cabMediaAcum={zooData.cabMediaAcum}
-                rebanhosMensais={zooData.rebanhosMensais}
-                arrobasProduzidasAcum={zooData.arrobasProduzidasAcum}
-                saldoAnterior={zooData.saldoAnterior}
-                saldoFinalMes={zooData.saldoFinalMes}
-                saldoInicialAno={zooData.saldoInicialAno}
-                arrobasProduzidasMesZoo={zooData.arrobasProduzidasMes}
-                gmdAcumZoo={zooData.gmdAcumulado}
-                isGlobal={isGlobal}
-                mesFiltro={mesFiltro}
-              />
-            </CardContent>
-          </Card>
+      {/* ================================================================= */}
+      {/* 2. CARDS MENORES — Decomposição */}
+      {/* ================================================================= */}
+      <div className="grid grid-cols-2 gap-2">
+        {/* Entradas no mês */}
+        <Card className="bg-card/80">
+          <CardContent className="p-2.5 space-y-1">
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entradas no mês</div>
+            {ind.categoriasEntrada.map(cat => (
+              <div key={cat} className="flex justify-between text-[10px]">
+                <span className="text-muted-foreground truncate mr-2">{cat}</span>
+                <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.entradaDecomp.mes.get(cat) || 0)}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
 
-          {/* Auditoria de arrobas produzidas — Global = Σ Fazendas */}
-          {isGlobal && (
-            <AuditArrobasGlobal
-              porFazenda={arrobasGlobal.porFazenda}
-              somaArrobas={arrobasGlobal.somaArrobas}
-              arrobasGlobalExibido={zooData.arrobasProduzidasAcum}
-              loading={arrobasGlobal.loading}
+        {/* Saídas no mês */}
+        <Card className="bg-card/80">
+          <CardContent className="p-2.5 space-y-1">
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Saídas no mês</div>
+            {ind.categoriasSaida.map(cat => (
+              <div key={cat} className="flex justify-between text-[10px]">
+                <span className={`text-muted-foreground truncate mr-2 ${cat === 'Reposição de Bovinos' ? 'italic' : ''}`}>{cat}</span>
+                <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.saidaDecomp.mes.get(cat) || 0)}</span>
+              </div>
+            ))}
+            {ind.categoriasSaida.includes('Reposição de Bovinos') && (
+              <div className="text-[8px] text-muted-foreground italic">* não entra no desembolso produtivo</div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Entradas acumulado */}
+        <Card className="bg-card/80">
+          <CardContent className="p-2.5 space-y-1">
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entradas acumulado</div>
+            {ind.categoriasEntrada.map(cat => (
+              <div key={cat} className="flex justify-between text-[10px]">
+                <span className="text-muted-foreground truncate mr-2">{cat}</span>
+                <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.entradaDecomp.acum.get(cat) || 0)}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* Saídas acumulado */}
+        <Card className="bg-card/80">
+          <CardContent className="p-2.5 space-y-1">
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Saídas acumulado</div>
+            {ind.categoriasSaida.map(cat => (
+              <div key={cat} className="flex justify-between text-[10px]">
+                <span className={`text-muted-foreground truncate mr-2 ${cat === 'Reposição de Bovinos' ? 'italic' : ''}`}>{cat}</span>
+                <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(ind.saidaDecomp.acum.get(cat) || 0)}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ================================================================= */}
+      {/* 4. INDICADORES ECONÔMICOS — 2 colunas */}
+      {/* ================================================================= */}
+      <div className="grid grid-cols-2 gap-2">
+        {/* ESQUERDA — Receitas */}
+        <Card>
+          <CardContent className="p-3 space-y-3">
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              Receitas Pecuárias
+            </div>
+
+            {/* Por Competência */}
+            <div>
+              <div className="text-[10px] text-muted-foreground">por Competência</div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm font-bold text-green-700 dark:text-green-400">{formatMoeda(ind.recPecCompetenciaMes)}</span>
+                <span className="text-[9px] text-muted-foreground">mês</span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs font-bold text-foreground">{formatMoeda(ind.recPecCompetenciaAcum)}</span>
+                <span className="text-[9px] text-muted-foreground">acumulado</span>
+              </div>
+            </div>
+
+            {/* Por Caixa */}
+            <div className="border-t pt-2">
+              <div className="text-[10px] text-muted-foreground">por Caixa</div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm font-bold text-green-700 dark:text-green-400">{formatMoeda(ind.recPecCaixaMes)}</span>
+                <span className="text-[9px] text-muted-foreground">mês</span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs font-bold text-foreground">{formatMoeda(ind.recPecCaixaAcum)}</span>
+                <span className="text-[9px] text-muted-foreground">acumulado</span>
+              </div>
+            </div>
+
+            {/* Auditoria Receita Competência */}
+            <AuditReceitaCompetencia
+              lancPecuarios={lancamentosPecuarios}
+              ano={Number(anoFiltro)}
+              mesLimite={mesLimite}
             />
-          )}
-          {/* Auditoria expandível */}
-          {!isGlobal && (
-            <div className="space-y-2">
-              <button
-                onClick={() => setShowAudit(!showAudit)}
-                className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors"
-              >
-                🔍 Auditoria de lançamentos
-                {showAudit ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              </button>
+          </CardContent>
+        </Card>
 
-              {showAudit && (
-                <div className="space-y-3">
-                  {/* Status audit breakdown */}
-                  <Card className="border-dashed">
-                    <CardContent className="p-3">
-                      <div className="text-xs font-bold mb-2">📊 Lançamentos por Status no período</div>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-[10px] px-2 py-1.5">Status</TableHead>
-                            <TableHead className="text-[10px] px-2 py-1.5 text-right">Qtde</TableHead>
-                            <TableHead className="text-[10px] px-2 py-1.5 text-right">Total</TableHead>
-                            <TableHead className="text-[10px] px-2 py-1.5 text-center">Usado?</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {auditStatus.map(s => {
-                            const usado = s.status.toLowerCase() === 'conciliado';
-                            return (
-                              <TableRow key={s.status} className={usado ? 'bg-green-50 dark:bg-green-950/20' : 'opacity-60'}>
-                                <TableCell className="text-[10px] px-2 py-1 font-bold">{s.status}</TableCell>
-                                <TableCell className="text-[10px] px-2 py-1 text-right">{s.count}</TableCell>
-                                <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatMoeda(s.total)}</TableCell>
-                                <TableCell className="text-[10px] px-2 py-1 text-center">{usado ? '✅' : '❌'}</TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                      <div className="border-t mt-2 pt-2 text-[10px] text-muted-foreground">
-                        Total no período: {todosNoPeriodo.length} lançamentos · Usados (Conciliado): {filtrados.length}
-                      </div>
-                    </CardContent>
-                  </Card>
+        {/* DIREITA — Desembolso Produtivo e Custos */}
+        <Card>
+          <CardContent className="p-3 space-y-3">
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              Desembolso & Custos
+            </div>
 
-                  <AuditTable
-                    title="Entradas próprias (1-*)"
-                    lancamentos={entradasList}
-                    totalLabel="Total entradas"
-                  />
-                  <AuditTable
-                    title="Saídas próprias (2-*)"
-                    lancamentos={saidasList}
-                    totalLabel="Total saídas"
-                  />
+            {/* Desembolso Produtivo mês */}
+            <div>
+              <div className="text-[10px] text-muted-foreground">Desembolso Prod. mês</div>
+              <p className="text-sm font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.desembolsoProdMes)}</p>
+            </div>
 
-                  {/* Summary */}
-                  <Card className="bg-muted/50">
-                    <CardContent className="p-3 space-y-1">
-                      <div className="text-xs font-bold mb-2">Resumo da composição</div>
-                      <div className="flex justify-between text-xs">
-                        <span>Entradas próprias</span>
-                        <span className="font-bold text-green-700 dark:text-green-400">{formatMoeda(ind.entradas)}</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span>Saídas próprias</span>
-                        <span className="font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.saidas)}</span>
-                      </div>
-                      {ind.rateioADM > 0 && (
-                        <div className="flex justify-between text-xs">
-                          <span className="text-amber-600 dark:text-amber-400">+ Rateio ADM</span>
-                          <span className="font-bold text-amber-600 dark:text-amber-400">{formatMoeda(ind.rateioADM)}</span>
-                        </div>
-                      )}
-                      <div className="border-t pt-1 mt-1 flex justify-between text-xs">
-                        <span className="font-bold">Total saídas + rateio</span>
-                        <span className="font-bold">{formatMoeda(ind.saidasComRateio)}</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
+            {/* Custo/cab mês */}
+            <div>
+              <div className="text-[10px] text-muted-foreground">Custo/cab mês</div>
+              <p className="text-sm font-bold">{ind.custoCabMes !== null ? formatMoeda(ind.custoCabMes) : '—'}</p>
+              {zooData.cabMediaMes !== null && (
+                <p className="text-[9px] text-muted-foreground">{formatNum(zooData.cabMediaMes, 0)} cab méd.</p>
               )}
             </div>
-          )}
 
-          {/* Gráfico */}
-          {chartData.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Entradas vs Saídas</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-48">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData} barGap={2}>
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                      <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                      <Tooltip
-                        formatter={(v: number) => formatMoeda(v)}
-                        labelFormatter={(l) => `Mês ${l}`}
-                      />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Bar dataKey="Entradas" fill="hsl(120, 40%, 40%)" radius={[2, 2, 0, 0]} />
-                      <Bar dataKey="Saídas" fill="hsl(0, 65%, 50%)" radius={[2, 2, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+            <div className="border-t pt-2">
+              {/* Desembolso Produtivo acumulado */}
+              <div className="text-[10px] text-muted-foreground">Desembolso Prod. acumulado</div>
+              <p className="text-sm font-bold">{formatMoeda(ind.desembolsoAcum)}</p>
+            </div>
 
-          {/* Hierarquia macro */}
-          {ind.porMacro.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4" /> Desembolso por Macro Custo
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {ind.porMacro.map(m => {
-                    const pct = ind.saidasComRateio > 0 ? (m.valor / ind.saidasComRateio) * 100 : 0;
-                    const isRateioItem = m.nome === 'ADM (Rateio)';
-                    return (
-                      <div key={m.nome}>
-                        <div className="flex justify-between text-xs mb-0.5">
-                          <span className={`font-bold truncate mr-2 ${isRateioItem ? 'text-amber-600 dark:text-amber-400' : ''}`}>
-                            {m.nome}
-                          </span>
-                          <span className="text-muted-foreground whitespace-nowrap">
-                            {formatMoeda(m.valor)} ({formatNum(pct, 1)}%)
-                          </span>
-                        </div>
-                        <div className="h-2 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all ${isRateioItem ? 'bg-amber-500' : 'bg-primary'}`}
-                            style={{ width: `${Math.min(pct, 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
+            {/* Custo/cab acumulado */}
+            <div>
+              <div className="text-[10px] text-muted-foreground">Custo/cab acumulado</div>
+              <p className="text-sm font-bold">{ind.custoCabAcum !== null ? formatMoeda(ind.custoCabAcum) : '—'}</p>
+              {zooData.cabMediaAcum !== null && (
+                <p className="text-[9px] text-muted-foreground">{formatNum(zooData.cabMediaAcum, 0)} cab méd.</p>
+              )}
+            </div>
+
+            {/* Média mensal — destaque */}
+            <div className="bg-muted/60 rounded-md p-2">
+              <div className="text-[10px] text-muted-foreground">Média mensal</div>
+              <p className="text-base font-extrabold">{formatMoeda(ind.mediaMensal)}</p>
+            </div>
+
+            {/* Custo/@ produzida */}
+            <div>
+              <div className="text-[10px] text-muted-foreground">Custo/@ produzida</div>
+              <p className="text-sm font-bold">{ind.custoArrobaProd !== null ? formatMoeda(ind.custoArrobaProd) : '—'}</p>
+              {zooData.arrobasProduzidasAcum !== null && (
+                <p className="text-[9px] text-muted-foreground">{formatNum(zooData.arrobasProduzidasAcum, 1)} @ produzidas</p>
+              )}
+            </div>
+
+            {(zooData.cabMediaMes === null && zooData.cabMediaAcum === null && zooData.arrobasProduzidasAcum === null) && (
+              <p className="text-[10px] text-muted-foreground italic">
+                Dados zootécnicos insuficientes — cadastre saldos iniciais e lançamentos.
+              </p>
+            )}
+
+            {/* Auditoria Desembolso */}
+            <AuditDesembolsoProdutivo
+              desembolsoMes={ind.desembolsoProdMesProprio}
+              rateioMes={ind.rateioMes}
+              desembolsoAcum={ind.desembolsoAcum}
+              rateioAcum={ind.rateioAcumVal}
+              numMeses={ind.numMeses}
+              mediaMensal={ind.mediaMensal}
+              custoCabMes={ind.custoCabMes}
+              custoCabAcum={ind.custoCabAcum}
+              custoArrobaProd={ind.custoArrobaProd}
+              cabMediaMes={zooData.cabMediaMes}
+              cabMediaAcum={zooData.cabMediaAcum}
+              rebanhosMensais={zooData.rebanhosMensais}
+              arrobasProduzidasAcum={zooData.arrobasProduzidasAcum}
+              saldoAnterior={zooData.saldoAnterior}
+              saldoFinalMes={zooData.saldoFinalMes}
+              mesFiltro={mesFiltro}
+              isGlobal={isGlobal}
+            />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ================================================================= */}
+      {/* 5. GRÁFICO — Jan → Dez fixo */}
+      {/* ================================================================= */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Entradas vs Saídas — {anoFiltro}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} barGap={2}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(v: number) => formatMoeda(v)} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="Entradas" fill="hsl(120, 40%, 40%)" radius={[2, 2, 0, 0]} />
+                <Bar dataKey="Saídas" fill="hsl(0, 65%, 50%)" radius={[2, 2, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ================================================================= */}
+      {/* 6. QUADRO CENTRO DE CUSTO — 2 colunas */}
+      {/* ================================================================= */}
+      {(ind.ccMes.length > 0 || ind.ccAcum.length > 0) && (
+        <div className="grid grid-cols-2 gap-2">
+          <CentroCustoTable
+            title="Desembolso por Centro — Mês"
+            items={ind.ccMes}
+            cabMedia={zooData.cabMediaMes}
+          />
+          <CentroCustoTable
+            title="Desembolso por Centro — Acumulado"
+            items={ind.ccAcum}
+            cabMedia={zooData.cabMediaAcum}
+            acum
+          />
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* AUDITORIA — expandível */}
+      {/* ================================================================= */}
+      {!isGlobal && (
+        <div className="space-y-2">
+          <button
+            onClick={() => setShowAudit(!showAudit)}
+            className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors"
+          >
+            🔍 Auditoria de lançamentos
+            {showAudit ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </button>
+
+          {showAudit && (
+            <div className="space-y-3">
+              <Card className="border-dashed">
+                <CardContent className="p-3">
+                  <div className="text-xs font-bold mb-2">📊 Lançamentos por Status no período</div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-[10px] px-2 py-1.5">Status</TableHead>
+                        <TableHead className="text-[10px] px-2 py-1.5 text-right">Qtde</TableHead>
+                        <TableHead className="text-[10px] px-2 py-1.5 text-right">Total</TableHead>
+                        <TableHead className="text-[10px] px-2 py-1.5 text-center">Usado?</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {auditStatus.map(s => {
+                        const usado = s.status.toLowerCase() === 'conciliado';
+                        return (
+                          <TableRow key={s.status} className={usado ? 'bg-green-50 dark:bg-green-950/20' : 'opacity-60'}>
+                            <TableCell className="text-[10px] px-2 py-1 font-bold">{s.status}</TableCell>
+                            <TableCell className="text-[10px] px-2 py-1 text-right">{s.count}</TableCell>
+                            <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatMoeda(s.total)}</TableCell>
+                            <TableCell className="text-[10px] px-2 py-1 text-center">{usado ? '✅' : '❌'}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                  <div className="border-t mt-2 pt-2 text-[10px] text-muted-foreground">
+                    Total no período: {todosNoPeriodo.length} · Usados (Conciliado): {filtrados.length}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <AuditTable title="Entradas próprias (1-*)" lancamentos={entradasList} totalLabel="Total entradas" />
+              <AuditTable title="Saídas próprias (2-*)" lancamentos={saidasList} totalLabel="Total saídas" />
+
+              <Card className="bg-muted/50">
+                <CardContent className="p-3 space-y-1">
+                  <div className="text-xs font-bold mb-2">Resumo da composição</div>
+                  <div className="flex justify-between text-xs">
+                    <span>Entradas próprias</span>
+                    <span className="font-bold text-green-700 dark:text-green-400">{formatMoeda(ind.totalEntradas)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span>Saídas próprias</span>
+                    <span className="font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.totalSaidas)}</span>
+                  </div>
+                  {ind.rateioMes > 0 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-amber-600 dark:text-amber-400">+ Rateio ADM</span>
+                      <span className="font-bold text-amber-600 dark:text-amber-400">{formatMoeda(ind.rateioMes)}</span>
+                    </div>
+                  )}
+                  <div className="border-t pt-1 mt-1 flex justify-between text-xs">
+                    <span className="font-bold">Total saídas + rateio</span>
+                    <span className="font-bold">{formatMoeda(ind.saidasComRateio)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           )}
-        </>
+        </div>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sub: Centro de Custo Table
+// ---------------------------------------------------------------------------
+
+function CentroCustoTable({
+  title,
+  items,
+  cabMedia,
+  acum,
+}: {
+  title: string;
+  items: { nome: string; valor: number }[];
+  cabMedia: number | null;
+  acum?: boolean;
+}) {
+  const total = items.reduce((s, i) => s + i.valor, 0);
+
+  return (
+    <Card>
+      <CardContent className="p-2.5">
+        <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
+          <BarChart3 className="h-3 w-3 inline mr-1" />{title}
+        </div>
+        <div className="space-y-0.5">
+          {/* Total line */}
+          <div className="flex items-center justify-between text-[10px] font-bold border-b pb-1 mb-1">
+            <span>TOTAL</span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono">{formatMoeda(total)}</span>
+              <span className="text-muted-foreground w-10 text-right">100%</span>
+              {cabMedia && cabMedia > 0 && (
+                <span className="text-muted-foreground font-mono w-16 text-right">{formatMoeda(total / cabMedia)}/cab</span>
+              )}
+            </div>
+          </div>
+          {/* Items */}
+          {items.map(item => {
+            const pct = total > 0 ? (item.valor / total) * 100 : 0;
+            const isRateio = item.nome === 'Rateio ADM';
+            return (
+              <div key={item.nome} className={`flex items-center justify-between text-[10px] ${isRateio ? 'text-amber-600 dark:text-amber-400' : ''}`}>
+                <span className="truncate mr-2 max-w-[100px]">{item.nome}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold whitespace-nowrap">{formatMoeda(item.valor)}</span>
+                  <span className="text-muted-foreground w-10 text-right">{formatNum(pct, 1)}%</span>
+                  {cabMedia && cabMedia > 0 && (
+                    <span className="text-muted-foreground font-mono w-16 text-right">{formatMoeda(item.valor / cabMedia)}/cab</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
