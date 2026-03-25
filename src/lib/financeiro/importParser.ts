@@ -1,5 +1,5 @@
 /**
- * Parser para importação financeira via Excel — 4 abas.
+ * Parser para importação financeira — aba única EXPORT_APP_UNICO.
  */
 import * as XLSX from 'xlsx';
 
@@ -118,24 +118,15 @@ function inferirEscopo(tipoOp: string | null, macro: string | null): string {
   return 'pecuaria';
 }
 
-function getRows(wb: XLSX.WorkBook, name: string): unknown[][] {
-  if (!wb.SheetNames.includes(name)) return [];
-  const ws = wb.Sheets[name];
-  const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as unknown[][];
-  if (rows.length < 2) return [];
-  return rows.slice(1).filter(r => r.some(c => c !== null && c !== undefined && c !== ''));
-}
+// ── Column index mapping ──
 
-// ── Sheet & column validation ──
+const REQUIRED_COLUMNS = [
+  'Tipo_Registro', 'AnoMes', 'Data_Ref', 'Conta', 'Fazenda',
+  'Tipo', 'Grupo', 'Valor', 'Status', 'Produto',
+  'Fornecedor', 'Macro_Custo', 'Grupo_Custo', 'Centro_Custo', 'Subcentro', 'Obs',
+];
 
-const REQUIRED_SHEETS = ['EXPORT_LANCAMENTOS', 'EXPORT_SALDOS_BANCARIOS', 'EXPORT_CONTAS', 'EXPORT_RESUMO_CAIXA'] as const;
-
-const REQUIRED_COLUMNS: Record<string, string[]> = {
-  EXPORT_LANCAMENTOS: ['AnoMes', 'Data Pagamento', 'Valor', 'Tipo Operação', 'Status Transação', 'Fazenda', 'Macro_Custo', 'Grupo_Custo'],
-  EXPORT_SALDOS_BANCARIOS: ['Conta Banco', 'AnoMes', 'Saldo_Final'],
-  EXPORT_CONTAS: ['Conta_ID', 'Conta_Label', 'Banco'],
-  EXPORT_RESUMO_CAIXA: ['AnoMes', 'Entradas', 'Saidas', 'Saldo_Final_Total'],
-};
+const MINIMUM_REQUIRED = ['Tipo_Registro', 'AnoMes', 'Fazenda', 'Valor'];
 
 export interface ValidacaoEstrutura {
   valido: boolean;
@@ -151,180 +142,155 @@ function getHeaderRow(wb: XLSX.WorkBook, sheetName: string): string[] {
   return (rows[0] || []).map(c => String(c ?? '').trim());
 }
 
+function normalizeCol(s: string): string {
+  return s.toLowerCase().replace(/[_\s]/g, '');
+}
+
 export function validarEstruturaExcel(file: ArrayBuffer): ValidacaoEstrutura {
   const wb = XLSX.read(file, { type: 'array' });
   const abasFaltando: string[] = [];
   const colunasFaltando: { aba: string; colunas: string[] }[] = [];
 
-  for (const sheet of REQUIRED_SHEETS) {
-    if (!wb.SheetNames.includes(sheet)) {
-      abasFaltando.push(sheet);
-      continue;
-    }
-    const headers = getHeaderRow(wb, sheet);
-    const headersLower = headers.map(h => h.toLowerCase().replace(/[_\s]/g, ''));
-    const required = REQUIRED_COLUMNS[sheet];
-    const missing = required.filter(col => {
-      const colNorm = col.toLowerCase().replace(/[_\s]/g, '');
-      return !headersLower.includes(colNorm);
-    });
-    if (missing.length > 0) colunasFaltando.push({ aba: sheet, colunas: missing });
+  if (!wb.SheetNames.includes('EXPORT_APP_UNICO')) {
+    abasFaltando.push('EXPORT_APP_UNICO');
+    return { valido: false, abasFaltando, colunasFaltando };
+  }
+
+  const headers = getHeaderRow(wb, 'EXPORT_APP_UNICO');
+  const headersNorm = headers.map(normalizeCol);
+  const missing = MINIMUM_REQUIRED.filter(col => !headersNorm.includes(normalizeCol(col)));
+  if (missing.length > 0) {
+    colunasFaltando.push({ aba: 'EXPORT_APP_UNICO', colunas: missing });
   }
 
   return { valido: abasFaltando.length === 0 && colunasFaltando.length === 0, abasFaltando, colunasFaltando };
 }
 
-// ── Parse all 4 sheets ──
+// ── Build column index map from header row ──
+
+function buildColMap(headers: string[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (let i = 0; i < headers.length; i++) {
+    const norm = normalizeCol(headers[i]);
+    // Map normalized name to known field
+    for (const col of REQUIRED_COLUMNS) {
+      if (normalizeCol(col) === norm) {
+        map.set(col, i);
+        break;
+      }
+    }
+  }
+  return map;
+}
+
+function col(row: unknown[], colMap: Map<string, number>, name: string): unknown {
+  const idx = colMap.get(name);
+  if (idx === undefined) return null;
+  return row[idx];
+}
+
+// ── Parse single sheet ──
 
 export function parseExcel(file: ArrayBuffer): ResultadoParsing {
   const wb = XLSX.read(file, { type: 'array' });
   const erros: ErroImportacao[] = [];
-  let totalLinhas = 0;
 
-  // ── EXPORT_LANCAMENTOS ──
-  // Also support legacy "DADOS" sheet
-  const lancSheetName = wb.SheetNames.includes('EXPORT_LANCAMENTOS') ? 'EXPORT_LANCAMENTOS'
-    : wb.SheetNames.includes('DADOS') ? 'DADOS' : wb.SheetNames[0];
-  const lancRows = getRows({ ...wb, SheetNames: [lancSheetName], Sheets: { [lancSheetName]: wb.Sheets[lancSheetName] } } as XLSX.WorkBook, lancSheetName);
-  
-  // Re-get rows properly
-  const lancRawRows = (() => {
-    if (!wb.Sheets[lancSheetName]) return [];
-    const ws = wb.Sheets[lancSheetName];
-    const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as unknown[][];
-    if (rows.length < 2) return [];
-    return rows.slice(1).filter(r => r.some(c => c !== null && c !== undefined && c !== ''));
-  })();
+  const sheetName = 'EXPORT_APP_UNICO';
+  const ws = wb.Sheets[sheetName];
+  if (!ws) {
+    return { lancamentos: [], saldosBancarios: [], contas: [], resumoCaixa: [], erros: [{ linha: 0, campo: 'Aba', mensagem: 'EXPORT_APP_UNICO não encontrada' }], totalLinhas: 0 };
+  }
 
-  totalLinhas += lancRawRows.length;
+  const allRows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as unknown[][];
+  if (allRows.length < 2) {
+    return { lancamentos: [], saldosBancarios: [], contas: [], resumoCaixa: [], erros: [], totalLinhas: 0 };
+  }
+
+  const headers = (allRows[0] || []).map(c => String(c ?? '').trim());
+  const colMap = buildColMap(headers);
+  const dataRows = allRows.slice(1).filter(r => r.some(c => c !== null && c !== undefined && c !== ''));
+
   const lancamentos: LinhaImportada[] = [];
+  const saldosBancarios: SaldoBancarioImportado[] = [];
+  const resumoCaixa: ResumoCaixaImportado[] = [];
 
-  for (let i = 0; i < lancRawRows.length; i++) {
-    const r = lancRawRows[i];
+  for (let i = 0; i < dataRows.length; i++) {
+    const r = dataRows[i];
     const linhaNum = i + 2;
+    const tipoRegistro = (str(col(r, colMap, 'Tipo_Registro')) || '').toUpperCase();
+    const anoMes = parseAnoMes(col(r, colMap, 'AnoMes'));
+    const valor = parseValor(col(r, colMap, 'Valor'));
+    const fazenda = str(col(r, colMap, 'Fazenda'));
 
-    // Detect if this is legacy format (col 0 = Data Realização) or new format (col 0 = AnoMes)
-    // New format: AnoMes is YYYY-MM pattern at col 0
-    const col0 = str(r[0]);
-    const isNewFormat = wb.SheetNames.includes('EXPORT_LANCAMENTOS');
+    if (!tipoRegistro) {
+      erros.push({ linha: linhaNum, campo: 'Tipo_Registro', mensagem: 'Tipo de registro ausente', aba: sheetName });
+      continue;
+    }
+    if (!anoMes) erros.push({ linha: linhaNum, campo: 'AnoMes', mensagem: 'Competência inválida ou ausente', aba: sheetName });
+    if (valor === null) erros.push({ linha: linhaNum, campo: 'Valor', mensagem: 'Valor inválido ou ausente', aba: sheetName });
+    if (!fazenda) erros.push({ linha: linhaNum, campo: 'Fazenda', mensagem: 'Código da fazenda ausente', aba: sheetName });
 
-    if (isNewFormat) {
-      // New format: AnoMes, Data Pagamento, Valor, Status, Fazenda, TipoOp, Macro, Grupo, Centro, Subcentro, ContaOrig, ContaDest, Fornecedor, Produto, Obs
-      const anoMes = parseAnoMes(r[0]);
-      const dataPagamento = parseDate(r[1]);
-      const valor = parseValor(r[2]);
-      const fazenda = str(r[4]);
+    if (!anoMes || valor === null || !fazenda) continue;
 
-      if (!anoMes) erros.push({ linha: linhaNum, campo: 'AnoMes', mensagem: 'Competência inválida ou ausente', aba: 'EXPORT_LANCAMENTOS' });
-      if (valor === null) erros.push({ linha: linhaNum, campo: 'Valor', mensagem: 'Valor inválido ou ausente', aba: 'EXPORT_LANCAMENTOS' });
-      if (!fazenda) erros.push({ linha: linhaNum, campo: 'Fazenda', mensagem: 'Código da fazenda ausente', aba: 'EXPORT_LANCAMENTOS' });
-      if (!anoMes || valor === null || !fazenda) continue;
-
-      const tipoOp = str(r[5]);
-      const macro = str(r[6]);
+    if (tipoRegistro === 'LANCAMENTO') {
+      const tipoOp = str(col(r, colMap, 'Tipo'));
+      const macro = str(col(r, colMap, 'Macro_Custo'));
       lancamentos.push({
-        linha: linhaNum, anoMes, dataPagamento, valor,
-        statusTransacao: str(r[3]), fazenda, fazendaId: null,
-        tipoOperacao: tipoOp, macroCusto: macro, grupoCusto: str(r[7]),
-        centroCusto: str(r[8]), subcentro: str(r[9]),
-        contaOrigem: str(r[10]), contaDestino: str(r[11]),
-        fornecedor: str(r[12]), produto: str(r[13]), obs: str(r[14]),
+        linha: linhaNum,
+        anoMes,
+        dataPagamento: parseDate(col(r, colMap, 'Data_Ref')),
+        valor,
+        statusTransacao: str(col(r, colMap, 'Status')),
+        fazenda,
+        fazendaId: null,
+        tipoOperacao: tipoOp,
+        macroCusto: macro,
+        grupoCusto: str(col(r, colMap, 'Grupo_Custo')),
+        centroCusto: str(col(r, colMap, 'Centro_Custo')),
+        subcentro: str(col(r, colMap, 'Subcentro')),
+        contaOrigem: str(col(r, colMap, 'Conta')),
+        contaDestino: null,
+        fornecedor: str(col(r, colMap, 'Fornecedor')),
+        produto: str(col(r, colMap, 'Produto')),
+        obs: str(col(r, colMap, 'Obs')),
         escopoNegocio: inferirEscopo(tipoOp, macro),
+      });
+    } else if (tipoRegistro === 'SALDO') {
+      const conta = str(col(r, colMap, 'Conta'));
+      if (!conta) {
+        erros.push({ linha: linhaNum, campo: 'Conta', mensagem: 'Conta bancária obrigatória para SALDO', aba: sheetName });
+        continue;
+      }
+      saldosBancarios.push({
+        linha: linhaNum,
+        contaBanco: conta,
+        anoMes,
+        saldoFinal: valor,
+        fazenda,
+        fazendaId: null,
+      });
+    } else if (tipoRegistro === 'RESUMO') {
+      // Parse entradas/saidas/saldo from Obs or use valor
+      const obsText = str(col(r, colMap, 'Obs')) || '';
+      const entMatch = obsText.match(/Entradas\s*=\s*([\d.]+)/i);
+      const saiMatch = obsText.match(/Saidas\s*=\s*([\d.]+)/i);
+      const salMatch = obsText.match(/Saldo\s*=\s*([\d.]+)/i);
+
+      resumoCaixa.push({
+        linha: linhaNum,
+        anoMes,
+        entradas: entMatch ? parseFloat(entMatch[1]) : (valor > 0 ? valor : 0),
+        saidas: saiMatch ? parseFloat(saiMatch[1]) : 0,
+        saldoFinalTotal: salMatch ? parseFloat(salMatch[1]) : valor,
+        fazenda,
+        fazendaId: null,
       });
     } else {
-      // Legacy format: Data Realizacao(0), Data Pagamento(1), Produto(2), Fornecedor(3), Valor(4), Status(5), Fazenda(6), TipoOp(7), ContaOrig(8), ContaDest(9), Macro(10), Grupo(11), Centro(12), Subcentro(13), NF(14), Mes(15), CNPJ(16), Recorr(17), FormaPag(18), Obs(19), Ano(20), Mes(21), AnoMes(22)
-      const dataRealizacao = parseDate(r[0]);
-      const valor = parseValor(r[4]);
-      const anoMes = parseAnoMes(r[22]);
-      const fazenda = str(r[6]);
-
-      if (!dataRealizacao) erros.push({ linha: linhaNum, campo: 'Data Realização', mensagem: 'Data inválida ou ausente', aba: 'DADOS' });
-      if (valor === null) erros.push({ linha: linhaNum, campo: 'Valor', mensagem: 'Valor inválido ou ausente', aba: 'DADOS' });
-      if (!anoMes) erros.push({ linha: linhaNum, campo: 'AnoMes', mensagem: 'Competência inválida ou ausente', aba: 'DADOS' });
-      if (!fazenda) erros.push({ linha: linhaNum, campo: 'Fazenda', mensagem: 'Código da fazenda ausente', aba: 'DADOS' });
-      if (!dataRealizacao || valor === null || !anoMes || !fazenda) continue;
-
-      const tipoOp = str(r[7]);
-      const macro = str(r[10]);
-      lancamentos.push({
-        linha: linhaNum, anoMes,
-        dataPagamento: parseDate(r[1]), valor,
-        statusTransacao: str(r[5]), fazenda, fazendaId: null,
-        tipoOperacao: tipoOp, macroCusto: macro, grupoCusto: str(r[11]),
-        centroCusto: str(r[12]), subcentro: str(r[13]),
-        contaOrigem: str(r[8]), contaDestino: str(r[9]),
-        fornecedor: str(r[3]), produto: str(r[2]), obs: str(r[19]),
-        escopoNegocio: inferirEscopo(tipoOp, macro),
-      });
+      erros.push({ linha: linhaNum, campo: 'Tipo_Registro', mensagem: `Tipo desconhecido: "${tipoRegistro}". Use LANCAMENTO, SALDO ou RESUMO`, aba: sheetName });
     }
   }
 
-  // ── EXPORT_SALDOS_BANCARIOS ──
-  const saldoRows = getRows(wb, 'EXPORT_SALDOS_BANCARIOS');
-  totalLinhas += saldoRows.length;
-  const saldosBancarios: SaldoBancarioImportado[] = [];
-
-  for (let i = 0; i < saldoRows.length; i++) {
-    const r = saldoRows[i];
-    const linhaNum = i + 2;
-    const contaBanco = str(r[0]);
-    const anoMes = parseAnoMes(r[1]);
-    const saldoFinal = parseValor(r[2]);
-
-    if (!contaBanco) erros.push({ linha: linhaNum, campo: 'Conta Banco', mensagem: 'Nome da conta ausente', aba: 'EXPORT_SALDOS_BANCARIOS' });
-    if (!anoMes) erros.push({ linha: linhaNum, campo: 'AnoMes', mensagem: 'Competência inválida', aba: 'EXPORT_SALDOS_BANCARIOS' });
-    if (saldoFinal === null) erros.push({ linha: linhaNum, campo: 'Saldo_Final', mensagem: 'Saldo inválido', aba: 'EXPORT_SALDOS_BANCARIOS' });
-    if (!contaBanco || !anoMes || saldoFinal === null) continue;
-
-    saldosBancarios.push({ linha: linhaNum, contaBanco, anoMes, saldoFinal, fazenda: null, fazendaId: null });
-  }
-
-  // ── EXPORT_CONTAS ──
-  const contasRows = getRows(wb, 'EXPORT_CONTAS');
-  totalLinhas += contasRows.length;
-  const contas: ContaImportada[] = [];
-
-  for (let i = 0; i < contasRows.length; i++) {
-    const r = contasRows[i];
-    const linhaNum = i + 2;
-    const contaId = str(r[0]);
-    const contaLabel = str(r[1]);
-
-    if (!contaId) erros.push({ linha: linhaNum, campo: 'Conta_ID', mensagem: 'ID da conta ausente', aba: 'EXPORT_CONTAS' });
-    if (!contaLabel) erros.push({ linha: linhaNum, campo: 'Conta_Label', mensagem: 'Nome da conta ausente', aba: 'EXPORT_CONTAS' });
-    if (!contaId || !contaLabel) continue;
-
-    contas.push({
-      linha: linhaNum, contaId, contaLabel,
-      banco: str(r[2]), instrumento: str(r[3]),
-      agenciaConta: str(r[4]), uso: str(r[5]),
-      fazenda: null, fazendaId: null,
-    });
-  }
-
-  // ── EXPORT_RESUMO_CAIXA ──
-  const resumoRows = getRows(wb, 'EXPORT_RESUMO_CAIXA');
-  totalLinhas += resumoRows.length;
-  const resumoCaixa: ResumoCaixaImportado[] = [];
-
-  for (let i = 0; i < resumoRows.length; i++) {
-    const r = resumoRows[i];
-    const linhaNum = i + 2;
-    const anoMes = parseAnoMes(r[0]);
-    const entradas = parseValor(r[1]);
-    const saidas = parseValor(r[2]);
-    const saldoFinalTotal = parseValor(r[3]);
-
-    if (!anoMes) erros.push({ linha: linhaNum, campo: 'AnoMes', mensagem: 'Competência inválida', aba: 'EXPORT_RESUMO_CAIXA' });
-    if (entradas === null) erros.push({ linha: linhaNum, campo: 'Entradas', mensagem: 'Valor inválido', aba: 'EXPORT_RESUMO_CAIXA' });
-    if (saidas === null) erros.push({ linha: linhaNum, campo: 'Saidas', mensagem: 'Valor inválido', aba: 'EXPORT_RESUMO_CAIXA' });
-    if (saldoFinalTotal === null) erros.push({ linha: linhaNum, campo: 'Saldo_Final_Total', mensagem: 'Valor inválido', aba: 'EXPORT_RESUMO_CAIXA' });
-    if (!anoMes || entradas === null || saidas === null || saldoFinalTotal === null) continue;
-
-    resumoCaixa.push({ linha: linhaNum, anoMes, entradas, saidas, saldoFinalTotal, fazenda: null, fazendaId: null });
-  }
-
-  return { lancamentos, saldosBancarios, contas, resumoCaixa, erros, totalLinhas };
+  return { lancamentos, saldosBancarios, contas: [], resumoCaixa, erros, totalLinhas: dataRows.length };
 }
 
 // ── Fazenda resolution ──
@@ -356,6 +322,35 @@ export function resolverFazendas(
       erros.push({ linha: l.linha, campo: 'Fazenda', mensagem: `Código "${l.fazenda}" não encontrado` });
     }
   }
+  return erros;
+}
+
+/** Resolve fazenda for saldos and resumo too */
+export function resolverFazendasExtras(
+  saldos: SaldoBancarioImportado[],
+  resumo: ResumoCaixaImportado[],
+  fazendas: FazendaMap[],
+): ErroImportacao[] {
+  const erros: ErroImportacao[] = [];
+  const mapaCode = new Map<string, string>();
+  for (const f of fazendas) {
+    mapaCode.set(f.codigo.toLowerCase().trim(), f.id);
+  }
+
+  for (const s of saldos) {
+    if (!s.fazenda) continue;
+    const id = mapaCode.get(s.fazenda.toLowerCase().trim());
+    if (id) { s.fazendaId = id; }
+    else { erros.push({ linha: s.linha, campo: 'Fazenda', mensagem: `Código "${s.fazenda}" não encontrado (SALDO)` }); }
+  }
+
+  for (const r of resumo) {
+    if (!r.fazenda) continue;
+    const id = mapaCode.get(r.fazenda.toLowerCase().trim());
+    if (id) { r.fazendaId = id; }
+    else { erros.push({ linha: r.linha, campo: 'Fazenda', mensagem: `Código "${r.fazenda}" não encontrado (RESUMO)` }); }
+  }
+
   return erros;
 }
 
