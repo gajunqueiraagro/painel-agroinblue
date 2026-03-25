@@ -47,12 +47,12 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho, tota
         </div>
 
         {/* Diagnóstico */}
-        <Card className="border-amber-500/50 bg-amber-500/5">
+        <Card className="border-border bg-muted/40">
           <CardContent className="p-3 space-y-2">
             <div className="flex items-start gap-2">
-              <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+              <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
               <div className="text-xs space-y-1">
-                <p className="font-bold text-amber-700">Diagnóstico</p>
+                <p className="font-bold">Diagnóstico</p>
                 <p>Lançamentos ADM carregados: <strong>{totalLancamentosADM}</strong></p>
                 <p className="text-muted-foreground mt-1">Critérios para entrar no rateio:</p>
                 <ul className="list-disc pl-4 text-muted-foreground space-y-0.5">
@@ -69,7 +69,7 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho, tota
                 </p>
                 {totalLancamentosADM > 0 && (
                   <p className="text-destructive mt-1">
-                    ⚠ Existem {totalLancamentosADM} lançamentos ADM, mas nenhum atendeu todos os critérios acima.
+                    ⚠ Existem {totalLancamentosADM} lançamentos ADM carregados, mas nenhum atendeu todos os critérios acima.
                     Verifique se o campo Status está como "Conciliado" e se o Tipo começa com "2".
                   </p>
                 )}
@@ -139,16 +139,41 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho, tota
 
       {dados && (
         <>
-          {/* Total ADM conciliado */}
+          {/* Totais do rateio no período */}
           <Card>
-            <CardContent className="p-3">
-              <div className="text-xs text-muted-foreground mb-1">Total ADM Conciliado (Saídas)</div>
-              <p className="text-xl font-bold">{formatMoeda(dados.totalADMConciliado)}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                Fazenda ADM · Tipo = 2-Saídas · Status = Conciliado · Data_Ref em {dados.anoMes}
-              </p>
+            <CardContent className="p-3 space-y-2">
+              <div className="text-xs text-muted-foreground">Resumo ADM do período ({dados.anoMes})</div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                <div className="rounded-md bg-muted p-2">
+                  <p className="text-muted-foreground">ADM encontrado</p>
+                  <p className="font-bold">{formatMoeda(dados.totalADMEncontrado)}</p>
+                  <p className="text-[10px] text-muted-foreground">{dados.qtdADMEncontrado} lançamento(s)</p>
+                </div>
+                <div className="rounded-md bg-muted p-2">
+                  <p className="text-muted-foreground">Elegível no rateio produtivo</p>
+                  <p className="font-bold">{formatMoeda(dados.totalADMElegivel)}</p>
+                  <p className="text-[10px] text-muted-foreground">{dados.qtdADMElegivel} lançamento(s)</p>
+                </div>
+                <div className="rounded-md bg-muted p-2">
+                  <p className="text-muted-foreground">Excluído do rateio</p>
+                  <p className="font-bold">{formatMoeda(dados.totalADMExcluido)}</p>
+                  <p className="text-[10px] text-muted-foreground">{dados.qtdADMExcluido} lançamento(s)</p>
+                </div>
+              </div>
+              {dados.gruposExcluidos.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground mb-1">Grupos excluídos (resumo)</p>
+                  <div className="flex flex-wrap gap-1">
+                    {dados.gruposExcluidos.slice(0, 6).map(g => (
+                      <span key={g.grupo} className="text-[10px] rounded-full bg-muted px-2 py-0.5">
+                        {g.grupo}: {formatMoeda(g.valor)} ({g.quantidade})
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
               <p className="text-[10px] text-muted-foreground">
-                {dados.lancamentosUsados.length} lançamento(s) no total
+                Filtro base: ADM + Tipo 2-Saídas + Status Conciliado + Data_Ref preenchida · Elegível: Macro_Custo em Custeio Produtivo ou Investimento na Fazenda.
               </p>
             </CardContent>
           </Card>
@@ -197,8 +222,8 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho, tota
                   </Table>
                 </div>
                 <div className="border-t mt-2 pt-2 flex justify-between text-xs">
-                  <span className="font-bold">{dados.lancamentosUsados.length} lançamentos</span>
-                  <span className="font-bold">{formatMoeda(dados.totalADMConciliado)}</span>
+                  <span className="font-bold">{dados.lancamentosUsados.length} lançamentos elegíveis</span>
+                  <span className="font-bold">{formatMoeda(dados.totalADMElegivel)}</span>
                 </div>
               </CardContent>
             )}
@@ -222,7 +247,7 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho, tota
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-2.5 bg-muted rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-amber-500 rounded-full transition-all"
+                          className="h-full bg-primary rounded-full transition-all"
                           style={{ width: `${Math.min(f.percentual, 100)}%` }}
                         />
                       </div>

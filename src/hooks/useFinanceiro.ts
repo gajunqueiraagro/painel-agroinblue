@@ -73,7 +73,17 @@ export interface RateioADM {
 /** Dados completos do rateio para conferência (todas as fazendas) */
 export interface RateioADMConferencia {
   anoMes: string;
-  totalADMConciliado: number;
+  totalADMEncontrado: number;
+  totalADMElegivel: number;
+  totalADMExcluido: number;
+  qtdADMEncontrado: number;
+  qtdADMElegivel: number;
+  qtdADMExcluido: number;
+  gruposExcluidos: {
+    grupo: string;
+    valor: number;
+    quantidade: number;
+  }[];
   lancamentosUsados: {
     dataRef: string | null;
     dataPagamento: string | null;
@@ -84,6 +94,7 @@ export interface RateioADMConferencia {
     tipoOperacao: string | null;
     contaOrigem: string | null;
     contaDestino: string | null;
+    macroCusto: string | null;
   }[];
   fazendas: {
     fazendaId: string;
@@ -129,15 +140,23 @@ export const isReceita = (l: FinanceiroLancamento) => {
   return tipo === 'receita' || tipo.startsWith('1');
 };
 
-/** ADM lancamento qualifies for rateio:
- *  - Status = Conciliado
- *  - Tipo começa com "2" (saída)
- *  - Data_Ref (data_realizacao) preenchida
- */
-const isADMConciliado = (l: FinanceiroLancamento) =>
-  (l.status_transacao || '').toLowerCase() === 'conciliado' &&
+const MACROS_RATEIO_ADM_PRODUTIVO = new Set([
+  'custeio produtivo',
+  'investimento na fazenda',
+]);
+
+/** Base ADM para avaliação de rateio */
+const isADMBaseRateio = (l: FinanceiroLancamento) =>
+  (l.status_transacao || '').toLowerCase().trim() === 'conciliado' &&
   (l.tipo_operacao || '').startsWith('2') &&
   !!l.data_realizacao;
+
+/** Elegível no rateio ADM produtivo */
+const isADMElegivelRateioProdutivo = (l: FinanceiroLancamento) => {
+  if (!isADMBaseRateio(l)) return false;
+  const macro = (l.macro_custo || '').toLowerCase().trim();
+  return MACROS_RATEIO_ADM_PRODUTIVO.has(macro);
+};
 
 /** Extract YYYY-MM from a date string */
 const dateToAnoMes = (dateStr: string | null | undefined): string | null => {
@@ -332,7 +351,7 @@ export function useFinanceiro() {
     // Collect all YYYY-MM from ADM lancamentos conciliados
     const mesesADM = new Set<string>();
     for (const l of lancamentosADM) {
-      if (!isADMConciliado(l)) continue;
+      if (!isADMBaseRateio(l)) continue;
       const am = dataRefRateio(l);
       if (am) mesesADM.add(am);
     }
@@ -358,7 +377,7 @@ export function useFinanceiro() {
 
     const admPorMes = new Map<string, number>();
     for (const l of lancamentosADM) {
-      if (!isADMConciliado(l)) continue;
+      if (!isADMElegivelRateioProdutivo(l)) continue;
       const am = dataRefRateio(l);
       if (!am) continue;
       admPorMes.set(am, (admPorMes.get(am) || 0) + Math.abs(l.valor));
@@ -383,7 +402,7 @@ export function useFinanceiro() {
     const admNomeFazenda = fazendaADM.nome;
     const admPorMes = new Map<string, FinanceiroLancamento[]>();
     for (const l of lancamentosADM) {
-      if (!isADMConciliado(l)) continue;
+      if (!isADMBaseRateio(l)) continue;
       const am = dataRefRateio(l);
       if (!am) continue;
       const arr = admPorMes.get(am) || [];
@@ -394,7 +413,27 @@ export function useFinanceiro() {
     return Array.from(admPorMes.entries())
       .sort(([a], [b]) => b.localeCompare(a))
       .map(([anoMes, lancs]) => {
-        const totalADM = lancs.reduce((s, l) => s + Math.abs(l.valor), 0);
+        const lancsElegiveis = lancs.filter(isADMElegivelRateioProdutivo);
+
+        const totalADMEncontrado = lancs.reduce((s, l) => s + Math.abs(l.valor), 0);
+        const totalADMElegivel = lancsElegiveis.reduce((s, l) => s + Math.abs(l.valor), 0);
+        const totalADMExcluido = totalADMEncontrado - totalADMElegivel;
+
+        const gruposExcluidosMap = new Map<string, { valor: number; quantidade: number }>();
+        for (const l of lancs) {
+          if (isADMElegivelRateioProdutivo(l)) continue;
+          const grupo = (l.macro_custo || 'Não informado').trim() || 'Não informado';
+          const atual = gruposExcluidosMap.get(grupo) || { valor: 0, quantidade: 0 };
+          gruposExcluidosMap.set(grupo, {
+            valor: atual.valor + Math.abs(l.valor),
+            quantidade: atual.quantidade + 1,
+          });
+        }
+
+        const gruposExcluidos = Array.from(gruposExcluidosMap.entries())
+          .map(([grupo, dados]) => ({ grupo, valor: dados.valor, quantidade: dados.quantidade }))
+          .sort((a, b) => b.valor - a.valor);
+
         const fazMap = rebanhoMedioPorFazendaMes.get(anoMes);
         const rebanhoTotal = fazMap ? Array.from(fazMap.values()).reduce((s, v) => s + v, 0) : 0;
 
@@ -403,7 +442,7 @@ export function useFinanceiro() {
           .map(f => {
             const rm = fazMap!.get(f.id) || 0;
             const pct = rebanhoTotal > 0 ? (rm / rebanhoTotal) * 100 : 0;
-            return { fazendaId: f.id, fazendaNome: f.nome, rebanhoMedio: rm, percentual: pct, valorRateado: totalADM * (pct / 100) };
+            return { fazendaId: f.id, fazendaNome: f.nome, rebanhoMedio: rm, percentual: pct, valorRateado: totalADMElegivel * (pct / 100) };
           });
 
         const semRebanho = fazendasOperacionais
@@ -412,11 +451,24 @@ export function useFinanceiro() {
 
         return {
           anoMes,
-          totalADMConciliado: totalADM,
-          lancamentosUsados: lancs.map(l => ({
-            dataRef: l.data_realizacao, dataPagamento: l.data_pagamento, produto: l.produto, valor: Math.abs(l.valor),
-            statusTransacao: l.status_transacao, fazenda: admNomeFazenda,
-            tipoOperacao: l.tipo_operacao, contaOrigem: l.conta_origem, contaDestino: l.conta_destino,
+          totalADMEncontrado,
+          totalADMElegivel,
+          totalADMExcluido,
+          qtdADMEncontrado: lancs.length,
+          qtdADMElegivel: lancsElegiveis.length,
+          qtdADMExcluido: lancs.length - lancsElegiveis.length,
+          gruposExcluidos,
+          lancamentosUsados: lancsElegiveis.map(l => ({
+            dataRef: l.data_realizacao,
+            dataPagamento: l.data_pagamento,
+            produto: l.produto,
+            valor: Math.abs(l.valor),
+            statusTransacao: l.status_transacao,
+            fazenda: admNomeFazenda,
+            tipoOperacao: l.tipo_operacao,
+            contaOrigem: l.conta_origem,
+            contaDestino: l.conta_destino,
+            macroCusto: l.macro_custo,
           })),
           fazendas: fazendasComRebanho,
           fazendasSemRebanho: semRebanho,
