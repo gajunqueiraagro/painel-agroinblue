@@ -8,6 +8,7 @@ export interface Fazenda {
   nome: string;
   owner_id: string;
   codigo_importacao?: string | null;
+  tem_pecuaria?: boolean;
   papel?: string;
 }
 
@@ -42,7 +43,7 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
     try {
       const { data: membros } = await supabase
         .from('fazenda_membros')
-        .select('fazenda_id, papel, fazendas(id, nome, owner_id, codigo_importacao)')
+        .select('fazenda_id, papel, fazendas(id, nome, owner_id, codigo_importacao, tem_pecuaria)')
         .eq('user_id', user.id);
 
       if (membros && membros.length > 0) {

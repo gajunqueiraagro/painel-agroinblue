@@ -1,0 +1,1 @@
+ALTER TABLE public.fazendas ADD COLUMN tem_pecuaria boolean NOT NULL DEFAULT true;

@@ -180,6 +180,7 @@ export type Database = {
           id: string
           nome: string
           owner_id: string
+          tem_pecuaria: boolean
         }
         Insert: {
           codigo_importacao?: string | null
@@ -187,6 +188,7 @@ export type Database = {
           id?: string
           nome: string
           owner_id: string
+          tem_pecuaria?: boolean
         }
         Update: {
           codigo_importacao?: string | null
@@ -194,6 +196,7 @@ export type Database = {
           id?: string
           nome?: string
           owner_id?: string
+          tem_pecuaria?: boolean
         }
         Relationships: []
       }
