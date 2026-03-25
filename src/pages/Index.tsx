@@ -90,11 +90,17 @@ const Index = () => {
 
   const handleTabChange = useCallback((tab: TabId) => {
     if (tab !== 'financeiro') setSubAbaFinanceiro(undefined);
+    if (tab !== 'lancamentos') setLancamentosFromConciliacao(false);
     setActiveTab(tab);
   }, []);
 
   const goToResumo = useCallback(() => setActiveTab('resumo'), []);
   const goToZootecnico = useCallback(() => setActiveTab('zootecnico'), []);
+  const goToConciliacaoCategoria = useCallback(() => setActiveTab('conciliacao_categoria'), []);
+  const goToReclassFromConciliacao = useCallback(() => {
+    setLancamentosFromConciliacao(true);
+    setActiveTab('lancamentos');
+  }, []);
 
   // Hide header for sub-screens that have their own back nav
   const isSubScreen = ['zootecnico', 'analise_economica', 'fin_caixa', 'valor_rebanho', 'conciliacao_categoria'].includes(activeTab);
