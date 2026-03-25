@@ -377,7 +377,7 @@ export function useFinanceiro() {
 
     const admPorMes = new Map<string, number>();
     for (const l of lancamentosADM) {
-      if (!isADMConciliado(l)) continue;
+      if (!isADMElegivelRateioProdutivo(l)) continue;
       const am = dataRefRateio(l);
       if (!am) continue;
       admPorMes.set(am, (admPorMes.get(am) || 0) + Math.abs(l.valor));
