@@ -74,9 +74,19 @@ function FinanceiroCard({ financeiro, onTabChange }: { financeiro: ReturnType<ty
           <span className="font-semibold text-red-600 dark:text-red-400">{formatMoeda(financeiro.totalSaidas)}</span>
         </div>
         <div className="flex justify-between border-t border-border pt-1">
-          <span className="text-muted-foreground font-semibold">Saldo</span>
-          <span className={`font-bold ${financeiro.saldoCaixa >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-            {formatMoeda(financeiro.saldoCaixa)}
+          <span className="text-muted-foreground font-semibold">Resultado</span>
+          <span className={`font-bold ${financeiro.resultado >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+            {formatMoeda(financeiro.resultado)}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Saldo Inicial</span>
+          <span className="font-semibold text-card-foreground">{formatMoeda(financeiro.saldoInicial)}</span>
+        </div>
+        <div className="flex justify-between border-t border-border pt-1">
+          <span className="text-muted-foreground font-bold">Caixa Atual</span>
+          <span className={`font-extrabold ${financeiro.caixaAtual >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+            {formatMoeda(financeiro.caixaAtual)}
           </span>
         </div>
       </div>
@@ -101,7 +111,15 @@ function FinanceiroCard({ financeiro, onTabChange }: { financeiro: ReturnType<ty
           <div><strong>Lançamentos filtrados:</strong> {a.totalLancamentosFiltrados}</div>
           <div><strong>Entradas:</strong> {a.qtdEntradas} lanç. → {formatMoeda(financeiro.totalEntradas)}</div>
           <div><strong>Saídas:</strong> {a.qtdSaidas} lanç. → {formatMoeda(financeiro.totalSaidas)}</div>
-          <div><strong>Saldo:</strong> {a.saldoOrigem}</div>
+          <div className="border-t border-border pt-1 mt-1">
+            <strong>Saldo Inicial:</strong> {formatMoeda(financeiro.saldoInicial)}
+          </div>
+          <div><strong>Período saldo:</strong> {a.saldoInicialPeriodo}</div>
+          <div><strong>Registros SALDO:</strong> {a.saldoInicialRegistros}</div>
+          {a.saldoInicialContas.length > 0 && (
+            <div><strong>Contas:</strong> {a.saldoInicialContas.join(', ')}</div>
+          )}
+          <div><strong>Caixa:</strong> {a.saldoOrigem}</div>
         </div>
       )}
 
