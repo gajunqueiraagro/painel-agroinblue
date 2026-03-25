@@ -413,7 +413,27 @@ export function useFinanceiro() {
     return Array.from(admPorMes.entries())
       .sort(([a], [b]) => b.localeCompare(a))
       .map(([anoMes, lancs]) => {
-        const totalADM = lancs.reduce((s, l) => s + Math.abs(l.valor), 0);
+        const lancsElegiveis = lancs.filter(isADMElegivelRateioProdutivo);
+
+        const totalADMEncontrado = lancs.reduce((s, l) => s + Math.abs(l.valor), 0);
+        const totalADMElegivel = lancsElegiveis.reduce((s, l) => s + Math.abs(l.valor), 0);
+        const totalADMExcluido = totalADMEncontrado - totalADMElegivel;
+
+        const gruposExcluidosMap = new Map<string, { valor: number; quantidade: number }>();
+        for (const l of lancs) {
+          if (isADMElegivelRateioProdutivo(l)) continue;
+          const grupo = (l.macro_custo || 'Não informado').trim() || 'Não informado';
+          const atual = gruposExcluidosMap.get(grupo) || { valor: 0, quantidade: 0 };
+          gruposExcluidosMap.set(grupo, {
+            valor: atual.valor + Math.abs(l.valor),
+            quantidade: atual.quantidade + 1,
+          });
+        }
+
+        const gruposExcluidos = Array.from(gruposExcluidosMap.entries())
+          .map(([grupo, dados]) => ({ grupo, valor: dados.valor, quantidade: dados.quantidade }))
+          .sort((a, b) => b.valor - a.valor);
+
         const fazMap = rebanhoMedioPorFazendaMes.get(anoMes);
         const rebanhoTotal = fazMap ? Array.from(fazMap.values()).reduce((s, v) => s + v, 0) : 0;
 
@@ -422,7 +442,7 @@ export function useFinanceiro() {
           .map(f => {
             const rm = fazMap!.get(f.id) || 0;
             const pct = rebanhoTotal > 0 ? (rm / rebanhoTotal) * 100 : 0;
-            return { fazendaId: f.id, fazendaNome: f.nome, rebanhoMedio: rm, percentual: pct, valorRateado: totalADM * (pct / 100) };
+            return { fazendaId: f.id, fazendaNome: f.nome, rebanhoMedio: rm, percentual: pct, valorRateado: totalADMElegivel * (pct / 100) };
           });
 
         const semRebanho = fazendasOperacionais
@@ -431,11 +451,24 @@ export function useFinanceiro() {
 
         return {
           anoMes,
-          totalADMConciliado: totalADM,
-          lancamentosUsados: lancs.map(l => ({
-            dataRef: l.data_realizacao, dataPagamento: l.data_pagamento, produto: l.produto, valor: Math.abs(l.valor),
-            statusTransacao: l.status_transacao, fazenda: admNomeFazenda,
-            tipoOperacao: l.tipo_operacao, contaOrigem: l.conta_origem, contaDestino: l.conta_destino,
+          totalADMEncontrado,
+          totalADMElegivel,
+          totalADMExcluido,
+          qtdADMEncontrado: lancs.length,
+          qtdADMElegivel: lancsElegiveis.length,
+          qtdADMExcluido: lancs.length - lancsElegiveis.length,
+          gruposExcluidos,
+          lancamentosUsados: lancsElegiveis.map(l => ({
+            dataRef: l.data_realizacao,
+            dataPagamento: l.data_pagamento,
+            produto: l.produto,
+            valor: Math.abs(l.valor),
+            statusTransacao: l.status_transacao,
+            fazenda: admNomeFazenda,
+            tipoOperacao: l.tipo_operacao,
+            contaOrigem: l.conta_origem,
+            contaDestino: l.conta_destino,
+            macroCusto: l.macro_custo,
           })),
           fazendas: fazendasComRebanho,
           fazendasSemRebanho: semRebanho,
