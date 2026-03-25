@@ -171,8 +171,6 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
                 pastos={pastos}
                 categorias={categorias}
                 fazendaId={fazendaId}
-                anoInicial={localAno}
-                mesInicial={localMes}
               />
             </div>
           )}
