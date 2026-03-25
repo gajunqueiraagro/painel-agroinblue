@@ -1,102 +1,120 @@
 /**
- * Geração do modelo Excel padrão para importação financeira.
+ * Modelo Excel com 4 abas de exportação para importação financeira.
  */
 import * as XLSX from 'xlsx';
 
-const COLUNAS = [
-  'Data Realização',
-  'Data Pagamento',
-  'Produto',
-  'Fornecedor',
-  'Valor',
-  'Status Transação',
-  'Fazenda',
-  'Tipo Operação',
-  'Conta Origem',
-  'Conta Destino',
-  'Macro_Custo',
-  'Grupo_Custo',
-  'Centro_Custo',
-  'Subcentro',
-  'Nota Fiscal',
-  'Mês',
-  'CNPJ/CPF',
-  'Recorrência',
-  'Forma de Pagamento',
-  'Obs',
-  'Ano',
-  'Mes',
-  'AnoMes',
+// ── EXPORT_LANCAMENTOS ──
+const LANC_COLS = [
+  'AnoMes', 'Data Pagamento', 'Valor', 'Status Transação', 'Fazenda',
+  'Tipo Operação', 'Macro_Custo', 'Grupo_Custo', 'Centro_Custo', 'Subcentro',
+  'Conta Origem', 'Conta Destino', 'Fornecedor', 'Produto', 'Obs',
 ];
 
-const EXEMPLO_1 = [
-  '2026-01-15', '2026-02-05', 'Sal mineral', 'Agro Nutrição Ltda', 4500.00,
-  'Pago', 'Fazenda Exemplo', 'Custo', 'Banco do Brasil', '', 'Nutrição',
-  'Suplementação', 'Sal mineral', 'Proteinado', 'NF-001234', 'Janeiro',
-  '12.345.678/0001-99', 'Mensal', 'Boleto', 'Entrega mensal', 2026, 1, '2026-01',
+const LANC_EX1 = [
+  '2026-01', '2026-02-05', 4500.00, 'Pago', '3M',
+  '2-Saídas', 'Custeio Produtivo', 'Nutrição', 'Sal mineral', 'Proteinado',
+  'Banco do Brasil', '', 'Agro Nutrição Ltda', 'Sal mineral', 'Entrega mensal',
 ];
 
-const EXEMPLO_2 = [
-  '2026-02-10', '2026-02-10', 'Vacina aftosa', 'Vet Saúde Animal', 2800.00,
-  'Pago', 'Fazenda Exemplo', 'Custo', 'Sicredi', '', 'Sanidade',
-  'Vacinação', 'Vacina obrigatória', '', 'NF-005678', 'Fevereiro',
-  '98.765.432/0001-10', 'Semestral', 'PIX', 'Campanha mai/2026', 2026, 2, '2026-02',
+const LANC_EX2 = [
+  '2026-02', '2026-02-10', 2800.00, 'Conciliado', 'BG',
+  '2-Saídas', 'Custeio Produtivo', 'Sanidade', 'Vacinação', '',
+  'Sicredi', '', 'Vet Saúde Animal', 'Vacina aftosa', 'Campanha mai/2026',
 ];
 
+// ── EXPORT_SALDOS_BANCARIOS ──
+const SALDO_COLS = ['Conta Banco', 'AnoMes', 'Saldo_Final'];
+const SALDO_EX1 = ['Banco do Brasil', '2026-01', 125000.00];
+const SALDO_EX2 = ['Sicredi', '2026-01', 43200.50];
+
+// ── EXPORT_CONTAS ──
+const CONTAS_COLS = ['Conta_ID', 'Conta_Label', 'Banco', 'Instrumento', 'Agencia/Conta', 'Uso'];
+const CONTAS_EX1 = ['BB_CC', 'BB Conta Corrente', 'Banco do Brasil', 'Conta Corrente', '1234/56789-0', 'Operacional'];
+const CONTAS_EX2 = ['SIC_PJ', 'Sicredi PJ', 'Sicredi', 'Conta Corrente', '0101/98765-4', 'Operacional'];
+
+// ── EXPORT_RESUMO_CAIXA ──
+const RESUMO_COLS = ['AnoMes', 'Entradas', 'Saidas', 'Saldo_Final_Total'];
+const RESUMO_EX1 = ['2026-01', 85000.00, 62000.00, 168200.50];
+const RESUMO_EX2 = ['2026-02', 120000.00, 74300.00, 213900.50];
+
+// ── INSTRUÇÕES ──
 const INSTRUCOES = [
-  ['INSTRUÇÕES DE PREENCHIMENTO DO MODELO FINANCEIRO'],
+  ['INSTRUÇÕES — MODELO FINANCEIRO SIMPLIFICADO'],
   [],
+  ['Este modelo possui 4 abas de exportação. Preencha cada aba conforme instruções abaixo.'],
+  [],
+  ['═══════════════════════════════════════════════════════════'],
+  ['ABA: EXPORT_LANCAMENTOS'],
+  ['═══════════════════════════════════════════════════════════'],
   ['Campo', 'Obrigatório', 'Formato', 'Descrição'],
-  ['Data Realização', 'SIM', 'AAAA-MM-DD', 'Data em que a despesa/receita foi realizada'],
+  ['AnoMes', 'SIM', 'AAAA-MM', 'Competência oficial do lançamento (ex: 2026-03)'],
   ['Data Pagamento', 'NÃO', 'AAAA-MM-DD', 'Data efetiva do pagamento'],
-  ['Produto', 'NÃO', 'Texto', 'Descrição do produto ou serviço'],
-  ['Fornecedor', 'NÃO', 'Texto', 'Nome do fornecedor ou cliente'],
-  ['Valor', 'SIM', 'Numérico', 'Valor da operação (positivo = saída/custo, negativo = entrada/receita)'],
-  ['Status Transação', 'NÃO', 'Texto', 'Ex: Pago, Pendente, Cancelado'],
-  ['Fazenda', 'NÃO', 'Texto', 'Nome da fazenda (será validado contra a fazenda ativa)'],
-  ['Tipo Operação', 'NÃO', 'Texto', 'Ex: Custo, Receita, Investimento, Financeiro'],
+  ['Valor', 'SIM', 'Numérico', 'Valor da operação (positivo = saída, negativo = entrada)'],
+  ['Status Transação', 'NÃO', 'Texto', 'Ex: Pago, Pendente, Conciliado'],
+  ['Fazenda', 'SIM', 'Texto', 'Código de importação da fazenda (ex: 3M, BG, ADM)'],
+  ['Tipo Operação', 'NÃO', 'Texto', 'Ex: 1-Entradas, 2-Saídas, 3-Investimento'],
+  ['Macro_Custo', 'NÃO', 'Texto', 'Nível 1 hierarquia (ex: Custeio Produtivo)'],
+  ['Grupo_Custo', 'NÃO', 'Texto', 'Nível 2 hierarquia (ex: Nutrição)'],
+  ['Centro_Custo', 'NÃO', 'Texto', 'Nível 3 hierarquia (ex: Sal mineral)'],
+  ['Subcentro', 'NÃO', 'Texto', 'Nível 4 — detalhe opcional'],
   ['Conta Origem', 'NÃO', 'Texto', 'Conta bancária de origem'],
   ['Conta Destino', 'NÃO', 'Texto', 'Conta bancária de destino'],
-  ['Macro_Custo', 'NÃO', 'Texto', 'Nível 1 da hierarquia de custo (ex: Nutrição, Sanidade)'],
-  ['Grupo_Custo', 'NÃO', 'Texto', 'Nível 2 da hierarquia (ex: Suplementação, Vacinação)'],
-  ['Centro_Custo', 'NÃO', 'Texto', 'Nível 3 da hierarquia (ex: Sal mineral, Vacina obrigatória)'],
-  ['Subcentro', 'NÃO', 'Texto', 'Nível 4 — detalhe opcional (ex: Proteinado)'],
-  ['Nota Fiscal', 'NÃO', 'Texto', 'Número da nota fiscal'],
-  ['Mês', 'NÃO', 'Texto', 'Redundante — derivado de AnoMes'],
-  ['CNPJ/CPF', 'NÃO', 'Texto', 'Documento do fornecedor'],
-  ['Recorrência', 'NÃO', 'Texto', 'Ex: Mensal, Trimestral, Avulso'],
-  ['Forma de Pagamento', 'NÃO', 'Texto', 'Ex: Boleto, PIX, Cartão, Cheque'],
+  ['Fornecedor', 'NÃO', 'Texto', 'Nome do fornecedor ou cliente'],
+  ['Produto', 'NÃO', 'Texto', 'Descrição do produto ou serviço'],
   ['Obs', 'NÃO', 'Texto', 'Observações livres'],
-  ['Ano', 'NÃO', 'Numérico', 'Redundante — derivado de AnoMes'],
-  ['Mes', 'NÃO', 'Numérico', 'Redundante — derivado de AnoMes'],
-  ['AnoMes', 'SIM', 'AAAA-MM', 'Competência oficial do lançamento (ex: 2026-03)'],
+  [],
+  ['═══════════════════════════════════════════════════════════'],
+  ['ABA: EXPORT_SALDOS_BANCARIOS'],
+  ['═══════════════════════════════════════════════════════════'],
+  ['Campo', 'Obrigatório', 'Formato', 'Descrição'],
+  ['Conta Banco', 'SIM', 'Texto', 'Nome da conta bancária'],
+  ['AnoMes', 'SIM', 'AAAA-MM', 'Mês de referência do saldo'],
+  ['Saldo_Final', 'SIM', 'Numérico', 'Saldo ao final do mês'],
+  [],
+  ['═══════════════════════════════════════════════════════════'],
+  ['ABA: EXPORT_CONTAS'],
+  ['═══════════════════════════════════════════════════════════'],
+  ['Campo', 'Obrigatório', 'Formato', 'Descrição'],
+  ['Conta_ID', 'SIM', 'Texto', 'Código único da conta (ex: BB_CC)'],
+  ['Conta_Label', 'SIM', 'Texto', 'Nome da conta para exibição'],
+  ['Banco', 'NÃO', 'Texto', 'Nome do banco'],
+  ['Instrumento', 'NÃO', 'Texto', 'Ex: Conta Corrente, Poupança, CDB'],
+  ['Agencia/Conta', 'NÃO', 'Texto', 'Número da agência e conta'],
+  ['Uso', 'NÃO', 'Texto', 'Finalidade: Operacional, Investimento, etc.'],
+  [],
+  ['═══════════════════════════════════════════════════════════'],
+  ['ABA: EXPORT_RESUMO_CAIXA'],
+  ['═══════════════════════════════════════════════════════════'],
+  ['Campo', 'Obrigatório', 'Formato', 'Descrição'],
+  ['AnoMes', 'SIM', 'AAAA-MM', 'Mês de referência'],
+  ['Entradas', 'SIM', 'Numérico', 'Total de entradas no mês'],
+  ['Saidas', 'SIM', 'Numérico', 'Total de saídas no mês'],
+  ['Saldo_Final_Total', 'SIM', 'Numérico', 'Saldo final consolidado'],
   [],
   ['REGRAS IMPORTANTES:'],
-  ['1. O campo AnoMes é a competência oficial. Ano, Mês e Mes são redundantes e serão ignorados.'],
-  ['2. A coluna Fazenda será validada contra a fazenda ativa no sistema.'],
-  ['3. A hierarquia Macro > Grupo > Centro > Subcentro deve bater com os centros de custo cadastrados.'],
-  ['4. Valores positivos representam saídas/custos. Valores negativos representam entradas/receitas.'],
-  ['5. Datas devem estar no formato AAAA-MM-DD (ex: 2026-01-15).'],
+  ['1. O campo Fazenda (EXPORT_LANCAMENTOS) deve conter o código de importação cadastrado na fazenda.'],
+  ['2. Valores positivos = saídas/custos. Valores negativos = entradas/receitas.'],
+  ['3. Datas no formato AAAA-MM-DD. AnoMes no formato AAAA-MM.'],
+  ['4. O app fará todos os agrupamentos e análises. A planilha é apenas a origem dos dados.'],
 ];
+
+function makeSheet(cols: string[], examples: unknown[][], colWidth = 20) {
+  const ws = XLSX.utils.aoa_to_sheet([cols, ...examples]);
+  ws['!cols'] = cols.map(c => ({ wch: Math.max(c.length + 2, colWidth) }));
+  return ws;
+}
 
 export function downloadModeloExcel() {
   const wb = XLSX.utils.book_new();
 
-  // Aba DADOS
-  const dadosData = [COLUNAS, EXEMPLO_1, EXEMPLO_2];
-  const wsDados = XLSX.utils.aoa_to_sheet(dadosData);
+  XLSX.utils.book_append_sheet(wb, makeSheet(LANC_COLS, [LANC_EX1, LANC_EX2]), 'EXPORT_LANCAMENTOS');
+  XLSX.utils.book_append_sheet(wb, makeSheet(SALDO_COLS, [SALDO_EX1, SALDO_EX2]), 'EXPORT_SALDOS_BANCARIOS');
+  XLSX.utils.book_append_sheet(wb, makeSheet(CONTAS_COLS, [CONTAS_EX1, CONTAS_EX2]), 'EXPORT_CONTAS');
+  XLSX.utils.book_append_sheet(wb, makeSheet(RESUMO_COLS, [RESUMO_EX1, RESUMO_EX2]), 'EXPORT_RESUMO_CAIXA');
 
-  // Column widths
-  wsDados['!cols'] = COLUNAS.map((col) => ({
-    wch: Math.max(col.length + 2, 18),
-  }));
-
-  XLSX.utils.book_append_sheet(wb, wsDados, 'DADOS');
-
-  // Aba INSTRUCOES
-  const wsInstrucoes = XLSX.utils.aoa_to_sheet(INSTRUCOES);
-  wsInstrucoes['!cols'] = [{ wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 60 }];
-  XLSX.utils.book_append_sheet(wb, wsInstrucoes, 'INSTRUCOES');
+  const wsInst = XLSX.utils.aoa_to_sheet(INSTRUCOES);
+  wsInst['!cols'] = [{ wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 60 }];
+  XLSX.utils.book_append_sheet(wb, wsInst, 'INSTRUCOES');
 
   XLSX.writeFile(wb, 'modelo_financeiro.xlsx');
 }
