@@ -1,14 +1,13 @@
 /**
  * Hook para o Fluxo de Caixa — 12 linhas, jan-dez.
  * Base: data_pagamento + status_transacao = 'Conciliado'.
- * Saldo Inicial Jan = saldo final Dez do ano anterior (financeiro_resumo_caixa).
+ * Saldo Inicial Jan = soma dos registros SALDO (EXPORT_APP_UNICO) de Dez do ano anterior.
  *
  * REGRA: O fluxo de caixa é SEMPRE GLOBAL (todas as fazendas),
  * independentemente da fazenda selecionada.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useFazenda } from '@/contexts/FazendaContext';
 import type { FinanceiroLancamento, RateioADM } from '@/hooks/useFinanceiro';
 
 // ---------------------------------------------------------------------------
