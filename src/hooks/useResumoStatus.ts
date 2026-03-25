@@ -227,7 +227,6 @@ export function useResumoStatus(
     const anoAtual = new Date().getFullYear();
     const anoStr = String(ano);
 
-    // Totals from financeiro_resumo_caixa (more accurate, includes saldo inicial)
     let totalEntradas = 0;
     let totalSaidas = 0;
     let saldoCaixa = 0;
@@ -237,9 +236,26 @@ export function useResumoStatus(
         totalEntradas += rc.entradas;
         totalSaidas += rc.saidas;
       });
-      // Saldo = último saldo_final_total no range
       const sorted = [...resumoCaixa].sort((a, b) => a.ano_mes.localeCompare(b.ano_mes));
       saldoCaixa = sorted[sorted.length - 1]?.saldo_final_total ?? 0;
+    } else {
+      // Fallback: calculate from conciliado lancamentos
+      const conciliados = finLancamentos.filter(
+        l => (l.status_transacao || '').toLowerCase().trim() === 'conciliado' && l.data_pagamento
+      );
+      conciliados.forEach(l => {
+        const tipo = (l.tipo_operacao || '').toLowerCase().trim();
+        if (tipo === 'entrada' || tipo === 'receita') {
+          totalEntradas += Math.abs(l.valor);
+        } else if (tipo === 'saida' || tipo === 'saída' || tipo === 'despesa') {
+          totalSaidas += Math.abs(l.valor);
+        } else if (l.valor > 0) {
+          totalEntradas += l.valor;
+        } else {
+          totalSaidas += Math.abs(l.valor);
+        }
+      });
+      saldoCaixa = totalEntradas - totalSaidas;
     }
 
     // Status: check conciliation per month
@@ -253,10 +269,8 @@ export function useResumoStatus(
 
       mesesComLancamentos++;
 
-      // For current month: never auto-close
       if (ano === anoAtual && m === mesAtual) continue;
 
-      // Check if all are conciliados (excluding operational exceptions)
       const relevantes = lancsMes.filter(l => !isExclusoOperacional(l.status_transacao));
       const todosConciliados = relevantes.every(
         l => (l.status_transacao || '').toLowerCase().trim() === 'conciliado'
