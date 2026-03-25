@@ -75,6 +75,7 @@ export interface RateioADMConferencia {
   anoMes: string;
   totalADMConciliado: number;
   lancamentosUsados: {
+    dataRef: string | null;
     dataPagamento: string | null;
     produto: string | null;
     valor: number;
@@ -128,17 +129,25 @@ export const isReceita = (l: FinanceiroLancamento) => {
   return tipo === 'receita' || tipo.startsWith('1');
 };
 
-/** ADM lancamento qualifies for rateio */
+/** ADM lancamento qualifies for rateio:
+ *  - Status = Conciliado
+ *  - Tipo começa com "2" (saída)
+ *  - Data_Ref (data_realizacao) preenchida
+ */
 const isADMConciliado = (l: FinanceiroLancamento) =>
   (l.status_transacao || '').toLowerCase() === 'conciliado' &&
-  (l.tipo_operacao || '').toLowerCase().startsWith('2') &&
-  (l.macro_custo || '').toLowerCase().trim() === 'custeio produtivo';
+  (l.tipo_operacao || '').startsWith('2') &&
+  !!l.data_realizacao;
 
 /** Extract YYYY-MM from a date string */
-const dateToAnoMes = (dateStr: string | null): string | null => {
+const dateToAnoMes = (dateStr: string | null | undefined): string | null => {
   if (!dateStr || dateStr.length < 7) return null;
   return dateStr.substring(0, 7);
 };
+
+/** Data de referência do lançamento para rateio (Data_Ref = data_realizacao) */
+const dataRefRateio = (l: FinanceiroLancamento): string | null =>
+  dateToAnoMes(l.data_realizacao);
 
 // Tipos de movimentação pecuária
 const TIPOS_ENTRADA_PEC = new Set(['nascimento', 'compra', 'transferencia_entrada']);
@@ -324,7 +333,7 @@ export function useFinanceiro() {
     const mesesADM = new Set<string>();
     for (const l of lancamentosADM) {
       if (!isADMConciliado(l)) continue;
-      const am = dateToAnoMes(l.data_pagamento);
+      const am = dataRefRateio(l);
       if (am) mesesADM.add(am);
     }
 
@@ -350,7 +359,7 @@ export function useFinanceiro() {
     const admPorMes = new Map<string, number>();
     for (const l of lancamentosADM) {
       if (!isADMConciliado(l)) continue;
-      const am = dateToAnoMes(l.data_pagamento);
+      const am = dataRefRateio(l);
       if (!am) continue;
       admPorMes.set(am, (admPorMes.get(am) || 0) + Math.abs(l.valor));
     }
@@ -375,7 +384,7 @@ export function useFinanceiro() {
     const admPorMes = new Map<string, FinanceiroLancamento[]>();
     for (const l of lancamentosADM) {
       if (!isADMConciliado(l)) continue;
-      const am = dateToAnoMes(l.data_pagamento);
+      const am = dataRefRateio(l);
       if (!am) continue;
       const arr = admPorMes.get(am) || [];
       arr.push(l);
@@ -405,7 +414,7 @@ export function useFinanceiro() {
           anoMes,
           totalADMConciliado: totalADM,
           lancamentosUsados: lancs.map(l => ({
-            dataPagamento: l.data_pagamento, produto: l.produto, valor: Math.abs(l.valor),
+            dataRef: l.data_realizacao, dataPagamento: l.data_pagamento, produto: l.produto, valor: Math.abs(l.valor),
             statusTransacao: l.status_transacao, fazenda: admNomeFazenda,
             tipoOperacao: l.tipo_operacao, contaOrigem: l.conta_origem, contaDestino: l.conta_destino,
           })),
@@ -615,5 +624,6 @@ export function useFinanceiro() {
     rateioADM, rateioConferencia, fazendasSemRebanho,
     fazendaMapForImport, loading, confirmarImportacao, excluirImportacao,
     reloadData: loadData, isGlobal, fazendaADM,
+    totalLancamentosADM: lancamentosADM.length,
   };
 }

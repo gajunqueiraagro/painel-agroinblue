@@ -34,6 +34,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
     importacoes, lancamentos, centrosCusto, indicadores,
     rateioADM, rateioConferencia, fazendasSemRebanho, fazendaMapForImport,
     loading, confirmarImportacao, excluirImportacao, isGlobal, fazendaADM,
+    totalLancamentosADM,
   } = useFinanceiro();
 
   // Dados zootécnicos oficiais — FONTE ÚNICA
@@ -112,6 +113,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
             <RateioADMConferenciaView
               conferencia={rateioConferencia}
               fazendasSemRebanho={fazendasSemRebanho}
+              totalLancamentosADM={totalLancamentosADM}
             />
           )}
           {subTab === 'importacao' && (

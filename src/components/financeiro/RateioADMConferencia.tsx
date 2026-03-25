@@ -1,13 +1,14 @@
 /**
- * Conferência do Rateio ADM v1
- * Critério: área produtiva (ha)
+ * Conferência do Rateio ADM v2
+ * Critério: rebanho médio do período
  *
  * Mostra por mês:
- * - Total ADM conciliado (apenas Saídas conciliadas por data_pagamento)
+ * - Total ADM conciliado (Saídas conciliadas por Data_Ref)
  * - Tabela de auditoria com todos os lançamentos usados
  * - Critério de rateio
  * - Percentual e valor por fazenda
- * - Aviso de fazendas sem área
+ * - Aviso de fazendas sem rebanho
+ * - Diagnóstico quando rateio vazio
  */
 import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,9 +21,11 @@ import type { RateioADMConferencia } from '@/hooks/useFinanceiro';
 interface Props {
   conferencia: RateioADMConferencia[];
   fazendasSemRebanho: string[];
+  /** Total de lançamentos ADM carregados (para diagnóstico) */
+  totalLancamentosADM?: number;
 }
 
-export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho }: Props) {
+export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho, totalLancamentosADM = 0 }: Props) {
   const meses = useMemo(() => conferencia.map(c => c.anoMes), [conferencia]);
   const [mesSelecionado, setMesSelecionado] = useState(meses[0] || '');
   const [showAudit, setShowAudit] = useState(false);
@@ -34,26 +37,69 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho }: Pr
 
   if (conferencia.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
-        <Building2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
-        <p className="font-bold">Nenhum rateio ADM disponível</p>
-        <p className="text-sm">Certifique-se de que existe uma fazenda com código ADM e lançamentos conciliados com data de pagamento.</p>
+      <div className="space-y-4">
+        <div className="text-center py-12 text-muted-foreground">
+          <Building2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
+          <p className="font-bold">Nenhum rateio ADM disponível</p>
+          <p className="text-sm mt-2">
+            Certifique-se de que existe uma fazenda com código ADM e lançamentos que atendam aos critérios.
+          </p>
+        </div>
+
+        {/* Diagnóstico */}
+        <Card className="border-amber-500/50 bg-amber-500/5">
+          <CardContent className="p-3 space-y-2">
+            <div className="flex items-start gap-2">
+              <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+              <div className="text-xs space-y-1">
+                <p className="font-bold text-amber-700">Diagnóstico</p>
+                <p>Lançamentos ADM carregados: <strong>{totalLancamentosADM}</strong></p>
+                <p className="text-muted-foreground mt-1">Critérios para entrar no rateio:</p>
+                <ul className="list-disc pl-4 text-muted-foreground space-y-0.5">
+                  <li>Fazenda = ADM (código de importação)</li>
+                  <li>Tipo começando com <code className="bg-muted px-1 rounded">2</code> (saída)</li>
+                  <li>Status = <code className="bg-muted px-1 rounded">Conciliado</code></li>
+                  <li>Data_Ref preenchida</li>
+                </ul>
+                <p className="text-muted-foreground mt-1">
+                  Coluna de data: <strong>Data_Ref</strong> (data_realizacao)
+                </p>
+                <p className="text-muted-foreground">
+                  Critério de rateio: <strong>Rebanho médio</strong> do período
+                </p>
+                {totalLancamentosADM > 0 && (
+                  <p className="text-destructive mt-1">
+                    ⚠ Existem {totalLancamentosADM} lançamentos ADM, mas nenhum atendeu todos os critérios acima.
+                    Verifique se o campo Status está como "Conciliado" e se o Tipo começa com "2".
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1.5 text-xs bg-muted rounded-md px-2.5 py-1.5">
-          <Info className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="font-bold">Rateio ADM v1</span>
-          <span className="text-muted-foreground">— critério: rebanho médio do período</span>
-        </div>
-      </div>
+      {/* Header com critérios */}
+      <Card className="bg-muted/50">
+        <CardContent className="p-3 space-y-1">
+          <div className="flex items-center gap-1.5 text-xs">
+            <Info className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="font-bold">Rateio ADM v2</span>
+          </div>
+          <div className="text-[10px] text-muted-foreground space-y-0.5 pl-5">
+            <p>Critério de rateio: <strong>Rebanho médio</strong> do período</p>
+            <p>Coluna de data: <strong>Data_Ref</strong> (data_realizacao)</p>
+            <p>Filtro: Fazenda=ADM · Tipo=2-Saídas · Status=Conciliado · Data_Ref preenchida</p>
+            <p>Base: apenas <strong>LANCAMENTO</strong> (SALDO e RESUMO excluídos)</p>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Aviso fazendas sem área */}
+      {/* Aviso fazendas sem rebanho */}
       {fazendasSemRebanho.length > 0 && (
         <Card className="border-destructive/50 bg-destructive/5">
           <CardContent className="p-3">
@@ -71,9 +117,6 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho }: Pr
                     </span>
                   ))}
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-1.5">
-                  Cadastre saldos iniciais e lançamentos pecuários para que estas fazendas entrem no rateio.
-                </p>
               </div>
             </div>
           </CardContent>
@@ -102,7 +145,7 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho }: Pr
               <div className="text-xs text-muted-foreground mb-1">Total ADM Conciliado (Saídas)</div>
               <p className="text-xl font-bold">{formatMoeda(dados.totalADMConciliado)}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5">
-                Fazenda ADM · Tipo Operação = 2-Saídas · Status = Conciliado · Data Pagamento em {dados.anoMes}
+                Fazenda ADM · Tipo = 2-Saídas · Status = Conciliado · Data_Ref em {dados.anoMes}
               </p>
               <p className="text-[10px] text-muted-foreground">
                 {dados.lancamentosUsados.length} lançamento(s) no total
@@ -129,27 +172,25 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho }: Pr
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="text-[10px] px-2 py-1.5">Data Pgto</TableHead>
+                        <TableHead className="text-[10px] px-2 py-1.5">Data_Ref</TableHead>
                         <TableHead className="text-[10px] px-2 py-1.5">Produto</TableHead>
                         <TableHead className="text-[10px] px-2 py-1.5 text-right">Valor</TableHead>
                         <TableHead className="text-[10px] px-2 py-1.5">Status</TableHead>
                         <TableHead className="text-[10px] px-2 py-1.5">Fazenda</TableHead>
                         <TableHead className="text-[10px] px-2 py-1.5">Tipo Op.</TableHead>
-                        <TableHead className="text-[10px] px-2 py-1.5">Conta Origem</TableHead>
-                        <TableHead className="text-[10px] px-2 py-1.5">Conta Destino</TableHead>
+                        <TableHead className="text-[10px] px-2 py-1.5">Conta</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {dados.lancamentosUsados.map((l, i) => (
                         <TableRow key={i}>
-                          <TableCell className="text-[10px] px-2 py-1">{l.dataPagamento || '-'}</TableCell>
+                          <TableCell className="text-[10px] px-2 py-1">{l.dataRef || '-'}</TableCell>
                           <TableCell className="text-[10px] px-2 py-1 max-w-[120px] truncate">{l.produto || '-'}</TableCell>
                           <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatMoeda(l.valor)}</TableCell>
                           <TableCell className="text-[10px] px-2 py-1">{l.statusTransacao || '-'}</TableCell>
                           <TableCell className="text-[10px] px-2 py-1">{l.fazenda}</TableCell>
                           <TableCell className="text-[10px] px-2 py-1">{l.tipoOperacao || '-'}</TableCell>
                           <TableCell className="text-[10px] px-2 py-1 max-w-[100px] truncate">{l.contaOrigem || '-'}</TableCell>
-                          <TableCell className="text-[10px] px-2 py-1 max-w-[100px] truncate">{l.contaDestino || '-'}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
