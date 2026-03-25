@@ -61,6 +61,20 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
     if (!file) return;
 
     const buffer = await file.arrayBuffer();
+
+    // Validate structure first
+    const validacao = validarEstruturaExcel(buffer);
+    if (!validacao.valido) {
+      setPreview({
+        nomeArquivo: file.name,
+        lancamentos: [], saldosBancarios: [], contas: [], resumoCaixa: [],
+        erros: [], totalLinhas: 0, resumoFazendas: [],
+        erroEstrutura: validacao,
+      });
+      if (fileRef.current) fileRef.current.value = '';
+      return;
+    }
+
     const result = parseExcel(buffer);
 
     const errosFazenda = resolverFazendas(result.lancamentos, fazendas);
