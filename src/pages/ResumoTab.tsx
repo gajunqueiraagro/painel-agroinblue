@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TabId } from '@/components/BottomNav';
 import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 import { useResumoStatus, StatusNivel } from '@/hooks/useResumoStatus';
+import { useFazenda } from '@/contexts/FazendaContext';
 import { ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 import type { FiltroGlobal } from './Index';
 
@@ -134,6 +135,9 @@ function FinanceiroCard({ financeiro, onTabChange }: { financeiro: ReturnType<ty
 }
 
 export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlobal, onFiltroChange }: Props) {
+  const { fazendaAtual } = useFazenda();
+  const fazendaNaoPecuaria = fazendaAtual && fazendaAtual.id !== '__global__' && fazendaAtual.tem_pecuaria === false;
+
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
@@ -186,39 +190,51 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
       {/* Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {/* ZOOTÉCNICO */}
-        <div className="rounded-xl border bg-card p-4 space-y-3 shadow-sm">
-          <div className="flex items-center justify-between">
+        {fazendaNaoPecuaria ? (
+          <div className="rounded-xl border bg-card p-4 space-y-3 shadow-sm opacity-75">
             <div className="flex items-center gap-2">
               <span className="text-xl">🐄</span>
               <h2 className="text-base font-extrabold text-card-foreground">Zootécnico</h2>
             </div>
-            <StatusBadge nivel={zootecnico.status.nivel} />
+            <p className="text-sm text-muted-foreground">
+              Fazenda selecionada não apresenta dados zootécnicos.
+            </p>
           </div>
+        ) : (
+          <div className="rounded-xl border bg-card p-4 space-y-3 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🐄</span>
+                <h2 className="text-base font-extrabold text-card-foreground">Zootécnico</h2>
+              </div>
+              <StatusBadge nivel={zootecnico.status.nivel} />
+            </div>
 
-          <div className="space-y-1.5 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Rebanho atual</span>
-              <span className="font-bold text-card-foreground">{formatNum(zootecnico.rebanhoAtual)} cab</span>
+            <div className="space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Rebanho atual</span>
+                <span className="font-bold text-card-foreground">{formatNum(zootecnico.rebanhoAtual)} cab</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Entradas</span>
+                <span className="font-semibold text-primary">+{formatNum(zootecnico.totalEntradas)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Saídas</span>
+                <span className="font-semibold text-destructive">-{formatNum(zootecnico.totalSaidas)}</span>
+              </div>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Entradas</span>
-              <span className="font-semibold text-primary">+{formatNum(zootecnico.totalEntradas)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Saídas</span>
-              <span className="font-semibold text-destructive">-{formatNum(zootecnico.totalSaidas)}</span>
-            </div>
+
+            <p className="text-[11px] text-muted-foreground">{zootecnico.status.descricao}</p>
+
+            <button
+              onClick={() => onTabChange('zootecnico')}
+              className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
+            >
+              Ver Painel Zootécnico <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
-
-          <p className="text-[11px] text-muted-foreground">{zootecnico.status.descricao}</p>
-
-          <button
-            onClick={() => onTabChange('zootecnico')}
-            className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
-          >
-            Ver Painel Zootécnico <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
+        )}
 
         {/* FINANCEIRO */}
         <FinanceiroCard financeiro={financeiro} onTabChange={onTabChange} />

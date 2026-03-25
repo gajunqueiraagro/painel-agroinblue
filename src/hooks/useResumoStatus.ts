@@ -98,6 +98,7 @@ export function useResumoStatus(
   const { fazendaAtual, fazendas } = useFazenda();
   const fazendaId = fazendaAtual?.id;
   const isGlobal = fazendaId === '__global__';
+  const fazendaNaoPecuaria = !isGlobal && fazendaAtual?.tem_pecuaria === false;
 
   // DB-fetched data for status calculation
   const [fechamentoRebanho, setFechamentoRebanho] = useState<Record<string, string>>({}); // anoMes → status
@@ -108,53 +109,86 @@ export function useResumoStatus(
   const [saldoInicialRegistros, setSaldoInicialRegistros] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // For global: only pecuária fazendas; for single: all
   const fazendaIds = useMemo(() => {
+    if (isGlobal) return fazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false).map(f => f.id);
+    return fazendaId ? [fazendaId] : [];
+  }, [fazendaId, isGlobal, fazendas]);
+
+  // All fazenda IDs (including ADM) for financial queries
+  const fazendaIdsFinanceiro = useMemo(() => {
     if (isGlobal) return fazendas.filter(f => f.id !== '__global__').map(f => f.id);
     return fazendaId ? [fazendaId] : [];
   }, [fazendaId, isGlobal, fazendas]);
 
   // Load status data
   const loadStatusData = useCallback(async () => {
-    if (fazendaIds.length === 0) { setLoading(false); return; }
+    if (fazendaNaoPecuaria) { setLoading(false); return; }
+    const idsZoo = fazendaIds; // pecuária only
+    const idsFin = fazendaIdsFinanceiro; // all farms
+    if (idsZoo.length === 0 && idsFin.length === 0) { setLoading(false); return; }
     setLoading(true);
     try {
       const anoStr = String(ano);
       const mesesRange = Array.from({ length: mesAte }, (_, i) => `${anoStr}-${String(i + 1).padStart(2, '0')}`);
 
       const [vrfResult, fpResult, flResult, saldoResult] = await Promise.all([
-        // Fechamento rebanho (valor_rebanho_fechamento)
-        supabase
-          .from('valor_rebanho_fechamento')
-          .select('ano_mes, status, fazenda_id')
-          .in('fazenda_id', fazendaIds)
-          .in('ano_mes', mesesRange),
-        // Fechamento pastos
-        supabase
-          .from('fechamento_pastos')
-          .select('ano_mes, status, fazenda_id')
-          .in('fazenda_id', fazendaIds)
-          .in('ano_mes', mesesRange),
-        // Financeiro - lançamentos brutos (fonte única de verdade)
-        supabase
-          .from('financeiro_lancamentos')
-          .select('status_transacao, data_pagamento, valor, tipo_operacao')
-          .in('fazenda_id', fazendaIds)
-          .gte('data_pagamento', `${anoStr}-01-01`)
-          .lte('data_pagamento', `${anoStr}-12-31`),
-        // Saldo inicial global: registros SALDO da EXPORT_APP_UNICO (Dez ano anterior)
+        // Fechamento rebanho — only pecuária farms
+        idsZoo.length > 0
+          ? supabase
+              .from('valor_rebanho_fechamento')
+              .select('ano_mes, status, fazenda_id')
+              .in('fazenda_id', idsZoo)
+              .in('ano_mes', mesesRange)
+          : Promise.resolve({ data: [] }),
+        // Fechamento pastos — only pecuária farms
+        idsZoo.length > 0
+          ? supabase
+              .from('fechamento_pastos')
+              .select('ano_mes, status, fazenda_id')
+              .in('fazenda_id', idsZoo)
+              .in('ano_mes', mesesRange)
+          : Promise.resolve({ data: [] }),
+        // Financeiro — ALL farms (including ADM)
+        idsFin.length > 0
+          ? supabase
+              .from('financeiro_lancamentos')
+              .select('status_transacao, data_pagamento, valor, tipo_operacao')
+              .in('fazenda_id', idsFin)
+              .gte('data_pagamento', `${anoStr}-01-01`)
+              .lte('data_pagamento', `${anoStr}-12-31`)
+          : Promise.resolve({ data: [] }),
+        // Saldo inicial global
         supabase
           .from('financeiro_saldos_bancarios')
           .select('saldo_final, conta_banco')
           .eq('ano_mes', `${ano - 1}-12`),
       ]);
 
-      // Process fechamento rebanho
+      // Process fechamento rebanho — per fazenda per month for accurate global consolidation
       const vrfMap: Record<string, string> = {};
-      (vrfResult.data || []).forEach((r: any) => {
-        const key = r.ano_mes;
-        if (vrfMap[key] === undefined) vrfMap[key] = r.status;
-        else if (vrfMap[key] === 'fechado' && r.status !== 'fechado') vrfMap[key] = r.status;
-      });
+      if (isGlobal && idsZoo.length > 0) {
+        // Global: a month is only "fechado" if ALL pecuária farms have it fechado
+        const byMonth = new Map<string, { total: Set<string>; fechados: Set<string> }>();
+        (vrfResult.data || []).forEach((r: any) => {
+          if (!byMonth.has(r.ano_mes)) byMonth.set(r.ano_mes, { total: new Set(), fechados: new Set() });
+          const m = byMonth.get(r.ano_mes)!;
+          m.total.add(r.fazenda_id);
+          if (r.status === 'fechado') m.fechados.add(r.fazenda_id);
+        });
+        byMonth.forEach((v, anoMes) => {
+          // All pecuária farms must have a record AND be fechado
+          if (v.fechados.size >= idsZoo.length) vrfMap[anoMes] = 'fechado';
+          else if (v.fechados.size > 0) vrfMap[anoMes] = 'parcial';
+          else vrfMap[anoMes] = 'aberto';
+        });
+      } else {
+        (vrfResult.data || []).forEach((r: any) => {
+          const key = r.ano_mes;
+          if (vrfMap[key] === undefined) vrfMap[key] = r.status;
+          else if (vrfMap[key] === 'fechado' && r.status !== 'fechado') vrfMap[key] = r.status;
+        });
+      }
       setFechamentoRebanho(vrfMap);
 
       // Process fechamento pastos
@@ -184,7 +218,7 @@ export function useResumoStatus(
     } finally {
       setLoading(false);
     }
-  }, [fazendaIds, ano, mesAte]);
+  }, [fazendaIds, fazendaIdsFinanceiro, fazendaNaoPecuaria, ano, mesAte, isGlobal]);
 
   useEffect(() => { loadStatusData(); }, [loadStatusData]);
 
@@ -192,6 +226,14 @@ export function useResumoStatus(
   // ZOOTÉCNICO
   // -------------------------------------------------------------------------
   const zootecnico = useMemo((): ResumoZootecnico => {
+    // Fazenda não-pecuária: status especial
+    if (fazendaNaoPecuaria) {
+      return {
+        rebanhoAtual: 0, totalEntradas: 0, totalSaidas: 0,
+        status: { nivel: 'fechado', descricao: 'Fazenda selecionada não apresenta dados zootécnicos.' },
+      };
+    }
+
     const { saldoInicialAno } = calcSaldoMensalAcumulado(saldosIniciais, lancamentos, ano);
     const anoStr = String(ano);
 
@@ -210,9 +252,6 @@ export function useResumoStatus(
     const rebanhoAtual = saldoInicialAno + totalEntradas - totalSaidas;
 
     // Status: check each month in range
-    const mesAtual = new Date().getMonth() + 1;
-    const anoAtual = new Date().getFullYear();
-
     let mesesFechados = 0;
     let mesesComDados = 0;
 
@@ -222,7 +261,6 @@ export function useResumoStatus(
       const pastoInfo = fechamentoPastos[anoMes];
       const pastosFechados = pastoInfo ? pastoInfo.total > 0 && pastoInfo.fechados === pastoInfo.total : false;
 
-      // Consider month "fechado" if rebanho fechado AND pastos fechados
       if (rebanhoFechado && pastosFechados) {
         mesesFechados++;
       }
@@ -240,7 +278,7 @@ export function useResumoStatus(
     }
 
     return { rebanhoAtual, totalEntradas, totalSaidas, status: { nivel, descricao } };
-  }, [lancamentos, saldosIniciais, ano, mesAte, fechamentoRebanho, fechamentoPastos]);
+  }, [lancamentos, saldosIniciais, ano, mesAte, fechamentoRebanho, fechamentoPastos, fazendaNaoPecuaria]);
 
   // -------------------------------------------------------------------------
   // FINANCEIRO — FONTE ÚNICA: calcFinanceiroFromLancamentos
