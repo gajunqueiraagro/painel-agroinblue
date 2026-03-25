@@ -108,7 +108,7 @@ export function useResumoStatus(
       const anoStr = String(ano);
       const mesesRange = Array.from({ length: mesAte }, (_, i) => `${anoStr}-${String(i + 1).padStart(2, '0')}`);
 
-      const [vrfResult, fpResult, flResult, rcResult] = await Promise.all([
+      const [vrfResult, fpResult, flResult] = await Promise.all([
         // Fechamento rebanho (valor_rebanho_fechamento)
         supabase
           .from('valor_rebanho_fechamento')
@@ -121,26 +121,17 @@ export function useResumoStatus(
           .select('ano_mes, status, fazenda_id')
           .in('fazenda_id', fazendaIds)
           .in('ano_mes', mesesRange),
-        // Financeiro - status conciliação
+        // Financeiro - lançamentos brutos (fonte única de verdade)
         supabase
           .from('financeiro_lancamentos')
-          .select('status_transacao, ano_mes, data_pagamento, valor, tipo_operacao')
-          .in('fazenda_id', fazendaIds)
-          .gte('ano_mes', mesesRange[0] || '')
-          .lte('ano_mes', mesesRange[mesesRange.length - 1] || ''),
-        // Resumo caixa
-        supabase
-          .from('financeiro_resumo_caixa')
-          .select('ano_mes, entradas, saidas, saldo_final_total')
-          .in('fazenda_id', fazendaIds)
-          .in('ano_mes', mesesRange),
+          .select('status_transacao, data_pagamento, valor, tipo_operacao')
+          .in('fazenda_id', fazendaIds),
       ]);
 
       // Process fechamento rebanho
       const vrfMap: Record<string, string> = {};
       (vrfResult.data || []).forEach((r: any) => {
         const key = r.ano_mes;
-        // For global: only "fechado" if ALL fazendas are fechado for this month
         if (vrfMap[key] === undefined) vrfMap[key] = r.status;
         else if (vrfMap[key] === 'fechado' && r.status !== 'fechado') vrfMap[key] = r.status;
       });
@@ -158,17 +149,9 @@ export function useResumoStatus(
 
       setFinLancamentos((flResult.data || []).map((r: any) => ({
         status_transacao: r.status_transacao,
-        ano_mes: r.ano_mes,
-        data_pagamento: r.data_pagamento,
+        data_pagamento: r.data_pagamento ? String(r.data_pagamento) : null,
         valor: Number(r.valor) || 0,
         tipo_operacao: r.tipo_operacao,
-      })));
-
-      setResumoCaixa((rcResult.data || []).map((r: any) => ({
-        ano_mes: r.ano_mes,
-        entradas: Number(r.entradas) || 0,
-        saidas: Number(r.saidas) || 0,
-        saldo_final_total: Number(r.saldo_final_total) || 0,
       })));
     } catch (e) {
       console.error('useResumoStatus load error', e);
