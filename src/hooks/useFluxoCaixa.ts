@@ -133,7 +133,6 @@ export function useFluxoCaixa(
       const { data } = await supabase
         .from('financeiro_saldos_bancarios')
         .select('saldo_final, conta_banco')
-        .in('fazenda_id', todasFazendaIds)
         .eq('ano_mes', anoMesDez);
 
       if (data && data.length > 0) {
