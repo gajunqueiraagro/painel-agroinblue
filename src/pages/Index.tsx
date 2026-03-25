@@ -58,6 +58,7 @@ const TITLES: Record<TabId, string> = {
 const Index = () => {
   const [activeTab, setActiveTab] = useState<TabId>('resumo');
   const [subAbaFinanceiro, setSubAbaFinanceiro] = useState<SubAba | undefined>(undefined);
+  const [lancamentosFromConciliacao, setLancamentosFromConciliacao] = useState(false);
   const { user } = useAuth();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial, loadData } = useLancamentos();
