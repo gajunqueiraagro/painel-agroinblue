@@ -447,7 +447,7 @@ export function useFinanceiro() {
         return false;
       }
 
-      const totalValid = linhas.length + (saldosBancarios?.length || 0) + (contasImportadas?.length || 0) + (resumoCaixa?.length || 0);
+      const totalValid = linhas.length + (saldosBancarios?.length || 0) + (resumoCaixa?.length || 0);
 
       const { data: imp, error: impErr } = await supabase
         .from('financeiro_importacoes')
