@@ -312,25 +312,29 @@ export function CadastrosTab() {
   if (loading) return <div className="p-4 text-center text-muted-foreground">Carregando...</div>;
 
   return (
-    <div className="pb-24 pt-2 px-3 max-w-lg mx-auto space-y-4">
-      {/* Action buttons */}
-      <div className="flex gap-2 justify-end">
-        {!editing && data.id && (
-          <>
-            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-              <Pencil className="h-4 w-4 mr-1" /> Editar
+    <div className="pb-24 max-w-lg mx-auto">
+      {/* Sticky action buttons */}
+      <div className="sticky top-0 z-20 bg-background border-b border-border px-3 pt-2 pb-2">
+        <div className="flex gap-2 justify-end">
+          {!editing && data.id && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                <Pencil className="h-4 w-4 mr-1" /> Editar
+              </Button>
+              <Button variant="destructive" size="sm" onClick={handleDelete}>
+                <Trash2 className="h-4 w-4 mr-1" /> Apagar
+              </Button>
+            </>
+          )}
+          {editing && (
+            <Button size="sm" onClick={handleSave} disabled={saving}>
+              <Save className="h-4 w-4 mr-1" /> {saving ? 'Salvando...' : 'Salvar'}
             </Button>
-            <Button variant="destructive" size="sm" onClick={handleDelete}>
-              <Trash2 className="h-4 w-4 mr-1" /> Apagar
-            </Button>
-          </>
-        )}
-        {editing && (
-          <Button size="sm" onClick={handleSave} disabled={saving}>
-            <Save className="h-4 w-4 mr-1" /> {saving ? 'Salvando...' : 'Salvar'}
-          </Button>
-        )}
+          )}
+        </div>
       </div>
+
+      <div className="px-3 pt-2 space-y-4">
 
       <Accordion type="multiple" defaultValue={['fazendas', 'dados', 'contato', 'bancario', 'roteiro', 'pastos', 'acessos']} className="space-y-2">
         {/* Fazendas - only in global mode */}

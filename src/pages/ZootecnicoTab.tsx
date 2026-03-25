@@ -344,6 +344,7 @@ export function ZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTabChange
           <span>Peso médio estimado — realize fechamento de pastos para maior precisão</span>
         </div>
       )}
+      </div>
     </div>
   );
 }
