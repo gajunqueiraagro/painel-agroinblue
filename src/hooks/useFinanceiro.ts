@@ -20,7 +20,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda, type Fazenda } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import type { LinhaImportada, SaldoBancarioImportado, ContaImportada, ResumoCaixaImportado, CentroCustoOficial } from '@/lib/financeiro/importParser';
+import type { LinhaImportada, SaldoBancarioImportado, ResumoCaixaImportado, CentroCustoOficial } from '@/lib/financeiro/importParser';
 
 // ---------------------------------------------------------------------------
 // Types
