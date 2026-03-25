@@ -47,12 +47,12 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho, tota
         </div>
 
         {/* Diagnóstico */}
-        <Card className="border-amber-500/50 bg-amber-500/5">
+        <Card className="border-border bg-muted/40">
           <CardContent className="p-3 space-y-2">
             <div className="flex items-start gap-2">
-              <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+              <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
               <div className="text-xs space-y-1">
-                <p className="font-bold text-amber-700">Diagnóstico</p>
+                <p className="font-bold">Diagnóstico</p>
                 <p>Lançamentos ADM carregados: <strong>{totalLancamentosADM}</strong></p>
                 <p className="text-muted-foreground mt-1">Critérios para entrar no rateio:</p>
                 <ul className="list-disc pl-4 text-muted-foreground space-y-0.5">
