@@ -624,5 +624,6 @@ export function useFinanceiro() {
     rateioADM, rateioConferencia, fazendasSemRebanho,
     fazendaMapForImport, loading, confirmarImportacao, excluirImportacao,
     reloadData: loadData, isGlobal, fazendaADM,
+    totalLancamentosADM: lancamentosADM.length,
   };
 }
