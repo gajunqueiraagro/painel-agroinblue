@@ -18,6 +18,9 @@ import { useFechamentoCategoria, type OrigemPeso } from '@/hooks/useFechamentoCa
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
+  onBack?: () => void;
+  filtroAnoInicial?: string;
+  filtroMesInicial?: number;
 }
 
 /** Mapeia OrigemPeso → label amigável */
