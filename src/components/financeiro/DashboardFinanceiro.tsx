@@ -795,9 +795,12 @@ export function DashboardFinanceiro({
             <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
               <TrendingUp className="h-3 w-3 text-green-600" /> Entradas
             </div>
-            <p className="text-lg font-bold text-green-700 dark:text-green-400">{formatMoeda(ind.totalEntradas)}</p>
-            <p className="text-[10px] text-muted-foreground">acumulado: {formatMoeda(ind.entradasAcum)}</p>
-            <p className="text-[10px] text-muted-foreground">{entradasList.length} lançamentos</p>
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-lg font-bold text-green-700 dark:text-green-400">{formatMoeda(ind.totalEntradas)}</p>
+              <span className="text-[10px] text-muted-foreground">por mês</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">{entradasList.length} lançamentos</p>
+            <p className="text-[10px] text-muted-foreground mt-1.5 pt-1.5 border-t border-border/50">acumulado: {formatMoeda(ind.entradasAcum)}</p>
           </CardContent>
         </Card>
 
@@ -807,16 +810,17 @@ export function DashboardFinanceiro({
             <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
               <TrendingDown className="h-3 w-3 text-red-600" /> Saídas
             </div>
-            <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.saidasComRateio)}</p>
-            <p className="text-[10px] text-muted-foreground">acumulado: {formatMoeda(ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal))}</p>
-            {!isGlobal && ind.rateioMes > 0 ? (
-              <div className="text-[10px] text-muted-foreground mt-0.5 space-y-0.5">
-                <p>próprio: {formatMoeda(ind.totalSaidas)} ({saidasList.length} lanç.)</p>
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatMoeda(ind.saidasComRateio)}</p>
+              <span className="text-[10px] text-muted-foreground">por mês</span>
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-1 space-y-0.5">
+              <p>próprio: {formatMoeda(ind.totalSaidas)} ({saidasList.length} lanç.)</p>
+              {!isGlobal && ind.rateioMes > 0 && (
                 <p className="text-amber-600 dark:text-amber-400">rateio ADM: {formatMoeda(ind.rateioMes)}</p>
-              </div>
-            ) : (
-              <p className="text-[10px] text-muted-foreground">{saidasList.length} lançamentos</p>
-            )}
+              )}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1.5 pt-1.5 border-t border-border/50">acumulado: {formatMoeda(ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal))}</p>
           </CardContent>
         </Card>
       </div>
