@@ -252,7 +252,7 @@ export function useStatusZootecnico(
       statusRebanho = 'fechado';
       descRebanho = 'Mês fechado';
     }
-    pendencias.push({ id: 'rebanho', label: 'Fechamento de Rebanho', descricao: descRebanho, status: statusRebanho, resolverTab: 'fluxo_anual' });
+    pendencias.push({ id: 'rebanho', label: 'Fechamento de Rebanho', descricao: descRebanho, status: statusRebanho, resolverTab: 'valor_rebanho' });
 
     // 3. Peso Médio
     let statusPeso: StatusItem = 'aberto';
