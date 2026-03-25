@@ -2,7 +2,6 @@
  * Tela Econômica — visão de resultado.
  * Reutiliza AnaliseEconomica com navegação executiva.
  */
-import { ArrowLeft } from 'lucide-react';
 import { AnaliseEconomica } from '@/components/financeiro/AnaliseEconomica';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { usePastos } from '@/hooks/usePastos';
