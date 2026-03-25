@@ -249,7 +249,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
         )}
 
         {/* FINANCEIRO */}
-        <FinanceiroCard financeiro={financeiro} onTabChange={onTabChange} />
+        <FinanceiroCard financeiro={financeiro} onTabChange={onTabChange} isGlobal={fazendaAtual?.id === '__global__'} />
 
         {/* ECONÔMICO */}
         <div className="rounded-xl border bg-card p-4 space-y-3 shadow-sm">
