@@ -98,6 +98,7 @@ export function useResumoStatus(
   const { fazendaAtual, fazendas } = useFazenda();
   const fazendaId = fazendaAtual?.id;
   const isGlobal = fazendaId === '__global__';
+  const fazendaNaoPecuaria = !isGlobal && fazendaAtual?.tem_pecuaria === false;
 
   // DB-fetched data for status calculation
   const [fechamentoRebanho, setFechamentoRebanho] = useState<Record<string, string>>({}); // anoMes → status
@@ -108,7 +109,14 @@ export function useResumoStatus(
   const [saldoInicialRegistros, setSaldoInicialRegistros] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // For global: only pecuária fazendas; for single: all
   const fazendaIds = useMemo(() => {
+    if (isGlobal) return fazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false).map(f => f.id);
+    return fazendaId ? [fazendaId] : [];
+  }, [fazendaId, isGlobal, fazendas]);
+
+  // All fazenda IDs (including ADM) for financial queries
+  const fazendaIdsFinanceiro = useMemo(() => {
     if (isGlobal) return fazendas.filter(f => f.id !== '__global__').map(f => f.id);
     return fazendaId ? [fazendaId] : [];
   }, [fazendaId, isGlobal, fazendas]);
