@@ -251,16 +251,6 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
         {/* FINANCEIRO */}
         <FinanceiroCard financeiro={financeiro} onTabChange={onTabChange} isGlobal={fazendaAtual?.id === '__global__'} />
 
-        {/* OPERACIONAL (placeholder) */}
-        <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 p-4 space-y-3 shadow-sm">
-          <div className="flex items-center gap-2">
-            <span className="text-xl opacity-70">🔧</span>
-            <h2 className="text-base font-extrabold text-muted-foreground">Operacional</h2>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Em breve: resumos operacionais de campo.
-          </p>
-        </div>
 
         {/* ECONÔMICO */}
         <div className="rounded-xl border bg-card p-4 space-y-3 shadow-sm">
