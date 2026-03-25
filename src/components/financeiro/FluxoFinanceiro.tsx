@@ -7,7 +7,8 @@ import { useMemo } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFluxoCaixa, type FluxoMensal } from '@/hooks/useFluxoCaixa';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, AlertTriangle } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Loader2, AlertTriangle, ChevronDown } from 'lucide-react';
 import type { FinanceiroLancamento, RateioADM } from '@/hooks/useFinanceiro';
 
 // ---------------------------------------------------------------------------
