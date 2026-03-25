@@ -16,6 +16,8 @@ import { AnaliseSaidasTab } from './AnaliseSaidasTab';
 import { DesfrunteTab } from './DesfrunteTab';
 import { CadastrosTab } from './CadastrosTab';
 import { ConciliacaoHubTab } from './ConciliacaoHubTab';
+import { ValorRebanhoTab } from './ValorRebanhoTab';
+import { ConciliacaoCategoriaTab } from './ConciliacaoCategoriaTab';
 
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { SyncStatus } from '@/components/SyncStatus';
