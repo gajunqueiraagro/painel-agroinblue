@@ -20,7 +20,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda, type Fazenda } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import type { LinhaImportada, CentroCustoOficial } from '@/lib/financeiro/importParser';
+import type { LinhaImportada, SaldoBancarioImportado, ContaImportada, ResumoCaixaImportado, CentroCustoOficial } from '@/lib/financeiro/importParser';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -428,22 +428,26 @@ export function useFinanceiro() {
       });
   }, [fazendaADM, lancamentosADM, areaFazendas, fazendasOperacionais]);
 
-  // --- Confirmar importação (global: per-line fazenda_id) ---
+  // --- Confirmar importação (4-sheet: lancamentos + saldos + contas + resumo) ---
   const confirmarImportacao = useCallback(async (
     nomeArquivo: string,
     linhas: LinhaImportada[],
     totalLinhas: number,
     totalErros: number,
+    saldosBancarios?: SaldoBancarioImportado[],
+    contasImportadas?: ContaImportada[],
+    resumoCaixa?: ResumoCaixaImportado[],
   ) => {
     if (!user) return false;
 
     try {
-      // Use the first fazenda_id as the import record's fazenda (for RLS)
       const primaryFazendaId = linhas[0]?.fazendaId;
       if (!primaryFazendaId) {
         toast.error('Nenhuma linha com fazenda válida');
         return false;
       }
+
+      const totalValid = linhas.length + (saldosBancarios?.length || 0) + (contasImportadas?.length || 0) + (resumoCaixa?.length || 0);
 
       const { data: imp, error: impErr } = await supabase
         .from('financeiro_importacoes')
@@ -453,7 +457,7 @@ export function useFinanceiro() {
           usuario_id: user.id,
           status: 'processada',
           total_linhas: totalLinhas,
-          total_validas: linhas.length,
+          total_validas: totalValid,
           total_com_erro: totalErros,
         })
         .select('id')
@@ -461,13 +465,14 @@ export function useFinanceiro() {
 
       if (impErr) throw impErr;
 
+      // Insert lancamentos
       const batchSize = 50;
       for (let i = 0; i < linhas.length; i += batchSize) {
         const batch = linhas.slice(i, i + batchSize).map(l => ({
           fazenda_id: l.fazendaId!,
           importacao_id: imp.id,
           origem_dado: 'import_excel',
-          data_realizacao: l.dataRealizacao,
+          data_realizacao: l.dataPagamento || l.anoMes + '-01',
           data_pagamento: l.dataPagamento,
           ano_mes: l.anoMes,
           produto: l.produto,
@@ -481,19 +486,61 @@ export function useFinanceiro() {
           grupo_custo: l.grupoCusto,
           centro_custo: l.centroCusto,
           subcentro: l.subcentro,
-          nota_fiscal: l.notaFiscal,
-          cpf_cnpj: l.cpfCnpj,
-          recorrencia: l.recorrencia,
-          forma_pagamento: l.formaPagamento,
           obs: l.obs,
           escopo_negocio: l.escopoNegocio,
         }));
-
         const { error } = await supabase.from('financeiro_lancamentos').insert(batch);
         if (error) throw error;
       }
 
-      toast.success(`${linhas.length} lançamentos importados com sucesso`);
+      // Insert saldos bancarios
+      if (saldosBancarios && saldosBancarios.length > 0) {
+        const saldoBatch = saldosBancarios.map(s => ({
+          fazenda_id: primaryFazendaId,
+          importacao_id: imp.id,
+          conta_banco: s.contaBanco,
+          ano_mes: s.anoMes,
+          saldo_final: s.saldoFinal,
+        }));
+        const { error } = await supabase.from('financeiro_saldos_bancarios').upsert(saldoBatch, {
+          onConflict: 'fazenda_id,conta_banco,ano_mes',
+        });
+        if (error) throw error;
+      }
+
+      // Insert/update contas
+      if (contasImportadas && contasImportadas.length > 0) {
+        for (const c of contasImportadas) {
+          const { error } = await supabase.from('financeiro_contas').upsert({
+            fazenda_id: primaryFazendaId,
+            nome_conta: c.contaId,
+            banco: c.banco,
+            instrumento: c.instrumento,
+            agencia_conta: c.agenciaConta,
+            uso: c.uso,
+            tipo: c.instrumento,
+          }, { onConflict: 'id' });
+          if (error) console.warn('Conta upsert warning:', error.message);
+        }
+      }
+
+      // Insert resumo caixa
+      if (resumoCaixa && resumoCaixa.length > 0) {
+        const resumoBatch = resumoCaixa.map(r => ({
+          fazenda_id: primaryFazendaId,
+          importacao_id: imp.id,
+          ano_mes: r.anoMes,
+          entradas: r.entradas,
+          saidas: r.saidas,
+          saldo_final_total: r.saldoFinalTotal,
+        }));
+        const { error } = await supabase.from('financeiro_resumo_caixa').upsert(resumoBatch, {
+          onConflict: 'fazenda_id,ano_mes',
+        });
+        if (error) throw error;
+      }
+
+      toast.success(`Importação concluída: ${linhas.length} lançamentos + ${(saldosBancarios?.length || 0)} saldos + ${(resumoCaixa?.length || 0)} resumos`);
       await loadData();
       return true;
     } catch (err: any) {
@@ -505,12 +552,13 @@ export function useFinanceiro() {
   // --- Excluir importação ---
   const excluirImportacao = useCallback(async (importacaoId: string) => {
     try {
-      // Delete lancamentos first
-      const { error: delLanc } = await supabase
-        .from('financeiro_lancamentos')
-        .delete()
-        .eq('importacao_id', importacaoId);
-      if (delLanc) throw delLanc;
+      // Delete all related data
+      const deletes = await Promise.all([
+        supabase.from('financeiro_lancamentos').delete().eq('importacao_id', importacaoId),
+        supabase.from('financeiro_saldos_bancarios').delete().eq('importacao_id', importacaoId),
+        supabase.from('financeiro_resumo_caixa').delete().eq('importacao_id', importacaoId),
+      ]);
+      for (const { error } of deletes) { if (error) throw error; }
 
       // Delete import record
       const { error: delImp } = await supabase
