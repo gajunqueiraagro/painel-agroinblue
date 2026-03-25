@@ -44,8 +44,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     return Array.from(anos).sort().reverse();
   }, [lancamentos, saldosIniciais]);
 
-  const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
-  const mesAtual = String(new Date().getMonth() + 1).padStart(2, '0');
+  const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(new Date().getFullYear()));
+  const mesAtual = filtroMesInicial ? String(filtroMesInicial).padStart(2, '0') : String(new Date().getMonth() + 1).padStart(2, '0');
   const [mesFiltro, setMesFiltro] = useState(mesAtual);
   const [mostrarZerados, setMostrarZerados] = useState(false);
 
