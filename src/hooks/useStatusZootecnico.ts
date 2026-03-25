@@ -46,6 +46,7 @@ export function useStatusZootecnico(
   const [catsDivergentes, setCatsDivergentes] = useState(0);
   const [difTotalCabecas, setDifTotalCabecas] = useState(0);
   const [saldoTotalSistema, setSaldoTotalSistema] = useState(0);
+  const [semPecuaria, setSemPecuaria] = useState(false);
 
   const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
   const isGlobal = !fazendaId || fazendaId === '__global__';
