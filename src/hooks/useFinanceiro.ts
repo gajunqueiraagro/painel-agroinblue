@@ -511,7 +511,7 @@ export function useFinanceiro() {
       // Insert resumo caixa
       if (resumoCaixa && resumoCaixa.length > 0) {
         const resumoBatch = resumoCaixa.map(r => ({
-          fazenda_id: primaryFazendaId,
+          fazenda_id: r.fazendaId || primaryFazendaId,
           importacao_id: imp.id,
           ano_mes: r.anoMes,
           entradas: r.entradas,
