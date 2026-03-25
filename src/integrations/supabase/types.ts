@@ -357,31 +357,40 @@ export type Database = {
       }
       financeiro_contas: {
         Row: {
+          agencia_conta: string | null
           ativo: boolean
           banco: string | null
           created_at: string
           fazenda_id: string
           id: string
+          instrumento: string | null
           nome_conta: string
           tipo: string | null
+          uso: string | null
         }
         Insert: {
+          agencia_conta?: string | null
           ativo?: boolean
           banco?: string | null
           created_at?: string
           fazenda_id: string
           id?: string
+          instrumento?: string | null
           nome_conta: string
           tipo?: string | null
+          uso?: string | null
         }
         Update: {
+          agencia_conta?: string | null
           ativo?: boolean
           banco?: string | null
           created_at?: string
           fazenda_id?: string
           id?: string
+          instrumento?: string | null
           nome_conta?: string
           tipo?: string | null
+          uso?: string | null
         }
         Relationships: [
           {
@@ -570,6 +579,99 @@ export type Database = {
           },
           {
             foreignKeyName: "financeiro_lancamentos_importacao_id_fkey"
+            columns: ["importacao_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_importacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financeiro_resumo_caixa: {
+        Row: {
+          ano_mes: string
+          created_at: string
+          entradas: number
+          fazenda_id: string
+          id: string
+          importacao_id: string | null
+          saidas: number
+          saldo_final_total: number
+        }
+        Insert: {
+          ano_mes: string
+          created_at?: string
+          entradas?: number
+          fazenda_id: string
+          id?: string
+          importacao_id?: string | null
+          saidas?: number
+          saldo_final_total?: number
+        }
+        Update: {
+          ano_mes?: string
+          created_at?: string
+          entradas?: number
+          fazenda_id?: string
+          id?: string
+          importacao_id?: string | null
+          saidas?: number
+          saldo_final_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_resumo_caixa_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_resumo_caixa_importacao_id_fkey"
+            columns: ["importacao_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_importacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financeiro_saldos_bancarios: {
+        Row: {
+          ano_mes: string
+          conta_banco: string
+          created_at: string
+          fazenda_id: string
+          id: string
+          importacao_id: string | null
+          saldo_final: number
+        }
+        Insert: {
+          ano_mes: string
+          conta_banco: string
+          created_at?: string
+          fazenda_id: string
+          id?: string
+          importacao_id?: string | null
+          saldo_final?: number
+        }
+        Update: {
+          ano_mes?: string
+          conta_banco?: string
+          created_at?: string
+          fazenda_id?: string
+          id?: string
+          importacao_id?: string | null
+          saldo_final?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_saldos_bancarios_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_saldos_bancarios_importacao_id_fkey"
             columns: ["importacao_id"]
             isOneToOne: false
             referencedRelation: "financeiro_importacoes"
