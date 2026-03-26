@@ -68,7 +68,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
       } catch { return false; }
     });
 
-    const anteriores = lancamentos.filter(l => {
+    const anteriores = lancFiltrados.filter(l => {
       try {
         return format(parseISO(l.data), 'yyyy-MM') < mesKey;
       } catch { return false; }
