@@ -24,6 +24,7 @@ import { AnaliseOperacionalTab } from './AnaliseOperacionalTab';
 import { ValorRebanhoTab } from './ValorRebanhoTab';
 import { ConciliacaoCategoriaTab } from './ConciliacaoCategoriaTab';
 import { ChuvasTab } from './ChuvasTab';
+import { VisaoAnualZootecnicaTab } from './VisaoAnualZootecnicaTab';
 
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { SyncStatus } from '@/components/SyncStatus';
@@ -64,6 +65,7 @@ const TITLES: Record<TabId, string> = {
   fechamento: 'Lançamento de Pasto',
   mapa_pastos: 'Mapa de Pastos',
   resumo_pastos: 'Resumo de Pastos',
+  visao_anual_zoo: 'Visão Anual Zootécnica',
 };
 
 const Index = () => {
@@ -127,6 +129,7 @@ const Index = () => {
     fin_caixa: goToResumo,
     valor_rebanho: goToZootecnico,
     conciliacao_categoria: goToZootecnico,
+    visao_anual_zoo: goToZootecnicoHub,
   };
 
   const fazendaNome = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || '');
@@ -201,6 +204,15 @@ const Index = () => {
       {activeTab === 'mapa_pastos' && <MapaPastosTab />}
       {activeTab === 'resumo_pastos' && <ResumoPastosTab />}
       {activeTab === 'analise_operacional' && <AnaliseOperacionalTab />}
+      {activeTab === 'visao_anual_zoo' && (
+        <VisaoAnualZootecnicaTab
+          lancamentos={lancamentosVisiveis}
+          saldosIniciais={saldosIniciais}
+          onBack={goToZootecnicoHub}
+          onTabChange={handleTabChange}
+          filtroAnoInicial={filtroGlobal.ano}
+        />
+      )}
       {activeTab === 'conciliacao' && <ConciliacaoTab filtroAnoInicial={filtroGlobal.ano} filtroMesInicial={filtroGlobal.mes} />}
       {activeTab === 'valor_rebanho' && (
         <ValorRebanhoTab

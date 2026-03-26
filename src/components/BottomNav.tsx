@@ -1,7 +1,7 @@
 import { BarChart3, Beef, DollarSign, ClipboardList } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'financeiro' | 'evolucao' | 'evolucao_categoria' | 'fluxo_anual' | 'acessos' | 'analise' | 'analise_entradas' | 'analise_saidas' | 'desfrute' | 'cadastros' | 'chuvas' | 'pastos' | 'conciliacao' | 'fin_caixa' | 'zootecnico' | 'zootecnico_hub' | 'analise_economica' | 'valor_rebanho' | 'conciliacao_categoria' | 'analise_operacional' | 'resumo_pastos' | 'mapa_pastos' | 'fechamento';
+export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'financeiro' | 'evolucao' | 'evolucao_categoria' | 'fluxo_anual' | 'acessos' | 'analise' | 'analise_entradas' | 'analise_saidas' | 'desfrute' | 'cadastros' | 'chuvas' | 'pastos' | 'conciliacao' | 'fin_caixa' | 'zootecnico' | 'zootecnico_hub' | 'analise_economica' | 'valor_rebanho' | 'conciliacao_categoria' | 'analise_operacional' | 'resumo_pastos' | 'mapa_pastos' | 'fechamento' | 'visao_anual_zoo';
 
 interface BottomNavProps {
   activeTab: TabId;
@@ -18,7 +18,7 @@ const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   // Highlight the parent tab for sub-screens
   const getActiveId = (tab: TabId): TabId => {
-    const zooTabs: TabId[] = ['zootecnico', 'zootecnico_hub', 'lancamentos', 'fluxo_anual', 'chuvas', 'conciliacao', 'conciliacao_categoria', 'valor_rebanho', 'fechamento', 'mapa_pastos', 'resumo_pastos', 'analise_operacional', 'evolucao', 'evolucao_categoria', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute', 'movimentacao', 'pastos'];
+    const zooTabs: TabId[] = ['zootecnico', 'zootecnico_hub', 'lancamentos', 'fluxo_anual', 'chuvas', 'conciliacao', 'conciliacao_categoria', 'valor_rebanho', 'fechamento', 'mapa_pastos', 'resumo_pastos', 'analise_operacional', 'evolucao', 'evolucao_categoria', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute', 'movimentacao', 'pastos', 'visao_anual_zoo'];
     const finTabs: TabId[] = ['fin_caixa', 'financeiro', 'analise_economica'];
     const cadTabs: TabId[] = ['cadastros', 'acessos'];
     if (zooTabs.includes(tab)) return 'zootecnico_hub';
