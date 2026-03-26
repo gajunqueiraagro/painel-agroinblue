@@ -49,9 +49,9 @@ function UnifiedTable({ lancamentos, onEdit, showTipo }: { lancamentos: Lancamen
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs border-collapse">
-        <thead>
+         <thead className="sticky top-0 z-10">
           <tr className="border-b bg-muted/50">
-            <th className="p-1.5 text-left font-bold">Data</th>
+            <th className="p-1.5 text-left font-bold bg-muted/50">Data</th>
             {showTipo && <th className="p-1.5 text-left font-bold">Tipo</th>}
             <th className="p-1.5 text-right font-bold">Qtd</th>
             <th className="p-1.5 text-left font-bold">Cat.</th>
