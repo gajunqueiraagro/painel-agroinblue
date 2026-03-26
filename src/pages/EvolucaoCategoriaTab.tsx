@@ -124,7 +124,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
 
       return { ...cat, saldoInicioMes, movs, saldoFinal };
     });
-  }, [lancamentos, saldosIniciais, anoFiltro, mesFiltro]);
+  }, [lancFiltrados, saldosIniciais, anoFiltro, mesFiltro]);
 
   const totais = useMemo(() => {
     const saldoIni = dados.reduce((s, d) => s + d.saldoInicioMes, 0);
