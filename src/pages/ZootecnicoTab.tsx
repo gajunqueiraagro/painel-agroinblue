@@ -11,7 +11,6 @@ import { calcSaldoPorCategoriaLegado, calcPesoMedioPonderado, calcUA, calcUAHa, 
 import { calcArrobasSafe } from '@/lib/calculos/economicos';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { usePastos } from '@/hooks/usePastos';
-import { usePastos } from '@/hooks/usePastos';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { KpiCard } from '@/components/indicadores/KpiCard';
 import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';
