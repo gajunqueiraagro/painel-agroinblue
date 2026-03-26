@@ -147,11 +147,11 @@ const Index = () => {
     zootecnico: goToVisaoZooHub,
     indicadores: goToVisaoZooHub,
     valor_rebanho: goToZootecnico,
-    conciliacao_categoria: goToVisaoZooHub,
+    conciliacao_categoria: goToZootecnico,
     visao_anual_zoo: goToVisaoZooHub,
     analise_economica: goToVisaoFinHub,
     fin_caixa: goToLancarFinHub,
-    fechamento: goToLancarZooHub,
+    fechamento: goToZootecnico,
   };
 
   const fazendaNome = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || '');
