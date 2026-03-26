@@ -308,12 +308,16 @@ export function calcFluxoAnual(
   saldosIniciais: SaldoInicial[],
   lancamentos: Lancamento[],
   ano: number,
+  /** Se true, não filtra por status (assume que os dados já foram pré-filtrados) */
+  preFiltered = false,
 ) {
   const saldoInicialAno = saldosIniciais
     .filter(s => s.ano === ano)
     .reduce((sum, s) => sum + s.quantidade, 0);
 
-  const lancAno = lancamentos.filter(l => l.data.substring(0, 4) === String(ano) && isLancConciliado(l));
+  const lancAno = lancamentos.filter(l =>
+    l.data.substring(0, 4) === String(ano) && (preFiltered || isLancConciliado(l))
+  );
 
   const porMesTipo: Record<string, Record<FluxoTipo, number>> = {};
   for (let m = 1; m <= 12; m++) {
