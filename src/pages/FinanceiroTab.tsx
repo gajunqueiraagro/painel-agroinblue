@@ -236,6 +236,7 @@ function AbateTable({ lancamentos, onEdit }: { lancamentos: Lancamento[]; onEdit
                 <td className="p-1.5 text-right">{fmtValor(liqArroba)}</td>
                 <td className="p-1.5 text-right">{fmtValor(liqCabeca)}</td>
                 <td className="p-1.5"></td>
+                <td className="p-1.5"></td>
               </tr>
             </tfoot>
           );
