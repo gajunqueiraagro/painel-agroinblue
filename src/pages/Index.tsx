@@ -112,6 +112,12 @@ const Index = () => {
     setLancamentosFromConciliacao(true);
     setActiveTab('lancamentos');
   }, []);
+  const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
+  const goToFechamentoFromConciliacao = useCallback((filtro?: { ano: string; mes: number }) => {
+    if (filtro) setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
+    setFechamentoFromConciliacao(true);
+    setActiveTab('fechamento');
+  }, []);
 
   // Sub-screens that need a back button
   const subScreenBackMap: Partial<Record<TabId, () => void>> = {
