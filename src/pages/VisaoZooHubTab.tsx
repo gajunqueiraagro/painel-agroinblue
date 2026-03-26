@@ -42,7 +42,6 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
         onTabChange={onTabChange}
         filtroAnoInicial={filtroGlobal?.ano}
         filtroMesInicial={filtroGlobal?.mes}
-        hideBackButton
       />
 
       {/* Atalho Evolução do Rebanho */}
