@@ -31,7 +31,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     if (lancarZooTabs.includes(tab)) return 'lancar_zoo_hub';
     if (visaoZooTabs.includes(tab)) return 'visao_zoo_hub';
     if (lancarFinTabs.includes(tab)) return 'lancar_fin_hub';
-    if (visaoFinTabs.includes(tab)) return 'visao_fin_hub';
+    if (visaoFinTabs.includes(tab)) return 'fin_caixa';
     if (cadTabs.includes(tab)) return 'cadastros';
     return 'resumo';
   };
