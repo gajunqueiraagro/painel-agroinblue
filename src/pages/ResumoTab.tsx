@@ -51,7 +51,7 @@ function StatusBadge({ nivel }: { nivel: StatusNivel }) {
   );
 }
 
-function FinanceiroCard({ financeiro, onTabChange, isGlobal }: { financeiro: ReturnType<typeof useResumoStatus>['financeiro']; onTabChange: (tab: TabId) => void; isGlobal: boolean }) {
+function FinanceiroCard({ financeiro, onTabChange, isGlobal, filtroGlobal }: { financeiro: ReturnType<typeof useResumoStatus>['financeiro']; onTabChange: (tab: TabId, filtro?: { ano: string; mes: number }) => void; isGlobal: boolean; filtroGlobal: FiltroGlobal }) {
   const [auditOpen, setAuditOpen] = useState(false);
   const a = financeiro.audit;
 
