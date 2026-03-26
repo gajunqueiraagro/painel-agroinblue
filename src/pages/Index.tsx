@@ -76,6 +76,7 @@ const TITLES: Record<TabId, string> = {
   resumo_pastos: 'Resumo de Pastos',
   visao_anual_zoo: 'Visão Anual Zootécnica',
   indicadores: 'Indicadores',
+  evolucao_rebanho_hub: 'Evolução Rebanho',
 };
 
 const Index = () => {
