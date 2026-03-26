@@ -486,11 +486,11 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
       {/* Content */}
       {topTab === 'todas' ? (
-        <UnifiedTable lancamentos={filtrados} onEdit={setEditando} showTipo />
+        <UnifiedTable lancamentos={filtrados} onEdit={setEditando} showTipo isGlobal={isGlobal} fazendaMap={fazendaMap} />
       ) : subAba === 'abate' ? (
-        <AbateTable lancamentos={filtrados} onEdit={setEditando} />
+        <AbateTable lancamentos={filtrados} onEdit={setEditando} isGlobal={isGlobal} fazendaMap={fazendaMap} />
       ) : (
-        <UnifiedTable lancamentos={filtrados} onEdit={setEditando} subTipo={subAba} />
+        <UnifiedTable lancamentos={filtrados} onEdit={setEditando} subTipo={subAba} isGlobal={isGlobal} fazendaMap={fazendaMap} />
       )}
 
       {/* Edit dialog */}
