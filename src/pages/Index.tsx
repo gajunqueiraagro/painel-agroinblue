@@ -2,7 +2,8 @@ import { useState, useCallback, useMemo } from 'react';
 import { BottomNav, TabId } from '@/components/BottomNav';
 import { Header } from '@/components/Header';
 import { ResumoTab } from './ResumoTab';
-import { ZootecnicoTab } from './ZootecnicoTab';
+import { IndicadoresZooTab } from './ZootecnicoTab';
+import { StatusZootecnicoTab } from './StatusZootecnicoTab';
 import { LancarZooHubTab } from './LancarZooHubTab';
 import { VisaoZooHubTab } from './VisaoZooHubTab';
 import { LancarFinHubTab } from './LancarFinHubTab';
@@ -43,7 +44,7 @@ export interface FiltroGlobal {
 
 const TITLES: Record<TabId, string> = {
   resumo: 'Resumo Executivo',
-  zootecnico: 'Painel Zootécnico',
+  zootecnico: 'Status Zootécnico',
   zootecnico_hub: 'Zootécnico',
   lancar_zoo_hub: 'Lançar Zootécnico',
   visao_zoo_hub: 'Visão Zootécnico',
@@ -73,6 +74,7 @@ const TITLES: Record<TabId, string> = {
   mapa_pastos: 'Mapa de Pastos',
   resumo_pastos: 'Resumo de Pastos',
   visao_anual_zoo: 'Visão Anual Zootécnica',
+  indicadores: 'Indicadores',
 };
 
 const Index = () => {
@@ -135,6 +137,7 @@ const Index = () => {
   // Sub-screens that need a back button
   const subScreenBackMap: Partial<Record<TabId, () => void>> = {
     zootecnico: goToVisaoZooHub,
+    indicadores: goToVisaoZooHub,
     valor_rebanho: goToZootecnico,
     conciliacao_categoria: goToVisaoZooHub,
     visao_anual_zoo: goToVisaoZooHub,
@@ -191,7 +194,17 @@ const Index = () => {
       )}
 
       {activeTab === 'zootecnico' && (
-        <ZootecnicoTab
+        <StatusZootecnicoTab
+          lancamentos={lancamentosVisiveis}
+          saldosIniciais={saldosIniciais}
+          onBack={goToVisaoZooHub}
+          onTabChange={handleTabChange}
+          filtroAnoInicial={filtroGlobal.ano}
+          filtroMesInicial={filtroGlobal.mes}
+        />
+      )}
+      {activeTab === 'indicadores' && (
+        <IndicadoresZooTab
           lancamentos={lancamentosVisiveis}
           saldosIniciais={saldosIniciais}
           onBack={goToVisaoZooHub}

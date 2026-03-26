@@ -1,6 +1,6 @@
 /**
- * Painel Zootécnico — Central de Status + Ação.
- * Blocos: Status, Estoque+Lotação, Produção, Gráficos.
+ * Indicadores Zootécnicos — KPIs de Estoque, Produção e Desempenho com gráficos.
+ * (Antigo "Painel Zootécnico", agora focado apenas em indicadores)
  */
 import { useState, useMemo, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -10,7 +10,6 @@ import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 import { calcSaldoPorCategoriaLegado, calcPesoMedioPonderado, calcUA, calcUAHa, calcAreaProdutivaPecuaria } from '@/lib/calculos/zootecnicos';
 import { calcArrobasSafe } from '@/lib/calculos/economicos';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
-import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
 import { usePastos } from '@/hooks/usePastos';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { KpiCard } from '@/components/indicadores/KpiCard';
@@ -18,8 +17,8 @@ import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';
 import { HistoricoComparativo } from '@/components/indicadores/HistoricoComparativo';
 import { TabId } from '@/components/BottomNav';
 import {
-  ArrowLeft, ChevronRight, AlertTriangle, CheckCircle2, Circle,
-  BarChart2, TrendingUp, TrendingDown, Beef, Activity,
+  ArrowLeft, ChevronRight, AlertTriangle,
+  BarChart2,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -39,7 +38,7 @@ interface Props {
 type Vista = 'mes' | 'acumulado';
 type SubView = 'main' | 'graficos-estoque' | 'graficos-producao';
 
-export function ZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTabChange, filtroAnoInicial, filtroMesInicial }: Props) {
+export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabChange, filtroAnoInicial, filtroMesInicial }: Props) {
   const { fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
@@ -71,7 +70,6 @@ export function ZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTabChange
   };
 
   const zoo = useIndicadoresZootecnicos(fazendaId, anoNum, mesFiltro, lancamentos, saldosIniciais, pastos, categorias);
-  const statusZoo = useStatusZootecnico(fazendaId, anoNum, mesFiltro, lancamentos, saldosIniciais);
 
   const mesLabel = MESES_COLS.find(m => m.key === String(mesFiltro).padStart(2, '0'))?.label || '';
 
@@ -128,61 +126,6 @@ export function ZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTabChange
       </div>
 
       <div className="p-4 space-y-4">
-
-      {/* ===== BLOCO 1: STATUS ZOOTÉCNICO ===== */}
-      <Card className={`border-l-4 ${statusZoo.status === 'fechado' ? 'border-l-emerald-500' : statusZoo.status === 'parcial' ? 'border-l-amber-500' : 'border-l-destructive'}`}>
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">📊 Status Zootécnico</h3>
-            <StatusBadge status={statusZoo.status} />
-          </div>
-
-          {/* Contadores */}
-          <div className="flex gap-3 text-xs font-bold">
-            <span className="flex items-center gap-1 text-destructive">
-              🔴 {statusZoo.contadores.aberto}
-            </span>
-            <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
-              🟡 {statusZoo.contadores.parcial}
-            </span>
-            <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-              🟢 {statusZoo.contadores.fechado}
-            </span>
-          </div>
-
-          {/* Lista de pendências */}
-          <div className="space-y-2">
-            {statusZoo.pendencias.map(p => (
-              <div key={p.id} className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-sm shrink-0">
-                    {p.status === 'aberto' ? '🔴' : p.status === 'parcial' ? '🟡' : '🟢'}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-foreground truncate">{p.label}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">{p.descricao}</p>
-                  </div>
-                </div>
-                {p.status !== 'fechado' && p.resolverTab && (
-                  <button
-                    onClick={() => navTo(p.resolverTab as TabId)}
-                    className="text-[10px] font-bold text-primary whitespace-nowrap flex items-center gap-0.5 hover:underline"
-                  >
-                    Resolver <ChevronRight className="h-3 w-3" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {statusZoo.status === 'fechado' && (
-            <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
-              <CheckCircle2 className="h-4 w-4" />
-              <span className="font-semibold">Mês completamente fechado</span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Toggle Mês | Acumulado */}
       <div className="flex bg-muted rounded-lg p-0.5">
@@ -346,20 +289,6 @@ export function ZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTabChange
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function StatusBadge({ status }: { status: 'aberto' | 'parcial' | 'fechado' }) {
-  const config = {
-    aberto: { emoji: '🔴', label: 'Em aberto', className: 'bg-destructive/15 text-destructive' },
-    parcial: { emoji: '🟡', label: 'Parcial', className: 'bg-amber-500/15 text-amber-700 dark:text-amber-400' },
-    fechado: { emoji: '🟢', label: 'Fechado', className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' },
-  };
-  const c = config[status];
-  return (
-    <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${c.className}`}>
-      {c.emoji} {c.label}
-    </span>
-  );
-}
 
 function formatMoedaCompacto(val: number): string {
   if (val >= 1_000_000) return `R$ ${formatNum(val / 1_000_000, 2)}M`;

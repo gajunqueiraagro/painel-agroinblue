@@ -4,7 +4,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { TabId } from '@/components/BottomNav';
 import {
-  BarChart2, GitCompare, Layers, Map, Eye,
+  BarChart2, GitCompare, Layers, Map, ClipboardCheck,
   ChevronRight,
 } from 'lucide-react';
 
@@ -25,8 +25,8 @@ const GROUPS: { title: string; emoji: string; items: GroupItem[] }[] = [
     title: 'Painel',
     emoji: '📊',
     items: [
-      { label: 'Indicadores e Status', tab: 'zootecnico', icon: BarChart2, description: 'KPIs, estoque, lotação e produção' },
-      { label: 'Visão Anual', tab: 'visao_anual_zoo', icon: Eye, description: 'Status mensal consolidado do ano' },
+      { label: 'Status Zootécnico', tab: 'zootecnico', icon: ClipboardCheck, description: 'Pendências do mês + visão anual' },
+      { label: 'Indicadores', tab: 'indicadores', icon: BarChart2, description: 'Estoque, produção, desempenho e gráficos' },
     ],
   },
   {
