@@ -36,9 +36,11 @@ function pct(v?: number) {
   return (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
 }
 
+type DialogMode = 'detail' | 'edit';
+
 export function FinanceiroEditDialog({ lancamento, open, onClose, onSave, onDelete }: Props) {
   const { fazendaAtual } = useFazenda();
-  const [data, setData] = useState('');
+  const [mode, setMode] = useState<DialogMode>('detail');
   const [quantidade, setQuantidade] = useState('');
   const [categoria, setCategoria] = useState<Categoria>('bois');
   const [local, setLocal] = useState('');
