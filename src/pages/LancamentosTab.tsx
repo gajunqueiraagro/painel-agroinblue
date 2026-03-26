@@ -343,7 +343,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const previstoLabelClass = isPrevisto ? 'text-orange-700 dark:text-orange-400' : '';
 
   // Check if financial section is needed
-  const showFinanceiro = !isNascimento;
+  const showFinanceiro = true;
 
   // Whether to show extra dates (Confirmado/Conciliado for abate, venda, transf)
   const showExtraDates = (isConfirmado || isConciliado) && (isAbate || isVenda || isTransferencia);
