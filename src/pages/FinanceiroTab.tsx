@@ -3,7 +3,7 @@ import { Lancamento, CATEGORIAS } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { parseISO, format } from 'date-fns';
-import { DollarSign, Pencil } from 'lucide-react';
+import { DollarSign, Info } from 'lucide-react';
 import { FinanceiroEditDialog } from '@/components/FinanceiroEditDialog';
 import { FinanceiroExportMenu } from '@/components/FinanceiroExportMenu';
 import { ChuvasTab } from './ChuvasTab';
