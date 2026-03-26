@@ -691,7 +691,37 @@ export function useIndicadoresZootecnicos(
     const valorPorHa = valorRebanho !== null && areaProdutiva > 0 ? valorRebanho / areaProdutiva : null;
     const valorRebanhoFechado = valorRebanhoData?.fechado ?? false;
 
-    // ===== COMPARAÇÕES =====
+    // ===== COMPARAÇÕES (dual: mensal + anual) =====
+
+    // --- MoM: structural indicators (vs mês anterior) ---
+    const compSaldoMoM = saldoAnterior > 0 ? buildComparacao(saldoFinalMes, saldoAnterior, 'mensal') : null;
+
+    // Peso médio do mês anterior
+    let pesoMedioAnterior: number | null = null;
+    if (mes > 1) {
+      pesoMedioAnterior = calcPesoMedioPonderado(
+        Array.from(saldoMapAnterior.entries())
+          .filter(([, q]) => q > 0)
+          .map(([cat, q]) => ({ quantidade: q, pesoKg: getPesoMedioCatComPastos(cat, pesoFechamentoMesAntMap, saldosIniciais, lancamentos, ano, mes - 1) }))
+      );
+    } else {
+      pesoMedioAnterior = calcPesoMedioPonderado(
+        saldosIniciais.filter(s => s.ano === ano).map(s => ({ quantidade: s.quantidade, pesoKg: s.pesoMedioKg ?? null }))
+      );
+    }
+    const compPesoMedioMoM = pesoMedioRebanhoKg !== null && pesoMedioAnterior !== null ? buildComparacao(pesoMedioRebanhoKg, pesoMedioAnterior, 'mensal') : null;
+
+    // UA/ha do mês anterior
+    const uaTotalAnt = calcUA(saldoAnterior, pesoMedioAnterior);
+    const uaHaAnt = calcUAHa(uaTotalAnt, areaProdutiva);
+    const compUaHaMoM = uaHa !== null && uaHaAnt !== null ? buildComparacao(uaHa, uaHaAnt, 'mensal') : null;
+
+    // Valor rebanho MoM — calculated from valorRebanhoMoM state
+    const compValorMoM = valorRebanho !== null && valorRebanhoMoM !== null ? buildComparacao(valorRebanho, valorRebanhoMoM, 'mensal') : null;
+
+    // R$/cab MoM
+    const valorPorCabecaAnt = valorRebanhoMoM !== null && saldoAnterior > 0 ? valorRebanhoMoM / saldoAnterior : null;
+    const compValorPorCabecaMoM = valorPorCabeca !== null && valorPorCabecaAnt !== null ? buildComparacao(valorPorCabeca, valorPorCabecaAnt, 'mensal') : null;
 
     // --- YoY: estruturais/patrimoniais ---
     const anoAnt = ano - 1;
@@ -730,7 +760,19 @@ export function useIndicadoresZootecnicos(
       ? buildComparacao(uaHaMediaAno, uaHaMediaAnoYoY, 'acumulado_yoy')
       : null;
 
+    // UA/ha méd. MoM (vs mês anterior: recalc média jan..mes-1)
+    let compUaHaMediaMoM: Comparacao | null = null;
+    if (mes > 1) {
+      const uaHaMensaisAnt = uaHaMensais.slice(0, mes - 1);
+      const uaHaMediaAnt = uaHaMensaisAnt.length > 0 ? uaHaMensaisAnt.reduce((a, b) => a + b, 0) / uaHaMensaisAnt.length : null;
+      compUaHaMediaMoM = uaHaMediaAno !== null && uaHaMediaAnt !== null ? buildComparacao(uaHaMediaAno, uaHaMediaAnt, 'mensal') : null;
+    }
+
     const compValor = valorRebanho !== null && valorRebanhoYoY !== null ? buildComparacao(valorRebanho, valorRebanhoYoY, 'yoy') : null;
+
+    // R$/cab YoY
+    const valorPorCabecaYoY = valorRebanhoYoY !== null && saldoYoY > 0 ? valorRebanhoYoY / saldoYoY : null;
+    const compValorPorCabecaYoY = valorPorCabeca !== null && valorPorCabecaYoY !== null ? buildComparacao(valorPorCabeca, valorPorCabecaYoY, 'yoy') : null;
 
     // --- MoM: operacionais ---
     let compArrobasMes: Comparacao | null = null;
@@ -744,6 +786,15 @@ export function useIndicadoresZootecnicos(
         compArrobasHaMes = buildComparacao(arrobasHaMes, arrobasAnt / areaProdutiva, 'mensal');
       }
     }
+
+    // --- YoY for operational (same month last year) ---
+    const anoMesYoYStr = `${anoAnt}-${String(mes).padStart(2, '0')}`;
+    const saidasMesYoY = saidasDesfrute(filterByAnoMes(lancamentos, anoMesYoYStr));
+    const arrobasMesYoY = saidasMesYoY.reduce((s, l) => s + calcArrobasSafe(l), 0);
+    const compArrobasMesYoY = arrobasMesYoY > 0 ? buildComparacao(arrobasSaidasMes, arrobasMesYoY, 'yoy') : null;
+    const compArrobasHaMesYoY = arrobasMesYoY > 0 && areaProdutiva > 0 && arrobasHaMes !== null
+      ? buildComparacao(arrobasHaMes, arrobasMesYoY / areaProdutiva, 'yoy')
+      : null;
 
     // --- Acumulado YoY ---
     const lancsAcumYoY = filterByAnoAteMes(lancamentos, anoAnt, mes);
@@ -777,6 +828,13 @@ export function useIndicadoresZootecnicos(
     // GMD mês YoY (mesmo mês do ano anterior — só se base confiável)
     const gmdMesYoY = computeGmdForPeriod(saldosIniciais, lancamentos, anoAnt, mes, pesoFechamentoYoYMap);
     const compGmdMes = gmdMes !== null && gmdMesYoY !== null ? buildComparacao(gmdMes, gmdMesYoY, 'yoy') : null;
+
+    // GMD mês MoM (vs mês anterior)
+    let compGmdMesMoM: Comparacao | null = null;
+    if (mes > 1) {
+      const gmdMesAnt = computeGmdForPeriod(saldosIniciais, lancamentos, ano, mes - 1, pesoFechamentoMesAntMap);
+      compGmdMesMoM = gmdMes !== null && gmdMesAnt !== null ? buildComparacao(gmdMes, gmdMesAnt, 'mensal') : null;
+    }
 
     // GMD acumulado YoY
     const diasAcumYoY = Array.from({ length: mes }, (_, i) => new Date(anoAnt, i + 1, 0).getDate()).reduce((a, b) => a + b, 0);
