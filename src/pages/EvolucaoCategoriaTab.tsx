@@ -52,6 +52,12 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
 
   const [anoFiltro, setAnoFiltro] = useState(initialAno || String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState(initialMes || format(new Date(), 'MM'));
+  const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'previsto'>('realizado');
+
+  const lancFiltrados = useMemo(() => {
+    const cenario = statusFiltro === 'realizado' ? 'realizado' : 'meta';
+    return filtrarPorCenario(lancamentos, cenario);
+  }, [lancamentos, statusFiltro]);
 
   const dados = useMemo(() => {
     const mesKey = `${anoFiltro}-${mesFiltro}`;
