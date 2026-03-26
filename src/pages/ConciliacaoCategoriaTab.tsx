@@ -301,7 +301,7 @@ export function ConciliacaoCategoriaTab({ lancamentos, saldosIniciais, onBack, o
                 <TableHead className="text-foreground font-bold">Categoria</TableHead>
                 <TableHead className="text-right text-foreground font-bold">Sistema</TableHead>
                 <TableHead className="text-right text-foreground font-bold">Pasto</TableHead>
-                <TableHead className="text-right text-foreground font-bold text-xs">Dif. no Sistema</TableHead>
+                <TableHead className="text-right text-foreground font-bold text-xs">Dif. no Pasto</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
