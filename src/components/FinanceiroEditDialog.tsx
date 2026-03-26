@@ -41,6 +41,7 @@ type DialogMode = 'detail' | 'edit';
 export function FinanceiroEditDialog({ lancamento, open, onClose, onSave, onDelete }: Props) {
   const { fazendaAtual } = useFazenda();
   const [mode, setMode] = useState<DialogMode>('detail');
+  const [data, setData] = useState('');
   const [quantidade, setQuantidade] = useState('');
   const [categoria, setCategoria] = useState<Categoria>('bois');
   const [local, setLocal] = useState('');
