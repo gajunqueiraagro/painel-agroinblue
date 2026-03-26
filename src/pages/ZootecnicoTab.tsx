@@ -290,20 +290,6 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function StatusBadge({ status }: { status: 'aberto' | 'parcial' | 'fechado' }) {
-  const config = {
-    aberto: { emoji: '🔴', label: 'Em aberto', className: 'bg-destructive/15 text-destructive' },
-    parcial: { emoji: '🟡', label: 'Parcial', className: 'bg-amber-500/15 text-amber-700 dark:text-amber-400' },
-    fechado: { emoji: '🟢', label: 'Fechado', className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' },
-  };
-  const c = config[status];
-  return (
-    <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${c.className}`}>
-      {c.emoji} {c.label}
-    </span>
-  );
-}
-
 function formatMoedaCompacto(val: number): string {
   if (val >= 1_000_000) return `R$ ${formatNum(val / 1_000_000, 2)}M`;
   if (val >= 1_000) return `R$ ${formatNum(val / 1_000, 1)}mil`;
