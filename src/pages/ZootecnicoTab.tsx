@@ -387,36 +387,39 @@ function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNu
         <button onClick={onBack} className="p-1.5 rounded-md hover:bg-muted transition-colors">
           <ArrowLeft className="h-5 w-5 text-foreground" />
         </button>
-        <h1 className="text-lg font-extrabold text-foreground">
-          {isEstoque ? '📊 Gráficos — Estoque' : '📊 Gráficos — Produção'}
-        </h1>
+        <div>
+          <h1 className="text-lg font-extrabold text-foreground">
+            {isEstoque ? '📊 Gráficos — Estoque' : '📊 Gráficos — Produção'}
+          </h1>
+          <p className="text-xs text-muted-foreground">📅 {MESES_NOMES[mesFiltro - 1]}/{anoNum}</p>
+        </div>
       </div>
 
       {isEstoque ? (
         <>
-          <ChartCard title="Rebanho Mensal (cab)" data={chartData}
+          <ChartCard title="Rebanho Final do mês (cab)" subtitle="Quantidade de cabeças no final do mês" data={chartData}
             keys={[`cab_${anoNum}`, `cab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-            type="area" />
-          <ChartCard title="Kg/ha" data={chartData}
+            type="area" maxMonth={mesFiltro} />
+          <ChartCard title="Lotação: Kg vivo por ha (Kg/ha)" subtitle="Quantidade de Kg sobre cada hectare produtivo, no final do mês" data={chartData}
             keys={[`kgHa_${anoNum}`, `kgHa_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-            type="line" />
+            type="line" maxMonth={mesFiltro} />
         </>
       ) : (
         <>
           <ChartCard title="@ Saídas por Mês" data={chartData}
             keys={[`arrSaida_${anoNum}`, `arrSaida_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-            type="bar" />
+            type="bar" maxMonth={mesFiltro} />
           {gmdData.length > 0 && (
             <>
               <ChartCard title="@ Produzidas (acumulado)" data={gmdData}
                 keys={[`arrProd_${anoNum}`, `arrProd_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="line" />
+                type="line" maxMonth={mesFiltro} />
               <ChartCard title="GMD Acumulado (kg/dia)" data={gmdData}
                 keys={[`gmd_${anoNum}`, `gmd_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="line" decimals={3} />
+                type="line" decimals={3} maxMonth={mesFiltro} />
               <ChartCard title="Desfrute Cab. Acumulado (%)" data={gmdData}
                 keys={[`desfCab_${anoNum}`, `desfCab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="line" decimals={1} />
+                type="line" decimals={1} maxMonth={mesFiltro} />
             </>
           )}
         </>
@@ -431,24 +434,31 @@ function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNu
 
 interface ChartCardProps {
   title: string;
+  subtitle?: string;
   data: any[];
   keys: string[];
   labels: string[];
   type: 'area' | 'line' | 'bar';
   decimals?: number;
+  maxMonth?: number;
 }
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--muted-foreground))'];
+const DOT_STYLE = { r: 3, strokeWidth: 2 };
+const ACTIVE_DOT_STYLE = { r: 5, strokeWidth: 2 };
 
-function ChartCard({ title, data, keys, labels, type, decimals = 0 }: ChartCardProps) {
+function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, maxMonth }: ChartCardProps) {
+  const filteredData = maxMonth ? data.slice(0, maxMonth) : data;
+
   return (
     <Card>
       <CardContent className="p-4">
-        <p className="text-xs font-bold text-muted-foreground mb-2">{title}</p>
+        <p className="text-xs font-bold text-muted-foreground mb-0.5">{title}</p>
+        {subtitle && <p className="text-[10px] text-muted-foreground/70 mb-2">{subtitle}</p>}
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             {type === 'bar' ? (
-              <BarChart data={data}>
+              <BarChart data={filteredData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
@@ -459,7 +469,7 @@ function ChartCard({ title, data, keys, labels, type, decimals = 0 }: ChartCardP
                 ))}
               </BarChart>
             ) : type === 'area' ? (
-              <AreaChart data={data}>
+              <AreaChart data={filteredData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
@@ -468,11 +478,12 @@ function ChartCard({ title, data, keys, labels, type, decimals = 0 }: ChartCardP
                 {keys.map((k, i) => (
                   <Area key={k} type="monotone" dataKey={k} name={labels[i]}
                     stroke={COLORS[i]} fill={COLORS[i]} fillOpacity={i === 0 ? 0.3 : 0.1}
-                    strokeWidth={i === 0 ? 2 : 1} strokeDasharray={i > 0 ? '4 2' : undefined} />
+                    strokeWidth={i === 0 ? 2 : 1} strokeDasharray={i > 0 ? '4 2' : undefined}
+                    dot={DOT_STYLE} activeDot={ACTIVE_DOT_STYLE} />
                 ))}
               </AreaChart>
             ) : (
-              <LineChart data={data}>
+              <LineChart data={filteredData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
@@ -482,7 +493,7 @@ function ChartCard({ title, data, keys, labels, type, decimals = 0 }: ChartCardP
                   <Line key={k} type="monotone" dataKey={k} name={labels[i]}
                     stroke={COLORS[i]} strokeWidth={i === 0 ? 2 : 1}
                     strokeDasharray={i > 0 ? '4 2' : undefined}
-                    dot={{ r: 2 }} connectNulls />
+                    dot={DOT_STYLE} activeDot={ACTIVE_DOT_STYLE} connectNulls />
                 ))}
               </LineChart>
             )}
