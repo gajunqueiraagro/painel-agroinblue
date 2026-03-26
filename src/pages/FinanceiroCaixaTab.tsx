@@ -53,6 +53,11 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
   const [localAno, setLocalAno] = useState(filtroAnoInicial || String(new Date().getFullYear()));
   const [localMes, setLocalMes] = useState(filtroMesInicial || new Date().getMonth() + 1);
 
+  useEffect(() => {
+    if (filtroAnoInicial) setLocalAno(filtroAnoInicial);
+    if (filtroMesInicial) setLocalMes(filtroMesInicial);
+  }, [filtroAnoInicial, filtroMesInicial]);
+
   const anoAtual = new Date().getFullYear();
   const mesAtual = new Date().getMonth() + 1;
 

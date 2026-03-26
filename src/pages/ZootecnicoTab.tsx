@@ -59,6 +59,11 @@ export function ZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTabChange
   const [vista, setVista] = useState<Vista>('mes');
   const [subView, setSubView] = useState<SubView>('main');
 
+  useEffect(() => {
+    if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
+    if (filtroMesInicial) setMesFiltro(filtroMesInicial);
+  }, [filtroAnoInicial, filtroMesInicial]);
+
   const handleAnoChange = (val: string) => {
     setAnoFiltro(val);
     const n = Number(val);

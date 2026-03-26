@@ -49,6 +49,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const [mesFiltro, setMesFiltro] = useState(mesAtual);
   const [mostrarZerados, setMostrarZerados] = useState(false);
 
+  useEffect(() => {
+    if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
+    if (filtroMesInicial) setMesFiltro(String(filtroMesInicial).padStart(2, '0'));
+  }, [filtroAnoInicial, filtroMesInicial]);
+
   const anoMes = `${anoFiltro}-${mesFiltro}`;
   const isDezembro = mesFiltro === '12';
 
