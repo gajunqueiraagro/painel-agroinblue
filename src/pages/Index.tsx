@@ -154,6 +154,7 @@ const Index = () => {
     analise_economica: goToVisaoFinHub,
     fin_caixa: goToLancarFinHub,
     fechamento: goToZootecnico,
+    evolucao_rebanho_hub: goToLancarZooHub,
   };
 
   const fazendaNome = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || '');
