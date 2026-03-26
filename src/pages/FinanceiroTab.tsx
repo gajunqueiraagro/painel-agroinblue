@@ -80,10 +80,12 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo }: { lancamentos:
                 {showTipo && <td className="p-1.5 text-xs">{tipoInfo?.icon} {tipoInfo?.label || l.tipo}</td>}
                 <td className="p-1.5 text-right font-bold">{l.quantidade}</td>
                 <td className="p-1.5">{cat}</td>
+                {showDestino && <td className="p-1.5 truncate max-w-[80px]">{(l.tipo === 'morte' ? l.fazendaDestino : (l.fazendaDestino || l.fazendaOrigem)) || '-'}</td>}
                 <td className="p-1.5 text-right">{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
                 <td className="p-1.5 text-right text-muted-foreground">{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
                 <td className="p-1.5 text-right font-bold text-primary">{fmtValor(c.valorFinal)}</td>
                 <td className="p-1.5 text-right">{fmtValor(c.liqArroba)}</td>
+                {showLiqKg && <td className="p-1.5 text-right">{fmtValor(c.liqKg)}</td>}
                 <td className="p-1.5 text-right">{fmtValor(c.liqCabeca)}</td>
                 <td className="p-1.5">
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(l)}>
