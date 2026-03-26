@@ -81,6 +81,14 @@ function lancamentosNoRange(lancs: Lancamento[], startDate: string, endDate: str
   return lancs.filter(l => l.data >= startDate && l.data <= endDate);
 }
 
+/**
+ * Filtra lançamentos CONCILIADOS (Realizados) dentro de um range de datas.
+ * Esta é a função padrão para cálculos de saldo real.
+ */
+function lancamentosConciliadosNoRange(lancs: Lancamento[], startDate: string, endDate: string): Lancamento[] {
+  return lancs.filter(l => l.data >= startDate && l.data <= endDate && isLancConciliado(l));
+}
+
 // ---------------------------------------------------------------------------
 // 1. Saldo por categoria até o final de um mês
 // ---------------------------------------------------------------------------
