@@ -278,15 +278,25 @@ export function ConciliacaoCategoriaTab({ lancamentos, saldosIniciais, onBack, o
         </CardContent>
       </Card>
 
-      {/* Botão de ação — Reclassificação */}
+      {/* Botões de ação */}
       {catsDivergentes > 0 && (
-        <Button
-          onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: mesFiltro })}
-          className="w-full font-bold"
-          size="lg"
-        >
-          🔄 Ajustar Categorias (Reclass.) <ArrowRight className="h-4 w-4 ml-1" />
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: mesFiltro })}
+            className="flex-1 font-bold"
+            size="lg"
+          >
+            🔄 Reclass. <ArrowRight className="h-4 w-4 ml-1" />
+          </Button>
+          <Button
+            onClick={() => onNavigateToFechamento({ ano: anoFiltro, mes: mesFiltro })}
+            className="flex-1 font-bold"
+            size="lg"
+            variant="outline"
+          >
+            🐄 Ajustar no Pasto <ArrowRight className="h-4 w-4 ml-1" />
+          </Button>
+        </div>
       )}
 
       {/* Table */}
