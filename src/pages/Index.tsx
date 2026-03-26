@@ -106,7 +106,16 @@ const Index = () => {
     setActiveTab('financeiro');
   }, []);
 
+  // Tabs operacionais bloqueadas no modo Global
+  const BLOCKED_TABS_GLOBAL: TabId[] = ['fechamento', 'conciliacao_categoria', 'conciliacao', 'lancamentos'];
+
   const handleTabChange = useCallback((tab: TabId, filtro?: { ano: string; mes: number }) => {
+    // Safety guard: block operational tabs when Global
+    if (isGlobal && BLOCKED_TABS_GLOBAL.includes(tab)) {
+      const { toast } = require('sonner');
+      toast.info('Selecione uma fazenda para acessar esta funcionalidade');
+      return;
+    }
     if (filtro) {
       setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
     }
@@ -114,7 +123,7 @@ const Index = () => {
     if (tab !== 'lancamentos') setLancamentosFromConciliacao(false);
     if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
     setActiveTab(tab);
-  }, []);
+  }, [isGlobal]);
 
   const goToResumo = useCallback(() => setActiveTab('resumo'), []);
   const goToLancarZooHub = useCallback(() => setActiveTab('lancar_zoo_hub'), []);
