@@ -16,7 +16,7 @@ import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { KpiCard } from '@/components/indicadores/KpiCard';
 import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';
-import { HistoricoComparativo } from '@/components/indicadores/HistoricoComparativo';
+
 
 interface Props {
   lancamentos: Lancamento[];
@@ -27,9 +27,14 @@ interface Props {
 }
 
 export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesInicial, onNavigateSubTab }: Props) {
-  const { fazendaAtual } = useFazenda();
+  const { fazendaAtual, fazendas } = useFazenda();
   const { pastos, categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
+
+  const globalFazendaIds = useMemo(() => {
+    if (fazendaId !== '__global__') return undefined;
+    return fazendas.filter(f => f.tem_pecuaria !== false).map(f => f.id);
+  }, [fazendaId, fazendas]);
 
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
@@ -44,7 +49,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
 
   const ind = useIndicadoresZootecnicos(
     fazendaId, Number(anoFiltro), Number(mesFiltro),
-    lancamentos, saldosIniciais, pastos, categorias,
+    lancamentos, saldosIniciais, pastos, categorias, globalFazendaIds,
   );
 
   const mesLabel = MESES_COLS.find(m => m.key === mesFiltro)?.label || mesFiltro;
@@ -263,12 +268,6 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
         </div>
       )}
 
-      {/* BLOCO 7 — Histórico Comparativo */}
-      <HistoricoComparativo
-        historico={ind.historico}
-        comparacoesHistorico={ind.comparacoesHistorico}
-        mesAtual={Number(mesFiltro)}
-      />
     </div>
   );
 }

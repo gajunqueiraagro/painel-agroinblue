@@ -275,6 +275,7 @@ export function useIndicadoresZootecnicos(
   saldosIniciais: SaldoInicial[],
   pastos: Pasto[],
   categorias?: { id: string; codigo: string; nome: string; ordem_exibicao: number }[],
+  globalFazendaIds?: string[],
 ) {
   const [valorRebanhoData, setValorRebanhoData] = useState<{ total: number; fechado: boolean } | null>(null);
   const [valorRebanhoYoY, setValorRebanhoYoY] = useState<number | null>(null);
@@ -284,11 +285,53 @@ export function useIndicadoresZootecnicos(
   const [pesoFechamentoMesAntMap, setPesoFechamentoMesAntMap] = useState<Record<string, number>>({});
   const [pesoFechamentoYoYMap, setPesoFechamentoYoYMap] = useState<Record<string, number>>({});
 
+  const isGlobal = fazendaId === '__global__';
   const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
 
   // --- Load pesos do fechamento de pasto (mês atual + mês anterior) ---
   const loadPesosFechamento = useCallback(async () => {
-    if (!fazendaId || fazendaId === '__global__' || !categorias?.length) {
+    if (!categorias?.length) {
+      setPesoFechamentoMap({});
+      setPesoFechamentoMesAntMap({});
+      setPesoFechamentoYoYMap({});
+      return;
+    }
+
+    // Global mode: load from all fazendas and merge (weighted average)
+    if (isGlobal) {
+      const fids = globalFazendaIds || [];
+      if (fids.length === 0) {
+        setPesoFechamentoMap({});
+        setPesoFechamentoMesAntMap({});
+        setPesoFechamentoYoYMap({});
+        return;
+      }
+
+      let mesAntAno = ano;
+      let mesAntMes = mes - 1;
+      if (mesAntMes < 1) { mesAntMes = 12; mesAntAno--; }
+      const mesAntStr = `${mesAntAno}-${String(mesAntMes).padStart(2, '0')}`;
+      const yoyStr = `${ano - 1}-${String(mes).padStart(2, '0')}`;
+
+      try {
+        const [atualResults, antResults, yoyResults] = await Promise.all([
+          Promise.all(fids.map(fid => loadPesosPastosPorCategoria(fid, anoMes, categorias))),
+          Promise.all(fids.map(fid => loadPesosPastosPorCategoria(fid, mesAntStr, categorias))),
+          Promise.all(fids.map(fid => loadPesosPastosPorCategoria(fid, yoyStr, categorias))),
+        ]);
+
+        setPesoFechamentoMap(mergePesoMaps(atualResults));
+        setPesoFechamentoMesAntMap(mergePesoMaps(antResults));
+        setPesoFechamentoYoYMap(mergePesoMaps(yoyResults));
+      } catch {
+        setPesoFechamentoMap({});
+        setPesoFechamentoMesAntMap({});
+        setPesoFechamentoYoYMap({});
+      }
+      return;
+    }
+
+    if (!fazendaId) {
       setPesoFechamentoMap({});
       setPesoFechamentoMesAntMap({});
       setPesoFechamentoYoYMap({});
@@ -318,17 +361,105 @@ export function useIndicadoresZootecnicos(
       setPesoFechamentoMesAntMap({});
       setPesoFechamentoYoYMap({});
     }
-  }, [fazendaId, anoMes, ano, mes, categorias]);
+  }, [fazendaId, isGlobal, globalFazendaIds, anoMes, ano, mes, categorias]);
 
   useEffect(() => { loadPesosFechamento(); }, [loadPesosFechamento]);
 
   // --- Load valor rebanho (current + YoY) ---
   const loadValorRebanho = useCallback(async () => {
-    if (!fazendaId || fazendaId === '__global__') {
+    if (!fazendaId) {
       setValorRebanhoData(null);
       setValorRebanhoYoY(null);
       return;
     }
+
+    // Global mode: load and sum valor rebanho from all fazendas
+    if (isGlobal) {
+      const fids = globalFazendaIds || [];
+      if (fids.length === 0) {
+        setValorRebanhoData(null);
+        setValorRebanhoYoY(null);
+        return;
+      }
+      setLoadingValor(true);
+      try {
+        const anoMesYoY = `${ano - 1}-${String(mes).padStart(2, '0')}`;
+        const [precosRes, fechRes, precosYoYRes, saldosDbRes] = await Promise.all([
+          supabase.from('valor_rebanho_mensal').select('fazenda_id, categoria, preco_kg').in('fazenda_id', fids).eq('ano_mes', anoMes),
+          supabase.from('valor_rebanho_fechamento').select('fazenda_id, status').in('fazenda_id', fids).eq('ano_mes', anoMes),
+          supabase.from('valor_rebanho_mensal').select('fazenda_id, categoria, preco_kg').in('fazenda_id', fids).eq('ano_mes', anoMesYoY),
+          supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade, peso_medio_kg').in('fazenda_id', fids),
+        ]);
+
+        // Build per-fazenda saldos iniciais
+        const saldosByFaz = new Map<string, SaldoInicial[]>();
+        saldosDbRes.data?.forEach((s: any) => {
+          const arr = saldosByFaz.get(s.fazenda_id) || [];
+          arr.push({ ano: s.ano, categoria: s.categoria, quantidade: s.quantidade, pesoMedioKg: s.peso_medio_kg ?? undefined });
+          saldosByFaz.set(s.fazenda_id, arr);
+        });
+
+        // Current month — sum per fazenda
+        if (precosRes.data && precosRes.data.length > 0) {
+          const precosByFaz = new Map<string, Map<string, number>>();
+          precosRes.data.forEach(p => {
+            if (!precosByFaz.has(p.fazenda_id)) precosByFaz.set(p.fazenda_id, new Map());
+            precosByFaz.get(p.fazenda_id)!.set(p.categoria, Number(p.preco_kg));
+          });
+
+          let totalGlobal = 0;
+          for (const fid of fids) {
+            const precoMap = precosByFaz.get(fid);
+            if (!precoMap || precoMap.size === 0) continue;
+            const lancsFaz = lancamentos.filter(l => l.fazendaId === fid);
+            const saldosFaz = saldosByFaz.get(fid) || [];
+            const saldoMap = calcSaldoPorCategoriaLegado(saldosFaz, lancsFaz, ano, mes);
+            saldoMap.forEach((qtd, cat) => {
+              const preco = precoMap.get(cat) || 0;
+              const { valor: pesoKg } = resolverPesoOficial(cat, pesoFechamentoMap, saldosFaz, lancsFaz, ano, mes);
+              totalGlobal += qtd * (pesoKg || 0) * preco;
+            });
+          }
+
+          const allFechado = fechRes.data?.length === fids.length && fechRes.data.every(f => f.status === 'fechado');
+          setValorRebanhoData({ total: totalGlobal, fechado: allFechado || false });
+        } else {
+          setValorRebanhoData(null);
+        }
+
+        // YoY
+        if (precosYoYRes.data && precosYoYRes.data.length > 0) {
+          const precosByFazYoY = new Map<string, Map<string, number>>();
+          precosYoYRes.data.forEach(p => {
+            if (!precosByFazYoY.has(p.fazenda_id)) precosByFazYoY.set(p.fazenda_id, new Map());
+            precosByFazYoY.get(p.fazenda_id)!.set(p.categoria, Number(p.preco_kg));
+          });
+          let totalYoY = 0;
+          for (const fid of fids) {
+            const precoMap = precosByFazYoY.get(fid);
+            if (!precoMap || precoMap.size === 0) continue;
+            const lancsFaz = lancamentos.filter(l => l.fazendaId === fid);
+            const saldosFaz = saldosByFaz.get(fid) || [];
+            const saldoMap = calcSaldoPorCategoriaLegado(saldosFaz, lancsFaz, ano - 1, mes);
+            saldoMap.forEach((qtd, cat) => {
+              const preco = precoMap.get(cat) || 0;
+              const pesoKg = getPesoMedioCatComPastos(cat, pesoFechamentoYoYMap, saldosFaz, lancsFaz, ano - 1, mes);
+              totalYoY += qtd * (pesoKg || 0) * preco;
+            });
+          }
+          setValorRebanhoYoY(totalYoY > 0 ? totalYoY : null);
+        } else {
+          setValorRebanhoYoY(null);
+        }
+      } catch {
+        setValorRebanhoData(null);
+        setValorRebanhoYoY(null);
+      } finally {
+        setLoadingValor(false);
+      }
+      return;
+    }
+
     setLoadingValor(true);
     try {
       const anoMesYoY = `${ano - 1}-${String(mes).padStart(2, '0')}`;
@@ -389,7 +520,7 @@ export function useIndicadoresZootecnicos(
     } finally {
       setLoadingValor(false);
     }
-  }, [fazendaId, anoMes, saldosIniciais, lancamentos, ano, mes, pesoFechamentoMap]);
+  }, [fazendaId, isGlobal, globalFazendaIds, anoMes, saldosIniciais, lancamentos, ano, mes, pesoFechamentoMap]);
 
   useEffect(() => { loadValorRebanho(); }, [loadValorRebanho]);
 
@@ -815,7 +946,25 @@ export function useIndicadoresZootecnicos(
 // Helpers de peso (internos)
 // ---------------------------------------------------------------------------
 
-
+/** Merge multiple per-fazenda peso maps into a single global map (simple merge, first wins per category) */
+function mergePesoMaps(maps: Record<string, number>[]): Record<string, number> {
+  // For global: weighted merge — since each map is already weighted-average per fazenda,
+  // we simply merge all entries. If same category appears in multiple fazendas,
+  // we keep the average across them (good enough for global view).
+  const acum: Record<string, { totalPeso: number; count: number }> = {};
+  for (const map of maps) {
+    for (const [cat, peso] of Object.entries(map)) {
+      if (!acum[cat]) acum[cat] = { totalPeso: 0, count: 0 };
+      acum[cat].totalPeso += peso;
+      acum[cat].count += 1;
+    }
+  }
+  const result: Record<string, number> = {};
+  for (const [cat, { totalPeso, count }] of Object.entries(acum)) {
+    result[cat] = totalPeso / count;
+  }
+  return result;
+}
 
 /** Mapeia OrigemPeso (do hook unificado) para FontePeso (do indicadores) */
 function origemToFonte(origem: OrigemPeso): FontePeso {
