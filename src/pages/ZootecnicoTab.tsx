@@ -217,33 +217,28 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
             </button>
           </div>
           <div className="grid grid-cols-3 gap-3">
-            {vista === 'mes' ? (
-              <>
-                <KpiCard label="@ produzidas"
-                  valor={zoo.arrobasProduzidasMes !== null ? formatNum(zoo.arrobasProduzidasMes, 1) : '—'}
-                  unidade="@" semBase={zoo.arrobasProduzidasMes === null} />
-                <KpiCard label="GMD"
-                  valor={zoo.gmdMes !== null ? formatNum(zoo.gmdMes, 3) : '—'}
-                  unidade="kg/dia" compMensal={zoo.comparacoes.gmdMes.mensal} compAnual={zoo.comparacoes.gmdMes.anual} />
-                <KpiCard label="@ saídas"
-                  valor={formatNum(zoo.arrobasSaidasMes, 1)} unidade="@"
-                  compMensal={zoo.comparacoes.arrobasSaidasMes.mensal} compAnual={zoo.comparacoes.arrobasSaidasMes.anual} />
-              </>
-            ) : (
-              <>
-                <KpiCard label="@ produzidas"
-                  valor={zoo.arrobasProduzidasAcumulado !== null ? formatNum(zoo.arrobasProduzidasAcumulado, 1) : '—'}
-                  unidade="@" compMensal={zoo.comparacoes.arrobasProduzidasAcumulado.mensal} compAnual={zoo.comparacoes.arrobasProduzidasAcumulado.anual}
-                  semBase={zoo.arrobasProduzidasAcumulado === null} />
-                <KpiCard label="@/ha"
-                  valor={zoo.arrobasHaAcumuladoAno !== null ? formatNum(zoo.arrobasHaAcumuladoAno, 2) : '—'}
-                  compMensal={zoo.comparacoes.arrobasHaAcumuladoAno.mensal} compAnual={zoo.comparacoes.arrobasHaAcumuladoAno.anual}
-                  semBase={zoo.arrobasHaAcumuladoAno === null} />
-                <KpiCard label="GMD acum."
-                  valor={zoo.gmdAcumulado !== null ? formatNum(zoo.gmdAcumulado, 3) : '—'}
-                  unidade="kg/dia" compMensal={zoo.comparacoes.gmdAcumulado.mensal} compAnual={zoo.comparacoes.gmdAcumulado.anual} />
-              </>
-            )}
+            <KpiCard label="@ produzidas"
+              valor={vista === 'mes'
+                ? (zoo.arrobasProduzidasMes !== null ? formatNum(zoo.arrobasProduzidasMes, 1) : '—')
+                : (zoo.arrobasProduzidasAcumulado !== null ? formatNum(zoo.arrobasProduzidasAcumulado, 1) : '—')}
+              unidade="@"
+              compMensal={vista === 'acumulado' ? zoo.comparacoes.arrobasProduzidasAcumulado.mensal : null}
+              compAnual={vista === 'acumulado' ? zoo.comparacoes.arrobasProduzidasAcumulado.anual : null}
+              semBase={vista === 'mes' ? zoo.arrobasProduzidasMes === null : zoo.arrobasProduzidasAcumulado === null} />
+            <KpiCard label="@/ha"
+              valor={vista === 'mes'
+                ? (zoo.arrobasHaMes !== null ? formatNum(zoo.arrobasHaMes, 2) : '—')
+                : (zoo.arrobasHaAcumuladoAno !== null ? formatNum(zoo.arrobasHaAcumuladoAno, 2) : '—')}
+              compMensal={vista === 'mes' ? zoo.comparacoes.arrobasHaMes.mensal : zoo.comparacoes.arrobasHaAcumuladoAno.mensal}
+              compAnual={vista === 'mes' ? zoo.comparacoes.arrobasHaMes.anual : zoo.comparacoes.arrobasHaAcumuladoAno.anual}
+              semBase={vista === 'mes' ? zoo.arrobasHaMes === null : zoo.arrobasHaAcumuladoAno === null} />
+            <KpiCard label="GMD"
+              valor={vista === 'mes'
+                ? (zoo.gmdMes !== null ? formatNum(zoo.gmdMes, 3) : '—')
+                : (zoo.gmdAcumulado !== null ? formatNum(zoo.gmdAcumulado, 3) : '—')}
+              unidade="kg/dia"
+              compMensal={vista === 'mes' ? zoo.comparacoes.gmdMes.mensal : zoo.comparacoes.gmdAcumulado.mensal}
+              compAnual={vista === 'mes' ? zoo.comparacoes.gmdMes.anual : zoo.comparacoes.gmdAcumulado.anual} />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <KpiCard label="Desfrute cab."
@@ -261,8 +256,12 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
               compAnual={vista === 'acumulado' ? zoo.comparacoes.desfruteArrobasAcumulado.anual : null}
               semBase={vista === 'mes' ? zoo.desfruteArrobasMes === null : zoo.desfruteArrobasAcumulado === null} />
             <KpiCard label="@ desfrutadas"
-              valor={formatNum(zoo.arrobasSaidasAcumuladoAno, 1)} unidade="@"
-              compMensal={zoo.comparacoes.arrobasDesfrutadasAcum.mensal} compAnual={zoo.comparacoes.arrobasDesfrutadasAcum.anual} />
+              valor={vista === 'mes'
+                ? formatNum(zoo.arrobasSaidasMes, 1)
+                : formatNum(zoo.arrobasSaidasAcumuladoAno, 1)}
+              unidade="@"
+              compMensal={vista === 'mes' ? zoo.comparacoes.arrobasSaidasMes.mensal : zoo.comparacoes.arrobasDesfrutadasAcum.mensal}
+              compAnual={vista === 'mes' ? zoo.comparacoes.arrobasSaidasMes.anual : zoo.comparacoes.arrobasDesfrutadasAcum.anual} />
           </div>
 
           {/* GMD detail */}
