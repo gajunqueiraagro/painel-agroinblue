@@ -387,9 +387,12 @@ function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNu
         <button onClick={onBack} className="p-1.5 rounded-md hover:bg-muted transition-colors">
           <ArrowLeft className="h-5 w-5 text-foreground" />
         </button>
-        <h1 className="text-lg font-extrabold text-foreground">
-          {isEstoque ? '📊 Gráficos — Estoque' : '📊 Gráficos — Produção'}
-        </h1>
+        <div>
+          <h1 className="text-lg font-extrabold text-foreground">
+            {isEstoque ? '📊 Gráficos — Estoque' : '📊 Gráficos — Produção'}
+          </h1>
+          <p className="text-xs text-muted-foreground">📅 {MESES_NOMES[mesFiltro - 1]}/{anoNum}</p>
+        </div>
       </div>
 
       {isEstoque ? (
