@@ -167,6 +167,7 @@ function AbateTable({ lancamentos, onEdit }: { lancamentos: Lancamento[]; onEdit
             <th className="p-1.5 text-right font-bold text-primary bg-muted/50">Total</th>
             <th className="p-1.5 text-right font-bold bg-muted/50">R$/líq @</th>
             <th className="p-1.5 text-right font-bold bg-muted/50">Líq/Cab</th>
+            <th className="p-1.5 text-center font-bold bg-muted/50">Status</th>
             <th className="p-1.5 w-8 bg-muted/50"></th>
           </tr>
         </thead>
