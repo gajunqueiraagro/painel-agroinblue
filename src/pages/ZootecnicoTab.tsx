@@ -39,9 +39,14 @@ type Vista = 'mes' | 'acumulado';
 type SubView = 'main' | 'graficos-estoque' | 'graficos-producao';
 
 export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabChange, filtroAnoInicial, filtroMesInicial }: Props) {
-  const { fazendaAtual } = useFazenda();
+  const { fazendaAtual, fazendas } = useFazenda();
   const { pastos, categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
+
+  const globalFazendaIds = useMemo(() => {
+    if (fazendaId !== '__global__') return undefined;
+    return fazendas.filter(f => f.tem_pecuaria !== false).map(f => f.id);
+  }, [fazendaId, fazendas]);
 
   const anosDisp = useMemo(() => {
     const set = new Set<string>();
@@ -69,7 +74,7 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
     setMesFiltro(n === new Date().getFullYear() ? new Date().getMonth() + 1 : 12);
   };
 
-  const zoo = useIndicadoresZootecnicos(fazendaId, anoNum, mesFiltro, lancamentos, saldosIniciais, pastos, categorias);
+  const zoo = useIndicadoresZootecnicos(fazendaId, anoNum, mesFiltro, lancamentos, saldosIniciais, pastos, categorias, globalFazendaIds);
 
   const mesLabel = MESES_COLS.find(m => m.key === String(mesFiltro).padStart(2, '0'))?.label || '';
 
