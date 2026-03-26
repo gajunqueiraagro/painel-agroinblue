@@ -366,24 +366,42 @@ function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNu
     });
   }, [lancamentos, saldosIniciais, anoNum, mesFiltro, pastos]);
 
-  // GMD / desfrute from historico
-  const gmdData = useMemo(() => {
+  // Produção / GMD / desfrute from historico
+  const prodData = useMemo(() => {
     if (!zoo.historico || zoo.historico.length < 2) return [];
     const anoAtual = zoo.historico.find(h => h.ano === anoNum);
     const anoAnt = zoo.historico.find(h => h.ano === anoNum - 1);
     if (!anoAtual) return [];
+
+    // Helper: derive monthly value from accumulated (acum[m] - acum[m-1])
+    const mensal = (meses: typeof anoAtual.meses, i: number, field: 'arrobasProduzidasAcum' | 'gmdAcumulado') => {
+      const cur = meses[i]?.[field];
+      if (cur === null || cur === undefined) return null;
+      if (field === 'gmdAcumulado') return cur; // GMD monthly = use the period GMD directly
+      if (i === 0) return cur;
+      const prev = meses[i - 1]?.[field];
+      if (prev === null || prev === undefined) return cur;
+      return cur - prev;
+    };
+
     return MESES_NOMES.map((mes, i) => {
       const m = anoAtual.meses[i];
       const mAnt = anoAnt?.meses[i];
       const isFuturo = i + 1 > mesFiltro;
       return {
         mes,
-        [`gmd_${anoNum}`]: isFuturo ? null : (m?.gmdAcumulado ?? null),
-        [`gmd_${anoNum - 1}`]: mAnt?.gmdAcumulado ?? null,
-        [`desfCab_${anoNum}`]: isFuturo ? null : (m?.desfruteCabAcum ?? null),
-        [`desfCab_${anoNum - 1}`]: mAnt?.desfruteCabAcum ?? null,
+        // Arrobas produzidas - mensal (diff from acum)
+        [`arrProdMes_${anoNum}`]: isFuturo ? null : mensal(anoAtual.meses, i, 'arrobasProduzidasAcum'),
+        [`arrProdMes_${anoNum - 1}`]: anoAnt ? mensal(anoAnt.meses, i, 'arrobasProduzidasAcum') : null,
+        // Arrobas produzidas - acumulado
         [`arrProd_${anoNum}`]: isFuturo ? null : (m?.arrobasProduzidasAcum ? Math.round(m.arrobasProduzidasAcum) : null),
         [`arrProd_${anoNum - 1}`]: mAnt?.arrobasProduzidasAcum ? Math.round(mAnt.arrobasProduzidasAcum) : null,
+        // GMD mensal (use acumulado value as monthly proxy)
+        [`gmdMes_${anoNum}`]: isFuturo ? null : mensal(anoAtual.meses, i, 'gmdAcumulado'),
+        [`gmdMes_${anoNum - 1}`]: anoAnt ? mensal(anoAnt.meses, i, 'gmdAcumulado') : null,
+        // Desfrute cab acumulado
+        [`desfCab_${anoNum}`]: isFuturo ? null : (m?.desfruteCabAcum ?? null),
+        [`desfCab_${anoNum - 1}`]: mAnt?.desfruteCabAcum ?? null,
       };
     });
   }, [zoo.historico, anoNum, mesFiltro]);
