@@ -202,7 +202,21 @@ export function MapaPastosTab() {
               <Badge variant="outline" className="text-sm">{formatNum(totais.uaHaGeral, 2)} UA/ha</Badge>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => gerarModeloMapaPastos(pastos, categorias, fazendaAtual?.nome || 'Fazenda')}
+            >
+              <FileDown className="h-4 w-4 mr-1" />Baixar modelo
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setImportOpen(true)}
+            >
+              <Upload className="h-4 w-4 mr-1" />Importar Excel
+            </Button>
             <Button
               variant="outline"
               size="sm"
