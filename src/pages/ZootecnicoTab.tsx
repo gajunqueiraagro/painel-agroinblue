@@ -2,7 +2,7 @@
  * Painel Zootécnico — Central de Status + Ação.
  * Blocos: Status, Estoque+Lotação, Produção, Gráficos.
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { MESES_NOMES, MESES_COLS } from '@/lib/calculos/labels';

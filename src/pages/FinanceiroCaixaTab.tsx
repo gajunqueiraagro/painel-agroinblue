@@ -3,7 +3,7 @@
  * Topo fixo: nome fazenda + seletor fazenda/global + filtro ano + filtro mês.
  * Sub-abas: Dashboard | Fluxo de Caixa | Rateio ADM | Importação
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ImportacaoFinanceira } from '@/components/financeiro/ImportacaoFinanceira';
 import { DashboardFinanceiro } from '@/components/financeiro/DashboardFinanceiro';
 import { RateioADMConferenciaView } from '@/components/financeiro/RateioADMConferencia';
