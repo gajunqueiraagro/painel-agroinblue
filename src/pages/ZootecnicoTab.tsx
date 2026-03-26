@@ -18,7 +18,7 @@ import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';
 import { TabId } from '@/components/BottomNav';
 import {
   ArrowLeft, ChevronRight, AlertTriangle,
-  BarChart2,
+  BarChart2, TrendingUp,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
