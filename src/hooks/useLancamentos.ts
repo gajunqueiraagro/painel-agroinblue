@@ -148,6 +148,7 @@ export function useLancamentos() {
         valorTotal: l.valor_total ?? undefined,
         notaFiscal: l.nota_fiscal ?? undefined,
         tipoPeso: l.tipo_peso ?? 'vivo',
+        statusOperacional: l.status_operacional ?? 'conciliado',
         createdAt: l.created_at,
         updatedAt: l.updated_at,
         createdBy: l.created_by ?? undefined,
