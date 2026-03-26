@@ -194,7 +194,17 @@ const Index = () => {
       )}
 
       {activeTab === 'zootecnico' && (
-        <ZootecnicoTab
+        <StatusZootecnicoTab
+          lancamentos={lancamentosVisiveis}
+          saldosIniciais={saldosIniciais}
+          onBack={goToVisaoZooHub}
+          onTabChange={handleTabChange}
+          filtroAnoInicial={filtroGlobal.ano}
+          filtroMesInicial={filtroGlobal.mes}
+        />
+      )}
+      {activeTab === 'indicadores' && (
+        <IndicadoresZooTab
           lancamentos={lancamentosVisiveis}
           saldosIniciais={saldosIniciais}
           onBack={goToVisaoZooHub}
