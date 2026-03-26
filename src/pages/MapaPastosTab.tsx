@@ -55,6 +55,7 @@ export function MapaPastosTab() {
   const [anoMes, setAnoMes] = useState(format(new Date(), 'yyyy-MM'));
   const [rows, setRows] = useState<PastoMapaRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => { loadFechamentos(anoMes); }, [anoMes, loadFechamentos]);
 
