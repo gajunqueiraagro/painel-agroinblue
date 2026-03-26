@@ -151,7 +151,7 @@ const Index = () => {
         />
       )}
       {activeTab === 'zootecnico_hub' && (
-        <ZootecnicoHubTab onTabChange={handleTabChange} />
+        <ZootecnicoHubTab onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
       )}
       {activeTab === 'zootecnico' && (
         <ZootecnicoTab
