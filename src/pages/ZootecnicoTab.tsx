@@ -455,8 +455,7 @@ const COLORS = ['hsl(var(--primary))', 'hsl(var(--muted-foreground))'];
 const DOT_STYLE = { r: 3, strokeWidth: 2 };
 const ACTIVE_DOT_STYLE = { r: 5, strokeWidth: 2 };
 
-function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, maxMonth }: ChartCardProps) {
-  const filteredData = maxMonth ? data.slice(0, maxMonth) : data;
+function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0 }: ChartCardProps) {
 
   return (
     <Card>
