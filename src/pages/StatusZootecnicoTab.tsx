@@ -77,7 +77,10 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
 
   const statusZoo = useStatusZootecnico(fazendaId, anoNum, mesFiltro, lancamentos, saldosIniciais);
 
+  const BLOCKED_TABS_GLOBAL: TabId[] = ['fechamento', 'conciliacao_categoria', 'conciliacao', 'lancamentos', 'valor_rebanho'];
+
   const navTo = (tab: TabId) => {
+    if (isGlobal && BLOCKED_TABS_GLOBAL.includes(tab)) return;
     onTabChange(tab, { ano: anoFiltro, mes: mesFiltro });
   };
 
