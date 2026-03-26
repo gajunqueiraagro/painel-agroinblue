@@ -61,6 +61,7 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave, onDele
 
   useEffect(() => {
     if (lancamento) {
+      setMode('detail');
       setData(lancamento.data ?? '');
       setQuantidade(String(lancamento.quantidade ?? ''));
       setCategoria(lancamento.categoria as Categoria);
