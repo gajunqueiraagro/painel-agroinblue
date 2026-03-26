@@ -22,9 +22,9 @@ export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateT
     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
       <TabsList className="w-full grid grid-cols-4 mx-4 mt-2" style={{ maxWidth: 'calc(100% - 2rem)' }}>
         <TabsTrigger value="movimentacoes" className="text-[11px] px-1">Movimentações</TabsTrigger>
-        <TabsTrigger value="evolucao" className="text-[11px] px-1">Evolução</TabsTrigger>
-        <TabsTrigger value="valor" className="text-[11px] px-1">Valor Reb.</TabsTrigger>
+        <TabsTrigger value="evolucao" className="text-[11px] px-1">Evol. Rebanho</TabsTrigger>
         <TabsTrigger value="categoria" className="text-[11px] px-1">Evol. Categ.</TabsTrigger>
+        <TabsTrigger value="valor" className="text-[11px] px-1">Valor Reb.</TabsTrigger>
       </TabsList>
 
       <TabsContent value="movimentacoes">
