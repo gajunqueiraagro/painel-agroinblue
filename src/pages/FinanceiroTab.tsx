@@ -353,27 +353,48 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       )}
 
       {/* Filters */}
-      <div className="flex gap-2">
+      <div className="flex gap-1.5 items-center flex-wrap">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-          <SelectTrigger className="touch-target text-base font-bold w-28">
+          <SelectTrigger className="h-8 text-xs font-bold w-20">
             <SelectValue placeholder="Ano" />
           </SelectTrigger>
           <SelectContent>
             {anosDisponiveis.map(a => (
-              <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>
+              <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
             ))}
           </SelectContent>
         </Select>
         <Select value={mesFiltro} onValueChange={setMesFiltro}>
-          <SelectTrigger className="touch-target text-base font-bold flex-1">
+          <SelectTrigger className="h-8 text-xs font-bold w-24">
             <SelectValue placeholder="Mês" />
           </SelectTrigger>
           <SelectContent>
             {MESES_OPTIONS.map(m => (
-              <SelectItem key={m.value} value={m.value} className="text-base">{m.label}</SelectItem>
+              <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
+        <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
+          {([
+            { value: 'todos', label: 'Todos' },
+            { value: 'realizado', label: 'Realizado' },
+            { value: 'previsto', label: 'Previsto' },
+          ] as { value: StatusFiltro; label: string }[]).map(s => (
+            <button
+              key={s.value}
+              onClick={() => setStatusFiltro(s.value)}
+              className={`px-2 py-1 rounded text-[10px] font-bold transition-colors ${
+                statusFiltro === s.value
+                  ? s.value === 'realizado' ? 'bg-green-700 text-white'
+                    : s.value === 'previsto' ? 'bg-orange-500 text-white'
+                    : 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground'
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
         {isFinancial && topTab !== 'todas' && (
           <FinanceiroExportMenu
             lancamentos={filtrados}
