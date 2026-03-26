@@ -234,7 +234,7 @@ export function calcSaldoPorCategoriaLegado(
     : `${ano}-12-31`;
   const startDate = `${ano}-01-01`;
 
-  lancamentosNoRange(lancamentos, startDate, endDate).forEach(l => {
+  lancamentosConciliadosNoRange(lancamentos, startDate, endDate).forEach(l => {
     if (isEntrada(l.tipo)) {
       map.set(l.categoria, (map.get(l.categoria) || 0) + l.quantidade);
     } else if (isSaida(l.tipo)) {
