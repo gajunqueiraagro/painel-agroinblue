@@ -78,13 +78,46 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
 
   const mesLabel = MESES_COLS.find(m => m.key === String(mesFiltro).padStart(2, '0'))?.label || '';
 
-  // Peso total derived
+  // Peso total derived (mês)
   const pesoTotalKg = zoo.saldoFinalMes > 0 && zoo.pesoMedioRebanhoKg !== null
     ? zoo.saldoFinalMes * zoo.pesoMedioRebanhoKg : null;
-  const arrobasTotalEstoque = pesoTotalKg ? pesoTotalKg / 30 : null;
   const kgHa = pesoTotalKg && zoo.areaProdutiva > 0 ? pesoTotalKg / zoo.areaProdutiva : null;
-  const rsCab = zoo.valorRebanho !== null && zoo.saldoFinalMes > 0 ? zoo.valorRebanho / zoo.saldoFinalMes : null;
-  const rsArroba = zoo.valorRebanho !== null && arrobasTotalEstoque ? zoo.valorRebanho / arrobasTotalEstoque : null;
+
+  // ===== Acumulado: médias jan→mesFiltro =====
+  const acumulado = useMemo(() => {
+    const snapshots: { cab: number; pesoMedio: number | null; kgTotal: number; area: number; ua: number }[] = [];
+    for (let m = 1; m <= mesFiltro; m++) {
+      const sMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, anoNum, m);
+      const cab = Array.from(sMap.values()).reduce((s, v) => s + v, 0);
+      const itensPeso = Array.from(sMap.entries())
+        .filter(([, q]) => q > 0)
+        .map(([cat, q]) => {
+          const si = saldosIniciais.find(s => s.ano === anoNum && s.categoria === cat);
+          return { quantidade: q, pesoKg: si?.pesoMedioKg ?? null };
+        });
+      const pm = calcPesoMedioPonderado(itensPeso);
+      const kgTot = cab * (pm || 0);
+      const area = calcAreaProdutivaPecuaria(pastos);
+      const ua = calcUA(cab, pm);
+      snapshots.push({ cab, pesoMedio: pm, kgTotal: kgTot, area, ua });
+    }
+
+    const n = snapshots.length;
+    if (n === 0) return { cabMedia: 0, pesoMedioFinal: null, areaMedia: 0, uaHaMedio: null, kgHaMedio: null };
+
+    const cabMedia = snapshots.reduce((s, v) => s + v.cab, 0) / n;
+    // Peso médio ponderado por cabeças de cada mês
+    const totalCabPeso = snapshots.reduce((s, v) => s + (v.pesoMedio !== null ? v.cab : 0), 0);
+    const totalPesoPond = snapshots.reduce((s, v) => s + (v.pesoMedio !== null ? v.cab * v.pesoMedio : 0), 0);
+    const pesoMedioFinal = totalCabPeso > 0 ? totalPesoPond / totalCabPeso : null;
+    const areaMedia = snapshots.reduce((s, v) => s + v.area, 0) / n;
+    const uaMedia = snapshots.reduce((s, v) => s + v.ua, 0) / n;
+    const kgTotalMedia = snapshots.reduce((s, v) => s + v.kgTotal, 0) / n;
+    const uaHaMedio = areaMedia > 0 ? uaMedia / areaMedia : null;
+    const kgHaMedio = areaMedia > 0 ? kgTotalMedia / areaMedia : null;
+
+    return { cabMedia, pesoMedioFinal, areaMedia, uaHaMedio, kgHaMedio };
+  }, [saldosIniciais, lancamentos, anoNum, mesFiltro, pastos]);
 
   // Helpers for navigation — always carry current filter context
   const navTo = (tab: TabId) => {
