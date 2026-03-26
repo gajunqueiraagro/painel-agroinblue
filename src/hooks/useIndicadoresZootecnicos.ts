@@ -928,7 +928,8 @@ export function useIndicadoresZootecnicos(
       const arrobasIniAno = calcArrobasIniciais(saldosIniciais, a);
       const uaHaAcumList: number[] = [];
 
-      for (let m = 1; m <= mes; m++) {
+      const maxMes = a === ano ? mes : 12;
+      for (let m = 1; m <= maxMes; m++) {
         const sMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, a, m);
         const sFinal = Array.from(sMap.values()).reduce((s2, v) => s2 + v, 0);
 
