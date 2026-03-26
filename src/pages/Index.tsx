@@ -184,11 +184,11 @@ const Index = () => {
       {activeTab === 'desfrute' && <DesfrunteTab lancamentos={isGlobal ? lancamentosVisiveis : lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} isGlobal={isGlobal} />}
       {activeTab === 'cadastros' && <CadastrosTab />}
       {activeTab === 'chuvas' && <ChuvasTab />}
-      {activeTab === 'fechamento' && <FechamentoTab />}
+      {activeTab === 'fechamento' && <FechamentoTab filtroAnoInicial={filtroGlobal.ano} filtroMesInicial={filtroGlobal.mes} />}
       {activeTab === 'mapa_pastos' && <MapaPastosTab />}
       {activeTab === 'resumo_pastos' && <ResumoPastosTab />}
       {activeTab === 'analise_operacional' && <AnaliseOperacionalTab />}
-      {activeTab === 'conciliacao' && <ConciliacaoTab />}
+      {activeTab === 'conciliacao' && <ConciliacaoTab filtroAnoInicial={filtroGlobal.ano} filtroMesInicial={filtroGlobal.mes} />}
       {activeTab === 'valor_rebanho' && (
         <ValorRebanhoTab
           lancamentos={lancamentos}

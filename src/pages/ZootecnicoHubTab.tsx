@@ -10,7 +10,8 @@ import {
 } from 'lucide-react';
 
 interface Props {
-  onTabChange: (tab: TabId) => void;
+  onTabChange: (tab: TabId, filtro?: { ano: string; mes: number }) => void;
+  filtroGlobal?: { ano: string; mes: number };
 }
 
 interface GroupItem {
