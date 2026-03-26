@@ -186,7 +186,7 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
-              Estoque {vista === 'mes' ? mesLabel : `Jan → ${mesLabel}`}
+              {vista === 'mes' ? `Estoque ${mesLabel}` : `Estoque — Média Jan → ${mesLabel}`}
             </h3>
             <button
               onClick={() => setSubView('graficos-estoque')}
@@ -195,42 +195,62 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
               Ver gráficos <ChevronRight className="h-3 w-3" />
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <KpiCard label="Cabeças" valor={formatNum(zoo.saldoFinalMes)} unidade="cab"
-              compMensal={zoo.comparacoes.saldoFinalMes.mensal} compAnual={zoo.comparacoes.saldoFinalMes.anual} />
-            <KpiCard label="Peso Médio" 
-              valor={zoo.pesoMedioRebanhoKg !== null ? formatNum(zoo.pesoMedioRebanhoKg, 1) : '—'}
-              unidade="kg" estimado={zoo.qualidade.pesoMedioEstimado}
-              compMensal={zoo.comparacoes.pesoMedioRebanhoKg.mensal} compAnual={zoo.comparacoes.pesoMedioRebanhoKg.anual}
-              semBase={zoo.pesoMedioRebanhoKg === null} />
-            <KpiCard label="Valor Rebanho"
-              valor={zoo.valorRebanho !== null ? formatMoedaCompacto(zoo.valorRebanho) : '—'}
-              compMensal={zoo.comparacoes.valorRebanho.mensal} compAnual={zoo.comparacoes.valorRebanho.anual}
-              semBase={zoo.valorRebanho === null} />
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <KpiCard label="R$/cab"
-              valor={rsCab !== null ? formatMoeda(rsCab) : '—'} small
-              semBase={rsCab === null} />
-            <KpiCard label="R$/@"
-              valor={rsArroba !== null ? formatMoeda(rsArroba) : '—'} small
-              semBase={rsArroba === null} />
-            <KpiCard label="Área Prod."
-              valor={formatNum(zoo.areaProdutiva, 1)} unidade="ha"
-              estimado={zoo.qualidade.areaProdutivaEstimativa} />
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <KpiCard label="UA/ha"
-              valor={zoo.uaHa !== null ? formatNum(zoo.uaHa, 2) : '—'}
-              compMensal={zoo.comparacoes.uaHa.mensal} compAnual={zoo.comparacoes.uaHa.anual}
-              semBase={zoo.uaHa === null} />
-            <KpiCard label="Kg/ha"
-              valor={kgHa !== null ? formatNum(kgHa, 0) : '—'}
-              semBase={kgHa === null} />
-            <KpiCard label="UA/ha méd."
-              valor={zoo.uaHaMediaAno !== null ? formatNum(zoo.uaHaMediaAno, 2) : '—'}
-              compMensal={zoo.comparacoes.uaHaMediaAno.mensal} compAnual={zoo.comparacoes.uaHaMediaAno.anual}
-              semBase={zoo.uaHaMediaAno === null} small />
+
+          {vista === 'mes' ? (
+            /* ===== VISÃO MÊS: posição final do mês ===== */
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                <KpiCard label="Cabeças no mês" valor={formatNum(zoo.saldoFinalMes)} unidade="cab"
+                  compMensal={zoo.comparacoes.saldoFinalMes.mensal} compAnual={zoo.comparacoes.saldoFinalMes.anual} />
+                <KpiCard label="Peso Final no mês"
+                  valor={zoo.pesoMedioRebanhoKg !== null ? formatNum(zoo.pesoMedioRebanhoKg, 1) : '—'}
+                  unidade="kg" estimado={zoo.qualidade.pesoMedioEstimado}
+                  compMensal={zoo.comparacoes.pesoMedioRebanhoKg.mensal} compAnual={zoo.comparacoes.pesoMedioRebanhoKg.anual}
+                  semBase={zoo.pesoMedioRebanhoKg === null} />
+                <KpiCard label="Valor Rebanho"
+                  valor={zoo.valorRebanho !== null ? formatMoedaCompacto(zoo.valorRebanho) : '—'}
+                  compMensal={zoo.comparacoes.valorRebanho.mensal} compAnual={zoo.comparacoes.valorRebanho.anual}
+                  semBase={zoo.valorRebanho === null} />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <KpiCard label="Área Prod. no mês"
+                  valor={formatNum(zoo.areaProdutiva, 1)} unidade="ha"
+                  estimado={zoo.qualidade.areaProdutivaEstimativa} />
+                <KpiCard label="UA/ha no mês"
+                  valor={zoo.uaHa !== null ? formatNum(zoo.uaHa, 2) : '—'}
+                  compMensal={zoo.comparacoes.uaHa.mensal} compAnual={zoo.comparacoes.uaHa.anual}
+                  semBase={zoo.uaHa === null} />
+                <KpiCard label="Kg/ha no mês"
+                  valor={kgHa !== null ? formatNum(kgHa, 2) : '—'}
+                  semBase={kgHa === null} />
+              </div>
+            </>
+          ) : (
+            /* ===== VISÃO ACUMULADA: médias jan→mesFiltro ===== */
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                <KpiCard label="Cabeças na média" valor={formatNum(acumulado.cabMedia, 0)} unidade="cab" />
+                <KpiCard label="Peso Médio Final"
+                  valor={acumulado.pesoMedioFinal !== null ? formatNum(acumulado.pesoMedioFinal, 1) : '—'}
+                  unidade="kg"
+                  semBase={acumulado.pesoMedioFinal === null} />
+                <KpiCard label="Valor Rebanho"
+                  valor={zoo.valorRebanho !== null ? formatMoedaCompacto(zoo.valorRebanho) : '—'}
+                  compMensal={zoo.comparacoes.valorRebanho.mensal} compAnual={zoo.comparacoes.valorRebanho.anual}
+                  semBase={zoo.valorRebanho === null} />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <KpiCard label="Área Prod. média"
+                  valor={formatNum(acumulado.areaMedia, 1)} unidade="ha" />
+                <KpiCard label="UA/ha médio"
+                  valor={acumulado.uaHaMedio !== null ? formatNum(acumulado.uaHaMedio, 2) : '—'}
+                  compMensal={zoo.comparacoes.uaHaMediaAno.mensal} compAnual={zoo.comparacoes.uaHaMediaAno.anual}
+                  semBase={acumulado.uaHaMedio === null} />
+                <KpiCard label="Kg/ha médio"
+                  valor={acumulado.kgHaMedio !== null ? formatNum(acumulado.kgHaMedio, 2) : '—'}
+                  semBase={acumulado.kgHaMedio === null} />
+              </div>
+            </>
           </div>
         </CardContent>
       </Card>
