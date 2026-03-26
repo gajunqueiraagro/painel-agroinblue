@@ -1,13 +1,13 @@
 /**
- * Hub Operacional Zootécnico — telas de lançamento e operação de campo.
- * Global mode: blocks all launch screens with a message.
+ * Hub Lançar Zootécnico — reestruturado: Ação → Análise → Controle
  */
 import { Card, CardContent } from '@/components/ui/card';
 import { TabId } from '@/components/BottomNav';
 import { useFazenda } from '@/contexts/FazendaContext';
 import {
-  PlusCircle, TrendingUp, ClipboardList, CloudRain,
-  ChevronRight, GitCompare, Lock, AlertCircle,
+  ChevronRight, Lock, AlertCircle,
+  ArrowLeftRight, LayoutGrid, CloudRain,
+  TrendingUp, GitCompare, Map, Layers, DollarSign,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -23,24 +23,52 @@ interface GroupItem {
   description: string;
 }
 
-const GROUPS: { title: string; emoji: string; items: GroupItem[] }[] = [
+const ACOES_PRINCIPAIS = [
   {
-    title: 'Rebanho',
-    emoji: '🐄',
-    items: [
-      { label: 'Lançar Rebanho', tab: 'lancamentos', icon: PlusCircle, description: 'Entradas, saídas e reclassificações' },
-      { label: 'Movimentações', tab: 'financeiro', icon: GitCompare, description: 'Detalhamento por tipo de operação' },
-      { label: 'Evolução do Rebanho', tab: 'fluxo_anual', icon: TrendingUp, description: 'Fluxo mensal e categorias' },
-    ],
+    label: 'Lançar Movimentações',
+    tab: 'lancamentos' as TabId,
+    icon: ArrowLeftRight,
+    description: 'Entradas, saídas e transferências',
   },
   {
-    title: 'Campo',
-    emoji: '🌿',
-    items: [
-      { label: 'Lançamento de Pasto', tab: 'fechamento', icon: ClipboardList, description: 'Fechamento mensal dos pastos' },
-      { label: 'Chuvas', tab: 'chuvas', icon: CloudRain, description: 'Registro de precipitação' },
-    ],
+    label: 'Lançar Rebanho em Pastos',
+    tab: 'fechamento' as TabId,
+    icon: LayoutGrid,
+    description: 'Alocação e ajuste por pasto',
   },
+  {
+    label: 'Lançar Chuvas',
+    tab: 'chuvas' as TabId,
+    icon: CloudRain,
+    description: 'Registro climático',
+  },
+];
+
+const EVOLUCAO_REBANHO: GroupItem[] = [
+  { label: 'Movimentações', tab: 'movimentacao', icon: ArrowLeftRight, description: 'Detalhamento por tipo de operação' },
+  { label: 'Evolução do Rebanho', tab: 'fluxo_anual', icon: TrendingUp, description: 'Fluxo mensal e categorias' },
+  { label: 'Evolução por Categoria', tab: 'evolucao_categoria', icon: Layers, description: 'Histórico por categoria' },
+  { label: 'Valor do Rebanho', tab: 'valor_rebanho', icon: DollarSign, description: 'Valorização mensal do estoque' },
+];
+
+const EVOLUCAO_PASTOS: GroupItem[] = [
+  { label: 'Mapa de Pastos', tab: 'mapa_pastos', icon: Map, description: 'Visualização consolidada' },
+  { label: 'Resumo de Pastos', tab: 'resumo_pastos', icon: Layers, description: 'Indicadores por pasto' },
+];
+
+const CONCILIACAO_REBANHO: GroupItem[] = [
+  { label: 'Conciliação de Categoria', tab: 'conciliacao_categoria', icon: GitCompare, description: 'Conferência por categoria' },
+];
+
+const CONCILIACAO_PASTOS: GroupItem[] = [
+  { label: 'Conciliação de Pastos', tab: 'conciliacao', icon: GitCompare, description: 'Conferência pasto vs sistema' },
+];
+
+const BLOCKS: { title: string; emoji: string; items: GroupItem[] }[] = [
+  { title: 'Evolução do Rebanho', emoji: '🐄', items: EVOLUCAO_REBANHO },
+  { title: 'Evolução dos Pastos', emoji: '🌿', items: EVOLUCAO_PASTOS },
+  { title: 'Conciliação Rebanho', emoji: '✅', items: CONCILIACAO_REBANHO },
+  { title: 'Conciliação Pastos', emoji: '✅', items: CONCILIACAO_PASTOS },
 ];
 
 export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
@@ -58,6 +86,8 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
     }
   };
 
+  const disabledCls = isGlobal ? 'opacity-50 cursor-not-allowed' : '';
+
   return (
     <div className="max-w-lg mx-auto animate-fade-in pb-20">
       {isGlobal && (
@@ -68,15 +98,39 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
           </p>
         </div>
       )}
+
       <div className="p-4 space-y-4">
-        {GROUPS.map(group => (
-          <Card key={group.title}>
+        {/* ── AÇÕES PRINCIPAIS ── */}
+        <div className="grid grid-cols-3 gap-3">
+          {ACOES_PRINCIPAIS.map(item => (
+            <button
+              key={item.tab}
+              onClick={() => navTo(item.tab)}
+              className={`flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card p-4 min-h-[120px] transition-colors ${isGlobal ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent active:bg-accent/80 shadow-sm'}`}
+            >
+              <div className={`rounded-full p-3 ${isGlobal ? 'bg-muted' : 'bg-primary/10'}`}>
+                <item.icon className={`h-6 w-6 ${isGlobal ? 'text-muted-foreground' : 'text-primary'}`} />
+              </div>
+              <div className="text-center">
+                <p className={`text-xs font-bold leading-tight ${isGlobal ? 'text-muted-foreground' : 'text-foreground'}`}>
+                  {item.label}
+                </p>
+                <p className="text-[9px] text-muted-foreground mt-0.5 leading-tight">{item.description}</p>
+              </div>
+              {isGlobal && <Lock className="h-3 w-3 text-muted-foreground" />}
+            </button>
+          ))}
+        </div>
+
+        {/* ── BLOCOS DE ANÁLISE E CONTROLE ── */}
+        {BLOCKS.map(block => (
+          <Card key={block.title}>
             <CardContent className="p-4 space-y-2">
               <h3 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
-                {group.emoji} {group.title}
+                {block.emoji} {block.title}
               </h3>
               <div className="space-y-1">
-                {group.items.map(item => (
+                {block.items.map(item => (
                   <button
                     key={item.tab}
                     onClick={() => navTo(item.tab)}
