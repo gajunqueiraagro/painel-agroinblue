@@ -420,13 +420,18 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
                         <p className="text-[10px] text-muted-foreground truncate">{p.descricao}</p>
                       </div>
                     </div>
-                    {p.status !== 'fechado' && p.resolverTab && (
+                    {p.status !== 'fechado' && p.resolverTab && !isGlobal && (
                       <button
                         onClick={() => navTo(p.resolverTab as TabId)}
                         className="text-[10px] font-bold text-primary whitespace-nowrap flex items-center gap-0.5 hover:underline"
                       >
                         Resolver <ChevronRight className="h-3 w-3" />
                       </button>
+                    )}
+                    {p.status !== 'fechado' && isGlobal && perFarmStatus.length > 0 && (
+                      <span className="text-[10px] font-bold text-muted-foreground whitespace-nowrap flex items-center gap-0.5">
+                        Verificar fazenda <ChevronDown className="h-3 w-3" />
+                      </span>
                     )}
                   </div>
 
