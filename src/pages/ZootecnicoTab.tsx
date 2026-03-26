@@ -127,61 +127,6 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
 
       <div className="p-4 space-y-4">
 
-      {/* ===== BLOCO 1: STATUS ZOOTÉCNICO ===== */}
-      <Card className={`border-l-4 ${statusZoo.status === 'fechado' ? 'border-l-emerald-500' : statusZoo.status === 'parcial' ? 'border-l-amber-500' : 'border-l-destructive'}`}>
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">📊 Status Zootécnico</h3>
-            <StatusBadge status={statusZoo.status} />
-          </div>
-
-          {/* Contadores */}
-          <div className="flex gap-3 text-xs font-bold">
-            <span className="flex items-center gap-1 text-destructive">
-              🔴 {statusZoo.contadores.aberto}
-            </span>
-            <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
-              🟡 {statusZoo.contadores.parcial}
-            </span>
-            <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-              🟢 {statusZoo.contadores.fechado}
-            </span>
-          </div>
-
-          {/* Lista de pendências */}
-          <div className="space-y-2">
-            {statusZoo.pendencias.map(p => (
-              <div key={p.id} className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-sm shrink-0">
-                    {p.status === 'aberto' ? '🔴' : p.status === 'parcial' ? '🟡' : '🟢'}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-foreground truncate">{p.label}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">{p.descricao}</p>
-                  </div>
-                </div>
-                {p.status !== 'fechado' && p.resolverTab && (
-                  <button
-                    onClick={() => navTo(p.resolverTab as TabId)}
-                    className="text-[10px] font-bold text-primary whitespace-nowrap flex items-center gap-0.5 hover:underline"
-                  >
-                    Resolver <ChevronRight className="h-3 w-3" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {statusZoo.status === 'fechado' && (
-            <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
-              <CheckCircle2 className="h-4 w-4" />
-              <span className="font-semibold">Mês completamente fechado</span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       {/* Toggle Mês | Acumulado */}
       <div className="flex bg-muted rounded-lg p-0.5">
         <button
