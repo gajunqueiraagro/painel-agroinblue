@@ -63,6 +63,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
   const anoNum = Number(anoFiltro);
   const mesDefault = filtroMesInicial || (anoNum === new Date().getFullYear() ? new Date().getMonth() + 1 : 12);
   const [mesFiltro, setMesFiltro] = useState(mesDefault);
+  const [expandedIndicator, setExpandedIndicator] = useState<string | null>(null);
 
   useEffect(() => {
     if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
@@ -409,53 +410,68 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
             </div>
 
             <div className="space-y-2">
-              {statusZoo.pendencias.map(p => (
-                <div key={p.id}>
-                  <div className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm shrink-0">
-                        {p.status === 'aberto' ? '🔴' : p.status === 'parcial' ? '🟡' : '🟢'}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-foreground truncate">{p.label}</p>
-                        <p className="text-[10px] text-muted-foreground truncate">{p.descricao}</p>
+              {statusZoo.pendencias.map(p => {
+                const isExpanded = expandedIndicator === p.id;
+                const farmProblems = isGlobal ? perFarmStatus.filter(fs => fs[p.id as keyof MonthStatus] !== 'fechado').length : 0;
+
+                return (
+                  <div key={p.id}>
+                    <div className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm shrink-0">
+                          {p.status === 'aberto' ? '🔴' : p.status === 'parcial' ? '🟡' : '🟢'}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-foreground truncate">{p.label}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">{p.descricao}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {p.status !== 'fechado' && p.resolverTab && !isGlobal && (
+                          <button
+                            onClick={() => navTo(p.resolverTab as TabId)}
+                            className="text-[10px] font-bold text-primary whitespace-nowrap flex items-center gap-0.5 hover:underline"
+                          >
+                            Resolver <ChevronRight className="h-3 w-3" />
+                          </button>
+                        )}
+                        {isGlobal && perFarmStatus.length > 0 && (
+                          <button
+                            onClick={() => setExpandedIndicator(isExpanded ? null : p.id)}
+                            className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            {farmProblems > 0 && (
+                              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-destructive/15 text-destructive text-[9px] font-bold">
+                                {farmProblems}
+                              </span>
+                            )}
+                            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          </button>
+                        )}
                       </div>
                     </div>
-                    {p.status !== 'fechado' && p.resolverTab && !isGlobal && (
-                      <button
-                        onClick={() => navTo(p.resolverTab as TabId)}
-                        className="text-[10px] font-bold text-primary whitespace-nowrap flex items-center gap-0.5 hover:underline"
-                      >
-                        Resolver <ChevronRight className="h-3 w-3" />
-                      </button>
-                    )}
-                    {p.status !== 'fechado' && isGlobal && perFarmStatus.length > 0 && (
-                      <span className="text-[10px] font-bold text-muted-foreground whitespace-nowrap flex items-center gap-0.5">
-                        Verificar fazenda <ChevronDown className="h-3 w-3" />
-                      </span>
+
+                    {/* Per-farm breakdown - expandable */}
+                    {isGlobal && isExpanded && perFarmStatus.length > 0 && (
+                      <div className="ml-6 mt-1 mb-2 space-y-0.5 animate-fade-in">
+                        {[...perFarmStatus]
+                          .sort((a, b) => STATUS_ORDER[a[p.id as keyof MonthStatus]] - STATUS_ORDER[b[p.id as keyof MonthStatus]])
+                          .map(fs => {
+                            const st = fs[p.id as keyof MonthStatus];
+                            return (
+                              <div key={fs.fazendaId} className="flex items-center justify-between text-[11px] px-2 py-0.5 rounded bg-muted/20">
+                                <span className="text-muted-foreground truncate mr-2">{fs.fazendaNome}</span>
+                                <span className={`shrink-0 font-semibold ${st === 'fechado' ? 'text-emerald-600 dark:text-emerald-400' : st === 'parcial' ? 'text-amber-600 dark:text-amber-400' : 'text-destructive'}`}>
+                                  {st === 'fechado' ? '🟢 Fechado' : st === 'parcial' ? '🟡 Parcial' : '🔴 Em aberto'}
+                                </span>
+                              </div>
+                            );
+                          })}
+                      </div>
                     )}
                   </div>
-
-                  {/* Per-farm breakdown in Global mode */}
-                  {isGlobal && perFarmStatus.length > 0 && (
-                    <div className="ml-6 mt-1 mb-2 space-y-0.5">
-                      {perFarmStatus
-                        .sort((a, b) => STATUS_ORDER[a[p.id as keyof MonthStatus]] - STATUS_ORDER[b[p.id as keyof MonthStatus]])
-                        .map(fs => {
-                          const st = fs[p.id as keyof MonthStatus];
-                          return (
-                            <div key={fs.fazendaId} className="flex items-center justify-between text-[11px] px-2 py-0.5 rounded bg-muted/20">
-                              <span className="text-muted-foreground truncate mr-2">{fs.fazendaNome}</span>
-                              <span className={`shrink-0 font-semibold ${st === 'fechado' ? 'text-emerald-600 dark:text-emerald-400' : st === 'parcial' ? 'text-amber-600 dark:text-amber-400' : 'text-destructive'}`}>
-                                {st === 'fechado' ? '🟢 Fechado' : st === 'parcial' ? '🟡 Parcial' : '🔴 Em aberto'}
-                              </span>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {statusZoo.status === 'fechado' && (
