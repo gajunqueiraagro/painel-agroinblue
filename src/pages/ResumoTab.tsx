@@ -218,7 +218,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
 
       {/* 1. STATUS GERAL */}
       <button
-        onClick={() => onTabChange('status_zootecnico' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
+        onClick={() => onTabChange('zootecnico' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
         className="w-full rounded-xl border bg-card p-4 space-y-2 shadow-sm text-left cursor-pointer transition-colors hover:bg-accent/50 active:scale-[0.99]"
       >
         <div className="flex items-center justify-between">
