@@ -282,6 +282,7 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
                   semBase={zoo.uaHa === null} />
                 <KpiCard label="Kg/ha no mês"
                   valor={kgHa !== null ? formatNum(kgHa, 2) : '—'}
+                  compMensal={kgHaComps.mensal} compAnual={kgHaComps.anual}
                   semBase={kgHa === null} />
               </div>
             </>
