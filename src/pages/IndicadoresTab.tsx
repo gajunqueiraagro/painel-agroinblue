@@ -268,12 +268,6 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
         </div>
       )}
 
-      {/* BLOCO 7 — Histórico Comparativo */}
-      <HistoricoComparativo
-        historico={ind.historico}
-        comparacoesHistorico={ind.comparacoesHistorico}
-        mesAtual={Number(mesFiltro)}
-      />
     </div>
   );
 }
