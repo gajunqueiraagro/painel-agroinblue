@@ -49,7 +49,7 @@ const TITLES: Record<TabId, string> = {
   zootecnico: 'Status Zootécnico',
   zootecnico_hub: 'Zootécnico',
   lancar_zoo_hub: 'Lançar Zootécnico',
-  visao_zoo_hub: 'Visão Zootécnico',
+  visao_zoo_hub: 'Indicadores',
   lancar_fin_hub: 'Lançar Financeiro',
   visao_fin_hub: 'Visão Financeiro',
   movimentacao: 'Fluxo Mensal',
