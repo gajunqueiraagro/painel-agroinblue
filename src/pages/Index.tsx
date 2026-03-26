@@ -151,6 +151,7 @@ const Index = () => {
     visao_anual_zoo: goToVisaoZooHub,
     analise_economica: goToVisaoFinHub,
     fin_caixa: goToLancarFinHub,
+    fechamento: goToLancarZooHub,
   };
 
   const fazendaNome = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || '');
