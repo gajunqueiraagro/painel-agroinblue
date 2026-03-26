@@ -251,7 +251,7 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
                   semBase={acumulado.kgHaMedio === null} />
               </div>
             </>
-          </div>
+          )}
         </CardContent>
       </Card>
 
