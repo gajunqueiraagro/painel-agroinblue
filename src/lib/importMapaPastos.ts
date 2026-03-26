@@ -3,6 +3,7 @@ import type { Pasto, CategoriaRebanho } from '@/hooks/usePastos';
 
 export interface MapaImportRow {
   linha: number;
+  anoMes: string;
   pasto: string;
   atividade: string;
   lote: string;
@@ -13,6 +14,7 @@ export interface MapaImportRow {
 }
 
 export interface MapaImportValidated {
+  anoMes: string;
   pastoId: string;
   pastoNome: string;
   categoriaId: string;
@@ -28,9 +30,15 @@ export interface MapaImportResult {
   validas: MapaImportValidated[];
   erros: { linha: number; mensagem: string }[];
   totalLinhas: number;
+  mesesEncontrados: string[];
 }
 
 const COL_MAP: Record<string, string> = {
+  'ano_mes': 'anoMes',
+  'anomes': 'anoMes',
+  'ano mes': 'anoMes',
+  'mes': 'anoMes',
+  'periodo': 'anoMes',
   'pasto': 'pasto',
   'atividade': 'atividade',
   'lote': 'lote',
@@ -48,6 +56,29 @@ function normalizeHeader(h: string): string {
   return (h || '').toString().trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
+/** Normalize various date formats to yyyy-MM */
+function normalizeAnoMes(val: string): string | null {
+  const s = val.trim();
+  // yyyy-MM
+  if (/^\d{4}-\d{2}$/.test(s)) return s;
+  // MM/yyyy
+  if (/^\d{2}\/\d{4}$/.test(s)) {
+    const [m, y] = s.split('/');
+    return `${y}-${m}`;
+  }
+  // yyyy/MM
+  if (/^\d{4}\/\d{2}$/.test(s)) {
+    const [y, m] = s.split('/');
+    return `${y}-${m}`;
+  }
+  // MM-yyyy
+  if (/^\d{2}-\d{4}$/.test(s)) {
+    const [m, y] = s.split('-');
+    return `${y}-${m}`;
+  }
+  return null;
+}
+
 export function parseMapaPastosExcel(file: ArrayBuffer): MapaImportRow[] {
   const wb = XLSX.read(file, { type: 'array' });
   const ws = wb.Sheets[wb.SheetNames[0]];
@@ -55,16 +86,13 @@ export function parseMapaPastosExcel(file: ArrayBuffer): MapaImportRow[] {
 
   if (raw.length === 0) return [];
 
-  // Map headers
   const firstRow = raw[0];
   const headerMap: Record<string, string> = {};
   Object.keys(firstRow).forEach(key => {
     const norm = normalizeHeader(key);
-    // Try direct match first
     if (COL_MAP[norm]) {
       headerMap[key] = COL_MAP[norm];
     } else {
-      // Try partial match
       for (const [pattern, mapped] of Object.entries(COL_MAP)) {
         if (norm.includes(normalizeHeader(pattern))) {
           headerMap[key] = mapped;
@@ -82,7 +110,8 @@ export function parseMapaPastosExcel(file: ArrayBuffer): MapaImportRow[] {
       return '';
     };
     return {
-      linha: idx + 2, // Excel row (1-based header + 1)
+      linha: idx + 2,
+      anoMes: get('anoMes'),
       pasto: get('pasto'),
       atividade: get('atividade'),
       lote: get('lote'),
@@ -98,17 +127,32 @@ export function validateMapaPastos(
   rows: MapaImportRow[],
   pastos: Pasto[],
   categorias: CategoriaRebanho[],
+  fallbackAnoMes: string,
 ): MapaImportResult {
   const erros: { linha: number; mensagem: string }[] = [];
   const validas: MapaImportValidated[] = [];
   const seen = new Set<string>();
+  const mesesSet = new Set<string>();
 
   const pastoMap = new Map(pastos.filter(p => p.ativo).map(p => [p.nome.trim().toLowerCase(), p]));
   const catMap = new Map(categorias.map(c => [c.nome.trim().toLowerCase(), c]));
 
   for (const row of rows) {
-    // Skip completely empty rows
     if (!row.pasto && !row.categoria && !row.quantidade) continue;
+
+    // Resolve ano_mes: from column or fallback to selector
+    let anoMes: string;
+    if (row.anoMes) {
+      const parsed = normalizeAnoMes(row.anoMes);
+      if (!parsed) {
+        erros.push({ linha: row.linha, mensagem: `Ano_Mes inválido: "${row.anoMes}". Use yyyy-MM ou MM/yyyy` });
+        continue;
+      }
+      anoMes = parsed;
+    } else {
+      anoMes = fallbackAnoMes;
+    }
+    mesesSet.add(anoMes);
 
     // Validate pasto
     if (!row.pasto) {
@@ -139,15 +183,14 @@ export function validateMapaPastos(
       continue;
     }
 
-    // Duplicity check
-    const key = `${pasto.id}|${cat.id}`;
+    // Duplicity: anoMes + pasto + categoria
+    const key = `${anoMes}|${pasto.id}|${cat.id}`;
     if (seen.has(key)) {
-      erros.push({ linha: row.linha, mensagem: `Duplicado: "${row.pasto}" + "${row.categoria}" já existe nesta importação` });
+      erros.push({ linha: row.linha, mensagem: `Duplicado: "${row.pasto}" + "${row.categoria}" em ${anoMes}` });
       continue;
     }
     seen.add(key);
 
-    // Optional fields
     const pesoMedio = row.pesoMedio ? parseFloat(row.pesoMedio.replace(',', '.')) : null;
     if (row.pesoMedio && (pesoMedio === null || isNaN(pesoMedio) || pesoMedio < 0)) {
       erros.push({ linha: row.linha, mensagem: `Peso médio inválido: "${row.pesoMedio}"` });
@@ -161,6 +204,7 @@ export function validateMapaPastos(
     }
 
     validas.push({
+      anoMes,
       pastoId: pasto.id,
       pastoNome: pasto.nome,
       categoriaId: cat.id,
@@ -173,7 +217,12 @@ export function validateMapaPastos(
     });
   }
 
-  return { validas, erros, totalLinhas: rows.length };
+  return {
+    validas,
+    erros,
+    totalLinhas: rows.length,
+    mesesEncontrados: Array.from(mesesSet).sort(),
+  };
 }
 
 export function gerarModeloMapaPastos(
@@ -182,15 +231,14 @@ export function gerarModeloMapaPastos(
   fazendaNome: string,
 ) {
   const wb = XLSX.utils.book_new();
-  const headers = ['Pasto', 'Atividade', 'Lote', 'Qualidade', 'Categoria', 'Quantidade', 'Peso Médio (kg)'];
+  const headers = ['Ano_Mes', 'Pasto', 'Atividade', 'Lote', 'Qualidade', 'Categoria', 'Quantidade', 'Peso Médio (kg)'];
 
   const dataRows: (string | number)[][] = [];
-
-  // Generate example rows: one per pasto × first category
   const pastosAtivos = pastos.filter(p => p.ativo && p.entra_conciliacao);
+
   if (pastosAtivos.length > 0 && categorias.length > 0) {
-    // One example row
     dataRows.push([
+      '2025-01',
       pastosAtivos[0].nome,
       'recria',
       pastosAtivos[0].lote_padrao || '',
@@ -199,9 +247,9 @@ export function gerarModeloMapaPastos(
       10,
       350,
     ]);
-    // Second example if more categories
     if (categorias.length > 1) {
       dataRows.push([
+        '2025-01',
         pastosAtivos[0].nome,
         'recria',
         pastosAtivos[0].lote_padrao || '',
@@ -216,16 +264,13 @@ export function gerarModeloMapaPastos(
   const wsData = [headers, ...dataRows];
   const ws = XLSX.utils.aoa_to_sheet(wsData);
   ws['!cols'] = [
-    { wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 10 }, { wch: 18 }, { wch: 12 }, { wch: 16 },
+    { wch: 12 }, { wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 10 }, { wch: 18 }, { wch: 12 }, { wch: 16 },
   ];
 
-  // Add reference sheets
-  // Pastos reference
   const pastosRef = [['Pastos Disponíveis'], ...pastosAtivos.map(p => [p.nome])];
   const wsPastos = XLSX.utils.aoa_to_sheet(pastosRef);
   wsPastos['!cols'] = [{ wch: 25 }];
 
-  // Categorias reference
   const catRef = [['Categorias Disponíveis'], ...categorias.map(c => [c.nome])];
   const wsCat = XLSX.utils.aoa_to_sheet(catRef);
   wsCat['!cols'] = [{ wch: 25 }];

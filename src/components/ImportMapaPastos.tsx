@@ -37,7 +37,7 @@ export function ImportMapaPastos({ open, onOpenChange, pastos, categorias, fazen
       toast.error('Arquivo vazio ou formato inválido');
       return;
     }
-    const validated = validateMapaPastos(rows, pastos, categorias);
+    const validated = validateMapaPastos(rows, pastos, categorias, anoMes);
     setResult(validated);
   };
 
@@ -46,37 +46,40 @@ export function ImportMapaPastos({ open, onOpenChange, pastos, categorias, fazen
     setImporting(true);
 
     try {
-      // Group by pasto to create/update fechamento_pastos
-      const byPasto = new Map<string, MapaImportValidated[]>();
+      // Group by anoMes + pastoId
+      const byMesPasto = new Map<string, MapaImportValidated[]>();
       for (const v of result.validas) {
-        const list = byPasto.get(v.pastoId) || [];
+        const key = `${v.anoMes}|${v.pastoId}`;
+        const list = byMesPasto.get(key) || [];
         list.push(v);
-        byPasto.set(v.pastoId, list);
+        byMesPasto.set(key, list);
       }
 
-      // Check existing fechamentos for this period
+      // Get all unique months
+      const meses = [...new Set(result.validas.map(v => v.anoMes))];
+
+      // Load existing fechamentos for all months
       const { data: existingFech } = await supabase
         .from('fechamento_pastos')
-        .select('id, pasto_id')
+        .select('id, pasto_id, ano_mes')
         .eq('fazenda_id', fazendaId)
-        .eq('ano_mes', anoMes);
+        .in('ano_mes', meses);
 
-      const fechMap = new Map((existingFech || []).map(f => [f.pasto_id, f.id]));
+      const fechMap = new Map((existingFech || []).map(f => [`${f.ano_mes}|${f.pasto_id}`, f.id]));
 
-      for (const [pastoId, items] of byPasto) {
-        let fechId = fechMap.get(pastoId);
-
-        // Get header info from first item of this pasto
+      let totalPastos = 0;
+      for (const [key, items] of byMesPasto) {
+        const [itemAnoMes, pastoId] = key.split('|');
+        let fechId = fechMap.get(key);
         const first = items[0];
 
         if (!fechId) {
-          // Create fechamento_pastos
           const { data, error } = await supabase
             .from('fechamento_pastos')
             .insert({
               pasto_id: pastoId,
               fazenda_id: fazendaId,
-              ano_mes: anoMes,
+              ano_mes: itemAnoMes,
               lote_mes: first.lote,
               tipo_uso_mes: first.atividade,
               qualidade_mes: first.qualidade,
@@ -86,7 +89,6 @@ export function ImportMapaPastos({ open, onOpenChange, pastos, categorias, fazen
           if (error) throw error;
           fechId = data.id;
         } else {
-          // Update header fields if provided
           const updates: Record<string, unknown> = {};
           if (first.atividade) updates.tipo_uso_mes = first.atividade;
           if (first.lote) updates.lote_mes = first.lote;
@@ -96,10 +98,8 @@ export function ImportMapaPastos({ open, onOpenChange, pastos, categorias, fazen
           }
         }
 
-        // Delete existing items for this fechamento
         await supabase.from('fechamento_pasto_itens').delete().eq('fechamento_id', fechId);
 
-        // Insert new items
         const toInsert = items
           .filter(i => i.quantidade > 0)
           .map(i => ({
@@ -115,9 +115,10 @@ export function ImportMapaPastos({ open, onOpenChange, pastos, categorias, fazen
           const { error } = await supabase.from('fechamento_pasto_itens').insert(toInsert);
           if (error) throw error;
         }
+        totalPastos++;
       }
 
-      toast.success(`Importação concluída: ${result.validas.length} registros em ${byPasto.size} pastos`);
+      toast.success(`Importação concluída: ${result.validas.length} registros em ${totalPastos} pastos (${meses.length} mês(es))`);
       setDone(true);
       onImported();
     } catch (err) {
@@ -144,7 +145,7 @@ export function ImportMapaPastos({ open, onOpenChange, pastos, categorias, fazen
 
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Período: <strong>{anoMes.split('-').reverse().join('/')}</strong>
+            Se a coluna <strong>Ano_Mes</strong> não estiver preenchida, será usado o período <strong>{anoMes.split('-').reverse().join('/')}</strong> do seletor.
           </p>
 
           {!done && (
@@ -162,10 +163,15 @@ export function ImportMapaPastos({ open, onOpenChange, pastos, categorias, fazen
           {result && !done && (
             <div className="space-y-3">
               <div className="flex gap-2 flex-wrap">
-                <Badge variant="secondary">{result.totalLinhas} linhas lidas</Badge>
+                <Badge variant="secondary">{result.totalLinhas} linhas</Badge>
                 <Badge className="bg-green-100 text-green-800">{result.validas.length} válidas</Badge>
                 {result.erros.length > 0 && (
                   <Badge variant="destructive">{result.erros.length} erros</Badge>
+                )}
+                {result.mesesEncontrados.length > 0 && (
+                  <Badge variant="outline">
+                    {result.mesesEncontrados.length} mês(es): {result.mesesEncontrados.map(m => m.split('-').reverse().join('/')).join(', ')}
+                  </Badge>
                 )}
               </div>
 
@@ -187,11 +193,12 @@ export function ImportMapaPastos({ open, onOpenChange, pastos, categorias, fazen
               {result.validas.length > 0 && (
                 <div className="space-y-1">
                   <p className="text-sm font-medium flex items-center gap-1 text-green-700">
-                    <CheckCircle className="h-4 w-4" /> Prévia dos dados válidos:
+                    <CheckCircle className="h-4 w-4" /> Prévia:
                   </p>
                   <ScrollArea className="max-h-40 border rounded p-2">
                     {result.validas.map((v, i) => (
                       <p key={i} className="text-xs">
+                        <span className="text-muted-foreground">{v.anoMes.split('-').reverse().join('/')}</span>{' '}
                         {v.pastoNome} → {v.categoriaNome}: {v.quantidade} cab
                         {v.pesoMedioKg ? ` (${v.pesoMedioKg} kg)` : ''}
                       </p>
@@ -203,7 +210,7 @@ export function ImportMapaPastos({ open, onOpenChange, pastos, categorias, fazen
               {result.erros.length > 0 && result.validas.length > 0 && (
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3" />
-                  As linhas com erro serão ignoradas. Apenas as válidas serão importadas.
+                  Linhas com erro serão ignoradas.
                 </p>
               )}
 
