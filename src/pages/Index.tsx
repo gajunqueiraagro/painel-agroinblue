@@ -172,6 +172,7 @@ const Index = () => {
           onRemover={isGlobal ? async () => {} : removerLancamento}
           abaInicial={lancamentosFromConciliacao ? 'reclassificacao' : undefined}
           onBackToConciliacao={lancamentosFromConciliacao ? goToConciliacaoCategoria : undefined}
+          dataInicial={lancamentosFromConciliacao ? `${filtroGlobal.ano}-${String(filtroGlobal.mes).padStart(2, '0')}-15` : undefined}
         />
       )}
       {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} />}
