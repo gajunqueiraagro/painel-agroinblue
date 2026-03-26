@@ -33,12 +33,13 @@ interface Props {
   onTabChange?: (tab: TabId, filtro?: { ano: string; mes: number }) => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
+  renderBottom?: React.ReactNode;
 }
 
 type Vista = 'mes' | 'acumulado';
 type SubView = 'main' | 'graficos-estoque' | 'graficos-producao';
 
-export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabChange, filtroAnoInicial, filtroMesInicial }: Props) {
+export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabChange, filtroAnoInicial, filtroMesInicial, renderBottom }: Props) {
   const { fazendaAtual, fazendas } = useFazenda();
   const { pastos, categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
@@ -398,6 +399,7 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
           <span>Peso médio estimado — realize fechamento de pastos para maior precisão</span>
         </div>
       )}
+      {renderBottom}
       </div>
     </div>
   );
