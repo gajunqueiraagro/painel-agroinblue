@@ -72,6 +72,7 @@ export interface Lancamento {
   valorTotal?: number;
   notaFiscal?: string;
   tipoPeso?: 'vivo' | 'morto';
+  statusOperacional?: 'previsto' | 'confirmado' | 'conciliado';
   // Audit fields
   createdAt?: string;
   updatedAt?: string;
