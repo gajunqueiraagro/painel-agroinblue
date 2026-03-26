@@ -123,7 +123,7 @@ export function calcSaldoPorCategoria(
   const startDate = `${ano}-01-01`;
   const endDate = `${anoMes}-31`;
 
-  lancamentosNoRange(lancamentos, startDate, endDate).forEach(l => {
+  lancamentosConciliadosNoRange(lancamentos, startDate, endDate).forEach(l => {
     const catId = codeToId.get(l.categoria);
     if (!catId) return;
 
