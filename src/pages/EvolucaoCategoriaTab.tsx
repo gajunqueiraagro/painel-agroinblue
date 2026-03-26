@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Lancamento, SaldoInicial, CATEGORIAS, Categoria, isEntrada, isReclassificacao } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { filtrarPorCenario } from '@/lib/statusOperacional';
 import { parseISO, format } from 'date-fns';
 
 interface Props {
@@ -51,17 +52,23 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
 
   const [anoFiltro, setAnoFiltro] = useState(initialAno || String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState(initialMes || format(new Date(), 'MM'));
+  const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'previsto'>('realizado');
+
+  const lancFiltrados = useMemo(() => {
+    const cenario = statusFiltro === 'realizado' ? 'realizado' : 'meta';
+    return filtrarPorCenario(lancamentos, cenario);
+  }, [lancamentos, statusFiltro]);
 
   const dados = useMemo(() => {
     const mesKey = `${anoFiltro}-${mesFiltro}`;
 
-    const filtrados = lancamentos.filter(l => {
+    const filtrados = lancFiltrados.filter(l => {
       try {
         return format(parseISO(l.data), 'yyyy-MM') === mesKey;
       } catch { return false; }
     });
 
-    const anteriores = lancamentos.filter(l => {
+    const anteriores = lancFiltrados.filter(l => {
       try {
         return format(parseISO(l.data), 'yyyy-MM') < mesKey;
       } catch { return false; }
@@ -117,7 +124,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
 
       return { ...cat, saldoInicioMes, movs, saldoFinal };
     });
-  }, [lancamentos, saldosIniciais, anoFiltro, mesFiltro]);
+  }, [lancFiltrados, saldosIniciais, anoFiltro, mesFiltro]);
 
   const totais = useMemo(() => {
     const saldoIni = dados.reduce((s, d) => s + d.saldoInicioMes, 0);
@@ -129,27 +136,49 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   return (
     <div className="p-4 max-w-4xl mx-auto space-y-4 animate-fade-in pb-20">
       {/* Filtros */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="flex items-center gap-2 flex-wrap">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-          <SelectTrigger className="touch-target text-base font-bold">
+          <SelectTrigger className="h-9 text-sm font-bold w-24">
             <SelectValue placeholder="Ano" />
           </SelectTrigger>
           <SelectContent>
             {anosDisponiveis.map(a => (
-              <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>
+              <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
             ))}
           </SelectContent>
         </Select>
         <Select value={mesFiltro} onValueChange={setMesFiltro}>
-          <SelectTrigger className="touch-target text-base font-bold">
+          <SelectTrigger className="h-9 text-sm font-bold w-28">
             <SelectValue placeholder="Mês" />
           </SelectTrigger>
           <SelectContent>
             {MESES.map(m => (
-              <SelectItem key={m.value} value={m.value} className="text-base">{m.label}</SelectItem>
+              <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
+
+        <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
+          {([
+            { value: 'realizado' as const, label: 'Realizado' },
+            { value: 'previsto' as const, label: 'Previsto' },
+          ]).map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setStatusFiltro(opt.value)}
+              className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
+                statusFiltro === opt.value
+                  ? opt.value === 'realizado'
+                    ? 'bg-green-700 text-white shadow-sm'
+                    : 'bg-orange-500 text-white shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Tabela */}
