@@ -240,6 +240,7 @@ export function useResumoStatus(
 
     // Filter to period
     const filtrados = lancamentos.filter(l => {
+      if (!isLancConciliado(l)) return false;
       try {
         const d = l.data;
         if (!d.startsWith(anoStr)) return false;
