@@ -17,6 +17,7 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Pencil, Trash2 } from 'lucide-react';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { STATUS_OPTIONS, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
 
 interface Props {
   lancamento: Lancamento;
