@@ -29,11 +29,13 @@ function buildChartData(
   mesAtual: number,
 ) {
   const data: Record<string, unknown>[] = [];
-  for (let m = 1; m <= mesAtual; m++) {
+  for (let m = 1; m <= 12; m++) {
     const point: Record<string, unknown> = { mes: MESES_COLS[m - 1]?.label?.substring(0, 3) || String(m) };
     historico.forEach(h => {
+      const isMaisRecente = h.ano === Math.max(...historico.map(x => x.ano));
       const val = h.meses.find(x => x.mes === m)?.[field];
-      point[String(h.ano)] = val;
+      // Null out future months only for the most recent year
+      point[String(h.ano)] = (isMaisRecente && m > mesAtual) ? null : val;
     });
     data.push(point);
   }
