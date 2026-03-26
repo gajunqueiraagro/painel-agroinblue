@@ -103,24 +103,27 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
       <div className="p-4 space-y-4">
         {/* ── AÇÕES PRINCIPAIS ── */}
         <div className="grid grid-cols-3 gap-3">
-          {ACOES_PRINCIPAIS.map(item => (
+          {ACOES_PRINCIPAIS.map(item => {
+            const blocked = isBlocked(item.tab);
+            return (
             <button
               key={item.tab}
               onClick={() => navTo(item.tab)}
-              className={`flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card p-4 min-h-[120px] transition-colors ${isGlobal ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent active:bg-accent/80 shadow-sm'}`}
+              className={`flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card p-4 min-h-[120px] transition-colors ${blocked ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent active:bg-accent/80 shadow-sm'}`}
             >
-              <div className={`rounded-full p-3 ${isGlobal ? 'bg-muted' : 'bg-primary/10'}`}>
-                <item.icon className={`h-6 w-6 ${isGlobal ? 'text-muted-foreground' : 'text-primary'}`} />
+              <div className={`rounded-full p-3 ${blocked ? 'bg-muted' : 'bg-primary/10'}`}>
+                <item.icon className={`h-6 w-6 ${blocked ? 'text-muted-foreground' : 'text-primary'}`} />
               </div>
               <div className="text-center">
-                <p className={`text-xs font-bold leading-tight ${isGlobal ? 'text-muted-foreground' : 'text-foreground'}`}>
+                <p className={`text-xs font-bold leading-tight ${blocked ? 'text-muted-foreground' : 'text-foreground'}`}>
                   {item.label}
                 </p>
                 <p className="text-[9px] text-muted-foreground mt-0.5 leading-tight">{item.description}</p>
               </div>
-              {isGlobal && <Lock className="h-3 w-3 text-muted-foreground" />}
+              {blocked && <Lock className="h-3 w-3 text-muted-foreground" />}
             </button>
-          ))}
+            );
+          })}
         </div>
 
         {/* ── BLOCOS DE ANÁLISE E CONTROLE ── */}
