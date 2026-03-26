@@ -134,26 +134,29 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
                 {block.emoji} {block.title}
               </h3>
               <div className="space-y-1">
-                {block.items.map(item => (
+                {block.items.map(item => {
+                  const blocked = isBlocked(item.tab);
+                  return (
                   <button
                     key={item.tab}
                     onClick={() => navTo(item.tab)}
-                    className={`w-full flex items-center justify-between rounded-lg px-3 py-2.5 transition-colors group ${isGlobal ? 'bg-muted/20 opacity-50 cursor-not-allowed' : 'bg-muted/40 hover:bg-muted/70'}`}
+                    className={`w-full flex items-center justify-between rounded-lg px-3 py-2.5 transition-colors group ${blocked ? 'bg-muted/20 opacity-50 cursor-not-allowed' : 'bg-muted/40 hover:bg-muted/70'}`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <item.icon className={`h-4 w-4 shrink-0 ${isGlobal ? 'text-muted-foreground' : 'text-primary'}`} />
+                      <item.icon className={`h-4 w-4 shrink-0 ${blocked ? 'text-muted-foreground' : 'text-primary'}`} />
                       <div className="text-left min-w-0">
-                        <p className={`text-sm font-semibold ${isGlobal ? 'text-muted-foreground' : 'text-foreground'}`}>{item.label}</p>
+                        <p className={`text-sm font-semibold ${blocked ? 'text-muted-foreground' : 'text-foreground'}`}>{item.label}</p>
                         <p className="text-[10px] text-muted-foreground truncate">{item.description}</p>
                       </div>
                     </div>
-                    {isGlobal ? (
+                    {blocked ? (
                       <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     ) : (
                       <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0" />
                     )}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
