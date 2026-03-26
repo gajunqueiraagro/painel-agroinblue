@@ -162,7 +162,7 @@ const Index = () => {
       <Header
         title={TITLES[activeTab]}
         fazendaNome={fazendaNome}
-        periodo={periodoLabel}
+        periodo={undefined}
         onBack={subScreenBackMap[activeTab]}
         rightAction={
           <div className="flex items-center gap-2">
