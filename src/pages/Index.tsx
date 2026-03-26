@@ -191,7 +191,13 @@ const Index = () => {
       {activeTab === 'desfrute' && <DesfrunteTab lancamentos={isGlobal ? lancamentosVisiveis : lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} isGlobal={isGlobal} />}
       {activeTab === 'cadastros' && <CadastrosTab />}
       {activeTab === 'chuvas' && <ChuvasTab />}
-      {activeTab === 'fechamento' && <FechamentoTab filtroAnoInicial={filtroGlobal.ano} filtroMesInicial={filtroGlobal.mes} />}
+      {activeTab === 'fechamento' && (
+        <FechamentoTab
+          filtroAnoInicial={filtroGlobal.ano}
+          filtroMesInicial={filtroGlobal.mes}
+          onBackToConciliacao={fechamentoFromConciliacao ? goToConciliacaoCategoria : undefined}
+        />
+      )}
       {activeTab === 'mapa_pastos' && <MapaPastosTab />}
       {activeTab === 'resumo_pastos' && <ResumoPastosTab />}
       {activeTab === 'analise_operacional' && <AnaliseOperacionalTab />}
