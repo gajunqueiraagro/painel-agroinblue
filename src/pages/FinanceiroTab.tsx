@@ -43,7 +43,11 @@ const SUB_ABA_LABELS: Record<SubAba, { label: string; icon: string }> = {
  * Tabela unificada de movimentações com indicadores econômicos.
  * NOTA: Lógica econômica/competência do rebanho — não é módulo financeiro de caixa.
  */
-function UnifiedTable({ lancamentos, onEdit, showTipo }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; showTipo?: boolean }) {
+function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; showTipo?: boolean; subTipo?: string }) {
+  const TIPOS_COM_DESTINO = ['venda', 'transferencia_entrada', 'transferencia_saida', 'consumo', 'morte'];
+  const showDestino = showTipo ? true : (subTipo ? TIPOS_COM_DESTINO.includes(subTipo) : false);
+  const isMorte = subTipo === 'morte';
+  const showLiqKg = showTipo ? true : (subTipo ? TIPOS_COM_DESTINO.includes(subTipo) : false);
   if (lancamentos.length === 0) return <p className="text-center text-muted-foreground py-6">Nenhum registro no período</p>;
 
   return (
@@ -55,10 +59,12 @@ function UnifiedTable({ lancamentos, onEdit, showTipo }: { lancamentos: Lancamen
             {showTipo && <th className="p-1.5 text-left font-bold bg-muted/50">Tipo</th>}
             <th className="p-1.5 text-right font-bold bg-muted/50">Qtd</th>
             <th className="p-1.5 text-left font-bold bg-muted/50">Categoria</th>
+            {showDestino && <th className="p-1.5 text-left font-bold bg-muted/50">{isMorte ? 'Motivo' : 'Destino'}</th>}
             <th className="p-1.5 text-right font-bold bg-muted/50">P.Vivo</th>
             <th className="p-1.5 text-right font-bold bg-muted/50">P.@</th>
             <th className="p-1.5 text-right font-bold text-primary bg-muted/50">Total</th>
             <th className="p-1.5 text-right font-bold bg-muted/50">R$/líq @</th>
+            {showLiqKg && <th className="p-1.5 text-right font-bold bg-muted/50">R$/Kg Líq</th>}
             <th className="p-1.5 text-right font-bold bg-muted/50">Líq/Cab</th>
             <th className="p-1.5 w-8 bg-muted/50"></th>
           </tr>
@@ -74,10 +80,12 @@ function UnifiedTable({ lancamentos, onEdit, showTipo }: { lancamentos: Lancamen
                 {showTipo && <td className="p-1.5 text-xs">{tipoInfo?.icon} {tipoInfo?.label || l.tipo}</td>}
                 <td className="p-1.5 text-right font-bold">{l.quantidade}</td>
                 <td className="p-1.5">{cat}</td>
+                {showDestino && <td className="p-1.5 truncate max-w-[80px]">{(l.tipo === 'morte' ? l.fazendaDestino : (l.fazendaDestino || l.fazendaOrigem)) || '-'}</td>}
                 <td className="p-1.5 text-right">{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
                 <td className="p-1.5 text-right text-muted-foreground">{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
                 <td className="p-1.5 text-right font-bold text-primary">{fmtValor(c.valorFinal)}</td>
                 <td className="p-1.5 text-right">{fmtValor(c.liqArroba)}</td>
+                {showLiqKg && <td className="p-1.5 text-right">{fmtValor(c.liqKg)}</td>}
                 <td className="p-1.5 text-right">{fmtValor(c.liqCabeca)}</td>
                 <td className="p-1.5">
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(l)}>
@@ -89,7 +97,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo }: { lancamentos: Lancamen
           })}
         </tbody>
         {lancamentos.length > 1 && (() => {
-          const totals = lancamentos.reduce((acc, l) => {
+           const totals = lancamentos.reduce((acc, l) => {
             const c = calcIndicadoresLancamento(l);
             acc.qtd += l.quantidade;
             acc.pesoVivoTotal += (l.pesoMedioKg ?? 0) * l.quantidade;
@@ -101,6 +109,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo }: { lancamentos: Lancamen
           const arrobaMedio = totals.qtd > 0 ? totals.arrobasTotal / totals.qtd : 0;
           const liqArroba = totals.arrobasTotal > 0 ? totals.valorTotal / totals.arrobasTotal : 0;
           const liqCabeca = totals.qtd > 0 ? totals.valorTotal / totals.qtd : 0;
+          const liqKgTotal = totals.pesoVivoTotal > 0 ? totals.valorTotal / totals.pesoVivoTotal : 0;
           return (
             <tfoot>
               <tr className="border-t-2 border-primary/40 bg-muted/30 font-bold">
@@ -108,10 +117,12 @@ function UnifiedTable({ lancamentos, onEdit, showTipo }: { lancamentos: Lancamen
                 {showTipo && <td className="p-1.5"></td>}
                 <td className="p-1.5 text-right">{totals.qtd}</td>
                 <td className="p-1.5"></td>
+                {showDestino && <td className="p-1.5"></td>}
                 <td className="p-1.5 text-right">{fmtValor(pesoVivoMedio)}</td>
                 <td className="p-1.5 text-right text-muted-foreground">{fmtValor(arrobaMedio)}</td>
                 <td className="p-1.5 text-right text-primary">{fmtValor(totals.valorTotal)}</td>
                 <td className="p-1.5 text-right">{fmtValor(liqArroba)}</td>
+                {showLiqKg && <td className="p-1.5 text-right">{fmtValor(liqKgTotal)}</td>}
                 <td className="p-1.5 text-right">{fmtValor(liqCabeca)}</td>
                 <td className="p-1.5"></td>
               </tr>
@@ -376,7 +387,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       ) : subAba === 'abate' ? (
         <AbateTable lancamentos={filtrados} onEdit={setEditando} />
       ) : (
-        <UnifiedTable lancamentos={filtrados} onEdit={setEditando} />
+        <UnifiedTable lancamentos={filtrados} onEdit={setEditando} subTipo={subAba} />
       )}
 
       {/* Edit dialog */}
