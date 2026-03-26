@@ -465,7 +465,7 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0 }: 
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             {type === 'bar' ? (
-              <BarChart data={filteredData}>
+              <BarChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
@@ -476,7 +476,7 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0 }: 
                 ))}
               </BarChart>
             ) : type === 'area' ? (
-              <AreaChart data={filteredData}>
+              <AreaChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
@@ -490,7 +490,7 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0 }: 
                 ))}
               </AreaChart>
             ) : (
-              <LineChart data={filteredData}>
+              <LineChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
