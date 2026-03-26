@@ -216,7 +216,7 @@ function getTopTabFromSubAba(subAba?: SubAba): TopTab {
   return 'todas';
 }
 
-export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial }: Props) {
+export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao }: Props) {
   const { fazendaAtual } = useFazenda();
   const [topTab, setTopTab] = useState<TopTab>(subAbaInicial ? getTopTabFromSubAba(subAbaInicial) : 'todas');
   const [subAba, setSubAba] = useState<SubAba>(subAbaInicial || 'abate');
