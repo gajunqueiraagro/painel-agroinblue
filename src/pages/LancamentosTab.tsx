@@ -231,7 +231,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       </div>
 
       {aba === 'reclassificacao' ? (
-        <ReclassificacaoForm onAdicionar={onAdicionar} />
+        <ReclassificacaoForm onAdicionar={onAdicionar} dataInicial={dataInicial} />
       ) : aba !== 'historico' ? (
         <form onSubmit={handleSubmit} className="bg-card rounded-lg p-4 shadow-sm border space-y-4">
           {/* Tipo */}
