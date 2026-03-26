@@ -263,13 +263,9 @@ export function calcDesfruteArrobas(arrobasDesfrutadas: number, arrobasIniciais:
  * - pesoInicial <= 0 (dado insuficiente)
  * - dias <= 0 (período inválido)
  * - cabMedia <= 0 (rebanho vazio)
- * - resultado < 0 (operacionalmente improvável — indica erro nos dados)
  * - resultado > 3.0 kg/dia (fora da faixa razoável para bovinos em pastejo)
  *
- * NOTA OPERACIONAL: A faixa de segurança (0 a 3.0 kg/dia) é uma referência
- * operacional baseada em pecuária extensiva/semi-intensiva brasileira.
- * Sistemas confinados ou raças específicas podem ultrapassar esse limite.
- * A trava existe para sinalizar possíveis erros de dados, não como limite absoluto.
+ * NOTA: Valores negativos são permitidos (indicam perda de peso no período).
  *
  * @returns GMD em kg/dia ou null se dados insuficientes ou resultado fora da faixa
  */
@@ -288,8 +284,7 @@ export function calcGMD(
 
   const gmd = (pesoFinal - pesoInicial - pesoEntradas + pesoSaidas) / (dias * cabMedia);
 
-  // Faixa de segurança operacional
-  if (gmd < 0) return null;
+  // Faixa de segurança operacional (limite superior)
   if (gmd > 3.0) return null;
 
   return gmd;
