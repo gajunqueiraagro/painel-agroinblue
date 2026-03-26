@@ -155,8 +155,6 @@ const Index = () => {
   };
 
   const fazendaNome = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || '');
-  const mesLabel = ['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][filtroGlobal.mes] || '';
-  const periodoLabel = `${mesLabel}/${filtroGlobal.ano}`;
 
   return (
     <div className="min-h-screen bg-background">
