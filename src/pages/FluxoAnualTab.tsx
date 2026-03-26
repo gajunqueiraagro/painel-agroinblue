@@ -27,10 +27,22 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   }, [lancamentos, saldosIniciais]);
 
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
+  const [statusFiltro, setStatusFiltro] = useState<'todos' | 'realizado' | 'previsto'>('todos');
+
+  const lancFiltrados = useMemo(() => {
+    if (statusFiltro === 'todos') return lancamentos;
+    // All existing lancamentos without status_operacional are treated as 'conciliado' (realizado)
+    return lancamentos.filter(l => {
+      const status = (l as any).status_operacional || 'conciliado';
+      if (statusFiltro === 'realizado') return status === 'conciliado';
+      if (statusFiltro === 'previsto') return status === 'previsto';
+      return true;
+    });
+  }, [lancamentos, statusFiltro]);
 
   const dados = useMemo(
-    () => calcFluxoAnual(saldosIniciais, lancamentos, Number(anoFiltro)),
-    [lancamentos, saldosIniciais, anoFiltro],
+    () => calcFluxoAnual(saldosIniciais, lancFiltrados, Number(anoFiltro)),
+    [lancFiltrados, saldosIniciais, anoFiltro],
   );
 
   if (drilldownMonth) {
