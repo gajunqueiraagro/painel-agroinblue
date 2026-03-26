@@ -39,7 +39,7 @@ interface Props {
 type Vista = 'mes' | 'acumulado';
 type SubView = 'main' | 'graficos-estoque' | 'graficos-producao';
 
-export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabChange, filtroAnoInicial, filtroMesInicial }: Props) {
+export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabChange, filtroAnoInicial, filtroMesInicial, renderBottom }: Props) {
   const { fazendaAtual, fazendas } = useFazenda();
   const { pastos, categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
