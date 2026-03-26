@@ -373,16 +373,21 @@ function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNu
     const anoAtual = zoo.historico.find(h => h.ano === anoNum);
     const anoAnt = zoo.historico.find(h => h.ano === anoNum - 1);
     if (!anoAtual) return [];
-    return anoAtual.meses.map((m, i) => ({
-      mes: MESES_NOMES[m.mes - 1],
-      [`gmd_${anoNum}`]: m.gmdAcumulado,
-      [`gmd_${anoNum - 1}`]: anoAnt?.meses[i]?.gmdAcumulado ?? null,
-      [`desfCab_${anoNum}`]: m.desfruteCabAcum,
-      [`desfCab_${anoNum - 1}`]: anoAnt?.meses[i]?.desfruteCabAcum ?? null,
-      [`arrProd_${anoNum}`]: m.arrobasProduzidasAcum ? Math.round(m.arrobasProduzidasAcum) : null,
-      [`arrProd_${anoNum - 1}`]: anoAnt?.meses[i]?.arrobasProduzidasAcum ? Math.round(anoAnt.meses[i].arrobasProduzidasAcum!) : null,
-    }));
-  }, [zoo.historico, anoNum]);
+    return MESES_NOMES.map((mes, i) => {
+      const m = anoAtual.meses[i];
+      const mAnt = anoAnt?.meses[i];
+      const isFuturo = i + 1 > mesFiltro;
+      return {
+        mes,
+        [`gmd_${anoNum}`]: isFuturo ? null : (m?.gmdAcumulado ?? null),
+        [`gmd_${anoNum - 1}`]: mAnt?.gmdAcumulado ?? null,
+        [`desfCab_${anoNum}`]: isFuturo ? null : (m?.desfruteCabAcum ?? null),
+        [`desfCab_${anoNum - 1}`]: mAnt?.desfruteCabAcum ?? null,
+        [`arrProd_${anoNum}`]: isFuturo ? null : (m?.arrobasProduzidasAcum ? Math.round(m.arrobasProduzidasAcum) : null),
+        [`arrProd_${anoNum - 1}`]: mAnt?.arrobasProduzidasAcum ? Math.round(mAnt.arrobasProduzidasAcum) : null,
+      };
+    });
+  }, [zoo.historico, anoNum, mesFiltro]);
 
   return (
     <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
