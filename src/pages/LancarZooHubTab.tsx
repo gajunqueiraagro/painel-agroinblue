@@ -71,8 +71,10 @@ const BLOCKS: { title: string; emoji: string; items: GroupItem[] }[] = [
 export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
   const { isGlobal } = useFazenda();
 
+  const ALLOWED_GLOBAL: TabId[] = ['evolucao_rebanho_hub'];
+
   const navTo = (tab: TabId) => {
-    if (isGlobal) {
+    if (isGlobal && !ALLOWED_GLOBAL.includes(tab)) {
       toast.info('Selecione uma fazenda para realizar lançamentos');
       return;
     }
@@ -82,6 +84,8 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
       onTabChange(tab);
     }
   };
+
+  const isBlocked = (tab: TabId) => isGlobal && !ALLOWED_GLOBAL.includes(tab);
 
   const disabledCls = isGlobal ? 'opacity-50 cursor-not-allowed' : '';
 
