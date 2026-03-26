@@ -10,7 +10,7 @@ import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 import { calcSaldoPorCategoriaLegado, calcPesoMedioPonderado, calcUA, calcUAHa, calcAreaProdutivaPecuaria } from '@/lib/calculos/zootecnicos';
 import { calcArrobasSafe } from '@/lib/calculos/economicos';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
-import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
+import { usePastos } from '@/hooks/usePastos';
 import { usePastos } from '@/hooks/usePastos';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { KpiCard } from '@/components/indicadores/KpiCard';
