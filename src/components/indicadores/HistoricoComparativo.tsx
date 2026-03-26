@@ -132,7 +132,8 @@ function HistoricoChart({
                 stroke={CORES[i]}
                 strokeWidth={i === 0 ? 2.5 : 1.5}
                 strokeDasharray={i === 0 ? undefined : '5 3'}
-                dot={false}
+                dot={{ r: 3, strokeWidth: 2 }}
+                activeDot={{ r: 5, strokeWidth: 2 }}
                 connectNulls
               />
             ))}
