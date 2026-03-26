@@ -139,6 +139,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo }: { lancamentos:
                 {showLiqKg && <td className="p-1.5 text-right">{fmtValor(liqKgTotal)}</td>}
                 <td className="p-1.5 text-right">{fmtValor(liqCabeca)}</td>
                 <td className="p-1.5"></td>
+                <td className="p-1.5"></td>
               </tr>
             </tfoot>
           );
