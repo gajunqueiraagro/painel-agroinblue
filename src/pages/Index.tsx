@@ -129,6 +129,7 @@ const Index = () => {
     fin_caixa: goToResumo,
     valor_rebanho: goToZootecnico,
     conciliacao_categoria: goToZootecnico,
+    visao_anual_zoo: goToZootecnicoHub,
   };
 
   const fazendaNome = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || '');
