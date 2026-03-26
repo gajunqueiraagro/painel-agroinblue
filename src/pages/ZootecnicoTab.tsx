@@ -1,6 +1,6 @@
 /**
- * Painel Zootécnico — Central de Status + Ação.
- * Blocos: Status, Estoque+Lotação, Produção, Gráficos.
+ * Indicadores Zootécnicos — KPIs de Estoque, Produção e Desempenho com gráficos.
+ * (Antigo "Painel Zootécnico", agora focado apenas em indicadores)
  */
 import { useState, useMemo, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
