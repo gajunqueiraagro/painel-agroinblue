@@ -63,6 +63,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
   const anoNum = Number(anoFiltro);
   const mesDefault = filtroMesInicial || (anoNum === new Date().getFullYear() ? new Date().getMonth() + 1 : 12);
   const [mesFiltro, setMesFiltro] = useState(mesDefault);
+  const [expandedIndicator, setExpandedIndicator] = useState<string | null>(null);
 
   useEffect(() => {
     if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
