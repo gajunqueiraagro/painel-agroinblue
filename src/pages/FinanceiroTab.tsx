@@ -253,6 +253,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState('todos');
+  const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>('todos');
 
   const filtrados = useMemo(() => {
     let tiposFilter: string[] = [];
