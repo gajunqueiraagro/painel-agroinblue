@@ -995,7 +995,7 @@ export function useIndicadoresZootecnicos(
       },
       loading,
     };
-  }, [lancamentos, saldosIniciais, pastos, ano, mes, anoMes, valorRebanhoData, valorRebanhoYoY, loadingValor, pesoFechamentoMap, pesoFechamentoMesAntMap, pesoFechamentoYoYMap]);
+  }, [lancamentos, saldosIniciais, pastos, ano, mes, anoMes, valorRebanhoData, valorRebanhoYoY, valorRebanhoMoM, loadingValor, pesoFechamentoMap, pesoFechamentoMesAntMap, pesoFechamentoYoYMap]);
 
   return indicadores;
 }
