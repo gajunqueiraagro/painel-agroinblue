@@ -162,10 +162,10 @@ function FluxoTable({ meses, mesAte, isMobile }: { meses: FluxoMensal[]; mesAte:
   return (
     <div className="overflow-x-auto -mx-2">
       <table className={`w-full min-w-[800px] ${fontSize}`}>
-        <thead>
+        <thead className="sticky top-0 z-20 bg-card">
           <tr className="border-b border-border">
-            <th className={`${cellPad} text-left font-bold text-muted-foreground sticky left-0 bg-card z-10`} style={{ minWidth: isMobile ? 100 : 140 }}>
-              Linha
+            <th className={`${cellPad} text-left font-bold text-muted-foreground sticky left-0 bg-card z-30`} style={{ minWidth: isMobile ? 100 : 140 }}>
+              
             </th>
             {meses.map(m => (
               <th
