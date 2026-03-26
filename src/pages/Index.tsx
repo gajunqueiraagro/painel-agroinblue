@@ -137,6 +137,7 @@ const Index = () => {
   // Sub-screens that need a back button
   const subScreenBackMap: Partial<Record<TabId, () => void>> = {
     zootecnico: goToVisaoZooHub,
+    indicadores: goToVisaoZooHub,
     valor_rebanho: goToZootecnico,
     conciliacao_categoria: goToVisaoZooHub,
     visao_anual_zoo: goToVisaoZooHub,
