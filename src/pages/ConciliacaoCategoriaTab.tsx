@@ -43,6 +43,7 @@ interface Props {
   saldosIniciais: SaldoInicial[];
   onBack: () => void;
   onNavigateToReclass: (filtro?: { ano: string; mes: number }) => void;
+  onNavigateToFechamento: (filtro?: { ano: string; mes: number }) => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
 }
