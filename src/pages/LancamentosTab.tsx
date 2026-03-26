@@ -36,13 +36,7 @@ interface Props {
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
-type StatusOperacional = 'previsto' | 'confirmado' | 'conciliado';
-
-const STATUS_OPTIONS: { value: StatusOperacional; label: string; color: string; bg: string }[] = [
-  { value: 'conciliado', label: 'Conciliado', color: 'text-green-800 dark:text-green-400', bg: 'bg-green-700' },
-  { value: 'confirmado', label: 'Confirmado', color: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-500' },
-  { value: 'previsto', label: 'Previsto', color: 'text-orange-700 dark:text-orange-400', bg: 'bg-orange-500' },
-];
+import { STATUS_OPTIONS, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
 
 const MOTIVOS_MORTE = [
   'Raio',
@@ -319,6 +313,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       valorTotal: valorTotalFinal,
       notaFiscal: notaFiscal || undefined,
       tipoPeso,
+      statusOperacional: statusOp,
     });
 
     setQuantidade('');
@@ -851,12 +846,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     {(() => {
-                      const st = (l as any).status_operacional || 'conciliado';
-                      const cfg = st === 'previsto'
-                        ? { label: 'Previsto', cls: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400' }
-                        : st === 'confirmado'
-                          ? { label: 'Confirmado', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400' }
-                          : { label: 'Realizado', cls: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400' };
+                      const cfg = getStatusBadge(l);
                       return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${cfg.cls}`}>{cfg.label}</span>;
                     })()}
                     <ChevronRight className="h-4 w-4 text-muted-foreground" />

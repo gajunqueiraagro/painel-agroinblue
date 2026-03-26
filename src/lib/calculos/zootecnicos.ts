@@ -5,6 +5,7 @@
 
 import type { Lancamento, SaldoInicial, Categoria, TipoMovimentacao } from '@/types/cattle';
 import type { CategoriaRebanho } from '@/hooks/usePastos';
+import { isConciliado as isLancConciliado } from '@/lib/statusOperacional';
 
 // ---------------------------------------------------------------------------
 // Tipos auxiliares
@@ -80,6 +81,14 @@ function lancamentosNoRange(lancs: Lancamento[], startDate: string, endDate: str
   return lancs.filter(l => l.data >= startDate && l.data <= endDate);
 }
 
+/**
+ * Filtra lançamentos CONCILIADOS (Realizados) dentro de um range de datas.
+ * Esta é a função padrão para cálculos de saldo real.
+ */
+function lancamentosConciliadosNoRange(lancs: Lancamento[], startDate: string, endDate: string): Lancamento[] {
+  return lancs.filter(l => l.data >= startDate && l.data <= endDate && isLancConciliado(l));
+}
+
 // ---------------------------------------------------------------------------
 // 1. Saldo por categoria até o final de um mês
 // ---------------------------------------------------------------------------
@@ -114,7 +123,7 @@ export function calcSaldoPorCategoria(
   const startDate = `${ano}-01-01`;
   const endDate = `${anoMes}-31`;
 
-  lancamentosNoRange(lancamentos, startDate, endDate).forEach(l => {
+  lancamentosConciliadosNoRange(lancamentos, startDate, endDate).forEach(l => {
     const catId = codeToId.get(l.categoria);
     if (!catId) return;
 
@@ -151,7 +160,7 @@ export function calcSaldoMensalAcumulado(
 
   const lancAno = lancamentos.filter(l => {
     const lAno = l.data.substring(0, 4);
-    return lAno === String(ano);
+    return lAno === String(ano) && isLancConciliado(l);
   });
 
   const saldoInicioMes: Record<string, number> = {};
@@ -225,7 +234,7 @@ export function calcSaldoPorCategoriaLegado(
     : `${ano}-12-31`;
   const startDate = `${ano}-01-01`;
 
-  lancamentosNoRange(lancamentos, startDate, endDate).forEach(l => {
+  lancamentosConciliadosNoRange(lancamentos, startDate, endDate).forEach(l => {
     if (isEntrada(l.tipo)) {
       map.set(l.categoria, (map.get(l.categoria) || 0) + l.quantidade);
     } else if (isSaida(l.tipo)) {
@@ -252,7 +261,7 @@ export function calcResumoMovimentacoes(
 ): ResumoMovimentacoes {
   const startDate = `${anoMes}-01`;
   const endDate = `${anoMes}-31`;
-  const doMes = lancamentosNoRange(lancamentos, startDate, endDate);
+  const doMes = lancamentosConciliadosNoRange(lancamentos, startDate, endDate);
 
   const count = (tipo: string) =>
     doMes.filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade, 0);
@@ -299,12 +308,16 @@ export function calcFluxoAnual(
   saldosIniciais: SaldoInicial[],
   lancamentos: Lancamento[],
   ano: number,
+  /** Se true, não filtra por status (assume que os dados já foram pré-filtrados) */
+  preFiltered = false,
 ) {
   const saldoInicialAno = saldosIniciais
     .filter(s => s.ano === ano)
     .reduce((sum, s) => sum + s.quantidade, 0);
 
-  const lancAno = lancamentos.filter(l => l.data.substring(0, 4) === String(ano));
+  const lancAno = lancamentos.filter(l =>
+    l.data.substring(0, 4) === String(ano) && (preFiltered || isLancConciliado(l))
+  );
 
   const porMesTipo: Record<string, Record<FluxoTipo, number>> = {};
   for (let m = 1; m <= 12; m++) {

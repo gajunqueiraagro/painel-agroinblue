@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { calcSaldoMensalAcumulado, isEntrada, isSaida } from '@/lib/calculos';
+import { isConciliado as isLancConciliado } from '@/lib/statusOperacional';
 import {
   calcFinanceiroFromLancamentos,
   isConciliado as isConciliadoFin,
@@ -239,6 +240,7 @@ export function useResumoStatus(
 
     // Filter to period
     const filtrados = lancamentos.filter(l => {
+      if (!isLancConciliado(l)) return false;
       try {
         const d = l.data;
         if (!d.startsWith(anoStr)) return false;

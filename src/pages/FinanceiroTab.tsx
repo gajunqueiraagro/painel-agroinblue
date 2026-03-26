@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { getStatusBadge } from '@/lib/statusOperacional';
 import { Lancamento, CATEGORIAS } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -92,12 +93,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo }: { lancamentos:
                 <td className="p-1.5 text-right">{fmtValor(c.liqCabeca)}</td>
                 <td className="p-1.5 text-center">
                   {(() => {
-                    const st = (l as any).status_operacional || 'conciliado';
-                    const cfg = st === 'previsto'
-                      ? { label: 'Prev', cls: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400' }
-                      : st === 'confirmado'
-                        ? { label: 'Conf', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400' }
-                        : { label: 'Real', cls: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400' };
+                    const cfg = getStatusBadge(l);
                     return <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${cfg.cls}`}>{cfg.label}</span>;
                   })()}
                 </td>
@@ -189,12 +185,7 @@ function AbateTable({ lancamentos, onEdit }: { lancamentos: Lancamento[]; onEdit
                 <td className="p-1.5 text-right">{fmtValor(c.liqCabeca)}</td>
                 <td className="p-1.5 text-center">
                   {(() => {
-                    const st = (l as any).status_operacional || 'conciliado';
-                    const cfg = st === 'previsto'
-                      ? { label: 'Prev', cls: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400' }
-                      : st === 'confirmado'
-                        ? { label: 'Conf', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400' }
-                        : { label: 'Real', cls: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400' };
+                    const cfg = getStatusBadge(l);
                     return <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${cfg.cls}`}>{cfg.label}</span>;
                   })()}
                 </td>
@@ -298,8 +289,10 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           if (format(d, 'yyyy') !== anoFiltro) return false;
           if (mesFiltro !== 'todos' && format(d, 'MM') !== mesFiltro) return false;
           if (!tiposFilter.includes(l.tipo)) return false;
-          // Status filter: all existing lancamentos are treated as "realizado" until status field is persisted
-          if (statusFiltro === 'previsto') return false; // No previsto records in DB yet
+          // Status filter using statusOperacional
+          const st = l.statusOperacional || 'conciliado';
+          if (statusFiltro === 'realizado' && st !== 'conciliado') return false;
+          if (statusFiltro === 'previsto' && st !== 'previsto') return false;
           return true;
         } catch { return false; }
       })

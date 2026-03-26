@@ -74,6 +74,7 @@ export function useLancamentos() {
           valorTotal: l.valor_total ?? undefined,
           notaFiscal: l.nota_fiscal ?? undefined,
           tipoPeso: l.tipo_peso ?? 'vivo',
+          statusOperacional: l.status_operacional ?? 'conciliado',
           createdAt: l.created_at,
           updatedAt: l.updated_at,
           createdBy: l.created_by ?? undefined,
@@ -147,6 +148,7 @@ export function useLancamentos() {
         valorTotal: l.valor_total ?? undefined,
         notaFiscal: l.nota_fiscal ?? undefined,
         tipoPeso: l.tipo_peso ?? 'vivo',
+        statusOperacional: l.status_operacional ?? 'conciliado',
         createdAt: l.created_at,
         updatedAt: l.updated_at,
         createdBy: l.created_by ?? undefined,
@@ -251,6 +253,7 @@ export function useLancamentos() {
       valor_total: lancamento.valorTotal || null,
       nota_fiscal: lancamento.notaFiscal || null,
       tipo_peso: lancamento.tipoPeso || 'vivo',
+      status_operacional: lancamento.statusOperacional || 'conciliado',
     };
 
     if (!isOnline()) {
@@ -318,6 +321,7 @@ export function useLancamentos() {
     if (dados.valorTotal !== undefined) update.valor_total = dados.valorTotal;
     if (dados.notaFiscal !== undefined) update.nota_fiscal = dados.notaFiscal;
     if (dados.tipoPeso !== undefined) update.tipo_peso = dados.tipoPeso;
+    if (dados.statusOperacional !== undefined) update.status_operacional = dados.statusOperacional;
 
     const { error } = await supabase.from('lancamentos').update(update).eq('id', id);
     if (!error) {
