@@ -94,7 +94,10 @@ const Index = () => {
     setActiveTab('financeiro');
   }, []);
 
-  const handleTabChange = useCallback((tab: TabId) => {
+  const handleTabChange = useCallback((tab: TabId, filtro?: { ano: string; mes: number }) => {
+    if (filtro) {
+      setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
+    }
     if (tab !== 'financeiro') setSubAbaFinanceiro(undefined);
     if (tab !== 'lancamentos') setLancamentosFromConciliacao(false);
     setActiveTab(tab);

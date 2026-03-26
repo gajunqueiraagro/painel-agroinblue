@@ -31,7 +31,7 @@ interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
   onBack: () => void;
-  onTabChange?: (tab: TabId) => void;
+  onTabChange?: (tab: TabId, filtro?: { ano: string; mes: number }) => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
 }
@@ -78,9 +78,9 @@ export function ZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTabChange
   const rsCab = zoo.valorRebanho !== null && zoo.saldoFinalMes > 0 ? zoo.valorRebanho / zoo.saldoFinalMes : null;
   const rsArroba = zoo.valorRebanho !== null && arrobasTotalEstoque ? zoo.valorRebanho / arrobasTotalEstoque : null;
 
-  // Helpers for navigation
+  // Helpers for navigation — always carry current filter context
   const navTo = (tab: TabId) => {
-    if (onTabChange) onTabChange(tab);
+    if (onTabChange) onTabChange(tab, { ano: anoFiltro, mes: mesFiltro });
   };
 
   // Sub-view: Graficos
