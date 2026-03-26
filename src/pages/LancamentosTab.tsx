@@ -39,9 +39,9 @@ type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
 type StatusOperacional = 'previsto' | 'confirmado' | 'conciliado';
 
 const STATUS_OPTIONS: { value: StatusOperacional; label: string; color: string; bg: string }[] = [
-  { value: 'previsto', label: 'Previsto', color: 'text-orange-700 dark:text-orange-400', bg: 'bg-orange-500' },
-  { value: 'confirmado', label: 'Confirmado', color: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-500' },
   { value: 'conciliado', label: 'Conciliado', color: 'text-green-800 dark:text-green-400', bg: 'bg-green-700' },
+  { value: 'confirmado', label: 'Confirmado', color: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-500' },
+  { value: 'previsto', label: 'Previsto', color: 'text-orange-700 dark:text-orange-400', bg: 'bg-orange-500' },
 ];
 
 const MOTIVOS_MORTE = [
@@ -114,7 +114,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState('todos');
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
-  const [statusOp, setStatusOp] = useState<StatusOperacional>('previsto');
+  const [statusOp, setStatusOp] = useState<StatusOperacional>('conciliado');
 
   // Death reason
   const [motivoMorte, setMotivoMorte] = useState('');
