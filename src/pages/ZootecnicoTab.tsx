@@ -399,6 +399,7 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
           <span>Peso médio estimado — realize fechamento de pastos para maior precisão</span>
         </div>
       )}
+      {renderBottom}
       </div>
     </div>
   );
