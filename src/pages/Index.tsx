@@ -65,6 +65,7 @@ const TITLES: Record<TabId, string> = {
   fechamento: 'Lançamento de Pasto',
   mapa_pastos: 'Mapa de Pastos',
   resumo_pastos: 'Resumo de Pastos',
+  visao_anual_zoo: 'Visão Anual Zootécnica',
 };
 
 const Index = () => {
