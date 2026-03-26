@@ -17,6 +17,7 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Pencil, Trash2 } from 'lucide-react';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { STATUS_OPTIONS, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
 
 interface Props {
   lancamento: Lancamento;
@@ -56,6 +57,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       pesoMedioKg: form.pesoMedioKg ? Number(form.pesoMedioKg) : undefined,
       pesoMedioArrobas: form.pesoMedioKg ? kgToArrobas(Number(form.pesoMedioKg)) : undefined,
       precoMedioCabeca: form.precoMedioCabeca ? Number(form.precoMedioCabeca) : undefined,
+      statusOperacional: form.statusOperacional || 'conciliado',
     });
     setEditando(false);
     onClose();
@@ -275,6 +277,27 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                   className="mt-1"
                 />
               )}
+            </div>
+          </div>
+
+          {/* Status Operacional */}
+          <div>
+            <Label className="font-bold text-foreground">Status</Label>
+            <div className="flex gap-1 mt-1">
+              {STATUS_OPTIONS.map(s => (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, statusOperacional: s.value }))}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold border-2 transition-all ${
+                    (form.statusOperacional || 'conciliado') === s.value
+                      ? `${s.bg} text-white border-transparent shadow-md`
+                      : 'border-border text-muted-foreground bg-muted/30'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
             </div>
           </div>
 
