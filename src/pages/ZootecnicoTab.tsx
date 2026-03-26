@@ -83,40 +83,100 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
     ? zoo.saldoFinalMes * zoo.pesoMedioRebanhoKg : null;
   const kgHa = pesoTotalKg && zoo.areaProdutiva > 0 ? pesoTotalKg / zoo.areaProdutiva : null;
 
-  // ===== Acumulado: médias jan→mesFiltro =====
+  // Kg/ha comparisons for monthly view (MoM + YoY)
+  const kgHaComps = useMemo(() => {
+    const buildComp = (atual: number | null, ref: number | null) => {
+      if (atual === null || ref === null || (atual === 0 && ref === 0)) return null;
+      const diff = atual - ref;
+      const pct = ref !== 0 ? (diff / Math.abs(ref)) * 100 : null;
+      return { diferencaPercentual: pct, disponivel: true } as any;
+    };
+    // MoM: kgHa do mês anterior
+    const mesAntMes = mesFiltro > 1 ? mesFiltro - 1 : 12;
+    const mesAntAno = mesFiltro > 1 ? anoNum : anoNum - 1;
+    const sMapAnt = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, mesAntAno, mesAntMes);
+    const cabAnt = Array.from(sMapAnt.values()).reduce((s, v) => s + v, 0);
+    const pmAnt = calcPesoMedioPonderado(Array.from(sMapAnt.entries()).filter(([,q]) => q > 0).map(([cat, q]) => {
+      const si = saldosIniciais.find(s => s.ano === mesAntAno && s.categoria === cat);
+      return { quantidade: q, pesoKg: si?.pesoMedioKg ?? null };
+    }));
+    const kgHaAnt = cabAnt > 0 && pmAnt && zoo.areaProdutiva > 0 ? (cabAnt * pmAnt) / zoo.areaProdutiva : null;
+
+    // YoY
+    const sMapYoY = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, anoNum - 1, mesFiltro);
+    const cabYoY = Array.from(sMapYoY.values()).reduce((s, v) => s + v, 0);
+    const pmYoY = calcPesoMedioPonderado(Array.from(sMapYoY.entries()).filter(([,q]) => q > 0).map(([cat, q]) => {
+      const si = saldosIniciais.find(s => s.ano === anoNum - 1 && s.categoria === cat);
+      return { quantidade: q, pesoKg: si?.pesoMedioKg ?? null };
+    }));
+    const kgHaYoY = cabYoY > 0 && pmYoY && zoo.areaProdutiva > 0 ? (cabYoY * pmYoY) / zoo.areaProdutiva : null;
+
+    return { mensal: buildComp(kgHa, kgHaAnt), anual: buildComp(kgHa, kgHaYoY) };
+  }, [kgHa, saldosIniciais, lancamentos, anoNum, mesFiltro, zoo.areaProdutiva]);
+
+  // ===== Acumulado: médias jan→mesFiltro + comparações MoM/YoY =====
   const acumulado = useMemo(() => {
-    const snapshots: { cab: number; pesoMedio: number | null; kgTotal: number; area: number; ua: number }[] = [];
-    for (let m = 1; m <= mesFiltro; m++) {
-      const sMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, anoNum, m);
-      const cab = Array.from(sMap.values()).reduce((s, v) => s + v, 0);
-      const itensPeso = Array.from(sMap.entries())
-        .filter(([, q]) => q > 0)
-        .map(([cat, q]) => {
-          const si = saldosIniciais.find(s => s.ano === anoNum && s.categoria === cat);
-          return { quantidade: q, pesoKg: si?.pesoMedioKg ?? null };
-        });
-      const pm = calcPesoMedioPonderado(itensPeso);
-      const kgTot = cab * (pm || 0);
-      const area = calcAreaProdutivaPecuaria(pastos);
-      const ua = calcUA(cab, pm);
-      snapshots.push({ cab, pesoMedio: pm, kgTotal: kgTot, area, ua });
-    }
+    type Snap = { cab: number; pesoMedio: number | null; kgTotal: number; area: number; ua: number };
 
-    const n = snapshots.length;
-    if (n === 0) return { cabMedia: 0, pesoMedioFinal: null, areaMedia: 0, uaHaMedio: null, kgHaMedio: null };
+    const buildSnapshots = (ano: number, ateMes: number): Snap[] => {
+      const snaps: Snap[] = [];
+      for (let m = 1; m <= ateMes; m++) {
+        const sMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, m);
+        const cab = Array.from(sMap.values()).reduce((s, v) => s + v, 0);
+        const itensPeso = Array.from(sMap.entries())
+          .filter(([, q]) => q > 0)
+          .map(([cat, q]) => {
+            const si = saldosIniciais.find(s => s.ano === ano && s.categoria === cat);
+            return { quantidade: q, pesoKg: si?.pesoMedioKg ?? null };
+          });
+        const pm = calcPesoMedioPonderado(itensPeso);
+        const kgTot = cab * (pm || 0);
+        const area = calcAreaProdutivaPecuaria(pastos);
+        const ua = calcUA(cab, pm);
+        snaps.push({ cab, pesoMedio: pm, kgTotal: kgTot, area, ua });
+      }
+      return snaps;
+    };
 
-    const cabMedia = snapshots.reduce((s, v) => s + v.cab, 0) / n;
-    // Peso médio ponderado por cabeças de cada mês
-    const totalCabPeso = snapshots.reduce((s, v) => s + (v.pesoMedio !== null ? v.cab : 0), 0);
-    const totalPesoPond = snapshots.reduce((s, v) => s + (v.pesoMedio !== null ? v.cab * v.pesoMedio : 0), 0);
-    const pesoMedioFinal = totalCabPeso > 0 ? totalPesoPond / totalCabPeso : null;
-    const areaMedia = snapshots.reduce((s, v) => s + v.area, 0) / n;
-    const uaMedia = snapshots.reduce((s, v) => s + v.ua, 0) / n;
-    const kgTotalMedia = snapshots.reduce((s, v) => s + v.kgTotal, 0) / n;
-    const uaHaMedio = areaMedia > 0 ? uaMedia / areaMedia : null;
-    const kgHaMedio = areaMedia > 0 ? kgTotalMedia / areaMedia : null;
+    const calcAvgs = (snaps: Snap[]) => {
+      const n = snaps.length;
+      if (n === 0) return { cabMedia: 0, pesoMedioFinal: null as number | null, areaMedia: 0, uaHaMedio: null as number | null, kgHaMedio: null as number | null };
+      const cabMedia = snaps.reduce((s, v) => s + v.cab, 0) / n;
+      const totalCabPeso = snaps.reduce((s, v) => s + (v.pesoMedio !== null ? v.cab : 0), 0);
+      const totalPesoPond = snaps.reduce((s, v) => s + (v.pesoMedio !== null ? v.cab * v.pesoMedio! : 0), 0);
+      const pesoMedioFinal = totalCabPeso > 0 ? totalPesoPond / totalCabPeso : null;
+      const areaMedia = snaps.reduce((s, v) => s + v.area, 0) / n;
+      const uaMedia = snaps.reduce((s, v) => s + v.ua, 0) / n;
+      const kgTotalMedia = snaps.reduce((s, v) => s + v.kgTotal, 0) / n;
+      const uaHaMedio = areaMedia > 0 ? uaMedia / areaMedia : null;
+      const kgHaMedio = areaMedia > 0 ? kgTotalMedia / areaMedia : null;
+      return { cabMedia, pesoMedioFinal, areaMedia, uaHaMedio, kgHaMedio };
+    };
 
-    return { cabMedia, pesoMedioFinal, areaMedia, uaHaMedio, kgHaMedio };
+    const comp = (atual: number | null, ref: number | null) => {
+      if (atual === null || ref === null || (atual === 0 && ref === 0)) return null;
+      const diff = atual - ref;
+      const pct = ref !== 0 ? (diff / Math.abs(ref)) * 100 : null;
+      return { diferencaPercentual: pct, disponivel: true } as { diferencaPercentual: number | null; disponivel: boolean; valorAtual: number; valorComparativo: number; diferencaAbsoluta: number; tipo: 'mensal' | 'yoy' };
+    };
+
+    // Current period
+    const atual = calcAvgs(buildSnapshots(anoNum, mesFiltro));
+
+    // MoM: jan→(mesFiltro-1) do mesmo ano
+    const mom = mesFiltro > 1 ? calcAvgs(buildSnapshots(anoNum, mesFiltro - 1)) : null;
+
+    // YoY: jan→mesFiltro do ano anterior
+    const yoy = calcAvgs(buildSnapshots(anoNum - 1, mesFiltro));
+
+    return {
+      ...atual,
+      compCab: { mensal: comp(atual.cabMedia, mom?.cabMedia ?? null), anual: comp(atual.cabMedia, yoy.cabMedia) },
+      compPeso: { mensal: comp(atual.pesoMedioFinal, mom?.pesoMedioFinal ?? null), anual: comp(atual.pesoMedioFinal, yoy.pesoMedioFinal) },
+      compArea: { mensal: comp(atual.areaMedia, mom?.areaMedia ?? null), anual: comp(atual.areaMedia, yoy.areaMedia) },
+      compUaHa: { mensal: comp(atual.uaHaMedio, mom?.uaHaMedio ?? null), anual: comp(atual.uaHaMedio, yoy.uaHaMedio) },
+      compKgHa: { mensal: comp(atual.kgHaMedio, mom?.kgHaMedio ?? null), anual: comp(atual.kgHaMedio, yoy.kgHaMedio) },
+    };
   }, [saldosIniciais, lancamentos, anoNum, mesFiltro, pastos]);
 
   // Helpers for navigation — always carry current filter context
@@ -222,6 +282,7 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
                   semBase={zoo.uaHa === null} />
                 <KpiCard label="Kg/ha no mês"
                   valor={kgHa !== null ? formatNum(kgHa, 2) : '—'}
+                  compMensal={kgHaComps.mensal} compAnual={kgHaComps.anual}
                   semBase={kgHa === null} />
               </div>
             </>
@@ -229,10 +290,12 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
             /* ===== VISÃO ACUMULADA: médias jan→mesFiltro ===== */
             <>
               <div className="grid grid-cols-3 gap-3">
-                <KpiCard label="Cabeças na média" valor={formatNum(acumulado.cabMedia, 0)} unidade="cab" />
+                <KpiCard label="Cabeças na média" valor={formatNum(acumulado.cabMedia, 0)} unidade="cab"
+                  compMensal={acumulado.compCab.mensal} compAnual={acumulado.compCab.anual} />
                 <KpiCard label="Peso Médio Final"
                   valor={acumulado.pesoMedioFinal !== null ? formatNum(acumulado.pesoMedioFinal, 1) : '—'}
                   unidade="kg"
+                  compMensal={acumulado.compPeso.mensal} compAnual={acumulado.compPeso.anual}
                   semBase={acumulado.pesoMedioFinal === null} />
                 <KpiCard label="Valor Rebanho"
                   valor={zoo.valorRebanho !== null ? formatMoedaCompacto(zoo.valorRebanho) : '—'}
@@ -241,13 +304,15 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <KpiCard label="Área Prod. média"
-                  valor={formatNum(acumulado.areaMedia, 1)} unidade="ha" />
+                  valor={formatNum(acumulado.areaMedia, 1)} unidade="ha"
+                  compMensal={acumulado.compArea.mensal} compAnual={acumulado.compArea.anual} />
                 <KpiCard label="UA/ha médio"
                   valor={acumulado.uaHaMedio !== null ? formatNum(acumulado.uaHaMedio, 2) : '—'}
-                  compMensal={zoo.comparacoes.uaHaMediaAno.mensal} compAnual={zoo.comparacoes.uaHaMediaAno.anual}
+                  compMensal={acumulado.compUaHa.mensal} compAnual={acumulado.compUaHa.anual}
                   semBase={acumulado.uaHaMedio === null} />
                 <KpiCard label="Kg/ha médio"
                   valor={acumulado.kgHaMedio !== null ? formatNum(acumulado.kgHaMedio, 2) : '—'}
+                  compMensal={acumulado.compKgHa.mensal} compAnual={acumulado.compKgHa.anual}
                   semBase={acumulado.kgHaMedio === null} />
               </div>
             </>
