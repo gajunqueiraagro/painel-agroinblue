@@ -31,14 +31,8 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   const [statusFiltro, setStatusFiltro] = useState<'todos' | 'realizado' | 'previsto'>('todos');
 
   const lancFiltrados = useMemo(() => {
-    if (statusFiltro === 'todos') return lancamentos;
-    // All existing lancamentos without status_operacional are treated as 'conciliado' (realizado)
-    return lancamentos.filter(l => {
-      const status = (l as any).status_operacional || 'conciliado';
-      if (statusFiltro === 'realizado') return status === 'conciliado';
-      if (statusFiltro === 'previsto') return status === 'previsto';
-      return true;
-    });
+    const cenario = statusFiltro === 'realizado' ? 'realizado' : statusFiltro === 'previsto' ? 'meta' : 'todos';
+    return filtrarPorCenario(lancamentos, cenario);
   }, [lancamentos, statusFiltro]);
 
   const dados = useMemo(
