@@ -157,26 +157,24 @@ export interface IndicadoresZootecnicos {
   valorPorCabeca: number | null;
   valorPorHa: number | null;
 
-  // --- Comparações ---
+  // --- Comparações (dual: mensal + anual para cada indicador) ---
   comparacoes: {
-    // Estruturais → YoY
-    saldoFinalMes: Comparacao | null;
-    pesoMedioRebanhoKg: Comparacao | null;
-    uaHa: Comparacao | null;
-    uaHaMediaAno: Comparacao | null;
-    valorRebanho: Comparacao | null;
-    // Operacionais → vs mês anterior
-    arrobasSaidasMes: Comparacao | null;
-    arrobasHaMes: Comparacao | null;
-    // Acumulados → vs acumulado ano anterior
-    arrobasSaidasAcumuladoAno: Comparacao | null;
-    arrobasHaAcumuladoAno: Comparacao | null;
-    arrobasProduzidasAcumulado: Comparacao | null;
-    gmdMes: Comparacao | null;
-    gmdAcumulado: Comparacao | null;
-    desfruteCabecasAcumulado: Comparacao | null;
-    desfruteArrobasAcumulado: Comparacao | null;
-    arrobasDesfrutadasAcum: Comparacao | null;
+    saldoFinalMes: { mensal: Comparacao | null; anual: Comparacao | null };
+    pesoMedioRebanhoKg: { mensal: Comparacao | null; anual: Comparacao | null };
+    uaHa: { mensal: Comparacao | null; anual: Comparacao | null };
+    uaHaMediaAno: { mensal: Comparacao | null; anual: Comparacao | null };
+    valorRebanho: { mensal: Comparacao | null; anual: Comparacao | null };
+    arrobasSaidasMes: { mensal: Comparacao | null; anual: Comparacao | null };
+    arrobasHaMes: { mensal: Comparacao | null; anual: Comparacao | null };
+    arrobasSaidasAcumuladoAno: { mensal: Comparacao | null; anual: Comparacao | null };
+    arrobasHaAcumuladoAno: { mensal: Comparacao | null; anual: Comparacao | null };
+    arrobasProduzidasAcumulado: { mensal: Comparacao | null; anual: Comparacao | null };
+    gmdMes: { mensal: Comparacao | null; anual: Comparacao | null };
+    gmdAcumulado: { mensal: Comparacao | null; anual: Comparacao | null };
+    desfruteCabecasAcumulado: { mensal: Comparacao | null; anual: Comparacao | null };
+    desfruteArrobasAcumulado: { mensal: Comparacao | null; anual: Comparacao | null };
+    arrobasDesfrutadasAcum: { mensal: Comparacao | null; anual: Comparacao | null };
+    valorPorCabeca: { mensal: Comparacao | null; anual: Comparacao | null };
   };
 
   // --- Histórico (gráficos) ---
