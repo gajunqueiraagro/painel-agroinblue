@@ -160,7 +160,7 @@ export function calcSaldoMensalAcumulado(
 
   const lancAno = lancamentos.filter(l => {
     const lAno = l.data.substring(0, 4);
-    return lAno === String(ano);
+    return lAno === String(ano) && isLancConciliado(l);
   });
 
   const saldoInicioMes: Record<string, number> = {};
