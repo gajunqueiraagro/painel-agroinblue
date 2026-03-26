@@ -12,6 +12,7 @@ import { VisaoFinHubTab } from './VisaoFinHubTab';
 import { MovimentacaoTab } from './MovimentacaoTab';
 import { LancamentosTab } from './LancamentosTab';
 import { FluxoAnualTab } from './FluxoAnualTab';
+import { EvolucaoRebanhoHubTab } from './EvolucaoRebanhoHubTab';
 import { FinanceiroTab, type SubAba } from './FinanceiroTab';
 import { FinanceiroCaixaTab } from './FinanceiroCaixaTab';
 import { AnaliseEconomicaTab } from './AnaliseEconomicaTab';
