@@ -17,6 +17,8 @@ interface Props {
   onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
   onRemover: (id: string) => void;
   subAbaInicial?: SubAba;
+  /** Modo compacto para aba Movimentações: sem "Todas"/"Chuvas", filtros menores, header sticky */
+  modoMovimentacao?: boolean;
 }
 
 export type SubAba = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
