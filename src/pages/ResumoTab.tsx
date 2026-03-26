@@ -1,17 +1,22 @@
 /**
- * Resumo — HUB de status operacional.
- * 3 cards enxutos: Zootécnico, Financeiro, Econômico.
- * Status forte (🔴🟡🟢) + botão de entrada em cada camada.
+ * Resumo Executivo — Dashboard de consultoria em tela única.
+ * Substitui o antigo HUB de 3 cards por uma visão completa:
+ * 1. Status Geral, 2. Zootécnico, 3. Financeiro, 4. Econômico, 5. Alertas.
  */
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { parseISO, format } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TabId } from '@/components/BottomNav';
 import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 import { useResumoStatus, StatusNivel } from '@/hooks/useResumoStatus';
+import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
+import { usePastos } from '@/hooks/usePastos';
+import { supabase } from '@/integrations/supabase/client';
+import { calcSaldoPorCategoriaLegado, calcPesoMedioPonderado, calcUA, calcUAHa, calcAreaProdutivaPecuaria } from '@/lib/calculos/zootecnicos';
+import { calcArrobasSafe } from '@/lib/calculos/economicos';
+import { ChevronRight, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import type { FiltroGlobal } from './Index';
 
 interface Props {
@@ -37,141 +42,152 @@ const MESES = [
   { value: '12', label: 'Dezembro' },
 ];
 
-function StatusBadge({ nivel }: { nivel: StatusNivel }) {
+const TIPOS_SAIDA = ['abate', 'venda', 'consumo', 'transferencia_saida'];
+
+function StatusDot({ nivel }: { nivel: StatusNivel }) {
   const config = {
-    aberto: { emoji: '🔴', label: 'Em aberto', className: 'bg-destructive/15 text-destructive' },
-    parcial: { emoji: '🟡', label: 'Parcial', className: 'bg-accent/20 text-accent-foreground' },
-    fechado: { emoji: '🟢', label: 'Fechado', className: 'bg-success/15 text-success' },
+    aberto: { emoji: '🔴', bg: 'bg-destructive/15' },
+    parcial: { emoji: '🟡', bg: 'bg-accent/20' },
+    fechado: { emoji: '🟢', bg: 'bg-green-500/15' },
+  };
+  return <span className="text-base">{config[nivel].emoji}</span>;
+}
+
+function StatusBadge({ nivel, label }: { nivel: StatusNivel; label?: string }) {
+  const config = {
+    aberto: { emoji: '🔴', text: label || 'Em aberto', className: 'bg-destructive/15 text-destructive' },
+    parcial: { emoji: '🟡', text: label || 'Parcial', className: 'bg-accent/20 text-accent-foreground' },
+    fechado: { emoji: '🟢', text: label || 'Fechado', className: 'bg-green-500/15 text-green-700 dark:text-green-400' },
   };
   const c = config[nivel];
   return (
     <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${c.className}`}>
-      {c.emoji} {c.label}
+      {c.emoji} {c.text}
     </span>
   );
 }
 
-function FinanceiroCard({ financeiro, onTabChange, isGlobal, filtroGlobal }: { financeiro: ReturnType<typeof useResumoStatus>['financeiro']; onTabChange: (tab: TabId, filtro?: { ano: string; mes: number }) => void; isGlobal: boolean; filtroGlobal: FiltroGlobal }) {
-  const [auditOpen, setAuditOpen] = useState(false);
-  const a = financeiro.audit;
-
+function KpiRow({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
-    <div className="rounded-xl border bg-card p-4 space-y-3 shadow-sm">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">💰</span>
-          <h2 className="text-base font-extrabold text-card-foreground">Financeiro</h2>
-        </div>
-        <StatusBadge nivel={financeiro.status.nivel} />
+    <div className="flex justify-between items-baseline">
+      <span className="text-muted-foreground text-sm">{label}</span>
+      <div className="text-right">
+        <span className={`font-bold text-sm ${color || 'text-card-foreground'}`}>{value}</span>
+        {sub && <span className="text-[10px] text-muted-foreground ml-1">{sub}</span>}
       </div>
-
-      <div className="space-y-1.5 text-sm">
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Entradas</span>
-          <span className="font-semibold text-green-600 dark:text-green-400">{formatMoeda(financeiro.totalEntradas)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Saídas</span>
-          <span className="font-semibold text-red-600 dark:text-red-400">{formatMoeda(financeiro.totalSaidas)}</span>
-        </div>
-        <div className="flex justify-between border-t border-border pt-1">
-          <span className="text-muted-foreground font-semibold">Resultado</span>
-          <span className={`font-bold ${financeiro.resultado >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-            {formatMoeda(financeiro.resultado)}
-          </span>
-        </div>
-        {isGlobal ? (
-          <>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Saldo Inicial</span>
-              <span className="font-semibold text-card-foreground">{formatMoeda(financeiro.saldoInicial)}</span>
-            </div>
-            <div className="flex justify-between border-t border-border pt-1">
-              <span className="text-muted-foreground font-bold">Caixa Atual</span>
-              <span className={`font-extrabold ${financeiro.caixaAtual >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                {formatMoeda(financeiro.caixaAtual)}
-              </span>
-            </div>
-          </>
-        ) : (
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground pt-1 border-t border-border">
-            <span>🔒</span>
-            <span>Valores de caixa consolidados disponíveis apenas no modo global</span>
-          </div>
-        )}
-      </div>
-
-      <p className="text-[11px] text-muted-foreground">{financeiro.status.descricao}</p>
-
-      {/* Auditoria expandível */}
-      <button
-        onClick={() => setAuditOpen(!auditOpen)}
-        className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground hover:text-foreground transition-colors w-full"
-      >
-        🔍 Auditoria
-        {auditOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-      </button>
-      {auditOpen && (
-        <div className="bg-muted/50 rounded-md p-2 space-y-1 text-[10px] text-muted-foreground">
-          <div><strong>Base:</strong> {a.base}</div>
-          <div><strong>Status:</strong> {a.filtroStatus}</div>
-          <div><strong>Data base:</strong> {a.filtroData}</div>
-          <div><strong>Classificação:</strong> {a.classificacao}</div>
-          <div><strong>Período:</strong> {a.periodo}</div>
-          <div><strong>Lançamentos filtrados:</strong> {a.totalLancamentosFiltrados}</div>
-          <div><strong>Entradas:</strong> {a.qtdEntradas} lanç. → {formatMoeda(financeiro.totalEntradas)}</div>
-          <div><strong>Saídas:</strong> {a.qtdSaidas} lanç. → {formatMoeda(financeiro.totalSaidas)}</div>
-          <div className="border-t border-border pt-1 mt-1">
-            <strong>Saldo Inicial:</strong> {formatMoeda(financeiro.saldoInicial)}
-          </div>
-          <div><strong>Período saldo:</strong> {a.saldoInicialPeriodo}</div>
-          <div><strong>Registros SALDO:</strong> {a.saldoInicialRegistros}</div>
-          {a.saldoInicialContas.length > 0 && (
-            <div><strong>Contas:</strong> {a.saldoInicialContas.join(', ')}</div>
-          )}
-          <div><strong>Caixa:</strong> {a.saldoOrigem}</div>
-        </div>
-      )}
-
-      <button
-        onClick={() => onTabChange('fin_caixa', { ano: filtroGlobal.ano, mes: filtroGlobal.mes })}
-        className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
-      >
-        Ver Fluxo Financeiro <ChevronRight className="h-4 w-4" />
-      </button>
     </div>
   );
 }
 
+/** Hook leve para KPIs zootécnicos extras (GMD, Lotação, @) */
+function useZooKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: number, mes: number, fazendaId?: string) {
+  const { pastos } = usePastos();
+  const isGlobal = !fazendaId || fazendaId === '__global__';
+
+  return useMemo(() => {
+    const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
+    const saldoFinal = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
+
+    // Peso médio (simplificado — sem fechamento de pasto no hook leve)
+    const itens = Array.from(saldoMap.entries())
+      .filter(([, q]) => q > 0)
+      .map(([cat, qtd]) => {
+        const si = saldosIniciais.find(s => s.categoria === cat && s.ano === ano);
+        return { quantidade: qtd, pesoKg: si?.pesoMedioKg || null };
+      });
+    const pesoMedio = calcPesoMedioPonderado(itens);
+
+    // UA/ha
+    const area = calcAreaProdutivaPecuaria(pastos);
+    const ua = calcUA(saldoFinal, pesoMedio);
+    const uaHa = calcUAHa(ua, area);
+
+    // Arrobas saídas acumuladas
+    const end = `${ano}-${String(mes).padStart(2, '0')}-31`;
+    const lancsAcum = lancamentos.filter(l => l.data >= `${ano}-01-01` && l.data <= end);
+    const saidasAcum = lancsAcum.filter(l => TIPOS_SAIDA.includes(l.tipo));
+    const arrobasSaidas = saidasAcum.reduce((s, l) => s + calcArrobasSafe(l), 0);
+
+    return {
+      saldoFinal,
+      pesoMedio,
+      uaHa,
+      arrobasSaidas,
+      area,
+    };
+  }, [lancamentos, saldosIniciais, ano, mes, pastos]);
+}
+
 export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlobal, onFiltroChange }: Props) {
-  const { fazendaAtual } = useFazenda();
+  const { fazendaAtual, isGlobal } = useFazenda();
   const fazendaNaoPecuaria = fazendaAtual && fazendaAtual.id !== '__global__' && fazendaAtual.tem_pecuaria === false;
 
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
-    lancamentos.forEach(l => {
-      try { anos.add(format(parseISO(l.data), 'yyyy')); } catch {}
-    });
+    lancamentos.forEach(l => { try { anos.add(format(parseISO(l.data), 'yyyy')); } catch {} });
     saldosIniciais.forEach(s => anos.add(String(s.ano)));
     return Array.from(anos).sort().reverse();
   }, [lancamentos, saldosIniciais]);
 
-  const anoFiltro = filtroGlobal.ano;
-  const mesFiltro = String(filtroGlobal.mes);
+  const anoNum = Number(filtroGlobal.ano);
+  const mesNum = filtroGlobal.mes;
 
-  const anoNum = Number(anoFiltro);
-  const mesNum = Number(mesFiltro);
+  const { zootecnico, financeiro, economico, loading } = useResumoStatus(lancamentos, saldosIniciais, anoNum, mesNum);
+  const statusZoo = useStatusZootecnico(fazendaAtual?.id, anoNum, mesNum, lancamentos, saldosIniciais);
+  const zooKpis = useZooKpis(lancamentos, saldosIniciais, anoNum, mesNum, fazendaAtual?.id);
 
-  const { zootecnico, financeiro, economico, loading } = useResumoStatus(
-    lancamentos, saldosIniciais, anoNum, mesNum
-  );
+  // Status geral
+  const statusGeral = useMemo((): StatusNivel => {
+    const niveis = [zootecnico.status.nivel, financeiro.status.nivel, economico.status.nivel];
+    if (niveis.every(n => n === 'fechado')) return 'fechado';
+    if (niveis.every(n => n === 'aberto')) return 'aberto';
+    return 'parcial';
+  }, [zootecnico.status.nivel, financeiro.status.nivel, economico.status.nivel]);
+
+  // Destaque do mês
+  const destaqueMes = useMemo(() => {
+    if (fazendaNaoPecuaria) return 'Fazenda sem operação pecuária.';
+    if (statusGeral === 'fechado') return 'Mês conciliado e fechado. ✅';
+    const alertas: string[] = [];
+    if (zootecnico.status.nivel === 'aberto') alertas.push('pendências zootécnicas');
+    if (financeiro.status.nivel === 'aberto') alertas.push('financeiro não conciliado');
+    if (alertas.length > 0) return `Atenção: ${alertas.join(', ')}.`;
+    return 'Mês em andamento — algumas pendências parciais.';
+  }, [statusGeral, zootecnico.status.nivel, financeiro.status.nivel, fazendaNaoPecuaria]);
+
+  // Alertas automáticos
+  const alertas = useMemo(() => {
+    const items: { texto: string; nivel: StatusNivel; tab: TabId }[] = [];
+    if (fazendaNaoPecuaria) return items;
+    statusZoo.pendencias.forEach(p => {
+      if (p.status !== 'fechado') {
+        items.push({
+          texto: `${p.label}: ${p.descricao}`,
+          nivel: p.status === 'aberto' ? 'aberto' : 'parcial',
+          tab: (p.resolverTab || 'visao_zoo_hub') as TabId,
+        });
+      }
+    });
+    if (financeiro.status.nivel !== 'fechado') {
+      items.push({
+        texto: `Financeiro: ${financeiro.status.descricao}`,
+        nivel: financeiro.status.nivel,
+        tab: 'fin_caixa',
+      });
+    }
+    return items;
+  }, [statusZoo.pendencias, financeiro.status, fazendaNaoPecuaria]);
+
+  const [auditOpen, setAuditOpen] = useState(false);
+
+  const mesLabel = MESES.find(m => m.value === String(mesNum))?.label || '';
 
   return (
-    <div className="p-4 max-w-4xl mx-auto space-y-4 animate-fade-in pb-20">
+    <div className="p-4 max-w-4xl mx-auto space-y-3 animate-fade-in pb-20">
       {/* Filtros */}
       <div className="flex gap-2 flex-wrap">
-        <Select value={anoFiltro} onValueChange={v => onFiltroChange({ ano: v })}>
+        <Select value={filtroGlobal.ano} onValueChange={v => onFiltroChange({ ano: v })}>
           <SelectTrigger className="w-24 touch-target text-sm font-bold">
             <SelectValue placeholder="Ano" />
           </SelectTrigger>
@@ -182,100 +198,159 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
           </SelectContent>
         </Select>
 
-        <Select value={mesFiltro} onValueChange={v => onFiltroChange({ mes: Number(v) })}>
+        <Select value={String(mesNum)} onValueChange={v => onFiltroChange({ mes: Number(v) })}>
           <SelectTrigger className="w-36 touch-target text-sm font-bold">
-            <SelectValue placeholder="Até o mês" />
+            <SelectValue placeholder="Mês" />
           </SelectTrigger>
           <SelectContent>
             {MESES.map(m => (
-              <SelectItem key={m.value} value={m.value} className="text-sm">
-                Até {m.label}
-              </SelectItem>
+              <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
-      {/* Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {/* ZOOTÉCNICO */}
-        {fazendaNaoPecuaria ? (
-          <div className="rounded-xl border border-border/50 bg-muted/30 p-4 space-y-3 shadow-sm">
-            <div className="flex items-center gap-2">
-              <span className="text-xl opacity-60">🐄</span>
-              <div>
-                <h2 className="text-base font-extrabold text-muted-foreground">Zootécnico</h2>
-                <span className="text-xs text-muted-foreground/70">{fazendaAtual?.nome || 'Administrativo'}</span>
-              </div>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Não se aplica para esta fazenda.
-            </p>
+      {/* 1. STATUS GERAL */}
+      <div className="rounded-xl border bg-card p-4 space-y-2 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-extrabold text-card-foreground">Status Geral</h2>
+          <StatusBadge nivel={statusGeral} label={statusGeral === 'fechado' ? 'Conciliado' : statusGeral === 'parcial' ? 'Em andamento' : 'Pendente'} />
+        </div>
+        <p className="text-sm text-muted-foreground">{destaqueMes}</p>
+        <div className="flex gap-4 pt-1">
+          <div className="flex items-center gap-1.5">
+            <StatusDot nivel={zootecnico.status.nivel} />
+            <span className="text-xs text-muted-foreground">Zoo</span>
           </div>
-        ) : (
-          <div className="rounded-xl border bg-card p-4 space-y-3 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">🐄</span>
-                <h2 className="text-base font-extrabold text-card-foreground">Zootécnico</h2>
-              </div>
-              <StatusBadge nivel={zootecnico.status.nivel} />
-            </div>
-
-            <div className="space-y-1.5 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Rebanho atual</span>
-                <span className="font-bold text-card-foreground">{formatNum(zootecnico.rebanhoAtual)} cab</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Entradas</span>
-                <span className="font-semibold text-primary">+{formatNum(zootecnico.totalEntradas)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Saídas</span>
-                <span className="font-semibold text-destructive">-{formatNum(zootecnico.totalSaidas)}</span>
-              </div>
-            </div>
-
-            <p className="text-[11px] text-muted-foreground">{zootecnico.status.descricao}</p>
-
-            <button
-              onClick={() => onTabChange('zootecnico_hub', { ano: filtroGlobal.ano, mes: filtroGlobal.mes })}
-              className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
-            >
-              Ver Painel Zootécnico <ChevronRight className="h-4 w-4" />
-            </button>
+          <div className="flex items-center gap-1.5">
+            <StatusDot nivel={financeiro.status.nivel} />
+            <span className="text-xs text-muted-foreground">Fin</span>
           </div>
-        )}
+          <div className="flex items-center gap-1.5">
+            <StatusDot nivel={economico.status.nivel} />
+            <span className="text-xs text-muted-foreground">Eco</span>
+          </div>
+        </div>
+      </div>
 
-        {/* FINANCEIRO */}
-        <FinanceiroCard financeiro={financeiro} onTabChange={onTabChange} isGlobal={fazendaAtual?.id === '__global__'} filtroGlobal={filtroGlobal} />
-
-
-        {/* ECONÔMICO */}
-        <div className="rounded-xl border bg-card p-4 space-y-3 shadow-sm">
+      {/* Grid 2 cols on md */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* 2. ZOOTÉCNICO */}
+        <div className="rounded-xl border bg-card p-4 space-y-2.5 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-xl">📊</span>
-              <h2 className="text-base font-extrabold text-card-foreground">Econômico</h2>
+              <span className="text-lg">🐄</span>
+              <h2 className="text-sm font-extrabold text-card-foreground">Zootécnico</h2>
             </div>
-            <StatusBadge nivel={economico.status.nivel} />
+            <StatusBadge nivel={zootecnico.status.nivel} />
           </div>
+          {fazendaNaoPecuaria ? (
+            <p className="text-sm text-muted-foreground">Não se aplica.</p>
+          ) : (
+            <>
+              <div className="space-y-1">
+                <KpiRow label="Rebanho atual" value={`${formatNum(zootecnico.rebanhoAtual)} cab`} />
+                <KpiRow label="Produção (@)" value={`${formatNum(zooKpis.arrobasSaidas)} @`} sub="saídas acum." />
+                <KpiRow label="Lotação (UA/ha)" value={zooKpis.uaHa !== null ? formatNum(zooKpis.uaHa, 2) : '—'} />
+                <KpiRow label="Peso médio" value={zooKpis.pesoMedio !== null ? `${formatNum(zooKpis.pesoMedio, 0)} kg` : '—'} />
+              </div>
+              <button
+                onClick={() => onTabChange('visao_zoo_hub', { ano: filtroGlobal.ano, mes: mesNum })}
+                className="w-full flex items-center justify-center gap-1 text-xs font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
+              >
+                Ver Painel Zootécnico <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </>
+          )}
+        </div>
 
-          <div className="space-y-1.5 text-sm text-muted-foreground">
-            <p>Resultado operacional consolidado a partir das bases zootécnica e financeira.</p>
+        {/* 3. FINANCEIRO */}
+        <div className="rounded-xl border bg-card p-4 space-y-2.5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">💰</span>
+              <h2 className="text-sm font-extrabold text-card-foreground">Financeiro</h2>
+            </div>
+            <StatusBadge nivel={financeiro.status.nivel} />
           </div>
-
-          <p className="text-[11px] text-muted-foreground">{economico.status.descricao}</p>
-
+          <div className="space-y-1">
+            <KpiRow label="Entradas" value={formatMoeda(financeiro.totalEntradas)} color="text-green-600 dark:text-green-400" />
+            <KpiRow label="Saídas" value={formatMoeda(financeiro.totalSaidas)} color="text-red-600 dark:text-red-400" />
+            <div className="border-t border-border pt-1">
+              <KpiRow
+                label="Resultado"
+                value={formatMoeda(financeiro.resultado)}
+                color={financeiro.resultado >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}
+              />
+            </div>
+            {isGlobal && (
+              <KpiRow
+                label="Caixa Atual"
+                value={formatMoeda(financeiro.caixaAtual)}
+                color={financeiro.caixaAtual >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}
+              />
+            )}
+          </div>
           <button
-            onClick={() => onTabChange('analise_economica', { ano: filtroGlobal.ano, mes: filtroGlobal.mes })}
-            className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
+            onClick={() => onTabChange('fin_caixa', { ano: filtroGlobal.ano, mes: mesNum })}
+            className="w-full flex items-center justify-center gap-1 text-xs font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
           >
-            Ver Análise Econômica <ChevronRight className="h-4 w-4" />
+            Ver Fluxo Financeiro <ChevronRight className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
+
+      {/* 4. ECONÔMICO */}
+      <div className="rounded-xl border bg-card p-4 space-y-2.5 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">📊</span>
+            <h2 className="text-sm font-extrabold text-card-foreground">Econômico</h2>
+          </div>
+          <StatusBadge nivel={economico.status.nivel} />
+        </div>
+        <p className="text-sm text-muted-foreground">{economico.status.descricao}</p>
+        <button
+          onClick={() => onTabChange('analise_economica', { ano: filtroGlobal.ano, mes: mesNum })}
+          className="w-full flex items-center justify-center gap-1 text-xs font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
+        >
+          Ver Análise Econômica <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* 5. ALERTAS */}
+      {alertas.length > 0 && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-2 shadow-sm">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+            <h2 className="text-sm font-extrabold text-destructive">Pendências do Mês</h2>
+          </div>
+          <div className="space-y-1.5">
+            {alertas.map((a, i) => (
+              <button
+                key={i}
+                onClick={() => onTabChange(a.tab, { ano: filtroGlobal.ano, mes: mesNum })}
+                className="w-full flex items-center gap-2 text-left text-sm hover:bg-destructive/10 rounded-md px-2 py-1.5 transition-colors"
+              >
+                <StatusDot nivel={a.nivel} />
+                <span className="flex-1 text-card-foreground">{a.texto}</span>
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {alertas.length === 0 && !loading && !statusZoo.loading && (
+        <div className="rounded-xl border border-green-500/30 bg-green-500/5 p-4 shadow-sm">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+            <span className="text-sm font-bold text-green-700 dark:text-green-400">
+              Nenhuma pendência para {mesLabel}/{filtroGlobal.ano}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

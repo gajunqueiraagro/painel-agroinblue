@@ -55,6 +55,15 @@ function loadLogoBase64(): Promise<string> {
   });
 }
 
+function LegacyLink({ label, tabId }: { label: string; tabId: string }) {
+  return (
+    <div className="flex items-center justify-between px-3 py-2 rounded-md bg-muted/40 text-sm text-muted-foreground">
+      <span>{label}</span>
+      <span className="text-[10px] font-mono opacity-60">{tabId}</span>
+    </div>
+  );
+}
+
 export function CadastrosTab() {
   const { fazendaAtual, isGlobal } = useFazenda();
   const [data, setData] = useState<CadastroData>(EMPTY);
@@ -440,6 +449,30 @@ export function CadastrosTab() {
           </AccordionTrigger>
           <AccordionContent className="px-0 pb-0">
             <AcessosTab />
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Ajustes Finais — telas legadas */}
+        <AccordionItem value="ajustes_finais" className="border rounded-lg border-dashed border-muted-foreground/30">
+          <AccordionTrigger className="px-4 py-3 text-sm font-bold text-muted-foreground">
+            <span className="flex items-center gap-2">
+              🔧 Ajustes Finais
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="px-4 pb-4">
+            <p className="text-xs text-muted-foreground mb-3">
+              Telas legadas mantidas para revisão. Serão removidas após validação.
+            </p>
+            <div className="space-y-2">
+              <LegacyLink label="Evolução Categorias por Mês" tabId="evolucao" />
+              <LegacyLink label="Evolução por Categoria" tabId="evolucao_categoria" />
+              <LegacyLink label="Análise Gráfica" tabId="analise" />
+              <LegacyLink label="Análise de Entradas" tabId="analise_entradas" />
+              <LegacyLink label="Análise de Saídas" tabId="analise_saidas" />
+              <LegacyLink label="Desfrute" tabId="desfrute" />
+              <LegacyLink label="Conciliação (Legado)" tabId="conciliacao" />
+              <LegacyLink label="Movimentação" tabId="movimentacao" />
+            </div>
           </AccordionContent>
         </AccordionItem>
       </Accordion>
