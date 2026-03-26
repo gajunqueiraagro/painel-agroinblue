@@ -81,7 +81,7 @@ export function ZootecnicoHubTab({ onTabChange, filtroGlobal }: Props) {
                 {group.items.map(item => (
                   <button
                     key={item.tab}
-                    onClick={() => onTabChange(item.tab)}
+                    onClick={() => navTo(item.tab)}
                     className="w-full flex items-center justify-between bg-muted/40 hover:bg-muted/70 rounded-lg px-3 py-2.5 transition-colors group"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
