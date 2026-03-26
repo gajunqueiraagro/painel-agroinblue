@@ -44,7 +44,7 @@ export interface FiltroGlobal {
 
 const TITLES: Record<TabId, string> = {
   resumo: 'Resumo Executivo',
-  zootecnico: 'Painel Zootécnico',
+  zootecnico: 'Status Zootécnico',
   zootecnico_hub: 'Zootécnico',
   lancar_zoo_hub: 'Lançar Zootécnico',
   visao_zoo_hub: 'Visão Zootécnico',
