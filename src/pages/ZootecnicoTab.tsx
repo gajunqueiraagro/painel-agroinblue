@@ -33,6 +33,7 @@ interface Props {
   onTabChange?: (tab: TabId, filtro?: { ano: string; mes: number }) => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
+  renderBottom?: React.ReactNode;
 }
 
 type Vista = 'mes' | 'acumulado';
