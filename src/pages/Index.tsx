@@ -107,7 +107,8 @@ const Index = () => {
   const goToZootecnicoHub = useCallback(() => setActiveTab('zootecnico_hub'), []);
   const goToZootecnico = useCallback(() => setActiveTab('zootecnico'), []);
   const goToConciliacaoCategoria = useCallback(() => setActiveTab('conciliacao_categoria'), []);
-  const goToReclassFromConciliacao = useCallback(() => {
+  const goToReclassFromConciliacao = useCallback((filtro?: { ano: string; mes: number }) => {
+    if (filtro) setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
     setLancamentosFromConciliacao(true);
     setActiveTab('lancamentos');
   }, []);
