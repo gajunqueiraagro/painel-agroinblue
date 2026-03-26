@@ -8,7 +8,10 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LancamentoShareButtons } from '@/components/FinanceiroExportMenu';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Pencil, ArrowLeft } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 
 interface Props {
   lancamento: Lancamento | null;
