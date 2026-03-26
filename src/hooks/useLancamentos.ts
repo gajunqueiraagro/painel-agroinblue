@@ -253,6 +253,7 @@ export function useLancamentos() {
       valor_total: lancamento.valorTotal || null,
       nota_fiscal: lancamento.notaFiscal || null,
       tipo_peso: lancamento.tipoPeso || 'vivo',
+      status_operacional: lancamento.statusOperacional || 'conciliado',
     };
 
     if (!isOnline()) {
