@@ -397,12 +397,12 @@ function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNu
 
       {isEstoque ? (
         <>
-          <ChartCard title="Rebanho Mensal (cab)" data={chartData}
+          <ChartCard title="Rebanho Final do mês (cab)" subtitle="Quantidade de cabeças no final do mês" data={chartData}
             keys={[`cab_${anoNum}`, `cab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-            type="area" />
-          <ChartCard title="Kg/ha" data={chartData}
+            type="area" maxMonth={mesFiltro} />
+          <ChartCard title="Lotação: Kg vivo por ha (Kg/ha)" subtitle="Quantidade de Kg sobre cada hectare produtivo, no final do mês" data={chartData}
             keys={[`kgHa_${anoNum}`, `kgHa_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-            type="line" />
+            type="line" maxMonth={mesFiltro} />
         </>
       ) : (
         <>
