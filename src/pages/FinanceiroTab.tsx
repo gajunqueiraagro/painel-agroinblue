@@ -271,11 +271,14 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           const d = parseISO(l.data);
           if (format(d, 'yyyy') !== anoFiltro) return false;
           if (mesFiltro !== 'todos' && format(d, 'MM') !== mesFiltro) return false;
-          return tiposFilter.includes(l.tipo);
+          if (!tiposFilter.includes(l.tipo)) return false;
+          // Status filter: all existing lancamentos are treated as "realizado" until status field is persisted
+          if (statusFiltro === 'previsto') return false; // No previsto records in DB yet
+          return true;
         } catch { return false; }
       })
       .sort((a, b) => a.data.localeCompare(b.data));
-  }, [lancamentos, anoFiltro, mesFiltro, topTab, subAba]);
+  }, [lancamentos, anoFiltro, mesFiltro, topTab, subAba, statusFiltro]);
 
   const isFinancial = FINANCIAL_TYPES.includes(subAba);
 
