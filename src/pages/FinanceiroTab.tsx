@@ -46,11 +46,56 @@ const SUB_ABA_LABELS: Record<SubAba, { label: string; icon: string }> = {
  * Tabela unificada de movimentações com indicadores econômicos.
  * NOTA: Lógica econômica/competência do rebanho — não é módulo financeiro de caixa.
  */
-function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; showTipo?: boolean; subTipo?: string }) {
+/** Returns the contextual column header for fazenda info based on tipo */
+function getFazendaColumnHeader(tipo: string): string {
+  switch (tipo) {
+    case 'nascimento': return 'Destino';
+    case 'compra':
+    case 'transferencia_entrada':
+    case 'transferencia_saida': return 'Origem e Destino';
+    case 'abate':
+    case 'venda':
+    case 'consumo': return 'Origem';
+    case 'morte': return 'Origem e Motivo';
+    default: return 'Fazenda';
+  }
+}
+
+/** Returns fazenda cell value based on tipo */
+function getFazendaCellValue(l: Lancamento, fazendaMap: Map<string, string>): string {
+  const fazNome = l.fazendaId ? (fazendaMap.get(l.fazendaId) || '') : '';
+  switch (l.tipo) {
+    case 'nascimento':
+      return fazNome || '-';
+    case 'compra':
+    case 'transferencia_entrada':
+    case 'transferencia_saida': {
+      const parts = [l.fazendaOrigem || fazNome, l.fazendaDestino].filter(Boolean);
+      return parts.length > 0 ? parts.join(' → ') : '-';
+    }
+    case 'abate':
+    case 'venda':
+    case 'consumo':
+      return fazNome || l.fazendaOrigem || '-';
+    case 'morte': {
+      const origem = fazNome || l.fazendaOrigem || '';
+      const motivo = l.fazendaDestino || '';
+      const parts2 = [origem, motivo].filter(Boolean);
+      return parts2.length > 0 ? parts2.join(' / ') : '-';
+    }
+    default:
+      return fazNome || '-';
+  }
+}
+
+function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazendaMap }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; showTipo?: boolean; subTipo?: string; isGlobal?: boolean; fazendaMap?: Map<string, string> }) {
   const TIPOS_COM_DESTINO = ['venda', 'transferencia_entrada', 'transferencia_saida', 'consumo', 'morte'];
-  const showDestino = showTipo ? true : (subTipo ? TIPOS_COM_DESTINO.includes(subTipo) : false);
+  const showDestino = !isGlobal && (showTipo ? true : (subTipo ? TIPOS_COM_DESTINO.includes(subTipo) : false));
   const isMorte = subTipo === 'morte';
   const showLiqKg = showTipo ? true : (subTipo ? TIPOS_COM_DESTINO.includes(subTipo) : false);
+  const fMap = fazendaMap || new Map<string, string>();
+  // For global + single subTipo, use that tipo's header; for global + showTipo (todas), use generic "Fazenda"
+  const globalColHeader = isGlobal ? (subTipo ? getFazendaColumnHeader(subTipo) : 'Fazenda') : '';
   if (lancamentos.length === 0) return <p className="text-center text-muted-foreground py-6">Nenhum registro no período</p>;
 
   return (
@@ -63,6 +108,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo }: { lancamentos:
             <th className="p-1.5 text-right font-bold bg-muted/50">Qtd</th>
             <th className="p-1.5 text-left font-bold bg-muted/50">Categoria</th>
             {showDestino && <th className="p-1.5 text-left font-bold bg-muted/50">{isMorte ? 'Motivo' : 'Destino'}</th>}
+            {isGlobal && <th className="p-1.5 text-left font-bold bg-muted/50">{showTipo ? 'Fazenda' : globalColHeader}</th>}
             <th className="p-1.5 text-right font-bold bg-muted/50">P.Vivo</th>
             <th className="p-1.5 text-right font-bold bg-muted/50">P.@</th>
             <th className="p-1.5 text-right font-bold text-primary bg-muted/50">Total</th>
@@ -85,6 +131,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo }: { lancamentos:
                 <td className="p-1.5 text-right font-bold">{l.quantidade}</td>
                 <td className="p-1.5">{cat}</td>
                 {showDestino && <td className="p-1.5 truncate max-w-[80px]">{(l.tipo === 'morte' ? l.fazendaDestino : (l.fazendaDestino || l.fazendaOrigem)) || '-'}</td>}
+                {isGlobal && <td className="p-1.5 truncate max-w-[100px]">{showTipo ? (fMap.get(l.fazendaId || '') || '-') : getFazendaCellValue(l, fMap)}</td>}
                 <td className="p-1.5 text-right">{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
                 <td className="p-1.5 text-right text-muted-foreground">{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
                 <td className="p-1.5 text-right font-bold text-primary">{fmtValor(c.valorFinal)}</td>
@@ -128,6 +175,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo }: { lancamentos:
                 <td className="p-1.5 text-right">{totals.qtd}</td>
                 <td className="p-1.5"></td>
                 {showDestino && <td className="p-1.5"></td>}
+                {isGlobal && <td className="p-1.5"></td>}
                 <td className="p-1.5 text-right">{fmtValor(pesoVivoMedio)}</td>
                 <td className="p-1.5 text-right text-muted-foreground">{fmtValor(arrobaMedio)}</td>
                 <td className="p-1.5 text-right text-primary">{fmtValor(totals.valorTotal)}</td>
@@ -145,7 +193,8 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo }: { lancamentos:
   );
 }
 
-function AbateTable({ lancamentos, onEdit }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void }) {
+function AbateTable({ lancamentos, onEdit, isGlobal, fazendaMap }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; isGlobal?: boolean; fazendaMap?: Map<string, string> }) {
+  const fMap = fazendaMap || new Map<string, string>();
   if (lancamentos.length === 0) return <p className="text-center text-muted-foreground py-6">Nenhum abate no período</p>;
 
   return (
@@ -157,6 +206,7 @@ function AbateTable({ lancamentos, onEdit }: { lancamentos: Lancamento[]; onEdit
             <th className="p-1.5 text-right font-bold bg-muted/50">Qtd</th>
             <th className="p-1.5 text-left font-bold bg-muted/50">Categoria</th>
             <th className="p-1.5 text-left font-bold bg-muted/50">Destino</th>
+            {isGlobal && <th className="p-1.5 text-left font-bold bg-muted/50">Origem</th>}
             <th className="p-1.5 text-right font-bold bg-muted/50">P.Vivo</th>
             <th className="p-1.5 text-right font-bold bg-muted/50">Rend.</th>
             <th className="p-1.5 text-right font-bold bg-muted/50">P.@</th>
@@ -177,6 +227,7 @@ function AbateTable({ lancamentos, onEdit }: { lancamentos: Lancamento[]; onEdit
                 <td className="p-1.5 text-right font-bold">{l.quantidade}</td>
                 <td className="p-1.5">{cat}</td>
                 <td className="p-1.5 truncate max-w-[80px]">{l.fazendaDestino || '-'}</td>
+                {isGlobal && <td className="p-1.5 truncate max-w-[100px]">{fMap.get(l.fazendaId || '') || '-'}</td>}
                 <td className="p-1.5 text-right">{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
                 <td className="p-1.5 text-right text-muted-foreground">{c.rendimento ? c.rendimento.toFixed(1) + '%' : '-'}</td>
                 <td className="p-1.5 text-right">{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
@@ -220,6 +271,7 @@ function AbateTable({ lancamentos, onEdit }: { lancamentos: Lancamento[]; onEdit
                 <td className="p-1.5 text-right">{totals.qtd}</td>
                 <td className="p-1.5"></td>
                 <td className="p-1.5"></td>
+                {isGlobal && <td className="p-1.5"></td>}
                 <td className="p-1.5 text-right">{fmtValor(pesoVivoMedio)}</td>
                 <td className="p-1.5 text-right text-muted-foreground">{rendMedio ? rendMedio.toFixed(1) + '%' : '-'}</td>
                 <td className="p-1.5 text-right">{fmtValor(arrobaMedio)}</td>
@@ -247,7 +299,12 @@ function getTopTabFromSubAba(subAba?: SubAba): TopTab {
 }
 
 export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao }: Props) {
-  const { fazendaAtual } = useFazenda();
+  const { fazendaAtual, fazendas, isGlobal } = useFazenda();
+  const fazendaMap = useMemo(() => {
+    const m = new Map<string, string>();
+    fazendas.forEach(f => m.set(f.id, f.nome));
+    return m;
+  }, [fazendas]);
   const [topTab, setTopTab] = useState<TopTab>(subAbaInicial ? getTopTabFromSubAba(subAbaInicial) : (modoMovimentacao ? 'entradas' : 'todas'));
   const [subAba, setSubAba] = useState<SubAba>(subAbaInicial || 'abate');
   const [editando, setEditando] = useState<Lancamento | null>(null);
@@ -429,11 +486,11 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
       {/* Content */}
       {topTab === 'todas' ? (
-        <UnifiedTable lancamentos={filtrados} onEdit={setEditando} showTipo />
+        <UnifiedTable lancamentos={filtrados} onEdit={setEditando} showTipo isGlobal={isGlobal} fazendaMap={fazendaMap} />
       ) : subAba === 'abate' ? (
-        <AbateTable lancamentos={filtrados} onEdit={setEditando} />
+        <AbateTable lancamentos={filtrados} onEdit={setEditando} isGlobal={isGlobal} fazendaMap={fazendaMap} />
       ) : (
-        <UnifiedTable lancamentos={filtrados} onEdit={setEditando} subTipo={subAba} />
+        <UnifiedTable lancamentos={filtrados} onEdit={setEditando} subTipo={subAba} isGlobal={isGlobal} fazendaMap={fazendaMap} />
       )}
 
       {/* Edit dialog */}
