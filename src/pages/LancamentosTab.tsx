@@ -36,13 +36,7 @@ interface Props {
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
-type StatusOperacional = 'previsto' | 'confirmado' | 'conciliado';
-
-const STATUS_OPTIONS: { value: StatusOperacional; label: string; color: string; bg: string }[] = [
-  { value: 'conciliado', label: 'Conciliado', color: 'text-green-800 dark:text-green-400', bg: 'bg-green-700' },
-  { value: 'confirmado', label: 'Confirmado', color: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-500' },
-  { value: 'previsto', label: 'Previsto', color: 'text-orange-700 dark:text-orange-400', bg: 'bg-orange-500' },
-];
+import { STATUS_OPTIONS, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
 
 const MOTIVOS_MORTE = [
   'Raio',
