@@ -28,10 +28,10 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   }, [lancamentos, saldosIniciais]);
 
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
-  const [statusFiltro, setStatusFiltro] = useState<'todos' | 'realizado' | 'previsto'>('todos');
+  const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'previsto'>('realizado');
 
   const lancFiltrados = useMemo(() => {
-    const cenario = statusFiltro === 'realizado' ? 'realizado' : statusFiltro === 'previsto' ? 'meta' : 'todos';
+    const cenario = statusFiltro === 'realizado' ? 'realizado' : 'meta';
     return filtrarPorCenario(lancamentos, cenario);
   }, [lancamentos, statusFiltro]);
 
