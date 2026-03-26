@@ -5,6 +5,7 @@
 
 import type { Lancamento, SaldoInicial, Categoria, TipoMovimentacao } from '@/types/cattle';
 import type { CategoriaRebanho } from '@/hooks/usePastos';
+import { isConciliado as isLancConciliado } from '@/lib/statusOperacional';
 
 // ---------------------------------------------------------------------------
 // Tipos auxiliares
