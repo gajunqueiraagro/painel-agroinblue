@@ -16,7 +16,7 @@ import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { KpiCard } from '@/components/indicadores/KpiCard';
 import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';
-import { HistoricoComparativo } from '@/components/indicadores/HistoricoComparativo';
+
 
 interface Props {
   lancamentos: Lancamento[];
