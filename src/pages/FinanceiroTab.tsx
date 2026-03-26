@@ -289,8 +289,10 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           if (format(d, 'yyyy') !== anoFiltro) return false;
           if (mesFiltro !== 'todos' && format(d, 'MM') !== mesFiltro) return false;
           if (!tiposFilter.includes(l.tipo)) return false;
-          // Status filter: all existing lancamentos are treated as "realizado" until status field is persisted
-          if (statusFiltro === 'previsto') return false; // No previsto records in DB yet
+          // Status filter using statusOperacional
+          const st = l.statusOperacional || 'conciliado';
+          if (statusFiltro === 'realizado' && st !== 'conciliado') return false;
+          if (statusFiltro === 'previsto' && st !== 'previsto') return false;
           return true;
         } catch { return false; }
       })
