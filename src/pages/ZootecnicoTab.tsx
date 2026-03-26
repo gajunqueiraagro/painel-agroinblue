@@ -17,8 +17,8 @@ import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';
 import { HistoricoComparativo } from '@/components/indicadores/HistoricoComparativo';
 import { TabId } from '@/components/BottomNav';
 import {
-  ArrowLeft, ChevronRight, AlertTriangle, CheckCircle2, Circle,
-  BarChart2, TrendingUp, TrendingDown, Beef, Activity,
+  ChevronRight, AlertTriangle,
+  BarChart2,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
