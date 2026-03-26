@@ -246,7 +246,7 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
-              {vista === 'mes' ? `Estoque ${mesLabel}` : `Estoque — Média Jan → ${mesLabel}`}
+              {vista === 'mes' ? `Indicadores Zootécnicos ${mesLabel}` : `Indicadores Zootécnicos — Média Jan → ${mesLabel}`}
             </h3>
             <button
               onClick={() => setSubView('graficos-estoque')}
