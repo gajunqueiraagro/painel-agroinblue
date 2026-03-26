@@ -236,6 +236,15 @@ const Index = () => {
         />
       )}
       {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} />}
+      {activeTab === 'evolucao_rebanho_hub' && (
+        <EvolucaoRebanhoHubTab
+          lancamentos={lancamentosVisiveis}
+          saldosIniciais={saldosIniciais}
+          onNavigateToMovimentacao={navigateToMovimentacao}
+          filtroAnoInicial={filtroGlobal.ano}
+          filtroMesInicial={filtroGlobal.mes}
+        />
+      )}
       {activeTab === 'financeiro' && <FinanceiroTab lancamentos={lancamentosVisiveis} onEditar={isGlobal ? async () => {} : editarLancamento} onRemover={isGlobal ? async () => {} : removerLancamento} subAbaInicial={subAbaFinanceiro} />}
       {activeTab === 'acessos' && <AcessosTab />}
       {activeTab === 'analise' && <AnaliseTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} isGlobal={isGlobal} />}
