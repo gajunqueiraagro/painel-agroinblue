@@ -343,7 +343,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const previstoLabelClass = isPrevisto ? 'text-orange-700 dark:text-orange-400' : '';
 
   // Check if financial section is needed
-  const showFinanceiro = !isNascimento;
+  const showFinanceiro = true;
 
   // Whether to show extra dates (Confirmado/Conciliado for abate, venda, transf)
   const showExtraDates = (isConfirmado || isConciliado) && (isAbate || isVenda || isTransferencia);
@@ -719,6 +719,40 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     </div>
                   </>
                 )}
+
+                {/* Valor total líquido - manual override */}
+                <Separator />
+                <div>
+                  <Label className={`text-xs font-semibold ${previstoLabelClass || 'text-foreground'}`}>Valor total líquido (R$)</Label>
+                  <Input
+                    type="number"
+                    value={calc.valorLiquido > 0 ? String(Math.round(calc.valorLiquido * 100) / 100) : ''}
+                    onChange={e => {
+                      const vt = parseFloat(e.target.value);
+                      if (!isNaN(vt)) {
+                        // Back-calculate base price from manual total
+                        const totalBon = isAbate
+                          ? (Number(bonusPrecoce) || 0) + (Number(bonusQualidade) || 0) + (Number(bonusListaTrace) || 0)
+                          : (Number(bonus) || 0);
+                        const totalDesc = isAbate
+                          ? (Number(descontoQualidade) || 0) + (Number(descontoFunrural) || 0) + (Number(outrosDescontos) || 0)
+                          : (Number(descontos) || 0);
+                        const comVal = 0; // comissão depends on bruto, skip for back-calc
+                        const freteVal = Number(frete) || 0;
+                        const outVal = Number(outrasDespesas) || 0;
+                        const brutoNecessario = vt - totalBon + totalDesc + comVal + freteVal + outVal;
+                        if (usaPrecoArroba && calc.totalArrobas > 0) {
+                          setPrecoArroba(String((brutoNecessario / calc.totalArrobas).toFixed(4)));
+                        } else if (usaPrecoKg && calc.totalKg > 0) {
+                          setPrecoKg(String((brutoNecessario / calc.totalKg).toFixed(4)));
+                        }
+                      }
+                    }}
+                    placeholder="Informe o valor total líquido"
+                    className={`h-10 text-base font-bold ${previstoInputClass}`}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Preencha para retro-calcular o preço base automaticamente</p>
+                </div>
 
                 {/* Comissão/Frete/Outras despesas */}
                 {(showComissaoFreteDespesas || showComissaoPrevConf) && (
