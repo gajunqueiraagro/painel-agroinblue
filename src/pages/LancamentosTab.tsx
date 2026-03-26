@@ -114,7 +114,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState('todos');
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
-  const [statusOp, setStatusOp] = useState<StatusOperacional>('previsto');
+  const [statusOp, setStatusOp] = useState<StatusOperacional>('conciliado');
 
   // Death reason
   const [motivoMorte, setMotivoMorte] = useState('');
