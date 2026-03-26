@@ -3,7 +3,7 @@
  * Topo fixo: nome fazenda + seletor fazenda/global + filtro ano + filtro mês.
  * Sub-abas: Dashboard | Fluxo de Caixa | Rateio ADM | Importação
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ImportacaoFinanceira } from '@/components/financeiro/ImportacaoFinanceira';
 import { DashboardFinanceiro } from '@/components/financeiro/DashboardFinanceiro';
 import { RateioADMConferenciaView } from '@/components/financeiro/RateioADMConferencia';
@@ -52,6 +52,11 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
   // Filtro único — herdado do Resumo, ajustável localmente
   const [localAno, setLocalAno] = useState(filtroAnoInicial || String(new Date().getFullYear()));
   const [localMes, setLocalMes] = useState(filtroMesInicial || new Date().getMonth() + 1);
+
+  useEffect(() => {
+    if (filtroAnoInicial) setLocalAno(filtroAnoInicial);
+    if (filtroMesInicial) setLocalMes(filtroMesInicial);
+  }, [filtroAnoInicial, filtroMesInicial]);
 
   const anoAtual = new Date().getFullYear();
   const mesAtual = new Date().getMonth() + 1;

@@ -2,7 +2,7 @@
  * Painel Zootécnico — Central de Status + Ação.
  * Blocos: Status, Estoque+Lotação, Produção, Gráficos.
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { MESES_NOMES, MESES_COLS } from '@/lib/calculos/labels';
@@ -58,6 +58,11 @@ export function ZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTabChange
   const [mesFiltro, setMesFiltro] = useState(mesDefault);
   const [vista, setVista] = useState<Vista>('mes');
   const [subView, setSubView] = useState<SubView>('main');
+
+  useEffect(() => {
+    if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
+    if (filtroMesInicial) setMesFiltro(filtroMesInicial);
+  }, [filtroAnoInicial, filtroMesInicial]);
 
   const handleAnoChange = (val: string) => {
     setAnoFiltro(val);

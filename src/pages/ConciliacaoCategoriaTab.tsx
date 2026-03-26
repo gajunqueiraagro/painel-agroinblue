@@ -144,6 +144,11 @@ export function ConciliacaoCategoriaTab({ lancamentos, saldosIniciais, onBack, o
   const [mesFiltro, setMesFiltro] = useState(mesDefault);
   const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
 
+  useEffect(() => {
+    if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
+    if (filtroMesInicial) setMesFiltro(filtroMesInicial);
+  }, [filtroAnoInicial, filtroMesInicial]);
+
   const [pastoData, setPastoData] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
 
