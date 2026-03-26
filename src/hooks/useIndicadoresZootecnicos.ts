@@ -157,26 +157,24 @@ export interface IndicadoresZootecnicos {
   valorPorCabeca: number | null;
   valorPorHa: number | null;
 
-  // --- Comparações ---
+  // --- Comparações (dual: mensal + anual para cada indicador) ---
   comparacoes: {
-    // Estruturais → YoY
-    saldoFinalMes: Comparacao | null;
-    pesoMedioRebanhoKg: Comparacao | null;
-    uaHa: Comparacao | null;
-    uaHaMediaAno: Comparacao | null;
-    valorRebanho: Comparacao | null;
-    // Operacionais → vs mês anterior
-    arrobasSaidasMes: Comparacao | null;
-    arrobasHaMes: Comparacao | null;
-    // Acumulados → vs acumulado ano anterior
-    arrobasSaidasAcumuladoAno: Comparacao | null;
-    arrobasHaAcumuladoAno: Comparacao | null;
-    arrobasProduzidasAcumulado: Comparacao | null;
-    gmdMes: Comparacao | null;
-    gmdAcumulado: Comparacao | null;
-    desfruteCabecasAcumulado: Comparacao | null;
-    desfruteArrobasAcumulado: Comparacao | null;
-    arrobasDesfrutadasAcum: Comparacao | null;
+    saldoFinalMes: { mensal: Comparacao | null; anual: Comparacao | null };
+    pesoMedioRebanhoKg: { mensal: Comparacao | null; anual: Comparacao | null };
+    uaHa: { mensal: Comparacao | null; anual: Comparacao | null };
+    uaHaMediaAno: { mensal: Comparacao | null; anual: Comparacao | null };
+    valorRebanho: { mensal: Comparacao | null; anual: Comparacao | null };
+    arrobasSaidasMes: { mensal: Comparacao | null; anual: Comparacao | null };
+    arrobasHaMes: { mensal: Comparacao | null; anual: Comparacao | null };
+    arrobasSaidasAcumuladoAno: { mensal: Comparacao | null; anual: Comparacao | null };
+    arrobasHaAcumuladoAno: { mensal: Comparacao | null; anual: Comparacao | null };
+    arrobasProduzidasAcumulado: { mensal: Comparacao | null; anual: Comparacao | null };
+    gmdMes: { mensal: Comparacao | null; anual: Comparacao | null };
+    gmdAcumulado: { mensal: Comparacao | null; anual: Comparacao | null };
+    desfruteCabecasAcumulado: { mensal: Comparacao | null; anual: Comparacao | null };
+    desfruteArrobasAcumulado: { mensal: Comparacao | null; anual: Comparacao | null };
+    arrobasDesfrutadasAcum: { mensal: Comparacao | null; anual: Comparacao | null };
+    valorPorCabeca: { mensal: Comparacao | null; anual: Comparacao | null };
   };
 
   // --- Histórico (gráficos) ---
@@ -279,6 +277,7 @@ export function useIndicadoresZootecnicos(
 ) {
   const [valorRebanhoData, setValorRebanhoData] = useState<{ total: number; fechado: boolean } | null>(null);
   const [valorRebanhoYoY, setValorRebanhoYoY] = useState<number | null>(null);
+  const [valorRebanhoMoM, setValorRebanhoMoM] = useState<number | null>(null);
   const [loadingValor, setLoadingValor] = useState(false);
   // Pesos oficiais do fechamento de pasto (código→peso)
   const [pesoFechamentoMap, setPesoFechamentoMap] = useState<Record<string, number>>({});
@@ -370,6 +369,7 @@ export function useIndicadoresZootecnicos(
     if (!fazendaId) {
       setValorRebanhoData(null);
       setValorRebanhoYoY(null);
+      setValorRebanhoMoM(null);
       return;
     }
 
@@ -379,6 +379,7 @@ export function useIndicadoresZootecnicos(
       if (fids.length === 0) {
         setValorRebanhoData(null);
         setValorRebanhoYoY(null);
+        setValorRebanhoMoM(null);
         return;
       }
       setLoadingValor(true);
@@ -451,9 +452,40 @@ export function useIndicadoresZootecnicos(
         } else {
           setValorRebanhoYoY(null);
         }
+
+        // MoM (previous month) - Global
+        let mesAntAnoV = ano;
+        let mesAntMesV = mes - 1;
+        if (mesAntMesV < 1) { mesAntMesV = 12; mesAntAnoV--; }
+        const anoMesMoMG = `${mesAntAnoV}-${String(mesAntMesV).padStart(2, '0')}`;
+        const precosMoMResG = await supabase.from('valor_rebanho_mensal').select('fazenda_id, categoria, preco_kg').in('fazenda_id', fids).eq('ano_mes', anoMesMoMG);
+        if (precosMoMResG.data && precosMoMResG.data.length > 0) {
+          const precosByFazMoM = new Map<string, Map<string, number>>();
+          precosMoMResG.data.forEach(p => {
+            if (!precosByFazMoM.has(p.fazenda_id)) precosByFazMoM.set(p.fazenda_id, new Map());
+            precosByFazMoM.get(p.fazenda_id)!.set(p.categoria, Number(p.preco_kg));
+          });
+          let totalMoM = 0;
+          for (const fid of fids) {
+            const precoMap = precosByFazMoM.get(fid);
+            if (!precoMap || precoMap.size === 0) continue;
+            const lancsFaz = lancamentos.filter(l => l.fazendaId === fid);
+            const saldosFaz = saldosByFaz.get(fid) || [];
+            const saldoMap = calcSaldoPorCategoriaLegado(saldosFaz, lancsFaz, mesAntAnoV, mesAntMesV);
+            saldoMap.forEach((qtd, cat) => {
+              const preco = precoMap.get(cat) || 0;
+              const pesoKg = getPesoMedioCatComPastos(cat, pesoFechamentoMesAntMap, saldosFaz, lancsFaz, mesAntAnoV, mesAntMesV);
+              totalMoM += qtd * (pesoKg || 0) * preco;
+            });
+          }
+          setValorRebanhoMoM(totalMoM > 0 ? totalMoM : null);
+        } else {
+          setValorRebanhoMoM(null);
+        }
       } catch {
         setValorRebanhoData(null);
         setValorRebanhoYoY(null);
+        setValorRebanhoMoM(null);
       } finally {
         setLoadingValor(false);
       }
@@ -514,9 +546,34 @@ export function useIndicadoresZootecnicos(
       } else {
         setValorRebanhoYoY(null);
       }
+
+      // MoM value (previous month)
+      let mesAntAnoN = ano;
+      let mesAntMesN = mes - 1;
+      if (mesAntMesN < 1) { mesAntMesN = 12; mesAntAnoN--; }
+      const anoMesMoMN = `${mesAntAnoN}-${String(mesAntMesN).padStart(2, '0')}`;
+      const precosMoMRes = await supabase
+        .from('valor_rebanho_mensal')
+        .select('categoria, preco_kg')
+        .eq('fazenda_id', fazendaId)
+        .eq('ano_mes', anoMesMoMN);
+      if (precosMoMRes.data && precosMoMRes.data.length > 0) {
+        const saldoMapMoM = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, mesAntAnoN, mesAntMesN);
+        const precoMapMoM = new Map(precosMoMRes.data.map(p => [p.categoria, Number(p.preco_kg)]));
+        let totalMoM = 0;
+        saldoMapMoM.forEach((qtd, cat) => {
+          const preco = precoMapMoM.get(cat) || 0;
+          const pesoKg = getPesoMedioCatComPastos(cat, pesoFechamentoMesAntMap, saldosIniciais, lancamentos, mesAntAnoN, mesAntMesN);
+          totalMoM += qtd * (pesoKg || 0) * preco;
+        });
+        setValorRebanhoMoM(totalMoM > 0 ? totalMoM : null);
+      } else {
+        setValorRebanhoMoM(null);
+      }
     } catch {
       setValorRebanhoData(null);
       setValorRebanhoYoY(null);
+      setValorRebanhoMoM(null);
     } finally {
       setLoadingValor(false);
     }
@@ -693,7 +750,37 @@ export function useIndicadoresZootecnicos(
     const valorPorHa = valorRebanho !== null && areaProdutiva > 0 ? valorRebanho / areaProdutiva : null;
     const valorRebanhoFechado = valorRebanhoData?.fechado ?? false;
 
-    // ===== COMPARAÇÕES =====
+    // ===== COMPARAÇÕES (dual: mensal + anual) =====
+
+    // --- MoM: structural indicators (vs mês anterior) ---
+    const compSaldoMoM = saldoAnterior > 0 ? buildComparacao(saldoFinalMes, saldoAnterior, 'mensal') : null;
+
+    // Peso médio do mês anterior
+    let pesoMedioAnterior: number | null = null;
+    if (mes > 1) {
+      pesoMedioAnterior = calcPesoMedioPonderado(
+        Array.from(saldoMapAnterior.entries())
+          .filter(([, q]) => q > 0)
+          .map(([cat, q]) => ({ quantidade: q, pesoKg: getPesoMedioCatComPastos(cat, pesoFechamentoMesAntMap, saldosIniciais, lancamentos, ano, mes - 1) }))
+      );
+    } else {
+      pesoMedioAnterior = calcPesoMedioPonderado(
+        saldosIniciais.filter(s => s.ano === ano).map(s => ({ quantidade: s.quantidade, pesoKg: s.pesoMedioKg ?? null }))
+      );
+    }
+    const compPesoMedioMoM = pesoMedioRebanhoKg !== null && pesoMedioAnterior !== null ? buildComparacao(pesoMedioRebanhoKg, pesoMedioAnterior, 'mensal') : null;
+
+    // UA/ha do mês anterior
+    const uaTotalAnt = calcUA(saldoAnterior, pesoMedioAnterior);
+    const uaHaAnt = calcUAHa(uaTotalAnt, areaProdutiva);
+    const compUaHaMoM = uaHa !== null && uaHaAnt !== null ? buildComparacao(uaHa, uaHaAnt, 'mensal') : null;
+
+    // Valor rebanho MoM — calculated from valorRebanhoMoM state
+    const compValorMoM = valorRebanho !== null && valorRebanhoMoM !== null ? buildComparacao(valorRebanho, valorRebanhoMoM, 'mensal') : null;
+
+    // R$/cab MoM
+    const valorPorCabecaAnt = valorRebanhoMoM !== null && saldoAnterior > 0 ? valorRebanhoMoM / saldoAnterior : null;
+    const compValorPorCabecaMoM = valorPorCabeca !== null && valorPorCabecaAnt !== null ? buildComparacao(valorPorCabeca, valorPorCabecaAnt, 'mensal') : null;
 
     // --- YoY: estruturais/patrimoniais ---
     const anoAnt = ano - 1;
@@ -732,7 +819,19 @@ export function useIndicadoresZootecnicos(
       ? buildComparacao(uaHaMediaAno, uaHaMediaAnoYoY, 'acumulado_yoy')
       : null;
 
+    // UA/ha méd. MoM (vs mês anterior: recalc média jan..mes-1)
+    let compUaHaMediaMoM: Comparacao | null = null;
+    if (mes > 1) {
+      const uaHaMensaisAnt = uaHaMensais.slice(0, mes - 1);
+      const uaHaMediaAnt = uaHaMensaisAnt.length > 0 ? uaHaMensaisAnt.reduce((a, b) => a + b, 0) / uaHaMensaisAnt.length : null;
+      compUaHaMediaMoM = uaHaMediaAno !== null && uaHaMediaAnt !== null ? buildComparacao(uaHaMediaAno, uaHaMediaAnt, 'mensal') : null;
+    }
+
     const compValor = valorRebanho !== null && valorRebanhoYoY !== null ? buildComparacao(valorRebanho, valorRebanhoYoY, 'yoy') : null;
+
+    // R$/cab YoY
+    const valorPorCabecaYoY = valorRebanhoYoY !== null && saldoYoY > 0 ? valorRebanhoYoY / saldoYoY : null;
+    const compValorPorCabecaYoY = valorPorCabeca !== null && valorPorCabecaYoY !== null ? buildComparacao(valorPorCabeca, valorPorCabecaYoY, 'yoy') : null;
 
     // --- MoM: operacionais ---
     let compArrobasMes: Comparacao | null = null;
@@ -746,6 +845,15 @@ export function useIndicadoresZootecnicos(
         compArrobasHaMes = buildComparacao(arrobasHaMes, arrobasAnt / areaProdutiva, 'mensal');
       }
     }
+
+    // --- YoY for operational (same month last year) ---
+    const anoMesYoYStr = `${anoAnt}-${String(mes).padStart(2, '0')}`;
+    const saidasMesYoY = saidasDesfrute(filterByAnoMes(lancamentos, anoMesYoYStr));
+    const arrobasMesYoY = saidasMesYoY.reduce((s, l) => s + calcArrobasSafe(l), 0);
+    const compArrobasMesYoY = arrobasMesYoY > 0 ? buildComparacao(arrobasSaidasMes, arrobasMesYoY, 'yoy') : null;
+    const compArrobasHaMesYoY = arrobasMesYoY > 0 && areaProdutiva > 0 && arrobasHaMes !== null
+      ? buildComparacao(arrobasHaMes, arrobasMesYoY / areaProdutiva, 'yoy')
+      : null;
 
     // --- Acumulado YoY ---
     const lancsAcumYoY = filterByAnoAteMes(lancamentos, anoAnt, mes);
@@ -779,6 +887,13 @@ export function useIndicadoresZootecnicos(
     // GMD mês YoY (mesmo mês do ano anterior — só se base confiável)
     const gmdMesYoY = computeGmdForPeriod(saldosIniciais, lancamentos, anoAnt, mes, pesoFechamentoYoYMap);
     const compGmdMes = gmdMes !== null && gmdMesYoY !== null ? buildComparacao(gmdMes, gmdMesYoY, 'yoy') : null;
+
+    // GMD mês MoM (vs mês anterior)
+    let compGmdMesMoM: Comparacao | null = null;
+    if (mes > 1) {
+      const gmdMesAnt = computeGmdForPeriod(saldosIniciais, lancamentos, ano, mes - 1, pesoFechamentoMesAntMap);
+      compGmdMesMoM = gmdMes !== null && gmdMesAnt !== null ? buildComparacao(gmdMes, gmdMesAnt, 'mensal') : null;
+    }
 
     // GMD acumulado YoY
     const diasAcumYoY = Array.from({ length: mes }, (_, i) => new Date(anoAnt, i + 1, 0).getDate()).reduce((a, b) => a + b, 0);
@@ -911,21 +1026,22 @@ export function useIndicadoresZootecnicos(
       valorPorCabeca,
       valorPorHa,
       comparacoes: {
-        saldoFinalMes: compSaldo,
-        pesoMedioRebanhoKg: compPesoMedio,
-        uaHa: compUaHa,
-        uaHaMediaAno: compUaHaMedia,
-        valorRebanho: compValor,
-        arrobasSaidasMes: compArrobasMes,
-        arrobasHaMes: compArrobasHaMes,
-        arrobasSaidasAcumuladoAno: compArrobasAcum,
-        arrobasHaAcumuladoAno: compArrobasHaAcum,
-        arrobasProduzidasAcumulado: compArrobasProdAcum,
-        gmdMes: compGmdMes,
-        gmdAcumulado: compGmdAcum,
-        desfruteCabecasAcumulado: compDesfruteCab,
-        desfruteArrobasAcumulado: compDesfruteArrob,
-        arrobasDesfrutadasAcum: compArrobasDesfrutadas,
+        saldoFinalMes: { mensal: compSaldoMoM, anual: compSaldo },
+        pesoMedioRebanhoKg: { mensal: compPesoMedioMoM, anual: compPesoMedio },
+        uaHa: { mensal: compUaHaMoM, anual: compUaHa },
+        uaHaMediaAno: { mensal: compUaHaMediaMoM, anual: compUaHaMedia },
+        valorRebanho: { mensal: compValorMoM, anual: compValor },
+        arrobasSaidasMes: { mensal: compArrobasMes, anual: compArrobasMesYoY },
+        arrobasHaMes: { mensal: compArrobasHaMes, anual: compArrobasHaMesYoY },
+        arrobasSaidasAcumuladoAno: { mensal: null, anual: compArrobasAcum },
+        arrobasHaAcumuladoAno: { mensal: null, anual: compArrobasHaAcum },
+        arrobasProduzidasAcumulado: { mensal: null, anual: compArrobasProdAcum },
+        gmdMes: { mensal: compGmdMesMoM, anual: compGmdMes },
+        gmdAcumulado: { mensal: null, anual: compGmdAcum },
+        desfruteCabecasAcumulado: { mensal: null, anual: compDesfruteCab },
+        desfruteArrobasAcumulado: { mensal: null, anual: compDesfruteArrob },
+        arrobasDesfrutadasAcum: { mensal: null, anual: compArrobasDesfrutadas },
+        valorPorCabeca: { mensal: compValorPorCabecaMoM, anual: compValorPorCabecaYoY },
       },
       historico,
       comparacoesHistorico,
@@ -937,7 +1053,7 @@ export function useIndicadoresZootecnicos(
       },
       loading,
     };
-  }, [lancamentos, saldosIniciais, pastos, ano, mes, anoMes, valorRebanhoData, valorRebanhoYoY, loadingValor, pesoFechamentoMap, pesoFechamentoMesAntMap, pesoFechamentoYoYMap]);
+  }, [lancamentos, saldosIniciais, pastos, ano, mes, anoMes, valorRebanhoData, valorRebanhoYoY, valorRebanhoMoM, loadingValor, pesoFechamentoMap, pesoFechamentoMesAntMap, pesoFechamentoYoYMap]);
 
   return indicadores;
 }
