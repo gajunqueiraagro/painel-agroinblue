@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Lancamento, SaldoInicial, Categoria } from '@/types/cattle';
+import type { StatusOperacional } from '@/lib/statusOperacional';
 import { addToQueue, isOnline } from '@/lib/offlineQueue';
 import { toast } from 'sonner';
 
@@ -277,7 +278,13 @@ export function useLancamentos() {
       ...insertData,
     }).select().single();
 
-    if (!error && data) {
+    if (error) {
+      console.error('Erro ao salvar lançamento:', error);
+      toast.error('Erro ao salvar lançamento: ' + error.message);
+      return;
+    }
+
+    if (data) {
       setLancamentos(prev => [{
         id: data.id,
         data: data.data,
@@ -291,6 +298,25 @@ export function useLancamentos() {
         pesoMedioArrobas: data.peso_medio_arrobas ?? undefined,
         precoMedioCabeca: data.preco_medio_cabeca ?? undefined,
         observacao: data.observacao ?? undefined,
+        precoArroba: data.preco_arroba ?? undefined,
+        pesoCarcacaKg: data.peso_carcaca_kg ?? undefined,
+        bonusPrecoce: data.bonus_precoce ?? undefined,
+        bonusQualidade: data.bonus_qualidade ?? undefined,
+        bonusListaTrace: data.bonus_lista_trace ?? undefined,
+        descontoQualidade: data.desconto_qualidade ?? undefined,
+        descontoFunrural: data.desconto_funrural ?? undefined,
+        outrosDescontos: data.outros_descontos ?? undefined,
+        acrescimos: data.acrescimos ?? undefined,
+        deducoes: data.deducoes ?? undefined,
+        valorTotal: data.valor_total ?? undefined,
+        notaFiscal: data.nota_fiscal ?? undefined,
+        tipoPeso: (data.tipo_peso as 'vivo' | 'morto') ?? 'vivo',
+        statusOperacional: (data.status_operacional as StatusOperacional) ?? 'conciliado',
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+        createdBy: data.created_by ?? undefined,
+        updatedBy: data.updated_by ?? undefined,
+        fazendaId: data.fazenda_id,
       }, ...prev]);
     }
   };
