@@ -122,9 +122,9 @@ function getColumnsForType(tipo: TipoFiltro): ColumnDef[] {
   }
 }
 
-export function MovimentacaoTab({ lancamentos, saldosIniciais }: Props) {
+export function MovimentacaoTab({ lancamentos, saldosIniciais, onEditar, onRemover }: Props) {
   const [filtroTipo, setFiltroTipo] = useState<TipoFiltro>('nascimento');
-
+  const [detalheId, setDetalheId] = useState<string | null>(null);
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
