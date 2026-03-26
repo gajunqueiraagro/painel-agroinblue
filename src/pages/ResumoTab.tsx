@@ -217,10 +217,16 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
       </div>
 
       {/* 1. STATUS GERAL */}
-      <div className="rounded-xl border bg-card p-4 space-y-2 shadow-sm">
+      <button
+        onClick={() => onTabChange('status_zootecnico' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
+        className="w-full rounded-xl border bg-card p-4 space-y-2 shadow-sm text-left cursor-pointer transition-colors hover:bg-accent/50 active:scale-[0.99]"
+      >
         <div className="flex items-center justify-between">
           <h2 className="text-base font-extrabold text-card-foreground">Status Geral</h2>
-          <StatusBadge nivel={statusGeral} label={statusGeral === 'fechado' ? 'Conciliado' : statusGeral === 'parcial' ? 'Em andamento' : 'Pendente'} />
+          <div className="flex items-center gap-1.5">
+            <StatusBadge nivel={statusGeral} label={statusGeral === 'fechado' ? 'Conciliado' : statusGeral === 'parcial' ? 'Em andamento' : 'Pendente'} />
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </div>
         </div>
         <p className="text-sm text-muted-foreground">{destaqueMes}</p>
         <div className="flex gap-4 pt-1">
@@ -237,7 +243,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
             <span className="text-xs text-muted-foreground">Eco</span>
           </div>
         </div>
-      </div>
+      </button>
 
       {/* Grid 2 cols on md */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
