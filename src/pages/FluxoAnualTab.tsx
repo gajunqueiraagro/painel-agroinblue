@@ -36,7 +36,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   }, [lancamentos, statusFiltro]);
 
   const dados = useMemo(
-    () => calcFluxoAnual(saldosIniciais, lancFiltrados, Number(anoFiltro)),
+    () => calcFluxoAnual(saldosIniciais, lancFiltrados, Number(anoFiltro), true),
     [lancFiltrados, saldosIniciais, anoFiltro],
   );
 
