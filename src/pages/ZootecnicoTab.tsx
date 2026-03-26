@@ -542,10 +542,10 @@ function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNu
         <>
           <ChartCard title="Rebanho Final do mês (cab)" subtitle="Quantidade de cabeças no final do mês" data={chartData}
             keys={[`cab_${anoNum}`, `cab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-            type="area" />
+            type="area" mesFiltro={mesFiltro} />
           <ChartCard title="Lotação: Kg vivo por ha (Kg/ha)" subtitle="Quantidade de Kg sobre cada hectare produtivo, no final do mês" data={chartData}
             keys={[`kgHa_${anoNum}`, `kgHa_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-            type="line" />
+            type="line" mesFiltro={mesFiltro} />
         </>
       ) : (
         <>
@@ -553,16 +553,16 @@ function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNu
             <>
               <ChartCard title="Arrobas Produzidas por mês" subtitle="Quantidade de arrobas produzidas por mês" data={prodData}
                 keys={[`arrProdMes_${anoNum}`, `arrProdMes_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="bar" decimals={0} />
+                type="bar" decimals={0} mesFiltro={mesFiltro} />
               <ChartCard title="Arrobas Produzidas acumulado" subtitle="Quantidade de arrobas produzidas no acumulado do ano" data={prodData}
                 keys={[`arrProd_${anoNum}`, `arrProd_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="line" decimals={0} />
+                type="line" decimals={0} mesFiltro={mesFiltro} />
               <ChartCard title="GMD médio (kg/dia)" subtitle="Kg médio ganho por cabeça, por dia" data={prodData}
                 keys={[`gmdMes_${anoNum}`, `gmdMes_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="bar" decimals={3} />
+                type="bar" decimals={3} mesFiltro={mesFiltro} />
               <ChartCard title="Desfrute Cab. acumulado (%)" subtitle="% de animais desfrutados (vendidos) em cabeças, em comparação com o saldo do início do ano" data={prodData}
                 keys={[`desfCab_${anoNum}`, `desfCab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="line" decimals={1} />
+                type="line" decimals={1} mesFiltro={mesFiltro} />
             </>
           )}
         </>
