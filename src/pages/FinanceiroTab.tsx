@@ -68,6 +68,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo }: { lancamentos:
             <th className="p-1.5 text-right font-bold bg-muted/50">R$/líq @</th>
             {showLiqKg && <th className="p-1.5 text-right font-bold bg-muted/50">R$/Kg Líq</th>}
             <th className="p-1.5 text-right font-bold bg-muted/50">Líq/Cab</th>
+            <th className="p-1.5 text-center font-bold bg-muted/50">Status</th>
             <th className="p-1.5 w-8 bg-muted/50"></th>
           </tr>
         </thead>
@@ -89,6 +90,17 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo }: { lancamentos:
                 <td className="p-1.5 text-right">{fmtValor(c.liqArroba)}</td>
                 {showLiqKg && <td className="p-1.5 text-right">{fmtValor(c.liqKg)}</td>}
                 <td className="p-1.5 text-right">{fmtValor(c.liqCabeca)}</td>
+                <td className="p-1.5 text-center">
+                  {(() => {
+                    const st = (l as any).status_operacional || 'conciliado';
+                    const cfg = st === 'previsto'
+                      ? { label: 'Prev', cls: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400' }
+                      : st === 'confirmado'
+                        ? { label: 'Conf', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400' }
+                        : { label: 'Real', cls: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400' };
+                    return <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${cfg.cls}`}>{cfg.label}</span>;
+                  })()}
+                </td>
                 <td className="p-1.5">
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(l)}>
                     <Info className="h-3 w-3" />
@@ -127,6 +139,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo }: { lancamentos:
                 {showLiqKg && <td className="p-1.5 text-right">{fmtValor(liqKgTotal)}</td>}
                 <td className="p-1.5 text-right">{fmtValor(liqCabeca)}</td>
                 <td className="p-1.5"></td>
+                <td className="p-1.5"></td>
               </tr>
             </tfoot>
           );
@@ -154,6 +167,7 @@ function AbateTable({ lancamentos, onEdit }: { lancamentos: Lancamento[]; onEdit
             <th className="p-1.5 text-right font-bold text-primary bg-muted/50">Total</th>
             <th className="p-1.5 text-right font-bold bg-muted/50">R$/líq @</th>
             <th className="p-1.5 text-right font-bold bg-muted/50">Líq/Cab</th>
+            <th className="p-1.5 text-center font-bold bg-muted/50">Status</th>
             <th className="p-1.5 w-8 bg-muted/50"></th>
           </tr>
         </thead>
@@ -173,6 +187,17 @@ function AbateTable({ lancamentos, onEdit }: { lancamentos: Lancamento[]; onEdit
                 <td className="p-1.5 text-right font-bold text-primary">{fmtValor(c.valorFinal)}</td>
                 <td className="p-1.5 text-right">{fmtValor(c.liqArroba)}</td>
                 <td className="p-1.5 text-right">{fmtValor(c.liqCabeca)}</td>
+                <td className="p-1.5 text-center">
+                  {(() => {
+                    const st = (l as any).status_operacional || 'conciliado';
+                    const cfg = st === 'previsto'
+                      ? { label: 'Prev', cls: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400' }
+                      : st === 'confirmado'
+                        ? { label: 'Conf', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400' }
+                        : { label: 'Real', cls: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400' };
+                    return <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${cfg.cls}`}>{cfg.label}</span>;
+                  })()}
+                </td>
                 <td className="p-1.5">
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(l)}>
                     <Info className="h-3 w-3" />
@@ -210,6 +235,7 @@ function AbateTable({ lancamentos, onEdit }: { lancamentos: Lancamento[]; onEdit
                 <td className="p-1.5 text-right text-primary">{fmtValor(totals.valorTotal)}</td>
                 <td className="p-1.5 text-right">{fmtValor(liqArroba)}</td>
                 <td className="p-1.5 text-right">{fmtValor(liqCabeca)}</td>
+                <td className="p-1.5"></td>
                 <td className="p-1.5"></td>
               </tr>
             </tfoot>
