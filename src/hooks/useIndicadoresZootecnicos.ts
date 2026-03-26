@@ -367,11 +367,91 @@ export function useIndicadoresZootecnicos(
 
   // --- Load valor rebanho (current + YoY) ---
   const loadValorRebanho = useCallback(async () => {
-    if (!fazendaId || fazendaId === '__global__') {
+    if (!fazendaId) {
       setValorRebanhoData(null);
       setValorRebanhoYoY(null);
       return;
     }
+
+    // Global mode: load and sum valor rebanho from all fazendas
+    if (isGlobal) {
+      const fids = globalFazendaIds || [];
+      if (fids.length === 0) {
+        setValorRebanhoData(null);
+        setValorRebanhoYoY(null);
+        return;
+      }
+      setLoadingValor(true);
+      try {
+        const anoMesYoY = `${ano - 1}-${String(mes).padStart(2, '0')}`;
+        const [precosRes, fechRes, precosYoYRes] = await Promise.all([
+          supabase.from('valor_rebanho_mensal').select('fazenda_id, categoria, preco_kg').in('fazenda_id', fids).eq('ano_mes', anoMes),
+          supabase.from('valor_rebanho_fechamento').select('fazenda_id, status').in('fazenda_id', fids).eq('ano_mes', anoMes),
+          supabase.from('valor_rebanho_mensal').select('fazenda_id, categoria, preco_kg').in('fazenda_id', fids).eq('ano_mes', anoMesYoY),
+        ]);
+
+        // Current month — sum per fazenda
+        if (precosRes.data && precosRes.data.length > 0) {
+          // Group precos by fazenda
+          const precosByFaz = new Map<string, Map<string, number>>();
+          precosRes.data.forEach(p => {
+            if (!precosByFaz.has(p.fazenda_id)) precosByFaz.set(p.fazenda_id, new Map());
+            precosByFaz.get(p.fazenda_id)!.set(p.categoria, Number(p.preco_kg));
+          });
+
+          let totalGlobal = 0;
+          for (const fid of fids) {
+            const precoMap = precosByFaz.get(fid);
+            if (!precoMap || precoMap.size === 0) continue;
+            const lancsFaz = lancamentos.filter(l => l.fazendaId === fid);
+            const saldosFaz = saldosIniciais.filter(s => (s as any).fazendaId === fid);
+            const saldoMap = calcSaldoPorCategoriaLegado(saldosFaz, lancsFaz, ano, mes);
+            saldoMap.forEach((qtd, cat) => {
+              const preco = precoMap.get(cat) || 0;
+              const { valor: pesoKg } = resolverPesoOficial(cat, pesoFechamentoMap, saldosFaz, lancsFaz, ano, mes);
+              totalGlobal += qtd * (pesoKg || 0) * preco;
+            });
+          }
+
+          const allFechado = fechRes.data?.length === fids.length && fechRes.data.every(f => f.status === 'fechado');
+          setValorRebanhoData({ total: totalGlobal, fechado: allFechado || false });
+        } else {
+          setValorRebanhoData(null);
+        }
+
+        // YoY
+        if (precosYoYRes.data && precosYoYRes.data.length > 0) {
+          const precosByFazYoY = new Map<string, Map<string, number>>();
+          precosYoYRes.data.forEach(p => {
+            if (!precosByFazYoY.has(p.fazenda_id)) precosByFazYoY.set(p.fazenda_id, new Map());
+            precosByFazYoY.get(p.fazenda_id)!.set(p.categoria, Number(p.preco_kg));
+          });
+          let totalYoY = 0;
+          for (const fid of fids) {
+            const precoMap = precosByFazYoY.get(fid);
+            if (!precoMap || precoMap.size === 0) continue;
+            const lancsFaz = lancamentos.filter(l => l.fazendaId === fid);
+            const saldosFaz = saldosIniciais.filter(s => (s as any).fazendaId === fid);
+            const saldoMap = calcSaldoPorCategoriaLegado(saldosFaz, lancsFaz, ano - 1, mes);
+            saldoMap.forEach((qtd, cat) => {
+              const preco = precoMap.get(cat) || 0;
+              const pesoKg = getPesoMedioCatComPastos(cat, pesoFechamentoYoYMap, saldosFaz, lancsFaz, ano - 1, mes);
+              totalYoY += qtd * (pesoKg || 0) * preco;
+            });
+          }
+          setValorRebanhoYoY(totalYoY > 0 ? totalYoY : null);
+        } else {
+          setValorRebanhoYoY(null);
+        }
+      } catch {
+        setValorRebanhoData(null);
+        setValorRebanhoYoY(null);
+      } finally {
+        setLoadingValor(false);
+      }
+      return;
+    }
+
     setLoadingValor(true);
     try {
       const anoMesYoY = `${ano - 1}-${String(mes).padStart(2, '0')}`;
@@ -432,7 +512,7 @@ export function useIndicadoresZootecnicos(
     } finally {
       setLoadingValor(false);
     }
-  }, [fazendaId, anoMes, saldosIniciais, lancamentos, ano, mes, pesoFechamentoMap]);
+  }, [fazendaId, isGlobal, globalFazendaIds, anoMes, saldosIniciais, lancamentos, ano, mes, pesoFechamentoMap]);
 
   useEffect(() => { loadValorRebanho(); }, [loadValorRebanho]);
 
