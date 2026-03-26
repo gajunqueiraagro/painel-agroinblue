@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -20,9 +21,10 @@ interface PastoResumo {
 interface Props {
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
+  onBackToConciliacao?: () => void;
 }
 
-export function FechamentoTab({ filtroAnoInicial, filtroMesInicial }: Props = {}) {
+export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao }: Props = {}) {
   const { isGlobal } = useFazenda();
   const { pastos, categorias } = usePastos();
   const { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, reabrirPasto, copiarMesAnterior } = useFechamento();
@@ -177,6 +179,15 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial }: Props = {}
           }}
           onCopiar={async () => copiarMesAnterior(selectedPasto.id, anoMes, categorias)}
         />
+      )}
+
+      {onBackToConciliacao && (
+        <button
+          onClick={onBackToConciliacao}
+          className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2.5 transition-colors hover:bg-primary/20 mt-4"
+        >
+          <ArrowLeft className="h-4 w-4" /> Voltar para Conciliação de Categoria
+        </button>
       )}
     </div>
   );

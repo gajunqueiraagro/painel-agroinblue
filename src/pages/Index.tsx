@@ -100,6 +100,7 @@ const Index = () => {
     }
     if (tab !== 'financeiro') setSubAbaFinanceiro(undefined);
     if (tab !== 'lancamentos') setLancamentosFromConciliacao(false);
+    if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
     setActiveTab(tab);
   }, []);
 
@@ -111,6 +112,12 @@ const Index = () => {
     if (filtro) setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
     setLancamentosFromConciliacao(true);
     setActiveTab('lancamentos');
+  }, []);
+  const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
+  const goToFechamentoFromConciliacao = useCallback((filtro?: { ano: string; mes: number }) => {
+    if (filtro) setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
+    setFechamentoFromConciliacao(true);
+    setActiveTab('fechamento');
   }, []);
 
   // Sub-screens that need a back button
@@ -184,7 +191,13 @@ const Index = () => {
       {activeTab === 'desfrute' && <DesfrunteTab lancamentos={isGlobal ? lancamentosVisiveis : lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} isGlobal={isGlobal} />}
       {activeTab === 'cadastros' && <CadastrosTab />}
       {activeTab === 'chuvas' && <ChuvasTab />}
-      {activeTab === 'fechamento' && <FechamentoTab filtroAnoInicial={filtroGlobal.ano} filtroMesInicial={filtroGlobal.mes} />}
+      {activeTab === 'fechamento' && (
+        <FechamentoTab
+          filtroAnoInicial={filtroGlobal.ano}
+          filtroMesInicial={filtroGlobal.mes}
+          onBackToConciliacao={fechamentoFromConciliacao ? goToConciliacaoCategoria : undefined}
+        />
+      )}
       {activeTab === 'mapa_pastos' && <MapaPastosTab />}
       {activeTab === 'resumo_pastos' && <ResumoPastosTab />}
       {activeTab === 'analise_operacional' && <AnaliseOperacionalTab />}
@@ -204,7 +217,7 @@ const Index = () => {
           saldosIniciais={saldosIniciais}
           onBack={goToZootecnico}
           onNavigateToReclass={goToReclassFromConciliacao}
-          filtroAnoInicial={filtroGlobal.ano}
+          onNavigateToFechamento={goToFechamentoFromConciliacao}
           filtroMesInicial={filtroGlobal.mes}
         />
       )}
