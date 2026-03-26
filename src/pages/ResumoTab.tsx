@@ -240,7 +240,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
             <p className="text-[11px] text-muted-foreground">{zootecnico.status.descricao}</p>
 
             <button
-              onClick={() => onTabChange('zootecnico_hub')}
+              onClick={() => onTabChange('zootecnico_hub', { ano: filtroGlobal.ano, mes: filtroGlobal.mes })}
               className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
             >
               Ver Painel Zootécnico <ChevronRight className="h-4 w-4" />
