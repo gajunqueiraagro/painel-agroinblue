@@ -400,35 +400,25 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave, onDele
           <Separator />
 
           <h4 className="text-xs font-bold text-muted-foreground uppercase">Valor da Operação</h4>
+
+          {/* 1. Preço base da arroba */}
           <div>
-            <Label className="text-xs font-bold">Valor Total Final (R$)</Label>
-            <Input type="number" value={calc.valorTotal > 0 ? String(calc.valorTotal) : ''} onChange={e => {
-              // When user types valorTotal directly, we back-calculate precoArroba
-              const vt = parseFloat(e.target.value);
-              if (!isNaN(vt) && calc.pesoTotalArrobas > 0) {
-                const totalAcr = isAbate ? (num(bonusPrecoce) ?? 0) + (num(bonusQualidade) ?? 0) + (num(bonusListaTrace) ?? 0) : (num(acrescimos) ?? 0);
-                const totalDes = isAbate ? (num(descontoQualidade) ?? 0) + (num(descontoFunrural) ?? 0) + (num(outrosDescontos) ?? 0) : (num(deducoes) ?? 0);
-                const bruto = vt - totalAcr + totalDes;
-                setPrecoArroba(String((bruto / calc.pesoTotalArrobas).toFixed(4)));
-              }
-            }} placeholder="Valor total líquido" className="h-10 text-base font-bold" />
-          </div>
-          {calc.liqArroba > 0 && (
-            <div className="bg-primary/10 rounded-lg p-2 text-sm font-bold flex justify-between">
-              <span>R$/líq @</span>
-              <span className="text-primary">R$ {fmt(calc.liqArroba)}</span>
-            </div>
-          )}
-          <div>
-            <Label className="text-xs text-muted-foreground">Preço referência por arroba (R$)</Label>
+            <Label className="text-xs">Preço base da arroba (R$)</Label>
             <Input type="number" value={precoArroba} onChange={e => setPrecoArroba(e.target.value)} placeholder="0,00" className="h-9" />
           </div>
 
-          <Separator />
+          {/* 2. Valor bruto calculado */}
+          <div className="bg-muted/30 rounded-lg p-2.5 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Valor total bruto</span>
+              <strong>R$ {fmt(calc.valorBruto)}</strong>
+            </div>
+          </div>
 
+          {/* 3. Ajustes: Acréscimos e Deduções */}
           {isAbate ? (
             <>
-              <h4 className="text-xs font-bold text-muted-foreground uppercase">Bônus (R$)</h4>
+              <h4 className="text-xs font-bold text-muted-foreground uppercase">Bônus / Acréscimos (R$)</h4>
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <Label className="text-xs">Precoce</Label>
@@ -461,20 +451,45 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave, onDele
               </div>
             </>
           ) : (
-            <>
-              <h4 className="text-xs font-bold text-muted-foreground uppercase">Ajustes (R$)</h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Acréscimos</Label>
-                  <Input type="number" value={acrescimos} onChange={e => setAcrescimos(e.target.value)} placeholder="0" className="h-9" />
-                </div>
-                <div>
-                  <Label className="text-xs">Deduções</Label>
-                  <Input type="number" value={deducoes} onChange={e => setDeducoes(e.target.value)} placeholder="0" className="h-9" />
-                </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Acréscimos (R$)</Label>
+                <Input type="number" value={acrescimos} onChange={e => setAcrescimos(e.target.value)} placeholder="0" className="h-9" />
               </div>
-            </>
+              <div>
+                <Label className="text-xs">Deduções (R$)</Label>
+                <Input type="number" value={deducoes} onChange={e => setDeducoes(e.target.value)} placeholder="0" className="h-9" />
+              </div>
+            </div>
           )}
+
+          {/* 4. Valor líquido final */}
+          <div className="bg-primary/10 rounded-lg p-3">
+            <div className="flex justify-between text-base font-bold">
+              <span>Valor líquido final</span>
+              <span className="text-primary">R$ {fmt(calc.valorTotal)}</span>
+            </div>
+            {calc.liqArroba > 0 && (
+              <div className="flex justify-between text-sm mt-1">
+                <span className="text-muted-foreground">R$/líq @</span>
+                <strong>R$ {fmt(calc.liqArroba)}</strong>
+              </div>
+            )}
+          </div>
+
+          {/* Override manual do valor total */}
+          <div>
+            <Label className="text-xs text-muted-foreground">Ou informe o valor total manualmente (R$)</Label>
+            <Input type="number" value={calc.valorTotal > 0 ? String(calc.valorTotal) : ''} onChange={e => {
+              const vt = parseFloat(e.target.value);
+              if (!isNaN(vt) && calc.pesoTotalArrobas > 0) {
+                const totalAcr = isAbate ? (num(bonusPrecoce) ?? 0) + (num(bonusQualidade) ?? 0) + (num(bonusListaTrace) ?? 0) : (num(acrescimos) ?? 0);
+                const totalDes = isAbate ? (num(descontoQualidade) ?? 0) + (num(descontoFunrural) ?? 0) + (num(outrosDescontos) ?? 0) : (num(deducoes) ?? 0);
+                const bruto = vt - totalAcr + totalDes;
+                setPrecoArroba(String((bruto / calc.pesoTotalArrobas).toFixed(4)));
+              }
+            }} placeholder="Valor total líquido" className="h-9" />
+          </div>
         </div>
 
         <Separator />
