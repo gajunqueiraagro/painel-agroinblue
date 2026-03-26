@@ -24,6 +24,7 @@ import { AnaliseOperacionalTab } from './AnaliseOperacionalTab';
 import { ValorRebanhoTab } from './ValorRebanhoTab';
 import { ConciliacaoCategoriaTab } from './ConciliacaoCategoriaTab';
 import { ChuvasTab } from './ChuvasTab';
+import { VisaoAnualZootecnicaTab } from './VisaoAnualZootecnicaTab';
 
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { SyncStatus } from '@/components/SyncStatus';
