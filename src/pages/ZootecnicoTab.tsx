@@ -353,16 +353,19 @@ function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNu
     const atual = buildYear(anoNum);
     const anterior = buildYear(anoNum - 1);
 
-    return MESES_NOMES.map((mes, i) => ({
-      mes,
-      [`cab_${anoNum}`]: atual[i]?.cabecas ?? 0,
-      [`cab_${anoNum - 1}`]: anterior[i]?.cabecas ?? 0,
-      [`kgHa_${anoNum}`]: atual[i]?.kgHa,
-      [`kgHa_${anoNum - 1}`]: anterior[i]?.kgHa,
-      [`arrSaida_${anoNum}`]: atual[i]?.arrobasSaidas ?? 0,
-      [`arrSaida_${anoNum - 1}`]: anterior[i]?.arrobasSaidas ?? 0,
-    }));
-  }, [lancamentos, saldosIniciais, anoNum, pastos]);
+    return MESES_NOMES.map((mes, i) => {
+      const isFuturo = i + 1 > mesFiltro;
+      return {
+        mes,
+        [`cab_${anoNum}`]: isFuturo ? null : (atual[i]?.cabecas ?? 0),
+        [`cab_${anoNum - 1}`]: anterior[i]?.cabecas ?? 0,
+        [`kgHa_${anoNum}`]: isFuturo ? null : atual[i]?.kgHa,
+        [`kgHa_${anoNum - 1}`]: anterior[i]?.kgHa,
+        [`arrSaida_${anoNum}`]: isFuturo ? null : (atual[i]?.arrobasSaidas ?? 0),
+        [`arrSaida_${anoNum - 1}`]: anterior[i]?.arrobasSaidas ?? 0,
+      };
+    });
+  }, [lancamentos, saldosIniciais, anoNum, mesFiltro, pastos]);
 
   // GMD / desfrute from historico
   const gmdData = useMemo(() => {
@@ -370,16 +373,21 @@ function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNu
     const anoAtual = zoo.historico.find(h => h.ano === anoNum);
     const anoAnt = zoo.historico.find(h => h.ano === anoNum - 1);
     if (!anoAtual) return [];
-    return anoAtual.meses.map((m, i) => ({
-      mes: MESES_NOMES[m.mes - 1],
-      [`gmd_${anoNum}`]: m.gmdAcumulado,
-      [`gmd_${anoNum - 1}`]: anoAnt?.meses[i]?.gmdAcumulado ?? null,
-      [`desfCab_${anoNum}`]: m.desfruteCabAcum,
-      [`desfCab_${anoNum - 1}`]: anoAnt?.meses[i]?.desfruteCabAcum ?? null,
-      [`arrProd_${anoNum}`]: m.arrobasProduzidasAcum ? Math.round(m.arrobasProduzidasAcum) : null,
-      [`arrProd_${anoNum - 1}`]: anoAnt?.meses[i]?.arrobasProduzidasAcum ? Math.round(anoAnt.meses[i].arrobasProduzidasAcum!) : null,
-    }));
-  }, [zoo.historico, anoNum]);
+    return MESES_NOMES.map((mes, i) => {
+      const m = anoAtual.meses[i];
+      const mAnt = anoAnt?.meses[i];
+      const isFuturo = i + 1 > mesFiltro;
+      return {
+        mes,
+        [`gmd_${anoNum}`]: isFuturo ? null : (m?.gmdAcumulado ?? null),
+        [`gmd_${anoNum - 1}`]: mAnt?.gmdAcumulado ?? null,
+        [`desfCab_${anoNum}`]: isFuturo ? null : (m?.desfruteCabAcum ?? null),
+        [`desfCab_${anoNum - 1}`]: mAnt?.desfruteCabAcum ?? null,
+        [`arrProd_${anoNum}`]: isFuturo ? null : (m?.arrobasProduzidasAcum ? Math.round(m.arrobasProduzidasAcum) : null),
+        [`arrProd_${anoNum - 1}`]: mAnt?.arrobasProduzidasAcum ? Math.round(mAnt.arrobasProduzidasAcum) : null,
+      };
+    });
+  }, [zoo.historico, anoNum, mesFiltro]);
 
   return (
     <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
@@ -399,27 +407,27 @@ function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNu
         <>
           <ChartCard title="Rebanho Final do mês (cab)" subtitle="Quantidade de cabeças no final do mês" data={chartData}
             keys={[`cab_${anoNum}`, `cab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-            type="area" maxMonth={mesFiltro} />
+            type="area" />
           <ChartCard title="Lotação: Kg vivo por ha (Kg/ha)" subtitle="Quantidade de Kg sobre cada hectare produtivo, no final do mês" data={chartData}
             keys={[`kgHa_${anoNum}`, `kgHa_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-            type="line" maxMonth={mesFiltro} />
+            type="line" />
         </>
       ) : (
         <>
           <ChartCard title="@ Saídas por Mês" data={chartData}
             keys={[`arrSaida_${anoNum}`, `arrSaida_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-            type="bar" maxMonth={mesFiltro} />
+            type="bar" />
           {gmdData.length > 0 && (
             <>
               <ChartCard title="@ Produzidas (acumulado)" data={gmdData}
                 keys={[`arrProd_${anoNum}`, `arrProd_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="line" maxMonth={mesFiltro} />
+                type="line" />
               <ChartCard title="GMD Acumulado (kg/dia)" data={gmdData}
                 keys={[`gmd_${anoNum}`, `gmd_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="line" decimals={3} maxMonth={mesFiltro} />
+                type="line" decimals={3} />
               <ChartCard title="Desfrute Cab. Acumulado (%)" data={gmdData}
                 keys={[`desfCab_${anoNum}`, `desfCab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="line" decimals={1} maxMonth={mesFiltro} />
+                type="line" decimals={1} />
             </>
           )}
         </>
@@ -440,15 +448,14 @@ interface ChartCardProps {
   labels: string[];
   type: 'area' | 'line' | 'bar';
   decimals?: number;
-  maxMonth?: number;
+
 }
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--muted-foreground))'];
 const DOT_STYLE = { r: 3, strokeWidth: 2 };
 const ACTIVE_DOT_STYLE = { r: 5, strokeWidth: 2 };
 
-function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, maxMonth }: ChartCardProps) {
-  const filteredData = maxMonth ? data.slice(0, maxMonth) : data;
+function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0 }: ChartCardProps) {
 
   return (
     <Card>
@@ -458,7 +465,7 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, ma
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             {type === 'bar' ? (
-              <BarChart data={filteredData}>
+              <BarChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
@@ -469,7 +476,7 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, ma
                 ))}
               </BarChart>
             ) : type === 'area' ? (
-              <AreaChart data={filteredData}>
+              <AreaChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
@@ -483,7 +490,7 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, ma
                 ))}
               </AreaChart>
             ) : (
-              <LineChart data={filteredData}>
+              <LineChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
