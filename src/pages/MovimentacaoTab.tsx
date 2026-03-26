@@ -3,10 +3,13 @@ import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { parseISO, format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
+  onEditar?: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
+  onRemover?: (id: string) => void;
 }
 
 type TipoFiltro = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
@@ -119,9 +122,9 @@ function getColumnsForType(tipo: TipoFiltro): ColumnDef[] {
   }
 }
 
-export function MovimentacaoTab({ lancamentos, saldosIniciais }: Props) {
+export function MovimentacaoTab({ lancamentos, saldosIniciais, onEditar, onRemover }: Props) {
   const [filtroTipo, setFiltroTipo] = useState<TipoFiltro>('nascimento');
-
+  const [detalheId, setDetalheId] = useState<string | null>(null);
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
@@ -231,7 +234,14 @@ export function MovimentacaoTab({ lancamentos, saldosIniciais }: Props) {
               </tr>
             ) : (
               lancamentosFiltrados.map((l, i) => (
-                <tr key={l.id} className={i % 2 === 0 ? '' : 'bg-muted/30'}>
+                <tr
+                  key={l.id}
+                  className={cn(
+                    'cursor-pointer hover:bg-primary/5 transition-colors',
+                    i % 2 === 0 ? '' : 'bg-muted/30'
+                  )}
+                  onClick={() => setDetalheId(l.id)}
+                >
                   {columns.map(col => (
                     <td
                       key={col.key}
@@ -272,6 +282,20 @@ export function MovimentacaoTab({ lancamentos, saldosIniciais }: Props) {
           )}
         </table>
       </div>
+
+      {detalheId && (() => {
+        const lancamento = lancamentos.find(l => l.id === detalheId);
+        if (!lancamento) return null;
+        return (
+          <LancamentoDetalhe
+            lancamento={lancamento}
+            open={!!detalheId}
+            onClose={() => setDetalheId(null)}
+            onEditar={onEditar || (() => {})}
+            onRemover={onRemover || (() => {})}
+          />
+        );
+      })()}
     </div>
   );
 }

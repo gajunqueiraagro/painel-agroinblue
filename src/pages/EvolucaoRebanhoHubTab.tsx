@@ -11,11 +11,13 @@ interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
   onNavigateToMovimentacao?: (subAba: SubAba) => void;
+  onEditar?: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
+  onRemover?: (id: string) => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
 }
 
-export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, filtroAnoInicial, filtroMesInicial }: Props) {
+export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onEditar, onRemover, filtroAnoInicial, filtroMesInicial }: Props) {
   const [activeTab, setActiveTab] = useState('movimentacoes');
 
   return (
@@ -28,7 +30,7 @@ export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateT
       </TabsList>
 
       <TabsContent value="movimentacoes">
-        <MovimentacaoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />
+        <MovimentacaoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onEditar={onEditar} onRemover={onRemover} />
       </TabsContent>
 
       <TabsContent value="evolucao">
