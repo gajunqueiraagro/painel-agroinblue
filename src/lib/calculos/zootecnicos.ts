@@ -261,7 +261,7 @@ export function calcResumoMovimentacoes(
 ): ResumoMovimentacoes {
   const startDate = `${anoMes}-01`;
   const endDate = `${anoMes}-31`;
-  const doMes = lancamentosNoRange(lancamentos, startDate, endDate);
+  const doMes = lancamentosConciliadosNoRange(lancamentos, startDate, endDate);
 
   const count = (tipo: string) =>
     doMes.filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade, 0);
