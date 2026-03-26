@@ -78,10 +78,9 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
 
         <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
           {([
-            { value: 'todos', label: 'Todos' },
-            { value: 'realizado', label: 'Realizado' },
-            { value: 'previsto', label: 'Previsto' },
-          ] as const).map(opt => (
+            { value: 'realizado' as const, label: 'Realizado' },
+            { value: 'previsto' as const, label: 'Previsto' },
+          ]).map(opt => (
             <button
               key={opt.value}
               type="button"
@@ -90,9 +89,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                 statusFiltro === opt.value
                   ? opt.value === 'realizado'
                     ? 'bg-green-700 text-white shadow-sm'
-                    : opt.value === 'previsto'
-                      ? 'bg-orange-500 text-white shadow-sm'
-                      : 'bg-background text-foreground shadow-sm'
+                    : 'bg-orange-500 text-white shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
