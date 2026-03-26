@@ -54,7 +54,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo }: { lancamentos: Lancamen
             <th className="p-1.5 text-left font-bold bg-muted/50">Data</th>
             {showTipo && <th className="p-1.5 text-left font-bold bg-muted/50">Tipo</th>}
             <th className="p-1.5 text-right font-bold bg-muted/50">Qtd</th>
-            <th className="p-1.5 text-left font-bold bg-muted/50">Cat.</th>
+            <th className="p-1.5 text-left font-bold bg-muted/50">Categoria</th>
             <th className="p-1.5 text-right font-bold bg-muted/50">P.Vivo</th>
             <th className="p-1.5 text-right font-bold bg-muted/50">P.@</th>
             <th className="p-1.5 text-right font-bold text-primary bg-muted/50">Total</th>
@@ -133,7 +133,7 @@ function AbateTable({ lancamentos, onEdit }: { lancamentos: Lancamento[]; onEdit
           <tr className="border-b bg-muted/50">
             <th className="p-1.5 text-left font-bold bg-muted/50">Data</th>
             <th className="p-1.5 text-right font-bold bg-muted/50">Qtd</th>
-            <th className="p-1.5 text-left font-bold bg-muted/50">Cat.</th>
+            <th className="p-1.5 text-left font-bold bg-muted/50">Categoria</th>
             <th className="p-1.5 text-left font-bold bg-muted/50">Destino</th>
             <th className="p-1.5 text-right font-bold bg-muted/50">P.Vivo</th>
             <th className="p-1.5 text-right font-bold bg-muted/50">Rend.</th>
