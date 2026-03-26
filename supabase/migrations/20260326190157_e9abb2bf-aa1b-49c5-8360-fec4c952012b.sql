@@ -1,0 +1,1 @@
+ALTER TABLE public.lancamentos ADD COLUMN IF NOT EXISTS status_operacional text NOT NULL DEFAULT 'conciliado';

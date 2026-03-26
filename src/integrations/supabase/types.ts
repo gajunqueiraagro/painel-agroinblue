@@ -709,6 +709,7 @@ export type Database = {
           preco_arroba: number | null
           preco_medio_cabeca: number | null
           quantidade: number
+          status_operacional: string
           tipo: string
           tipo_peso: string | null
           transferencia_par_id: string | null
@@ -742,6 +743,7 @@ export type Database = {
           preco_arroba?: number | null
           preco_medio_cabeca?: number | null
           quantidade: number
+          status_operacional?: string
           tipo: string
           tipo_peso?: string | null
           transferencia_par_id?: string | null
@@ -775,6 +777,7 @@ export type Database = {
           preco_arroba?: number | null
           preco_medio_cabeca?: number | null
           quantidade?: number
+          status_operacional?: string
           tipo?: string
           tipo_peso?: string | null
           transferencia_par_id?: string | null
