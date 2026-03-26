@@ -2,55 +2,126 @@ import { useState, useMemo } from 'react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { parseISO, format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
 }
 
-const TIPOS_MOVIMENTACAO = [
-  { value: '__todos__', label: 'Todos os tipos' },
-  { value: 'nascimento', label: 'Nascimento' },
-  { value: 'compra', label: 'Compra' },
-  { value: 'transferencia_entrada', label: 'Transf. Entrada' },
-  { value: 'abate', label: 'Abate' },
-  { value: 'venda', label: 'Venda em Pé' },
-  { value: 'transferencia_saida', label: 'Transf. Saída' },
-  { value: 'consumo', label: 'Consumo' },
-  { value: 'morte', label: 'Morte' },
-  { value: 'reclassificacao', label: 'Reclassificação' },
+type TipoFiltro = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
+
+const TIPOS_FILTRO: { value: TipoFiltro; label: string; icon: string }[] = [
+  { value: 'nascimento', label: 'Nascimentos', icon: '🐄' },
+  { value: 'compra', label: 'Compras', icon: '🛒' },
+  { value: 'transferencia_entrada', label: 'Transf. Ent.', icon: '📥' },
+  { value: 'abate', label: 'Abates', icon: '🔪' },
+  { value: 'venda', label: 'Vendas', icon: '💰' },
+  { value: 'transferencia_saida', label: 'Transf. Saída', icon: '📤' },
+  { value: 'consumo', label: 'Consumo', icon: '🍖' },
+  { value: 'morte', label: 'Mortes', icon: '💀' },
 ];
 
 const MESES = [
   { value: '__todos__', label: 'Todos' },
-  { value: '01', label: 'Jan' },
-  { value: '02', label: 'Fev' },
-  { value: '03', label: 'Mar' },
-  { value: '04', label: 'Abr' },
-  { value: '05', label: 'Mai' },
-  { value: '06', label: 'Jun' },
-  { value: '07', label: 'Jul' },
-  { value: '08', label: 'Ago' },
-  { value: '09', label: 'Set' },
-  { value: '10', label: 'Out' },
-  { value: '11', label: 'Nov' },
-  { value: '12', label: 'Dez' },
+  { value: '01', label: 'Jan' }, { value: '02', label: 'Fev' }, { value: '03', label: 'Mar' },
+  { value: '04', label: 'Abr' }, { value: '05', label: 'Mai' }, { value: '06', label: 'Jun' },
+  { value: '07', label: 'Jul' }, { value: '08', label: 'Ago' }, { value: '09', label: 'Set' },
+  { value: '10', label: 'Out' }, { value: '11', label: 'Nov' }, { value: '12', label: 'Dez' },
 ];
 
-const TIPO_LABELS: Record<string, string> = {
-  nascimento: 'Nascimento',
-  compra: 'Compra',
-  transferencia_entrada: 'Transf. Entrada',
-  abate: 'Abate',
-  venda: 'Venda em Pé',
-  transferencia_saida: 'Transf. Saída',
-  consumo: 'Consumo',
-  morte: 'Morte',
-  reclassificacao: 'Reclassificação',
-};
+// Future-ready: status operacional
+// type StatusOperacional = 'previsto' | 'confirmado' | 'realizado';
+
+interface ColumnDef {
+  key: string;
+  label: string;
+  align?: 'left' | 'right';
+  render: (l: Lancamento) => string;
+}
+
+function fmtData(data: string) {
+  try { return format(parseISO(data), 'dd/MM/yy'); } catch { return data; }
+}
+
+function fmtPesoKg(v?: number | null) {
+  if (!v) return '-';
+  return `${v.toFixed(0)}`;
+}
+
+function fmtPesoArroba(v?: number | null) {
+  if (!v) return '-';
+  return v.toFixed(1);
+}
+
+function fmtValor(v?: number | null) {
+  if (!v) return '-';
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+function fmtDecimal(v?: number | null, dec = 2) {
+  if (!v) return '-';
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+
+function calcRcPercent(l: Lancamento): string {
+  if (!l.pesoCarcacaKg || !l.pesoMedioKg || l.pesoMedioKg === 0) return '-';
+  return ((l.pesoCarcacaKg / l.pesoMedioKg) * 100).toFixed(1) + '%';
+}
+
+function calcPrecoArrobaLiq(l: Lancamento): string {
+  const arrobas = l.pesoMedioArrobas ? l.pesoMedioArrobas * l.quantidade : null;
+  if (!arrobas || !l.valorTotal) return '-';
+  return fmtDecimal(l.valorTotal / arrobas);
+}
+
+function calcPrecoKgLiq(l: Lancamento): string {
+  const kgTotal = l.pesoMedioKg ? l.pesoMedioKg * l.quantidade : null;
+  if (!kgTotal || !l.valorTotal) return '-';
+  return fmtDecimal(l.valorTotal / kgTotal);
+}
+
+function calcPrecoCabeca(l: Lancamento): string {
+  if (!l.valorTotal || !l.quantidade) return '-';
+  return fmtValor(l.valorTotal / l.quantidade);
+}
+
+function getColumnsForType(tipo: TipoFiltro): ColumnDef[] {
+  const colData: ColumnDef = { key: 'data', label: 'Data', render: l => fmtData(l.data) };
+  const colQtde: ColumnDef = { key: 'qtde', label: 'Qtde', align: 'right', render: l => String(l.quantidade) };
+  const colCategoria: ColumnDef = { key: 'cat', label: 'Categoria', render: l => l.categoria };
+  const colPesoKg: ColumnDef = { key: 'pesoKg', label: 'Peso kg', align: 'right', render: l => fmtPesoKg(l.pesoMedioKg) };
+  const colObs: ColumnDef = { key: 'obs', label: 'Obs.', render: l => l.observacao || '-' };
+  const colOrigem: ColumnDef = { key: 'origem', label: 'Origem', render: l => l.fazendaOrigem || '-' };
+  const colDestino: ColumnDef = { key: 'destino', label: 'Destino', render: l => l.fazendaDestino || '-' };
+  const colMotivo: ColumnDef = { key: 'motivo', label: 'Motivo', render: l => l.fazendaDestino || l.observacao || '-' };
+  const colValorLiq: ColumnDef = { key: 'valorLiq', label: 'R$ Líq.', align: 'right', render: l => fmtValor(l.valorTotal) };
+  const colPrecoArrobaLiq: ColumnDef = { key: 'precoArrLiq', label: 'R$/@Líq.', align: 'right', render: calcPrecoArrobaLiq };
+  const colPrecoKgLiq: ColumnDef = { key: 'precoKgLiq', label: 'R$/kg', align: 'right', render: calcPrecoKgLiq };
+  const colPrecoCab: ColumnDef = { key: 'precoCab', label: 'R$/cab.', align: 'right', render: calcPrecoCabeca };
+  const colPesoArroba: ColumnDef = { key: 'pesoArr', label: 'Peso @', align: 'right', render: l => fmtPesoArroba(l.pesoMedioArrobas) };
+  const colRc: ColumnDef = { key: 'rc', label: 'RC%', align: 'right', render: calcRcPercent };
+
+  switch (tipo) {
+    case 'nascimento':
+      return [colData, colQtde, colCategoria, colPesoKg, colObs];
+    case 'compra':
+    case 'transferencia_entrada':
+      return [colData, colQtde, colCategoria, colOrigem, colPesoKg, colValorLiq, colPrecoArrobaLiq, colPrecoKgLiq, colPrecoCab];
+    case 'abate':
+      return [colData, colQtde, colCategoria, colDestino, colPesoKg, colPesoArroba, colRc, colValorLiq, colPrecoArrobaLiq, colPrecoCab];
+    case 'venda':
+    case 'transferencia_saida':
+    case 'consumo':
+      return [colData, colQtde, colCategoria, colDestino, colPesoKg, colValorLiq, colPrecoArrobaLiq, colPrecoKgLiq, colPrecoCab];
+    case 'morte':
+      return [colData, colQtde, colCategoria, colMotivo, colPesoKg, colValorLiq, colPrecoArrobaLiq, colPrecoKgLiq, colPrecoCab];
+  }
+}
 
 export function MovimentacaoTab({ lancamentos, saldosIniciais }: Props) {
+  const [filtroTipo, setFiltroTipo] = useState<TipoFiltro>('nascimento');
+
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
@@ -62,63 +133,50 @@ export function MovimentacaoTab({ lancamentos, saldosIniciais }: Props) {
 
   const [filtroAno, setFiltroAno] = useState(String(new Date().getFullYear()));
   const [filtroMes, setFiltroMes] = useState('__todos__');
-  const [filtroTipo, setFiltroTipo] = useState('__todos__');
 
   const lancamentosFiltrados = useMemo(() => {
     return lancamentos
       .filter(l => {
         try {
+          if (l.tipo !== filtroTipo) return false;
           const d = parseISO(l.data);
-          const ano = format(d, 'yyyy');
-          const mes = format(d, 'MM');
-          if (ano !== filtroAno) return false;
-          if (filtroMes !== '__todos__' && mes !== filtroMes) return false;
-          if (filtroTipo !== '__todos__' && l.tipo !== filtroTipo) return false;
+          if (format(d, 'yyyy') !== filtroAno) return false;
+          if (filtroMes !== '__todos__' && format(d, 'MM') !== filtroMes) return false;
           return true;
-        } catch {
-          return false;
-        }
+        } catch { return false; }
       })
       .sort((a, b) => b.data.localeCompare(a.data));
   }, [lancamentos, filtroAno, filtroMes, filtroTipo]);
 
+  const columns = useMemo(() => getColumnsForType(filtroTipo), [filtroTipo]);
   const totalQtd = lancamentosFiltrados.reduce((s, l) => s + l.quantidade, 0);
-
-  const formatData = (data: string) => {
-    try {
-      return format(parseISO(data), 'dd/MM/yy');
-    } catch {
-      return data;
-    }
-  };
-
-  const formatValor = (v: number | null | undefined) => {
-    if (v == null || v === 0) return '-';
-    return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 });
-  };
-
-  const formatPeso = (v: number | null | undefined) => {
-    if (v == null || v === 0) return '-';
-    return `${v.toFixed(0)} kg`;
-  };
+  const totalValor = lancamentosFiltrados.reduce((s, l) => s + (l.valorTotal || 0), 0);
 
   return (
-    <div className="p-4 max-w-4xl mx-auto space-y-4 animate-fade-in pb-20">
-      {/* Filtros */}
-      <div className="grid grid-cols-3 gap-2">
-        <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-          <SelectTrigger className="text-xs h-9">
-            <SelectValue placeholder="Tipo" />
-          </SelectTrigger>
-          <SelectContent>
-            {TIPOS_MOVIMENTACAO.map(t => (
-              <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <div className="p-3 max-w-4xl mx-auto space-y-3 animate-fade-in pb-20">
+      {/* Filtros por tipo — botões visuais */}
+      <div className="grid grid-cols-4 gap-1.5">
+        {TIPOS_FILTRO.map(t => (
+          <button
+            key={t.value}
+            onClick={() => setFiltroTipo(t.value)}
+            className={cn(
+              'flex flex-col items-center justify-center rounded-lg border px-1 py-2 text-[10px] font-medium transition-all',
+              filtroTipo === t.value
+                ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                : 'bg-card text-muted-foreground border-border hover:bg-accent hover:text-accent-foreground'
+            )}
+          >
+            <span className="text-base leading-none mb-0.5">{t.icon}</span>
+            <span className="leading-tight text-center">{t.label}</span>
+          </button>
+        ))}
+      </div>
 
+      {/* Filtros complementares */}
+      <div className="grid grid-cols-2 gap-2">
         <Select value={filtroAno} onValueChange={setFiltroAno}>
-          <SelectTrigger className="text-xs h-9">
+          <SelectTrigger className="text-xs h-8">
             <SelectValue placeholder="Ano" />
           </SelectTrigger>
           <SelectContent>
@@ -127,9 +185,8 @@ export function MovimentacaoTab({ lancamentos, saldosIniciais }: Props) {
             ))}
           </SelectContent>
         </Select>
-
         <Select value={filtroMes} onValueChange={setFiltroMes}>
-          <SelectTrigger className="text-xs h-9">
+          <SelectTrigger className="text-xs h-8">
             <SelectValue placeholder="Mês" />
           </SelectTrigger>
           <SelectContent>
@@ -142,48 +199,53 @@ export function MovimentacaoTab({ lancamentos, saldosIniciais }: Props) {
 
       {/* Resumo */}
       <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>{lancamentosFiltrados.length} lançamento(s)</span>
+        <span>{lancamentosFiltrados.length} registro(s)</span>
         <span className="font-bold text-foreground">Total: {totalQtd} cab.</span>
       </div>
 
-      {/* Tabela */}
+      {/* Tabela dinâmica */}
       <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="w-full text-[11px]">
           <thead>
             <tr className="border-b bg-primary/10">
-              <th className="text-left px-2 py-2 font-bold text-foreground sticky left-0 bg-primary/10">Data</th>
-              <th className="text-left px-2 py-2 font-bold text-foreground">Tipo</th>
-              <th className="text-left px-2 py-2 font-bold text-foreground">Categoria</th>
-              <th className="text-right px-2 py-2 font-bold text-foreground">Qtd</th>
-              <th className="text-right px-2 py-2 font-bold text-foreground">Peso</th>
-              <th className="text-right px-2 py-2 font-bold text-foreground">Valor</th>
-              <th className="text-left px-2 py-2 font-bold text-foreground">Obs</th>
+              {columns.map(col => (
+                <th
+                  key={col.key}
+                  className={cn(
+                    'px-1.5 py-2 font-bold text-foreground whitespace-nowrap',
+                    col.key === 'data' && 'sticky left-0 bg-primary/10',
+                    col.align === 'right' ? 'text-right' : 'text-left'
+                  )}
+                >
+                  {col.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {lancamentosFiltrados.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
-                  Nenhum lançamento encontrado para os filtros selecionados
+                <td colSpan={columns.length} className="px-4 py-8 text-center text-muted-foreground">
+                  Nenhum lançamento encontrado
                 </td>
               </tr>
             ) : (
               lancamentosFiltrados.map((l, i) => (
                 <tr key={l.id} className={i % 2 === 0 ? '' : 'bg-muted/30'}>
-                  <td className={`px-2 py-1.5 font-medium text-foreground sticky left-0 whitespace-nowrap ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
-                    {formatData(l.data)}
-                  </td>
-                  <td className="px-2 py-1.5 text-foreground whitespace-nowrap">
-                    {TIPO_LABELS[l.tipo] || l.tipo}
-                  </td>
-                  <td className="px-2 py-1.5 text-foreground whitespace-nowrap">
-                    {l.categoria}
-                    {l.categoriaDestino ? ` → ${l.categoriaDestino}` : ''}
-                  </td>
-                  <td className="px-2 py-1.5 text-right font-bold text-foreground">{l.quantidade}</td>
-                  <td className="px-2 py-1.5 text-right text-foreground">{formatPeso(l.pesoMedioKg)}</td>
-                  <td className="px-2 py-1.5 text-right text-foreground whitespace-nowrap">{formatValor(l.valorTotal)}</td>
-                  <td className="px-2 py-1.5 text-muted-foreground truncate max-w-[120px]">{l.observacao || '-'}</td>
+                  {columns.map(col => (
+                    <td
+                      key={col.key}
+                      className={cn(
+                        'px-1.5 py-1.5 whitespace-nowrap',
+                        col.key === 'data' && `font-medium sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`,
+                        col.key === 'obs' && 'truncate max-w-[100px]',
+                        col.align === 'right' ? 'text-right' : 'text-left',
+                        col.key === 'qtde' && 'font-bold'
+                      )}
+                    >
+                      {col.render(l)}
+                    </td>
+                  ))}
                 </tr>
               ))
             )}
@@ -191,13 +253,20 @@ export function MovimentacaoTab({ lancamentos, saldosIniciais }: Props) {
           {lancamentosFiltrados.length > 0 && (
             <tfoot>
               <tr className="border-t-2 bg-primary/10">
-                <td colSpan={3} className="px-2 py-2 font-bold text-foreground sticky left-0 bg-primary/10">Total</td>
-                <td className="px-2 py-2 text-right font-extrabold text-foreground">{totalQtd}</td>
-                <td className="px-2 py-2"></td>
-                <td className="px-2 py-2 text-right font-bold text-foreground whitespace-nowrap">
-                  {formatValor(lancamentosFiltrados.reduce((s, l) => s + (l.valorTotal || 0), 0))}
-                </td>
-                <td className="px-2 py-2"></td>
+                {columns.map((col, idx) => (
+                  <td
+                    key={col.key}
+                    className={cn(
+                      'px-1.5 py-2 font-bold text-foreground whitespace-nowrap',
+                      idx === 0 && 'sticky left-0 bg-primary/10',
+                      col.align === 'right' ? 'text-right' : 'text-left'
+                    )}
+                  >
+                    {idx === 0 && 'Total'}
+                    {col.key === 'qtde' && totalQtd}
+                    {col.key === 'valorLiq' && fmtValor(totalValor)}
+                  </td>
+                ))}
               </tr>
             </tfoot>
           )}
