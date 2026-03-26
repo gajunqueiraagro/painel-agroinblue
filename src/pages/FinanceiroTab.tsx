@@ -3,7 +3,7 @@ import { Lancamento, CATEGORIAS } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { parseISO, format } from 'date-fns';
-import { DollarSign, Pencil } from 'lucide-react';
+import { DollarSign, Info } from 'lucide-react';
 import { FinanceiroEditDialog } from '@/components/FinanceiroEditDialog';
 import { FinanceiroExportMenu } from '@/components/FinanceiroExportMenu';
 import { ChuvasTab } from './ChuvasTab';
@@ -81,7 +81,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo }: { lancamentos: Lancamen
                 <td className="p-1.5 text-right">{fmtValor(c.liqCabeca)}</td>
                 <td className="p-1.5">
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(l)}>
-                    <Pencil className="h-3 w-3" />
+                    <Info className="h-3 w-3" />
                   </Button>
                 </td>
               </tr>
@@ -162,7 +162,7 @@ function AbateTable({ lancamentos, onEdit }: { lancamentos: Lancamento[]; onEdit
                 <td className="p-1.5 text-right">{fmtValor(c.liqCabeca)}</td>
                 <td className="p-1.5">
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(l)}>
-                    <Pencil className="h-3 w-3" />
+                    <Info className="h-3 w-3" />
                   </Button>
                 </td>
               </tr>

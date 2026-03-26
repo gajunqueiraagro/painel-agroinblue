@@ -8,7 +8,10 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LancamentoShareButtons } from '@/components/FinanceiroExportMenu';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Pencil, ArrowLeft } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 
 interface Props {
   lancamento: Lancamento | null;
@@ -33,8 +36,11 @@ function pct(v?: number) {
   return (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
 }
 
+type DialogMode = 'detail' | 'edit';
+
 export function FinanceiroEditDialog({ lancamento, open, onClose, onSave, onDelete }: Props) {
   const { fazendaAtual } = useFazenda();
+  const [mode, setMode] = useState<DialogMode>('detail');
   const [data, setData] = useState('');
   const [quantidade, setQuantidade] = useState('');
   const [categoria, setCategoria] = useState<Categoria>('bois');
@@ -55,6 +61,7 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave, onDele
 
   useEffect(() => {
     if (lancamento) {
+      setMode('detail');
       setData(lancamento.data ?? '');
       setQuantidade(String(lancamento.quantidade ?? ''));
       setCategoria(lancamento.categoria as Categoria);
@@ -182,12 +189,137 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave, onDele
     onClose();
   };
 
+  const SUB_ABA_LABELS: Record<string, { label: string; icon: string }> = {
+    nascimento: { label: 'Nascimento', icon: '🐄' },
+    compra: { label: 'Compra', icon: '🛒' },
+    transferencia_entrada: { label: 'Transf. Entrada', icon: '📥' },
+    abate: { label: 'Abate', icon: '🔪' },
+    venda: { label: 'Venda', icon: '💰' },
+    transferencia_saida: { label: 'Transf. Saída', icon: '📤' },
+    consumo: { label: 'Consumo', icon: '🍖' },
+    morte: { label: 'Morte', icon: '💀' },
+  };
+  const tipoInfo = SUB_ABA_LABELS[lancamento.tipo] || { label: lancamento.tipo, icon: '📋' };
+  const catInfo = CATEGORIAS.find(c => c.value === lancamento.categoria);
+  const indicadores = calcIndicadoresLancamento(lancamento);
+
+  // ===== DETAIL VIEW MODE =====
+  if (mode === 'detail') {
+    return (
+      <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
+        <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <span className="text-xl">{tipoInfo.icon}</span>
+              {tipoInfo.label}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {fazendaNome && (
+              <div className="text-sm bg-muted/50 rounded-lg p-2.5">
+                <span className="text-muted-foreground">Fazenda:</span> <strong className="text-foreground">{fazendaNome}</strong>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-muted-foreground text-xs">Data</p>
+                <p className="font-bold text-foreground">
+                  {(() => { try { return format(parseISO(lancamento.data), 'dd/MM/yyyy', { locale: ptBR }); } catch { return lancamento.data; } })()}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs">Quantidade</p>
+                <p className="font-bold text-foreground">{lancamento.quantidade} cab.</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs">Categoria</p>
+                <p className="font-bold text-foreground">{catInfo?.label ?? lancamento.categoria}</p>
+              </div>
+              {lancamento.pesoMedioKg != null && lancamento.pesoMedioKg > 0 && (
+                <div>
+                  <p className="text-muted-foreground text-xs">Peso Vivo</p>
+                  <p className="font-bold text-foreground">{lancamento.pesoMedioKg} kg</p>
+                </div>
+              )}
+              {lancamento.fazendaOrigem && (
+                <div>
+                  <p className="text-muted-foreground text-xs">Origem</p>
+                  <p className="font-bold text-foreground">{lancamento.fazendaOrigem}</p>
+                </div>
+              )}
+              {lancamento.fazendaDestino && (
+                <div>
+                  <p className="text-muted-foreground text-xs">Destino</p>
+                  <p className="font-bold text-foreground">{lancamento.fazendaDestino}</p>
+                </div>
+              )}
+              {lancamento.notaFiscal && (
+                <div>
+                  <p className="text-muted-foreground text-xs">Nota Fiscal</p>
+                  <p className="font-bold text-foreground">{lancamento.notaFiscal}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Indicadores calculados */}
+            {indicadores.valorFinal > 0 && (
+              <>
+                <Separator />
+                <div className="bg-muted/30 rounded-lg p-3 space-y-1.5 text-sm">
+                  <div className="flex justify-between text-base font-bold">
+                    <span>Valor Total</span>
+                    <span className="text-primary">R$ {fmt(indicadores.valorFinal)}</span>
+                  </div>
+                  {indicadores.liqArroba > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">R$/líq @</span>
+                      <strong>R$ {fmt(indicadores.liqArroba)}</strong>
+                    </div>
+                  )}
+                  {indicadores.liqCabeca > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Líq/Cabeça</span>
+                      <strong>R$ {fmt(indicadores.liqCabeca)}</strong>
+                    </div>
+                  )}
+                  {isAbate && indicadores.rendimento > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Rendimento</span>
+                      <strong>{indicadores.rendimento.toFixed(1)}%</strong>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-2">
+              <LancamentoShareButtons
+                lancamento={lancamento}
+                fazendaNome={fazendaNome}
+              />
+              <Button variant="outline" className="flex-1 touch-target" onClick={() => setMode('edit')}>
+                <Pencil className="h-4 w-4 mr-1" /> Editar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // ===== EDIT MODE =====
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-base">
-            Editar {isAbate ? 'Abate' : lancamento.tipo === 'compra' ? 'Compra' : 'Venda'}
+          <DialogTitle className="text-base flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setMode('detail')}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            Editar {tipoInfo.label}
           </DialogTitle>
         </DialogHeader>
 
