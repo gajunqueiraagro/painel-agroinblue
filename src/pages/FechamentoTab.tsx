@@ -21,6 +21,7 @@ interface PastoResumo {
 interface Props {
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
+  onBackToConciliacao?: () => void;
 }
 
 export function FechamentoTab({ filtroAnoInicial, filtroMesInicial }: Props = {}) {
