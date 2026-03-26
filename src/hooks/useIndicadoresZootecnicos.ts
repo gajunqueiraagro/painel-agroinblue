@@ -277,6 +277,7 @@ export function useIndicadoresZootecnicos(
 ) {
   const [valorRebanhoData, setValorRebanhoData] = useState<{ total: number; fechado: boolean } | null>(null);
   const [valorRebanhoYoY, setValorRebanhoYoY] = useState<number | null>(null);
+  const [valorRebanhoMoM, setValorRebanhoMoM] = useState<number | null>(null);
   const [loadingValor, setLoadingValor] = useState(false);
   // Pesos oficiais do fechamento de pasto (código→peso)
   const [pesoFechamentoMap, setPesoFechamentoMap] = useState<Record<string, number>>({});
