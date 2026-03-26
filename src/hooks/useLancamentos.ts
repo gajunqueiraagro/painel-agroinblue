@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Lancamento, SaldoInicial, Categoria } from '@/types/cattle';
+import type { StatusOperacional } from '@/lib/statusOperacional';
 import { addToQueue, isOnline } from '@/lib/offlineQueue';
 import { toast } from 'sonner';
 
