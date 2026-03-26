@@ -108,7 +108,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [data, setData] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [fazendaOrigem, setFazendaOrigem] = useState('');
   const [fazendaDestino, setFazendaDestino] = useState('');
-  const [pesoKg, setPesoKg] = useState('');
+  const [pesoKg, setPesoKg] = useState(abaInicial === 'entrada' || !abaInicial ? '30' : '');
   const [observacao, setObservacao] = useState('');
   const [detalheId, setDetalheId] = useState<string | null>(null);
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
@@ -322,7 +322,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     });
 
     setQuantidade('');
-    setPesoKg('');
+    setPesoKg(tipo === 'nascimento' ? '30' : '');
     setFazendaOrigem('');
     setFazendaDestino('');
     resetFinancialFields();
@@ -431,7 +431,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             <div className="grid grid-cols-2 gap-2 mt-2">
               {tiposDisponiveis.map(t => (
                 <button key={t.value} type="button"
-                  onClick={() => { setTipo(t.value); setFazendaOrigem(''); setFazendaDestino(''); setMotivoMorte(''); setMotivoMorteCustom(''); resetFinancialFields(); }}
+                  onClick={() => { setTipo(t.value); setFazendaOrigem(''); setFazendaDestino(''); setMotivoMorte(''); setMotivoMorteCustom(''); resetFinancialFields(); setPesoKg(t.value === 'nascimento' ? '30' : ''); }}
                   className={`p-3 rounded-lg text-sm font-bold border-2 transition-all touch-target ${
                     tipo === t.value ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground'
                   }`}>
