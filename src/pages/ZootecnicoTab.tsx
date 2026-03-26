@@ -407,27 +407,27 @@ function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNu
         <>
           <ChartCard title="Rebanho Final do mês (cab)" subtitle="Quantidade de cabeças no final do mês" data={chartData}
             keys={[`cab_${anoNum}`, `cab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-            type="area" maxMonth={mesFiltro} />
+            type="area" />
           <ChartCard title="Lotação: Kg vivo por ha (Kg/ha)" subtitle="Quantidade de Kg sobre cada hectare produtivo, no final do mês" data={chartData}
             keys={[`kgHa_${anoNum}`, `kgHa_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-            type="line" maxMonth={mesFiltro} />
+            type="line" />
         </>
       ) : (
         <>
           <ChartCard title="@ Saídas por Mês" data={chartData}
             keys={[`arrSaida_${anoNum}`, `arrSaida_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-            type="bar" maxMonth={mesFiltro} />
+            type="bar" />
           {gmdData.length > 0 && (
             <>
               <ChartCard title="@ Produzidas (acumulado)" data={gmdData}
                 keys={[`arrProd_${anoNum}`, `arrProd_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="line" maxMonth={mesFiltro} />
+                type="line" />
               <ChartCard title="GMD Acumulado (kg/dia)" data={gmdData}
                 keys={[`gmd_${anoNum}`, `gmd_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="line" decimals={3} maxMonth={mesFiltro} />
+                type="line" decimals={3} />
               <ChartCard title="Desfrute Cab. Acumulado (%)" data={gmdData}
                 keys={[`desfCab_${anoNum}`, `desfCab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="line" decimals={1} maxMonth={mesFiltro} />
+                type="line" decimals={1} />
             </>
           )}
         </>
@@ -448,7 +448,7 @@ interface ChartCardProps {
   labels: string[];
   type: 'area' | 'line' | 'bar';
   decimals?: number;
-  maxMonth?: number;
+
 }
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--muted-foreground))'];
