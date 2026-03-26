@@ -156,16 +156,21 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
     return 'Mês em andamento — algumas pendências parciais.';
   }, [statusGeral, zootecnico.status.nivel, financeiro.status.nivel, fazendaNaoPecuaria]);
 
+  // Tabs bloqueadas no modo global
+  const BLOCKED_TABS_GLOBAL: TabId[] = ['fechamento', 'conciliacao_categoria', 'conciliacao', 'lancamentos', 'valor_rebanho'];
+
   // Alertas automáticos
   const alertas = useMemo(() => {
-    const items: { texto: string; nivel: StatusNivel; tab: TabId }[] = [];
+    const items: { texto: string; nivel: StatusNivel; tab: TabId; blockedGlobal: boolean }[] = [];
     if (fazendaNaoPecuaria) return items;
     statusZoo.pendencias.forEach(p => {
       if (p.status !== 'fechado') {
+        const destTab = (p.resolverTab || 'visao_zoo_hub') as TabId;
         items.push({
           texto: `${p.label}: ${p.descricao}`,
           nivel: p.status === 'aberto' ? 'aberto' : 'parcial',
-          tab: (p.resolverTab || 'visao_zoo_hub') as TabId,
+          tab: destTab,
+          blockedGlobal: BLOCKED_TABS_GLOBAL.includes(destTab),
         });
       }
     });
@@ -174,6 +179,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
         texto: `Financeiro: ${financeiro.status.descricao}`,
         nivel: financeiro.status.nivel,
         tab: 'fin_caixa',
+        blockedGlobal: false,
       });
     }
     return items;
@@ -326,17 +332,24 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
             <h2 className="text-sm font-extrabold text-destructive">Pendências do Mês</h2>
           </div>
           <div className="space-y-1.5">
-            {alertas.map((a, i) => (
-              <button
-                key={i}
-                onClick={() => onTabChange(a.tab, { ano: filtroGlobal.ano, mes: mesNum })}
-                className="w-full flex items-center gap-2 text-left text-sm hover:bg-destructive/10 rounded-md px-2 py-1.5 transition-colors"
-              >
-                <StatusDot nivel={a.nivel} />
-                <span className="flex-1 text-card-foreground">{a.texto}</span>
-                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-            ))}
+            {alertas.map((a, i) => {
+              const blocked = isGlobal && a.blockedGlobal;
+              return (
+                <button
+                  key={i}
+                  onClick={() => !blocked && onTabChange(a.tab, { ano: filtroGlobal.ano, mes: mesNum })}
+                  className={`w-full flex items-center gap-2 text-left text-sm rounded-md px-2 py-1.5 transition-colors ${blocked ? 'opacity-60 cursor-default' : 'hover:bg-destructive/10'}`}
+                >
+                  <StatusDot nivel={a.nivel} />
+                  <span className="flex-1 text-card-foreground">{a.texto}</span>
+                  {blocked ? (
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">Selecione uma fazenda</span>
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

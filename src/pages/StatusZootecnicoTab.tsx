@@ -13,7 +13,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { TabId } from '@/components/BottomNav';
 import { supabase } from '@/integrations/supabase/client';
 import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
-import { ChevronRight, CheckCircle2, Building2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, CheckCircle2, Building2 } from 'lucide-react';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
 interface Props {
@@ -77,7 +77,10 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
 
   const statusZoo = useStatusZootecnico(fazendaId, anoNum, mesFiltro, lancamentos, saldosIniciais);
 
+  const BLOCKED_TABS_GLOBAL: TabId[] = ['fechamento', 'conciliacao_categoria', 'conciliacao', 'lancamentos', 'valor_rebanho'];
+
   const navTo = (tab: TabId) => {
+    if (isGlobal && BLOCKED_TABS_GLOBAL.includes(tab)) return;
     onTabChange(tab, { ano: anoFiltro, mes: mesFiltro });
   };
 
@@ -337,6 +340,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
   useEffect(() => { loadYear(); }, [loadYear]);
 
   const handleCellClick = (rowId: keyof MonthStatus, mes: number) => {
+    if (isGlobal) return; // Global mode: view-only
     const row = ROWS.find(r => r.id === rowId);
     if (!row) return;
     onTabChange(row.tab, { ano: anoFiltro, mes });
@@ -417,13 +421,18 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
                         <p className="text-[10px] text-muted-foreground truncate">{p.descricao}</p>
                       </div>
                     </div>
-                    {p.status !== 'fechado' && p.resolverTab && (
+                    {p.status !== 'fechado' && p.resolverTab && !isGlobal && (
                       <button
                         onClick={() => navTo(p.resolverTab as TabId)}
                         className="text-[10px] font-bold text-primary whitespace-nowrap flex items-center gap-0.5 hover:underline"
                       >
                         Resolver <ChevronRight className="h-3 w-3" />
                       </button>
+                    )}
+                    {p.status !== 'fechado' && isGlobal && perFarmStatus.length > 0 && (
+                      <span className="text-[10px] font-bold text-muted-foreground whitespace-nowrap flex items-center gap-0.5">
+                        Verificar fazenda <ChevronDown className="h-3 w-3" />
+                      </span>
                     )}
                   </div>
 
