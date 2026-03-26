@@ -379,6 +379,7 @@ export function useIndicadoresZootecnicos(
       if (fids.length === 0) {
         setValorRebanhoData(null);
         setValorRebanhoYoY(null);
+        setValorRebanhoMoM(null);
         return;
       }
       setLoadingValor(true);
