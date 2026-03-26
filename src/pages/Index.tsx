@@ -49,7 +49,7 @@ const TITLES: Record<TabId, string> = {
   zootecnico: 'Status Zootécnico',
   zootecnico_hub: 'Zootécnico',
   lancar_zoo_hub: 'Lançar Zootécnico',
-  visao_zoo_hub: 'Visão Zootécnico',
+  visao_zoo_hub: 'Indicadores',
   lancar_fin_hub: 'Lançar Financeiro',
   visao_fin_hub: 'Visão Financeiro',
   movimentacao: 'Fluxo Mensal',
@@ -189,7 +189,7 @@ const Index = () => {
         <LancarZooHubTab onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
       )}
       {activeTab === 'visao_zoo_hub' && (
-        <VisaoZooHubTab onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
+        <VisaoZooHubTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
       )}
       {activeTab === 'lancar_fin_hub' && (
         <LancarFinHubTab onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
@@ -200,7 +200,7 @@ const Index = () => {
 
       {/* Legacy hub kept for internal routing */}
       {activeTab === 'zootecnico_hub' && (
-        <VisaoZooHubTab onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
+        <VisaoZooHubTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
       )}
 
       {activeTab === 'zootecnico' && (
