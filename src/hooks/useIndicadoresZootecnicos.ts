@@ -369,6 +369,7 @@ export function useIndicadoresZootecnicos(
     if (!fazendaId) {
       setValorRebanhoData(null);
       setValorRebanhoYoY(null);
+      setValorRebanhoMoM(null);
       return;
     }
 
