@@ -387,7 +387,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       ) : subAba === 'abate' ? (
         <AbateTable lancamentos={filtrados} onEdit={setEditando} />
       ) : (
-        <UnifiedTable lancamentos={filtrados} onEdit={setEditando} />
+        <UnifiedTable lancamentos={filtrados} onEdit={setEditando} subTipo={subAba} />
       )}
 
       {/* Edit dialog */}
