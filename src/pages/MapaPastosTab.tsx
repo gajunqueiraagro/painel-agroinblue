@@ -6,8 +6,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Download, FileText } from 'lucide-react';
+import { Download, FileText, Upload, FileDown } from 'lucide-react';
 import { format } from 'date-fns';
+import { gerarModeloMapaPastos } from '@/lib/importMapaPastos';
+import { ImportMapaPastos } from '@/components/ImportMapaPastos';
 import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
 import { exportMapaPastosXlsx } from '@/lib/exportMapaPastos';
 import { exportMapaPastosPdf } from '@/lib/exportMapaPastosPdf';
@@ -53,6 +55,7 @@ export function MapaPastosTab() {
   const [anoMes, setAnoMes] = useState(format(new Date(), 'yyyy-MM'));
   const [rows, setRows] = useState<PastoMapaRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => { loadFechamentos(anoMes); }, [anoMes, loadFechamentos]);
 
@@ -199,7 +202,21 @@ export function MapaPastosTab() {
               <Badge variant="outline" className="text-sm">{formatNum(totais.uaHaGeral, 2)} UA/ha</Badge>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => gerarModeloMapaPastos(pastos, categorias, fazendaAtual?.nome || 'Fazenda')}
+            >
+              <FileDown className="h-4 w-4 mr-1" />Baixar modelo
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setImportOpen(true)}
+            >
+              <Upload className="h-4 w-4 mr-1" />Importar Excel
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -357,6 +374,16 @@ export function MapaPastosTab() {
           </>
         )}
       </div>
+
+      <ImportMapaPastos
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        pastos={pastos}
+        categorias={categorias}
+        fazendaId={fazendaAtual?.id || ''}
+        anoMes={anoMes}
+        onImported={() => loadFechamentos(anoMes)}
+      />
     </TooltipProvider>
   );
 }
