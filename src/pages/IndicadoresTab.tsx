@@ -69,6 +69,8 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
     alertas.push('Valor do rebanho em aberto — feche o mês para oficializar');
   const alertasVisiveis = alertas.slice(0, 3);
 
+  const c = ind.comparacoes;
+
   return (
     <div className="p-4 max-w-lg mx-auto animate-fade-in pb-20 space-y-4">
       {/* Seletores */}
@@ -91,16 +93,17 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
         </Select>
       </div>
 
-      {/* BLOCO 1 — Estoque */}
+      {/* BLOCO 1 — Indicadores Zootécnicos */}
       <Card>
         <CardContent className="p-4 space-y-3">
-          <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Estoque</h3>
+          <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Indicadores Zootécnicos</h3>
           <div className="grid grid-cols-3 gap-3">
             <KpiCard
               label="Cabeças"
               valor={formatNum(ind.saldoFinalMes)}
               unidade="cab"
-              comparacao={ind.comparacoes.saldoFinalMes}
+              compMensal={c.saldoFinalMes.mensal}
+              compAnual={c.saldoFinalMes.anual}
             />
             <KpiCard
               label="Peso Total"
@@ -113,7 +116,8 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               valor={ind.pesoMedioRebanhoKg !== null ? formatNum(ind.pesoMedioRebanhoKg, 1) : '—'}
               unidade="kg"
               estimado={ind.qualidade.pesoMedioEstimado}
-              comparacao={ind.comparacoes.pesoMedioRebanhoKg}
+              compMensal={c.pesoMedioRebanhoKg.mensal}
+              compAnual={c.pesoMedioRebanhoKg.anual}
               semBase={ind.pesoMedioRebanhoKg === null}
             />
           </div>
@@ -121,13 +125,16 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
             <KpiCard
               label="Valor Rebanho"
               valor={ind.valorRebanho !== null ? formatMoedaCompacto(ind.valorRebanho) : '—'}
-              comparacao={ind.comparacoes.valorRebanho}
+              compMensal={c.valorRebanho.mensal}
+              compAnual={c.valorRebanho.anual}
               semBase={ind.valorRebanho === null}
             />
             <KpiCard
               label="R$/cab"
               valor={ind.valorPorCabeca !== null ? formatMoeda(ind.valorPorCabeca) : '—'}
               small
+              compMensal={c.valorPorCabeca.mensal}
+              compAnual={c.valorPorCabeca.anual}
               semBase={ind.valorPorCabeca === null}
             />
             <div className="flex flex-col justify-end">
@@ -153,13 +160,15 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               estimado={ind.qualidade.areaProdutivaEstimativa} />
             <KpiCard label="UA Total" valor={formatNum(ind.uaTotal, 1)} unidade="UA" />
             <KpiCard label="UA/ha" valor={ind.uaHa !== null ? formatNum(ind.uaHa, 2) : '—'}
-              comparacao={ind.comparacoes.uaHa} semBase={ind.uaHa === null} />
+              compMensal={c.uaHa.mensal} compAnual={c.uaHa.anual}
+              semBase={ind.uaHa === null} />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <KpiCard
               label="UA/ha méd. ano"
               valor={ind.uaHaMediaAno !== null ? formatNum(ind.uaHaMediaAno, 2) : '—'}
-              comparacao={ind.comparacoes.uaHaMediaAno}
+              compMensal={c.uaHaMediaAno.mensal}
+              compAnual={c.uaHaMediaAno.anual}
               semBase={ind.uaHaMediaAno === null}
             />
           </div>
@@ -181,13 +190,13 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               label="@ prod. acum."
               valor={ind.arrobasProduzidasAcumulado !== null ? formatNum(ind.arrobasProduzidasAcumulado, 1) : '—'}
               unidade="@"
-              comparacao={ind.comparacoes.arrobasProduzidasAcumulado}
+              compAnual={c.arrobasProduzidasAcumulado.anual}
               semBase={ind.arrobasProduzidasAcumulado === null}
             />
             <KpiCard
               label="@/ha acum."
               valor={ind.arrobasHaAcumuladoAno !== null ? formatNum(ind.arrobasHaAcumuladoAno, 2) : '—'}
-              comparacao={ind.comparacoes.arrobasHaAcumuladoAno}
+              compAnual={c.arrobasHaAcumuladoAno.anual}
               semBase={ind.arrobasHaAcumuladoAno === null}
             />
           </div>
@@ -205,13 +214,14 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
                   label="GMD mês"
                   valor={ind.gmdMes !== null ? formatNum(ind.gmdMes, 3) : '—'}
                   unidade="kg/dia"
-                  comparacao={ind.comparacoes.gmdMes}
+                  compMensal={c.gmdMes.mensal}
+                  compAnual={c.gmdMes.anual}
                 />
                 <KpiCard
                   label="GMD acumulado"
                   valor={ind.gmdAcumulado !== null ? formatNum(ind.gmdAcumulado, 3) : '—'}
                   unidade="kg/dia"
-                  comparacao={ind.comparacoes.gmdAcumulado}
+                  compAnual={c.gmdAcumulado.anual}
                 />
               </div>
               <GmdDetalheSheet abertura={ind.gmdAberturaMes} mesLabel={mesLabel} anoLabel={anoFiltro} />
@@ -236,21 +246,21 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               label="Desfrute cab."
               valor={ind.desfruteCabecasAcumulado !== null ? formatNum(ind.desfruteCabecasAcumulado, 1) : '—'}
               unidade="%"
-              comparacao={ind.comparacoes.desfruteCabecasAcumulado}
+              compAnual={c.desfruteCabecasAcumulado.anual}
               semBase={ind.desfruteCabecasAcumulado === null}
             />
             <KpiCard
               label="Desfrute @"
               valor={ind.desfruteArrobasAcumulado !== null ? formatNum(ind.desfruteArrobasAcumulado, 1) : '—'}
               unidade="%"
-              comparacao={ind.comparacoes.desfruteArrobasAcumulado}
+              compAnual={c.desfruteArrobasAcumulado.anual}
               semBase={ind.desfruteArrobasAcumulado === null}
             />
             <KpiCard
               label="@ desfrutadas"
               valor={formatNum(ind.arrobasSaidasAcumuladoAno, 1)}
               unidade="@"
-              comparacao={ind.comparacoes.arrobasDesfrutadasAcum}
+              compAnual={c.arrobasDesfrutadasAcum.anual}
             />
           </div>
         </CardContent>
