@@ -57,8 +57,15 @@ const GROUPS: { title: string; emoji: string; items: GroupItem[] }[] = [
   },
 ];
 
-export function ZootecnicoHubTab({ onTabChange }: Props) {
+export function ZootecnicoHubTab({ onTabChange, filtroGlobal }: Props) {
   const { fazendaAtual } = useFazenda();
+  const navTo = (tab: TabId) => {
+    if (filtroGlobal) {
+      onTabChange(tab, filtroGlobal);
+    } else {
+      onTabChange(tab);
+    }
+  };
 
   return (
     <div className="max-w-lg mx-auto animate-fade-in pb-20">
