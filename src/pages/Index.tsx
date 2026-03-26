@@ -111,9 +111,7 @@ const Index = () => {
   const BLOCKED_TABS_GLOBAL: TabId[] = ['fechamento', 'conciliacao_categoria', 'conciliacao', 'lancamentos'];
 
   const handleTabChange = useCallback((tab: TabId, filtro?: { ano: string; mes: number }) => {
-    // Safety guard: block operational tabs when Global
     if (isGlobal && BLOCKED_TABS_GLOBAL.includes(tab)) {
-      const { toast } = require('sonner');
       toast.info('Selecione uma fazenda para acessar esta funcionalidade');
       return;
     }
