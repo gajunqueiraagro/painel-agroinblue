@@ -546,9 +546,34 @@ export function useIndicadoresZootecnicos(
       } else {
         setValorRebanhoYoY(null);
       }
+
+      // MoM value (previous month)
+      let mesAntAnoN = ano;
+      let mesAntMesN = mes - 1;
+      if (mesAntMesN < 1) { mesAntMesN = 12; mesAntAnoN--; }
+      const anoMesMoMN = `${mesAntAnoN}-${String(mesAntMesN).padStart(2, '0')}`;
+      const precosMoMRes = await supabase
+        .from('valor_rebanho_mensal')
+        .select('categoria, preco_kg')
+        .eq('fazenda_id', fazendaId)
+        .eq('ano_mes', anoMesMoMN);
+      if (precosMoMRes.data && precosMoMRes.data.length > 0) {
+        const saldoMapMoM = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, mesAntAnoN, mesAntMesN);
+        const precoMapMoM = new Map(precosMoMRes.data.map(p => [p.categoria, Number(p.preco_kg)]));
+        let totalMoM = 0;
+        saldoMapMoM.forEach((qtd, cat) => {
+          const preco = precoMapMoM.get(cat) || 0;
+          const pesoKg = getPesoMedioCatComPastos(cat, pesoFechamentoMesAntMap, saldosIniciais, lancamentos, mesAntAnoN, mesAntMesN);
+          totalMoM += qtd * (pesoKg || 0) * preco;
+        });
+        setValorRebanhoMoM(totalMoM > 0 ? totalMoM : null);
+      } else {
+        setValorRebanhoMoM(null);
+      }
     } catch {
       setValorRebanhoData(null);
       setValorRebanhoYoY(null);
+      setValorRebanhoMoM(null);
     } finally {
       setLoadingValor(false);
     }
