@@ -12,7 +12,7 @@ const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
   { id: 'resumo', label: 'Resumo', icon: BarChart3 },
   { id: 'lancar_zoo_hub', label: 'Lançar Zoo', icon: PenSquare },
   { id: 'visao_zoo_hub', label: 'Visão Zoo', icon: Eye },
-  { id: 'lancar_fin_hub', label: 'Lançar Fin', icon: DollarSign },
+  { id: 'lancar_fin_hub', label: 'Visão Op.', icon: DollarSign },
   { id: 'visao_fin_hub', label: 'Visão Fin', icon: TrendingUp },
   { id: 'cadastros', label: 'Cadastros', icon: ClipboardList },
 ];
