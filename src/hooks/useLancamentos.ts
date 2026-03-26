@@ -321,6 +321,7 @@ export function useLancamentos() {
     if (dados.valorTotal !== undefined) update.valor_total = dados.valorTotal;
     if (dados.notaFiscal !== undefined) update.nota_fiscal = dados.notaFiscal;
     if (dados.tipoPeso !== undefined) update.tipo_peso = dados.tipoPeso;
+    if (dados.statusOperacional !== undefined) update.status_operacional = dados.statusOperacional;
 
     const { error } = await supabase.from('lancamentos').update(update).eq('id', id);
     if (!error) {
