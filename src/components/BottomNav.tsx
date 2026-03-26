@@ -18,7 +18,7 @@ const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   // Highlight the parent tab for sub-screens
   const getActiveId = (tab: TabId): TabId => {
-    const zooTabs: TabId[] = ['zootecnico', 'zootecnico_hub', 'lancamentos', 'fluxo_anual', 'chuvas', 'conciliacao', 'conciliacao_categoria', 'valor_rebanho', 'fechamento', 'mapa_pastos', 'resumo_pastos', 'analise_operacional', 'evolucao', 'evolucao_categoria', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute', 'movimentacao', 'pastos'];
+    const zooTabs: TabId[] = ['zootecnico', 'zootecnico_hub', 'lancamentos', 'fluxo_anual', 'chuvas', 'conciliacao', 'conciliacao_categoria', 'valor_rebanho', 'fechamento', 'mapa_pastos', 'resumo_pastos', 'analise_operacional', 'evolucao', 'evolucao_categoria', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute', 'movimentacao', 'pastos', 'visao_anual_zoo'];
     const finTabs: TabId[] = ['fin_caixa', 'financeiro', 'analise_economica'];
     const cadTabs: TabId[] = ['cadastros', 'acessos'];
     if (zooTabs.includes(tab)) return 'zootecnico_hub';

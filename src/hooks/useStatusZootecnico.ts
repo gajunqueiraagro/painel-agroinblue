@@ -83,9 +83,9 @@ export function useStatusZootecnico(
           // No pecuária farms — everything is "fechado"
           setPastosAtivos(0);
           setPastosFechados(0);
-          setRebanhoFechamentos({ total: 0, fechados: 0 });
+          setPastosRascunho(0);
+          setPastosNaoIniciados(0);
           setItensTotais(0);
-          setItensComPeso(0);
           setPrecosDefinidos(0);
           setCategoriasComSaldo(0);
           setCatsDivergentes(0);
