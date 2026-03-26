@@ -81,7 +81,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo }: { lancamentos: Lancamen
                 <td className="p-1.5 text-right">{fmtValor(c.liqCabeca)}</td>
                 <td className="p-1.5">
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(l)}>
-                    <Pencil className="h-3 w-3" />
+                    <Info className="h-3 w-3" />
                   </Button>
                 </td>
               </tr>
