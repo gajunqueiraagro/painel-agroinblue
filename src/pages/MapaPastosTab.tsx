@@ -6,8 +6,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Download, FileText } from 'lucide-react';
+import { Download, FileText, Upload, FileDown } from 'lucide-react';
 import { format } from 'date-fns';
+import { gerarModeloMapaPastos } from '@/lib/importMapaPastos';
+import { ImportMapaPastos } from '@/components/ImportMapaPastos';
 import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
 import { exportMapaPastosXlsx } from '@/lib/exportMapaPastos';
 import { exportMapaPastosPdf } from '@/lib/exportMapaPastosPdf';
