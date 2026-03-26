@@ -126,7 +126,7 @@ function gerarSugestoes(rows: RowData[], catMap: Map<string, string>): Sugestao[
   return sugestoes;
 }
 
-export function ConciliacaoCategoriaTab({ lancamentos, saldosIniciais, onBack, onNavigateToReclass, filtroAnoInicial, filtroMesInicial }: Props) {
+export function ConciliacaoCategoriaTab({ lancamentos, saldosIniciais, onBack, onNavigateToReclass, onNavigateToFechamento, filtroAnoInicial, filtroMesInicial }: Props) {
   const { fazendaAtual, isGlobal } = useFazenda();
   const { categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
