@@ -200,7 +200,7 @@ const Index = () => {
 
       {/* Legacy hub kept for internal routing */}
       {activeTab === 'zootecnico_hub' && (
-        <VisaoZooHubTab onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
+        <VisaoZooHubTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
       )}
 
       {activeTab === 'zootecnico' && (
