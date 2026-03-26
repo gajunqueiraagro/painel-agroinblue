@@ -340,6 +340,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
   useEffect(() => { loadYear(); }, [loadYear]);
 
   const handleCellClick = (rowId: keyof MonthStatus, mes: number) => {
+    if (isGlobal) return; // Global mode: view-only
     const row = ROWS.find(r => r.id === rowId);
     if (!row) return;
     onTabChange(row.tab, { ano: anoFiltro, mes });
