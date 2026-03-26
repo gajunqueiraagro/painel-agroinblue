@@ -384,15 +384,23 @@ export function useIndicadoresZootecnicos(
       setLoadingValor(true);
       try {
         const anoMesYoY = `${ano - 1}-${String(mes).padStart(2, '0')}`;
-        const [precosRes, fechRes, precosYoYRes] = await Promise.all([
+        const [precosRes, fechRes, precosYoYRes, saldosDbRes] = await Promise.all([
           supabase.from('valor_rebanho_mensal').select('fazenda_id, categoria, preco_kg').in('fazenda_id', fids).eq('ano_mes', anoMes),
           supabase.from('valor_rebanho_fechamento').select('fazenda_id, status').in('fazenda_id', fids).eq('ano_mes', anoMes),
           supabase.from('valor_rebanho_mensal').select('fazenda_id, categoria, preco_kg').in('fazenda_id', fids).eq('ano_mes', anoMesYoY),
+          supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade, peso_medio_kg').in('fazenda_id', fids),
         ]);
+
+        // Build per-fazenda saldos iniciais
+        const saldosByFaz = new Map<string, SaldoInicial[]>();
+        saldosDbRes.data?.forEach((s: any) => {
+          const arr = saldosByFaz.get(s.fazenda_id) || [];
+          arr.push({ ano: s.ano, categoria: s.categoria, quantidade: s.quantidade, pesoMedioKg: s.peso_medio_kg ?? undefined });
+          saldosByFaz.set(s.fazenda_id, arr);
+        });
 
         // Current month — sum per fazenda
         if (precosRes.data && precosRes.data.length > 0) {
-          // Group precos by fazenda
           const precosByFaz = new Map<string, Map<string, number>>();
           precosRes.data.forEach(p => {
             if (!precosByFaz.has(p.fazenda_id)) precosByFaz.set(p.fazenda_id, new Map());
@@ -404,7 +412,7 @@ export function useIndicadoresZootecnicos(
             const precoMap = precosByFaz.get(fid);
             if (!precoMap || precoMap.size === 0) continue;
             const lancsFaz = lancamentos.filter(l => l.fazendaId === fid);
-            const saldosFaz = saldosIniciais.filter(s => (s as any).fazendaId === fid);
+            const saldosFaz = saldosByFaz.get(fid) || [];
             const saldoMap = calcSaldoPorCategoriaLegado(saldosFaz, lancsFaz, ano, mes);
             saldoMap.forEach((qtd, cat) => {
               const preco = precoMap.get(cat) || 0;
@@ -431,7 +439,7 @@ export function useIndicadoresZootecnicos(
             const precoMap = precosByFazYoY.get(fid);
             if (!precoMap || precoMap.size === 0) continue;
             const lancsFaz = lancamentos.filter(l => l.fazendaId === fid);
-            const saldosFaz = saldosIniciais.filter(s => (s as any).fazendaId === fid);
+            const saldosFaz = saldosByFaz.get(fid) || [];
             const saldoMap = calcSaldoPorCategoriaLegado(saldosFaz, lancsFaz, ano - 1, mes);
             saldoMap.forEach((qtd, cat) => {
               const preco = precoMap.get(cat) || 0;
