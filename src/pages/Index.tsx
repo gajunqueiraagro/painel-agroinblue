@@ -12,6 +12,7 @@ import { VisaoFinHubTab } from './VisaoFinHubTab';
 import { MovimentacaoTab } from './MovimentacaoTab';
 import { LancamentosTab } from './LancamentosTab';
 import { FluxoAnualTab } from './FluxoAnualTab';
+import { EvolucaoRebanhoHubTab } from './EvolucaoRebanhoHubTab';
 import { FinanceiroTab, type SubAba } from './FinanceiroTab';
 import { FinanceiroCaixaTab } from './FinanceiroCaixaTab';
 import { AnaliseEconomicaTab } from './AnaliseEconomicaTab';
@@ -76,6 +77,7 @@ const TITLES: Record<TabId, string> = {
   resumo_pastos: 'Resumo de Pastos',
   visao_anual_zoo: 'Visão Anual Zootécnica',
   indicadores: 'Indicadores',
+  evolucao_rebanho_hub: 'Evolução Rebanho',
 };
 
 const Index = () => {
@@ -152,6 +154,7 @@ const Index = () => {
     analise_economica: goToVisaoFinHub,
     fin_caixa: goToLancarFinHub,
     fechamento: goToZootecnico,
+    evolucao_rebanho_hub: goToLancarZooHub,
   };
 
   const fazendaNome = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || '');
@@ -233,6 +236,15 @@ const Index = () => {
         />
       )}
       {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} />}
+      {activeTab === 'evolucao_rebanho_hub' && (
+        <EvolucaoRebanhoHubTab
+          lancamentos={lancamentosVisiveis}
+          saldosIniciais={saldosIniciais}
+          onNavigateToMovimentacao={navigateToMovimentacao}
+          filtroAnoInicial={filtroGlobal.ano}
+          filtroMesInicial={filtroGlobal.mes}
+        />
+      )}
       {activeTab === 'financeiro' && <FinanceiroTab lancamentos={lancamentosVisiveis} onEditar={isGlobal ? async () => {} : editarLancamento} onRemover={isGlobal ? async () => {} : removerLancamento} subAbaInicial={subAbaFinanceiro} />}
       {activeTab === 'acessos' && <AcessosTab />}
       {activeTab === 'analise' && <AnaliseTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} isGlobal={isGlobal} />}

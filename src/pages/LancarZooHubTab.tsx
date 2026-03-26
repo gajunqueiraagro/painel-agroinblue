@@ -45,10 +45,7 @@ const ACOES_PRINCIPAIS = [
 ];
 
 const EVOLUCAO_REBANHO: GroupItem[] = [
-  { label: 'Movimentações', tab: 'movimentacao', icon: ArrowLeftRight, description: 'Detalhamento por tipo de operação' },
-  { label: 'Evolução do Rebanho', tab: 'fluxo_anual', icon: TrendingUp, description: 'Fluxo mensal e categorias' },
-  { label: 'Evolução por Categoria', tab: 'evolucao_categoria', icon: Layers, description: 'Histórico por categoria' },
-  { label: 'Valor do Rebanho', tab: 'valor_rebanho', icon: DollarSign, description: 'Valorização mensal do estoque' },
+  { label: 'Evolução do Rebanho', tab: 'evolucao_rebanho_hub', icon: TrendingUp, description: 'Movimentações, evolução, valor e categorias' },
 ];
 
 const EVOLUCAO_PASTOS: GroupItem[] = [

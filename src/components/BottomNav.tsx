@@ -1,7 +1,7 @@
 import { BarChart3, PenSquare, Eye, DollarSign, TrendingUp, ClipboardList } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'financeiro' | 'evolucao' | 'evolucao_categoria' | 'fluxo_anual' | 'acessos' | 'analise' | 'analise_entradas' | 'analise_saidas' | 'desfrute' | 'cadastros' | 'chuvas' | 'pastos' | 'conciliacao' | 'fin_caixa' | 'zootecnico' | 'zootecnico_hub' | 'analise_economica' | 'valor_rebanho' | 'conciliacao_categoria' | 'analise_operacional' | 'resumo_pastos' | 'mapa_pastos' | 'fechamento' | 'visao_anual_zoo' | 'lancar_zoo_hub' | 'visao_zoo_hub' | 'lancar_fin_hub' | 'visao_fin_hub' | 'indicadores';
+export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'financeiro' | 'evolucao' | 'evolucao_categoria' | 'fluxo_anual' | 'acessos' | 'analise' | 'analise_entradas' | 'analise_saidas' | 'desfrute' | 'cadastros' | 'chuvas' | 'pastos' | 'conciliacao' | 'fin_caixa' | 'zootecnico' | 'zootecnico_hub' | 'analise_economica' | 'valor_rebanho' | 'conciliacao_categoria' | 'analise_operacional' | 'resumo_pastos' | 'mapa_pastos' | 'fechamento' | 'visao_anual_zoo' | 'lancar_zoo_hub' | 'visao_zoo_hub' | 'lancar_fin_hub' | 'visao_fin_hub' | 'indicadores' | 'evolucao_rebanho_hub';
 
 interface BottomNavProps {
   activeTab: TabId;
@@ -20,7 +20,7 @@ const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const getActiveId = (tab: TabId): TabId => {
     // Lançar Zoo sub-screens
-    const lancarZooTabs: TabId[] = ['lancar_zoo_hub', 'lancamentos', 'movimentacao', 'fluxo_anual', 'fechamento', 'chuvas', 'financeiro', 'evolucao_categoria', 'valor_rebanho', 'mapa_pastos', 'resumo_pastos', 'conciliacao', 'conciliacao_categoria'];
+    const lancarZooTabs: TabId[] = ['lancar_zoo_hub', 'lancamentos', 'movimentacao', 'fluxo_anual', 'fechamento', 'chuvas', 'financeiro', 'evolucao_categoria', 'valor_rebanho', 'mapa_pastos', 'resumo_pastos', 'conciliacao', 'conciliacao_categoria', 'evolucao_rebanho_hub'];
     // Visão Zoo sub-screens
     const visaoZooTabs: TabId[] = ['visao_zoo_hub', 'zootecnico', 'zootecnico_hub', 'indicadores', 'visao_anual_zoo', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute', 'evolucao', 'analise_operacional', 'pastos'];
     // Lançar Fin sub-screens
