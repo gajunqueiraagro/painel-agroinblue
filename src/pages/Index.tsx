@@ -100,6 +100,7 @@ const Index = () => {
     }
     if (tab !== 'financeiro') setSubAbaFinanceiro(undefined);
     if (tab !== 'lancamentos') setLancamentosFromConciliacao(false);
+    if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
     setActiveTab(tab);
   }, []);
 
