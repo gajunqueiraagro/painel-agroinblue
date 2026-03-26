@@ -19,9 +19,7 @@ interface GroupItem {
   description: string;
 }
 
-const ITEMS: GroupItem[] = [
-  { label: 'Financeiro', tab: 'fin_caixa', icon: DollarSign, description: 'Dashboard, fluxo de caixa e importação' },
-];
+const ITEMS: GroupItem[] = [];
 
 export function LancarFinHubTab({ onTabChange, filtroGlobal }: Props) {
   const navTo = (tab: TabId) => {

@@ -4,7 +4,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { TabId } from '@/components/BottomNav';
 import {
-  TrendingUp, ChevronRight,
+  TrendingUp, DollarSign, ChevronRight,
 } from 'lucide-react';
 
 interface Props {
@@ -20,6 +20,7 @@ interface GroupItem {
 }
 
 const ITEMS: GroupItem[] = [
+  { label: 'Financeiro', tab: 'fin_caixa', icon: DollarSign, description: 'Dashboard, fluxo de caixa e importação' },
   { label: 'Análise Econômica', tab: 'analise_economica', icon: TrendingUp, description: 'DRE, resultado e indicadores financeiros' },
 ];
 
