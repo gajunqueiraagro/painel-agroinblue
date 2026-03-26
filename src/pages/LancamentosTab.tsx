@@ -108,7 +108,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [data, setData] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [fazendaOrigem, setFazendaOrigem] = useState('');
   const [fazendaDestino, setFazendaDestino] = useState('');
-  const [pesoKg, setPesoKg] = useState('');
+  const [pesoKg, setPesoKg] = useState(abaInicial === 'entrada' || !abaInicial ? '30' : '');
   const [observacao, setObservacao] = useState('');
   const [detalheId, setDetalheId] = useState<string | null>(null);
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
