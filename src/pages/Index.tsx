@@ -3,7 +3,10 @@ import { BottomNav, TabId } from '@/components/BottomNav';
 import { Header } from '@/components/Header';
 import { ResumoTab } from './ResumoTab';
 import { ZootecnicoTab } from './ZootecnicoTab';
-import { ZootecnicoHubTab } from './ZootecnicoHubTab';
+import { LancarZooHubTab } from './LancarZooHubTab';
+import { VisaoZooHubTab } from './VisaoZooHubTab';
+import { LancarFinHubTab } from './LancarFinHubTab';
+import { VisaoFinHubTab } from './VisaoFinHubTab';
 import { MovimentacaoTab } from './MovimentacaoTab';
 import { LancamentosTab } from './LancamentosTab';
 import { FluxoAnualTab } from './FluxoAnualTab';
@@ -42,6 +45,10 @@ const TITLES: Record<TabId, string> = {
   resumo: 'Controle de Rebanho',
   zootecnico: 'Painel Zootécnico',
   zootecnico_hub: 'Zootécnico',
+  lancar_zoo_hub: 'Lançar Zootécnico',
+  visao_zoo_hub: 'Visão Zootécnico',
+  lancar_fin_hub: 'Lançar Financeiro',
+  visao_fin_hub: 'Visão Financeiro',
   movimentacao: 'Fluxo Mensal',
   lancamentos: 'Lançar Rebanho',
   financeiro: 'Movimentações',
@@ -72,6 +79,7 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState<TabId>('resumo');
   const [subAbaFinanceiro, setSubAbaFinanceiro] = useState<SubAba | undefined>(undefined);
   const [lancamentosFromConciliacao, setLancamentosFromConciliacao] = useState(false);
+  const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
   const { user } = useAuth();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial, loadData } = useLancamentos();
@@ -107,7 +115,10 @@ const Index = () => {
   }, []);
 
   const goToResumo = useCallback(() => setActiveTab('resumo'), []);
-  const goToZootecnicoHub = useCallback(() => setActiveTab('zootecnico_hub'), []);
+  const goToLancarZooHub = useCallback(() => setActiveTab('lancar_zoo_hub'), []);
+  const goToVisaoZooHub = useCallback(() => setActiveTab('visao_zoo_hub'), []);
+  const goToLancarFinHub = useCallback(() => setActiveTab('lancar_fin_hub'), []);
+  const goToVisaoFinHub = useCallback(() => setActiveTab('visao_fin_hub'), []);
   const goToZootecnico = useCallback(() => setActiveTab('zootecnico'), []);
   const goToConciliacaoCategoria = useCallback(() => setActiveTab('conciliacao_categoria'), []);
   const goToReclassFromConciliacao = useCallback((filtro?: { ano: string; mes: number }) => {
@@ -115,7 +126,6 @@ const Index = () => {
     setLancamentosFromConciliacao(true);
     setActiveTab('lancamentos');
   }, []);
-  const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
   const goToFechamentoFromConciliacao = useCallback((filtro?: { ano: string; mes: number }) => {
     if (filtro) setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
     setFechamentoFromConciliacao(true);
@@ -124,12 +134,12 @@ const Index = () => {
 
   // Sub-screens that need a back button
   const subScreenBackMap: Partial<Record<TabId, () => void>> = {
-    zootecnico: goToZootecnicoHub,
-    analise_economica: goToResumo,
-    fin_caixa: goToResumo,
+    zootecnico: goToVisaoZooHub,
     valor_rebanho: goToZootecnico,
-    conciliacao_categoria: goToZootecnico,
-    visao_anual_zoo: goToZootecnicoHub,
+    conciliacao_categoria: goToVisaoZooHub,
+    visao_anual_zoo: goToVisaoZooHub,
+    analise_economica: goToVisaoFinHub,
+    fin_caixa: goToLancarFinHub,
   };
 
   const fazendaNome = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || '');
@@ -160,14 +170,31 @@ const Index = () => {
           onFiltroChange={handleFiltroChange}
         />
       )}
-      {activeTab === 'zootecnico_hub' && (
-        <ZootecnicoHubTab onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
+
+      {/* Hubs */}
+      {activeTab === 'lancar_zoo_hub' && (
+        <LancarZooHubTab onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
       )}
+      {activeTab === 'visao_zoo_hub' && (
+        <VisaoZooHubTab onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
+      )}
+      {activeTab === 'lancar_fin_hub' && (
+        <LancarFinHubTab onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
+      )}
+      {activeTab === 'visao_fin_hub' && (
+        <VisaoFinHubTab onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
+      )}
+
+      {/* Legacy hub kept for internal routing */}
+      {activeTab === 'zootecnico_hub' && (
+        <VisaoZooHubTab onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
+      )}
+
       {activeTab === 'zootecnico' && (
         <ZootecnicoTab
           lancamentos={lancamentosVisiveis}
           saldosIniciais={saldosIniciais}
-          onBack={goToZootecnicoHub}
+          onBack={goToVisaoZooHub}
           onTabChange={handleTabChange}
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
@@ -208,7 +235,7 @@ const Index = () => {
         <VisaoAnualZootecnicaTab
           lancamentos={lancamentosVisiveis}
           saldosIniciais={saldosIniciais}
-          onBack={goToZootecnicoHub}
+          onBack={goToVisaoZooHub}
           onTabChange={handleTabChange}
           filtroAnoInicial={filtroGlobal.ano}
         />
@@ -227,7 +254,7 @@ const Index = () => {
         <ConciliacaoCategoriaTab
           lancamentos={lancamentosVisiveis}
           saldosIniciais={saldosIniciais}
-          onBack={goToZootecnico}
+          onBack={goToVisaoZooHub}
           onNavigateToReclass={goToReclassFromConciliacao}
           onNavigateToFechamento={goToFechamentoFromConciliacao}
           filtroMesInicial={filtroGlobal.mes}
@@ -237,7 +264,7 @@ const Index = () => {
         <FinanceiroCaixaTab
           lancamentosPecuarios={lancamentos}
           saldosIniciais={saldosIniciais}
-          onBack={goToResumo}
+          onBack={goToLancarFinHub}
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
         />
@@ -246,7 +273,7 @@ const Index = () => {
         <AnaliseEconomicaTab
           lancamentosPecuarios={lancamentos}
           saldosIniciais={saldosIniciais}
-          onBack={goToResumo}
+          onBack={goToVisaoFinHub}
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
         />

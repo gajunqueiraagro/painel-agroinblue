@@ -1,7 +1,7 @@
-import { BarChart3, Beef, DollarSign, ClipboardList } from 'lucide-react';
+import { BarChart3, PenSquare, Eye, DollarSign, TrendingUp, ClipboardList } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'financeiro' | 'evolucao' | 'evolucao_categoria' | 'fluxo_anual' | 'acessos' | 'analise' | 'analise_entradas' | 'analise_saidas' | 'desfrute' | 'cadastros' | 'chuvas' | 'pastos' | 'conciliacao' | 'fin_caixa' | 'zootecnico' | 'zootecnico_hub' | 'analise_economica' | 'valor_rebanho' | 'conciliacao_categoria' | 'analise_operacional' | 'resumo_pastos' | 'mapa_pastos' | 'fechamento' | 'visao_anual_zoo';
+export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'financeiro' | 'evolucao' | 'evolucao_categoria' | 'fluxo_anual' | 'acessos' | 'analise' | 'analise_entradas' | 'analise_saidas' | 'desfrute' | 'cadastros' | 'chuvas' | 'pastos' | 'conciliacao' | 'fin_caixa' | 'zootecnico' | 'zootecnico_hub' | 'analise_economica' | 'valor_rebanho' | 'conciliacao_categoria' | 'analise_operacional' | 'resumo_pastos' | 'mapa_pastos' | 'fechamento' | 'visao_anual_zoo' | 'lancar_zoo_hub' | 'visao_zoo_hub' | 'lancar_fin_hub' | 'visao_fin_hub';
 
 interface BottomNavProps {
   activeTab: TabId;
@@ -10,19 +10,28 @@ interface BottomNavProps {
 
 const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'resumo', label: 'Resumo', icon: BarChart3 },
-  { id: 'zootecnico_hub', label: 'Zootécnico', icon: Beef },
-  { id: 'fin_caixa', label: 'Financeiro', icon: DollarSign },
+  { id: 'lancar_zoo_hub', label: 'Lançar Zoo', icon: PenSquare },
+  { id: 'visao_zoo_hub', label: 'Visão Zoo', icon: Eye },
+  { id: 'lancar_fin_hub', label: 'Lançar Fin', icon: DollarSign },
+  { id: 'visao_fin_hub', label: 'Visão Fin', icon: TrendingUp },
   { id: 'cadastros', label: 'Cadastros', icon: ClipboardList },
 ];
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
-  // Highlight the parent tab for sub-screens
   const getActiveId = (tab: TabId): TabId => {
-    const zooTabs: TabId[] = ['zootecnico', 'zootecnico_hub', 'lancamentos', 'fluxo_anual', 'chuvas', 'conciliacao', 'conciliacao_categoria', 'valor_rebanho', 'fechamento', 'mapa_pastos', 'resumo_pastos', 'analise_operacional', 'evolucao', 'evolucao_categoria', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute', 'movimentacao', 'pastos', 'visao_anual_zoo'];
-    const finTabs: TabId[] = ['fin_caixa', 'financeiro', 'analise_economica'];
+    // Lançar Zoo sub-screens
+    const lancarZooTabs: TabId[] = ['lancar_zoo_hub', 'lancamentos', 'movimentacao', 'fluxo_anual', 'fechamento', 'chuvas', 'financeiro'];
+    // Visão Zoo sub-screens
+    const visaoZooTabs: TabId[] = ['visao_zoo_hub', 'zootecnico', 'zootecnico_hub', 'conciliacao', 'conciliacao_categoria', 'valor_rebanho', 'visao_anual_zoo', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute', 'evolucao', 'evolucao_categoria', 'mapa_pastos', 'resumo_pastos', 'analise_operacional', 'pastos'];
+    // Lançar Fin sub-screens
+    const lancarFinTabs: TabId[] = ['lancar_fin_hub', 'fin_caixa'];
+    // Visão Fin sub-screens
+    const visaoFinTabs: TabId[] = ['visao_fin_hub', 'analise_economica'];
     const cadTabs: TabId[] = ['cadastros', 'acessos'];
-    if (zooTabs.includes(tab)) return 'zootecnico_hub';
-    if (finTabs.includes(tab)) return 'fin_caixa';
+    if (lancarZooTabs.includes(tab)) return 'lancar_zoo_hub';
+    if (visaoZooTabs.includes(tab)) return 'visao_zoo_hub';
+    if (lancarFinTabs.includes(tab)) return 'lancar_fin_hub';
+    if (visaoFinTabs.includes(tab)) return 'visao_fin_hub';
     if (cadTabs.includes(tab)) return 'cadastros';
     return 'resumo';
   };
