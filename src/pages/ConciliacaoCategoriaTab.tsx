@@ -42,7 +42,7 @@ interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
   onBack: () => void;
-  onNavigateToReclass: () => void;
+  onNavigateToReclass: (filtro?: { ano: string; mes: number }) => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
 }
