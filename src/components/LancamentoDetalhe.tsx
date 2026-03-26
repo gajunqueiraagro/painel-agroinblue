@@ -280,6 +280,27 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
             </div>
           </div>
 
+          {/* Status Operacional */}
+          <div>
+            <Label className="font-bold text-foreground">Status</Label>
+            <div className="flex gap-1 mt-1">
+              {STATUS_OPTIONS.map(s => (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, statusOperacional: s.value }))}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold border-2 transition-all ${
+                    (form.statusOperacional || 'conciliado') === s.value
+                      ? `${s.bg} text-white border-transparent shadow-md`
+                      : 'border-border text-muted-foreground bg-muted/30'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="flex gap-2 pt-2">
             <Button variant="outline" className="flex-1 touch-target" onClick={() => setEditando(false)}>Cancelar</Button>
             <Button variant="destructive" className="touch-target" onClick={handleRemover}>
