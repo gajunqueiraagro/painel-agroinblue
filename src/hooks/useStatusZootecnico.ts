@@ -38,8 +38,8 @@ export function useStatusZootecnico(
   // Raw data
   const [pastosAtivos, setPastosAtivos] = useState(0);
   const [pastosFechados, setPastosFechados] = useState(0);
-  const [rebanhoFechamentos, setRebanhoFechamentos] = useState<{ total: number; fechados: number }>({ total: 0, fechados: 0 });
-  const [itensComPeso, setItensComPeso] = useState(0);
+  const [pastosRascunho, setPastosRascunho] = useState(0);
+  const [pastosNaoIniciados, setPastosNaoIniciados] = useState(0);
   const [itensTotais, setItensTotais] = useState(0);
   const [precosDefinidos, setPrecosDefinidos] = useState(0);
   const [categoriasComSaldo, setCategoriasComSaldo] = useState(0);
