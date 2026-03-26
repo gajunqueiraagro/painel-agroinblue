@@ -17,11 +17,25 @@ interface PastoResumo {
   uaHa: number | null;
 }
 
-export function FechamentoTab() {
+interface Props {
+  filtroAnoInicial?: string;
+  filtroMesInicial?: number;
+}
+
+export function FechamentoTab({ filtroAnoInicial, filtroMesInicial }: Props = {}) {
   const { isGlobal } = useFazenda();
   const { pastos, categorias } = usePastos();
   const { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, reabrirPasto, copiarMesAnterior } = useFechamento();
-  const [anoMes, setAnoMes] = useState(format(new Date(), 'yyyy-MM'));
+  const defaultAnoMes = filtroAnoInicial && filtroMesInicial
+    ? `${filtroAnoInicial}-${String(filtroMesInicial).padStart(2, '0')}`
+    : format(new Date(), 'yyyy-MM');
+  const [anoMes, setAnoMes] = useState(defaultAnoMes);
+
+  useEffect(() => {
+    if (filtroAnoInicial && filtroMesInicial) {
+      setAnoMes(`${filtroAnoInicial}-${String(filtroMesInicial).padStart(2, '0')}`);
+    }
+  }, [filtroAnoInicial, filtroMesInicial]);
   const [selectedPasto, setSelectedPasto] = useState<Pasto | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeFechamento, setActiveFechamento] = useState<FechamentoPasto | null>(null);

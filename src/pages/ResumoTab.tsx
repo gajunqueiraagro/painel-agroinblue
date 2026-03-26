@@ -17,7 +17,7 @@ import type { FiltroGlobal } from './Index';
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
-  onTabChange: (tab: TabId) => void;
+  onTabChange: (tab: TabId, filtro?: { ano: string; mes: number }) => void;
   filtroGlobal: FiltroGlobal;
   onFiltroChange: (f: Partial<FiltroGlobal>) => void;
 }
@@ -51,7 +51,7 @@ function StatusBadge({ nivel }: { nivel: StatusNivel }) {
   );
 }
 
-function FinanceiroCard({ financeiro, onTabChange, isGlobal }: { financeiro: ReturnType<typeof useResumoStatus>['financeiro']; onTabChange: (tab: TabId) => void; isGlobal: boolean }) {
+function FinanceiroCard({ financeiro, onTabChange, isGlobal, filtroGlobal }: { financeiro: ReturnType<typeof useResumoStatus>['financeiro']; onTabChange: (tab: TabId, filtro?: { ano: string; mes: number }) => void; isGlobal: boolean; filtroGlobal: FiltroGlobal }) {
   const [auditOpen, setAuditOpen] = useState(false);
   const a = financeiro.audit;
 
@@ -134,7 +134,7 @@ function FinanceiroCard({ financeiro, onTabChange, isGlobal }: { financeiro: Ret
       )}
 
       <button
-        onClick={() => onTabChange('fin_caixa')}
+        onClick={() => onTabChange('fin_caixa', { ano: filtroGlobal.ano, mes: filtroGlobal.mes })}
         className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
       >
         Ver Fluxo Financeiro <ChevronRight className="h-4 w-4" />
@@ -240,7 +240,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
             <p className="text-[11px] text-muted-foreground">{zootecnico.status.descricao}</p>
 
             <button
-              onClick={() => onTabChange('zootecnico_hub')}
+              onClick={() => onTabChange('zootecnico_hub', { ano: filtroGlobal.ano, mes: filtroGlobal.mes })}
               className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
             >
               Ver Painel Zootécnico <ChevronRight className="h-4 w-4" />
@@ -249,7 +249,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
         )}
 
         {/* FINANCEIRO */}
-        <FinanceiroCard financeiro={financeiro} onTabChange={onTabChange} isGlobal={fazendaAtual?.id === '__global__'} />
+        <FinanceiroCard financeiro={financeiro} onTabChange={onTabChange} isGlobal={fazendaAtual?.id === '__global__'} filtroGlobal={filtroGlobal} />
 
 
         {/* ECONÔMICO */}
@@ -269,7 +269,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
           <p className="text-[11px] text-muted-foreground">{economico.status.descricao}</p>
 
           <button
-            onClick={() => onTabChange('analise_economica')}
+            onClick={() => onTabChange('analise_economica', { ano: filtroGlobal.ano, mes: filtroGlobal.mes })}
             className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
           >
             Ver Análise Econômica <ChevronRight className="h-4 w-4" />
