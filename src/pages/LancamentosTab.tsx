@@ -322,7 +322,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     });
 
     setQuantidade('');
-    setPesoKg('');
+    setPesoKg(tipo === 'nascimento' ? '30' : '');
     setFazendaOrigem('');
     setFazendaDestino('');
     resetFinancialFields();
