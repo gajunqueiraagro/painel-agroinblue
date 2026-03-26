@@ -17,7 +17,7 @@ interface Props {
   filtroMesInicial?: number;
 }
 
-export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, filtroAnoInicial, filtroMesInicial }: Props) {
+export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onEditar, onRemover, filtroAnoInicial, filtroMesInicial }: Props) {
   const [activeTab, setActiveTab] = useState('movimentacoes');
 
   return (
