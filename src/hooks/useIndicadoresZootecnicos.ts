@@ -858,7 +858,25 @@ export function useIndicadoresZootecnicos(
 // Helpers de peso (internos)
 // ---------------------------------------------------------------------------
 
-
+/** Merge multiple per-fazenda peso maps into a single global map (simple merge, first wins per category) */
+function mergePesoMaps(maps: Record<string, number>[]): Record<string, number> {
+  // For global: weighted merge — since each map is already weighted-average per fazenda,
+  // we simply merge all entries. If same category appears in multiple fazendas,
+  // we keep the average across them (good enough for global view).
+  const acum: Record<string, { totalPeso: number; count: number }> = {};
+  for (const map of maps) {
+    for (const [cat, peso] of Object.entries(map)) {
+      if (!acum[cat]) acum[cat] = { totalPeso: 0, count: 0 };
+      acum[cat].totalPeso += peso;
+      acum[cat].count += 1;
+    }
+  }
+  const result: Record<string, number> = {};
+  for (const [cat, { totalPeso, count }] of Object.entries(acum)) {
+    result[cat] = totalPeso / count;
+  }
+  return result;
+}
 
 /** Mapeia OrigemPeso (do hook unificado) para FontePeso (do indicadores) */
 function origemToFonte(origem: OrigemPeso): FontePeso {
