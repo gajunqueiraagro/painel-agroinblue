@@ -353,16 +353,19 @@ function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNu
     const atual = buildYear(anoNum);
     const anterior = buildYear(anoNum - 1);
 
-    return MESES_NOMES.map((mes, i) => ({
-      mes,
-      [`cab_${anoNum}`]: atual[i]?.cabecas ?? 0,
-      [`cab_${anoNum - 1}`]: anterior[i]?.cabecas ?? 0,
-      [`kgHa_${anoNum}`]: atual[i]?.kgHa,
-      [`kgHa_${anoNum - 1}`]: anterior[i]?.kgHa,
-      [`arrSaida_${anoNum}`]: atual[i]?.arrobasSaidas ?? 0,
-      [`arrSaida_${anoNum - 1}`]: anterior[i]?.arrobasSaidas ?? 0,
-    }));
-  }, [lancamentos, saldosIniciais, anoNum, pastos]);
+    return MESES_NOMES.map((mes, i) => {
+      const isFuturo = i + 1 > mesFiltro;
+      return {
+        mes,
+        [`cab_${anoNum}`]: isFuturo ? null : (atual[i]?.cabecas ?? 0),
+        [`cab_${anoNum - 1}`]: anterior[i]?.cabecas ?? 0,
+        [`kgHa_${anoNum}`]: isFuturo ? null : atual[i]?.kgHa,
+        [`kgHa_${anoNum - 1}`]: anterior[i]?.kgHa,
+        [`arrSaida_${anoNum}`]: isFuturo ? null : (atual[i]?.arrobasSaidas ?? 0),
+        [`arrSaida_${anoNum - 1}`]: anterior[i]?.arrobasSaidas ?? 0,
+      };
+    });
+  }, [lancamentos, saldosIniciais, anoNum, mesFiltro, pastos]);
 
   // GMD / desfrute from historico
   const gmdData = useMemo(() => {
