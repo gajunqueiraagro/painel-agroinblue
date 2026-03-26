@@ -43,7 +43,11 @@ const SUB_ABA_LABELS: Record<SubAba, { label: string; icon: string }> = {
  * Tabela unificada de movimentações com indicadores econômicos.
  * NOTA: Lógica econômica/competência do rebanho — não é módulo financeiro de caixa.
  */
-function UnifiedTable({ lancamentos, onEdit, showTipo }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; showTipo?: boolean }) {
+function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; showTipo?: boolean; subTipo?: string }) {
+  const TIPOS_COM_DESTINO = ['venda', 'transferencia_entrada', 'transferencia_saida', 'consumo', 'morte'];
+  const showDestino = showTipo ? true : (subTipo ? TIPOS_COM_DESTINO.includes(subTipo) : false);
+  const isMorte = subTipo === 'morte';
+  const showLiqKg = showTipo ? true : (subTipo ? TIPOS_COM_DESTINO.includes(subTipo) : false);
   if (lancamentos.length === 0) return <p className="text-center text-muted-foreground py-6">Nenhum registro no período</p>;
 
   return (
