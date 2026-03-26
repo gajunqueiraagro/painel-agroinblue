@@ -71,8 +71,10 @@ const BLOCKS: { title: string; emoji: string; items: GroupItem[] }[] = [
 export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
   const { isGlobal } = useFazenda();
 
+  const ALLOWED_GLOBAL: TabId[] = ['evolucao_rebanho_hub'];
+
   const navTo = (tab: TabId) => {
-    if (isGlobal) {
+    if (isGlobal && !ALLOWED_GLOBAL.includes(tab)) {
       toast.info('Selecione uma fazenda para realizar lançamentos');
       return;
     }
@@ -82,6 +84,8 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
       onTabChange(tab);
     }
   };
+
+  const isBlocked = (tab: TabId) => isGlobal && !ALLOWED_GLOBAL.includes(tab);
 
   const disabledCls = isGlobal ? 'opacity-50 cursor-not-allowed' : '';
 
@@ -99,24 +103,27 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
       <div className="p-4 space-y-4">
         {/* ── AÇÕES PRINCIPAIS ── */}
         <div className="grid grid-cols-3 gap-3">
-          {ACOES_PRINCIPAIS.map(item => (
+          {ACOES_PRINCIPAIS.map(item => {
+            const blocked = isBlocked(item.tab);
+            return (
             <button
               key={item.tab}
               onClick={() => navTo(item.tab)}
-              className={`flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card p-4 min-h-[120px] transition-colors ${isGlobal ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent active:bg-accent/80 shadow-sm'}`}
+              className={`flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card p-4 min-h-[120px] transition-colors ${blocked ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent active:bg-accent/80 shadow-sm'}`}
             >
-              <div className={`rounded-full p-3 ${isGlobal ? 'bg-muted' : 'bg-primary/10'}`}>
-                <item.icon className={`h-6 w-6 ${isGlobal ? 'text-muted-foreground' : 'text-primary'}`} />
+              <div className={`rounded-full p-3 ${blocked ? 'bg-muted' : 'bg-primary/10'}`}>
+                <item.icon className={`h-6 w-6 ${blocked ? 'text-muted-foreground' : 'text-primary'}`} />
               </div>
               <div className="text-center">
-                <p className={`text-xs font-bold leading-tight ${isGlobal ? 'text-muted-foreground' : 'text-foreground'}`}>
+                <p className={`text-xs font-bold leading-tight ${blocked ? 'text-muted-foreground' : 'text-foreground'}`}>
                   {item.label}
                 </p>
                 <p className="text-[9px] text-muted-foreground mt-0.5 leading-tight">{item.description}</p>
               </div>
-              {isGlobal && <Lock className="h-3 w-3 text-muted-foreground" />}
+              {blocked && <Lock className="h-3 w-3 text-muted-foreground" />}
             </button>
-          ))}
+            );
+          })}
         </div>
 
         {/* ── BLOCOS DE ANÁLISE E CONTROLE ── */}
@@ -127,26 +134,29 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
                 {block.emoji} {block.title}
               </h3>
               <div className="space-y-1">
-                {block.items.map(item => (
+                {block.items.map(item => {
+                  const blocked = isBlocked(item.tab);
+                  return (
                   <button
                     key={item.tab}
                     onClick={() => navTo(item.tab)}
-                    className={`w-full flex items-center justify-between rounded-lg px-3 py-2.5 transition-colors group ${isGlobal ? 'bg-muted/20 opacity-50 cursor-not-allowed' : 'bg-muted/40 hover:bg-muted/70'}`}
+                    className={`w-full flex items-center justify-between rounded-lg px-3 py-2.5 transition-colors group ${blocked ? 'bg-muted/20 opacity-50 cursor-not-allowed' : 'bg-muted/40 hover:bg-muted/70'}`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <item.icon className={`h-4 w-4 shrink-0 ${isGlobal ? 'text-muted-foreground' : 'text-primary'}`} />
+                      <item.icon className={`h-4 w-4 shrink-0 ${blocked ? 'text-muted-foreground' : 'text-primary'}`} />
                       <div className="text-left min-w-0">
-                        <p className={`text-sm font-semibold ${isGlobal ? 'text-muted-foreground' : 'text-foreground'}`}>{item.label}</p>
+                        <p className={`text-sm font-semibold ${blocked ? 'text-muted-foreground' : 'text-foreground'}`}>{item.label}</p>
                         <p className="text-[10px] text-muted-foreground truncate">{item.description}</p>
                       </div>
                     </div>
-                    {isGlobal ? (
+                    {blocked ? (
                       <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     ) : (
                       <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0" />
                     )}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
