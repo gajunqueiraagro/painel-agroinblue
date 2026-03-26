@@ -10,12 +10,26 @@ import { format } from 'date-fns';
 import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
 import { calcSaldoPorCategoria, calcConciliacao } from '@/lib/calculos/zootecnicos';
 
-export function ConciliacaoTab() {
+interface Props {
+  filtroAnoInicial?: string;
+  filtroMesInicial?: number;
+}
+
+export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {}) {
   const { isGlobal } = useFazenda();
   const { categorias, pastos } = usePastos();
   const { fechamentos, loadFechamentos, loadItens } = useFechamento();
   const { lancamentos, saldosIniciais } = useLancamentos();
-  const [anoMes, setAnoMes] = useState(format(new Date(), 'yyyy-MM'));
+  const defaultAnoMes = filtroAnoInicial && filtroMesInicial
+    ? `${filtroAnoInicial}-${String(filtroMesInicial).padStart(2, '0')}`
+    : format(new Date(), 'yyyy-MM');
+  const [anoMes, setAnoMes] = useState(defaultAnoMes);
+
+  useEffect(() => {
+    if (filtroAnoInicial && filtroMesInicial) {
+      setAnoMes(`${filtroAnoInicial}-${String(filtroMesInicial).padStart(2, '0')}`);
+    }
+  }, [filtroAnoInicial, filtroMesInicial]);
   const [itensPastos, setItensPastos] = useState<Map<string, number>>(new Map());
   const [loadingItens, setLoadingItens] = useState(false);
 

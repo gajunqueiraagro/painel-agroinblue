@@ -17,7 +17,7 @@ import type { FiltroGlobal } from './Index';
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
-  onTabChange: (tab: TabId) => void;
+  onTabChange: (tab: TabId, filtro?: { ano: string; mes: number }) => void;
   filtroGlobal: FiltroGlobal;
   onFiltroChange: (f: Partial<FiltroGlobal>) => void;
 }
