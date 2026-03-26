@@ -267,12 +267,7 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
         </CardContent>
       </Card>
 
-      {/* ===== BLOCO 4: Histórico Comparativo ===== */}
-      <HistoricoComparativo
-        historico={zoo.historico}
-        comparacoesHistorico={zoo.comparacoesHistorico}
-        mesAtual={mesFiltro}
-      />
+      {/* Histórico Comparativo movido para dentro de "Ver gráficos → Produção" */}
 
       {/* Alertas */}
       {zoo.qualidade.pesoMedioEstimado && (

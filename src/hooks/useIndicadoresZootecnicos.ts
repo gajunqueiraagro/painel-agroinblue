@@ -275,6 +275,7 @@ export function useIndicadoresZootecnicos(
   saldosIniciais: SaldoInicial[],
   pastos: Pasto[],
   categorias?: { id: string; codigo: string; nome: string; ordem_exibicao: number }[],
+  globalFazendaIds?: string[],
 ) {
   const [valorRebanhoData, setValorRebanhoData] = useState<{ total: number; fechado: boolean } | null>(null);
   const [valorRebanhoYoY, setValorRebanhoYoY] = useState<number | null>(null);
@@ -284,11 +285,53 @@ export function useIndicadoresZootecnicos(
   const [pesoFechamentoMesAntMap, setPesoFechamentoMesAntMap] = useState<Record<string, number>>({});
   const [pesoFechamentoYoYMap, setPesoFechamentoYoYMap] = useState<Record<string, number>>({});
 
+  const isGlobal = fazendaId === '__global__';
   const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
 
   // --- Load pesos do fechamento de pasto (mês atual + mês anterior) ---
   const loadPesosFechamento = useCallback(async () => {
-    if (!fazendaId || fazendaId === '__global__' || !categorias?.length) {
+    if (!categorias?.length) {
+      setPesoFechamentoMap({});
+      setPesoFechamentoMesAntMap({});
+      setPesoFechamentoYoYMap({});
+      return;
+    }
+
+    // Global mode: load from all fazendas and merge (weighted average)
+    if (isGlobal) {
+      const fids = globalFazendaIds || [];
+      if (fids.length === 0) {
+        setPesoFechamentoMap({});
+        setPesoFechamentoMesAntMap({});
+        setPesoFechamentoYoYMap({});
+        return;
+      }
+
+      let mesAntAno = ano;
+      let mesAntMes = mes - 1;
+      if (mesAntMes < 1) { mesAntMes = 12; mesAntAno--; }
+      const mesAntStr = `${mesAntAno}-${String(mesAntMes).padStart(2, '0')}`;
+      const yoyStr = `${ano - 1}-${String(mes).padStart(2, '0')}`;
+
+      try {
+        const [atualResults, antResults, yoyResults] = await Promise.all([
+          Promise.all(fids.map(fid => loadPesosPastosPorCategoria(fid, anoMes, categorias))),
+          Promise.all(fids.map(fid => loadPesosPastosPorCategoria(fid, mesAntStr, categorias))),
+          Promise.all(fids.map(fid => loadPesosPastosPorCategoria(fid, yoyStr, categorias))),
+        ]);
+
+        setPesoFechamentoMap(mergePesoMaps(atualResults));
+        setPesoFechamentoMesAntMap(mergePesoMaps(antResults));
+        setPesoFechamentoYoYMap(mergePesoMaps(yoyResults));
+      } catch {
+        setPesoFechamentoMap({});
+        setPesoFechamentoMesAntMap({});
+        setPesoFechamentoYoYMap({});
+      }
+      return;
+    }
+
+    if (!fazendaId) {
       setPesoFechamentoMap({});
       setPesoFechamentoMesAntMap({});
       setPesoFechamentoYoYMap({});
