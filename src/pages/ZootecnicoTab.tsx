@@ -83,6 +83,37 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
     ? zoo.saldoFinalMes * zoo.pesoMedioRebanhoKg : null;
   const kgHa = pesoTotalKg && zoo.areaProdutiva > 0 ? pesoTotalKg / zoo.areaProdutiva : null;
 
+  // Kg/ha comparisons for monthly view (MoM + YoY)
+  const kgHaComps = useMemo(() => {
+    const buildComp = (atual: number | null, ref: number | null) => {
+      if (atual === null || ref === null || (atual === 0 && ref === 0)) return null;
+      const diff = atual - ref;
+      const pct = ref !== 0 ? (diff / Math.abs(ref)) * 100 : null;
+      return { diferencaPercentual: pct, disponivel: true } as any;
+    };
+    // MoM: kgHa do mês anterior
+    const mesAntMes = mesFiltro > 1 ? mesFiltro - 1 : 12;
+    const mesAntAno = mesFiltro > 1 ? anoNum : anoNum - 1;
+    const sMapAnt = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, mesAntAno, mesAntMes);
+    const cabAnt = Array.from(sMapAnt.values()).reduce((s, v) => s + v, 0);
+    const pmAnt = calcPesoMedioPonderado(Array.from(sMapAnt.entries()).filter(([,q]) => q > 0).map(([cat, q]) => {
+      const si = saldosIniciais.find(s => s.ano === mesAntAno && s.categoria === cat);
+      return { quantidade: q, pesoKg: si?.pesoMedioKg ?? null };
+    }));
+    const kgHaAnt = cabAnt > 0 && pmAnt && zoo.areaProdutiva > 0 ? (cabAnt * pmAnt) / zoo.areaProdutiva : null;
+
+    // YoY
+    const sMapYoY = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, anoNum - 1, mesFiltro);
+    const cabYoY = Array.from(sMapYoY.values()).reduce((s, v) => s + v, 0);
+    const pmYoY = calcPesoMedioPonderado(Array.from(sMapYoY.entries()).filter(([,q]) => q > 0).map(([cat, q]) => {
+      const si = saldosIniciais.find(s => s.ano === anoNum - 1 && s.categoria === cat);
+      return { quantidade: q, pesoKg: si?.pesoMedioKg ?? null };
+    }));
+    const kgHaYoY = cabYoY > 0 && pmYoY && zoo.areaProdutiva > 0 ? (cabYoY * pmYoY) / zoo.areaProdutiva : null;
+
+    return { mensal: buildComp(kgHa, kgHaAnt), anual: buildComp(kgHa, kgHaYoY) };
+  }, [kgHa, saldosIniciais, lancamentos, anoNum, mesFiltro, zoo.areaProdutiva]);
+
   // ===== Acumulado: médias jan→mesFiltro + comparações MoM/YoY =====
   const acumulado = useMemo(() => {
     type Snap = { cab: number; pesoMedio: number | null; kgTotal: number; area: number; ua: number };
