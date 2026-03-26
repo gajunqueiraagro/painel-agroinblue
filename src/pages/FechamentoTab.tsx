@@ -180,6 +180,15 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           onCopiar={async () => copiarMesAnterior(selectedPasto.id, anoMes, categorias)}
         />
       )}
+
+      {onBackToConciliacao && (
+        <button
+          onClick={onBackToConciliacao}
+          className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2.5 transition-colors hover:bg-primary/20 mt-4"
+        >
+          <ArrowLeft className="h-4 w-4" /> Voltar para Conciliação de Categoria
+        </button>
+      )}
     </div>
   );
 }
