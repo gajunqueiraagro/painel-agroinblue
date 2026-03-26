@@ -24,7 +24,7 @@ interface Props {
   onBackToConciliacao?: () => void;
 }
 
-export function FechamentoTab({ filtroAnoInicial, filtroMesInicial }: Props = {}) {
+export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao }: Props = {}) {
   const { isGlobal } = useFazenda();
   const { pastos, categorias } = usePastos();
   const { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, reabrirPasto, copiarMesAnterior } = useFechamento();
