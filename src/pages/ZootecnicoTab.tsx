@@ -408,18 +408,18 @@ function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNu
         <>
           <ChartCard title="@ Saídas por Mês" data={chartData}
             keys={[`arrSaida_${anoNum}`, `arrSaida_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-            type="bar" />
+            type="bar" maxMonth={mesFiltro} />
           {gmdData.length > 0 && (
             <>
               <ChartCard title="@ Produzidas (acumulado)" data={gmdData}
                 keys={[`arrProd_${anoNum}`, `arrProd_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="line" />
+                type="line" maxMonth={mesFiltro} />
               <ChartCard title="GMD Acumulado (kg/dia)" data={gmdData}
                 keys={[`gmd_${anoNum}`, `gmd_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="line" decimals={3} />
+                type="line" decimals={3} maxMonth={mesFiltro} />
               <ChartCard title="Desfrute Cab. Acumulado (%)" data={gmdData}
                 keys={[`desfCab_${anoNum}`, `desfCab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="line" decimals={1} />
+                type="line" decimals={1} maxMonth={mesFiltro} />
             </>
           )}
         </>
