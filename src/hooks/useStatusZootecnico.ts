@@ -1,6 +1,6 @@
 /**
  * Hook de status/pendências do painel Zootécnico.
- * 5 pendências: Conciliação Pastos, Fechamento Rebanho, Peso Médio, Valor Rebanho, Conciliação Categorias.
+ * 3 pendências: Conciliação Pastos, Valor Rebanho, Conciliação Categorias.
  * Suporte a modo global (todas as fazendas).
  */
 import { useState, useEffect, useCallback, useMemo } from 'react';
