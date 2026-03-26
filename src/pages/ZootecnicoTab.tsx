@@ -14,7 +14,7 @@ import { usePastos } from '@/hooks/usePastos';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { KpiCard } from '@/components/indicadores/KpiCard';
 import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';
-import { HistoricoComparativo } from '@/components/indicadores/HistoricoComparativo';
+
 import { TabId } from '@/components/BottomNav';
 import {
   ArrowLeft, ChevronRight, AlertTriangle,
