@@ -97,7 +97,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo }: { lancamentos:
           })}
         </tbody>
         {lancamentos.length > 1 && (() => {
-          const totals = lancamentos.reduce((acc, l) => {
+           const totals = lancamentos.reduce((acc, l) => {
             const c = calcIndicadoresLancamento(l);
             acc.qtd += l.quantidade;
             acc.pesoVivoTotal += (l.pesoMedioKg ?? 0) * l.quantidade;
@@ -109,6 +109,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo }: { lancamentos:
           const arrobaMedio = totals.qtd > 0 ? totals.arrobasTotal / totals.qtd : 0;
           const liqArroba = totals.arrobasTotal > 0 ? totals.valorTotal / totals.arrobasTotal : 0;
           const liqCabeca = totals.qtd > 0 ? totals.valorTotal / totals.qtd : 0;
+          const liqKgTotal = totals.pesoVivoTotal > 0 ? totals.valorTotal / totals.pesoVivoTotal : 0;
           return (
             <tfoot>
               <tr className="border-t-2 border-primary/40 bg-muted/30 font-bold">
@@ -116,10 +117,12 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo }: { lancamentos:
                 {showTipo && <td className="p-1.5"></td>}
                 <td className="p-1.5 text-right">{totals.qtd}</td>
                 <td className="p-1.5"></td>
+                {showDestino && <td className="p-1.5"></td>}
                 <td className="p-1.5 text-right">{fmtValor(pesoVivoMedio)}</td>
                 <td className="p-1.5 text-right text-muted-foreground">{fmtValor(arrobaMedio)}</td>
                 <td className="p-1.5 text-right text-primary">{fmtValor(totals.valorTotal)}</td>
                 <td className="p-1.5 text-right">{fmtValor(liqArroba)}</td>
+                {showLiqKg && <td className="p-1.5 text-right">{fmtValor(liqKgTotal)}</td>}
                 <td className="p-1.5 text-right">{fmtValor(liqCabeca)}</td>
                 <td className="p-1.5"></td>
               </tr>
