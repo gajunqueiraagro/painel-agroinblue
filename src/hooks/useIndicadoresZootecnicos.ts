@@ -361,7 +361,7 @@ export function useIndicadoresZootecnicos(
       setPesoFechamentoMesAntMap({});
       setPesoFechamentoYoYMap({});
     }
-  }, [fazendaId, anoMes, ano, mes, categorias]);
+  }, [fazendaId, isGlobal, globalFazendaIds, anoMes, ano, mes, categorias]);
 
   useEffect(() => { loadPesosFechamento(); }, [loadPesosFechamento]);
 
