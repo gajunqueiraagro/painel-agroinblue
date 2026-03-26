@@ -20,9 +20,9 @@ const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const getActiveId = (tab: TabId): TabId => {
     // Lançar Zoo sub-screens
-    const lancarZooTabs: TabId[] = ['lancar_zoo_hub', 'lancamentos', 'movimentacao', 'fluxo_anual', 'fechamento', 'chuvas', 'financeiro'];
+    const lancarZooTabs: TabId[] = ['lancar_zoo_hub', 'lancamentos', 'movimentacao', 'fluxo_anual', 'fechamento', 'chuvas', 'financeiro', 'evolucao_categoria', 'valor_rebanho', 'mapa_pastos', 'resumo_pastos', 'conciliacao', 'conciliacao_categoria'];
     // Visão Zoo sub-screens
-    const visaoZooTabs: TabId[] = ['visao_zoo_hub', 'zootecnico', 'zootecnico_hub', 'indicadores', 'conciliacao', 'conciliacao_categoria', 'valor_rebanho', 'visao_anual_zoo', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute', 'evolucao', 'evolucao_categoria', 'mapa_pastos', 'resumo_pastos', 'analise_operacional', 'pastos'];
+    const visaoZooTabs: TabId[] = ['visao_zoo_hub', 'zootecnico', 'zootecnico_hub', 'indicadores', 'visao_anual_zoo', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute', 'evolucao', 'analise_operacional', 'pastos'];
     // Lançar Fin sub-screens
     const lancarFinTabs: TabId[] = ['lancar_fin_hub', 'fin_caixa'];
     // Visão Fin sub-screens
