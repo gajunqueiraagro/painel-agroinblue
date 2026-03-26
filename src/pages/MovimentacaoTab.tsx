@@ -3,10 +3,13 @@ import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { parseISO, format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
+  onEditar?: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
+  onRemover?: (id: string) => void;
 }
 
 type TipoFiltro = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
