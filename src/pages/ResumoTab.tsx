@@ -332,17 +332,24 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
             <h2 className="text-sm font-extrabold text-destructive">Pendências do Mês</h2>
           </div>
           <div className="space-y-1.5">
-            {alertas.map((a, i) => (
-              <button
-                key={i}
-                onClick={() => onTabChange(a.tab, { ano: filtroGlobal.ano, mes: mesNum })}
-                className="w-full flex items-center gap-2 text-left text-sm hover:bg-destructive/10 rounded-md px-2 py-1.5 transition-colors"
-              >
-                <StatusDot nivel={a.nivel} />
-                <span className="flex-1 text-card-foreground">{a.texto}</span>
-                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-            ))}
+            {alertas.map((a, i) => {
+              const blocked = isGlobal && a.blockedGlobal;
+              return (
+                <button
+                  key={i}
+                  onClick={() => !blocked && onTabChange(a.tab, { ano: filtroGlobal.ano, mes: mesNum })}
+                  className={`w-full flex items-center gap-2 text-left text-sm rounded-md px-2 py-1.5 transition-colors ${blocked ? 'opacity-60 cursor-default' : 'hover:bg-destructive/10'}`}
+                >
+                  <StatusDot nivel={a.nivel} />
+                  <span className="flex-1 text-card-foreground">{a.texto}</span>
+                  {blocked ? (
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">Selecione uma fazenda</span>
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
