@@ -234,7 +234,14 @@ export function MovimentacaoTab({ lancamentos, saldosIniciais, onEditar, onRemov
               </tr>
             ) : (
               lancamentosFiltrados.map((l, i) => (
-                <tr key={l.id} className={i % 2 === 0 ? '' : 'bg-muted/30'}>
+                <tr
+                  key={l.id}
+                  className={cn(
+                    'cursor-pointer hover:bg-primary/5 transition-colors',
+                    i % 2 === 0 ? '' : 'bg-muted/30'
+                  )}
+                  onClick={() => setDetalheId(l.id)}
+                >
                   {columns.map(col => (
                     <td
                       key={col.key}
