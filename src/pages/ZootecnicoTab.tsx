@@ -258,10 +258,12 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
             /* ===== VISÃO ACUMULADA: médias jan→mesFiltro ===== */
             <>
               <div className="grid grid-cols-3 gap-3">
-                <KpiCard label="Cabeças na média" valor={formatNum(acumulado.cabMedia, 0)} unidade="cab" />
+                <KpiCard label="Cabeças na média" valor={formatNum(acumulado.cabMedia, 0)} unidade="cab"
+                  compMensal={acumulado.compCab.mensal} compAnual={acumulado.compCab.anual} />
                 <KpiCard label="Peso Médio Final"
                   valor={acumulado.pesoMedioFinal !== null ? formatNum(acumulado.pesoMedioFinal, 1) : '—'}
                   unidade="kg"
+                  compMensal={acumulado.compPeso.mensal} compAnual={acumulado.compPeso.anual}
                   semBase={acumulado.pesoMedioFinal === null} />
                 <KpiCard label="Valor Rebanho"
                   valor={zoo.valorRebanho !== null ? formatMoedaCompacto(zoo.valorRebanho) : '—'}
@@ -270,13 +272,15 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <KpiCard label="Área Prod. média"
-                  valor={formatNum(acumulado.areaMedia, 1)} unidade="ha" />
+                  valor={formatNum(acumulado.areaMedia, 1)} unidade="ha"
+                  compMensal={acumulado.compArea.mensal} compAnual={acumulado.compArea.anual} />
                 <KpiCard label="UA/ha médio"
                   valor={acumulado.uaHaMedio !== null ? formatNum(acumulado.uaHaMedio, 2) : '—'}
-                  compMensal={zoo.comparacoes.uaHaMediaAno.mensal} compAnual={zoo.comparacoes.uaHaMediaAno.anual}
+                  compMensal={acumulado.compUaHa.mensal} compAnual={acumulado.compUaHa.anual}
                   semBase={acumulado.uaHaMedio === null} />
                 <KpiCard label="Kg/ha médio"
                   valor={acumulado.kgHaMedio !== null ? formatNum(acumulado.kgHaMedio, 2) : '—'}
+                  compMensal={acumulado.compKgHa.mensal} compAnual={acumulado.compKgHa.anual}
                   semBase={acumulado.kgHaMedio === null} />
               </div>
             </>
