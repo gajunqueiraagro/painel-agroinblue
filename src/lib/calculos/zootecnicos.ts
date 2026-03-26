@@ -313,7 +313,7 @@ export function calcFluxoAnual(
     .filter(s => s.ano === ano)
     .reduce((sum, s) => sum + s.quantidade, 0);
 
-  const lancAno = lancamentos.filter(l => l.data.substring(0, 4) === String(ano));
+  const lancAno = lancamentos.filter(l => l.data.substring(0, 4) === String(ano) && isLancConciliado(l));
 
   const porMesTipo: Record<string, Record<FluxoTipo, number>> = {};
   for (let m = 1; m <= 12; m++) {
