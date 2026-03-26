@@ -193,7 +193,8 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
   );
 }
 
-function AbateTable({ lancamentos, onEdit }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void }) {
+function AbateTable({ lancamentos, onEdit, isGlobal, fazendaMap }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; isGlobal?: boolean; fazendaMap?: Map<string, string> }) {
+  const fMap = fazendaMap || new Map<string, string>();
   if (lancamentos.length === 0) return <p className="text-center text-muted-foreground py-6">Nenhum abate no período</p>;
 
   return (
@@ -205,6 +206,7 @@ function AbateTable({ lancamentos, onEdit }: { lancamentos: Lancamento[]; onEdit
             <th className="p-1.5 text-right font-bold bg-muted/50">Qtd</th>
             <th className="p-1.5 text-left font-bold bg-muted/50">Categoria</th>
             <th className="p-1.5 text-left font-bold bg-muted/50">Destino</th>
+            {isGlobal && <th className="p-1.5 text-left font-bold bg-muted/50">Origem</th>}
             <th className="p-1.5 text-right font-bold bg-muted/50">P.Vivo</th>
             <th className="p-1.5 text-right font-bold bg-muted/50">Rend.</th>
             <th className="p-1.5 text-right font-bold bg-muted/50">P.@</th>
@@ -225,6 +227,7 @@ function AbateTable({ lancamentos, onEdit }: { lancamentos: Lancamento[]; onEdit
                 <td className="p-1.5 text-right font-bold">{l.quantidade}</td>
                 <td className="p-1.5">{cat}</td>
                 <td className="p-1.5 truncate max-w-[80px]">{l.fazendaDestino || '-'}</td>
+                {isGlobal && <td className="p-1.5 truncate max-w-[100px]">{fMap.get(l.fazendaId || '') || '-'}</td>}
                 <td className="p-1.5 text-right">{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
                 <td className="p-1.5 text-right text-muted-foreground">{c.rendimento ? c.rendimento.toFixed(1) + '%' : '-'}</td>
                 <td className="p-1.5 text-right">{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
@@ -268,6 +271,7 @@ function AbateTable({ lancamentos, onEdit }: { lancamentos: Lancamento[]; onEdit
                 <td className="p-1.5 text-right">{totals.qtd}</td>
                 <td className="p-1.5"></td>
                 <td className="p-1.5"></td>
+                {isGlobal && <td className="p-1.5"></td>}
                 <td className="p-1.5 text-right">{fmtValor(pesoVivoMedio)}</td>
                 <td className="p-1.5 text-right text-muted-foreground">{rendMedio ? rendMedio.toFixed(1) + '%' : '-'}</td>
                 <td className="p-1.5 text-right">{fmtValor(arrobaMedio)}</td>
