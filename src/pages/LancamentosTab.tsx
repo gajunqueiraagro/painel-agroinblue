@@ -319,6 +319,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       valorTotal: valorTotalFinal,
       notaFiscal: notaFiscal || undefined,
       tipoPeso,
+      statusOperacional: statusOp,
     });
 
     setQuantidade('');
