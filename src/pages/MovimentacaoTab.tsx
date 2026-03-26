@@ -195,7 +195,7 @@ export function MovimentacaoTab({ lancamentos, saldosIniciais }: Props) {
                 <td className="px-2 py-2 text-right font-extrabold text-foreground">{totalQtd}</td>
                 <td className="px-2 py-2"></td>
                 <td className="px-2 py-2 text-right font-bold text-foreground whitespace-nowrap">
-                  {formatValor(lancamentosFiltrados.reduce((s, l) => s + (l.valor_total || 0), 0))}
+                  {formatValor(lancamentosFiltrados.reduce((s, l) => s + (l.valorTotal || 0), 0))}
                 </td>
                 <td className="px-2 py-2"></td>
               </tr>
