@@ -52,15 +52,15 @@ function UnifiedTable({ lancamentos, onEdit, showTipo }: { lancamentos: Lancamen
          <thead className="sticky top-0 z-10">
           <tr className="border-b bg-muted/50">
             <th className="p-1.5 text-left font-bold bg-muted/50">Data</th>
-            {showTipo && <th className="p-1.5 text-left font-bold">Tipo</th>}
-            <th className="p-1.5 text-right font-bold">Qtd</th>
-            <th className="p-1.5 text-left font-bold">Cat.</th>
-            <th className="p-1.5 text-right font-bold">P.Vivo</th>
-            <th className="p-1.5 text-right font-bold">P.@</th>
-            <th className="p-1.5 text-right font-bold text-primary">Total</th>
-            <th className="p-1.5 text-right font-bold">R$/líq @</th>
-            <th className="p-1.5 text-right font-bold">Líq/Cab</th>
-            <th className="p-1.5 w-8"></th>
+            {showTipo && <th className="p-1.5 text-left font-bold bg-muted/50">Tipo</th>}
+            <th className="p-1.5 text-right font-bold bg-muted/50">Qtd</th>
+            <th className="p-1.5 text-left font-bold bg-muted/50">Cat.</th>
+            <th className="p-1.5 text-right font-bold bg-muted/50">P.Vivo</th>
+            <th className="p-1.5 text-right font-bold bg-muted/50">P.@</th>
+            <th className="p-1.5 text-right font-bold text-primary bg-muted/50">Total</th>
+            <th className="p-1.5 text-right font-bold bg-muted/50">R$/líq @</th>
+            <th className="p-1.5 text-right font-bold bg-muted/50">Líq/Cab</th>
+            <th className="p-1.5 w-8 bg-muted/50"></th>
           </tr>
         </thead>
         <tbody>
