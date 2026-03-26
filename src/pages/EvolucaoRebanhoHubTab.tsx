@@ -11,6 +11,8 @@ interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
   onNavigateToMovimentacao?: (subAba: SubAba) => void;
+  onEditar?: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
+  onRemover?: (id: string) => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
 }
