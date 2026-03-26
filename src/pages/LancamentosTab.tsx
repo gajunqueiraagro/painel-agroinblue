@@ -31,6 +31,7 @@ interface Props {
   onRemover: (id: string) => void;
   abaInicial?: Aba;
   onBackToConciliacao?: () => void;
+  dataInicial?: string; // yyyy-MM-dd format for reclass context
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
