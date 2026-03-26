@@ -156,16 +156,21 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
     return 'Mês em andamento — algumas pendências parciais.';
   }, [statusGeral, zootecnico.status.nivel, financeiro.status.nivel, fazendaNaoPecuaria]);
 
+  // Tabs bloqueadas no modo global
+  const BLOCKED_TABS_GLOBAL: TabId[] = ['fechamento', 'conciliacao_categoria', 'conciliacao', 'lancamentos', 'valor_rebanho'];
+
   // Alertas automáticos
   const alertas = useMemo(() => {
-    const items: { texto: string; nivel: StatusNivel; tab: TabId }[] = [];
+    const items: { texto: string; nivel: StatusNivel; tab: TabId; blockedGlobal: boolean }[] = [];
     if (fazendaNaoPecuaria) return items;
     statusZoo.pendencias.forEach(p => {
       if (p.status !== 'fechado') {
+        const destTab = (p.resolverTab || 'visao_zoo_hub') as TabId;
         items.push({
           texto: `${p.label}: ${p.descricao}`,
           nivel: p.status === 'aberto' ? 'aberto' : 'parcial',
-          tab: (p.resolverTab || 'visao_zoo_hub') as TabId,
+          tab: destTab,
+          blockedGlobal: BLOCKED_TABS_GLOBAL.includes(destTab),
         });
       }
     });
@@ -174,6 +179,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
         texto: `Financeiro: ${financeiro.status.descricao}`,
         nivel: financeiro.status.nivel,
         tab: 'fin_caixa',
+        blockedGlobal: false,
       });
     }
     return items;
