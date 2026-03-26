@@ -282,6 +282,20 @@ export function MovimentacaoTab({ lancamentos, saldosIniciais, onEditar, onRemov
           )}
         </table>
       </div>
+
+      {detalheId && (() => {
+        const lancamento = lancamentos.find(l => l.id === detalheId);
+        if (!lancamento) return null;
+        return (
+          <LancamentoDetalhe
+            lancamento={lancamento}
+            open={!!detalheId}
+            onClose={() => setDetalheId(null)}
+            onEditar={onEditar || (() => {})}
+            onRemover={onRemover || (() => {})}
+          />
+        );
+      })()}
     </div>
   );
 }
