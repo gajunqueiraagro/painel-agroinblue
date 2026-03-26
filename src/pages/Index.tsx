@@ -204,6 +204,15 @@ const Index = () => {
       {activeTab === 'mapa_pastos' && <MapaPastosTab />}
       {activeTab === 'resumo_pastos' && <ResumoPastosTab />}
       {activeTab === 'analise_operacional' && <AnaliseOperacionalTab />}
+      {activeTab === 'visao_anual_zoo' && (
+        <VisaoAnualZootecnicaTab
+          lancamentos={lancamentosVisiveis}
+          saldosIniciais={saldosIniciais}
+          onBack={goToZootecnicoHub}
+          onTabChange={handleTabChange}
+          filtroAnoInicial={filtroGlobal.ano}
+        />
+      )}
       {activeTab === 'conciliacao' && <ConciliacaoTab filtroAnoInicial={filtroGlobal.ano} filtroMesInicial={filtroGlobal.mes} />}
       {activeTab === 'valor_rebanho' && (
         <ValorRebanhoTab

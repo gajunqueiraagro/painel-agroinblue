@@ -27,6 +27,7 @@ const GROUPS: { title: string; emoji: string; items: GroupItem[] }[] = [
     emoji: '📊',
     items: [
       { label: 'Indicadores e Status', tab: 'zootecnico', icon: BarChart2, description: 'KPIs, estoque, lotação e produção' },
+      { label: 'Visão Anual', tab: 'visao_anual_zoo', icon: Layers, description: 'Status mensal consolidado do ano' },
     ],
   },
   {
