@@ -374,6 +374,16 @@ export function MapaPastosTab() {
           </>
         )}
       </div>
+
+      <ImportMapaPastos
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        pastos={pastos}
+        categorias={categorias}
+        fazendaId={fazendaAtual?.id || ''}
+        anoMes={anoMes}
+        onImported={() => loadFechamentos(anoMes)}
+      />
     </TooltipProvider>
   );
 }
