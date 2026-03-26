@@ -35,7 +35,6 @@ export function useStatusZootecnico(
 ): StatusZootecnicoResult {
   const [loading, setLoading] = useState(true);
 
-  // Raw data
   const [pastosAtivos, setPastosAtivos] = useState(0);
   const [pastosFechados, setPastosFechados] = useState(0);
   const [pastosRascunho, setPastosRascunho] = useState(0);
@@ -53,9 +52,7 @@ export function useStatusZootecnico(
 
   const load = useCallback(async () => {
     if (!fazendaId) { setLoading(false); return; }
-    // Single non-pecuária fazenda: skip all queries
     if (!isGlobal) {
-      // Need to check tem_pecuaria for single farm
       const { data: fazData } = await supabase.from('fazendas').select('tem_pecuaria').eq('id', fazendaId).single();
       if (fazData && fazData.tem_pecuaria === false) {
         setPastosAtivos(0); setPastosFechados(0);
@@ -71,62 +68,41 @@ export function useStatusZootecnico(
     setLoading(true);
     setSemPecuaria(false);
     try {
-      // Build fazenda filter helper
-      const fq = (q: any) => isGlobal ? q : q.eq('fazenda_id', fazendaId);
-
-      // For global mode, get only pecuária fazendas
       let fazendaIdsPecuaria: string[] = [];
       if (isGlobal) {
         const { data: allFazendas } = await supabase.from('fazendas').select('id, tem_pecuaria');
         fazendaIdsPecuaria = (allFazendas || []).filter(f => f.tem_pecuaria !== false).map(f => f.id);
         if (fazendaIdsPecuaria.length === 0) {
-          // No pecuária farms — everything is "fechado"
-          setPastosAtivos(0);
-          setPastosFechados(0);
-          setPastosRascunho(0);
-          setPastosNaoIniciados(0);
+          setPastosAtivos(0); setPastosFechados(0);
+          setPastosRascunho(0); setPastosNaoIniciados(0);
           setItensTotais(0);
-          setPrecosDefinidos(0);
-          setCategoriasComSaldo(0);
-          setCatsDivergentes(0);
-          setDifTotalCabecas(0);
-          setSaldoTotalSistema(0);
-          setSemPecuaria(true);
+          setPrecosDefinidos(0); setCategoriasComSaldo(0);
+          setCatsDivergentes(0); setDifTotalCabecas(0);
+          setSaldoTotalSistema(0); setSemPecuaria(true);
           setLoading(false);
           return;
         }
       }
 
-      // Helper to apply global filter using only pecuária farms
       const fqPec = (q: any) => isGlobal ? q.in('fazenda_id', fazendaIdsPecuaria) : q.eq('fazenda_id', fazendaId);
 
       // 1. Pastos ativos com conciliação
-      const pastosQuery = fqPec(supabase.from('pastos').select('id').eq('ativo', true).eq('entra_conciliacao', true));
-      const { data: pastosData } = await pastosQuery;
+      const { data: pastosData } = await fqPec(supabase.from('pastos').select('id').eq('ativo', true).eq('entra_conciliacao', true));
       const totalPastos = (pastosData || []).length;
       setPastosAtivos(totalPastos);
 
-      // 2. Fechamento de pastos
-      const fpQuery = fqPec(supabase.from('fechamento_pastos').select('id, status, pasto_id').eq('ano_mes', anoMes));
-      const { data: fpData } = await fpQuery;
+      // 2. Fechamento de pastos — detailed status
+      const { data: fpData } = await fqPec(supabase.from('fechamento_pastos').select('id, status, pasto_id').eq('ano_mes', anoMes));
       const fps = fpData || [];
       const fechados = fps.filter(f => f.status === 'fechado').length;
+      const rascunhos = fps.filter(f => f.status !== 'fechado').length;
+      const pastosComFechamento = new Set(fps.map(f => f.pasto_id));
+      const naoIniciados = totalPastos - pastosComFechamento.size;
       setPastosFechados(fechados);
+      setPastosRascunho(rascunhos);
+      setPastosNaoIniciados(naoIniciados);
 
-      // 3. Fechamento de rebanho (valor_rebanho_fechamento)
-      const vrfQuery = fqPec(supabase.from('valor_rebanho_fechamento').select('status, fazenda_id').eq('ano_mes', anoMes));
-      const { data: vrfData } = await vrfQuery;
-      
-      if (isGlobal) {
-        const totalFazendas = fazendaIdsPecuaria.length;
-        const fechadasCount = (vrfData || []).filter(v => v.status === 'fechado').length;
-        setRebanhoFechamentos({ total: totalFazendas, fechados: fechadasCount });
-      } else {
-        const isFechado = (vrfData || []).some(v => v.status === 'fechado');
-        setRebanhoFechamentos({ total: 1, fechados: isFechado ? 1 : 0 });
-      }
-
-      // 4. Peso médio (fechamento_pasto_itens com quantidade > 0)
+      // Itens for categorias comparison
       const fechIds = fps.map(f => f.id);
       if (fechIds.length > 0) {
         const { data: itensData } = await supabase
@@ -136,23 +112,19 @@ export function useStatusZootecnico(
           .gt('quantidade', 0);
         const itens = itensData || [];
         setItensTotais(itens.length);
-        setItensComPeso(itens.filter(i => i.peso_medio_kg && i.peso_medio_kg > 0).length);
 
-        // 6. Conciliação de categorias
+        // Conciliação de categorias
         const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
         const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
         setCategoriasComSaldo(catsComSaldo.length);
         const totalSist = catsComSaldo.reduce((s, [, q]) => s + q, 0);
         setSaldoTotalSistema(totalSist);
 
-        // Aggregate pastos by categoria_id
         const pastosMap = new Map<string, number>();
         itens.forEach(i => {
           pastosMap.set(i.categoria_id, (pastosMap.get(i.categoria_id) || 0) + i.quantidade);
         });
 
-        // We need to compare by categoria code, but itens use categoria_id (UUID)
-        // Fetch categorias to map
         const { data: catsData } = await supabase.from('categorias_rebanho').select('id, codigo');
         const idToCodigo = new Map((catsData || []).map(c => [c.id, c.codigo]));
         
@@ -169,7 +141,6 @@ export function useStatusZootecnico(
           const dif = Math.abs(qtdPastos - qtdSist);
           if (dif > 0) { divCount++; difTotal += dif; }
         });
-        // Also check categories in pastos but not in sistema
         pastosMapByCodigo.forEach((qtdP, cat) => {
           if (!saldoMap.has(cat) || (saldoMap.get(cat) || 0) <= 0) {
             if (qtdP > 0) { divCount++; difTotal += qtdP; }
@@ -179,7 +150,6 @@ export function useStatusZootecnico(
         setDifTotalCabecas(difTotal);
       } else {
         setItensTotais(0);
-        setItensComPeso(0);
         const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
         const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
         setCategoriasComSaldo(catsComSaldo.length);
@@ -188,10 +158,8 @@ export function useStatusZootecnico(
         setDifTotalCabecas(catsComSaldo.reduce((s, [, q]) => s + q, 0));
       }
 
-      // 5. Valor do rebanho (precos)
-      const vrQuery = fqPec(supabase.from('valor_rebanho_mensal').select('categoria').eq('ano_mes', anoMes));
-      const { data: vrData } = await vrQuery;
-      setPrecosDefinidos((vrData || []).length);
+      // Valor do rebanho (precos)
+      const { data: vrData } = await fqPec(supabase.from('valor_rebanho_mensal').select('categoria').eq('ano_mes', anoMes));
       setPrecosDefinidos((vrData || []).length);
 
     } catch (e) {
@@ -206,73 +174,36 @@ export function useStatusZootecnico(
   const result = useMemo(() => {
     const pendencias: Pendencia[] = [];
 
-    // Se não há fazendas com operação pecuária, tudo fechado
     if (semPecuaria) {
       const desc = 'Sem operação pecuária';
-      const ids = ['pastos', 'rebanho', 'peso', 'valor', 'categorias'];
+      const ids = ['pastos', 'valor', 'categorias'];
       const labels: Record<string, string> = {
-        pastos: 'Conciliação de Pastos', rebanho: 'Fechamento de Rebanho',
-        peso: 'Peso Médio', valor: 'Valor do Rebanho', categorias: 'Conciliação de Categorias',
+        pastos: 'Conciliação de Pastos', valor: 'Valor do Rebanho', categorias: 'Conciliação de Categorias',
       };
       ids.forEach(id => pendencias.push({ id, label: labels[id], descricao: desc, status: 'fechado' }));
-      return { status: 'fechado' as StatusGeral, pendencias, contadores: { aberto: 0, parcial: 0, fechado: 5 }, loading };
+      return { status: 'fechado' as StatusGeral, pendencias, contadores: { aberto: 0, parcial: 0, fechado: 3 }, loading };
     }
 
-    // 1. Conciliação de Pastos
+    // 1. Conciliação de Pastos — detailed
     let statusPastos: StatusItem = 'aberto';
     let descPastos = '';
     if (pastosAtivos === 0) {
       statusPastos = 'aberto';
       descPastos = 'Nenhum pasto cadastrado';
-    } else if (pastosFechados === 0) {
-      statusPastos = 'aberto';
-      descPastos = `0/${pastosAtivos} pastos fechados`;
-    } else if (pastosFechados < pastosAtivos) {
-      statusPastos = 'parcial';
-      descPastos = `${pastosFechados}/${pastosAtivos} pastos fechados`;
-    } else {
+    } else if (pastosFechados === pastosAtivos) {
       statusPastos = 'fechado';
-      descPastos = `${pastosAtivos}/${pastosAtivos} pastos conciliados`;
-    }
-    pendencias.push({ id: 'pastos', label: 'Conciliação de Pastos', descricao: descPastos, status: statusPastos, resolverTab: 'conciliacao' });
-
-    // 2. Fechamento de Rebanho
-    let statusRebanho: StatusItem = 'aberto';
-    let descRebanho = '';
-    if (rebanhoFechamentos.total === 0) {
-      statusRebanho = 'aberto';
-      descRebanho = 'Sem fazendas';
-    } else if (rebanhoFechamentos.fechados === 0) {
-      statusRebanho = 'aberto';
-      descRebanho = 'Mês ainda não fechado';
-    } else if (rebanhoFechamentos.fechados < rebanhoFechamentos.total) {
-      statusRebanho = 'parcial';
-      descRebanho = `${rebanhoFechamentos.fechados}/${rebanhoFechamentos.total} fazendas fechadas`;
+      descPastos = `${pastosAtivos} fechado(s)`;
     } else {
-      statusRebanho = 'fechado';
-      descRebanho = 'Mês fechado';
+      const parts: string[] = [];
+      if (pastosFechados > 0) parts.push(`${pastosFechados} fechado(s)`);
+      if (pastosRascunho > 0) parts.push(`${pastosRascunho} em rascunho`);
+      if (pastosNaoIniciados > 0) parts.push(`${pastosNaoIniciados} não iniciado(s)`);
+      descPastos = parts.join(' · ');
+      statusPastos = pastosFechados > 0 ? 'parcial' : 'aberto';
     }
-    pendencias.push({ id: 'rebanho', label: 'Fechamento de Rebanho', descricao: descRebanho, status: statusRebanho, resolverTab: 'valor_rebanho' });
+    pendencias.push({ id: 'pastos', label: 'Conciliação de Pastos', descricao: descPastos, status: statusPastos, resolverTab: 'fechamento' });
 
-    // 3. Peso Médio
-    let statusPeso: StatusItem = 'aberto';
-    let descPeso = '';
-    if (itensTotais === 0) {
-      statusPeso = 'aberto';
-      descPeso = 'Peso médio não informado';
-    } else if (itensComPeso === 0) {
-      statusPeso = 'aberto';
-      descPeso = 'Peso médio não informado';
-    } else if (itensComPeso < itensTotais) {
-      statusPeso = 'parcial';
-      descPeso = `Peso médio parcial (${itensComPeso}/${itensTotais})`;
-    } else {
-      statusPeso = 'fechado';
-      descPeso = 'Peso médio completo';
-    }
-    pendencias.push({ id: 'peso', label: 'Peso Médio', descricao: descPeso, status: statusPeso, resolverTab: 'conciliacao' });
-
-    // 4. Valor do Rebanho
+    // 2. Valor do Rebanho
     let statusValor: StatusItem = 'aberto';
     let descValor = '';
     if (precosDefinidos === 0) {
@@ -287,7 +218,7 @@ export function useStatusZootecnico(
     }
     pendencias.push({ id: 'valor', label: 'Valor do Rebanho', descricao: descValor, status: statusValor, resolverTab: 'valor_rebanho' });
 
-    // 5. Conciliação de Categorias
+    // 3. Conciliação de Categorias
     let statusCats: StatusItem = 'aberto';
     let descCats = '';
     if (itensTotais === 0 && categoriasComSaldo > 0) {
@@ -309,11 +240,11 @@ export function useStatusZootecnico(
 
     // Status geral
     let status: StatusGeral = 'parcial';
-    if (contadores.fechado === 5) status = 'fechado';
-    else if (contadores.aberto === 5) status = 'aberto';
+    if (contadores.fechado === 3) status = 'fechado';
+    else if (contadores.aberto === 3) status = 'aberto';
 
     return { status, pendencias, contadores, loading };
-  }, [semPecuaria, pastosAtivos, pastosFechados, rebanhoFechamentos, itensComPeso, itensTotais, precosDefinidos, categoriasComSaldo, catsDivergentes, difTotalCabecas, saldoTotalSistema, loading]);
+  }, [semPecuaria, pastosAtivos, pastosFechados, pastosRascunho, pastosNaoIniciados, precosDefinidos, categoriasComSaldo, catsDivergentes, difTotalCabecas, saldoTotalSistema, itensTotais, loading]);
 
   return result;
 }
