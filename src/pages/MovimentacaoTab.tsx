@@ -178,11 +178,11 @@ export function MovimentacaoTab({ lancamentos, saldosIniciais }: Props) {
                   </td>
                   <td className="px-2 py-1.5 text-foreground whitespace-nowrap">
                     {l.categoria}
-                    {l.categoria_destino ? ` → ${l.categoria_destino}` : ''}
+                    {l.categoriaDestino ? ` → ${l.categoriaDestino}` : ''}
                   </td>
                   <td className="px-2 py-1.5 text-right font-bold text-foreground">{l.quantidade}</td>
-                  <td className="px-2 py-1.5 text-right text-foreground">{formatPeso(l.peso_medio_kg)}</td>
-                  <td className="px-2 py-1.5 text-right text-foreground whitespace-nowrap">{formatValor(l.valor_total)}</td>
+                  <td className="px-2 py-1.5 text-right text-foreground">{formatPeso(l.pesoMedioKg)}</td>
+                  <td className="px-2 py-1.5 text-right text-foreground whitespace-nowrap">{formatValor(l.valorTotal)}</td>
                   <td className="px-2 py-1.5 text-muted-foreground truncate max-w-[120px]">{l.observacao || '-'}</td>
                 </tr>
               ))
