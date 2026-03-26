@@ -31,6 +31,7 @@ interface Props {
   onRemover: (id: string) => void;
   abaInicial?: Aba;
   onBackToConciliacao?: () => void;
+  dataInicial?: string; // yyyy-MM-dd format for reclass context
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
@@ -58,7 +59,7 @@ function getCamposFazenda(tipo: TipoMovimentacao, nomeFazenda: string) {
   }
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, abaInicial, onBackToConciliacao }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, abaInicial, onBackToConciliacao, dataInicial }: Props) {
   const { fazendaAtual, fazendas } = useFazenda();
   const nomeFazenda = fazendaAtual?.nome || '';
   const outrasFazendas = useMemo(() => fazendas.filter(f => f.id !== fazendaAtual?.id), [fazendas, fazendaAtual]);
@@ -230,7 +231,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       </div>
 
       {aba === 'reclassificacao' ? (
-        <ReclassificacaoForm onAdicionar={onAdicionar} />
+        <ReclassificacaoForm onAdicionar={onAdicionar} dataInicial={dataInicial} />
       ) : aba !== 'historico' ? (
         <form onSubmit={handleSubmit} className="bg-card rounded-lg p-4 shadow-sm border space-y-4">
           {/* Tipo */}

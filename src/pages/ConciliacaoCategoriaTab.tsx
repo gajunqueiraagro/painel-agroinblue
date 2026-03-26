@@ -42,7 +42,7 @@ interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
   onBack: () => void;
-  onNavigateToReclass: () => void;
+  onNavigateToReclass: (filtro?: { ano: string; mes: number }) => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
 }
@@ -280,7 +280,7 @@ export function ConciliacaoCategoriaTab({ lancamentos, saldosIniciais, onBack, o
       {/* Botão de ação — Reclassificação */}
       {catsDivergentes > 0 && (
         <Button
-          onClick={onNavigateToReclass}
+          onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: mesFiltro })}
           className="w-full font-bold"
           size="lg"
         >

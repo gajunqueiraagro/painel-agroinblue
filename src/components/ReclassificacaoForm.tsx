@@ -8,13 +8,14 @@ import { format } from 'date-fns';
 
 interface Props {
   onAdicionar: (l: Omit<Lancamento, 'id'>) => void;
+  dataInicial?: string; // yyyy-MM-dd
 }
 
-export function ReclassificacaoForm({ onAdicionar }: Props) {
+export function ReclassificacaoForm({ onAdicionar, dataInicial }: Props) {
   const [categoriaOrigem, setCategoriaOrigem] = useState<Categoria>('desmama_m');
   const [categoriaDestino, setCategoriaDestino] = useState<Categoria>('garrotes');
   const [quantidade, setQuantidade] = useState('');
-  const [data, setData] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [data, setData] = useState(dataInicial || format(new Date(), 'yyyy-MM-dd'));
   const [pesoKg, setPesoKg] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {

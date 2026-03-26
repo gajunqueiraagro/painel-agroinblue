@@ -107,7 +107,8 @@ const Index = () => {
   const goToZootecnicoHub = useCallback(() => setActiveTab('zootecnico_hub'), []);
   const goToZootecnico = useCallback(() => setActiveTab('zootecnico'), []);
   const goToConciliacaoCategoria = useCallback(() => setActiveTab('conciliacao_categoria'), []);
-  const goToReclassFromConciliacao = useCallback(() => {
+  const goToReclassFromConciliacao = useCallback((filtro?: { ano: string; mes: number }) => {
+    if (filtro) setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
     setLancamentosFromConciliacao(true);
     setActiveTab('lancamentos');
   }, []);
@@ -171,6 +172,7 @@ const Index = () => {
           onRemover={isGlobal ? async () => {} : removerLancamento}
           abaInicial={lancamentosFromConciliacao ? 'reclassificacao' : undefined}
           onBackToConciliacao={lancamentosFromConciliacao ? goToConciliacaoCategoria : undefined}
+          dataInicial={lancamentosFromConciliacao ? `${filtroGlobal.ano}-${String(filtroGlobal.mes).padStart(2, '0')}-15` : undefined}
         />
       )}
       {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} />}
