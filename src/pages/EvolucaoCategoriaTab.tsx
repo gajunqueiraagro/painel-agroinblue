@@ -62,7 +62,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   const dados = useMemo(() => {
     const mesKey = `${anoFiltro}-${mesFiltro}`;
 
-    const filtrados = lancamentos.filter(l => {
+    const filtrados = lancFiltrados.filter(l => {
       try {
         return format(parseISO(l.data), 'yyyy-MM') === mesKey;
       } catch { return false; }
