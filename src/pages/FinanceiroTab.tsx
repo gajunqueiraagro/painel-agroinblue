@@ -17,6 +17,8 @@ interface Props {
   onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
   onRemover: (id: string) => void;
   subAbaInicial?: SubAba;
+  /** Modo compacto para aba Movimentações: sem "Todas"/"Chuvas", filtros menores, header sticky */
+  modoMovimentacao?: boolean;
 }
 
 export type SubAba = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
@@ -47,18 +49,18 @@ function UnifiedTable({ lancamentos, onEdit, showTipo }: { lancamentos: Lancamen
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs border-collapse">
-        <thead>
+         <thead className="sticky top-0 z-10">
           <tr className="border-b bg-muted/50">
-            <th className="p-1.5 text-left font-bold">Data</th>
-            {showTipo && <th className="p-1.5 text-left font-bold">Tipo</th>}
-            <th className="p-1.5 text-right font-bold">Qtd</th>
-            <th className="p-1.5 text-left font-bold">Cat.</th>
-            <th className="p-1.5 text-right font-bold">P.Vivo</th>
-            <th className="p-1.5 text-right font-bold">P.@</th>
-            <th className="p-1.5 text-right font-bold text-primary">Total</th>
-            <th className="p-1.5 text-right font-bold">R$/líq @</th>
-            <th className="p-1.5 text-right font-bold">Líq/Cab</th>
-            <th className="p-1.5 w-8"></th>
+            <th className="p-1.5 text-left font-bold bg-muted/50">Data</th>
+            {showTipo && <th className="p-1.5 text-left font-bold bg-muted/50">Tipo</th>}
+            <th className="p-1.5 text-right font-bold bg-muted/50">Qtd</th>
+            <th className="p-1.5 text-left font-bold bg-muted/50">Cat.</th>
+            <th className="p-1.5 text-right font-bold bg-muted/50">P.Vivo</th>
+            <th className="p-1.5 text-right font-bold bg-muted/50">P.@</th>
+            <th className="p-1.5 text-right font-bold text-primary bg-muted/50">Total</th>
+            <th className="p-1.5 text-right font-bold bg-muted/50">R$/líq @</th>
+            <th className="p-1.5 text-right font-bold bg-muted/50">Líq/Cab</th>
+            <th className="p-1.5 w-8 bg-muted/50"></th>
           </tr>
         </thead>
         <tbody>
@@ -127,19 +129,19 @@ function AbateTable({ lancamentos, onEdit }: { lancamentos: Lancamento[]; onEdit
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs border-collapse">
-        <thead>
+         <thead className="sticky top-0 z-10">
           <tr className="border-b bg-muted/50">
-            <th className="p-1.5 text-left font-bold">Data</th>
-            <th className="p-1.5 text-right font-bold">Qtd</th>
-            <th className="p-1.5 text-left font-bold">Cat.</th>
-            <th className="p-1.5 text-left font-bold">Destino</th>
-            <th className="p-1.5 text-right font-bold">P.Vivo</th>
-            <th className="p-1.5 text-right font-bold">Rend.</th>
-            <th className="p-1.5 text-right font-bold">P.@</th>
-            <th className="p-1.5 text-right font-bold text-primary">Total</th>
-            <th className="p-1.5 text-right font-bold">R$/líq @</th>
-            <th className="p-1.5 text-right font-bold">Líq/Cab</th>
-            <th className="p-1.5 w-8"></th>
+            <th className="p-1.5 text-left font-bold bg-muted/50">Data</th>
+            <th className="p-1.5 text-right font-bold bg-muted/50">Qtd</th>
+            <th className="p-1.5 text-left font-bold bg-muted/50">Cat.</th>
+            <th className="p-1.5 text-left font-bold bg-muted/50">Destino</th>
+            <th className="p-1.5 text-right font-bold bg-muted/50">P.Vivo</th>
+            <th className="p-1.5 text-right font-bold bg-muted/50">Rend.</th>
+            <th className="p-1.5 text-right font-bold bg-muted/50">P.@</th>
+            <th className="p-1.5 text-right font-bold text-primary bg-muted/50">Total</th>
+            <th className="p-1.5 text-right font-bold bg-muted/50">R$/líq @</th>
+            <th className="p-1.5 text-right font-bold bg-muted/50">Líq/Cab</th>
+            <th className="p-1.5 w-8 bg-muted/50"></th>
           </tr>
         </thead>
         <tbody>
@@ -214,9 +216,9 @@ function getTopTabFromSubAba(subAba?: SubAba): TopTab {
   return 'todas';
 }
 
-export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial }: Props) {
+export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao }: Props) {
   const { fazendaAtual } = useFazenda();
-  const [topTab, setTopTab] = useState<TopTab>(subAbaInicial ? getTopTabFromSubAba(subAbaInicial) : 'todas');
+  const [topTab, setTopTab] = useState<TopTab>(subAbaInicial ? getTopTabFromSubAba(subAbaInicial) : (modoMovimentacao ? 'entradas' : 'todas'));
   const [subAba, setSubAba] = useState<SubAba>(subAbaInicial || 'abate');
   const [editando, setEditando] = useState<Lancamento | null>(null);
 
@@ -263,12 +265,15 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial 
 
   const isFinancial = FINANCIAL_TYPES.includes(subAba);
 
-  const topTabs: { id: TopTab; label: string; icon: string }[] = [
+  const allTopTabs: { id: TopTab; label: string; icon: string }[] = [
     { id: 'todas', label: 'Todas', icon: '📋' },
     { id: 'entradas', label: 'Entradas', icon: '📥' },
     { id: 'saidas', label: 'Saídas', icon: '📤' },
     { id: 'chuvas', label: 'Chuvas', icon: '☁️' },
   ];
+  const topTabs = modoMovimentacao
+    ? allTopTabs.filter(t => t.id !== 'todas' && t.id !== 'chuvas')
+    : allTopTabs;
 
   const subTypes = topTab === 'entradas' ? ENTRY_TYPES : topTab === 'saidas' ? EXIT_TYPES : [];
 
@@ -299,12 +304,12 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial 
   return (
     <div className="p-4 max-w-full mx-auto space-y-3 animate-fade-in pb-20">
       {/* Top tabs */}
-      <div className="grid grid-cols-4 gap-1 bg-muted rounded-lg p-1">
+      <div className={`grid gap-1 bg-muted rounded-lg p-1 ${modoMovimentacao ? 'grid-cols-2' : `grid-cols-${topTabs.length}`}`}>
         {topTabs.map(t => (
           <button
             key={t.id}
             onClick={() => { setTopTab(t.id); if (t.id === 'entradas') setSubAba('nascimento'); if (t.id === 'saidas') setSubAba('abate'); }}
-            className={`py-2 px-1 rounded-md text-xs font-bold transition-colors touch-target ${
+            className={`${modoMovimentacao ? 'py-1.5 px-2 text-[11px]' : 'py-2 px-1 text-xs'} rounded-md font-bold transition-colors touch-target ${
               topTab === t.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'
             }`}
           >
