@@ -19,6 +19,7 @@ export function MovimentacaoTab({ lancamentos, saldosIniciais, onEditar, onRemov
       lancamentos={lancamentos}
       onEditar={onEditar || (() => {})}
       onRemover={onRemover || (() => {})}
+      modoMovimentacao
     />
   );
 }
