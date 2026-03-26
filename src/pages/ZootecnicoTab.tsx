@@ -31,7 +31,7 @@ interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
   onBack: () => void;
-  onTabChange?: (tab: TabId) => void;
+  onTabChange?: (tab: TabId, filtro?: { ano: string; mes: number }) => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
 }
