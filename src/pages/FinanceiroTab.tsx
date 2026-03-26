@@ -12,6 +12,8 @@ import { fmtValor } from '@/lib/calculos/formatters';
 import { MESES_OPTIONS } from '@/lib/calculos/labels';
 import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 
+type StatusFiltro = 'todos' | 'realizado' | 'previsto';
+
 interface Props {
   lancamentos: Lancamento[];
   onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
@@ -251,6 +253,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState('todos');
+  const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>('todos');
 
   const filtrados = useMemo(() => {
     let tiposFilter: string[] = [];
@@ -268,11 +271,14 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           const d = parseISO(l.data);
           if (format(d, 'yyyy') !== anoFiltro) return false;
           if (mesFiltro !== 'todos' && format(d, 'MM') !== mesFiltro) return false;
-          return tiposFilter.includes(l.tipo);
+          if (!tiposFilter.includes(l.tipo)) return false;
+          // Status filter: all existing lancamentos are treated as "realizado" until status field is persisted
+          if (statusFiltro === 'previsto') return false; // No previsto records in DB yet
+          return true;
         } catch { return false; }
       })
       .sort((a, b) => a.data.localeCompare(b.data));
-  }, [lancamentos, anoFiltro, mesFiltro, topTab, subAba]);
+  }, [lancamentos, anoFiltro, mesFiltro, topTab, subAba, statusFiltro]);
 
   const isFinancial = FINANCIAL_TYPES.includes(subAba);
 
@@ -350,27 +356,48 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       )}
 
       {/* Filters */}
-      <div className="flex gap-2">
+      <div className="flex gap-1.5 items-center flex-wrap">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-          <SelectTrigger className="touch-target text-base font-bold w-28">
+          <SelectTrigger className="h-8 text-xs font-bold w-20">
             <SelectValue placeholder="Ano" />
           </SelectTrigger>
           <SelectContent>
             {anosDisponiveis.map(a => (
-              <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>
+              <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
             ))}
           </SelectContent>
         </Select>
         <Select value={mesFiltro} onValueChange={setMesFiltro}>
-          <SelectTrigger className="touch-target text-base font-bold flex-1">
+          <SelectTrigger className="h-8 text-xs font-bold w-24">
             <SelectValue placeholder="Mês" />
           </SelectTrigger>
           <SelectContent>
             {MESES_OPTIONS.map(m => (
-              <SelectItem key={m.value} value={m.value} className="text-base">{m.label}</SelectItem>
+              <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
+        <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
+          {([
+            { value: 'todos', label: 'Todos' },
+            { value: 'realizado', label: 'Realizado' },
+            { value: 'previsto', label: 'Previsto' },
+          ] as { value: StatusFiltro; label: string }[]).map(s => (
+            <button
+              key={s.value}
+              onClick={() => setStatusFiltro(s.value)}
+              className={`px-2 py-1 rounded text-[10px] font-bold transition-colors ${
+                statusFiltro === s.value
+                  ? s.value === 'realizado' ? 'bg-green-700 text-white'
+                    : s.value === 'previsto' ? 'bg-orange-500 text-white'
+                    : 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground'
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
         {isFinancial && topTab !== 'todas' && (
           <FinanceiroExportMenu
             lancamentos={filtrados}
