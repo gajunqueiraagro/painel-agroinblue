@@ -68,6 +68,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo }: { lancamentos:
             <th className="p-1.5 text-right font-bold bg-muted/50">R$/líq @</th>
             {showLiqKg && <th className="p-1.5 text-right font-bold bg-muted/50">R$/Kg Líq</th>}
             <th className="p-1.5 text-right font-bold bg-muted/50">Líq/Cab</th>
+            <th className="p-1.5 text-center font-bold bg-muted/50">Status</th>
             <th className="p-1.5 w-8 bg-muted/50"></th>
           </tr>
         </thead>
