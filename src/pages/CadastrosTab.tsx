@@ -55,6 +55,15 @@ function loadLogoBase64(): Promise<string> {
   });
 }
 
+function LegacyLink({ label, tabId }: { label: string; tabId: string }) {
+  return (
+    <div className="flex items-center justify-between px-3 py-2 rounded-md bg-muted/40 text-sm text-muted-foreground">
+      <span>{label}</span>
+      <span className="text-[10px] font-mono opacity-60">{tabId}</span>
+    </div>
+  );
+}
+
 export function CadastrosTab() {
   const { fazendaAtual, isGlobal } = useFazenda();
   const [data, setData] = useState<CadastroData>(EMPTY);
