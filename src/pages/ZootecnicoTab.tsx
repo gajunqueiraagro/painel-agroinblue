@@ -18,7 +18,7 @@ import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';
 import { TabId } from '@/components/BottomNav';
 import {
   ArrowLeft, ChevronRight, AlertTriangle,
-  BarChart2,
+  BarChart2, TrendingUp,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -542,10 +542,10 @@ function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNu
         <>
           <ChartCard title="Rebanho Final do mês (cab)" subtitle="Quantidade de cabeças no final do mês" data={chartData}
             keys={[`cab_${anoNum}`, `cab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-            type="area" />
+            type="area" mesFiltro={mesFiltro} />
           <ChartCard title="Lotação: Kg vivo por ha (Kg/ha)" subtitle="Quantidade de Kg sobre cada hectare produtivo, no final do mês" data={chartData}
             keys={[`kgHa_${anoNum}`, `kgHa_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-            type="line" />
+            type="line" mesFiltro={mesFiltro} />
         </>
       ) : (
         <>
@@ -553,16 +553,16 @@ function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNu
             <>
               <ChartCard title="Arrobas Produzidas por mês" subtitle="Quantidade de arrobas produzidas por mês" data={prodData}
                 keys={[`arrProdMes_${anoNum}`, `arrProdMes_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="bar" decimals={0} />
+                type="bar" decimals={0} mesFiltro={mesFiltro} />
               <ChartCard title="Arrobas Produzidas acumulado" subtitle="Quantidade de arrobas produzidas no acumulado do ano" data={prodData}
                 keys={[`arrProd_${anoNum}`, `arrProd_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="line" decimals={0} />
+                type="line" decimals={0} mesFiltro={mesFiltro} />
               <ChartCard title="GMD médio (kg/dia)" subtitle="Kg médio ganho por cabeça, por dia" data={prodData}
                 keys={[`gmdMes_${anoNum}`, `gmdMes_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="bar" decimals={3} />
+                type="bar" decimals={3} mesFiltro={mesFiltro} />
               <ChartCard title="Desfrute Cab. acumulado (%)" subtitle="% de animais desfrutados (vendidos) em cabeças, em comparação com o saldo do início do ano" data={prodData}
                 keys={[`desfCab_${anoNum}`, `desfCab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="line" decimals={1} />
+                type="line" decimals={1} mesFiltro={mesFiltro} />
             </>
           )}
         </>
@@ -583,20 +583,59 @@ interface ChartCardProps {
   labels: string[];
   type: 'area' | 'line' | 'bar';
   decimals?: number;
-
+  mesFiltro: number;
 }
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--muted-foreground))'];
 const DOT_STYLE = { r: 3, strokeWidth: 2 };
 const ACTIVE_DOT_STYLE = { r: 5, strokeWidth: 2 };
 
-function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0 }: ChartCardProps) {
+function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, mesFiltro }: ChartCardProps) {
+  // Compute MoM and YoY comparisons from data
+  const comparisons = useMemo(() => {
+    if (!data || data.length === 0 || keys.length < 2) return { mom: null, yoy: null };
+    const mesIdx = mesFiltro - 1;
+    const mesAntIdx = mesFiltro > 1 ? mesFiltro - 2 : null;
+
+    const valAtual = data[mesIdx]?.[keys[0]];
+    const valMesAnt = mesAntIdx !== null ? data[mesAntIdx]?.[keys[0]] : null;
+    const valAnoAnt = data[mesIdx]?.[keys[1]];
+
+    const calcPct = (cur: any, ref: any) => {
+      if (cur === null || cur === undefined || ref === null || ref === undefined) return null;
+      if (typeof cur !== 'number' || typeof ref !== 'number') return null;
+      if (cur === 0 && ref === 0) return null;
+      if (ref === 0) return null;
+      return ((cur - ref) / Math.abs(ref)) * 100;
+    };
+
+    return { mom: calcPct(valAtual, valMesAnt), yoy: calcPct(valAtual, valAnoAnt) };
+  }, [data, keys, mesFiltro]);
+
+  const renderComp = (pct: number | null, label: string) => {
+    if (pct === null) return null;
+    const isPositive = pct >= 0;
+    return (
+      <span className={`flex items-center gap-0.5 text-[10px] font-medium ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+        <TrendingUp className={`h-3 w-3 ${!isPositive ? 'rotate-180' : ''}`} />
+        {isPositive ? '+' : ''}{pct.toFixed(1)}% {label}
+      </span>
+    );
+  };
 
   return (
     <Card>
       <CardContent className="p-4">
-        <p className="text-xs font-bold text-muted-foreground mb-0.5">{title}</p>
-        {subtitle && <p className="text-[10px] text-muted-foreground/70 mb-2">{subtitle}</p>}
+        <div className="flex items-start justify-between mb-1">
+          <div>
+            <p className="text-xs font-bold text-muted-foreground mb-0.5">{title}</p>
+            {subtitle && <p className="text-[10px] text-muted-foreground/70">{subtitle}</p>}
+          </div>
+          <div className="flex flex-col items-end gap-0.5 shrink-0 ml-2">
+            {renderComp(comparisons.mom, 'vs mês')}
+            {renderComp(comparisons.yoy, 'vs ano ant.')}
+          </div>
+        </div>
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             {type === 'bar' ? (
