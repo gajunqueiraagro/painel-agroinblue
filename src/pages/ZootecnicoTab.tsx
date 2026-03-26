@@ -258,7 +258,7 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
                 ? (zoo.desfruteArrobasMes !== null ? formatNum(zoo.desfruteArrobasMes, 1) : '—')
                 : (zoo.desfruteArrobasAcumulado !== null ? formatNum(zoo.desfruteArrobasAcumulado, 1) : '—')}
               unidade="%"
-              comparacao={vista === 'acumulado' ? zoo.comparacoes.desfruteArrobasAcumulado : null}
+              compAnual={vista === 'acumulado' ? zoo.comparacoes.desfruteArrobasAcumulado.anual : null}
               semBase={vista === 'mes' ? zoo.desfruteArrobasMes === null : zoo.desfruteArrobasAcumulado === null} />
             <KpiCard label="@ desfrutadas"
               valor={formatNum(zoo.arrobasSaidasAcumuladoAno, 1)} unidade="@"
