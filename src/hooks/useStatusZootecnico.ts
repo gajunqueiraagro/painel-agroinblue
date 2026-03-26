@@ -59,8 +59,8 @@ export function useStatusZootecnico(
       const { data: fazData } = await supabase.from('fazendas').select('tem_pecuaria').eq('id', fazendaId).single();
       if (fazData && fazData.tem_pecuaria === false) {
         setPastosAtivos(0); setPastosFechados(0);
-        setRebanhoFechamentos({ total: 0, fechados: 0 });
-        setItensTotais(0); setItensComPeso(0);
+        setPastosRascunho(0); setPastosNaoIniciados(0);
+        setItensTotais(0);
         setPrecosDefinidos(0); setCategoriasComSaldo(0);
         setCatsDivergentes(0); setDifTotalCabecas(0);
         setSaldoTotalSistema(0); setSemPecuaria(true);
