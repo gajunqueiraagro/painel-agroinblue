@@ -133,17 +133,24 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
         itensByFech.set(i.fechamento_id, list);
       });
 
-      // Filter lancamentos and saldos per fazenda
+      // Filter lancamentos per fazenda (Lancamento uses fazendaId)
       const lancByFaz = new Map<string, Lancamento[]>();
-      const saldosByFaz = new Map<string, SaldoInicial[]>();
       lancamentos.forEach(l => {
-        const list = lancByFaz.get(l.fazenda_id) || [];
+        if (!l.fazendaId) return;
+        const list = lancByFaz.get(l.fazendaId) || [];
         list.push(l);
-        lancByFaz.set(l.fazenda_id, list);
+        lancByFaz.set(l.fazendaId, list);
       });
-      saldosIniciais.forEach(s => {
+
+      // Fetch saldos_iniciais per fazenda from DB
+      const { data: saldosAllData } = await supabase
+        .from('saldos_iniciais')
+        .select('fazenda_id, ano, categoria, quantidade, peso_medio_kg')
+        .in('fazenda_id', fIds);
+      const saldosByFaz = new Map<string, SaldoInicial[]>();
+      (saldosAllData || []).forEach(s => {
         const list = saldosByFaz.get(s.fazenda_id) || [];
-        list.push(s);
+        list.push({ ano: s.ano, categoria: s.categoria as any, quantidade: s.quantidade, pesoMedioKg: s.peso_medio_kg ?? undefined });
         saldosByFaz.set(s.fazenda_id, list);
       });
 
