@@ -17,6 +17,10 @@ interface Props {
   precosMap: Map<string, { categoria: string; preco_kg: number }[]>;
   /** Reposição vinda de financeiro_lancamentos (Investimento em Bovinos, Conciliado) */
   reposicaoFinanceiro: number;
+  /** Pesos reais (do fechamento de pastos) para o estoque inicial (Dez ano anterior) */
+  pesosReaisInicial?: Record<string, number>;
+  /** Pesos reais (do fechamento de pastos) para o estoque final (mês corrente) */
+  pesosReaisFinal?: Record<string, number>;
 }
 
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
