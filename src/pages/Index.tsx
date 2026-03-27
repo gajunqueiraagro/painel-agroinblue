@@ -192,7 +192,12 @@ const Index = () => {
         <VisaoZooHubTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
       )}
       {activeTab === 'lancar_fin_hub' && (
-        <LancarFinHubTab onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
+        <LancarFinHubTab
+          onTabChange={handleTabChange}
+          filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }}
+          lancamentosPecuarios={lancamentos}
+          saldosIniciais={saldosIniciais}
+        />
       )}
       {activeTab === 'visao_fin_hub' && (
         <VisaoFinHubTab onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
