@@ -534,6 +534,8 @@ export function DREAtividade({
         fazendaId={fazendaId}
         precosMap={precosMap}
         reposicaoFinanceiro={variacaoEstoque.reposicao}
+        pesosReaisInicial={getPesosCompletos(0)}
+        pesosReaisFinal={getPesosCompletos(mesNum)}
       />
     </div>
   );
