@@ -121,6 +121,23 @@ export function AcessosTab() {
     }
   };
 
+  const handleResetSenha = async (userId: string) => {
+    if (!resetSenha || resetSenha.length < 6) {
+      toast.error('Senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+    const res = await supabase.functions.invoke('redefinir-senha', {
+      body: { user_id: userId, nova_senha: resetSenha },
+    });
+    if (res.error || res.data?.error) {
+      toast.error(res.data?.error || 'Erro ao redefinir senha');
+    } else {
+      toast.success('Senha redefinida com sucesso!');
+      setResetUserId(null);
+      setResetSenha('');
+    }
+  };
+
   const isDono = fazendaAtual?.owner_id === user?.id;
   const myPapel = membros.find(m => m.user_id === user?.id)?.papel;
   const canManage = isDono || myPapel === 'gerente';
