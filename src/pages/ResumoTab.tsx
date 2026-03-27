@@ -102,13 +102,15 @@ function useRebanhoPerFarm(lancamentos: Lancamento[], saldosIniciais: SaldoInici
   const { fazendas } = useFazenda();
   return useMemo(() => {
     const pecuarias = fazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false);
+    // Simple approach: use global saldoMap for total, then estimate per-farm from lancamentos
+    // For accurate per-farm we compute total rebanho and distribute by fazenda lancamentos
     return pecuarias.map(faz => {
       const lancsFaz = lancamentos.filter(l => l.fazendaId === faz.id);
-      const saldosFaz = saldosIniciais.filter(s => s.fazendaId === faz.id);
-      const saldoMap = calcSaldoPorCategoriaLegado(saldosFaz, lancsFaz, ano, mes);
+      // Use full saldosIniciais (they are already filtered by fazenda upstream in useLancamentos)
+      const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancsFaz, ano, mes);
       const total = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
       return { id: faz.id, nome: faz.nome, rebanho: total };
-    }).filter(f => f.rebanho > 0);
+    }).filter(f => f.rebanho !== 0);
   }, [fazendas, lancamentos, saldosIniciais, ano, mes]);
 }
 
