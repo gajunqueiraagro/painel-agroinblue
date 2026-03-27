@@ -116,7 +116,7 @@ interface RowDef {
 }
 
 const ROWS: RowDef[] = [
-  { label: 'Saldo Inicial', key: 'saldoInicial', bold: true, tipo: 'saldo' },
+  { label: 'Saldo Inicial', key: 'saldoInicial', tipo: 'saldo' },
   { label: 'Total Entradas', key: 'totalEntradas', bold: true, tipo: 'entrada' },
   { label: 'Receitas', key: 'receitas', indent: true, tipo: 'entrada' },
   { label: 'Captação Financ.', key: 'captacao', indent: true, tipo: 'entrada' },
@@ -126,8 +126,8 @@ const ROWS: RowDef[] = [
   { label: 'Reposição Bovinos', key: 'reposicao', indent: true, tipo: 'saida' },
   { label: 'Amortizações Fin.', key: 'amortizacoes', indent: true, tipo: 'saida' },
   { label: 'Dividendos', key: 'dividendos', indent: true, tipo: 'saida' },
-  { label: 'Saldo Final', key: 'saldoFinal', bold: true, tipo: 'saldo' },
-  { label: 'Saldo Acumulado', key: 'saldoAcumulado', bold: true, tipo: 'saldo' },
+  { label: 'Saldo Final', key: 'saldoFinal', tipo: 'saldo' },
+  { label: 'Saldo Acumulado', key: 'saldoAcumulado', tipo: 'saldo' },
 ];
 
 function getValueColor(val: number, row: RowDef, isAfter: boolean): string {
