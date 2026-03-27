@@ -174,7 +174,8 @@ const Index = () => {
     evolucao_rebanho_hub: goToLancarZooHub,
   };
 
-  const clienteNome = clientes.length > 0 ? (clientes.find(c => c.id === (fazendaAtual as any)?.cliente_id)?.nome || '') : '';
+  const { clienteAtual } = useCliente();
+  const clienteNomeHeader = clientes.length > 1 ? (clienteAtual?.nome || '') : '';
   const fazendaNome = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || '');
 
   return (
@@ -182,6 +183,7 @@ const Index = () => {
       <SyncStatus online={online} pendingCount={pendingCount} syncing={syncing} onSync={syncQueue} />
       <Header
         title={TITLES[activeTab]}
+        clienteNome={clienteNomeHeader}
         fazendaNome={fazendaNome}
         periodo={undefined}
         onBack={subScreenBackMap[activeTab]}
