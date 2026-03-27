@@ -24,6 +24,7 @@ import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import type { Pasto, CategoriaRebanho } from '@/hooks/usePastos';
 
 type Bloco = 'indicadores' | 'receita' | 'dre' | 'fluxo';
+type Cenario = 'realizado' | 'previsto';
 
 interface Props {
   lancamentos: FinanceiroLancamento[];
@@ -89,6 +90,7 @@ export function AnaliseEconomica({
   filtroMesInicial,
 }: Props) {
   const [bloco, setBloco] = useState<Bloco>('indicadores');
+  const [cenario, setCenario] = useState<Cenario>('realizado');
   const { fazendas } = useFazenda();
 
   // Anos disponíveis
@@ -175,50 +177,69 @@ export function AnaliseEconomica({
 
   return (
     <div className="space-y-3">
-      {/* Filtros: Ano + Até o mês */}
-      <div className="flex gap-2 items-center flex-wrap">
-        <Select value={anoFiltro} onValueChange={handleAnoChange}>
-          <SelectTrigger className="w-24 text-base font-bold">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-          </SelectContent>
-        </Select>
+      {/* Sticky filters */}
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/40 -mx-4 px-4 pt-2 pb-2 space-y-1.5">
+        {/* Ano + Mês */}
+        <div className="flex gap-1.5 items-center flex-wrap">
+          <Select value={anoFiltro} onValueChange={handleAnoChange}>
+            <SelectTrigger className="w-20 h-7 text-xs font-bold">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent side="bottom">
+              {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+            </SelectContent>
+          </Select>
 
-        <Select value={String(mesLimite)} onValueChange={v => setMesLimite(Number(v))}>
-          <SelectTrigger className="w-32 text-sm font-bold">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {mesesOpt.map(m => (
-              <SelectItem key={m.value} value={String(m.value)}>
-                Até {m.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <Select value={String(mesLimite)} onValueChange={v => setMesLimite(Number(v))}>
+            <SelectTrigger className="w-28 h-7 text-xs font-bold">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent side="bottom">
+              {mesesOpt.map(m => (
+                <SelectItem key={m.value} value={String(m.value)}>
+                  Até {m.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-        <span className="text-[10px] text-muted-foreground">
-          Jan → {MESES_NOMES[mesLimite - 1]}
-        </span>
-      </div>
+          <span className="text-[10px] text-muted-foreground">
+            Jan → {MESES_NOMES[mesLimite - 1]}
+          </span>
+        </div>
 
-      {/* Sub-blocos */}
-      <div className="grid grid-cols-4 gap-1 bg-muted rounded-lg p-1">
-        {blocos.map(b => (
+        {/* Toggle Realizado | Previsto */}
+        <div className="flex bg-muted rounded-md p-0.5 max-w-xs">
           <button
-            key={b.id}
-            onClick={() => setBloco(b.id)}
-            className={`py-2 px-1 rounded-md text-[10px] sm:text-xs font-bold transition-colors ${
-              bloco === b.id
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground'
-            }`}
+            onClick={() => setCenario('realizado')}
+            className={`flex-1 text-[11px] font-bold py-1 rounded transition-colors ${cenario === 'realizado' ? 'bg-green-700 text-white shadow-sm' : 'text-muted-foreground'}`}
           >
-            {b.label}
+            Realizado
           </button>
-        ))}
+          <button
+            onClick={() => setCenario('previsto')}
+            className={`flex-1 text-[11px] font-bold py-1 rounded transition-colors ${cenario === 'previsto' ? 'bg-orange-500 text-white shadow-sm' : 'text-muted-foreground'}`}
+          >
+            Previsto
+          </button>
+        </div>
+
+        {/* Sub-blocos */}
+        <div className="grid grid-cols-4 gap-1 bg-muted rounded-md p-0.5">
+          {blocos.map(b => (
+            <button
+              key={b.id}
+              onClick={() => setBloco(b.id)}
+              className={`py-1.5 px-1 rounded text-[10px] sm:text-xs font-bold transition-colors ${
+                bloco === b.id
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground'
+              }`}
+            >
+              {b.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {bloco === 'indicadores' && (

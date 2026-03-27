@@ -26,12 +26,12 @@ export function Header({ title, fazendaNome, periodo, onBack, rightAction }: Hea
                 <ArrowLeft className="h-5 w-5 text-primary-foreground" />
               </button>
             )}
-            <img src={logo} alt="AgroInBlue" className="h-7 md:h-9 w-auto shrink-0" />
+            <img src={logo} alt="AgroInBlue" className="h-6 md:h-9 w-auto shrink-0" />
             <div className="min-w-0">
-              <h1 className="text-base md:text-xl font-bold text-primary-foreground tracking-wide truncate">
+              <h1 className="text-sm md:text-xl font-bold text-primary-foreground tracking-wide truncate leading-tight">
                 Painel de Controle
               </h1>
-              <p className="text-[10px] md:text-xs text-primary-foreground/60 font-medium tracking-wider hidden md:block">
+              <p className="text-[9px] md:text-xs text-primary-foreground/60 font-medium tracking-wider leading-tight">
                 Agroinblue · Gestão Pecuária e Financeira
               </p>
             </div>

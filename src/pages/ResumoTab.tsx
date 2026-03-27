@@ -186,15 +186,15 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
   return (
     <div className="max-w-5xl mx-auto animate-fade-in pb-24">
       {/* ── Sticky filter bar ── */}
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/40 px-4 md:px-6 py-2.5 -mx-0">
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/40 px-4 md:px-6 py-2">
         <div className="flex items-center justify-between gap-3 max-w-5xl mx-auto">
-          <p className="text-xs text-muted-foreground font-medium">
+          <p className="text-[11px] text-muted-foreground font-medium">
             {mesLabel} / {filtroGlobal.ano}
             {isGlobal ? ' · Consolidado' : ` · ${fazendaAtual?.nome || ''}`}
           </p>
-          <div className="flex gap-1.5">
+          <div className="flex gap-1">
             <Select value={filtroGlobal.ano} onValueChange={v => onFiltroChange({ ano: v })}>
-              <SelectTrigger className="w-[72px] h-8 text-xs font-medium border-border/60 bg-card">
+              <SelectTrigger className="w-[68px] h-7 text-xs font-medium border-border/60 bg-card">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent side="bottom">
@@ -204,7 +204,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
               </SelectContent>
             </Select>
             <Select value={String(mesNum)} onValueChange={v => onFiltroChange({ mes: Number(v) })}>
-              <SelectTrigger className="w-[68px] h-8 text-xs font-medium border-border/60 bg-card">
+              <SelectTrigger className="w-[62px] h-7 text-xs font-medium border-border/60 bg-card">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent side="bottom">
