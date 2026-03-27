@@ -175,13 +175,13 @@ function CategoriaView({ lancamentos }: { lancamentos: Lancamento[] }) {
           <p className="text-[10px] text-muted-foreground font-semibold">Categorias</p>
           <p className="text-lg font-bold">{grouped.length}</p>
         </div>
-        <div className="bg-emerald-500/10 rounded-lg p-2 text-center">
-          <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold">Entradas</p>
-          <p className="text-lg font-bold text-emerald-700 dark:text-emerald-400">+{totalEntradas}</p>
+        <div className="bg-primary/10 rounded-lg p-2 text-center">
+          <p className="text-[10px] text-primary font-semibold">Entradas</p>
+          <p className="text-lg font-bold text-primary">+{totalEntradas}</p>
         </div>
-        <div className="bg-red-500/10 rounded-lg p-2 text-center">
-          <p className="text-[10px] text-red-700 dark:text-red-400 font-semibold">Saídas</p>
-          <p className="text-lg font-bold text-red-700 dark:text-red-400">-{totalSaidas}</p>
+        <div className="bg-destructive/10 rounded-lg p-2 text-center">
+          <p className="text-[10px] text-destructive font-semibold">Saídas</p>
+          <p className="text-lg font-bold text-destructive">-{totalSaidas}</p>
         </div>
       </div>
 
