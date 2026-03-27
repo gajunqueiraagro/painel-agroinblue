@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Save, X, Pencil, Building2, Check } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { Plus, Save, X, Pencil, Building2, Check, Trash2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ClienteRow {
@@ -156,6 +157,45 @@ export function ClientesTab() {
     setSaving(false);
   };
 
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState('');
+
+  const handleDelete = async (clienteId: string, clienteNome: string) => {
+    if (confirmDelete !== clienteNome) {
+      toast.error('Digite o nome exato do cliente para confirmar.');
+      return;
+    }
+    setDeleting(true);
+
+    // Delete in order: fazenda_membros → fazendas → cliente_membros → cliente
+    const { data: fazendas } = await supabase
+      .from('fazendas')
+      .select('id')
+      .eq('cliente_id', clienteId);
+
+    const fazendaIds = (fazendas || []).map(f => f.id);
+
+    if (fazendaIds.length > 0) {
+      await supabase.from('fazenda_membros').delete().in('fazenda_id', fazendaIds);
+      await supabase.from('fazendas').delete().eq('cliente_id', clienteId);
+    }
+
+    await supabase.from('cliente_membros').delete().eq('cliente_id', clienteId);
+
+    const { error } = await supabase.from('clientes').delete().eq('id', clienteId);
+
+    if (error) {
+      toast.error('Erro ao apagar cliente: ' + error.message);
+    } else {
+      toast.success('Cliente apagado com sucesso!');
+      setEditing(null);
+      setConfirmDelete('');
+      await loadClientes();
+      await reloadClientes();
+    }
+    setDeleting(false);
+  };
+
   if (!isAdmin) {
     return (
       <div className="p-4 text-center text-muted-foreground text-sm">
@@ -212,8 +252,40 @@ export function ClientesTab() {
                   <Button size="sm" onClick={handleUpdate} disabled={saving} className="flex-1">
                     <Save className="h-4 w-4 mr-1" /> {saving ? '...' : 'Salvar'}
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => setEditing(null)}>
+                  <Button size="sm" variant="outline" onClick={() => { setEditing(null); setConfirmDelete(''); }}>
                     <X className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <Separator className="my-3" />
+
+                <div className="space-y-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
+                  <div className="flex items-center gap-2 text-destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <p className="text-xs font-bold">Zona Perigosa</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Apagar o cliente remove todas as fazendas, membros e dados vinculados. Esta ação é irreversível.
+                  </p>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">
+                      Digite <span className="font-bold text-foreground">{editing.nome}</span> para confirmar
+                    </Label>
+                    <Input
+                      value={confirmDelete}
+                      onChange={e => setConfirmDelete(e.target.value)}
+                      placeholder={editing.nome}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="w-full"
+                    disabled={deleting || confirmDelete !== editing.nome}
+                    onClick={() => handleDelete(editing.id, editing.nome)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" /> {deleting ? 'Apagando...' : 'Apagar Cliente Permanentemente'}
                   </Button>
                 </div>
               </CardContent>
