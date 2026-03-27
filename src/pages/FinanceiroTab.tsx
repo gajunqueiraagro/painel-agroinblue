@@ -313,7 +313,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
     fazendas.forEach(f => m.set(f.id, f.nome));
     return m;
   }, [fazendas]);
-  const [topTab, setTopTab] = useState<TopTab>(subAbaInicial ? getTopTabFromSubAba(subAbaInicial) : (modoMovimentacao ? 'entradas' : 'todas'));
+  const [topTab, setTopTab] = useState<TopTab>(subAbaInicial ? getTopTabFromSubAba(subAbaInicial) : 'entradas');
   const [subAba, setSubAba] = useState<SubAba>(subAbaInicial || 'abate');
   const [editando, setEditando] = useState<Lancamento | null>(null);
 
