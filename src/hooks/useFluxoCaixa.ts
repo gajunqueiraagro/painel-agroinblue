@@ -95,7 +95,7 @@ const normEscopo = (l: FluxoLancamentoBase): 'pec' | 'agri' | 'outras' => {
   return 'outras';
 };
 
-type CategoriaFluxo = 'receitas' | 'captacao' | 'aportes' | 'desembolso' | 'reposicao' | 'amortizacoes' | 'dividendos';
+type CategoriaFluxo = 'receitas' | 'captacao' | 'aportes' | 'deducao' | 'desembolso' | 'reposicao' | 'amortizacoes' | 'dividendos';
 
 function classificarEntrada(l: FluxoLancamentoBase): CategoriaFluxo {
   const macro = normMacro(l);
@@ -106,6 +106,7 @@ function classificarEntrada(l: FluxoLancamentoBase): CategoriaFluxo {
 
 function classificarSaida(l: FluxoLancamentoBase): CategoriaFluxo {
   const macro = normMacro(l);
+  if (macro.includes('dedução') || macro.includes('deducao') || macro === 'dedução de receitas') return 'deducao';
   if (macro.includes('reposição') || macro.includes('reposicao')) return 'reposicao';
   if (macro.includes('amortização') || macro.includes('amortizacao') || macro.includes('amortizaç')) return 'amortizacoes';
   if (macro.includes('dividendo') || macro.includes('retirada')) return 'dividendos';
