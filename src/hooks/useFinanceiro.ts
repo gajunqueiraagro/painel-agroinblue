@@ -115,6 +115,26 @@ interface RawLancPec { fazenda_id: string; data: string; tipo: string; quantidad
 // ---------------------------------------------------------------------------
 
 /**
+ * Paginated fetch — loads ALL rows from a query, bypassing the 1000-row default.
+ * Same strategy used in useFluxoCaixa to guarantee data completeness.
+ */
+async function fetchAllPaginated<T>(
+  buildQuery: (from: number, to: number) => ReturnType<ReturnType<typeof supabase.from>['select']>,
+): Promise<T[]> {
+  const PAGE_SIZE = 1000;
+  let allData: T[] = [];
+  let from = 0;
+  while (true) {
+    const { data } = await buildQuery(from, from + PAGE_SIZE - 1) as { data: T[] | null };
+    if (!data || data.length === 0) break;
+    allData = allData.concat(data);
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+  return allData;
+}
+
+/**
  * Desembolso produtivo = macro_custo "Custeio Produtivo" + tipo_operacao 2-Saídas.
  * Exclui: Investimentos, Amortizações, Dividendos, Receitas, Outras Entradas.
  */
