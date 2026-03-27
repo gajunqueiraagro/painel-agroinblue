@@ -434,7 +434,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       )}
 
       {/* Filters */}
-      <div className="flex gap-0.5 items-center flex-wrap">
+      <div className="flex gap-1 items-center">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
           <SelectTrigger className="h-6 text-[10px] font-bold w-[68px]">
             <SelectValue placeholder="Ano" />
@@ -446,7 +446,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           </SelectContent>
         </Select>
         <Select value={mesFiltro} onValueChange={setMesFiltro}>
-          <SelectTrigger className="h-6 text-[10px] font-bold w-[68px]">
+          <SelectTrigger className="h-6 text-[10px] font-bold w-[90px]">
             <SelectValue placeholder="Mês" />
           </SelectTrigger>
           <SelectContent side="bottom">
@@ -457,18 +457,16 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
         </Select>
         <div className="flex gap-px bg-muted rounded p-px">
           {([
-            { value: 'todos', label: 'Todos' },
-            { value: 'realizado', label: 'Real.' },
-            { value: 'previsto', label: 'Prev.' },
+            { value: 'realizado', label: 'Realizado' },
+            { value: 'previsto', label: 'Previsto' },
           ] as { value: StatusFiltro; label: string }[]).map(s => (
             <button
               key={s.value}
-              onClick={() => setStatusFiltro(s.value)}
-              className={`px-1.5 py-px rounded text-[9px] font-bold transition-colors ${
+              onClick={() => setStatusFiltro(s.value === statusFiltro ? 'todos' : s.value)}
+              className={`px-2 py-px rounded text-[9px] font-bold transition-colors ${
                 statusFiltro === s.value
                   ? s.value === 'realizado' ? 'bg-green-700 text-white'
-                    : s.value === 'previsto' ? 'bg-orange-500 text-white'
-                    : 'bg-primary text-primary-foreground'
+                    : 'bg-orange-500 text-white'
                   : 'text-muted-foreground'
               }`}
             >

@@ -305,8 +305,8 @@ export function FinanceiroExportMenu({ lancamentos, subAba, ano, fazendaNome }: 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="touch-target">
-          <Download className="h-4 w-4 mr-1" /> Exportar
+        <Button variant="outline" size="sm" className="h-6 text-[10px] px-2">
+          <Download className="h-3 w-3 mr-1" /> Exportar
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-xs">
