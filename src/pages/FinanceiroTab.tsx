@@ -388,12 +388,12 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       <div className="animate-fade-in pb-20">
         {/* Top tabs */}
         <div className="p-4 pb-0">
-          <div className="grid grid-cols-4 gap-1 bg-muted rounded-lg p-1">
+          <div className={`grid gap-0.5 bg-muted rounded-md p-0.5 grid-cols-${topTabs.length}`}>
             {topTabs.map(t => (
               <button
                 key={t.id}
                 onClick={() => { setTopTab(t.id); if (t.id === 'entradas') setSubAba('nascimento'); if (t.id === 'saidas') setSubAba('abate'); }}
-                className={`py-2 px-1 rounded-md text-xs font-bold transition-colors touch-target ${
+                className={`py-1 px-1 rounded font-bold transition-colors text-[11px] ${
                   topTab === t.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'
                 }`}
               >
