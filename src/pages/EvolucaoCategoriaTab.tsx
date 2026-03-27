@@ -186,18 +186,18 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b bg-primary/10">
-              <th className="text-left px-2 py-2 font-bold text-foreground sticky left-0 bg-primary/10 min-w-[80px]">
+              <th className="text-left px-1.5 py-1 font-bold text-foreground sticky left-0 bg-primary/10 min-w-[80px]">
                 Categoria
               </th>
-              <th className="px-2 py-2 font-bold text-foreground text-center min-w-[55px] bg-primary/20">
+              <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-primary/20">
                 Saldo Ini.
               </th>
               {COLUNAS_MOV.map(col => (
-                <th key={col.tipo} className={`px-2 py-2 font-bold text-center min-w-[50px] ${col.entrada ? 'text-success' : 'text-destructive'}`}>
+                <th key={col.tipo} className={`px-1.5 py-1 font-bold text-center min-w-[45px] ${col.entrada ? 'text-success' : 'text-destructive'}`}>
                   {col.label}
                 </th>
               ))}
-              <th className="px-2 py-2 font-bold text-foreground text-center min-w-[55px] bg-primary/20">
+              <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-primary/20">
                 Saldo Fin.
               </th>
             </tr>
