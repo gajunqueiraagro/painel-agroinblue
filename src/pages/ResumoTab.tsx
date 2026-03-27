@@ -1,9 +1,8 @@
 /**
- * Resumo Executivo — Dashboard de consultoria em tela única.
- * Substitui o antigo HUB de 3 cards por uma visão completa:
- * 1. Status Geral, 2. Zootécnico, 3. Financeiro, 4. Econômico, 5. Alertas.
+ * Resumo Executivo — Dashboard profissional de gestão.
+ * Visual: software financeiro / ERP / BI executivo.
  */
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { parseISO, format } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -13,10 +12,9 @@ import { useResumoStatus, StatusNivel } from '@/hooks/useResumoStatus';
 import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
-import { supabase } from '@/integrations/supabase/client';
 import { calcSaldoPorCategoriaLegado, calcPesoMedioPonderado, calcUA, calcUAHa, calcAreaProdutivaPecuaria } from '@/lib/calculos/zootecnicos';
 import { calcArrobasSafe } from '@/lib/calculos/economicos';
-import { ChevronRight, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
+import { ChevronRight, AlertTriangle, CheckCircle2, TrendingUp, TrendingDown, Wallet, BarChart3, Landmark } from 'lucide-react';
 import type { FiltroGlobal } from './Index';
 
 interface Props {
@@ -28,67 +26,56 @@ interface Props {
 }
 
 const MESES = [
-  { value: '1', label: 'Janeiro' },
-  { value: '2', label: 'Fevereiro' },
-  { value: '3', label: 'Março' },
-  { value: '4', label: 'Abril' },
-  { value: '5', label: 'Maio' },
-  { value: '6', label: 'Junho' },
-  { value: '7', label: 'Julho' },
-  { value: '8', label: 'Agosto' },
-  { value: '9', label: 'Setembro' },
-  { value: '10', label: 'Outubro' },
-  { value: '11', label: 'Novembro' },
-  { value: '12', label: 'Dezembro' },
+  { value: '1', label: 'Jan' }, { value: '2', label: 'Fev' },
+  { value: '3', label: 'Mar' }, { value: '4', label: 'Abr' },
+  { value: '5', label: 'Mai' }, { value: '6', label: 'Jun' },
+  { value: '7', label: 'Jul' }, { value: '8', label: 'Ago' },
+  { value: '9', label: 'Set' }, { value: '10', label: 'Out' },
+  { value: '11', label: 'Nov' }, { value: '12', label: 'Dez' },
+];
+
+const MESES_FULL = [
+  'Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+  'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro',
 ];
 
 const TIPOS_SAIDA = ['abate', 'venda', 'consumo', 'transferencia_saida'];
 
-function StatusDot({ nivel }: { nivel: StatusNivel }) {
+// ---------------------------------------------------------------------------
+// Status visual components
+// ---------------------------------------------------------------------------
+
+function StatusIndicator({ nivel }: { nivel: StatusNivel }) {
   const config = {
-    aberto: { emoji: '🔴', bg: 'bg-destructive/15' },
-    parcial: { emoji: '🟡', bg: 'bg-accent/20' },
-    fechado: { emoji: '🟢', bg: 'bg-green-500/15' },
+    aberto: 'bg-red-500',
+    parcial: 'bg-amber-500',
+    fechado: 'bg-emerald-500',
   };
-  return <span className="text-base">{config[nivel].emoji}</span>;
+  return <span className={`inline-block h-2.5 w-2.5 rounded-full ${config[nivel]}`} />;
 }
 
-function StatusBadge({ nivel, label }: { nivel: StatusNivel; label?: string }) {
+function StatusLabel({ nivel, label }: { nivel: StatusNivel; label: string }) {
   const config = {
-    aberto: { emoji: '🔴', text: label || 'Em aberto', className: 'bg-destructive/15 text-destructive' },
-    parcial: { emoji: '🟡', text: label || 'Parcial', className: 'bg-accent/20 text-accent-foreground' },
-    fechado: { emoji: '🟢', text: label || 'Fechado', className: 'bg-green-500/15 text-green-700 dark:text-green-400' },
+    aberto: 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/20',
+    parcial: 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20',
+    fechado: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
   };
-  const c = config[nivel];
   return (
-    <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${c.className}`}>
-      {c.emoji} {c.text}
+    <span className={`text-[11px] font-semibold tracking-wide uppercase px-2.5 py-1 rounded border ${config[nivel]}`}>
+      {label}
     </span>
   );
 }
 
-function KpiRow({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
-  return (
-    <div className="flex justify-between items-baseline">
-      <span className="text-muted-foreground text-sm">{label}</span>
-      <div className="text-right">
-        <span className={`font-bold text-sm ${color || 'text-card-foreground'}`}>{value}</span>
-        {sub && <span className="text-[10px] text-muted-foreground ml-1">{sub}</span>}
-      </div>
-    </div>
-  );
-}
+// ---------------------------------------------------------------------------
+// Zoo KPIs hook
+// ---------------------------------------------------------------------------
 
-/** Hook leve para KPIs zootécnicos extras (GMD, Lotação, @) */
-function useZooKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: number, mes: number, fazendaId?: string) {
+function useZooKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: number, mes: number) {
   const { pastos } = usePastos();
-  const isGlobal = !fazendaId || fazendaId === '__global__';
-
   return useMemo(() => {
     const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
     const saldoFinal = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
-
-    // Peso médio (simplificado — sem fechamento de pasto no hook leve)
     const itens = Array.from(saldoMap.entries())
       .filter(([, q]) => q > 0)
       .map(([cat, qtd]) => {
@@ -96,27 +83,40 @@ function useZooKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], a
         return { quantidade: qtd, pesoKg: si?.pesoMedioKg || null };
       });
     const pesoMedio = calcPesoMedioPonderado(itens);
-
-    // UA/ha
     const area = calcAreaProdutivaPecuaria(pastos);
     const ua = calcUA(saldoFinal, pesoMedio);
     const uaHa = calcUAHa(ua, area);
-
-    // Arrobas saídas acumuladas
     const end = `${ano}-${String(mes).padStart(2, '0')}-31`;
     const lancsAcum = lancamentos.filter(l => l.data >= `${ano}-01-01` && l.data <= end);
     const saidasAcum = lancsAcum.filter(l => TIPOS_SAIDA.includes(l.tipo));
     const arrobasSaidas = saidasAcum.reduce((s, l) => s + calcArrobasSafe(l), 0);
-
-    return {
-      saldoFinal,
-      pesoMedio,
-      uaHa,
-      arrobasSaidas,
-      area,
-    };
+    return { saldoFinal, pesoMedio, uaHa, arrobasSaidas, area };
   }, [lancamentos, saldosIniciais, ano, mes, pastos]);
 }
+
+// ---------------------------------------------------------------------------
+// Per-farm rebanho for global view
+// ---------------------------------------------------------------------------
+
+function useRebanhoPerFarm(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: number, mes: number) {
+  const { fazendas } = useFazenda();
+  return useMemo(() => {
+    const pecuarias = fazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false);
+    // Simple approach: use global saldoMap for total, then estimate per-farm from lancamentos
+    // For accurate per-farm we compute total rebanho and distribute by fazenda lancamentos
+    return pecuarias.map(faz => {
+      const lancsFaz = lancamentos.filter(l => l.fazendaId === faz.id);
+      // Use full saldosIniciais (they are already filtered by fazenda upstream in useLancamentos)
+      const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancsFaz, ano, mes);
+      const total = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
+      return { id: faz.id, nome: faz.nome, rebanho: total };
+    }).filter(f => f.rebanho !== 0);
+  }, [fazendas, lancamentos, saldosIniciais, ano, mes]);
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
 
 export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlobal, onFiltroChange }: Props) {
   const { fazendaAtual, isGlobal } = useFazenda();
@@ -135,9 +135,9 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
 
   const { zootecnico, financeiro, economico, loading } = useResumoStatus(lancamentos, saldosIniciais, anoNum, mesNum);
   const statusZoo = useStatusZootecnico(fazendaAtual?.id, anoNum, mesNum, lancamentos, saldosIniciais);
-  const zooKpis = useZooKpis(lancamentos, saldosIniciais, anoNum, mesNum, fazendaAtual?.id);
+  const zooKpis = useZooKpis(lancamentos, saldosIniciais, anoNum, mesNum);
+  const farmBreakdown = useRebanhoPerFarm(lancamentos, saldosIniciais, anoNum, mesNum);
 
-  // Status geral
   const statusGeral = useMemo((): StatusNivel => {
     const niveis = [zootecnico.status.nivel, financeiro.status.nivel, economico.status.nivel];
     if (niveis.every(n => n === 'fechado')) return 'fechado';
@@ -145,21 +145,10 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
     return 'parcial';
   }, [zootecnico.status.nivel, financeiro.status.nivel, economico.status.nivel]);
 
-  // Destaque do mês
-  const destaqueMes = useMemo(() => {
-    if (fazendaNaoPecuaria) return 'Fazenda sem operação pecuária.';
-    if (statusGeral === 'fechado') return 'Mês conciliado e fechado. ✅';
-    const alertas: string[] = [];
-    if (zootecnico.status.nivel === 'aberto') alertas.push('pendências zootécnicas');
-    if (financeiro.status.nivel === 'aberto') alertas.push('financeiro não conciliado');
-    if (alertas.length > 0) return `Atenção: ${alertas.join(', ')}.`;
-    return 'Mês em andamento — algumas pendências parciais.';
-  }, [statusGeral, zootecnico.status.nivel, financeiro.status.nivel, fazendaNaoPecuaria]);
+  const mesLabel = MESES_FULL[mesNum - 1] || '';
 
-  // Tabs bloqueadas no modo global
+  // Alertas
   const BLOCKED_TABS_GLOBAL: TabId[] = ['fechamento', 'conciliacao_categoria', 'conciliacao', 'lancamentos', 'valor_rebanho'];
-
-  // Alertas automáticos
   const alertas = useMemo(() => {
     const items: { texto: string; nivel: StatusNivel; tab: TabId; blockedGlobal: boolean }[] = [];
     if (fazendaNaoPecuaria) return items;
@@ -185,173 +174,295 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
     return items;
   }, [statusZoo.pendencias, financeiro.status, fazendaNaoPecuaria]);
 
-  const [auditOpen, setAuditOpen] = useState(false);
-
-  const mesLabel = MESES.find(m => m.value === String(mesNum))?.label || '';
-
   return (
-    <div className="p-4 max-w-4xl mx-auto space-y-3 animate-fade-in pb-20">
-      {/* Filtros */}
-      <div className="flex gap-2 flex-wrap">
-        <Select value={filtroGlobal.ano} onValueChange={v => onFiltroChange({ ano: v })}>
-          <SelectTrigger className="w-24 touch-target text-sm font-bold">
-            <SelectValue placeholder="Ano" />
-          </SelectTrigger>
-          <SelectContent>
-            {anosDisponiveis.map(a => (
-              <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={String(mesNum)} onValueChange={v => onFiltroChange({ mes: Number(v) })}>
-          <SelectTrigger className="w-36 touch-target text-sm font-bold">
-            <SelectValue placeholder="Mês" />
-          </SelectTrigger>
-          <SelectContent>
-            {MESES.map(m => (
-              <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <div className="p-3 md:p-6 max-w-5xl mx-auto space-y-4 animate-fade-in pb-24">
+      {/* ── Header ── */}
+      <div className="flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">
+            Resumo Executivo
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {mesLabel} / {filtroGlobal.ano}
+            {isGlobal ? ' · Consolidado' : ` · ${fazendaAtual?.nome || ''}`}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Select value={filtroGlobal.ano} onValueChange={v => onFiltroChange({ ano: v })}>
+            <SelectTrigger className="w-[76px] h-9 text-xs font-semibold border-border/60">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent side="bottom">
+              {anosDisponiveis.map(a => (
+                <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={String(mesNum)} onValueChange={v => onFiltroChange({ mes: Number(v) })}>
+            <SelectTrigger className="w-[72px] h-9 text-xs font-semibold border-border/60">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent side="bottom">
+              {MESES.map(m => (
+                <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      {/* 1. STATUS GERAL */}
-      <button
-        onClick={() => onTabChange('zootecnico' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
-        className="w-full rounded-xl border bg-card p-4 space-y-2 shadow-sm text-left cursor-pointer transition-colors hover:bg-accent/50 active:scale-[0.99]"
-      >
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-extrabold text-card-foreground">Status Geral</h2>
-          <div className="flex items-center gap-1.5">
-            <StatusBadge nivel={statusGeral} label={statusGeral === 'fechado' ? 'Conciliado' : statusGeral === 'parcial' ? 'Em andamento' : 'Pendente'} />
+      {/* ── Status Strip ── */}
+      <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
+        <button
+          onClick={() => onTabChange('zootecnico' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
+          className="w-full text-left p-4 transition-colors hover:bg-muted/30 active:bg-muted/50"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center">
+                <BarChart3 className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <span className="text-sm font-bold text-foreground">Status Geral</span>
+                <span className="text-xs text-muted-foreground ml-2">
+                  {statusGeral === 'fechado' ? 'Conciliado' : statusGeral === 'parcial' ? 'Em andamento' : 'Pendente'}
+                </span>
+              </div>
+            </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </div>
-        </div>
-        <p className="text-sm text-muted-foreground">{destaqueMes}</p>
-        <div className="flex gap-4 pt-1">
-          <div className="flex items-center gap-1.5">
-            <StatusDot nivel={zootecnico.status.nivel} />
-            <span className="text-xs text-muted-foreground">Zoo</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <StatusDot nivel={financeiro.status.nivel} />
-            <span className="text-xs text-muted-foreground">Fin</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <StatusDot nivel={economico.status.nivel} />
-            <span className="text-xs text-muted-foreground">Eco</span>
-          </div>
-        </div>
-      </button>
-
-      {/* Grid 2 cols on md */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {/* 2. ZOOTÉCNICO */}
-        <div className="rounded-xl border bg-card p-4 space-y-2.5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🐄</span>
-              <h2 className="text-sm font-extrabold text-card-foreground">Zootécnico</h2>
-            </div>
-            <StatusBadge nivel={zootecnico.status.nivel} />
-          </div>
-          {fazendaNaoPecuaria ? (
-            <p className="text-sm text-muted-foreground">Não se aplica.</p>
-          ) : (
-            <>
-              <div className="space-y-1">
-                <KpiRow label="Rebanho atual" value={`${formatNum(zootecnico.rebanhoAtual)} cab`} />
-                <KpiRow label="Produção (@)" value={`${formatNum(zooKpis.arrobasSaidas)} @`} sub="saídas acum." />
-                <KpiRow label="Lotação (UA/ha)" value={zooKpis.uaHa !== null ? formatNum(zooKpis.uaHa, 2) : '—'} />
-                <KpiRow label="Peso médio" value={zooKpis.pesoMedio !== null ? `${formatNum(zooKpis.pesoMedio, 0)} kg` : '—'} />
+          <div className="flex gap-6">
+            {[
+              { label: 'Zootécnico', nivel: zootecnico.status.nivel },
+              { label: 'Financeiro', nivel: financeiro.status.nivel },
+              { label: 'Econômico', nivel: economico.status.nivel },
+            ].map(item => (
+              <div key={item.label} className="flex items-center gap-2">
+                <StatusIndicator nivel={item.nivel} />
+                <span className="text-xs text-muted-foreground font-medium">{item.label}</span>
               </div>
-              <button
-                onClick={() => onTabChange('visao_zoo_hub', { ano: filtroGlobal.ano, mes: mesNum })}
-                className="w-full flex items-center justify-center gap-1 text-xs font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
-              >
-                Ver Painel Zootécnico <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </>
-          )}
-        </div>
-
-        {/* 3. FINANCEIRO */}
-        <div className="rounded-xl border bg-card p-4 space-y-2.5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">💰</span>
-              <h2 className="text-sm font-extrabold text-card-foreground">Financeiro</h2>
-            </div>
-            <StatusBadge nivel={financeiro.status.nivel} />
+            ))}
           </div>
-          <div className="space-y-1">
-            <KpiRow label="Entradas" value={formatMoeda(financeiro.totalEntradas)} color="text-green-600 dark:text-green-400" />
-            <KpiRow label="Saídas" value={formatMoeda(financeiro.totalSaidas)} color="text-red-600 dark:text-red-400" />
-            <div className="border-t border-border pt-1">
-              <KpiRow
-                label="Resultado"
-                value={formatMoeda(financeiro.resultado)}
-                color={financeiro.resultado >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}
-              />
-            </div>
-            {isGlobal && (
-              <KpiRow
-                label="Caixa Atual"
-                value={formatMoeda(financeiro.caixaAtual)}
-                color={financeiro.caixaAtual >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}
-              />
-            )}
-          </div>
-          <button
-            onClick={() => onTabChange('fin_caixa', { ano: filtroGlobal.ano, mes: mesNum })}
-            className="w-full flex items-center justify-center gap-1 text-xs font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
-          >
-            Ver Fluxo Financeiro <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-
-      {/* 4. ECONÔMICO */}
-      <div className="rounded-xl border bg-card p-4 space-y-2.5 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">📊</span>
-            <h2 className="text-sm font-extrabold text-card-foreground">Econômico</h2>
-          </div>
-          <StatusBadge nivel={economico.status.nivel} />
-        </div>
-        <p className="text-sm text-muted-foreground">{economico.status.descricao}</p>
-        <button
-          onClick={() => onTabChange('analise_economica', { ano: filtroGlobal.ano, mes: mesNum })}
-          className="w-full flex items-center justify-center gap-1 text-xs font-bold text-primary bg-primary/10 rounded-lg py-2 transition-colors hover:bg-primary/20"
-        >
-          Ver Análise Econômica <ChevronRight className="h-3.5 w-3.5" />
         </button>
       </div>
 
-      {/* 5. ALERTAS */}
-      {alertas.length > 0 && (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-2 shadow-sm">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-destructive" />
-            <h2 className="text-sm font-extrabold text-destructive">Pendências do Mês</h2>
+      {/* ── Grid: Zootécnico + Financeiro ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* ZOOTÉCNICO */}
+        <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
+          <div className="px-4 pt-4 pb-3 border-b border-border/40">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-7 w-7 rounded-md bg-emerald-500/10 flex items-center justify-center">
+                  <span className="text-sm">🐄</span>
+                </div>
+                <span className="text-sm font-bold text-foreground">Zootécnico</span>
+              </div>
+              <StatusLabel
+                nivel={zootecnico.status.nivel}
+                label={zootecnico.status.nivel === 'fechado' ? 'Fechado' : zootecnico.status.nivel === 'parcial' ? 'Parcial' : 'Aberto'}
+              />
+            </div>
           </div>
-          <div className="space-y-1.5">
+
+          {fazendaNaoPecuaria ? (
+            <div className="p-4">
+              <p className="text-sm text-muted-foreground italic">Não se aplica a esta unidade.</p>
+            </div>
+          ) : (
+            <div className="p-4 space-y-4">
+              {/* Rebanho principal */}
+              <div className="text-center py-2">
+                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Rebanho Atual</p>
+                <p className="text-3xl font-extrabold text-foreground tracking-tight">
+                  {formatNum(zootecnico.rebanhoAtual)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">cabeças</p>
+              </div>
+
+              {/* Per-farm breakdown (Global) */}
+              {isGlobal && farmBreakdown.length > 0 && (
+                <div className="border-t border-border/40 pt-3 space-y-1.5">
+                  {farmBreakdown.map(f => (
+                    <div key={f.id} className="flex justify-between items-center px-1">
+                      <span className="text-xs text-muted-foreground truncate max-w-[60%]">{f.nome}</span>
+                      <span className="text-xs font-semibold text-foreground tabular-nums">{formatNum(f.rebanho)} cab</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* KPIs por fazenda */}
+              {!isGlobal && (
+                <div className="grid grid-cols-3 gap-2 border-t border-border/40 pt-3">
+                  <div className="text-center">
+                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Área Prod.</p>
+                    <p className="text-sm font-bold text-foreground tabular-nums mt-0.5">
+                      {zooKpis.area > 0 ? `${formatNum(zooKpis.area, 0)} ha` : '—'}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Peso Médio</p>
+                    <p className="text-sm font-bold text-foreground tabular-nums mt-0.5">
+                      {zooKpis.pesoMedio ? `${formatNum(zooKpis.pesoMedio, 0)} kg` : '—'}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Lot. kg/ha</p>
+                    <p className="text-sm font-bold text-foreground tabular-nums mt-0.5">
+                      {zooKpis.uaHa !== null ? formatNum(zooKpis.uaHa, 2) : '—'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* CTA */}
+              <button
+                onClick={() => onTabChange('visao_zoo_hub', { ano: filtroGlobal.ano, mes: mesNum })}
+                className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-primary py-2.5 rounded-md border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10"
+              >
+                Painel Zootécnico <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* FINANCEIRO */}
+        <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
+          <div className="px-4 pt-4 pb-3 border-b border-border/40">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-7 w-7 rounded-md bg-blue-500/10 flex items-center justify-center">
+                  <Wallet className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <span className="text-sm font-bold text-foreground">Financeiro</span>
+              </div>
+              <StatusLabel
+                nivel={financeiro.status.nivel}
+                label={financeiro.status.nivel === 'fechado' ? 'Conciliado' : financeiro.status.nivel === 'parcial' ? 'Parcial' : 'Pendente'}
+              />
+            </div>
+          </div>
+
+          <div className="p-4 space-y-4">
+            {/* Resultado destaque */}
+            <div className="text-center py-2">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Resultado Acumulado</p>
+              <p className={`text-3xl font-extrabold tracking-tight ${financeiro.resultado >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                {formatMoeda(financeiro.resultado)}
+              </p>
+            </div>
+
+            {/* Entradas / Saídas */}
+            <div className="grid grid-cols-2 gap-3 border-t border-border/40 pt-3">
+              <div className="flex items-center gap-2">
+                <div className="h-6 w-6 rounded bg-emerald-500/10 flex items-center justify-center">
+                  <TrendingUp className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase font-medium">Entradas</p>
+                  <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                    {formatMoeda(financeiro.totalEntradas)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-6 w-6 rounded bg-red-500/10 flex items-center justify-center">
+                  <TrendingDown className="h-3 w-3 text-red-600 dark:text-red-400" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase font-medium">Saídas</p>
+                  <p className="text-xs font-bold text-red-600 dark:text-red-400 tabular-nums">
+                    {formatMoeda(financeiro.totalSaidas)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Caixa Atual (global) */}
+            {isGlobal && (
+              <div className="border-t border-border/40 pt-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="h-6 w-6 rounded bg-primary/10 flex items-center justify-center">
+                      <Landmark className="h-3 w-3 text-primary" />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground uppercase font-medium">Caixa Atual</span>
+                  </div>
+                  <span className={`text-sm font-bold tabular-nums ${financeiro.caixaAtual >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                    {formatMoeda(financeiro.caixaAtual)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* CTA */}
+            <button
+              onClick={() => onTabChange('fin_caixa', { ano: filtroGlobal.ano, mes: mesNum })}
+              className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-primary py-2.5 rounded-md border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10"
+            >
+              Fluxo Financeiro <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Econômico ── */}
+      <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
+        <div className="p-4 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="h-7 w-7 rounded-md bg-violet-500/10 flex items-center justify-center">
+              <BarChart3 className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+            </div>
+            <div>
+              <span className="text-sm font-bold text-foreground">Econômico</span>
+              <span className="text-xs text-muted-foreground ml-2">{economico.status.descricao}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <StatusLabel
+              nivel={economico.status.nivel}
+              label={economico.status.nivel === 'fechado' ? 'Validado' : economico.status.nivel === 'parcial' ? 'Parcial' : 'Pendente'}
+            />
+            <button
+              onClick={() => onTabChange('analise_economica', { ano: filtroGlobal.ano, mes: mesNum })}
+              className="h-8 px-3 flex items-center gap-1 text-xs font-semibold text-primary rounded-md border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10"
+            >
+              Abrir <ChevronRight className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Pendências ── */}
+      {alertas.length > 0 && (
+        <div className="rounded-lg border border-amber-500/30 bg-card overflow-hidden">
+          <div className="px-4 py-3 border-b border-amber-500/20 bg-amber-500/5">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <span className="text-sm font-bold text-foreground">
+                Pendências
+              </span>
+              <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-full ml-auto tabular-nums">
+                {alertas.length}
+              </span>
+            </div>
+          </div>
+          <div className="divide-y divide-border/40">
             {alertas.map((a, i) => {
               const blocked = isGlobal && a.blockedGlobal;
               return (
                 <button
                   key={i}
                   onClick={() => !blocked && onTabChange(a.tab, { ano: filtroGlobal.ano, mes: mesNum })}
-                  className={`w-full flex items-center gap-2 text-left text-sm rounded-md px-2 py-1.5 transition-colors ${blocked ? 'opacity-60 cursor-default' : 'hover:bg-destructive/10'}`}
+                  className={`w-full flex items-center gap-3 text-left px-4 py-3 transition-colors ${blocked ? 'opacity-50 cursor-default' : 'hover:bg-muted/30'}`}
                 >
-                  <StatusDot nivel={a.nivel} />
-                  <span className="flex-1 text-card-foreground">{a.texto}</span>
+                  <StatusIndicator nivel={a.nivel} />
+                  <span className="flex-1 text-sm text-foreground">{a.texto}</span>
                   {blocked ? (
-                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">Selecione uma fazenda</span>
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">Selecione fazenda</span>
                   ) : (
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                   )}
                 </button>
               );
@@ -361,11 +472,11 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
       )}
 
       {alertas.length === 0 && !loading && !statusZoo.loading && (
-        <div className="rounded-xl border border-green-500/30 bg-green-500/5 p-4 shadow-sm">
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-            <span className="text-sm font-bold text-green-700 dark:text-green-400">
-              Nenhuma pendência para {mesLabel}/{filtroGlobal.ano}
+            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+              Nenhuma pendência — {mesLabel}/{filtroGlobal.ano}
             </span>
           </div>
         </div>
