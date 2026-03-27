@@ -487,22 +487,6 @@ function DREContent({
 }) {
   return (
     <div className="space-y-4">
-      {/* Toggle Realizado / Previsto */}
-      <div className="flex bg-muted rounded-lg p-0.5">
-        <button
-          onClick={() => setCenario('realizado')}
-          className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-colors ${cenario === 'realizado' ? 'bg-green-600 text-white shadow-sm' : 'text-muted-foreground'}`}
-        >
-          Realizado
-        </button>
-        <button
-          onClick={() => setCenario('previsto')}
-          className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-colors ${cenario === 'previsto' ? 'bg-orange-500 text-white shadow-sm' : 'text-muted-foreground'}`}
-        >
-          Previsto
-        </button>
-      </div>
-
       {cenario === 'previsto' ? (
         <Card>
           <CardContent className="p-6 text-center">

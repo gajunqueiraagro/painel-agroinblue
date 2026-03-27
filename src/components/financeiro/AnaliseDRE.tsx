@@ -177,7 +177,7 @@ export function DREAtividade({
   categorias,
   pastos,
 }: Props) {
-  const [mesSelecionado, setMesSelecionado] = useState(String(mesLimite).padStart(2, "0"));
+  const mesSelecionado = String(mesLimite).padStart(2, "0");
   const [escopo, setEscopo] = useState<Escopo>("pecuaria");
   const [visao, setVisao] = useState<"mes" | "acumulado">("acumulado");
   const mesNum = Number(mesSelecionado);
