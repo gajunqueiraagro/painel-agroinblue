@@ -16,7 +16,7 @@ export function Header({ title, fazendaNome, periodo, onBack, rightAction }: Hea
   const { signOut } = useAuth();
 
   return (
-    <header className="sticky top-0 z-40 bg-primary px-4 md:px-6 py-2.5 md:py-4 shadow-md">
+    <header className="z-40 bg-primary px-4 md:px-6 py-2.5 md:py-4 shadow-md shrink-0">
       <div className="max-w-5xl mx-auto space-y-0.5 md:space-y-1">
         {/* Row 1: Back + Logo + Title + Actions */}
         <div className="flex items-center justify-between gap-2">

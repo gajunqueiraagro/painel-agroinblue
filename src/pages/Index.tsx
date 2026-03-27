@@ -318,6 +318,7 @@ const Index = () => {
           filtroMesInicial={filtroGlobal.mes}
         />
       )}
+      </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
   );
