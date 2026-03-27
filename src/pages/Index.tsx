@@ -263,7 +263,12 @@ const Index = () => {
           filtroMesInicial={filtroGlobal.mes}
         />
       )}
-      {activeTab === 'movimentacao' && <MovimentacaoTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} />}
+      {activeTab === 'movimentacao' && (
+        <MovimentacaoTab onNavigate={(dest) => {
+          if (dest === 'tipos') setActiveTab('financeiro');
+          if (dest === 'resumo') setActiveTab('evolucao_rebanho_hub');
+        }} />
+      )}
       {activeTab === 'lancamentos' && (
         <LancamentosTab
           lancamentos={lancamentosVisiveis}
