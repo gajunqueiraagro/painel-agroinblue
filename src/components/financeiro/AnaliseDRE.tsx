@@ -299,9 +299,9 @@ export function DREAtividade({
     if (precosAnterior.length === 0 || precosFinal.length === 0) return 0;
 
     const valAnterior = mesAnterior === 0
-      ? calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosAnterior, anoNum, 0)
-      : calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosAnterior, anoNum, mesAnterior);
-    const valFinal = calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosFinal, anoNum, mesNum);
+      ? calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosAnterior, anoNum, 0, getPesosCompletos(0))
+      : calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosAnterior, anoNum, mesAnterior, getPesosCompletos(mesAnterior));
+    const valFinal = calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosFinal, anoNum, mesNum, getPesosCompletos(mesNum));
 
     // Reposição only for this month
     const mesKey = String(mesNum).padStart(2, "0");
@@ -309,7 +309,7 @@ export function DREAtividade({
     const repMes = lancsDoMes.filter(l => isReposicaoBovinos(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
 
     return valFinal - valAnterior - repMes;
-  }, [precosMap, saldosIniciais, lancamentosPecuarios, lancConciliadosPorMes, anoFiltro, anoNum, mesNum]);
+  }, [precosMap, saldosIniciais, lancamentosPecuarios, lancConciliadosPorMes, anoFiltro, anoNum, mesNum, pesosReaisFinal, pesosReaisInicial, pesosIntermediarios, categorias]);
 
   const dreData = useMemo(() => {
     const mesKey = mesSelecionado;
