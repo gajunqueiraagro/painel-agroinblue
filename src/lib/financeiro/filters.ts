@@ -33,15 +33,19 @@ export const isConciliado = (l: FinanceiroLancamentoBase): boolean =>
  * Lançamento de entrada — somente tipo_operacao 1*
  * 3-Transferência é movimentação interna e NÃO entra.
  */
-export const isEntradaFinanceira = (l: FinanceiroLancamentoBase): boolean =>
-  norm(l.tipo_operacao).startsWith('1');
+export const isEntradaFinanceira = (l: FinanceiroLancamentoBase): boolean => {
+  const tipo = normTipo(l.tipo_operacao);
+  return tipo.startsWith('1') || tipo.includes('entrada');
+};
 
 /**
  * Lançamento de saída — somente tipo_operacao 2*
  * 3-Transferência é movimentação interna e NÃO entra.
  */
-export const isSaidaFinanceira = (l: FinanceiroLancamentoBase): boolean =>
-  norm(l.tipo_operacao).startsWith('2');
+export const isSaidaFinanceira = (l: FinanceiroLancamentoBase): boolean => {
+  const tipo = normTipo(l.tipo_operacao);
+  return tipo.startsWith('2') || tipo.includes('saida') || tipo.includes('saída');
+};
 
 /** Extrai ano-mês (YYYY-MM) da data_pagamento */
 export const datePagtoAnoMes = (l: FinanceiroLancamentoBase): string | null => {
