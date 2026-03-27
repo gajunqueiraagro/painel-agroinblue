@@ -116,7 +116,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               {MESES_COLS.map(m => (
                 <th
                   key={m.key}
-                  className="px-2 py-2 font-bold text-foreground text-center min-w-[45px] cursor-pointer hover:bg-primary/20 transition-colors"
+                  className="px-2 py-1 font-bold text-foreground text-center min-w-[45px] cursor-pointer hover:bg-primary/20 transition-colors"
                   onClick={() => setDrilldownMonth(m.key)}
                 >
                   {m.label}
