@@ -306,7 +306,9 @@ export function useFluxoCaixa(
             }
           } else if (isSaidaFinanceira(l)) {
             const cat = classificarSaida(l);
-            if (cat === 'desembolso') {
+            if (cat === 'deducao') {
+              deducaoReceitas += val;
+            } else if (cat === 'desembolso') {
               desembolso += val;
               if (escopo === 'pec') desembolsoPec += val;
               else desembolsoAgri += val;
