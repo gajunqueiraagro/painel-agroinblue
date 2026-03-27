@@ -187,34 +187,34 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   }
 
   return (
-    <div className="p-4 max-w-4xl mx-auto space-y-4 animate-fade-in pb-20">
+    <div className="p-3 max-w-4xl mx-auto space-y-2 animate-fade-in pb-20">
       {/* Filtros */}
-      <div className="flex gap-2 items-center flex-wrap">
+      <div className="flex gap-1.5 items-center flex-wrap">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-          <SelectTrigger className="w-[100px] touch-target text-base font-bold">
+          <SelectTrigger className="w-20 h-7 text-xs font-bold">
             <SelectValue placeholder="Ano" />
           </SelectTrigger>
           <SelectContent>
             {anosDisponiveis.map(a => (
-              <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>
+              <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
         <Select value={mesFiltro} onValueChange={setMesFiltro}>
-          <SelectTrigger className="w-[120px] touch-target text-base font-bold">
+          <SelectTrigger className="w-24 h-7 text-xs font-bold">
             <SelectValue placeholder="Mês" />
           </SelectTrigger>
           <SelectContent>
             {MESES_COLS.map(m => (
-              <SelectItem key={m.key} value={m.key} className="text-base">{m.label}</SelectItem>
+              <SelectItem key={m.key} value={m.key} className="text-sm">{m.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
         {canEdit && (
-          <Button variant="outline" size="sm" onClick={handleCopiarMesAnterior} className="gap-1">
-            <Copy className="h-4 w-4" /> Mês anterior
+          <Button variant="outline" size="sm" onClick={handleCopiarMesAnterior} className="gap-1 h-7 text-xs px-2">
+            <Copy className="h-3 w-3" /> Mês anterior
           </Button>
         )}
 
