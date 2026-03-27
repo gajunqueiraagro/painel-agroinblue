@@ -99,7 +99,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
   if (lancamentos.length === 0) return <p className="text-center text-muted-foreground py-6">Nenhum registro no período</p>;
 
   return (
-    <div className="overflow-x-auto overflow-y-visible">
+    <div>
       <table className="w-full text-xs border-collapse">
          <thead className="sticky top-0 z-10">
           <tr className="border-b border-border">
