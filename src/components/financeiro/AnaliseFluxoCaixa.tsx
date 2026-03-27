@@ -78,7 +78,7 @@ export function FluxoCaixa({
         }
       }
 
-      const totalSaidas = saidasCusteio + saidasInvestimentos + saidasAmortizacoes + saidasDividendos + saidasOutras;
+      const totalSaidas = saidasDeducao + saidasCusteio + saidasInvestimentos + saidasAmortizacoes + saidasDividendos + saidasOutras;
       const saldoMes = entradas - totalSaidas;
       saldoAcum += saldoMes;
 
