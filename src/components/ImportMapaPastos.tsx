@@ -80,6 +80,7 @@ export function ImportMapaPastos({ open, onOpenChange, pastos, categorias, fazen
             .insert({
               pasto_id: pastoId,
               fazenda_id: fazendaId,
+              cliente_id: clienteId,
               ano_mes: itemAnoMes,
               lote_mes: first.lote,
               tipo_uso_mes: first.atividade,
