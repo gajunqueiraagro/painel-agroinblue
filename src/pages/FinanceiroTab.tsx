@@ -409,8 +409,28 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
   return (
     <div className="max-w-full mx-auto animate-fade-in pb-20">
+      {/* Drill-down header */}
+      {(onBack || drillDownLabel) && (
+        <div className="sticky top-0 z-30 bg-background border-b border-border/50 shadow-sm px-3 py-2 space-y-1.5">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="flex items-center gap-1.5 text-xs font-bold text-primary hover:text-primary/80 transition-colors"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Voltar
+            </button>
+          )}
+          {drillDownLabel && (
+            <div className="flex items-center gap-1.5 bg-primary/10 text-primary rounded-md px-2.5 py-1 text-xs font-bold w-fit">
+              <Filter className="h-3 w-3" />
+              {drillDownLabel}
+            </div>
+          )}
+        </div>
+      )}
       {/* Sticky filter bar */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 space-y-1">
+      <div className={`sticky ${onBack || drillDownLabel ? 'top-[60px]' : 'top-0'} z-20 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 space-y-1`}>
       {/* Top tabs */}
       <div className={`grid gap-0.5 bg-muted rounded-md p-0.5 ${modoMovimentacao ? 'grid-cols-2' : `grid-cols-${topTabs.length}`}`}>
         {topTabs.map(t => (
