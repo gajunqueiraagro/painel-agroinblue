@@ -78,15 +78,14 @@ export function VariacaoEstoqueExplicacao({
       .filter(s => s.ano === anoNum)
       .forEach(s => {
         const preco = precoMapInicial.get(s.categoria) || 0;
-        const pesoKg = s.pesoMedioKg || 0;
+        const pesoKg = pesosReaisInicial?.[s.categoria] ?? s.pesoMedioKg ?? 0;
         valorInicial += s.quantidade * pesoKg * preco;
       });
 
     let valorFinal = 0;
     for (const [cat, qtd] of saldoFimMap.entries()) {
       const preco = precoMapFinal.get(cat) || 0;
-      const si = saldosIniciais.find(s => s.ano === anoNum && s.categoria === cat);
-      const pesoKg = si?.pesoMedioKg || 0;
+      const pesoKg = pesosReaisFinal?.[cat] ?? saldosIniciais.find(s => s.ano === anoNum && s.categoria === cat)?.pesoMedioKg ?? 0;
       valorFinal += qtd * pesoKg * preco;
     }
 
