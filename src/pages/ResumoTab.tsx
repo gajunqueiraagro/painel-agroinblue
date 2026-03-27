@@ -76,23 +76,39 @@ function StatusBadge({ nivel, label }: { nivel: StatusNivel; label: string }) {
 function useZooKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: number, mes: number) {
   const { pastos } = usePastos();
   return useMemo(() => {
+    // Saldo final no mês filtrado (snapshot)
     const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
     const saldoFinal = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
-    const itens = Array.from(saldoMap.entries())
-      .filter(([, q]) => q > 0)
-      .map(([cat, qtd]) => {
-        const si = saldosIniciais.find(s => s.categoria === cat && s.ano === ano);
-        return { quantidade: qtd, pesoKg: si?.pesoMedioKg || null };
-      });
-    const pesoMedio = calcPesoMedioPonderado(itens);
+
+    // Acumulado: média ponderada de jan→mes
+    let sumSaldo = 0;
+    let sumPesoTotal = 0;
+    for (let m = 1; m <= mes; m++) {
+      const sM = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, m);
+      const st = Array.from(sM.values()).reduce((a, v) => a + v, 0);
+      if (st <= 0) continue;
+      sumSaldo += st;
+      const itens = Array.from(sM.entries())
+        .filter(([, q]) => q > 0)
+        .map(([cat, qtd]) => {
+          const si = saldosIniciais.find(s => s.categoria === cat && s.ano === ano);
+          return { quantidade: qtd, pesoKg: si?.pesoMedioKg || null };
+        });
+      const p = calcPesoMedioPonderado(itens);
+      if (p) sumPesoTotal += p * st;
+    }
+
+    const rebanhoMedio = mes > 0 ? sumSaldo / mes : 0;
+    const pesoMedio = sumSaldo > 0 ? sumPesoTotal / sumSaldo : null;
     const area = calcAreaProdutivaPecuaria(pastos);
-    const ua = calcUA(saldoFinal, pesoMedio);
-    const uaHa = calcUAHa(ua, area);
+    const pesoTotalKg = pesoMedio && rebanhoMedio > 0 ? pesoMedio * rebanhoMedio : null;
+    const lotacaoKgHa = pesoTotalKg && area > 0 ? pesoTotalKg / area : null;
+
     const end = `${ano}-${String(mes).padStart(2, '0')}-31`;
     const lancsAcum = lancamentos.filter(l => l.data >= `${ano}-01-01` && l.data <= end);
     const saidasAcum = lancsAcum.filter(l => TIPOS_SAIDA.includes(l.tipo));
     const arrobasSaidas = saidasAcum.reduce((s, l) => s + calcArrobasSafe(l), 0);
-    return { saldoFinal, pesoMedio, uaHa, arrobasSaidas, area };
+    return { saldoFinal, pesoMedio, lotacaoKgHa, arrobasSaidas, area };
   }, [lancamentos, saldosIniciais, ano, mes, pastos]);
 }
 
