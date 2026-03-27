@@ -397,7 +397,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   return (
     <div className="max-w-full mx-auto animate-fade-in pb-20">
       {/* Sticky filter bar */}
-      <div className="sticky top-0 z-20 bg-background px-3 py-1.5 space-y-1 border-b border-border/50">
+      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 space-y-1">
       {/* Top tabs */}
       <div className={`grid gap-0.5 bg-muted rounded-md p-0.5 ${modoMovimentacao ? 'grid-cols-2' : `grid-cols-${topTabs.length}`}`}>
         {topTabs.map(t => (
