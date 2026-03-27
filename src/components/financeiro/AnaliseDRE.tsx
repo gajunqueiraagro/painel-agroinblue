@@ -38,6 +38,8 @@ import type { Lancamento, SaldoInicial } from "@/types/cattle";
 import type { CategoriaRebanho, Pasto } from "@/hooks/usePastos";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { calcSaldoPorCategoriaLegado } from "@/lib/calculos/zootecnicos";
+import { useFechamentoCategoria, loadPesosPastosPorCategoria } from "@/hooks/useFechamentoCategoria";
+import { resolverPesoOficial } from "@/hooks/useFechamentoCategoria";
 
 interface Props {
   lancConciliadosPorMes: Map<string, FinanceiroLancamento[]>;
@@ -120,16 +122,18 @@ function calcValorEstoque(
   precos: { categoria: string; preco_kg: number }[],
   ano: number,
   mes: number,
+  pesosReais?: Record<string, number>,
 ): number {
   if (!precos || precos.length === 0) return 0;
   const precoMap = new Map(precos.map((p) => [p.categoria, p.preco_kg]));
 
   if (mes === 0) {
+    // Initial value (Dec prev year) — use pesosReais if available
     return saldosIniciais
       .filter((s) => s.ano === ano)
       .reduce((sum, s) => {
         const preco = precoMap.get(s.categoria) || 0;
-        const pesoKg = s.pesoMedioKg || 0;
+        const pesoKg = pesosReais?.[s.categoria] ?? s.pesoMedioKg ?? 0;
         return sum + s.quantidade * pesoKg * preco;
       }, 0);
   }
@@ -138,8 +142,8 @@ function calcValorEstoque(
   let total = 0;
   for (const [cat, qtd] of saldoMap.entries()) {
     const preco = precoMap.get(cat) || 0;
-    const si = saldosIniciais.find((s) => s.ano === ano && s.categoria === cat);
-    const pesoKg = si?.pesoMedioKg || 0;
+    // Use real weight from pesosReais (fechamento de pastos), fallback to saldo inicial
+    const pesoKg = pesosReais?.[cat] ?? saldosIniciais.find((s) => s.ano === ano && s.categoria === cat)?.pesoMedioKg ?? 0;
     total += qtd * pesoKg * preco;
   }
   return total;
@@ -185,13 +189,91 @@ export function DREAtividade({
 
   const precosMap = useValorRebanhoForDRE(fazendaId, anoFiltro, mesLimite, isGlobal);
 
+  // Get real weights from useFechamentoCategoria for the current month
+  const resumoFinal = useFechamentoCategoria(
+    fazendaId, anoNum, mesNum,
+    lancamentosPecuarios, saldosIniciais, categorias,
+  );
+
+  // Build pesosReais map for current month from useFechamentoCategoria
+  const pesosReaisFinal = useMemo(() => {
+    const map: Record<string, number> = {};
+    resumoFinal.rows.forEach(r => {
+      if (r.pesoMedioFinalKg && r.pesoMedioFinalKg > 0) {
+        map[r.categoriaCodigo] = r.pesoMedioFinalKg;
+      }
+    });
+    return map;
+  }, [resumoFinal.rows]);
+
+  // Load real weights for Dec prev year (initial stock)
+  const [pesosReaisInicial, setPesosReaisInicial] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!fazendaId || fazendaId === '__global__' || !categorias.length) {
+      setPesosReaisInicial({});
+      return;
+    }
+    const dezAnoAnterior = `${anoNum - 1}-12`;
+    loadPesosPastosPorCategoria(fazendaId, dezAnoAnterior, categorias)
+      .then(map => setPesosReaisInicial(map))
+      .catch(() => setPesosReaisInicial({}));
+  }, [fazendaId, anoNum, categorias]);
+
+  // Also load real weights for each intermediate month (for month-only view)
+  const [pesosIntermediarios, setPesosIntermediarios] = useState<Record<string, Record<string, number>>>({});
+  useEffect(() => {
+    if (!fazendaId || fazendaId === '__global__' || !categorias.length) return;
+    const loadAll = async () => {
+      const result: Record<string, Record<string, number>> = {};
+      for (let m = 1; m <= mesNum; m++) {
+        const anoMes = `${anoFiltro}-${String(m).padStart(2, '0')}`;
+        try {
+          result[String(m)] = await loadPesosPastosPorCategoria(fazendaId, anoMes, categorias);
+        } catch { result[String(m)] = {}; }
+      }
+      setPesosIntermediarios(result);
+    };
+    loadAll();
+  }, [fazendaId, anoFiltro, mesNum, categorias]);
+
+  // Helper to get pesos for a given month (0 = initial)
+  const getPesosForMonth = (m: number): Record<string, number> => {
+    if (m === 0) return pesosReaisInicial;
+    if (m === mesNum) return pesosReaisFinal;
+    return pesosIntermediarios[String(m)] || {};
+  };
+
+  // Build pesos using resolverPesoOficial for months without pasto data
+  const getPesosCompletos = (m: number): Record<string, number> => {
+    const pesosBase = getPesosForMonth(m);
+    if (m === 0) {
+      // For initial, fill from saldos iniciais where pasto data is missing
+      const result: Record<string, number> = { ...pesosBase };
+      saldosIniciais.filter(s => s.ano === anoNum).forEach(s => {
+        if (!result[s.categoria] && s.pesoMedioKg && s.pesoMedioKg > 0) {
+          result[s.categoria] = s.pesoMedioKg;
+        }
+      });
+      return result;
+    }
+    // For other months, use resolverPesoOficial fallback
+    const result: Record<string, number> = { ...pesosBase };
+    categorias.forEach(cat => {
+      if (!result[cat.codigo]) {
+        const { valor } = resolverPesoOficial(cat.codigo, pesosBase, saldosIniciais, lancamentosPecuarios, anoNum, m);
+        if (valor) result[cat.codigo] = valor;
+      }
+    });
+    return result;
+  };
+
   // Stock variation calculation — using financeiro_lancamentos for reposição
   const variacaoEstoque = useMemo(() => {
     const precosInicial = precosMap.get(`${anoNum - 1}-12`) || [];
     const precosFinal = precosMap.get(`${anoFiltro}-${String(mesNum).padStart(2, "0")}`) || [];
 
-    const valorInicial = calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosInicial, anoNum, 0);
-    const valorFinal = calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosFinal, anoNum, mesNum);
+    const valorInicial = calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosInicial, anoNum, 0, getPesosCompletos(0));
+    const valorFinal = calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosFinal, anoNum, mesNum, getPesosCompletos(mesNum));
 
     // Reposição = financeiro_lancamentos, macro_custo "Investimento em Bovinos", Conciliado
     const reposicao = calcReposicaoFinanceiro(lancConciliadosPorMes, mesNum);
@@ -203,7 +285,7 @@ export function DREAtividade({
     const hasData = hasPrecoInicial && hasPrecoFinal;
 
     return { valorInicial, valorFinal, variacaoBruta, reposicao, variacao, hasData, hasPrecoInicial, hasPrecoFinal };
-  }, [saldosIniciais, lancamentosPecuarios, precosMap, lancConciliadosPorMes, anoFiltro, anoNum, mesNum]);
+  }, [saldosIniciais, lancamentosPecuarios, precosMap, lancConciliadosPorMes, anoFiltro, anoNum, mesNum, pesosReaisFinal, pesosReaisInicial, pesosIntermediarios, categorias]);
 
   // Stock variation for single month (approximate — only use acum for DRE)
   const variacaoEstoqueMes = useMemo(() => {
@@ -217,9 +299,9 @@ export function DREAtividade({
     if (precosAnterior.length === 0 || precosFinal.length === 0) return 0;
 
     const valAnterior = mesAnterior === 0
-      ? calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosAnterior, anoNum, 0)
-      : calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosAnterior, anoNum, mesAnterior);
-    const valFinal = calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosFinal, anoNum, mesNum);
+      ? calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosAnterior, anoNum, 0, getPesosCompletos(0))
+      : calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosAnterior, anoNum, mesAnterior, getPesosCompletos(mesAnterior));
+    const valFinal = calcValorEstoque(saldosIniciais, lancamentosPecuarios, precosFinal, anoNum, mesNum, getPesosCompletos(mesNum));
 
     // Reposição only for this month
     const mesKey = String(mesNum).padStart(2, "0");
@@ -227,7 +309,7 @@ export function DREAtividade({
     const repMes = lancsDoMes.filter(l => isReposicaoBovinos(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
 
     return valFinal - valAnterior - repMes;
-  }, [precosMap, saldosIniciais, lancamentosPecuarios, lancConciliadosPorMes, anoFiltro, anoNum, mesNum]);
+  }, [precosMap, saldosIniciais, lancamentosPecuarios, lancConciliadosPorMes, anoFiltro, anoNum, mesNum, pesosReaisFinal, pesosReaisInicial, pesosIntermediarios, categorias]);
 
   const dreData = useMemo(() => {
     const mesKey = mesSelecionado;
@@ -452,6 +534,8 @@ export function DREAtividade({
         fazendaId={fazendaId}
         precosMap={precosMap}
         reposicaoFinanceiro={variacaoEstoque.reposicao}
+        pesosReaisInicial={getPesosCompletos(0)}
+        pesosReaisFinal={getPesosCompletos(mesNum)}
       />
     </div>
   );

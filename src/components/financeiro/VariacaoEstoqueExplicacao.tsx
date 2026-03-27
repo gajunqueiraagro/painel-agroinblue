@@ -17,6 +17,10 @@ interface Props {
   precosMap: Map<string, { categoria: string; preco_kg: number }[]>;
   /** Reposição vinda de financeiro_lancamentos (Investimento em Bovinos, Conciliado) */
   reposicaoFinanceiro: number;
+  /** Pesos reais (do fechamento de pastos) para o estoque inicial (Dez ano anterior) */
+  pesosReaisInicial?: Record<string, number>;
+  /** Pesos reais (do fechamento de pastos) para o estoque final (mês corrente) */
+  pesosReaisFinal?: Record<string, number>;
 }
 
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -29,6 +33,8 @@ export function VariacaoEstoqueExplicacao({
   fazendaId,
   precosMap,
   reposicaoFinanceiro,
+  pesosReaisInicial,
+  pesosReaisFinal,
 }: Props) {
   const [aberto, setAberto] = useState(false);
   const anoNum = Number(anoFiltro);
@@ -45,12 +51,14 @@ export function VariacaoEstoqueExplicacao({
 
     const arrobasInicio = saldosIniciais
       .filter(s => s.ano === anoNum)
-      .reduce((sum, s) => sum + s.quantidade * ((s.pesoMedioKg || 0) / 30), 0);
+      .reduce((sum, s) => {
+        const pesoKg = pesosReaisInicial?.[s.categoria] ?? s.pesoMedioKg ?? 0;
+        return sum + s.quantidade * (pesoKg / 30);
+      }, 0);
 
     let arrobasFim = 0;
     for (const [cat, qtd] of saldoFimMap.entries()) {
-      const si = saldosIniciais.find(s => s.ano === anoNum && s.categoria === cat);
-      const pesoKg = si?.pesoMedioKg || 0;
+      const pesoKg = pesosReaisFinal?.[cat] ?? saldosIniciais.find(s => s.ano === anoNum && s.categoria === cat)?.pesoMedioKg ?? 0;
       arrobasFim += qtd * (pesoKg / 30);
     }
     const deltaArrobas = arrobasFim - arrobasInicio;
@@ -70,15 +78,14 @@ export function VariacaoEstoqueExplicacao({
       .filter(s => s.ano === anoNum)
       .forEach(s => {
         const preco = precoMapInicial.get(s.categoria) || 0;
-        const pesoKg = s.pesoMedioKg || 0;
+        const pesoKg = pesosReaisInicial?.[s.categoria] ?? s.pesoMedioKg ?? 0;
         valorInicial += s.quantidade * pesoKg * preco;
       });
 
     let valorFinal = 0;
     for (const [cat, qtd] of saldoFimMap.entries()) {
       const preco = precoMapFinal.get(cat) || 0;
-      const si = saldosIniciais.find(s => s.ano === anoNum && s.categoria === cat);
-      const pesoKg = si?.pesoMedioKg || 0;
+      const pesoKg = pesosReaisFinal?.[cat] ?? saldosIniciais.find(s => s.ano === anoNum && s.categoria === cat)?.pesoMedioKg ?? 0;
       valorFinal += qtd * pesoKg * preco;
     }
 
@@ -101,7 +108,7 @@ export function VariacaoEstoqueExplicacao({
       hasPrecos, hasPrecoInicial, hasPrecoFinal,
       alertas,
     };
-  }, [saldosIniciais, lancamentosPecuarios, anoNum, anoFiltro, mesLimite, precosMap, reposicaoFinanceiro]);
+  }, [saldosIniciais, lancamentosPecuarios, anoNum, anoFiltro, mesLimite, precosMap, reposicaoFinanceiro, pesosReaisInicial, pesosReaisFinal]);
 
   const colorVal = (v: number) =>
     v > 0 ? 'text-blue-600 dark:text-blue-400' : v < 0 ? 'text-red-600 dark:text-red-400' : '';
