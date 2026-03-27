@@ -1,7 +1,8 @@
 import { ReactNode } from 'react';
-import { LogOut, ArrowLeft } from 'lucide-react';
+import { LogOut, ArrowLeft, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
+import { AlterarSenhaDialog } from '@/components/AlterarSenhaDialog';
 import logo from '@/assets/logo.png';
 
 interface HeaderProps {
