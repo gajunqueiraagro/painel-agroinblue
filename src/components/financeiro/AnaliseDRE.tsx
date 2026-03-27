@@ -362,44 +362,29 @@ export function DREAtividade({
 
   return (
     <div className="space-y-3">
-      {/* Seletor de mês + escopo */}
-      <div className="flex gap-2 items-center flex-wrap">
-        <Select value={mesSelecionado} onValueChange={setMesSelecionado}>
-          <SelectTrigger className="w-28 text-sm font-bold">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {mesesOpt.map((m) => (
-              <SelectItem key={m.value} value={m.value}>
-                {m.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <div className="flex gap-1">
-          {[
-            { id: "pecuaria" as Escopo, label: "🐄 Pecuária", enabled: true },
-            { id: "agricultura" as Escopo, label: "🌾 Agricultura", enabled: false },
-            { id: "consolidado" as Escopo, label: "📊 Consolidado", enabled: false },
-          ].map((e) => (
-            <button
-              key={e.id}
-              onClick={() => e.enabled && setEscopo(e.id)}
-              disabled={!e.enabled}
-              title={!e.enabled ? "Em breve" : undefined}
-              className={`px-2 py-1 rounded text-[10px] font-bold transition-colors ${
-                escopo === e.id
-                  ? "bg-primary text-primary-foreground"
-                  : e.enabled
-                    ? "bg-muted text-muted-foreground hover:bg-muted/80"
-                    : "bg-muted/50 text-muted-foreground/40 cursor-not-allowed"
-              }`}
-            >
-              {e.label}
-            </button>
-          ))}
-        </div>
+      {/* Escopo */}
+      <div className="flex gap-1">
+        {[
+          { id: "pecuaria" as Escopo, label: "🐄 Pecuária", enabled: true },
+          { id: "agricultura" as Escopo, label: "🌾 Agricultura", enabled: false },
+          { id: "consolidado" as Escopo, label: "📊 Consolidado", enabled: false },
+        ].map((e) => (
+          <button
+            key={e.id}
+            onClick={() => e.enabled && setEscopo(e.id)}
+            disabled={!e.enabled}
+            title={!e.enabled ? "Em breve" : undefined}
+            className={`px-2 py-1 rounded text-[10px] font-bold transition-colors ${
+              escopo === e.id
+                ? "bg-primary text-primary-foreground"
+                : e.enabled
+                  ? "bg-muted text-muted-foreground hover:bg-muted/80"
+                  : "bg-muted/50 text-muted-foreground/40 cursor-not-allowed"
+            }`}
+          >
+            {e.label}
+          </button>
+        ))}
       </div>
 
       <div className="text-[10px] text-muted-foreground">Regime de caixa · Data Pagamento · Conciliado</div>
