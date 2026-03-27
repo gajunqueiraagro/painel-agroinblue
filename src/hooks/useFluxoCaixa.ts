@@ -123,6 +123,9 @@ export function useFluxoCaixa(
   ano: number,
   mesAte: number,
 ) {
+  const { fazendas } = useFazenda();
+  const allFazendaIds = fazendas.filter(f => f.id !== '__global__').map(f => f.id);
+
   const [lancamentosGlobais, setLancamentosGlobais] = useState<FluxoLancamentoBase[]>([]);
   const [loadingLancamentos, setLoadingLancamentos] = useState(true);
   const [saldoInicialAno, setSaldoInicialAno] = useState<number>(0);
