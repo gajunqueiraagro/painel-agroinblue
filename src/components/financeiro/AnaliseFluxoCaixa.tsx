@@ -53,6 +53,7 @@ export function FluxoCaixa({
       const entradas = somaAbs(lancs.filter(isEntrada));
 
       const saidasAll = lancs.filter(isSaida);
+      let saidasDeducao = 0;
       let saidasCusteio = 0;
       let saidasInvestimentos = 0;
       let saidasAmortizacoes = 0;
