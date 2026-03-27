@@ -65,6 +65,7 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
   const [mesFiltro, setMesFiltro] = useState(mesDefault);
   const [vista, setVista] = useState<Vista>('mes');
   const [subView, setSubView] = useState<SubView>('main');
+  const [cenario, setCenario] = useState<Cenario>('realizado');
 
   useEffect(() => {
     if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
@@ -77,7 +78,13 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
     setMesFiltro(n === new Date().getFullYear() ? new Date().getMonth() + 1 : 12);
   };
 
-  const zoo = useIndicadoresZootecnicos(fazendaId, anoNum, mesFiltro, lancamentos, saldosIniciais, pastos, categorias, globalFazendaIds);
+  // Filter lancamentos by cenario
+  const lancsFiltrados = useMemo(() => {
+    const statusMatch = cenario === 'realizado' ? 'conciliado' : 'previsto';
+    return lancamentos.filter(l => (l.statusOperacional || 'conciliado') === statusMatch);
+  }, [lancamentos, cenario]);
+
+  const zoo = useIndicadoresZootecnicos(fazendaId, anoNum, mesFiltro, lancsFiltrados, saldosIniciais, pastos, categorias, globalFazendaIds);
 
   const mesLabel = MESES_COLS.find(m => m.key === String(mesFiltro).padStart(2, '0'))?.label || '';
 
