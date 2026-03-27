@@ -266,7 +266,7 @@ const Index = () => {
       {activeTab === 'movimentacao' && (
         <MovimentacaoTab onNavigate={(dest) => {
           if (dest === 'tipos') setActiveTab('financeiro');
-          if (dest === 'resumo') setActiveTab('evolucao_rebanho_hub');
+          if (dest === 'resumo') setActiveTab('fluxo_anual');
         }} />
       )}
       {activeTab === 'lancamentos' && (
