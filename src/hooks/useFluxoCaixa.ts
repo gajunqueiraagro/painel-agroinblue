@@ -132,15 +132,26 @@ export function useFluxoCaixa(
   const loadLancamentosGlobais = useCallback(async () => {
     setLoadingLancamentos(true);
     try {
-      const { data } = await supabase
-        .from('financeiro_lancamentos')
-        .select('status_transacao, data_pagamento, valor, tipo_operacao, macro_custo, produto, escopo_negocio')
-        .gte('data_pagamento', `${ano}-01-01`)
-        .lte('data_pagamento', `${ano}-12-31`)
-        .limit(20000);
+      const PAGE_SIZE = 1000;
+      let allData: any[] = [];
+      let from = 0;
+
+      while (true) {
+        const { data } = await supabase
+          .from('financeiro_lancamentos')
+          .select('status_transacao, data_pagamento, valor, tipo_operacao, macro_custo, produto, escopo_negocio')
+          .gte('data_pagamento', `${ano}-01-01`)
+          .lte('data_pagamento', `${ano}-12-31`)
+          .range(from, from + PAGE_SIZE - 1);
+
+        if (!data || data.length === 0) break;
+        allData = allData.concat(data);
+        if (data.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+      }
 
       setLancamentosGlobais(
-        (data || []).map((r: any) => ({
+        allData.map((r: any) => ({
           status_transacao: r.status_transacao,
           data_pagamento: r.data_pagamento ? String(r.data_pagamento) : null,
           valor: Number(r.valor) || 0,
