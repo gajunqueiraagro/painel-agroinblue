@@ -115,15 +115,33 @@ export function AnaliseOperacionalTab({ onNavigateToMovimentacao }: Props) {
           <div className="text-sm text-muted-foreground">Nenhuma movimentação registrada neste mês.</div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {movItems.map(m => (
-              <div key={m.label} className="rounded-lg border bg-card p-3 flex items-center gap-3">
-                <m.icon className={`h-5 w-5 ${m.color} shrink-0`} />
-                <div>
-                  <div className="text-xs text-muted-foreground">{m.label}</div>
-                  <div className="text-lg font-bold">{m.value}</div>
+            {movItems.map(m => {
+              const subAba = LABEL_TO_SUBABA[m.label];
+              const handleClick = () => {
+                if (onNavigateToMovimentacao && subAba) {
+                  const [ano, mes] = anoMes.split('-');
+                  onNavigateToMovimentacao(subAba, {
+                    ano,
+                    mes,
+                    label: `${m.label} | ${formatAnoMes(anoMes)}`,
+                    backTab: 'analise_operacional',
+                  });
+                }
+              };
+              return (
+                <div
+                  key={m.label}
+                  className={`rounded-lg border bg-card p-3 flex items-center gap-3 ${subAba ? 'cursor-pointer hover:bg-muted/50 transition-colors' : ''}`}
+                  onClick={handleClick}
+                >
+                  <m.icon className={`h-5 w-5 ${m.color} shrink-0`} />
+                  <div>
+                    <div className="text-xs text-muted-foreground">{m.label}</div>
+                    <div className="text-lg font-bold">{m.value}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
         {(resumoMov.totalEntradas > 0 || resumoMov.totalSaidas > 0) && (
