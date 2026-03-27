@@ -7,6 +7,7 @@ import logo from '@/assets/logo.png';
 
 interface HeaderProps {
   title: string;
+  clienteNome?: string;
   fazendaNome?: string;
   periodo?: string;
   onBack?: () => void;
