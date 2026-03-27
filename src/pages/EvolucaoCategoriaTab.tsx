@@ -134,11 +134,11 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   }, [dados]);
 
   return (
-    <div className="p-4 max-w-4xl mx-auto space-y-4 animate-fade-in pb-20">
+    <div className="p-3 max-w-4xl mx-auto space-y-2 animate-fade-in pb-20">
       {/* Filtros */}
       <div className="flex items-center gap-2 flex-wrap">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-          <SelectTrigger className="h-9 text-sm font-bold w-24">
+          <SelectTrigger className="h-7 text-xs font-bold w-20">
             <SelectValue placeholder="Ano" />
           </SelectTrigger>
           <SelectContent>
