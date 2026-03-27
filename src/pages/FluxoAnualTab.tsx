@@ -14,6 +14,7 @@ interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
   onNavigateToMovimentacao?: (subAba: SubAba) => void;
+  onNavigateToValorRebanho?: () => void;
 }
 
 export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao }: Props) {
