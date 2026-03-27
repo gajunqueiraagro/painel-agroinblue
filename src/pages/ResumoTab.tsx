@@ -257,7 +257,7 @@ function useGlobalFarmKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInici
     };
 
     return { farms, globalRow };
-  }, [fazendas, lancamentos, saldosIniciais, ano, mes, allPastos]);
+  }, [fazendas, lancamentos, saldosIniciais, ano, mes, allPastos, allPesosPorFazMes, categorias]);
 }
 
 // ---------------------------------------------------------------------------
