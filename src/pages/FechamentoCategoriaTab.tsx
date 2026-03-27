@@ -62,30 +62,34 @@ export function FechamentoCategoriaTab({ lancamentos, saldosIniciais }: Props) {
   const rowsEstimativa = resumo.rows.filter(r => r.quantidadeFinal > 0 && (r.origemPeso === 'lancamento' || r.origemPeso === 'saldo_inicial'));
 
   return (
-    <div className="p-4 max-w-4xl mx-auto space-y-4 animate-fade-in pb-20">
-      {/* Filtros */}
-      <div className="grid grid-cols-2 gap-3">
-        <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-          <SelectTrigger className="touch-target text-base font-bold">
-            <SelectValue placeholder="Ano" />
-          </SelectTrigger>
-          <SelectContent>
-            {anosDisponiveis.map(a => (
-              <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={mesFiltro} onValueChange={setMesFiltro}>
-          <SelectTrigger className="touch-target text-base font-bold">
-            <SelectValue placeholder="Mês" />
-          </SelectTrigger>
-          <SelectContent>
-            {MESES_COLS.map(m => (
-              <SelectItem key={m.key} value={m.key} className="text-base">{m.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <div className="max-w-4xl mx-auto animate-fade-in pb-20">
+      {/* Filtros - sticky */}
+      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-2">
+        <div className="grid grid-cols-2 gap-3">
+          <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+            <SelectTrigger className="touch-target text-base font-bold">
+              <SelectValue placeholder="Ano" />
+            </SelectTrigger>
+            <SelectContent>
+              {anosDisponiveis.map(a => (
+                <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={mesFiltro} onValueChange={setMesFiltro}>
+            <SelectTrigger className="touch-target text-base font-bold">
+              <SelectValue placeholder="Mês" />
+            </SelectTrigger>
+            <SelectContent>
+              {MESES_COLS.map(m => (
+                <SelectItem key={m.key} value={m.key} className="text-base">{m.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
+
+      <div className="p-4 space-y-4">
 
       {/* Info */}
       <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 flex items-start gap-2">
@@ -179,6 +183,7 @@ export function FechamentoCategoriaTab({ lancamentos, saldosIniciais }: Props) {
           </table>
         </div>
       )}
+      </div>
     </div>
   );
 }

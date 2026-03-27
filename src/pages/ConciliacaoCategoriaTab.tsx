@@ -222,7 +222,7 @@ export function ConciliacaoCategoriaTab({ lancamentos, saldosIniciais, onBack, o
   return (
     <div className="max-w-lg mx-auto animate-fade-in pb-20">
       {/* Filtros - sticky */}
-      <div className="sticky top-0 z-20 bg-background pt-4 px-4 pb-2">
+      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm pt-4 px-4 pb-2">
         <div className="flex gap-2 items-center flex-wrap">
           <Select value={anoFiltro} onValueChange={setAnoFiltro}>
             <SelectTrigger className="w-24 text-base font-bold"><SelectValue /></SelectTrigger>

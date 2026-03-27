@@ -94,7 +94,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
   return (
     <div className="max-w-full mx-auto animate-fade-in pb-20">
       {/* ── Topo fixo: filtros ── */}
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/40 space-y-1.5 px-4 pt-2 pb-2">
+      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm space-y-1.5 px-4 pt-2 pb-2">
 
         {/* Linha 1: filtros de ano e mês */}
         <div className="flex gap-1.5">

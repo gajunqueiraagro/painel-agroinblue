@@ -234,7 +234,7 @@ export function LancarFinHubTab({ onTabChange, filtroGlobal, lancamentosPecuario
   return (
     <div className="max-w-full mx-auto animate-fade-in pb-20">
       {/* ── Topo fixo: filtros ── */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border">
+      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm">
         <div className="flex gap-2 px-4 pb-2">
           <Select value={localAno} onValueChange={setLocalAno}>
             <SelectTrigger className="w-24 h-8 text-xs font-bold">

@@ -185,57 +185,60 @@ export function MapaPastosTab() {
 
   return (
     <TooltipProvider>
-      <div className="p-4 pb-24 space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3">
-            <Select value={anoMes} onValueChange={setAnoMes}>
-              <SelectTrigger className="w-40 h-12"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {getAnoMesOptions().map(am => (
-                  <SelectItem key={am} value={am}>{formatAnoMes(am)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Badge variant="secondary" className="text-sm">{totais.totalCab} cab</Badge>
-            {totais.uaHaGeral !== null && (
-              <Badge variant="outline" className="text-sm">{formatNum(totais.uaHaGeral, 2)} UA/ha</Badge>
-            )}
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => gerarModeloMapaPastos(pastos, categorias, fazendaAtual?.nome || 'Fazenda')}
-            >
-              <FileDown className="h-4 w-4 mr-1" />Baixar modelo
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setImportOpen(true)}
-            >
-              <Upload className="h-4 w-4 mr-1" />Importar Excel
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => exportMapaPastosXlsx(rows, categorias, totais, resumoAtividades, anoMes, fazendaAtual?.nome || 'Fazenda')}
-              disabled={rows.length === 0}
-            >
-              <Download className="h-4 w-4 mr-1" />Excel
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => exportMapaPastosPdf(rows, categorias, totais, resumoAtividades, anoMes, fazendaAtual?.nome || 'Fazenda')}
-              disabled={rows.length === 0}
-            >
-              <FileText className="h-4 w-4 mr-1" />PDF
-            </Button>
+      <div className="pb-24">
+        {/* Header - sticky */}
+        <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-2">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              <Select value={anoMes} onValueChange={setAnoMes}>
+                <SelectTrigger className="w-40 h-12"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {getAnoMesOptions().map(am => (
+                    <SelectItem key={am} value={am}>{formatAnoMes(am)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Badge variant="secondary" className="text-sm">{totais.totalCab} cab</Badge>
+              {totais.uaHaGeral !== null && (
+                <Badge variant="outline" className="text-sm">{formatNum(totais.uaHaGeral, 2)} UA/ha</Badge>
+              )}
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => gerarModeloMapaPastos(pastos, categorias, fazendaAtual?.nome || 'Fazenda')}
+              >
+                <FileDown className="h-4 w-4 mr-1" />Baixar modelo
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setImportOpen(true)}
+              >
+                <Upload className="h-4 w-4 mr-1" />Importar Excel
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => exportMapaPastosXlsx(rows, categorias, totais, resumoAtividades, anoMes, fazendaAtual?.nome || 'Fazenda')}
+                disabled={rows.length === 0}
+              >
+                <Download className="h-4 w-4 mr-1" />Excel
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => exportMapaPastosPdf(rows, categorias, totais, resumoAtividades, anoMes, fazendaAtual?.nome || 'Fazenda')}
+                disabled={rows.length === 0}
+              >
+                <FileText className="h-4 w-4 mr-1" />PDF
+              </Button>
+            </div>
           </div>
         </div>
 
+        <div className="p-4 space-y-4">
         {loading ? (
           <div className="text-center py-8 text-muted-foreground">Carregando mapa...</div>
         ) : rows.length === 0 ? (
@@ -373,6 +376,7 @@ export function MapaPastosTab() {
             )}
           </>
         )}
+        </div>
       </div>
 
       <ImportMapaPastos
