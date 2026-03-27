@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Save, X, Pencil, Building2, Check } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { Plus, Save, X, Pencil, Building2, Check, Trash2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ClienteRow {
