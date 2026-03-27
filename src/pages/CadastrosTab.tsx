@@ -350,6 +350,20 @@ export function CadastrosTab() {
       <div className="px-3 pt-2 space-y-4">
 
       <Accordion type="multiple" defaultValue={[]} className="space-y-2">
+        {/* Clientes - admin only */}
+        {isAdmin && (
+          <AccordionItem value="clientes" className="border rounded-lg">
+            <AccordionTrigger className="px-4 py-3 text-sm font-bold">
+              <span className="flex items-center gap-2">
+                <Building2 className="h-4 w-4" /> Clientes
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="px-4 pb-4">
+              <ClientesTab />
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
         {/* Fazendas - only in global mode */}
         {isGlobal && (
           <AccordionItem value="fazendas" className="border rounded-lg">
