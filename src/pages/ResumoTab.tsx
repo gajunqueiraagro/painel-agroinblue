@@ -227,7 +227,7 @@ function useGlobalFarmKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInici
         let pesoTotalMes = 0;
         for (const [cat, qtd] of saldoM.entries()) {
           if (qtd <= 0) continue;
-          const { valor: pesoKg } = resolverPesoOficial(cat, pesosPastosMes, saldosIniciais, lancsFaz, ano, m);
+          const { valor: pesoKg } = resolverPesoOficial(cat, pesosPastosMes, saldosFaz, lancsFaz, ano, m);
           if (pesoKg) pesoTotalMes += pesoKg * qtd;
         }
         sumPesoTotal += pesoTotalMes;
