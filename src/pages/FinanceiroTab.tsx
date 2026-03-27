@@ -306,7 +306,7 @@ function getTopTabFromSubAba(subAba?: SubAba): TopTab {
   return 'todas';
 }
 
-export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao }: Props) {
+export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, onBack, drillDownLabel }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const fazendaMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -333,9 +333,14 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
     return Array.from(anos).sort().reverse();
   }, [lancamentos]);
 
-  const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
-  const [mesFiltro, setMesFiltro] = useState('todos');
+  const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(new Date().getFullYear()));
+  const [mesFiltro, setMesFiltro] = useState(filtroMesInicial || 'todos');
   const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>('todos');
+
+  useEffect(() => {
+    if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
+    if (filtroMesInicial) setMesFiltro(filtroMesInicial);
+  }, [filtroAnoInicial, filtroMesInicial]);
 
   const filtrados = useMemo(() => {
     let tiposFilter: string[] = [];
