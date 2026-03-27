@@ -211,6 +211,7 @@ export function useLancamentos() {
         if (localSaldo.length > 0) {
           const inserts = localSaldo.map(s => ({
             fazenda_id: fazendaId,
+            cliente_id: clienteId!,
             ano: s.ano,
             categoria: s.categoria,
             quantidade: s.quantidade,
