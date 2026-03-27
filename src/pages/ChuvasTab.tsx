@@ -137,56 +137,60 @@ export function ChuvasTab() {
   if (loading) return <div className="p-4 text-center text-muted-foreground">Carregando...</div>;
 
   return (
-    <div className="pb-20 px-2">
-      {/* Header */}
-      <div className="flex items-center justify-between p-3 gap-2">
-        <div className="flex items-center gap-2">
-          <CloudRain className="h-5 w-5 text-blue-500" />
-          <Select value={String(anoFiltro)} onValueChange={v => setAnoFiltro(Number(v))}>
-            <SelectTrigger className="w-24 h-8 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {anos.map(a => (
-                <SelectItem key={a} value={String(a)}>{a}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <span className="text-sm font-semibold text-muted-foreground">
-            Total: {yearTotal.toFixed(1)} mm
-          </span>
-        </div>
+    <div className="pb-20">
+      {/* Header - sticky */}
+      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 py-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <CloudRain className="h-5 w-5 text-blue-500" />
+            <Select value={String(anoFiltro)} onValueChange={v => setAnoFiltro(Number(v))}>
+              <SelectTrigger className="w-24 h-8 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {anos.map(a => (
+                  <SelectItem key={a} value={String(a)}>{a}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-sm font-semibold text-muted-foreground">
+              Total: {yearTotal.toFixed(1)} mm
+            </span>
+          </div>
 
-        {!isGlobal && (
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" variant="outline" className="gap-1">
-                <Plus className="h-4 w-4" /> Lançar
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-sm">
-              <DialogHeader>
-                <DialogTitle>Registrar Chuva</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-3">
-                <div>
-                  <Label>Data</Label>
-                  <Input type="date" value={novaData} onChange={e => setNovaData(e.target.value)} />
+          {!isGlobal && (
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-1">
+                  <Plus className="h-4 w-4" /> Lançar
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>Registrar Chuva</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div>
+                    <Label>Data</Label>
+                    <Input type="date" value={novaData} onChange={e => setNovaData(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Milímetros (mm)</Label>
+                    <Input type="number" step="0.1" min="0" value={novaMm} onChange={e => setNovaMm(e.target.value)} placeholder="0.0" />
+                  </div>
+                  <div>
+                    <Label>Observação</Label>
+                    <Input value={novaObs} onChange={e => setNovaObs(e.target.value)} placeholder="Opcional" />
+                  </div>
+                  <Button onClick={handleSalvar} className="w-full">Salvar</Button>
                 </div>
-                <div>
-                  <Label>Milímetros (mm)</Label>
-                  <Input type="number" step="0.1" min="0" value={novaMm} onChange={e => setNovaMm(e.target.value)} placeholder="0.0" />
-                </div>
-                <div>
-                  <Label>Observação</Label>
-                  <Input value={novaObs} onChange={e => setNovaObs(e.target.value)} placeholder="Opcional" />
-                </div>
-                <Button onClick={handleSalvar} className="w-full">Salvar</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        )}
+              </DialogContent>
+            </Dialog>
+          )}
+        </div>
       </div>
+
+      <div className="px-2">
 
       {/* Matrix table */}
       <div className="overflow-auto max-h-[calc(100vh-140px)]">

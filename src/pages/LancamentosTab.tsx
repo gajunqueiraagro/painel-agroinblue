@@ -807,17 +807,20 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           </Button>
         </form>
       ) : (
-        <div className="space-y-2">
-          <div className="flex gap-2">
-            <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-              <SelectTrigger className="touch-target text-base font-bold w-28"><SelectValue placeholder="Ano" /></SelectTrigger>
-              <SelectContent>{anosDisponiveis.map(a => <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select value={mesFiltro} onValueChange={setMesFiltro}>
-              <SelectTrigger className="touch-target text-base font-bold flex-1"><SelectValue placeholder="Mês" /></SelectTrigger>
-              <SelectContent>{MESES.map(m => <SelectItem key={m.value} value={m.value} className="text-base">{m.label}</SelectItem>)}</SelectContent>
-            </Select>
+        <div>
+          <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-2 -mx-4">
+            <div className="flex gap-2">
+              <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+                <SelectTrigger className="touch-target text-base font-bold w-28"><SelectValue placeholder="Ano" /></SelectTrigger>
+                <SelectContent>{anosDisponiveis.map(a => <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select value={mesFiltro} onValueChange={setMesFiltro}>
+                <SelectTrigger className="touch-target text-base font-bold flex-1"><SelectValue placeholder="Mês" /></SelectTrigger>
+                <SelectContent>{MESES.map(m => <SelectItem key={m.value} value={m.value} className="text-base">{m.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
           </div>
+          <div className="space-y-2 pt-2">
           {historicoFiltrado.length === 0 ? (
             <p className="text-center text-muted-foreground py-10">Nenhum lançamento no período</p>
           ) : (

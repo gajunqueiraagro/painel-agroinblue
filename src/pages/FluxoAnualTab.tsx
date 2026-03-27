@@ -63,41 +63,46 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   }
 
   return (
-    <div className="p-4 max-w-4xl mx-auto space-y-4 animate-fade-in pb-20">
-      <div className="flex items-center gap-2 flex-wrap">
-        <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-          <SelectTrigger className="h-9 text-sm font-bold w-24">
-            <SelectValue placeholder="Ano" />
-          </SelectTrigger>
-          <SelectContent>
-            {anosDisponiveis.map(a => (
-              <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <div className="max-w-4xl mx-auto animate-fade-in pb-20">
+      {/* Filtros - sticky */}
+      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+            <SelectTrigger className="h-9 text-sm font-bold w-24">
+              <SelectValue placeholder="Ano" />
+            </SelectTrigger>
+            <SelectContent>
+              {anosDisponiveis.map(a => (
+                <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-        <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
-          {([
-            { value: 'realizado' as const, label: 'Realizado' },
-            { value: 'previsto' as const, label: 'Previsto' },
-          ]).map(opt => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setStatusFiltro(opt.value)}
-              className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
-                statusFiltro === opt.value
-                  ? opt.value === 'realizado'
-                    ? 'bg-green-700 text-white shadow-sm'
-                    : 'bg-orange-500 text-white shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+          <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
+            {([
+              { value: 'realizado' as const, label: 'Realizado' },
+              { value: 'previsto' as const, label: 'Previsto' },
+            ]).map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setStatusFiltro(opt.value)}
+                className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
+                  statusFiltro === opt.value
+                    ? opt.value === 'realizado'
+                      ? 'bg-green-700 text-white shadow-sm'
+                      : 'bg-orange-500 text-white shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+
+      <div className="p-4 space-y-4">
 
       <p className="text-xs text-muted-foreground">Toque em um mês para ver a evolução por categoria</p>
 
