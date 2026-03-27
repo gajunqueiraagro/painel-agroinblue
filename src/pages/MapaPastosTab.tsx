@@ -298,8 +298,8 @@ export function MapaPastosTab() {
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-muted font-bold border-t-2">
-                    <td className="sticky left-0 z-10 bg-muted p-2 border-r" colSpan={3}>TOTAL / MÉDIA</td>
+                  <tr className="bg-muted font-bold border-t-2 text-xs">
+                    <td className="sticky left-0 z-10 bg-muted px-2 py-1.5 border-r" colSpan={3}>TOTAL / MÉDIA</td>
                     {categorias.map(cat => {
                       const t = totais.catTotals.get(cat.id);
                       const pesoMed = t && t.qtdComPeso > 0 ? t.pesoTotal / t.qtdComPeso : null;
