@@ -397,23 +397,23 @@ function CardEntradaSaidaToggle({ ind, isGlobal }: { ind: any; isGlobal: boolean
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-      {/* Entradas */}
+      {/* Entradas em Caixa */}
       <Card>
         <CardContent className="p-3 space-y-1.5">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <TrendingUp className="h-3 w-3 text-green-600" /> Entradas
+            <div className="flex items-center gap-1.5 text-xs font-bold text-green-700 dark:text-green-400">
+              <TrendingUp className="h-3.5 w-3.5" /> Entradas em Caixa
             </div>
             <ToggleGroup value={entradaTab} onChange={setEntradaTab} />
           </div>
-          <p className="text-lg font-bold text-green-700 dark:text-green-400">
+          <p className="text-xl font-extrabold text-green-700 dark:text-green-400 text-right">
             {formatMoeda(entradaTab === 'mes' ? ind.totalEntradas : ind.entradasAcum)}
           </p>
-          <div className="space-y-0.5">
+          <div className="space-y-0.5 border-t border-border/50 pt-1.5">
             {ind.categoriasEntrada.map((cat: string) => (
               <div key={cat} className="flex justify-between text-xs">
                 <span className="text-muted-foreground truncate max-w-[55%] mr-2">{cat}</span>
-                <span className="font-mono font-bold whitespace-nowrap text-green-600 dark:text-green-400">
+                <span className="font-mono font-semibold whitespace-nowrap text-green-600 dark:text-green-400">
                   {formatMoeda((entradaTab === 'mes' ? ind.entradaDecomp.mes : ind.entradaDecomp.acum).get(cat) || 0)}
                 </span>
               </div>
@@ -422,23 +422,23 @@ function CardEntradaSaidaToggle({ ind, isGlobal }: { ind: any; isGlobal: boolean
         </CardContent>
       </Card>
 
-      {/* Saídas */}
+      {/* Saídas em Caixa */}
       <Card>
         <CardContent className="p-3 space-y-1.5">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <TrendingDown className="h-3 w-3 text-red-600" /> Saídas
+            <div className="flex items-center gap-1.5 text-xs font-bold text-red-600 dark:text-red-400">
+              <TrendingDown className="h-3.5 w-3.5" /> Saídas em Caixa
             </div>
             <ToggleGroup value={saidaTab} onChange={setSaidaTab} />
           </div>
-          <p className="text-lg font-bold text-red-600 dark:text-red-400">
+          <p className="text-xl font-extrabold text-red-600 dark:text-red-400 text-right">
             {formatMoeda(saidaTab === 'mes' ? ind.saidasComRateio : (ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal)))}
           </p>
-          <div className="space-y-0.5">
+          <div className="space-y-0.5 border-t border-border/50 pt-1.5">
             {ind.categoriasSaida.map((cat: string) => (
               <div key={cat} className="flex justify-between text-xs">
                 <span className={`text-muted-foreground truncate max-w-[55%] mr-2 ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
-                <span className="font-mono font-bold whitespace-nowrap text-red-600 dark:text-red-400">
+                <span className="font-mono font-semibold whitespace-nowrap text-red-600 dark:text-red-400">
                   {formatMoeda((saidaTab === 'mes' ? ind.saidaDecomp.mes : ind.saidaDecomp.acum).get(cat) || 0)}
                 </span>
               </div>
@@ -446,7 +446,7 @@ function CardEntradaSaidaToggle({ ind, isGlobal }: { ind: any; isGlobal: boolean
             {/* Próprio / Rateio ADM */}
             <div className="border-t border-border/50 pt-1 mt-1 space-y-0.5">
               <div className="flex justify-between text-[10px]">
-                <span className="text-muted-foreground">Próprio</span>
+                <span className="text-muted-foreground font-semibold">Próprio</span>
                 <span className="font-mono font-bold text-red-600 dark:text-red-400">
                   {formatMoeda(saidaTab === 'mes' ? ind.totalSaidas : ind.saidasAcum)}
                 </span>
@@ -719,11 +719,15 @@ export function DashboardFinanceiro({
       if (macro === 'receitas' && escopo === 'pecuaria') return 'Receitas Pecuárias';
       if (macro === 'receitas' && escopo === 'agricultura') return 'Receitas Agrícolas';
       if (macro === 'receitas') return 'Outras Receitas';
+      if (macro === 'outras entradas financeiras' && escopo === 'pecuaria') return 'Captação Financ. Pec.';
+      if (macro === 'outras entradas financeiras' && escopo === 'agricultura') return 'Captação Financ. Agri.';
+      if (macro === 'outras entradas financeiras') return 'Captação Financ. Pec.';
+      if (macro === 'aportes pessoais' || macro === 'aporte pessoal') return 'Aportes Pessoais';
       return 'Outras Receitas';
     };
 
     const entradaDecomp = { mes: new Map<string, number>(), acum: new Map<string, number>() };
-    const categoriasEntrada = ['Receitas Pecuárias', 'Receitas Agrícolas', 'Outras Receitas'];
+    const categoriasEntrada = ['Receitas Pecuárias', 'Receitas Agrícolas', 'Outras Receitas', 'Captação Financ. Pec.', 'Captação Financ. Agri.', 'Aportes Pessoais'];
     for (const cat of categoriasEntrada) { entradaDecomp.mes.set(cat, 0); entradaDecomp.acum.set(cat, 0); }
 
     for (const l of entradasListMes) {
@@ -753,10 +757,14 @@ export function DashboardFinanceiro({
       if (macro === 'investimento na fazenda') return 'Investimento Pecuário';
       if (macro === 'investimento em bovinos') return 'Reposição de Bovinos';
       if (macro.includes('dedu') && macro.includes('receita')) return 'Dedução de Receitas';
+      if (macro === 'amortizações financeiras' && escopo === 'pecuaria') return 'Amortizações Fin. Pec.';
+      if (macro === 'amortizações financeiras' && escopo === 'agricultura') return 'Amortizações Fin. Agri.';
+      if (macro === 'amortizações financeiras') return 'Amortizações Fin. Pec.';
+      if (macro === 'dividendos') return 'Dividendos';
       return 'Outros';
     };
 
-    const categoriasSaida = ['Custeio Pecuário', 'Investimento Pecuário', 'Custeio Agrícola', 'Investimento Agrícola', 'Reposição de Bovinos', 'Dedução de Receitas'];
+    const categoriasSaida = ['Custeio Pecuário', 'Investimento Pecuário', 'Custeio Agrícola', 'Investimento Agrícola', 'Reposição de Bovinos', 'Dedução de Receitas', 'Amortizações Fin. Pec.', 'Amortizações Fin. Agri.', 'Dividendos'];
     const saidaDecomp = { mes: new Map<string, number>(), acum: new Map<string, number>() };
     for (const cat of categoriasSaida) { saidaDecomp.mes.set(cat, 0); saidaDecomp.acum.set(cat, 0); }
 
