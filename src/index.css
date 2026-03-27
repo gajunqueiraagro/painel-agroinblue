@@ -47,7 +47,8 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', 'Nunito', sans-serif;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-feature-settings: "tnum" on, "lnum" on;
   }
 }
 
