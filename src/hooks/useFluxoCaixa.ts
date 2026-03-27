@@ -347,6 +347,7 @@ export function useFluxoCaixa(
         captacaoAgri,
         aportes,
         totalEntradas,
+        deducaoReceitas,
         desembolsoProdutivo: desembolso,
         desembolsoPec,
         desembolsoAgri,
