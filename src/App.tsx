@@ -17,14 +17,16 @@ const App = () => (
       <Toaster />
       <Sonner />
       <AuthProvider>
-        <FazendaProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<AppRouter />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </FazendaProvider>
+        <ClienteProvider>
+          <FazendaProvider>
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<AppRouter />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </FazendaProvider>
+        </ClienteProvider>
       </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
