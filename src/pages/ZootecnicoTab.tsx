@@ -38,6 +38,7 @@ interface Props {
 }
 
 type Vista = 'mes' | 'acumulado';
+type Cenario = 'realizado' | 'previsto';
 type SubView = 'main' | 'graficos-estoque' | 'graficos-producao';
 
 export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabChange, filtroAnoInicial, filtroMesInicial, renderBottom }: Props) {
