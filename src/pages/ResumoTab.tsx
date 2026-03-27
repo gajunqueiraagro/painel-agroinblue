@@ -426,12 +426,29 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
                 </div>
               )}
 
-              {/* KPIs por fazenda */}
+              {/* KPIs por fazenda — executive grid */}
               {!isGlobal && (
-                <div className="border-t border-border/40 pt-2.5">
-                  <MetricRow label="Área Produtiva" value={zooKpis.area > 0 ? `${formatNum(zooKpis.area, 0)} ha` : '—'} />
-                  <MetricRow label="Peso Médio" value={zooKpis.pesoMedio ? `${formatNum(zooKpis.pesoMedio, 0)} kg` : '—'} />
-                  <MetricRow label="Lotação (kg/ha)" value={zooKpis.uaHa !== null ? formatNum(zooKpis.uaHa, 2) : '—'} />
+                <div className="border-t border-border/40 pt-3">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="text-center rounded-md bg-muted/30 px-2 py-2">
+                      <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Área (ha)</p>
+                      <p className="text-sm font-bold text-foreground tabular-nums mt-0.5">
+                        {zooKpis.area > 0 ? formatNum(zooKpis.area, 0) : '—'}
+                      </p>
+                    </div>
+                    <div className="text-center rounded-md bg-muted/30 px-2 py-2">
+                      <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Peso Méd.</p>
+                      <p className="text-sm font-bold text-foreground tabular-nums mt-0.5">
+                        {zooKpis.pesoMedio ? `${formatNum(zooKpis.pesoMedio, 0)} kg` : '—'}
+                      </p>
+                    </div>
+                    <div className="text-center rounded-md bg-muted/30 px-2 py-2">
+                      <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Kg/ha</p>
+                      <p className="text-sm font-bold text-foreground tabular-nums mt-0.5">
+                        {zooKpis.lotacaoKgHa !== null ? formatNum(zooKpis.lotacaoKgHa, 0) : '—'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
 
