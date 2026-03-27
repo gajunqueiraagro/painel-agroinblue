@@ -323,7 +323,7 @@ export function CadastrosTab() {
   return (
     <div className="pb-24 max-w-lg mx-auto">
       {/* Sticky action buttons */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border px-3 pt-2 pb-2">
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/40 px-3 pt-2 pb-2">
         <div className="flex gap-2 justify-end">
           {!editing && data.id && (
             <>
