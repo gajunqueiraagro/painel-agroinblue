@@ -27,7 +27,7 @@ export function FazendaSelector() {
               }
             }}
           >
-            <SelectTrigger className="h-8 text-[11px] md:text-xs font-bold bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground w-[140px] md:w-[220px]">
+            <SelectTrigger className="h-8 text-[10px] md:text-xs font-bold bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground w-[120px] md:w-[220px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
