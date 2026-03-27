@@ -300,10 +300,10 @@ function AbateTable({ lancamentos, onEdit, isGlobal, fazendaMap }: { lancamentos
 const FINANCIAL_TYPES: SubAba[] = ['abate', 'compra', 'venda'];
 
 function getTopTabFromSubAba(subAba?: SubAba): TopTab {
-  if (!subAba) return 'todas';
+  if (!subAba) return 'entradas';
   if (ENTRY_TYPES.includes(subAba)) return 'entradas';
   if (EXIT_TYPES.includes(subAba)) return 'saidas';
-  return 'todas';
+  return 'entradas';
 }
 
 export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, onBack, drillDownLabel }: Props) {
@@ -313,7 +313,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
     fazendas.forEach(f => m.set(f.id, f.nome));
     return m;
   }, [fazendas]);
-  const [topTab, setTopTab] = useState<TopTab>(subAbaInicial ? getTopTabFromSubAba(subAbaInicial) : (modoMovimentacao ? 'entradas' : 'todas'));
+  const [topTab, setTopTab] = useState<TopTab>(subAbaInicial ? getTopTabFromSubAba(subAbaInicial) : 'entradas');
   const [subAba, setSubAba] = useState<SubAba>(subAbaInicial || 'abate');
   const [editando, setEditando] = useState<Lancamento | null>(null);
 
@@ -372,13 +372,12 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   const isFinancial = FINANCIAL_TYPES.includes(subAba);
 
   const allTopTabs: { id: TopTab; label: string; icon: string }[] = [
-    { id: 'todas', label: 'Todas', icon: '📋' },
     { id: 'entradas', label: 'Entradas', icon: '📥' },
     { id: 'saidas', label: 'Saídas', icon: '📤' },
     { id: 'chuvas', label: 'Chuvas', icon: '☁️' },
   ];
   const topTabs = modoMovimentacao
-    ? allTopTabs.filter(t => t.id !== 'todas' && t.id !== 'chuvas')
+    ? allTopTabs.filter(t => t.id !== 'chuvas')
     : allTopTabs;
 
   const subTypes = topTab === 'entradas' ? ENTRY_TYPES : topTab === 'saidas' ? EXIT_TYPES : [];
