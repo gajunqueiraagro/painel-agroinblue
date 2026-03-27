@@ -220,7 +220,7 @@ function FluxoTable({ meses, mesAte, isMobile, visao }: { meses: FluxoMensal[]; 
   return (
     <div className="overflow-x-auto -mx-2">
       <table className={`w-full min-w-[800px] ${fontSize}`}>
-        <thead className="sticky top-0 z-20 bg-card">
+        <thead className="bg-card">
           <tr className="border-b border-border">
             <th className={`${cellPad} text-left font-bold text-muted-foreground sticky left-0 bg-card z-30`} style={{ minWidth: isMobile ? 100 : 160 }}>
               
