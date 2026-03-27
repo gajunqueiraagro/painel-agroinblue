@@ -562,6 +562,7 @@ export function useFinanceiro() {
       if (saldosBancarios && saldosBancarios.length > 0) {
         const saldoBatch = saldosBancarios.map(s => ({
           fazenda_id: s.fazendaId || primaryFazendaId,
+          cliente_id: fazendas.find(f => f.id === (s.fazendaId || primaryFazendaId))?.cliente_id || clienteId,
           importacao_id: imp.id,
           conta_banco: s.contaBanco,
           ano_mes: s.anoMes,
