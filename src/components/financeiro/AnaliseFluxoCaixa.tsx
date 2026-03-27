@@ -167,6 +167,7 @@ export function FluxoCaixa({
                 </TableRow>
 
                 {/* Saídas detalhadas */}
+                <SaidaRow label="  Dedução de Receitas" dados={dados} field="saidasDeducao" />
                 <SaidaRow label="  Custeio Produtivo" dados={dados} field="saidasCusteio" />
                 <SaidaRow label="  Investimentos" dados={dados} field="saidasInvestimentos" />
                 <SaidaRow label="  Amortizações" dados={dados} field="saidasAmortizacoes" />
