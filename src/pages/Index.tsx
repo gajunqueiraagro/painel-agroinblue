@@ -265,8 +265,8 @@ const Index = () => {
           lancamentos={lancamentosVisiveis}
           saldosIniciais={saldosIniciais}
           onNavigateToMovimentacao={navigateToMovimentacao}
-          onEditar={isGlobal ? async () => {} : editarLancamento}
-          onRemover={isGlobal ? async () => {} : removerLancamento}
+          onEditar={wrappedEditar as any}
+          onRemover={wrappedRemover as any}
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
         />
