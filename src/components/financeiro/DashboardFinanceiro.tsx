@@ -61,6 +61,12 @@ const normEscopo = (l: FinanceiroLancamento) =>
 // Props
 // ---------------------------------------------------------------------------
 
+export interface DrillDownPayload {
+  categoria: string;
+  tipo: 'entrada' | 'saida';
+  periodo: 'mes' | 'acum';
+}
+
 interface Props {
   lancamentos: FinanceiroLancamento[];
   indicadores: any;
@@ -76,6 +82,8 @@ interface Props {
   ano: number;
   /** Mês limite (1-12) — vem do container */
   mesAte: number;
+  /** Callback para drill-down nas categorias */
+  onDrillDown?: (payload: DrillDownPayload) => void;
 }
 
 // ---------------------------------------------------------------------------
