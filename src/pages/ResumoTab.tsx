@@ -427,6 +427,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
           </span>
         </div>
       )}
+      </div>
     </div>
   );
 }
