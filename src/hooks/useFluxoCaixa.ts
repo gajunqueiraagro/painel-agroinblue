@@ -202,7 +202,7 @@ export function useFluxoCaixa(
     });
 
     // Group by month
-    const byMes: Record<number, FinanceiroLancamento[]> = {};
+    const byMes: Record<number, FluxoLancamentoBase[]> = {};
     for (let m = 1; m <= 12; m++) byMes[m] = [];
     for (const l of conciliados) {
       const m = datePagtoMes(l);
