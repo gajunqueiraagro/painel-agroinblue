@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { MovimentacaoTab } from './MovimentacaoTab';
+import { FinanceiroTab } from './FinanceiroTab';
 import { FluxoAnualTab } from './FluxoAnualTab';
 import { ValorRebanhoTab } from './ValorRebanhoTab';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
