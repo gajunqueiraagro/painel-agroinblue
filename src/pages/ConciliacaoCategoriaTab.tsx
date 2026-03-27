@@ -220,24 +220,28 @@ export function ConciliacaoCategoriaTab({ lancamentos, saldosIniciais, onBack, o
   const mesLabel = MESES_COLS.find(m => m.key === String(mesFiltro).padStart(2, '0'))?.label || '';
 
   return (
-    <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
-      {/* Filtros */}
-      <div className="flex gap-2 items-center flex-wrap">
-        <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-          <SelectTrigger className="w-24 text-base font-bold"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
-          <SelectTrigger className="w-28 text-sm font-bold"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {MESES_COLS.map((m, i) => (
-              <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <div className="max-w-lg mx-auto animate-fade-in pb-20">
+      {/* Filtros - sticky */}
+      <div className="sticky top-0 z-20 bg-background pt-4 px-4 pb-2">
+        <div className="flex gap-2 items-center flex-wrap">
+          <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+            <SelectTrigger className="w-24 text-base font-bold"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
+            <SelectTrigger className="w-28 text-sm font-bold"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {MESES_COLS.map((m, i) => (
+                <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
+
+      <div className="px-4 space-y-4">
 
       {/* Summary */}
       <Card className={catsDivergentes > 0 ? 'border-l-4 border-l-destructive' : 'border-l-4 border-l-emerald-500'}>
@@ -348,6 +352,7 @@ export function ConciliacaoCategoriaTab({ lancamentos, saldosIniciais, onBack, o
       >
         <ArrowLeft className="h-4 w-4" /> Retornar ao Resumo Zootécnico
       </button>
+      </div>
     </div>
   );
 }
