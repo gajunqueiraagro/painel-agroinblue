@@ -241,7 +241,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
   const { zootecnico, financeiro, economico, loading } = useResumoStatus(lancamentos, saldosIniciais, anoNum, mesNum);
   const statusZoo = useStatusZootecnico(fazendaAtual?.id, anoNum, mesNum, lancamentos, saldosIniciais);
   const zooKpis = useZooKpis(lancamentos, saldosIniciais, anoNum, mesNum);
-  const farmBreakdown = useRebanhoPerFarm(lancamentos, saldosIniciais, anoNum, mesNum);
+  const globalFarmKpis = useGlobalFarmKpis(lancamentos, saldosIniciais, anoNum, mesNum);
 
   const statusGeral = useMemo((): StatusNivel => {
     const niveis = [zootecnico.status.nivel, financeiro.status.nivel, economico.status.nivel];
