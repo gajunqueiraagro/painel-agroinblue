@@ -42,7 +42,7 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const loadFazendas = useCallback(async () => {
-    if (!user || !clienteAtual) {
+    if (!user || !clienteAtual?.id) {
       setFazendas([]);
       setFazendaAtualState(null);
       setLoading(false);
@@ -65,7 +65,7 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
           .filter((f: Fazenda) => f.cliente_id === clienteAtual.id);
 
         setFazendas(list);
-        const savedKey = `fazenda-ativa-${clienteAtual.id}`;
+        const savedKey = `fazenda-ativa-${clienteAtual?.id}`;
         const savedId = localStorage.getItem(savedKey);
         if (savedId === '__global__' && list.length > 1) {
           setFazendaAtualState(GLOBAL_FAZENDA);
@@ -82,6 +82,10 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
     }
     setLoading(false);
   }, [user, clienteAtual]);
+
+  useEffect(() => {
+    setFazendaAtualState(null);
+  }, [clienteAtual?.id]);
 
   useEffect(() => { loadFazendas(); }, [loadFazendas]);
 

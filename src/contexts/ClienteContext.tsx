@@ -107,6 +107,12 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
   const setClienteAtual = (c: Cliente) => {
     setClienteAtualState(c);
     localStorage.setItem('cliente-ativo', c.id);
+    // Reset fazenda ativa ao trocar cliente (evita cruzamento de dados)
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith('fazenda-ativa-')) {
+        localStorage.removeItem(key);
+      }
+    });
   };
 
   return (
