@@ -47,8 +47,9 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'IBM Plex Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-feature-settings: "tnum" on, "lnum" on;
+    font-variant-numeric: tabular-nums;
   }
 }
 
