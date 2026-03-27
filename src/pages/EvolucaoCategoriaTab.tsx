@@ -222,14 +222,14 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
               </tr>
             ))}
             <tr className="border-t-2 bg-primary/10">
-              <td className="px-2 py-2 font-extrabold text-foreground sticky left-0 bg-primary/10">TOTAL</td>
-              <td className="px-2 py-2 text-center font-extrabold text-foreground">{totais.saldoIni}</td>
+              <td className="px-1.5 py-1 font-extrabold text-foreground sticky left-0 bg-primary/10">TOTAL</td>
+              <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoIni}</td>
               {totais.movs.map((val, j) => (
-                <td key={j} className={`px-2 py-2 text-center font-extrabold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-muted-foreground'}`}>
+                <td key={j} className={`px-1.5 py-1 text-center font-extrabold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-muted-foreground'}`}>
                   {val || '-'}
                 </td>
               ))}
-              <td className="px-2 py-2 text-center font-extrabold text-foreground">{totais.saldoFin}</td>
+              <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoFin}</td>
             </tr>
           </tbody>
         </table>
