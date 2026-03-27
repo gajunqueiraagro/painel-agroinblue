@@ -44,6 +44,7 @@ export function MovimentacaoTab({ onNavigate }: Props) {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }
