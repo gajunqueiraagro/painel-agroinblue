@@ -167,7 +167,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
               key={opt.value}
               type="button"
               onClick={() => setStatusFiltro(opt.value)}
-              className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
+              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
                 statusFiltro === opt.value
                   ? opt.value === 'realizado'
                     ? 'bg-green-700 text-white shadow-sm'
