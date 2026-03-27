@@ -183,6 +183,7 @@ export function FechamentoCategoriaTab({ lancamentos, saldosIniciais }: Props) {
           </table>
         </div>
       )}
+      </div>
     </div>
   );
 }

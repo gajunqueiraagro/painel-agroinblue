@@ -163,6 +163,7 @@ export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
           </tbody>
         </table>
       </div>
+      </div>
     </div>
   );
 }

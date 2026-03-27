@@ -332,6 +332,7 @@ export function ChuvasTab() {
           </tbody>
         </table>
       </div>
+      </div>
     </div>
   );
 }

@@ -184,6 +184,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
           </tbody>
         </table>
       </div>
+      </div>
     </div>
   );
 }
