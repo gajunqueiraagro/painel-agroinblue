@@ -22,7 +22,8 @@ import {
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, AreaChart, Area, Legend,
+  Tooltip, ResponsiveContainer, AreaChart, Area, Legend, ReferenceLine,
+  ComposedChart,
 } from 'recharts';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
@@ -561,7 +562,8 @@ function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNu
                 type="line" decimals={0} mesFiltro={mesFiltro} />
               <ChartCard title="GMD médio (kg/dia)" subtitle="Kg médio ganho por cabeça, por dia" data={prodData}
                 keys={[`gmdMes_${anoNum}`, `gmdMes_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="bar" decimals={3} mesFiltro={mesFiltro} />
+                type="bar" decimals={3} mesFiltro={mesFiltro}
+                averageKey={`gmdMes_${anoNum}`} averageLabel="kg/dia" />
               <ChartCard title="Desfrute Cab. acumulado (%)" subtitle="% de animais desfrutados (vendidos) em cabeças, em comparação com o saldo do início do ano" data={prodData}
                 keys={[`desfCab_${anoNum}`, `desfCab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
                 type="line" decimals={1} mesFiltro={mesFiltro} />
@@ -586,13 +588,16 @@ interface ChartCardProps {
   type: 'area' | 'line' | 'bar';
   decimals?: number;
   mesFiltro: number;
+  /** Optional: show average line on bar charts + display value in header */
+  averageKey?: string;
+  averageLabel?: string;
 }
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--muted-foreground))'];
 const DOT_STYLE = { r: 3, strokeWidth: 2 };
 const ACTIVE_DOT_STYLE = { r: 5, strokeWidth: 2 };
 
-function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, mesFiltro }: ChartCardProps) {
+function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, mesFiltro, averageKey, averageLabel }: ChartCardProps) {
   // Compute MoM and YoY comparisons from data
   const comparisons = useMemo(() => {
     if (!data || data.length === 0 || keys.length < 2) return { mom: null, yoy: null };
@@ -614,6 +619,17 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
     return { mom: calcPct(valAtual, valMesAnt), yoy: calcPct(valAtual, valAnoAnt) };
   }, [data, keys, mesFiltro]);
 
+  // Compute average value for the current year key up to mesFiltro
+  const avgValue = useMemo(() => {
+    if (!averageKey || !data || data.length === 0) return null;
+    const vals: number[] = [];
+    for (let i = 0; i < mesFiltro && i < data.length; i++) {
+      const v = data[i]?.[averageKey];
+      if (typeof v === 'number') vals.push(v);
+    }
+    return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  }, [data, averageKey, mesFiltro]);
+
   const renderComp = (pct: number | null, label: string) => {
     if (pct === null) return null;
     const isPositive = pct >= 0;
@@ -634,6 +650,12 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
             {subtitle && <p className="text-[10px] text-muted-foreground/70">{subtitle}</p>}
           </div>
           <div className="flex flex-col items-end gap-0.5 shrink-0 ml-2">
+            {avgValue !== null && (
+              <span className="text-sm font-bold text-foreground">
+                {avgValue.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}
+                {averageLabel && <span className="text-[10px] font-normal text-muted-foreground ml-1">{averageLabel}</span>}
+              </span>
+            )}
             {renderComp(comparisons.mom, 'vs mês')}
             {renderComp(comparisons.yoy, 'vs ano ant.')}
           </div>
@@ -641,6 +663,20 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             {type === 'bar' ? (
+              avgValue !== null ? (
+                <ComposedChart data={data}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} />
+                  <Tooltip formatter={(v: any) => typeof v === 'number' ? v.toLocaleString('pt-BR', { maximumFractionDigits: decimals }) : '—'} />
+                  <Legend wrapperStyle={{ fontSize: 10 }} />
+                  {keys.map((k, i) => (
+                    <Bar key={k} dataKey={k} name={labels[i]} fill={COLORS[i]} fillOpacity={i === 0 ? 1 : 0.4} radius={[3, 3, 0, 0]} />
+                  ))}
+                  <ReferenceLine y={avgValue} stroke="hsl(var(--primary))" strokeDasharray="6 3" strokeWidth={1.5}
+                    label={{ value: `Média: ${avgValue.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`, position: 'insideTopRight', fontSize: 9, fill: 'hsl(var(--primary))' }} />
+                </ComposedChart>
+              ) : (
               <BarChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
@@ -651,6 +687,7 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
                   <Bar key={k} dataKey={k} name={labels[i]} fill={COLORS[i]} fillOpacity={i === 0 ? 1 : 0.4} radius={[3, 3, 0, 0]} />
                 ))}
               </BarChart>
+              )
             ) : type === 'area' ? (
               <AreaChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" />
