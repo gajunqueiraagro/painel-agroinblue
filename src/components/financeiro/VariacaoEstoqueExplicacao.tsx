@@ -108,7 +108,7 @@ export function VariacaoEstoqueExplicacao({
       hasPrecos, hasPrecoInicial, hasPrecoFinal,
       alertas,
     };
-  }, [saldosIniciais, lancamentosPecuarios, anoNum, anoFiltro, mesLimite, precosMap, reposicaoFinanceiro]);
+  }, [saldosIniciais, lancamentosPecuarios, anoNum, anoFiltro, mesLimite, precosMap, reposicaoFinanceiro, pesosReaisInicial, pesosReaisFinal]);
 
   const colorVal = (v: number) =>
     v > 0 ? 'text-blue-600 dark:text-blue-400' : v < 0 ? 'text-red-600 dark:text-red-400' : '';
