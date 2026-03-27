@@ -376,6 +376,7 @@ export function MapaPastosTab() {
             )}
           </>
         )}
+        </div>
       </div>
 
       <ImportMapaPastos
