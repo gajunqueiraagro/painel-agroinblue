@@ -3,7 +3,7 @@ import { filtrarPorCenario } from '@/lib/statusOperacional';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, DollarSign } from 'lucide-react';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import type { SubAba } from './FinanceiroTab';
 import { calcFluxoAnual, FLUXO_LINHAS } from '@/lib/calculos/zootecnicos';
