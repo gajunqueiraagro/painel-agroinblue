@@ -158,6 +158,7 @@ export function useResumoStatus(
               .in('fazenda_id', idsFin)
               .gte('data_pagamento', `${anoStr}-01-01`)
               .lte('data_pagamento', `${anoStr}-12-31`)
+              .limit(10000)
           : Promise.resolve({ data: [] }),
         // Saldo inicial global
         supabase

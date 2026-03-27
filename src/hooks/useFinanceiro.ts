@@ -306,7 +306,7 @@ export function useFinanceiro() {
         const needsRateio = fazendaADM && fazendaADM.id !== fazendaId;
         if (needsRateio) {
           promises.push(
-            supabase.from('financeiro_lancamentos').select('*').eq('fazenda_id', fazendaADM.id).order('data_realizacao', { ascending: false }),
+            supabase.from('financeiro_lancamentos').select('*').eq('fazenda_id', fazendaADM.id).order('data_realizacao', { ascending: false }).limit(10000),
           );
           // Load raw pecuário for rebanho calc
           if (opIds.length > 0) {
