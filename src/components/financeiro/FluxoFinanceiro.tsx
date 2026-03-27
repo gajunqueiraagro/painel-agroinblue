@@ -127,7 +127,7 @@ const ROWS: RowDef[] = [
   { label: 'Amortizações Fin.', key: 'amortizacoes', indent: true, tipo: 'saida' },
   { label: 'Dividendos', key: 'dividendos', indent: true, tipo: 'saida' },
   { label: 'Saldo Final', key: 'saldoFinal', tipo: 'saldo' },
-  { label: 'Saldo Acumulado', key: 'saldoAcumulado', tipo: 'saldo' },
+  { label: 'Saldo Acumulado', key: 'saldoAcumulado', bold: true, tipo: 'saldo' },
 ];
 
 function getValueColor(val: number, row: RowDef, isAfter: boolean): string {
