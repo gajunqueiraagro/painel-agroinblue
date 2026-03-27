@@ -448,7 +448,11 @@ function CardEntradaSaidaToggle({ ind, isGlobal, onDrillDown }: { ind: any; isGl
           </p>
           <div className="space-y-0.5 border-t border-border/50 pt-1.5">
             {ind.categoriasSaida.map((cat: string) => (
-              <div key={cat} className="flex justify-between text-xs italic">
+              <div
+                key={cat}
+                className="flex justify-between text-xs italic cursor-pointer hover:bg-muted/50 rounded px-1 -mx-1 transition-colors"
+                onClick={() => onDrillDown?.({ categoria: cat, tipo: 'saida', periodo: saidaTab === 'mes' ? 'mes' : 'acum' })}
+              >
                 <span className="text-muted-foreground truncate max-w-[55%] mr-2">{cat}</span>
                 <span className="font-mono font-semibold whitespace-nowrap text-red-600 dark:text-red-400">
                   {formatMoeda((saidaTab === 'mes' ? ind.saidaDecomp.mes : ind.saidaDecomp.acum).get(cat) || 0)}
