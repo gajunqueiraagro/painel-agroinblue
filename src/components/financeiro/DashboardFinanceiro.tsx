@@ -61,6 +61,12 @@ const normEscopo = (l: FinanceiroLancamento) =>
 // Props
 // ---------------------------------------------------------------------------
 
+export interface DrillDownPayload {
+  categoria: string;
+  tipo: 'entrada' | 'saida';
+  periodo: 'mes' | 'acum';
+}
+
 interface Props {
   lancamentos: FinanceiroLancamento[];
   indicadores: any;
@@ -76,6 +82,8 @@ interface Props {
   ano: number;
   /** Mês limite (1-12) — vem do container */
   mesAte: number;
+  /** Callback para drill-down nas categorias */
+  onDrillDown?: (payload: DrillDownPayload) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -391,7 +399,7 @@ function ToggleGroup({ value, onChange }: { value: 'mes' | 'acum'; onChange: (v:
 // Sub: Unified Entradas/Saídas card with toggle
 // ---------------------------------------------------------------------------
 
-function CardEntradaSaidaToggle({ ind, isGlobal }: { ind: any; isGlobal: boolean }) {
+function CardEntradaSaidaToggle({ ind, isGlobal, onDrillDown }: { ind: any; isGlobal: boolean; onDrillDown?: (payload: DrillDownPayload) => void }) {
   const [entradaTab, setEntradaTab] = useState<'mes' | 'acum'>('mes');
   const [saidaTab, setSaidaTab] = useState<'mes' | 'acum'>('mes');
 
@@ -411,7 +419,11 @@ function CardEntradaSaidaToggle({ ind, isGlobal }: { ind: any; isGlobal: boolean
           </p>
           <div className="space-y-0.5 border-t border-border/50 pt-1.5">
             {ind.categoriasEntrada.map((cat: string) => (
-              <div key={cat} className="flex justify-between text-xs italic">
+              <div
+                key={cat}
+                className="flex justify-between text-xs italic cursor-pointer hover:bg-muted/50 rounded px-1 -mx-1 transition-colors"
+                onClick={() => onDrillDown?.({ categoria: cat, tipo: 'entrada', periodo: entradaTab === 'mes' ? 'mes' : 'acum' })}
+              >
                 <span className="text-muted-foreground truncate max-w-[55%] mr-2">{cat}</span>
                 <span className="font-mono font-semibold whitespace-nowrap text-green-600 dark:text-green-400">
                   {formatMoeda((entradaTab === 'mes' ? ind.entradaDecomp.mes : ind.entradaDecomp.acum).get(cat) || 0)}
@@ -436,7 +448,11 @@ function CardEntradaSaidaToggle({ ind, isGlobal }: { ind: any; isGlobal: boolean
           </p>
           <div className="space-y-0.5 border-t border-border/50 pt-1.5">
             {ind.categoriasSaida.map((cat: string) => (
-              <div key={cat} className="flex justify-between text-xs italic">
+              <div
+                key={cat}
+                className="flex justify-between text-xs italic cursor-pointer hover:bg-muted/50 rounded px-1 -mx-1 transition-colors"
+                onClick={() => onDrillDown?.({ categoria: cat, tipo: 'saida', periodo: saidaTab === 'mes' ? 'mes' : 'acum' })}
+              >
                 <span className="text-muted-foreground truncate max-w-[55%] mr-2">{cat}</span>
                 <span className="font-mono font-semibold whitespace-nowrap text-red-600 dark:text-red-400">
                   {formatMoeda((saidaTab === 'mes' ? ind.saidaDecomp.mes : ind.saidaDecomp.acum).get(cat) || 0)}
@@ -546,6 +562,7 @@ export function DashboardFinanceiro({
   fazendaId,
   ano,
   mesAte,
+  onDrillDown,
 }: Props) {
   const [showAudit, setShowAudit] = useState(false);
   const isMobile = useIsMobile();
@@ -936,7 +953,7 @@ export function DashboardFinanceiro({
       {/* ================================================================= */}
       {/* 1. CARDS ENTRADAS / SAÍDAS — com toggle Mês/Acumulado */}
       {/* ================================================================= */}
-      <CardEntradaSaidaToggle ind={ind} isGlobal={isGlobal} />
+      <CardEntradaSaidaToggle ind={ind} isGlobal={isGlobal} onDrillDown={onDrillDown} />
 
       {/* ================================================================= */}
       {/* 2. INDICADORES ECONÔMICOS — 2 colunas */}

@@ -2,19 +2,31 @@
  * Módulo Financeiro — container principal com sub-abas horizontais no topo.
  * Topo fixo: nome fazenda + seletor fazenda/global + filtro ano + filtro mês.
  * Sub-abas: Dashboard | Fluxo de Caixa | Rateio ADM | Importação
+ * Suporta drill-down: ao clicar numa categoria no dashboard, mostra lançamentos filtrados.
  */
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { ImportacaoFinanceira } from '@/components/financeiro/ImportacaoFinanceira';
-import { DashboardFinanceiro } from '@/components/financeiro/DashboardFinanceiro';
+import { DashboardFinanceiro, type DrillDownPayload } from '@/components/financeiro/DashboardFinanceiro';
 import { RateioADMConferenciaView } from '@/components/financeiro/RateioADMConferencia';
 import { FluxoFinanceiro } from '@/components/financeiro/FluxoFinanceiro';
-import { useFinanceiro } from '@/hooks/useFinanceiro';
+import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FazendaSelector } from '@/components/FazendaSelector';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Filter, X } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { formatMoeda } from '@/lib/calculos/formatters';
+import { MESES_NOMES } from '@/lib/calculos/labels';
+import {
+  isConciliado as isConciliadoShared,
+  isEntradaFinanceira,
+  isSaidaFinanceira,
+  datePagtoAnoMes as datePagtoAnoMesShared,
+} from '@/lib/financeiro/filters';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
 type SubTab = 'dashboard' | 'fluxo' | 'rateio' | 'importacao';
@@ -36,8 +48,44 @@ const MESES_FILTRO = [
   { value: '11', label: 'Novembro' }, { value: '12', label: 'Dezembro' },
 ];
 
+// Classification helpers (same as DashboardFinanceiro)
+const normMacro = (l: FinanceiroLancamento) => (l.macro_custo || '').toLowerCase().trim();
+const normEscopo = (l: FinanceiroLancamento) => (l.escopo_negocio || '').toLowerCase().trim();
+
+function classifyEntrada(l: FinanceiroLancamento): string {
+  const macro = normMacro(l);
+  const escopo = normEscopo(l);
+  if (macro === 'receitas' && escopo === 'pecuaria') return 'Receitas Pecuárias';
+  if (macro === 'receitas' && escopo === 'agricultura') return 'Receitas Agrícolas';
+  if (macro === 'receitas') return 'Outras Receitas';
+  if (macro === 'outras entradas financeiras' && escopo === 'pecuaria') return 'Captação Financ. Pec.';
+  if (macro === 'outras entradas financeiras' && escopo === 'agricultura') return 'Captação Financ. Agri.';
+  if (macro === 'outras entradas financeiras') return 'Captação Financ. Pec.';
+  if (macro === 'aportes pessoais' || macro === 'aporte pessoal') return 'Aportes Pessoais';
+  return 'Outras Receitas';
+}
+
+function classifySaida(l: FinanceiroLancamento): string {
+  const macro = normMacro(l);
+  const escopo = normEscopo(l);
+  if (macro === 'custeio produtivo' && escopo === 'pecuaria') return 'Custeio Pecuário';
+  if (macro === 'custeio produtivo' && escopo === 'agricultura') return 'Custeio Agrícola';
+  if (macro === 'custeio produtivo') return 'Custeio Pecuário';
+  if (macro === 'investimento na fazenda' && escopo === 'pecuaria') return 'Investimento Pecuário';
+  if (macro === 'investimento na fazenda' && escopo === 'agricultura') return 'Investimento Agrícola';
+  if (macro === 'investimento na fazenda') return 'Investimento Pecuário';
+  if (macro === 'investimento em bovinos') return 'Reposição de Bovinos';
+  if (macro.includes('dedu') && macro.includes('receita')) return 'Dedução de Receitas';
+  if (macro === 'amortizações financeiras' && escopo === 'pecuaria') return 'Amortizações Fin. Pec.';
+  if (macro === 'amortizações financeiras' && escopo === 'agricultura') return 'Amortizações Fin. Agri.';
+  if (macro === 'amortizações financeiras') return 'Amortizações Fin. Pec.';
+  if (macro === 'dividendos') return 'Dividendos';
+  return 'Outros';
+}
+
 export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [], onBack, filtroAnoInicial, filtroMesInicial }: Props) {
   const [subTab, setSubTab] = useState<SubTab>('dashboard');
+  const [drillDown, setDrillDown] = useState<(DrillDownPayload & { ano: string; mes: number }) | null>(null);
   const { fazendaAtual, fazendas } = useFazenda();
   const { pastos, categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
@@ -90,6 +138,133 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
   ];
 
   const fazendaNome = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || 'Fazenda');
+
+  // Drill-down handler
+  const handleDrillDown = useCallback((payload: DrillDownPayload) => {
+    setDrillDown({ ...payload, ano: localAno, mes: localMes });
+  }, [localAno, localMes]);
+
+  // Filtered lancamentos for drill-down view
+  const drillDownLancamentos = useMemo(() => {
+    if (!drillDown) return [];
+    const { categoria, tipo, periodo, ano, mes } = drillDown;
+
+    return lancamentos.filter(l => {
+      if (!isConciliadoShared(l)) return false;
+
+      // Check tipo (entrada/saida)
+      if (tipo === 'entrada' && !isEntradaFinanceira(l)) return false;
+      if (tipo === 'saida' && !isSaidaFinanceira(l)) return false;
+
+      // Check period
+      const am = datePagtoAnoMesShared(l);
+      if (!am) return false;
+      if (periodo === 'mes') {
+        const periodoMes = `${ano}-${String(mes).padStart(2, '0')}`;
+        if (am !== periodoMes) return false;
+      } else {
+        if (!am.startsWith(ano)) return false;
+        if (Number(am.substring(5, 7)) > mes) return false;
+      }
+
+      // Check category classification
+      const classified = tipo === 'entrada' ? classifyEntrada(l) : classifySaida(l);
+      return classified === categoria;
+    });
+  }, [drillDown, lancamentos]);
+
+  const drillDownTotal = useMemo(
+    () => drillDownLancamentos.reduce((s, l) => s + Math.abs(l.valor), 0),
+    [drillDownLancamentos],
+  );
+
+  // If drill-down is active, show filtered view
+  if (drillDown) {
+    const periodoLabel = drillDown.periodo === 'mes'
+      ? `${MESES_NOMES[drillDown.mes - 1]}/${drillDown.ano}`
+      : `Jan→${MESES_NOMES[drillDown.mes - 1]}/${drillDown.ano}`;
+    const tipoLabel = drillDown.tipo === 'entrada' ? 'Entrada' : 'Saída';
+
+    return (
+      <div className="max-w-full mx-auto animate-fade-in pb-20">
+        {/* Header with back button and filter info */}
+        <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-2.5 space-y-2">
+          <button
+            onClick={() => setDrillDown(null)}
+            className="flex items-center gap-1.5 text-xs font-bold text-primary hover:text-primary/80 transition-colors"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Voltar para Financeiro
+          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 bg-primary/10 text-primary rounded-md px-2.5 py-1 text-xs font-bold">
+              <Filter className="h-3 w-3" />
+              {drillDown.categoria}
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {tipoLabel} · {periodoLabel}
+            </span>
+            <button
+              onClick={() => setDrillDown(null)}
+              className="ml-auto text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Summary */}
+        <div className="px-4 pt-3 pb-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">{drillDownLancamentos.length} lançamentos</span>
+            <span className={`font-bold font-mono ${drillDown.tipo === 'entrada' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+              Total: {formatMoeda(drillDownTotal)}
+            </span>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="px-4 pb-4">
+          {drillDownLancamentos.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center text-muted-foreground">
+                Nenhum lançamento encontrado para este filtro.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="overflow-auto rounded-md border border-border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-[10px] px-2 py-1.5 whitespace-nowrap">Data Pgto</TableHead>
+                    <TableHead className="text-[10px] px-2 py-1.5">Produto</TableHead>
+                    <TableHead className="text-[10px] px-2 py-1.5">Fornecedor</TableHead>
+                    <TableHead className="text-[10px] px-2 py-1.5">Centro Custo</TableHead>
+                    <TableHead className="text-[10px] px-2 py-1.5 text-right">Valor</TableHead>
+                    <TableHead className="text-[10px] px-2 py-1.5">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {drillDownLancamentos.map(l => (
+                    <TableRow key={l.id}>
+                      <TableCell className="text-[10px] px-2 py-1.5 whitespace-nowrap">{l.data_pagamento || '-'}</TableCell>
+                      <TableCell className="text-[10px] px-2 py-1.5 max-w-[140px] truncate">{l.produto || '-'}</TableCell>
+                      <TableCell className="text-[10px] px-2 py-1.5 max-w-[120px] truncate">{l.fornecedor || '-'}</TableCell>
+                      <TableCell className="text-[10px] px-2 py-1.5 max-w-[120px] truncate">{l.centro_custo || '-'}</TableCell>
+                      <TableCell className={`text-[10px] px-2 py-1.5 text-right font-mono font-bold ${drillDown.tipo === 'entrada' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {formatMoeda(Math.abs(l.valor))}
+                      </TableCell>
+                      <TableCell className="text-[10px] px-2 py-1.5">{l.status_transacao || '-'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-full mx-auto animate-fade-in pb-20">
@@ -162,6 +337,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
                 fazendaId={fazendaId}
                 ano={Number(localAno)}
                 mesAte={localMes}
+                onDrillDown={handleDrillDown}
               />
             </div>
           )}
