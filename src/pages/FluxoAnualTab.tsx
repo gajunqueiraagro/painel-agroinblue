@@ -101,7 +101,17 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
             ))}
           </div>
 
-          <span className="text-[10px] text-muted-foreground ml-auto">Toque em um mês para ver por categoria</span>
+          <span className="text-[10px] text-muted-foreground ml-auto hidden sm:inline">Toque em um mês para ver por categoria</span>
+
+          {onNavigateToValorRebanho && (
+            <button
+              onClick={onNavigateToValorRebanho}
+              className="flex items-center gap-1 px-2 py-0.5 rounded border border-border bg-card hover:bg-muted/50 text-[10px] font-bold text-foreground transition-colors shrink-0"
+            >
+              <DollarSign className="h-3 w-3 text-primary" />
+              Valor Rebanho
+            </button>
+          )}
         </div>
       </div>
 
