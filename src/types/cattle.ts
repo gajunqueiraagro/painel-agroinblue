@@ -88,6 +88,7 @@ export interface SaldoInicial {
   categoria: Categoria;
   quantidade: number;
   pesoMedioKg?: number;
+  fazendaId?: string;
 }
 
 export function isEntrada(tipo: TipoMovimentacao): tipo is TipoEntrada {

@@ -204,10 +204,11 @@ function useGlobalFarmKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInici
 
     const farms: FarmKpi[] = pecuarias.map(faz => {
       const lancsFaz = lancamentos.filter(l => l.fazendaId === faz.id);
+      const saldosFaz = saldosIniciais.filter(s => s.fazendaId === faz.id);
       const pastosFaz = allPastos.filter(p => p.fazenda_id === faz.id);
 
       // Saldo final no mês filtrado
-      const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancsFaz, ano, mes);
+      const saldoMap = calcSaldoPorCategoriaLegado(saldosFaz, lancsFaz, ano, mes);
       const rebanho = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
 
       // Acumulado with official weight hierarchy
