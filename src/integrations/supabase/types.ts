@@ -37,7 +37,7 @@ export type Database = {
       }
       chuvas: {
         Row: {
-          cliente_id: string | null
+          cliente_id: string
           created_at: string
           created_by: string | null
           data: string
@@ -47,7 +47,7 @@ export type Database = {
           observacao: string | null
         }
         Insert: {
-          cliente_id?: string | null
+          cliente_id: string
           created_at?: string
           created_by?: string | null
           data: string
@@ -57,7 +57,7 @@ export type Database = {
           observacao?: string | null
         }
         Update: {
-          cliente_id?: string | null
+          cliente_id?: string
           created_at?: string
           created_by?: string | null
           data?: string
@@ -150,7 +150,7 @@ export type Database = {
           area_produtiva: number | null
           area_total: number | null
           banco: string | null
-          cliente_id: string | null
+          cliente_id: string
           cpf_cnpj: string | null
           created_at: string
           email: string | null
@@ -170,7 +170,7 @@ export type Database = {
           area_produtiva?: number | null
           area_total?: number | null
           banco?: string | null
-          cliente_id?: string | null
+          cliente_id: string
           cpf_cnpj?: string | null
           created_at?: string
           email?: string | null
@@ -190,7 +190,7 @@ export type Database = {
           area_produtiva?: number | null
           area_total?: number | null
           banco?: string | null
-          cliente_id?: string | null
+          cliente_id?: string
           cpf_cnpj?: string | null
           created_at?: string
           email?: string | null
@@ -257,7 +257,7 @@ export type Database = {
       }
       fazendas: {
         Row: {
-          cliente_id: string | null
+          cliente_id: string
           codigo_importacao: string | null
           created_at: string
           id: string
@@ -266,7 +266,7 @@ export type Database = {
           tem_pecuaria: boolean
         }
         Insert: {
-          cliente_id?: string | null
+          cliente_id: string
           codigo_importacao?: string | null
           created_at?: string
           id?: string
@@ -275,7 +275,7 @@ export type Database = {
           tem_pecuaria?: boolean
         }
         Update: {
-          cliente_id?: string | null
+          cliente_id?: string
           codigo_importacao?: string | null
           created_at?: string
           id?: string
@@ -347,7 +347,7 @@ export type Database = {
       fechamento_pastos: {
         Row: {
           ano_mes: string
-          cliente_id: string | null
+          cliente_id: string
           created_at: string
           fazenda_id: string
           id: string
@@ -362,7 +362,7 @@ export type Database = {
         }
         Insert: {
           ano_mes: string
-          cliente_id?: string | null
+          cliente_id: string
           created_at?: string
           fazenda_id: string
           id?: string
@@ -377,7 +377,7 @@ export type Database = {
         }
         Update: {
           ano_mes?: string
-          cliente_id?: string | null
+          cliente_id?: string
           created_at?: string
           fazenda_id?: string
           id?: string
@@ -418,7 +418,7 @@ export type Database = {
         Row: {
           ativo: boolean
           centro_custo: string
-          cliente_id: string | null
+          cliente_id: string
           codigo: string | null
           created_at: string
           fazenda_id: string
@@ -431,7 +431,7 @@ export type Database = {
         Insert: {
           ativo?: boolean
           centro_custo: string
-          cliente_id?: string | null
+          cliente_id: string
           codigo?: string | null
           created_at?: string
           fazenda_id: string
@@ -444,7 +444,7 @@ export type Database = {
         Update: {
           ativo?: boolean
           centro_custo?: string
-          cliente_id?: string | null
+          cliente_id?: string
           codigo?: string | null
           created_at?: string
           fazenda_id?: string
@@ -476,7 +476,7 @@ export type Database = {
           agencia_conta: string | null
           ativo: boolean
           banco: string | null
-          cliente_id: string | null
+          cliente_id: string
           created_at: string
           fazenda_id: string
           id: string
@@ -489,7 +489,7 @@ export type Database = {
           agencia_conta?: string | null
           ativo?: boolean
           banco?: string | null
-          cliente_id?: string | null
+          cliente_id: string
           created_at?: string
           fazenda_id: string
           id?: string
@@ -502,7 +502,7 @@ export type Database = {
           agencia_conta?: string | null
           ativo?: boolean
           banco?: string | null
-          cliente_id?: string | null
+          cliente_id?: string
           created_at?: string
           fazenda_id?: string
           id?: string
@@ -531,7 +531,7 @@ export type Database = {
       financeiro_fornecedores: {
         Row: {
           ativo: boolean
-          cliente_id: string | null
+          cliente_id: string
           cpf_cnpj: string | null
           created_at: string
           fazenda_id: string
@@ -540,7 +540,7 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean
-          cliente_id?: string | null
+          cliente_id: string
           cpf_cnpj?: string | null
           created_at?: string
           fazenda_id: string
@@ -549,7 +549,7 @@ export type Database = {
         }
         Update: {
           ativo?: boolean
-          cliente_id?: string | null
+          cliente_id?: string
           cpf_cnpj?: string | null
           created_at?: string
           fazenda_id?: string
@@ -575,7 +575,7 @@ export type Database = {
       }
       financeiro_importacoes: {
         Row: {
-          cliente_id: string | null
+          cliente_id: string
           created_at: string
           data_importacao: string
           fazenda_id: string
@@ -588,7 +588,7 @@ export type Database = {
           usuario_id: string
         }
         Insert: {
-          cliente_id?: string | null
+          cliente_id: string
           created_at?: string
           data_importacao?: string
           fazenda_id: string
@@ -601,7 +601,7 @@ export type Database = {
           usuario_id: string
         }
         Update: {
-          cliente_id?: string | null
+          cliente_id?: string
           created_at?: string
           data_importacao?: string
           fazenda_id?: string
@@ -634,7 +634,7 @@ export type Database = {
         Row: {
           ano_mes: string
           centro_custo: string | null
-          cliente_id: string | null
+          cliente_id: string
           conta_destino: string | null
           conta_origem: string | null
           cpf_cnpj: string | null
@@ -663,7 +663,7 @@ export type Database = {
         Insert: {
           ano_mes: string
           centro_custo?: string | null
-          cliente_id?: string | null
+          cliente_id: string
           conta_destino?: string | null
           conta_origem?: string | null
           cpf_cnpj?: string | null
@@ -692,7 +692,7 @@ export type Database = {
         Update: {
           ano_mes?: string
           centro_custo?: string | null
-          cliente_id?: string | null
+          cliente_id?: string
           conta_destino?: string | null
           conta_origem?: string | null
           cpf_cnpj?: string | null
@@ -745,7 +745,7 @@ export type Database = {
       financeiro_resumo_caixa: {
         Row: {
           ano_mes: string
-          cliente_id: string | null
+          cliente_id: string
           created_at: string
           entradas: number
           fazenda_id: string
@@ -756,7 +756,7 @@ export type Database = {
         }
         Insert: {
           ano_mes: string
-          cliente_id?: string | null
+          cliente_id: string
           created_at?: string
           entradas?: number
           fazenda_id: string
@@ -767,7 +767,7 @@ export type Database = {
         }
         Update: {
           ano_mes?: string
-          cliente_id?: string | null
+          cliente_id?: string
           created_at?: string
           entradas?: number
           fazenda_id?: string
@@ -803,7 +803,7 @@ export type Database = {
       financeiro_saldos_bancarios: {
         Row: {
           ano_mes: string
-          cliente_id: string | null
+          cliente_id: string
           conta_banco: string
           created_at: string
           fazenda_id: string
@@ -813,7 +813,7 @@ export type Database = {
         }
         Insert: {
           ano_mes: string
-          cliente_id?: string | null
+          cliente_id: string
           conta_banco: string
           created_at?: string
           fazenda_id: string
@@ -823,7 +823,7 @@ export type Database = {
         }
         Update: {
           ano_mes?: string
-          cliente_id?: string | null
+          cliente_id?: string
           conta_banco?: string
           created_at?: string
           fazenda_id?: string
@@ -863,7 +863,7 @@ export type Database = {
           bonus_qualidade: number | null
           categoria: string
           categoria_destino: string | null
-          cliente_id: string | null
+          cliente_id: string
           created_at: string
           created_by: string | null
           data: string
@@ -898,7 +898,7 @@ export type Database = {
           bonus_qualidade?: number | null
           categoria: string
           categoria_destino?: string | null
-          cliente_id?: string | null
+          cliente_id: string
           created_at?: string
           created_by?: string | null
           data: string
@@ -933,7 +933,7 @@ export type Database = {
           bonus_qualidade?: number | null
           categoria?: string
           categoria_destino?: string | null
-          cliente_id?: string | null
+          cliente_id?: string
           created_at?: string
           created_by?: string | null
           data?: string
@@ -989,7 +989,7 @@ export type Database = {
         Row: {
           area_produtiva_ha: number | null
           ativo: boolean
-          cliente_id: string | null
+          cliente_id: string
           created_at: string
           entra_conciliacao: boolean
           fazenda_id: string
@@ -1004,7 +1004,7 @@ export type Database = {
         Insert: {
           area_produtiva_ha?: number | null
           ativo?: boolean
-          cliente_id?: string | null
+          cliente_id: string
           created_at?: string
           entra_conciliacao?: boolean
           fazenda_id: string
@@ -1019,7 +1019,7 @@ export type Database = {
         Update: {
           area_produtiva_ha?: number | null
           ativo?: boolean
-          cliente_id?: string | null
+          cliente_id?: string
           created_at?: string
           entra_conciliacao?: boolean
           fazenda_id?: string
@@ -1084,7 +1084,7 @@ export type Database = {
         Row: {
           ano: number
           categoria: string
-          cliente_id: string | null
+          cliente_id: string
           created_at: string
           fazenda_id: string
           id: string
@@ -1094,7 +1094,7 @@ export type Database = {
         Insert: {
           ano: number
           categoria: string
-          cliente_id?: string | null
+          cliente_id: string
           created_at?: string
           fazenda_id: string
           id?: string
@@ -1104,7 +1104,7 @@ export type Database = {
         Update: {
           ano?: number
           categoria?: string
-          cliente_id?: string | null
+          cliente_id?: string
           created_at?: string
           fazenda_id?: string
           id?: string
@@ -1131,7 +1131,7 @@ export type Database = {
       valor_rebanho_fechamento: {
         Row: {
           ano_mes: string
-          cliente_id: string | null
+          cliente_id: string
           created_at: string
           fazenda_id: string
           fechado_em: string | null
@@ -1144,7 +1144,7 @@ export type Database = {
         }
         Insert: {
           ano_mes: string
-          cliente_id?: string | null
+          cliente_id: string
           created_at?: string
           fazenda_id: string
           fechado_em?: string | null
@@ -1157,7 +1157,7 @@ export type Database = {
         }
         Update: {
           ano_mes?: string
-          cliente_id?: string | null
+          cliente_id?: string
           created_at?: string
           fazenda_id?: string
           fechado_em?: string | null
@@ -1189,7 +1189,7 @@ export type Database = {
         Row: {
           ano_mes: string
           categoria: string
-          cliente_id: string | null
+          cliente_id: string
           created_at: string
           fazenda_id: string
           id: string
@@ -1199,7 +1199,7 @@ export type Database = {
         Insert: {
           ano_mes: string
           categoria: string
-          cliente_id?: string | null
+          cliente_id: string
           created_at?: string
           fazenda_id: string
           id?: string
@@ -1209,7 +1209,7 @@ export type Database = {
         Update: {
           ano_mes?: string
           categoria?: string
-          cliente_id?: string | null
+          cliente_id?: string
           created_at?: string
           fazenda_id?: string
           id?: string
