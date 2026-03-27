@@ -217,7 +217,7 @@ function useGlobalFarmKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInici
       let mesesComDado = 0;
 
       for (let m = 1; m <= mes; m++) {
-        const saldoM = calcSaldoPorCategoriaLegado(saldosIniciais, lancsFaz, ano, m);
+        const saldoM = calcSaldoPorCategoriaLegado(saldosFaz, lancsFaz, ano, m);
         const saldoTotal = Array.from(saldoM.values()).reduce((s, v) => s + v, 0);
         if (saldoTotal <= 0) continue;
         mesesComDado++;
