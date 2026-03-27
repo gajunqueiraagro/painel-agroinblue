@@ -40,6 +40,7 @@ import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 
 export interface FiltroGlobal {
   ano: string;
@@ -88,10 +89,19 @@ const Index = () => {
   const [lancamentosFromConciliacao, setLancamentosFromConciliacao] = useState(false);
   const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
   const { user } = useAuth();
+  const { canViewTab, canEdit, isReadOnly } = usePermissions();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clientes } = useCliente();
   const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial, loadData } = useLancamentos();
   const { pendingCount, syncing, online, syncQueue } = useOfflineSync(fazendaAtual?.id === '__global__' ? undefined : fazendaAtual?.id, loadData);
+
+  // Wrap edit actions based on permissions
+  const noOp = async () => {};
+  const canEditZoo = canEdit('zootecnico') && !isGlobal;
+  const canEditFin = canEdit('financeiro') && !isGlobal;
+  const wrappedAdicionar = canEditZoo ? adicionarLancamento : noOp;
+  const wrappedEditar = canEditZoo ? editarLancamento : noOp;
+  const wrappedRemover = canEditZoo ? removerLancamento : noOp;
 
   const [filtroGlobal, setFiltroGlobal] = useState<FiltroGlobal>({
     ano: String(new Date().getFullYear()),
@@ -120,6 +130,10 @@ const Index = () => {
       toast.info('Selecione uma fazenda para acessar esta funcionalidade');
       return;
     }
+    if (!canViewTab(tab)) {
+      toast.info('Seu perfil não tem acesso a esta funcionalidade');
+      return;
+    }
     if (filtro) {
       setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
     }
@@ -127,7 +141,7 @@ const Index = () => {
     if (tab !== 'lancamentos') setLancamentosFromConciliacao(false);
     if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
     setActiveTab(tab);
-  }, [isGlobal]);
+  }, [isGlobal, canViewTab]);
 
   const goToResumo = useCallback(() => setActiveTab('resumo'), []);
   const goToLancarZooHub = useCallback(() => setActiveTab('lancar_zoo_hub'), []);
@@ -237,9 +251,9 @@ const Index = () => {
       {activeTab === 'lancamentos' && (
         <LancamentosTab
           lancamentos={lancamentosVisiveis}
-          onAdicionar={isGlobal ? async () => {} : adicionarLancamento}
-          onEditar={isGlobal ? async () => {} : editarLancamento}
-          onRemover={isGlobal ? async () => {} : removerLancamento}
+          onAdicionar={wrappedAdicionar as any}
+          onEditar={wrappedEditar as any}
+          onRemover={wrappedRemover as any}
           abaInicial={lancamentosFromConciliacao ? 'reclassificacao' : undefined}
           onBackToConciliacao={lancamentosFromConciliacao ? goToConciliacaoCategoria : undefined}
           dataInicial={lancamentosFromConciliacao ? `${filtroGlobal.ano}-${String(filtroGlobal.mes).padStart(2, '0')}-15` : undefined}
@@ -251,13 +265,13 @@ const Index = () => {
           lancamentos={lancamentosVisiveis}
           saldosIniciais={saldosIniciais}
           onNavigateToMovimentacao={navigateToMovimentacao}
-          onEditar={isGlobal ? async () => {} : editarLancamento}
-          onRemover={isGlobal ? async () => {} : removerLancamento}
+          onEditar={wrappedEditar as any}
+          onRemover={wrappedRemover as any}
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
         />
       )}
-      {activeTab === 'financeiro' && <FinanceiroTab lancamentos={lancamentosVisiveis} onEditar={isGlobal ? async () => {} : editarLancamento} onRemover={isGlobal ? async () => {} : removerLancamento} subAbaInicial={subAbaFinanceiro} />}
+      {activeTab === 'financeiro' && <FinanceiroTab lancamentos={lancamentosVisiveis} onEditar={wrappedEditar as any} onRemover={wrappedRemover as any} subAbaInicial={subAbaFinanceiro} />}
       {activeTab === 'acessos' && <AcessosTab />}
       {activeTab === 'analise' && <AnaliseTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} isGlobal={isGlobal} />}
       {activeTab === 'analise_entradas' && <AnaliseEntradasTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
