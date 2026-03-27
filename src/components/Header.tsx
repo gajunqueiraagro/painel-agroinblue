@@ -1,7 +1,8 @@
 import { ReactNode } from 'react';
-import { LogOut, ArrowLeft } from 'lucide-react';
+import { LogOut, ArrowLeft, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
+import { AlterarSenhaDialog } from '@/components/AlterarSenhaDialog';
 import logo from '@/assets/logo.png';
 
 interface HeaderProps {
@@ -38,6 +39,18 @@ export function Header({ title, fazendaNome, periodo, onBack, rightAction }: Hea
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {rightAction}
+            <AlterarSenhaDialog
+              trigger={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-primary-foreground hover:bg-primary-foreground/10 h-8 w-8"
+                  title="Alterar Senha"
+                >
+                  <KeyRound className="h-4 w-4" />
+                </Button>
+              }
+            />
             <Button
               variant="ghost"
               size="icon"

@@ -20,12 +20,27 @@ export default function AuthPage() {
     try {
       if (isLogin) {
         const { error } = await signIn(email, password);
-        if (error) toast.error(error.message);
+        if (error) {
+          if (error.message?.includes('Invalid login credentials')) {
+            toast.error('Email ou senha incorretos');
+          } else if (error.message?.includes('Email not confirmed')) {
+            toast.error('Email ainda não confirmado. Verifique sua caixa de entrada.');
+          } else {
+            toast.error(error.message);
+          }
+        }
       } else {
         if (!nome.trim()) { toast.error('Informe seu nome'); setLoading(false); return; }
         const { error } = await signUp(email, password, nome);
-        if (error) toast.error(error.message);
-        else toast.success('Conta criada! Verifique seu email para confirmar.');
+        if (error) {
+          if (error.message?.includes('already registered') || error.message?.includes('already been registered')) {
+            toast.error('Este email já está cadastrado. Tente fazer login.');
+          } else {
+            toast.error(error.message);
+          }
+        } else {
+          toast.success('Conta criada! Verifique seu email para confirmar.');
+        }
       }
     } finally {
       setLoading(false);
