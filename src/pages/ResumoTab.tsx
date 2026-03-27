@@ -2,16 +2,18 @@
  * Resumo Executivo — Dashboard profissional de gestão.
  * Visual: software financeiro / ERP / BI executivo.
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { parseISO, format } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TabId } from '@/components/BottomNav';
 import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 import { useResumoStatus, StatusNivel } from '@/hooks/useResumoStatus';
 import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
+import { supabase } from '@/integrations/supabase/client';
 import { calcSaldoPorCategoriaLegado, calcPesoMedioPonderado, calcUA, calcUAHa, calcAreaProdutivaPecuaria } from '@/lib/calculos/zootecnicos';
 import { calcArrobasSafe } from '@/lib/calculos/economicos';
 import { ChevronRight, AlertTriangle, CheckCircle2, TrendingUp, TrendingDown, Wallet, BarChart3, Landmark } from 'lucide-react';
@@ -95,20 +97,114 @@ function useZooKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], a
 }
 
 // ---------------------------------------------------------------------------
-// Per-farm rebanho for global view
+// Per-farm KPIs for global view (table)
 // ---------------------------------------------------------------------------
 
-function useRebanhoPerFarm(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: number, mes: number) {
+interface FarmKpi {
+  id: string;
+  nome: string;
+  rebanho: number;         // saldo final no mês filtrado
+  pesoMedio: number | null; // média ponderada acumulada
+  area: number;            // área produtiva média do período
+  lotacaoKgHa: number | null; // kg/ha médio do período
+}
+
+function useGlobalFarmKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: number, mes: number) {
   const { fazendas } = useFazenda();
+  const [allPastos, setAllPastos] = useState<{ fazenda_id: string; ativo: boolean; entra_conciliacao: boolean; area_produtiva_ha: number | null }[]>([]);
+
+  useEffect(() => {
+    const ids = fazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false).map(f => f.id);
+    if (ids.length === 0) return;
+    supabase.from('pastos').select('fazenda_id, ativo, entra_conciliacao, area_produtiva_ha').in('fazenda_id', ids)
+      .then(({ data }) => { if (data) setAllPastos(data); });
+  }, [fazendas]);
+
   return useMemo(() => {
     const pecuarias = fazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false);
-    return pecuarias.map(faz => {
+
+    const farms: FarmKpi[] = pecuarias.map(faz => {
       const lancsFaz = lancamentos.filter(l => l.fazendaId === faz.id);
+      const pastosFaz = allPastos.filter(p => p.fazenda_id === faz.id);
+
+      // Saldo final no mês filtrado
       const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancsFaz, ano, mes);
-      const total = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
-      return { id: faz.id, nome: faz.nome, rebanho: total };
+      const rebanho = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
+
+      // Acumulado: calcular saldo e peso para cada mês jan→mes, depois média
+      let sumSaldo = 0;
+      let sumPesoTotal = 0;
+      let mesesComDado = 0;
+
+      for (let m = 1; m <= mes; m++) {
+        const saldoM = calcSaldoPorCategoriaLegado(saldosIniciais, lancsFaz, ano, m);
+        const saldoTotal = Array.from(saldoM.values()).reduce((s, v) => s + v, 0);
+        if (saldoTotal <= 0) continue;
+        mesesComDado++;
+        sumSaldo += saldoTotal;
+
+        const itens = Array.from(saldoM.entries())
+          .filter(([, q]) => q > 0)
+          .map(([cat, qtd]) => {
+            const si = saldosIniciais.find(s => s.categoria === cat && s.ano === ano);
+            return { quantidade: qtd, pesoKg: si?.pesoMedioKg || null };
+          });
+        const pesoM = calcPesoMedioPonderado(itens);
+        if (pesoM) sumPesoTotal += pesoM * saldoTotal;
+      }
+
+      const rebanhoMedio = mesesComDado > 0 ? sumSaldo / mesesComDado : 0;
+      const pesoMedio = rebanhoMedio > 0 ? sumPesoTotal / sumSaldo : null;
+      const area = calcAreaProdutivaPecuaria(pastosFaz); // area doesn't vary monthly in this model
+      const pesoTotalKg = pesoMedio && rebanhoMedio > 0 ? pesoMedio * rebanhoMedio : null;
+      const lotacaoKgHa = pesoTotalKg && area > 0 ? pesoTotalKg / area : null;
+
+      return { id: faz.id, nome: faz.nome, rebanho, pesoMedio, area, lotacaoKgHa };
     }).filter(f => f.rebanho !== 0);
-  }, [fazendas, lancamentos, saldosIniciais, ano, mes]);
+
+    // Global consolidated row
+    const globalRebanho = farms.reduce((s, f) => s + f.rebanho, 0);
+    const globalSumPesoTotal = farms.reduce((s, f) => {
+      // Reconstruct peso total from each farm's accumulated average
+      const lancsFaz = lancamentos.filter(l => l.fazendaId === f.id);
+      let sumSaldo = 0; let sumPT = 0;
+      for (let m = 1; m <= mes; m++) {
+        const sM = calcSaldoPorCategoriaLegado(saldosIniciais, lancsFaz, ano, m);
+        const st = Array.from(sM.values()).reduce((a, v) => a + v, 0);
+        if (st <= 0) continue;
+        sumSaldo += st;
+        const itens = Array.from(sM.entries()).filter(([, q]) => q > 0).map(([cat, qtd]) => {
+          const si = saldosIniciais.find(x => x.categoria === cat && x.ano === ano);
+          return { quantidade: qtd, pesoKg: si?.pesoMedioKg || null };
+        });
+        const p = calcPesoMedioPonderado(itens);
+        if (p) sumPT += p * st;
+      }
+      return s + sumPT;
+    }, 0);
+    const globalSumSaldo = farms.reduce((s, f) => {
+      const lancsFaz = lancamentos.filter(l => l.fazendaId === f.id);
+      let sumS = 0;
+      for (let m = 1; m <= mes; m++) {
+        const sM = calcSaldoPorCategoriaLegado(saldosIniciais, lancsFaz, ano, m);
+        sumS += Array.from(sM.values()).reduce((a, v) => a + v, 0);
+      }
+      return s + sumS;
+    }, 0);
+
+    const globalPesoMedio = globalSumSaldo > 0 ? globalSumPesoTotal / globalSumSaldo : null;
+    const globalArea = farms.reduce((s, f) => s + f.area, 0);
+    const globalRebanhoMedio = globalSumSaldo / (mes > 0 ? mes : 1);
+    const globalPesoTotalKg = globalPesoMedio && globalRebanhoMedio > 0 ? globalPesoMedio * globalRebanhoMedio : null;
+    const globalLotacao = globalPesoTotalKg && globalArea > 0 ? globalPesoTotalKg / globalArea : null;
+
+    const globalRow: FarmKpi = {
+      id: '__global__', nome: 'Global', rebanho: globalRebanho,
+      pesoMedio: globalPesoMedio, area: globalArea, lotacaoKgHa: globalLotacao,
+    };
+
+    return { farms, globalRow };
+  }, [fazendas, lancamentos, saldosIniciais, ano, mes, allPastos]);
 }
 
 // ---------------------------------------------------------------------------
@@ -145,7 +241,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
   const { zootecnico, financeiro, economico, loading } = useResumoStatus(lancamentos, saldosIniciais, anoNum, mesNum);
   const statusZoo = useStatusZootecnico(fazendaAtual?.id, anoNum, mesNum, lancamentos, saldosIniciais);
   const zooKpis = useZooKpis(lancamentos, saldosIniciais, anoNum, mesNum);
-  const farmBreakdown = useRebanhoPerFarm(lancamentos, saldosIniciais, anoNum, mesNum);
+  const globalFarmKpis = useGlobalFarmKpis(lancamentos, saldosIniciais, anoNum, mesNum);
 
   const statusGeral = useMemo((): StatusNivel => {
     const niveis = [zootecnico.status.nivel, financeiro.status.nivel, economico.status.nivel];
@@ -277,14 +373,40 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
               </div>
 
               {/* Per-farm breakdown (Global) */}
-              {isGlobal && farmBreakdown.length > 0 && (
-                <div className="border-t border-border/40 pt-2.5 space-y-0.5">
-                  {farmBreakdown.map(f => (
-                    <div key={f.id} className="flex justify-between items-center">
-                      <span className="text-[11px] text-muted-foreground truncate max-w-[65%]">{f.nome}</span>
-                      <span className="text-[11px] font-semibold text-foreground tabular-nums">{formatNum(f.rebanho)} cab</span>
-                    </div>
-                  ))}
+              {isGlobal && globalFarmKpis.farms.length > 0 && (
+                <div className="border-t border-border/40 pt-2.5 -mx-1">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="text-[9px] h-7 px-1.5">Fazenda</TableHead>
+                          <TableHead className="text-[9px] h-7 px-1.5 text-right">Qtde</TableHead>
+                          <TableHead className="text-[9px] h-7 px-1.5 text-right">Peso Méd.</TableHead>
+                          <TableHead className="text-[9px] h-7 px-1.5 text-right">Kg/ha</TableHead>
+                          <TableHead className="text-[9px] h-7 px-1.5 text-right">Área (ha)</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {globalFarmKpis.farms.map(f => (
+                          <TableRow key={f.id} className="hover:bg-muted/30">
+                            <TableCell className="text-[10px] py-1 px-1.5 font-medium truncate max-w-[100px]">{f.nome}</TableCell>
+                            <TableCell className="text-[10px] py-1 px-1.5 text-right tabular-nums">{formatNum(f.rebanho)}</TableCell>
+                            <TableCell className="text-[10px] py-1 px-1.5 text-right tabular-nums">{f.pesoMedio ? formatNum(f.pesoMedio, 0) : '—'}</TableCell>
+                            <TableCell className="text-[10px] py-1 px-1.5 text-right tabular-nums">{f.lotacaoKgHa ? formatNum(f.lotacaoKgHa, 0) : '—'}</TableCell>
+                            <TableCell className="text-[10px] py-1 px-1.5 text-right tabular-nums">{f.area > 0 ? formatNum(f.area, 0) : '—'}</TableCell>
+                          </TableRow>
+                        ))}
+                        {/* Global consolidated row */}
+                        <TableRow className="border-t-2 border-border bg-muted/30 hover:bg-muted/40 font-semibold">
+                          <TableCell className="text-[10px] py-1.5 px-1.5 font-bold">Global</TableCell>
+                          <TableCell className="text-[10px] py-1.5 px-1.5 text-right tabular-nums font-bold">{formatNum(globalFarmKpis.globalRow.rebanho)}</TableCell>
+                          <TableCell className="text-[10px] py-1.5 px-1.5 text-right tabular-nums font-bold">{globalFarmKpis.globalRow.pesoMedio ? formatNum(globalFarmKpis.globalRow.pesoMedio, 0) : '—'}</TableCell>
+                          <TableCell className="text-[10px] py-1.5 px-1.5 text-right tabular-nums font-bold">{globalFarmKpis.globalRow.lotacaoKgHa ? formatNum(globalFarmKpis.globalRow.lotacaoKgHa, 0) : '—'}</TableCell>
+                          <TableCell className="text-[10px] py-1.5 px-1.5 text-right tabular-nums font-bold">{globalFarmKpis.globalRow.area > 0 ? formatNum(globalFarmKpis.globalRow.area, 0) : '—'}</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
               )}
 
