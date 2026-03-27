@@ -73,6 +73,68 @@ export type Database = {
           },
         ]
       }
+      cliente_membros: {
+        Row: {
+          ativo: boolean
+          cliente_id: string
+          created_at: string
+          id: string
+          perfil: Database["public"]["Enums"]["perfil_acesso"]
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          cliente_id: string
+          created_at?: string
+          id?: string
+          perfil?: Database["public"]["Enums"]["perfil_acesso"]
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean
+          cliente_id?: string
+          created_at?: string
+          id?: string
+          perfil?: Database["public"]["Enums"]["perfil_acesso"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cliente_membros_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clientes: {
+        Row: {
+          ativo: boolean
+          config: Json | null
+          created_at: string
+          id: string
+          nome: string
+          slug: string
+        }
+        Insert: {
+          ativo?: boolean
+          config?: Json | null
+          created_at?: string
+          id?: string
+          nome: string
+          slug: string
+        }
+        Update: {
+          ativo?: boolean
+          config?: Json | null
+          created_at?: string
+          id?: string
+          nome?: string
+          slug?: string
+        }
+        Relationships: []
+      }
       fazenda_cadastros: {
         Row: {
           area_produtiva: number | null
@@ -175,6 +237,7 @@ export type Database = {
       }
       fazendas: {
         Row: {
+          cliente_id: string | null
           codigo_importacao: string | null
           created_at: string
           id: string
@@ -183,6 +246,7 @@ export type Database = {
           tem_pecuaria: boolean
         }
         Insert: {
+          cliente_id?: string | null
           codigo_importacao?: string | null
           created_at?: string
           id?: string
@@ -191,6 +255,7 @@ export type Database = {
           tem_pecuaria?: boolean
         }
         Update: {
+          cliente_id?: string | null
           codigo_importacao?: string | null
           created_at?: string
           id?: string
@@ -198,7 +263,15 @@ export type Database = {
           owner_id?: string
           tem_pecuaria?: boolean
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fazendas_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       fechamento_pasto_itens: {
         Row: {
@@ -1004,6 +1077,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_user_cliente_id: { Args: { _user_id?: string }; Returns: string }
+      get_user_perfil: {
+        Args: { _cliente_id: string; _user_id: string }
+        Returns: Database["public"]["Enums"]["perfil_acesso"]
+      }
+      is_admin_agroinblue: { Args: { _user_id?: string }; Returns: boolean }
+      is_cliente_member: {
+        Args: { _cliente_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_fazenda_member: {
         Args: { _fazenda_id: string; _user_id: string }
         Returns: boolean
@@ -1018,7 +1101,12 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      perfil_acesso:
+        | "admin_agroinblue"
+        | "gestor_cliente"
+        | "financeiro"
+        | "campo"
+        | "leitura"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1145,6 +1233,14 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      perfil_acesso: [
+        "admin_agroinblue",
+        "gestor_cliente",
+        "financeiro",
+        "campo",
+        "leitura",
+      ],
+    },
   },
 } as const
