@@ -733,13 +733,21 @@ export function DashboardFinanceiro({
     const classifyEntrada = (l: FinanceiroLancamento) => {
       const macro = normMacro(l);
       const escopo = normEscopo(l);
+      const grupo = (l.grupo_custo || '').toLowerCase().trim();
+      const centro = (l.centro_custo || '').toLowerCase().trim();
+      const sub = (l.subcentro || '').toLowerCase().trim();
+      // Aportes Pessoais — checar macro, grupo, centro ou subcentro
+      const isAporte = macro === 'aportes pessoais' || macro === 'aporte pessoal'
+        || grupo.includes('aporte pessoal') || grupo.includes('aportes pessoais')
+        || centro.includes('aporte pessoal') || centro.includes('aportes pessoais')
+        || sub.includes('aporte pessoal') || sub.includes('aportes pessoais');
+      if (isAporte) return 'Aportes Pessoais';
       if (macro === 'receitas' && escopo === 'pecuaria') return 'Receitas Pecuárias';
       if (macro === 'receitas' && escopo === 'agricultura') return 'Receitas Agrícolas';
       if (macro === 'receitas') return 'Outras Receitas';
       if (macro === 'outras entradas financeiras' && escopo === 'pecuaria') return 'Captação Financ. Pec.';
       if (macro === 'outras entradas financeiras' && escopo === 'agricultura') return 'Captação Financ. Agri.';
       if (macro === 'outras entradas financeiras') return 'Captação Financ. Pec.';
-      if (macro === 'aportes pessoais' || macro === 'aporte pessoal') return 'Aportes Pessoais';
       return 'Outras Receitas';
     };
 
