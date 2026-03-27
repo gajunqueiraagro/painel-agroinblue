@@ -172,6 +172,7 @@ const Index = () => {
         onBack={subScreenBackMap[activeTab]}
         rightAction={
           <div className="flex items-center gap-2">
+            {clientes.length > 1 && <ClienteSelector />}
             {fazendas.length > 1 && <FazendaSelector />}
           </div>
         }
