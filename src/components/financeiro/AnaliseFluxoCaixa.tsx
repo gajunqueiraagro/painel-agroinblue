@@ -63,7 +63,9 @@ export function FluxoCaixa({
       for (const l of saidasAll) {
         const macro = normMacro(l);
         const valor = Math.abs(l.valor);
-        if (macro === 'custeio produtivo') {
+        if (macro.includes('dedução') || macro.includes('deducao') || macro === 'dedução de receitas') {
+          saidasDeducao += valor;
+        } else if (macro === 'custeio produtivo') {
           saidasCusteio += valor;
         } else if (macro === 'investimento na fazenda' || macro === 'investimento em bovinos') {
           saidasInvestimentos += valor;
