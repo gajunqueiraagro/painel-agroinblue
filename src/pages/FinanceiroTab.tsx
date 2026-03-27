@@ -432,22 +432,22 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       )}
 
       {/* Filters */}
-      <div className="flex gap-1.5 items-center flex-wrap">
+      <div className="flex gap-1 items-center flex-wrap">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-          <SelectTrigger className="h-8 text-xs font-bold w-20">
+          <SelectTrigger className="h-7 text-xs font-bold w-20">
             <SelectValue placeholder="Ano" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent side="bottom">
             {anosDisponiveis.map(a => (
               <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
             ))}
           </SelectContent>
         </Select>
         <Select value={mesFiltro} onValueChange={setMesFiltro}>
-          <SelectTrigger className="h-8 text-xs font-bold w-24">
+          <SelectTrigger className="h-7 text-xs font-bold w-20">
             <SelectValue placeholder="Mês" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent side="bottom">
             {MESES_OPTIONS.map(m => (
               <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>
             ))}
@@ -462,7 +462,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
             <button
               key={s.value}
               onClick={() => setStatusFiltro(s.value)}
-              className={`px-2 py-1 rounded text-[10px] font-bold transition-colors ${
+              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
                 statusFiltro === s.value
                   ? s.value === 'realizado' ? 'bg-green-700 text-white'
                     : s.value === 'previsto' ? 'bg-orange-500 text-white'
