@@ -512,10 +512,13 @@ export function useFinanceiro() {
 
       const totalValid = linhas.length + (saldosBancarios?.length || 0) + (resumoCaixa?.length || 0);
 
+      const clienteId = fazendas.find(f => f.id === primaryFazendaId)?.cliente_id || fazendaAtual?.cliente_id || '';
+
       const { data: imp, error: impErr } = await supabase
         .from('financeiro_importacoes')
         .insert({
           fazenda_id: primaryFazendaId,
+          cliente_id: clienteId,
           nome_arquivo: nomeArquivo,
           usuario_id: user.id,
           status: 'processada',
