@@ -116,11 +116,10 @@ export function useResumoStatus(
     return fazendaId ? [fazendaId] : [];
   }, [fazendaId, isGlobal, fazendas]);
 
-  // All fazenda IDs (including ADM) for financial queries
+  // Financeiro é sempre consolidado (todas as fazendas, incluindo ADM)
   const fazendaIdsFinanceiro = useMemo(() => {
-    if (isGlobal) return fazendas.filter(f => f.id !== '__global__').map(f => f.id);
-    return fazendaId ? [fazendaId] : [];
-  }, [fazendaId, isGlobal, fazendas]);
+    return fazendas.filter(f => f.id !== '__global__').map(f => f.id);
+  }, [fazendas]);
 
   // Load status data
   const loadStatusData = useCallback(async () => {
