@@ -535,6 +535,7 @@ export function useFinanceiro() {
       for (let i = 0; i < linhas.length; i += batchSize) {
         const batch = linhas.slice(i, i + batchSize).map(l => ({
           fazenda_id: l.fazendaId!,
+          cliente_id: fazendas.find(f => f.id === l.fazendaId)?.cliente_id || clienteId,
           importacao_id: imp.id,
           origem_dado: 'import_excel',
           data_realizacao: l.dataPagamento || l.anoMes + '-01',
