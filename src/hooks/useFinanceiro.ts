@@ -115,6 +115,26 @@ interface RawLancPec { fazenda_id: string; data: string; tipo: string; quantidad
 // ---------------------------------------------------------------------------
 
 /**
+ * Paginated fetch — loads ALL rows from a query, bypassing the 1000-row default.
+ * Same strategy used in useFluxoCaixa to guarantee data completeness.
+ */
+async function fetchAllPaginated<T>(
+  buildQuery: (from: number, to: number) => ReturnType<ReturnType<typeof supabase.from>['select']>,
+): Promise<T[]> {
+  const PAGE_SIZE = 1000;
+  let allData: T[] = [];
+  let from = 0;
+  while (true) {
+    const { data } = await buildQuery(from, from + PAGE_SIZE - 1) as { data: T[] | null };
+    if (!data || data.length === 0) break;
+    allData = allData.concat(data);
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+  return allData;
+}
+
+/**
  * Desembolso produtivo = macro_custo "Custeio Produtivo" + tipo_operacao 2-Saídas.
  * Exclui: Investimentos, Amortizações, Dividendos, Receitas, Outras Entradas.
  */
@@ -274,16 +294,16 @@ export function useFinanceiro() {
           return;
         }
 
-        const [lancResult, ccResult, impResult, saldoResult, lancPecResult] = await Promise.all([
-          supabase.from('financeiro_lancamentos').select('*').in('fazenda_id', allFazendaIds).order('data_realizacao', { ascending: false }).limit(10000),
+        const [allLancs, ccResult, impResult, saldoResult, lancPecResult] = await Promise.all([
+          fetchAllPaginated<FinanceiroLancamento>((from, to) =>
+            supabase.from('financeiro_lancamentos').select('*').in('fazenda_id', allFazendaIds).order('data_realizacao', { ascending: false }).range(from, to),
+          ),
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').in('fazenda_id', allFazendaIds).eq('ativo', true),
           supabase.from('financeiro_importacoes').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').in('fazenda_id', allFazendaIds).order('data_importacao', { ascending: false }),
-          // Raw pecuário data for rebanho calculation
           opIds.length > 0 ? supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
           opIds.length > 0 ? supabase.from('lancamentos').select('fazenda_id, data, tipo, quantidade, categoria, categoria_destino').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
         ]);
 
-        const allLancs = (lancResult.data as FinanceiroLancamento[]) || [];
         setLancamentos(allLancs);
         setCentrosCusto((ccResult.data as CentroCustoOficial[]) || []);
         setImportacoes((impResult.data as ImportacaoRecord[]) || []);
@@ -296,39 +316,40 @@ export function useFinanceiro() {
           setLancamentosADM([]);
         }
       } else {
-        // Per-fazenda
-        const promises: PromiseLike<any>[] = [
-          supabase.from('financeiro_lancamentos').select('*').eq('fazenda_id', fazendaId).order('data_realizacao', { ascending: false }).limit(10000),
+        // Per-fazenda — use paginated fetch for lancamentos
+        const needsRateio = fazendaADM && fazendaADM.id !== fazendaId;
+
+        const lancPromise = fetchAllPaginated<FinanceiroLancamento>((from, to) =>
+          supabase.from('financeiro_lancamentos').select('*').eq('fazenda_id', fazendaId).order('data_realizacao', { ascending: false }).range(from, to),
+        );
+
+        const admPromise = needsRateio
+          ? fetchAllPaginated<FinanceiroLancamento>((from, to) =>
+              supabase.from('financeiro_lancamentos').select('*').eq('fazenda_id', fazendaADM.id).order('data_realizacao', { ascending: false }).range(from, to),
+            )
+          : Promise.resolve([] as FinanceiroLancamento[]);
+
+        const [lancData, ccResult, impResult, admData, saldoResult, lancPecResult] = await Promise.all([
+          lancPromise,
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').eq('fazenda_id', fazendaId).eq('ativo', true),
           supabase.from('financeiro_importacoes').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').in('fazenda_id', allFazendaIds).order('data_importacao', { ascending: false }),
-        ];
+          admPromise,
+          needsRateio && opIds.length > 0
+            ? supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds)
+            : Promise.resolve({ data: [] }),
+          needsRateio && opIds.length > 0
+            ? supabase.from('lancamentos').select('fazenda_id, data, tipo, quantidade, categoria, categoria_destino').in('fazenda_id', opIds)
+            : Promise.resolve({ data: [] }),
+        ]);
 
-        const needsRateio = fazendaADM && fazendaADM.id !== fazendaId;
-        if (needsRateio) {
-          promises.push(
-            supabase.from('financeiro_lancamentos').select('*').eq('fazenda_id', fazendaADM.id).order('data_realizacao', { ascending: false }).limit(10000),
-          );
-          // Load raw pecuário for rebanho calc
-          if (opIds.length > 0) {
-            promises.push(
-              supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds),
-            );
-            promises.push(
-              supabase.from('lancamentos').select('fazenda_id, data, tipo, quantidade, categoria, categoria_destino').in('fazenda_id', opIds),
-            );
-          }
-        }
-
-        const results = await Promise.all(promises);
-
-        setLancamentos((results[0].data as FinanceiroLancamento[]) || []);
-        setCentrosCusto((results[1].data as CentroCustoOficial[]) || []);
-        setImportacoes((results[2].data as ImportacaoRecord[]) || []);
+        setLancamentos(lancData);
+        setCentrosCusto((ccResult.data as CentroCustoOficial[]) || []);
+        setImportacoes((impResult.data as ImportacaoRecord[]) || []);
 
         if (needsRateio) {
-          setLancamentosADM((results[3]?.data as FinanceiroLancamento[]) || []);
-          setRawSaldos((results[4]?.data as RawSaldo[]) || []);
-          setRawLancsPec((results[5]?.data as RawLancPec[]) || []);
+          setLancamentosADM(admData);
+          setRawSaldos((saldoResult.data as RawSaldo[]) || []);
+          setRawLancsPec((lancPecResult.data as RawLancPec[]) || []);
         } else {
           setLancamentosADM([]);
           setRawSaldos([]);
