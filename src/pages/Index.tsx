@@ -121,8 +121,12 @@ const Index = () => {
     return lancamentos.filter(l => l.tipo !== 'transferencia_entrada' && l.tipo !== 'transferencia_saida');
   }, [lancamentos, isGlobal]);
 
-  const navigateToMovimentacao = useCallback((subAba: SubAba) => {
+  const navigateToMovimentacao = useCallback((subAba: SubAba, opts?: { ano?: string; mes?: string; label?: string; backTab?: TabId }) => {
     setSubAbaFinanceiro(subAba);
+    setMovFiltroAno(opts?.ano);
+    setMovFiltroMes(opts?.mes);
+    setMovDrillLabel(opts?.label);
+    setMovBackTab(opts?.backTab);
     setActiveTab('financeiro');
   }, []);
 
