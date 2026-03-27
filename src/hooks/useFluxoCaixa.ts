@@ -17,6 +17,7 @@ interface FluxoLancamentoBase {
   tipo_operacao: string | null;
   macro_custo: string | null;
   produto: string | null;
+  escopo_negocio: string | null;
 }
 
 // ---------------------------------------------------------------------------
