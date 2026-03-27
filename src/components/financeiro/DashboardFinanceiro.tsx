@@ -562,6 +562,7 @@ export function DashboardFinanceiro({
   fazendaId,
   ano,
   mesAte,
+  onDrillDown,
 }: Props) {
   const [showAudit, setShowAudit] = useState(false);
   const isMobile = useIsMobile();
