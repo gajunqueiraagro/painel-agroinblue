@@ -33,10 +33,12 @@ import { ChuvasTab } from './ChuvasTab';
 import { VisaoAnualZootecnicaTab } from './VisaoAnualZootecnicaTab';
 
 import { FazendaSelector } from '@/components/FazendaSelector';
+import { ClienteSelector } from '@/components/ClienteSelector';
 import { SyncStatus } from '@/components/SyncStatus';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
 
 export interface FiltroGlobal {
@@ -87,6 +89,7 @@ const Index = () => {
   const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
   const { user } = useAuth();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
+  const { clientes } = useCliente();
   const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial, loadData } = useLancamentos();
   const { pendingCount, syncing, online, syncQueue } = useOfflineSync(fazendaAtual?.id === '__global__' ? undefined : fazendaAtual?.id, loadData);
 
@@ -169,6 +172,7 @@ const Index = () => {
         onBack={subScreenBackMap[activeTab]}
         rightAction={
           <div className="flex items-center gap-2">
+            {clientes.length > 1 && <ClienteSelector />}
             {fazendas.length > 1 && <FazendaSelector />}
           </div>
         }

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
+import { useCliente } from './ClienteContext';
 import { toast } from 'sonner';
 
 export interface Fazenda {
@@ -35,31 +36,42 @@ const FazendaContext = createContext<FazendaContextType | undefined>(undefined);
 
 export function FazendaProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { clienteAtual } = useCliente();
   const [fazendas, setFazendas] = useState<Fazenda[]>([]);
   const [fazendaAtual, setFazendaAtualState] = useState<Fazenda | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadFazendas = useCallback(async () => {
-    if (!user) { setFazendas([]); setFazendaAtualState(null); setLoading(false); return; }
+    if (!user || !clienteAtual) {
+      setFazendas([]);
+      setFazendaAtualState(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const { data: membros } = await supabase
         .from('fazenda_membros')
-        .select('fazenda_id, papel, fazendas(id, nome, owner_id, codigo_importacao, tem_pecuaria)')
+        .select('fazenda_id, papel, fazendas(id, nome, owner_id, cliente_id, codigo_importacao, tem_pecuaria)')
         .eq('user_id', user.id);
 
       if (membros && membros.length > 0) {
-        const list = membros.map(m => ({
-          ...(m.fazendas as any),
-          papel: m.papel,
-        }));
+        // Filter fazendas belonging to the current client
+        const list = membros
+          .map(m => ({
+            ...(m.fazendas as any),
+            papel: m.papel,
+          }))
+          .filter((f: Fazenda) => f.cliente_id === clienteAtual.id);
+
         setFazendas(list);
-        const savedId = localStorage.getItem('fazenda-ativa');
+        const savedKey = `fazenda-ativa-${clienteAtual.id}`;
+        const savedId = localStorage.getItem(savedKey);
         if (savedId === '__global__' && list.length > 1) {
           setFazendaAtualState(GLOBAL_FAZENDA);
         } else {
-          const saved = list.find(f => f.id === savedId);
-          setFazendaAtualState(saved || list[0]);
+          const saved = list.find((f: Fazenda) => f.id === savedId);
+          setFazendaAtualState(saved || list[0] || null);
         }
       } else {
         setFazendas([]);
@@ -69,18 +81,20 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
       setFazendas([]);
     }
     setLoading(false);
-  }, [user]);
+  }, [user, clienteAtual]);
 
   useEffect(() => { loadFazendas(); }, [loadFazendas]);
 
   const setFazendaAtual = (f: Fazenda) => {
     setFazendaAtualState(f);
-    localStorage.setItem('fazenda-ativa', f.id);
+    if (clienteAtual) {
+      localStorage.setItem(`fazenda-ativa-${clienteAtual.id}`, f.id);
+    }
   };
 
   const criarFazenda = async (nome: string, codigoImportacao?: string): Promise<Fazenda | null> => {
-    if (!user) return null;
-    const payload: any = { nome, owner_id: user.id };
+    if (!user || !clienteAtual) return null;
+    const payload: any = { nome, owner_id: user.id, cliente_id: clienteAtual.id };
     if (codigoImportacao) payload.codigo_importacao = codigoImportacao;
     const { data, error } = await supabase
       .from('fazendas')
