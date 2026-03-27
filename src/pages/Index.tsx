@@ -179,7 +179,7 @@ const Index = () => {
   const subScreenBackMap: Partial<Record<TabId, () => void>> = {
     zootecnico: goToVisaoZooHub,
     indicadores: goToVisaoZooHub,
-    valor_rebanho: goToZootecnico,
+    valor_rebanho: () => setActiveTab('fluxo_anual'),
     conciliacao_categoria: goToZootecnico,
     visao_anual_zoo: goToVisaoZooHub,
     analise_economica: goToVisaoFinHub,
