@@ -205,43 +205,56 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
   return (
     <div className="max-w-lg mx-auto animate-fade-in pb-20">
       {/* Sticky header + filters */}
-      {/* Filtros */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border px-4 pt-3 pb-2">
-        <div className="flex gap-2 items-center flex-wrap">
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/40 px-4 pt-2 pb-2 space-y-1.5">
+        <div className="flex gap-1.5 items-center flex-wrap">
           <Select value={anoFiltro} onValueChange={handleAnoChange}>
-            <SelectTrigger className="w-24 text-base font-bold"><SelectValue /></SelectTrigger>
-            <SelectContent>
+            <SelectTrigger className="w-20 h-7 text-xs font-bold"><SelectValue /></SelectTrigger>
+            <SelectContent side="bottom">
               {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
-            <SelectTrigger className="w-28 text-sm font-bold"><SelectValue /></SelectTrigger>
-            <SelectContent>
+            <SelectTrigger className="w-24 h-7 text-xs font-bold"><SelectValue /></SelectTrigger>
+            <SelectContent side="bottom">
               {MESES_COLS.map((m, i) => (
                 <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
+        {/* Toggle Mês | Acumulado */}
+        <div className="flex bg-muted rounded-md p-0.5 max-w-xs">
+          <button
+            onClick={() => setVista('mes')}
+            className={`flex-1 text-[11px] font-bold py-1 rounded transition-colors ${vista === 'mes' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
+          >
+            {mesLabel}
+          </button>
+          <button
+            onClick={() => setVista('acumulado')}
+            className={`flex-1 text-[11px] font-bold py-1 rounded transition-colors ${vista === 'acumulado' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
+          >
+            Acumulado
+          </button>
+        </div>
+        {/* Toggle Realizado | Previsto */}
+        <div className="flex bg-muted rounded-md p-0.5 max-w-xs">
+          <button
+            onClick={() => setCenario('realizado')}
+            className={`flex-1 text-[11px] font-bold py-1 rounded transition-colors ${cenario === 'realizado' ? 'bg-green-700 text-white shadow-sm' : 'text-muted-foreground'}`}
+          >
+            Realizado
+          </button>
+          <button
+            onClick={() => setCenario('previsto')}
+            className={`flex-1 text-[11px] font-bold py-1 rounded transition-colors ${cenario === 'previsto' ? 'bg-orange-500 text-white shadow-sm' : 'text-muted-foreground'}`}
+          >
+            Previsto
+          </button>
+        </div>
       </div>
 
       <div className="p-4 space-y-4">
-
-      {/* Toggle Mês | Acumulado */}
-      <div className="flex bg-muted rounded-lg p-0.5">
-        <button
-          onClick={() => setVista('mes')}
-          className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-colors ${vista === 'mes' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
-        >
-          {mesLabel}
-        </button>
-        <button
-          onClick={() => setVista('acumulado')}
-          className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-colors ${vista === 'acumulado' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
-        >
-          Acumulado
-        </button>
-      </div>
 
       {/* ===== BLOCO 2: ESTOQUE + LOTAÇÃO ===== */}
       <Card>

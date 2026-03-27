@@ -345,7 +345,7 @@ export function CadastrosTab() {
 
       <div className="px-3 pt-2 space-y-4">
 
-      <Accordion type="multiple" defaultValue={['fazendas', 'dados', 'contato', 'bancario', 'roteiro', 'pastos', 'acessos']} className="space-y-2">
+      <Accordion type="multiple" defaultValue={[]} className="space-y-2">
         {/* Fazendas - only in global mode */}
         {isGlobal && (
           <AccordionItem value="fazendas" className="border rounded-lg">
