@@ -48,6 +48,17 @@ export function AnaliseOperacionalTab({ onNavigateToMovimentacao }: Props) {
   const pastosCount = pastos.filter(p => p.ativo && p.entra_conciliacao).length;
   const fechadosCount = fechamentos.filter(f => f.status === 'fechado').length;
 
+  const LABEL_TO_SUBABA: Record<string, SubAba> = {
+    'Nascimentos': 'nascimento',
+    'Compras': 'compra',
+    'Transf. Entrada': 'transferencia_entrada',
+    'Vendas': 'venda',
+    'Abates': 'abate',
+    'Mortes': 'morte',
+    'Consumo': 'consumo',
+    'Transf. Saída': 'transferencia_saida',
+  };
+
   const movItems = [
     { label: 'Nascimentos', value: resumoMov.nascimentos, icon: Baby, color: 'text-green-600' },
     { label: 'Compras', value: resumoMov.compras, icon: ShoppingCart, color: 'text-blue-600' },
