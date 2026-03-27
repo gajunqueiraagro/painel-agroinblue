@@ -11,7 +11,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Verify caller is authenticated
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
@@ -31,7 +30,7 @@ Deno.serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    // Verify caller JWT with admin client
+    // Verify caller JWT
     const token = authHeader.replace(/^Bearer\s+/i, "").trim();
     const { data: { user: caller }, error: authError } = await adminClient.auth.getUser(token);
     if (authError || !caller) {
@@ -41,28 +40,43 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { email, senha, nome, fazenda_id, papel } = await req.json();
+    const { email, senha, nome, cliente_id, perfil, fazenda_ids } = await req.json();
 
-    if (!email || !senha || !fazenda_id || !papel) {
-      return new Response(JSON.stringify({ error: "Campos obrigatórios: email, senha, fazenda_id, papel" }), {
+    if (!email || !senha || !cliente_id || !perfil) {
+      return new Response(JSON.stringify({ error: "Campos obrigatórios: email, senha, cliente_id, perfil" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Verify caller is owner or gerente of the fazenda
-    const { data: callerMembro } = await adminClient
-      .from("fazenda_membros")
-      .select("papel")
-      .eq("user_id", caller.id)
-      .eq("fazenda_id", fazenda_id)
-      .single();
-
-    if (!callerMembro || !["dono", "gerente"].includes(callerMembro.papel)) {
-      return new Response(JSON.stringify({ error: "Sem permissão para adicionar membros nesta fazenda" }), {
-        status: 403,
+    if (senha.length < 6) {
+      return new Response(JSON.stringify({ error: "Senha deve ter pelo menos 6 caracteres" }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    const validPerfis = ['gestor_cliente', 'financeiro', 'campo', 'leitura'];
+    if (!validPerfis.includes(perfil)) {
+      return new Response(JSON.stringify({ error: "Perfil inválido. Valores aceitos: " + validPerfis.join(', ') }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Verify caller is admin or gestor_cliente of this client
+    const { data: isAdmin } = await adminClient.rpc('is_admin_agroinblue', { _user_id: caller.id });
+    if (!isAdmin) {
+      const { data: callerPerfil } = await adminClient.rpc('get_user_perfil', {
+        _user_id: caller.id,
+        _cliente_id: cliente_id,
+      });
+      if (callerPerfil !== 'gestor_cliente') {
+        return new Response(JSON.stringify({ error: "Sem permissão para adicionar membros neste cliente" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // Check if user already exists
@@ -72,6 +86,20 @@ Deno.serve(async (req) => {
     let userId: string;
 
     if (existingUser) {
+      // Check if already a member of this client
+      const { data: existingMembro } = await adminClient
+        .from("cliente_membros")
+        .select("id")
+        .eq("user_id", existingUser.id)
+        .eq("cliente_id", cliente_id)
+        .single();
+
+      if (existingMembro) {
+        return new Response(JSON.stringify({ error: "Este email já está cadastrado neste cliente" }), {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       userId = existingUser.id;
     } else {
       // Create user
@@ -83,6 +111,12 @@ Deno.serve(async (req) => {
       });
 
       if (createError) {
+        if (createError.message?.includes('already') || createError.message?.includes('duplicate')) {
+          return new Response(JSON.stringify({ error: "Este email já está cadastrado no sistema" }), {
+            status: 409,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
         return new Response(JSON.stringify({ error: "Erro ao criar usuário: " + createError.message }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -91,33 +125,85 @@ Deno.serve(async (req) => {
       userId = newUser.user.id;
     }
 
-    // Check if already a member
-    const { data: existingMembro } = await adminClient
-      .from("fazenda_membros")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("fazenda_id", fazenda_id)
-      .single();
+    // Upsert cliente_membros
+    const { error: membroError } = await adminClient
+      .from("cliente_membros")
+      .upsert(
+        { user_id: userId, cliente_id, perfil, ativo: true },
+        { onConflict: "user_id,cliente_id" }
+      );
 
-    if (existingMembro) {
-      // Update papel
-      await adminClient
-        .from("fazenda_membros")
-        .update({ papel })
-        .eq("id", existingMembro.id);
-    } else {
-      // Insert membro
-      const { error: membroError } = await adminClient
-        .from("fazenda_membros")
-        .insert({ user_id: userId, fazenda_id, papel });
+    if (membroError) {
+      // If upsert not supported due to missing unique constraint, try insert then update
+      const { data: existing } = await adminClient
+        .from("cliente_membros")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("cliente_id", cliente_id)
+        .single();
 
-      if (membroError) {
-        return new Response(JSON.stringify({ error: "Erro ao vincular: " + membroError.message }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      if (existing) {
+        await adminClient
+          .from("cliente_membros")
+          .update({ perfil, ativo: true })
+          .eq("id", existing.id);
+      } else {
+        const { error: insertError } = await adminClient
+          .from("cliente_membros")
+          .insert({ user_id: userId, cliente_id, perfil });
+        if (insertError) {
+          return new Response(JSON.stringify({ error: "Erro ao vincular ao cliente: " + insertError.message }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
       }
     }
+
+    // Manage fazenda_membros: add to selected fazendas
+    if (fazenda_ids && Array.isArray(fazenda_ids) && fazenda_ids.length > 0) {
+      // Verify all fazendas belong to this client
+      const { data: validFazendas } = await adminClient
+        .from("fazendas")
+        .select("id")
+        .eq("cliente_id", cliente_id)
+        .in("id", fazenda_ids);
+
+      const validIds = (validFazendas || []).map(f => f.id);
+
+      // Remove existing fazenda_membros for this user in this client's fazendas
+      const { data: clientFazendas } = await adminClient
+        .from("fazendas")
+        .select("id")
+        .eq("cliente_id", cliente_id);
+
+      const allClientFazendaIds = (clientFazendas || []).map(f => f.id);
+
+      if (allClientFazendaIds.length > 0) {
+        await adminClient
+          .from("fazenda_membros")
+          .delete()
+          .eq("user_id", userId)
+          .in("fazenda_id", allClientFazendaIds);
+      }
+
+      // Insert new fazenda_membros
+      if (validIds.length > 0) {
+        const rows = validIds.map(fid => ({
+          user_id: userId,
+          fazenda_id: fid,
+          papel: perfil === 'gestor_cliente' ? 'gerente' : perfil === 'campo' ? 'capataz' : 'membro',
+        }));
+        await adminClient.from("fazenda_membros").insert(rows);
+      }
+    }
+
+    // Update profile cliente_id if not set
+    await adminClient
+      .from("profiles")
+      .update({ cliente_id })
+      .eq("user_id", userId)
+      .is("cliente_id", null);
 
     return new Response(JSON.stringify({ success: true, user_id: userId }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
