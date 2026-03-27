@@ -159,11 +159,14 @@ export function useResumoStatus(
               .lte('data_pagamento', `${anoStr}-12-31`)
               .limit(10000)
           : Promise.resolve({ data: [] }),
-        // Saldo inicial global
-        supabase
-          .from('financeiro_saldos_bancarios')
-          .select('saldo_final, conta_banco')
-          .eq('ano_mes', `${ano - 1}-12`),
+        // Saldo inicial — filtered by client's fazendas
+        idsFin.length > 0
+          ? supabase
+              .from('financeiro_saldos_bancarios')
+              .select('saldo_final, conta_banco')
+              .in('fazenda_id', idsFin)
+              .eq('ano_mes', `${ano - 1}-12`)
+          : Promise.resolve({ data: [] }),
       ]);
 
       // Process fechamento rebanho — per fazenda per month for accurate global consolidation
