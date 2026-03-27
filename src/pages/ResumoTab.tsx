@@ -218,41 +218,16 @@ function useGlobalFarmKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInici
       return { id: faz.id, nome: faz.nome, rebanho, pesoMedio, area, lotacaoKgHa };
     }).filter(f => f.rebanho !== 0);
 
-    // Global consolidated row
+    // Global consolidated row — derived directly from farm KPIs
     const globalRebanho = farms.reduce((s, f) => s + f.rebanho, 0);
-    const globalSumPesoTotal = farms.reduce((s, f) => {
-      // Reconstruct peso total from each farm's accumulated average
-      const lancsFaz = lancamentos.filter(l => l.fazendaId === f.id);
-      let sumSaldo = 0; let sumPT = 0;
-      for (let m = 1; m <= mes; m++) {
-        const sM = calcSaldoPorCategoriaLegado(saldosIniciais, lancsFaz, ano, m);
-        const st = Array.from(sM.values()).reduce((a, v) => a + v, 0);
-        if (st <= 0) continue;
-        sumSaldo += st;
-        const itens = Array.from(sM.entries()).filter(([, q]) => q > 0).map(([cat, qtd]) => {
-          const si = saldosIniciais.find(x => x.categoria === cat && x.ano === ano);
-          return { quantidade: qtd, pesoKg: si?.pesoMedioKg || null };
-        });
-        const p = calcPesoMedioPonderado(itens);
-        if (p) sumPT += p * st;
-      }
-      return s + sumPT;
-    }, 0);
-    const globalSumSaldo = farms.reduce((s, f) => {
-      const lancsFaz = lancamentos.filter(l => l.fazendaId === f.id);
-      let sumS = 0;
-      for (let m = 1; m <= mes; m++) {
-        const sM = calcSaldoPorCategoriaLegado(saldosIniciais, lancsFaz, ano, m);
-        sumS += Array.from(sM.values()).reduce((a, v) => a + v, 0);
-      }
-      return s + sumS;
-    }, 0);
-
-    const globalPesoMedio = globalSumSaldo > 0 ? globalSumPesoTotal / globalSumSaldo : null;
     const globalArea = farms.reduce((s, f) => s + f.area, 0);
-    const globalRebanhoMedio = globalSumSaldo / (mes > 0 ? mes : 1);
-    const globalPesoTotalKg = globalPesoMedio && globalRebanhoMedio > 0 ? globalPesoMedio * globalRebanhoMedio : null;
-    const globalLotacao = globalPesoTotalKg && globalArea > 0 ? globalPesoTotalKg / globalArea : null;
+
+    // Peso Médio Global = Σ(qtd × pesoMedio) / Σ(qtd) — weighted by rebanho
+    const globalPesoTotal = farms.reduce((s, f) => s + (f.pesoMedio ? f.rebanho * f.pesoMedio : 0), 0);
+    const globalPesoMedio = globalRebanho > 0 ? globalPesoTotal / globalRebanho : null;
+
+    // KG/HA Global = Σ peso total / Σ área
+    const globalLotacao = globalPesoTotal > 0 && globalArea > 0 ? globalPesoTotal / globalArea : null;
 
     const globalRow: FarmKpi = {
       id: '__global__', nome: 'Global', rebanho: globalRebanho,
