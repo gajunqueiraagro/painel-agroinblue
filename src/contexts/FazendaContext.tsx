@@ -17,6 +17,7 @@ export const GLOBAL_FAZENDA: Fazenda = {
   id: '__global__',
   nome: 'Global',
   owner_id: '',
+  cliente_id: '',
   papel: 'viewer',
 };
 

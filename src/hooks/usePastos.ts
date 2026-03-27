@@ -69,7 +69,7 @@ export function usePastos() {
   useEffect(() => { loadPastos(); }, [loadPastos]);
 
   const criarPasto = useCallback(async (pasto: Omit<Pasto, 'id' | 'created_at' | 'updated_at'>) => {
-    const { error } = await supabase.from('pastos').insert(pasto);
+    const { error } = await supabase.from('pastos').insert({ ...pasto, cliente_id: pasto.cliente_id || (pasto as any).fazenda_id ? fazendaAtual?.cliente_id! : '' } as any);
     if (error) { toast.error('Erro ao criar pasto'); console.error(error); return false; }
     toast.success('Pasto criado');
     await loadPastos();

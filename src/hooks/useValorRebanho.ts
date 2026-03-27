@@ -158,6 +158,7 @@ export function useValorRebanho(anoMes: string) {
         .from('valor_rebanho_fechamento')
         .upsert({
           fazenda_id: fazendaId,
+          cliente_id: fazendaAtual?.cliente_id!,
           ano_mes: anoMes,
           status: 'fechado',
           fechado_por: user?.id || null,

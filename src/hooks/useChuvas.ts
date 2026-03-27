@@ -48,6 +48,7 @@ export function useChuvas() {
 
     const { error } = await supabase.from('chuvas').upsert({
       fazenda_id: fazendaId,
+      cliente_id: fazendaAtual?.cliente_id!,
       data,
       milimetros,
       observacao: observacao || null,
