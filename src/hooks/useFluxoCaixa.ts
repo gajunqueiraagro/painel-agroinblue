@@ -8,7 +8,14 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import type { FinanceiroLancamento, RateioADM } from '@/hooks/useFinanceiro';
+
+interface FluxoLancamentoBase {
+  status_transacao: string | null;
+  data_pagamento: string | null;
+  valor: number;
+  tipo_operacao: string | null;
+  macro_custo: string | null;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -51,38 +58,38 @@ export interface FluxoCaixaResult {
 // Classification helpers
 // ---------------------------------------------------------------------------
 
-const isConciliado = (l: FinanceiroLancamento) =>
+const isConciliado = (l: FluxoLancamentoBase) =>
   (l.status_transacao || '').toLowerCase().trim() === 'conciliado';
 
-const datePagtoMes = (l: FinanceiroLancamento): number | null => {
+const datePagtoMes = (l: FluxoLancamentoBase): number | null => {
   if (!l.data_pagamento || l.data_pagamento.length < 7) return null;
   return Number(l.data_pagamento.substring(5, 7));
 };
 
-const datePagtoAno = (l: FinanceiroLancamento): number | null => {
+const datePagtoAno = (l: FluxoLancamentoBase): number | null => {
   if (!l.data_pagamento || l.data_pagamento.length < 4) return null;
   return Number(l.data_pagamento.substring(0, 4));
 };
 
-const isEntrada = (l: FinanceiroLancamento) =>
+const isEntrada = (l: FluxoLancamentoBase) =>
   (l.tipo_operacao || '').startsWith('1');
 
-const isSaida = (l: FinanceiroLancamento) =>
+const isSaida = (l: FluxoLancamentoBase) =>
   (l.tipo_operacao || '').startsWith('2');
 
-const normMacro = (l: FinanceiroLancamento) =>
+const normMacro = (l: FluxoLancamentoBase) =>
   (l.macro_custo || '').toLowerCase().trim();
 
 type CategoriaFluxo = 'receitas' | 'captacao' | 'aportes' | 'desembolso' | 'reposicao' | 'amortizacoes' | 'dividendos';
 
-function classificarEntrada(l: FinanceiroLancamento): CategoriaFluxo {
+function classificarEntrada(l: FluxoLancamentoBase): CategoriaFluxo {
   const macro = normMacro(l);
   if (macro.includes('financiamento') || macro.includes('captação') || macro.includes('captacao')) return 'captacao';
   if (macro.includes('aporte')) return 'aportes';
   return 'receitas';
 }
 
-function classificarSaida(l: FinanceiroLancamento): CategoriaFluxo {
+function classificarSaida(l: FluxoLancamentoBase): CategoriaFluxo {
   const macro = normMacro(l);
   if (macro.includes('reposição') || macro.includes('reposicao')) return 'reposicao';
   if (macro.includes('amortização') || macro.includes('amortizacao') || macro.includes('amortizaç')) return 'amortizacoes';
@@ -97,15 +104,43 @@ function classificarSaida(l: FinanceiroLancamento): CategoriaFluxo {
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 export function useFluxoCaixa(
-  lancamentosFinanceiros: FinanceiroLancamento[],
-  rateioADM: RateioADM[],
+  _lancamentosFinanceiros: unknown[],
+  _rateioADM: unknown[],
   ano: number,
   mesAte: number,
 ) {
+  const [lancamentosGlobais, setLancamentosGlobais] = useState<FluxoLancamentoBase[]>([]);
+  const [loadingLancamentos, setLoadingLancamentos] = useState(true);
   const [saldoInicialAno, setSaldoInicialAno] = useState<number>(0);
   const [saldoInicialAusente, setSaldoInicialAusente] = useState(false);
   const [saldoInicialAudit, setSaldoInicialAudit] = useState<SaldoInicialAudit | null>(null);
   const [loadingSaldo, setLoadingSaldo] = useState(true);
+
+  const loadLancamentosGlobais = useCallback(async () => {
+    setLoadingLancamentos(true);
+    try {
+      const { data } = await supabase
+        .from('financeiro_lancamentos')
+        .select('status_transacao, data_pagamento, valor, tipo_operacao, macro_custo')
+        .gte('data_pagamento', `${ano}-01-01`)
+        .lte('data_pagamento', `${ano}-12-31`)
+        .limit(20000);
+
+      setLancamentosGlobais(
+        (data || []).map((r: any) => ({
+          status_transacao: r.status_transacao,
+          data_pagamento: r.data_pagamento ? String(r.data_pagamento) : null,
+          valor: Number(r.valor) || 0,
+          tipo_operacao: r.tipo_operacao,
+          macro_custo: r.macro_custo,
+        })),
+      );
+    } catch {
+      setLancamentosGlobais([]);
+    } finally {
+      setLoadingLancamentos(false);
+    }
+  }, [ano]);
 
   // Fetch saldo inicial GLOBAL de Dez do ano anterior (registros SALDO da EXPORT_APP_UNICO, sem filtro de fazenda)
   const loadSaldoInicial = useCallback(async () => {
@@ -150,14 +185,17 @@ export function useFluxoCaixa(
     }
   }, [ano]);
 
-  useEffect(() => { loadSaldoInicial(); }, [loadSaldoInicial]);
+  useEffect(() => {
+    loadSaldoInicial();
+    loadLancamentosGlobais();
+  }, [loadSaldoInicial, loadLancamentosGlobais]);
 
   // Compute 12-line fluxo
   const meses = useMemo((): FluxoMensal[] => {
     const anoStr = String(ano);
 
     // Filter: conciliado + data_pagamento in the given year
-    const conciliados = lancamentosFinanceiros.filter(l => {
+    const conciliados = lancamentosGlobais.filter(l => {
       if (!isConciliado(l)) return false;
       const a = datePagtoAno(l);
       return a === ano;
@@ -169,15 +207,6 @@ export function useFluxoCaixa(
     for (const l of conciliados) {
       const m = datePagtoMes(l);
       if (m && m >= 1 && m <= 12) byMes[m].push(l);
-    }
-
-    // Rateio ADM by month
-    const rateioPorMes: Record<number, number> = {};
-    for (const r of rateioADM) {
-      if (r.anoMes.startsWith(anoStr)) {
-        const m = Number(r.anoMes.substring(5, 7));
-        rateioPorMes[m] = (rateioPorMes[m] || 0) + r.valorRateado;
-      }
     }
 
     let saldoAcumulado = saldoInicialAno;
@@ -206,8 +235,6 @@ export function useFluxoCaixa(
             else dividendos += val;
           }
         }
-        // Add rateio ADM to desembolso
-        desembolso += rateioPorMes[m] || 0;
       }
 
       const totalEntradas = receitas + captacao + aportes;
@@ -238,7 +265,13 @@ export function useFluxoCaixa(
     }
 
     return result;
-  }, [lancamentosFinanceiros, rateioADM, ano, mesAte, saldoInicialAno]);
+  }, [lancamentosGlobais, ano, mesAte, saldoInicialAno]);
 
-  return { meses, loading: loadingSaldo, saldoInicialAno, saldoInicialAusente, saldoInicialAudit } as FluxoCaixaResult;
+  return {
+    meses,
+    loading: loadingSaldo || loadingLancamentos,
+    saldoInicialAno,
+    saldoInicialAusente,
+    saldoInicialAudit,
+  } as FluxoCaixaResult;
 }
