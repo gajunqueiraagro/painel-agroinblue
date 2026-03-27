@@ -34,7 +34,11 @@ export function FazendaSelector() {
               {hasMultiple && (
                 <SelectItem value="__global__" className="text-sm font-bold">🌐 Global</SelectItem>
               )}
-              {fazendas.map(f => (
+              {[...fazendas].sort((a, b) => {
+                if (a.nome === 'Administrativo') return 1;
+                if (b.nome === 'Administrativo') return -1;
+                return a.nome.localeCompare(b.nome);
+              }).map(f => (
                 <SelectItem key={f.id} value={f.id} className="text-sm">{f.nome}</SelectItem>
               ))}
             </SelectContent>
