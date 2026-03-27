@@ -86,6 +86,13 @@ const datePagtoAno = (l: FluxoLancamentoBase): number | null => {
 const normMacro = (l: FluxoLancamentoBase) =>
   (l.macro_custo || '').toLowerCase().trim();
 
+const normEscopo = (l: FluxoLancamentoBase): 'pec' | 'agri' | 'outras' => {
+  const e = (l.escopo_negocio || '').toLowerCase().trim();
+  if (e.includes('pecuári') || e.includes('pecuaria') || e.includes('pec')) return 'pec';
+  if (e.includes('agricul') || e.includes('agri')) return 'agri';
+  return 'outras';
+};
+
 type CategoriaFluxo = 'receitas' | 'captacao' | 'aportes' | 'desembolso' | 'reposicao' | 'amortizacoes' | 'dividendos';
 
 function classificarEntrada(l: FluxoLancamentoBase): CategoriaFluxo {
