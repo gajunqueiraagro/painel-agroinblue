@@ -15,6 +15,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
 import { supabase } from '@/integrations/supabase/client';
 import { calcSaldoPorCategoriaLegado, calcPesoMedioPonderado, calcUA, calcUAHa, calcAreaProdutivaPecuaria } from '@/lib/calculos/zootecnicos';
+import { loadPesosPastosPorCategoria, resolverPesoOficial } from '@/hooks/useFechamentoCategoria';
 import { calcArrobasSafe } from '@/lib/calculos/economicos';
 import { ChevronRight, AlertTriangle, CheckCircle2, TrendingUp, TrendingDown, Wallet, BarChart3, Landmark } from 'lucide-react';
 import type { FiltroGlobal } from './Index';
