@@ -16,19 +16,39 @@ export interface FinanceiroLancamentoBase {
   tipo_operacao: string | null;
   data_pagamento: string | null;
   valor: number;
+  produto?: string | null;
 }
+
+const norm = (v: string | null | undefined) => (v || '').toLowerCase().trim();
+
+const isTransferencia = (l: FinanceiroLancamentoBase): boolean =>
+  norm(l.tipo_operacao).startsWith('3');
+
+const isTransferenciaEntrada = (l: FinanceiroLancamentoBase): boolean =>
+  isTransferencia(l) && norm(l.produto).includes('resgate');
+
+const isTransferenciaSaida = (l: FinanceiroLancamentoBase): boolean =>
+  isTransferencia(l) && norm(l.produto).includes('aplica');
 
 /** Lançamento conciliado? */
 export const isConciliado = (l: FinanceiroLancamentoBase): boolean =>
-  (l.status_transacao || '').toLowerCase().trim() === 'conciliado';
+  norm(l.status_transacao) === 'conciliado';
 
-/** Lançamento de entrada? (tipo_operacao começa com '1') */
+/**
+ * Lançamento de entrada
+ * - tipo_operacao 1*
+ * - tipo_operacao 3* com produto contendo "resgate"
+ */
 export const isEntradaFinanceira = (l: FinanceiroLancamentoBase): boolean =>
-  (l.tipo_operacao || '').startsWith('1');
+  norm(l.tipo_operacao).startsWith('1') || isTransferenciaEntrada(l);
 
-/** Lançamento de saída? (tipo_operacao começa com '2') */
+/**
+ * Lançamento de saída
+ * - tipo_operacao 2*
+ * - tipo_operacao 3* com produto contendo "aplica"
+ */
 export const isSaidaFinanceira = (l: FinanceiroLancamentoBase): boolean =>
-  (l.tipo_operacao || '').startsWith('2');
+  norm(l.tipo_operacao).startsWith('2') || isTransferenciaSaida(l);
 
 /** Extrai ano-mês (YYYY-MM) da data_pagamento */
 export const datePagtoAnoMes = (l: FinanceiroLancamentoBase): string | null => {
@@ -92,7 +112,7 @@ export function calcFinanceiroFromLancamentos(
       base: 'financeiro_lancamentos',
       filtroStatus: 'conciliado',
       filtroData: 'data_pagamento',
-      classificacao: 'tipo_operacao: 1*=entrada, 2*=saída',
+      classificacao: 'tipo_operacao: 1*=entrada, 2*=saída, 3*=transferência (resgate=entrada, aplicação=saída)',
       periodo: `${mesesRange[0]} a ${mesesRange[mesesRange.length - 1]}`,
       totalLancamentosFiltrados: conciliados.length,
     },

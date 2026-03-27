@@ -153,7 +153,7 @@ export function useResumoStatus(
         idsFin.length > 0
           ? supabase
               .from('financeiro_lancamentos')
-              .select('status_transacao, data_pagamento, valor, tipo_operacao')
+              .select('status_transacao, data_pagamento, valor, tipo_operacao, produto')
               .in('fazenda_id', idsFin)
               .gte('data_pagamento', `${anoStr}-01-01`)
               .lte('data_pagamento', `${anoStr}-12-31`)
@@ -207,6 +207,7 @@ export function useResumoStatus(
         data_pagamento: r.data_pagamento ? String(r.data_pagamento) : null,
         valor: Number(r.valor) || 0,
         tipo_operacao: r.tipo_operacao,
+        produto: r.produto,
       })));
 
       // Process saldo inicial global (mesma lógica do useFluxoCaixa)

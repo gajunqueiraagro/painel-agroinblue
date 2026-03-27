@@ -8,6 +8,7 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { isEntradaFinanceira, isSaidaFinanceira } from '@/lib/financeiro/filters';
 
 interface FluxoLancamentoBase {
   status_transacao: string | null;
@@ -15,6 +16,7 @@ interface FluxoLancamentoBase {
   valor: number;
   tipo_operacao: string | null;
   macro_custo: string | null;
+  produto: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -71,12 +73,6 @@ const datePagtoAno = (l: FluxoLancamentoBase): number | null => {
   return Number(l.data_pagamento.substring(0, 4));
 };
 
-const isEntrada = (l: FluxoLancamentoBase) =>
-  (l.tipo_operacao || '').startsWith('1');
-
-const isSaida = (l: FluxoLancamentoBase) =>
-  (l.tipo_operacao || '').startsWith('2');
-
 const normMacro = (l: FluxoLancamentoBase) =>
   (l.macro_custo || '').toLowerCase().trim();
 
@@ -121,7 +117,7 @@ export function useFluxoCaixa(
     try {
       const { data } = await supabase
         .from('financeiro_lancamentos')
-        .select('status_transacao, data_pagamento, valor, tipo_operacao, macro_custo')
+        .select('status_transacao, data_pagamento, valor, tipo_operacao, macro_custo, produto')
         .gte('data_pagamento', `${ano}-01-01`)
         .lte('data_pagamento', `${ano}-12-31`)
         .limit(20000);
@@ -133,6 +129,7 @@ export function useFluxoCaixa(
           valor: Number(r.valor) || 0,
           tipo_operacao: r.tipo_operacao,
           macro_custo: r.macro_custo,
+            produto: r.produto,
         })),
       );
     } catch {
@@ -222,12 +219,12 @@ export function useFluxoCaixa(
       if (!isAfterFilter) {
         for (const l of lancs) {
           const val = Math.abs(l.valor);
-          if (isEntrada(l)) {
+          if (isEntradaFinanceira(l)) {
             const cat = classificarEntrada(l);
             if (cat === 'receitas') receitas += val;
             else if (cat === 'captacao') captacao += val;
             else aportes += val;
-          } else if (isSaida(l)) {
+          } else if (isSaidaFinanceira(l)) {
             const cat = classificarSaida(l);
             if (cat === 'desembolso') desembolso += val;
             else if (cat === 'reposicao') reposicao += val;
