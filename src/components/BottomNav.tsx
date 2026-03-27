@@ -1,5 +1,6 @@
 import { BarChart3, PenSquare, Eye, DollarSign, TrendingUp, ClipboardList } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { usePermissions } from '@/hooks/usePermissions';
 
 export type TabId = 'resumo' | 'movimentacao' | 'lancamentos' | 'financeiro' | 'evolucao' | 'evolucao_categoria' | 'fluxo_anual' | 'acessos' | 'analise' | 'analise_entradas' | 'analise_saidas' | 'desfrute' | 'cadastros' | 'chuvas' | 'pastos' | 'conciliacao' | 'fin_caixa' | 'zootecnico' | 'zootecnico_hub' | 'analise_economica' | 'valor_rebanho' | 'conciliacao_categoria' | 'analise_operacional' | 'resumo_pastos' | 'mapa_pastos' | 'fechamento' | 'visao_anual_zoo' | 'lancar_zoo_hub' | 'visao_zoo_hub' | 'lancar_fin_hub' | 'visao_fin_hub' | 'indicadores' | 'evolucao_rebanho_hub';
 
@@ -8,7 +9,7 @@ interface BottomNavProps {
   onTabChange: (tab: TabId) => void;
 }
 
-const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+const allTabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'resumo', label: 'Resumo', icon: BarChart3 },
   { id: 'lancar_zoo_hub', label: 'Lançar Zoo', icon: PenSquare },
   { id: 'visao_zoo_hub', label: 'Visão Zoo', icon: Eye },
@@ -18,6 +19,8 @@ const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
 ];
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
+  const { canViewTab } = usePermissions();
+  const tabs = allTabs.filter(t => canViewTab(t.id));
   const getActiveId = (tab: TabId): TabId => {
     // Lançar Zoo sub-screens
     const lancarZooTabs: TabId[] = ['lancar_zoo_hub', 'lancamentos', 'movimentacao', 'fluxo_anual', 'fechamento', 'chuvas', 'financeiro', 'evolucao_categoria', 'valor_rebanho', 'mapa_pastos', 'resumo_pastos', 'conciliacao', 'conciliacao_categoria', 'evolucao_rebanho_hub'];
