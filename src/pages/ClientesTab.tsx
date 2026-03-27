@@ -98,24 +98,21 @@ export function ClientesTab() {
     // 2. Criar fazenda Administrativo + vincular usuário como admin
     const promises: Promise<any>[] = [];
 
-    promises.push(
+    const [fazRes, memRes] = await Promise.all([
       supabase.from('fazendas').insert({
         nome: 'Administrativo',
         cliente_id: clienteId,
         tem_pecuaria: false,
         owner_id: userId!,
-      })
-    );
-
-    promises.push(
+      }).select(),
       supabase.from('cliente_membros').insert({
         cliente_id: clienteId,
         user_id: userId!,
         perfil: 'admin_agroinblue',
-      })
-    );
+      }).select(),
+    ]);
 
-    const results = await Promise.all(promises);
+    const results = [fazRes, memRes];
     const erros = results.filter(r => r.error);
 
     if (erros.length > 0) {
