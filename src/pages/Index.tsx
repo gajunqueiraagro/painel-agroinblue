@@ -287,7 +287,18 @@ const Index = () => {
           filtroMesInicial={filtroGlobal.mes}
         />
       )}
-      {activeTab === 'financeiro' && <FinanceiroTab lancamentos={lancamentosVisiveis} onEditar={wrappedEditar as any} onRemover={wrappedRemover as any} subAbaInicial={subAbaFinanceiro} />}
+      {activeTab === 'financeiro' && (
+        <FinanceiroTab
+          lancamentos={lancamentosVisiveis}
+          onEditar={wrappedEditar as any}
+          onRemover={wrappedRemover as any}
+          subAbaInicial={subAbaFinanceiro}
+          filtroAnoInicial={movFiltroAno}
+          filtroMesInicial={movFiltroMes}
+          drillDownLabel={movDrillLabel}
+          onBack={movBackTab ? () => setActiveTab(movBackTab) : undefined}
+        />
+      )}
       {activeTab === 'acessos' && <AcessosTab />}
       {activeTab === 'analise' && <AnaliseTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} isGlobal={isGlobal} />}
       {activeTab === 'analise_entradas' && <AnaliseEntradasTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
