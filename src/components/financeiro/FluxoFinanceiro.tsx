@@ -156,7 +156,7 @@ function FluxoTable({ meses, mesAte, isMobile }: { meses: FluxoMensal[]; mesAte:
     return result;
   }, [meses, mesAte]);
 
-  const fontSize = isMobile ? 'text-[10px]' : 'text-xs';
+  const fontSize = isMobile ? 'text-[9px]' : 'text-[11px]';
   const cellPad = isMobile ? 'px-1 py-1' : 'px-2 py-1.5';
 
   return (
