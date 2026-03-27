@@ -374,8 +374,9 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
           </div>
 
           {fazendaNaoPecuaria ? (
-            <div className="p-4">
-              <p className="text-xs text-muted-foreground italic">Não se aplica a esta unidade.</p>
+            <div className="p-5 text-center">
+              <p className="text-xs text-muted-foreground">Sem dados de rebanho para esta fazenda</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-1">Fazenda utilizada apenas para rateio financeiro</p>
             </div>
           ) : (
             <div className="p-4 space-y-3">
