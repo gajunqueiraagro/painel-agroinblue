@@ -122,16 +122,18 @@ function calcValorEstoque(
   precos: { categoria: string; preco_kg: number }[],
   ano: number,
   mes: number,
+  pesosReais?: Record<string, number>,
 ): number {
   if (!precos || precos.length === 0) return 0;
   const precoMap = new Map(precos.map((p) => [p.categoria, p.preco_kg]));
 
   if (mes === 0) {
+    // Initial value (Dec prev year) — use pesosReais if available
     return saldosIniciais
       .filter((s) => s.ano === ano)
       .reduce((sum, s) => {
         const preco = precoMap.get(s.categoria) || 0;
-        const pesoKg = s.pesoMedioKg || 0;
+        const pesoKg = pesosReais?.[s.categoria] ?? s.pesoMedioKg ?? 0;
         return sum + s.quantidade * pesoKg * preco;
       }, 0);
   }
@@ -140,8 +142,8 @@ function calcValorEstoque(
   let total = 0;
   for (const [cat, qtd] of saldoMap.entries()) {
     const preco = precoMap.get(cat) || 0;
-    const si = saldosIniciais.find((s) => s.ano === ano && s.categoria === cat);
-    const pesoKg = si?.pesoMedioKg || 0;
+    // Use real weight from pesosReais (fechamento de pastos), fallback to saldo inicial
+    const pesoKg = pesosReais?.[cat] ?? saldosIniciais.find((s) => s.ano === ano && s.categoria === cat)?.pesoMedioKg ?? 0;
     total += qtd * pesoKg * preco;
   }
   return total;
