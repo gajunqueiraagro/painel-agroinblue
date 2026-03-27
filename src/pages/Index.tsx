@@ -33,10 +33,12 @@ import { ChuvasTab } from './ChuvasTab';
 import { VisaoAnualZootecnicaTab } from './VisaoAnualZootecnicaTab';
 
 import { FazendaSelector } from '@/components/FazendaSelector';
+import { ClienteSelector } from '@/components/ClienteSelector';
 import { SyncStatus } from '@/components/SyncStatus';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
 
 export interface FiltroGlobal {
