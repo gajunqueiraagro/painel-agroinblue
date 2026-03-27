@@ -519,7 +519,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
           <div className="p-4 space-y-3">
             {/* Resultado destaque */}
             <div className="text-center">
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">Saldo Disponível em Caixa</p>
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">Saldo Final em Caixa</p>
               <p className={`text-3xl font-bold tabular-nums leading-tight mt-1 ${financeiro.caixaAtual >= 0 ? 'text-success' : 'text-destructive'}`}>
                 {formatMoeda(financeiro.caixaAtual)}
               </p>
@@ -528,27 +528,16 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
             {/* Entradas / Saídas */}
             <div className="border-t border-border/40 pt-2.5">
               <MetricRow
-                label="Entradas"
+                label="Entradas acum."
                 value={formatMoeda(financeiro.totalEntradas)}
                 accent="text-success"
               />
               <MetricRow
-                label="Saídas"
+                label="Saídas acum."
                 value={formatMoeda(financeiro.totalSaidas)}
                 accent="text-destructive"
               />
             </div>
-
-            {/* Caixa Atual (global) */}
-            {isGlobal && (
-              <div className="border-t border-border/40 pt-2.5">
-                <MetricRow
-                  label="Caixa Atual"
-                  value={formatMoeda(financeiro.caixaAtual)}
-                  accent={financeiro.caixaAtual >= 0 ? 'text-success' : 'text-destructive'}
-                />
-              </div>
-            )}
 
             {/* CTA */}
             <button
