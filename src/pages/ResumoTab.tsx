@@ -444,7 +444,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
                       </p>
                     </div>
                     <div className="text-center rounded-md bg-muted/30 px-2 py-2">
-                      <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Kg/ha</p>
+                      <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Kg/ha Méd.</p>
                       <p className="text-sm font-bold text-foreground tabular-nums mt-0.5">
                         {zooKpis.lotacaoKgHa !== null ? formatNum(zooKpis.lotacaoKgHa, 0) : '—'}
                       </p>
