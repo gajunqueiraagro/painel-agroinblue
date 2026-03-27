@@ -512,10 +512,13 @@ export function useFinanceiro() {
 
       const totalValid = linhas.length + (saldosBancarios?.length || 0) + (resumoCaixa?.length || 0);
 
+      const clienteId = fazendas.find(f => f.id === primaryFazendaId)?.cliente_id || fazendaAtual?.cliente_id || '';
+
       const { data: imp, error: impErr } = await supabase
         .from('financeiro_importacoes')
         .insert({
           fazenda_id: primaryFazendaId,
+          cliente_id: clienteId,
           nome_arquivo: nomeArquivo,
           usuario_id: user.id,
           status: 'processada',
@@ -532,6 +535,7 @@ export function useFinanceiro() {
       for (let i = 0; i < linhas.length; i += batchSize) {
         const batch = linhas.slice(i, i + batchSize).map(l => ({
           fazenda_id: l.fazendaId!,
+          cliente_id: fazendas.find(f => f.id === l.fazendaId)?.cliente_id || clienteId,
           importacao_id: imp.id,
           origem_dado: 'import_excel',
           data_realizacao: l.dataPagamento || l.anoMes + '-01',
@@ -558,6 +562,7 @@ export function useFinanceiro() {
       if (saldosBancarios && saldosBancarios.length > 0) {
         const saldoBatch = saldosBancarios.map(s => ({
           fazenda_id: s.fazendaId || primaryFazendaId,
+          cliente_id: fazendas.find(f => f.id === (s.fazendaId || primaryFazendaId))?.cliente_id || clienteId,
           importacao_id: imp.id,
           conta_banco: s.contaBanco,
           ano_mes: s.anoMes,
@@ -572,6 +577,7 @@ export function useFinanceiro() {
       if (resumoCaixa && resumoCaixa.length > 0) {
         const resumoBatch = resumoCaixa.map(r => ({
           fazenda_id: r.fazendaId || primaryFazendaId,
+          cliente_id: fazendas.find(f => f.id === (r.fazendaId || primaryFazendaId))?.cliente_id || clienteId,
           importacao_id: imp.id,
           ano_mes: r.anoMes,
           entradas: r.entradas,

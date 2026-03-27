@@ -82,6 +82,7 @@ export function useFechamento() {
       .insert({
         pasto_id: pastoId,
         fazenda_id: fazendaId,
+        cliente_id: fazendaAtual?.cliente_id!,
         ano_mes: anoMes,
         lote_mes,
         tipo_uso_mes,

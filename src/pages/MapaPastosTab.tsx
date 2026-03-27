@@ -381,6 +381,7 @@ export function MapaPastosTab() {
         pastos={pastos}
         categorias={categorias}
         fazendaId={fazendaAtual?.id || ''}
+        clienteId={fazendaAtual?.cliente_id || ''}
         anoMes={anoMes}
         onImported={() => loadFechamentos(anoMes)}
       />

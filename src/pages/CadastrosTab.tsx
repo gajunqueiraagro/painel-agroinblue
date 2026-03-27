@@ -116,6 +116,7 @@ export function CadastrosTab() {
     setSaving(true);
     const payload = {
       fazenda_id: fazendaAtual.id,
+      cliente_id: fazendaAtual.cliente_id,
       municipio: data.municipio || null,
       ie: data.ie || null,
       proprietario_nome: data.proprietario_nome || null,

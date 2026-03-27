@@ -140,6 +140,7 @@ export function useValorRebanho(anoMes: string) {
         .filter(i => i.preco_kg > 0)
         .map(i => ({
           fazenda_id: fazendaId,
+          cliente_id: fazendaAtual?.cliente_id!,
           ano_mes: anoMes,
           categoria: i.categoria,
           preco_kg: i.preco_kg,
@@ -157,6 +158,7 @@ export function useValorRebanho(anoMes: string) {
         .from('valor_rebanho_fechamento')
         .upsert({
           fazenda_id: fazendaId,
+          cliente_id: fazendaAtual?.cliente_id!,
           ano_mes: anoMes,
           status: 'fechado',
           fechado_por: user?.id || null,

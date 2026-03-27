@@ -17,6 +17,7 @@ export function useLancamentos() {
   const [migrated, setMigrated] = useState(false);
 
   const fazendaId = fazendaAtual?.id;
+  const clienteId = fazendaAtual?.cliente_id;
 
   const loadData = useCallback(async () => {
     if (!fazendaId) { setLancamentos([]); setSaldosIniciais([]); setLoading(false); return; }
@@ -191,6 +192,7 @@ export function useLancamentos() {
         if (localLanc.length > 0) {
           const inserts = localLanc.map(l => ({
             fazenda_id: fazendaId,
+            cliente_id: clienteId!,
             data: l.data,
             tipo: l.tipo,
             quantidade: l.quantidade,
@@ -209,6 +211,7 @@ export function useLancamentos() {
         if (localSaldo.length > 0) {
           const inserts = localSaldo.map(s => ({
             fazenda_id: fazendaId,
+            cliente_id: clienteId!,
             ano: s.ano,
             categoria: s.categoria,
             quantidade: s.quantidade,
@@ -276,6 +279,7 @@ export function useLancamentos() {
 
     const { data, error } = await supabase.from('lancamentos').insert({
       fazenda_id: fazendaId,
+      cliente_id: clienteId!,
       ...insertData,
     }).select().single();
 
@@ -369,6 +373,7 @@ export function useLancamentos() {
     if (quantidade > 0) {
       const { error } = await supabase.from('saldos_iniciais').upsert({
         fazenda_id: fazendaId,
+        cliente_id: clienteId!,
         ano,
         categoria,
         quantidade,

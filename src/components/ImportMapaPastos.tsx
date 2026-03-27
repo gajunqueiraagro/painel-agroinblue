@@ -15,11 +15,12 @@ interface Props {
   pastos: Pasto[];
   categorias: CategoriaRebanho[];
   fazendaId: string;
+  clienteId: string;
   anoMes: string;
   onImported: () => void;
 }
 
-export function ImportMapaPastos({ open, onOpenChange, pastos, categorias, fazendaId, anoMes, onImported }: Props) {
+export function ImportMapaPastos({ open, onOpenChange, pastos, categorias, fazendaId, clienteId, anoMes, onImported }: Props) {
   const [result, setResult] = useState<MapaImportResult | null>(null);
   const [importing, setImporting] = useState(false);
   const [done, setDone] = useState(false);
@@ -79,6 +80,7 @@ export function ImportMapaPastos({ open, onOpenChange, pastos, categorias, fazen
             .insert({
               pasto_id: pastoId,
               fazenda_id: fazendaId,
+              cliente_id: clienteId,
               ano_mes: itemAnoMes,
               lote_mes: first.lote,
               tipo_uso_mes: first.atividade,

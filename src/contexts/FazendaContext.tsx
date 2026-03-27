@@ -7,6 +7,7 @@ export interface Fazenda {
   id: string;
   nome: string;
   owner_id: string;
+  cliente_id: string;
   codigo_importacao?: string | null;
   tem_pecuaria?: boolean;
   papel?: string;
@@ -16,6 +17,7 @@ export const GLOBAL_FAZENDA: Fazenda = {
   id: '__global__',
   nome: 'Global',
   owner_id: '',
+  cliente_id: '',
   papel: 'viewer',
 };
 
