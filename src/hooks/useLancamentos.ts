@@ -373,6 +373,7 @@ export function useLancamentos() {
     if (quantidade > 0) {
       const { error } = await supabase.from('saldos_iniciais').upsert({
         fazenda_id: fazendaId,
+        cliente_id: clienteId!,
         ano,
         categoria,
         quantidade,
