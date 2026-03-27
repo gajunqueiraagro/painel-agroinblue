@@ -7,13 +7,14 @@ import logo from '@/assets/logo.png';
 
 interface HeaderProps {
   title: string;
+  clienteNome?: string;
   fazendaNome?: string;
   periodo?: string;
   onBack?: () => void;
   rightAction?: ReactNode;
 }
 
-export function Header({ title, fazendaNome, periodo, onBack, rightAction }: HeaderProps) {
+export function Header({ title, clienteNome, fazendaNome, periodo, onBack, rightAction }: HeaderProps) {
   const { signOut } = useAuth();
 
   return (
@@ -63,9 +64,10 @@ export function Header({ title, fazendaNome, periodo, onBack, rightAction }: Hea
           </div>
         </div>
 
-        {/* Row 2: Fazenda + Período */}
-        {(fazendaNome || periodo) && (
+        {/* Row 2: Cliente + Fazenda + Período */}
+        {(clienteNome || fazendaNome || periodo) && (
           <div className="flex items-center gap-3 text-[11px] md:text-xs text-primary-foreground/70 pl-1 md:pl-12">
+            {clienteNome && <span className="truncate">🏢 {clienteNome}</span>}
             {fazendaNome && <span className="truncate">📍 {fazendaNome}</span>}
             {periodo && <span className="shrink-0">📅 {periodo}</span>}
           </div>

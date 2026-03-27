@@ -91,7 +91,7 @@ const Index = () => {
   const { user } = useAuth();
   const { canViewTab, canEdit, isReadOnly } = usePermissions();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
-  const { clientes } = useCliente();
+  const { clientes, clienteAtual } = useCliente();
   const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial, loadData } = useLancamentos();
   const { pendingCount, syncing, online, syncQueue } = useOfflineSync(fazendaAtual?.id === '__global__' ? undefined : fazendaAtual?.id, loadData);
 
@@ -174,6 +174,7 @@ const Index = () => {
     evolucao_rebanho_hub: goToLancarZooHub,
   };
 
+  const clienteNomeHeader = clientes.length > 1 ? (clienteAtual?.nome || '') : '';
   const fazendaNome = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || '');
 
   return (
@@ -181,6 +182,7 @@ const Index = () => {
       <SyncStatus online={online} pendingCount={pendingCount} syncing={syncing} onSync={syncQueue} />
       <Header
         title={TITLES[activeTab]}
+        clienteNome={clienteNomeHeader}
         fazendaNome={fazendaNome}
         periodo={undefined}
         onBack={subScreenBackMap[activeTab]}

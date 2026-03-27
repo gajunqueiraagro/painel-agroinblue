@@ -8,13 +8,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Save, FileText, Share2, Pencil, Trash2, MapPin, Tag, Users } from 'lucide-react';
+import { Save, FileText, Share2, Pencil, Trash2, MapPin, Tag, Users, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import logoUrl from '@/assets/logo.png';
 import { PastosTab } from './PastosTab';
 import { FazendasList } from '@/components/FazendasList';
 import { AcessosTab } from './AcessosTab';
+import { ClientesTab } from './ClientesTab';
+import { useCliente } from '@/contexts/ClienteContext';
 
 interface CadastroData {
   id?: string;
@@ -66,6 +68,7 @@ function LegacyLink({ label, tabId }: { label: string; tabId: string }) {
 
 export function CadastrosTab() {
   const { fazendaAtual, isGlobal } = useFazenda();
+  const { isAdmin } = useCliente();
   const [data, setData] = useState<CadastroData>(EMPTY);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -347,6 +350,20 @@ export function CadastrosTab() {
       <div className="px-3 pt-2 space-y-4">
 
       <Accordion type="multiple" defaultValue={[]} className="space-y-2">
+        {/* Clientes - admin only */}
+        {isAdmin && (
+          <AccordionItem value="clientes" className="border rounded-lg">
+            <AccordionTrigger className="px-4 py-3 text-sm font-bold">
+              <span className="flex items-center gap-2">
+                <Building2 className="h-4 w-4" /> Clientes
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="px-4 pb-4">
+              <ClientesTab />
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
         {/* Fazendas - only in global mode */}
         {isGlobal && (
           <AccordionItem value="fazendas" className="border rounded-lg">
