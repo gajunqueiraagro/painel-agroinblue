@@ -127,7 +127,7 @@ export function useFluxoCaixa(
     try {
       const { data } = await supabase
         .from('financeiro_lancamentos')
-        .select('status_transacao, data_pagamento, valor, tipo_operacao, macro_custo, produto')
+        .select('status_transacao, data_pagamento, valor, tipo_operacao, macro_custo, produto, escopo_negocio')
         .gte('data_pagamento', `${ano}-01-01`)
         .lte('data_pagamento', `${ano}-12-31`)
         .limit(20000);
@@ -139,7 +139,8 @@ export function useFluxoCaixa(
           valor: Number(r.valor) || 0,
           tipo_operacao: r.tipo_operacao,
           macro_custo: r.macro_custo,
-            produto: r.produto,
+          produto: r.produto,
+          escopo_negocio: r.escopo_negocio,
         })),
       );
     } catch {
