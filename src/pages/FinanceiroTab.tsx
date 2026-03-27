@@ -397,14 +397,14 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   return (
     <div className="max-w-full mx-auto animate-fade-in pb-20">
       {/* Sticky filter bar */}
-      <div className="sticky top-0 z-20 bg-background p-4 pb-2 space-y-3 border-b border-border/50">
+      <div className="sticky top-0 z-20 bg-background px-3 py-1.5 space-y-1 border-b border-border/50">
       {/* Top tabs */}
-      <div className={`grid gap-1 bg-muted rounded-lg p-1 ${modoMovimentacao ? 'grid-cols-2' : `grid-cols-${topTabs.length}`}`}>
+      <div className={`grid gap-0.5 bg-muted rounded-md p-0.5 ${modoMovimentacao ? 'grid-cols-2' : `grid-cols-${topTabs.length}`}`}>
         {topTabs.map(t => (
           <button
             key={t.id}
             onClick={() => { setTopTab(t.id); if (t.id === 'entradas') setSubAba('nascimento'); if (t.id === 'saidas') setSubAba('abate'); }}
-            className={`${modoMovimentacao ? 'py-1.5 px-2 text-[11px]' : 'py-2 px-1 text-xs'} rounded-md font-bold transition-colors touch-target ${
+            className={`${modoMovimentacao ? 'py-1 px-1.5 text-[11px]' : 'py-1 px-1 text-[11px]'} rounded font-bold transition-colors ${
               topTab === t.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'
             }`}
           >
@@ -413,16 +413,16 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
         ))}
       </div>
 
-      {/* Sub-type tabs for Entradas/Saídas */}
+      {/* Sub-type tabs + Filters in one row when possible */}
       {subTypes.length > 0 && (
-        <div className="flex gap-1 overflow-x-auto">
+        <div className="flex gap-0.5 overflow-x-auto">
           {subTypes.map(st => {
             const info = SUB_ABA_LABELS[st];
             return (
               <button
                 key={st}
                 onClick={() => setSubAba(st)}
-                className={`py-1.5 px-3 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+                className={`py-0.5 px-2 rounded-full text-[10px] font-bold whitespace-nowrap transition-colors ${
                   subAba === st ? 'bg-primary/20 text-primary border border-primary/40' : 'bg-muted text-muted-foreground'
                 }`}
               >
@@ -434,9 +434,9 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       )}
 
       {/* Filters */}
-      <div className="flex gap-1 items-center flex-wrap">
+      <div className="flex gap-0.5 items-center flex-wrap">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-          <SelectTrigger className="h-7 text-xs font-bold w-20">
+          <SelectTrigger className="h-6 text-[10px] font-bold w-[68px]">
             <SelectValue placeholder="Ano" />
           </SelectTrigger>
           <SelectContent side="bottom">
@@ -446,7 +446,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           </SelectContent>
         </Select>
         <Select value={mesFiltro} onValueChange={setMesFiltro}>
-          <SelectTrigger className="h-7 text-xs font-bold w-20">
+          <SelectTrigger className="h-6 text-[10px] font-bold w-[68px]">
             <SelectValue placeholder="Mês" />
           </SelectTrigger>
           <SelectContent side="bottom">
@@ -455,16 +455,16 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
             ))}
           </SelectContent>
         </Select>
-        <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
+        <div className="flex gap-px bg-muted rounded p-px">
           {([
             { value: 'todos', label: 'Todos' },
-            { value: 'realizado', label: 'Realizado' },
-            { value: 'previsto', label: 'Previsto' },
+            { value: 'realizado', label: 'Real.' },
+            { value: 'previsto', label: 'Prev.' },
           ] as { value: StatusFiltro; label: string }[]).map(s => (
             <button
               key={s.value}
               onClick={() => setStatusFiltro(s.value)}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
+              className={`px-1.5 py-px rounded text-[9px] font-bold transition-colors ${
                 statusFiltro === s.value
                   ? s.value === 'realizado' ? 'bg-green-700 text-white'
                     : s.value === 'previsto' ? 'bg-orange-500 text-white'
