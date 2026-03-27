@@ -129,7 +129,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
           </thead>
           <tbody>
             <tr className="bg-primary/10 border-b">
-              <td className="px-2 py-2 font-bold text-foreground sticky left-0 bg-primary/10">Saldo Início</td>
+              <td className="px-2 py-1 font-bold text-foreground sticky left-0 bg-primary/10">Saldo Início</td>
               {MESES_COLS.map(m => (
                 <td
                   key={m.key}
