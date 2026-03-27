@@ -174,6 +174,7 @@ const Index = () => {
     evolucao_rebanho_hub: goToLancarZooHub,
   };
 
+  const clienteNome = clientes.length > 0 ? (clientes.find(c => c.id === (fazendaAtual as any)?.cliente_id)?.nome || '') : '';
   const fazendaNome = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || '');
 
   return (
