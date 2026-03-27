@@ -13,7 +13,8 @@ interface Props {
  */
 export function MovimentacaoTab({ onNavigate }: Props) {
   return (
-    <div className="p-4 pb-24 space-y-4 max-w-lg mx-auto">
+    <div className="p-4 pb-24 max-w-2xl mx-auto">
+      <div className="grid grid-cols-2 gap-4">
       <Card
         className="cursor-pointer hover:shadow-md transition-shadow active:scale-[0.98]"
         onClick={() => onNavigate('tipos')}
