@@ -15,6 +15,7 @@ interface Props {
   pastos: Pasto[];
   categorias: CategoriaRebanho[];
   fazendaId: string;
+  clienteId: string;
   anoMes: string;
   onImported: () => void;
 }
