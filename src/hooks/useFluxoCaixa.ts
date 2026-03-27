@@ -8,6 +8,7 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useFazenda } from '@/contexts/FazendaContext';
 import { isEntradaFinanceira, isSaidaFinanceira } from '@/lib/financeiro/filters';
 
 interface FluxoLancamentoBase {
