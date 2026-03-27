@@ -381,9 +381,9 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
           <span className="text-xs font-semibold text-foreground">Status Geral</span>
           <div className="flex gap-4 mt-1">
             {[
-              { label: 'Zoo', nivel: zootecnico.status.nivel },
-              { label: 'Fin', nivel: financeiro.status.nivel },
-              { label: 'Eco', nivel: economico.status.nivel },
+              { label: 'Zootécnico', nivel: zootecnico.status.nivel },
+              { label: 'Financeiro', nivel: financeiro.status.nivel },
+              { label: 'Econômico', nivel: economico.status.nivel },
             ].map(item => (
               <div key={item.label} className="flex items-center gap-1.5">
                 <StatusDot nivel={item.nivel} />
