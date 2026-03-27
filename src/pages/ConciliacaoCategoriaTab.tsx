@@ -352,6 +352,7 @@ export function ConciliacaoCategoriaTab({ lancamentos, saldosIniciais, onBack, o
       >
         <ArrowLeft className="h-4 w-4" /> Retornar ao Resumo Zootécnico
       </button>
+      </div>
     </div>
   );
 }
