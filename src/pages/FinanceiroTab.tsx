@@ -102,21 +102,21 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
     <div className="overflow-x-auto">
       <table className="w-full text-xs border-collapse">
          <thead className="sticky top-0 z-10">
-          <tr className="border-b bg-muted/50">
-            <th className="p-1.5 text-left font-bold bg-muted/50">Data</th>
-            {showTipo && <th className="p-1.5 text-left font-bold bg-muted/50">Tipo</th>}
-            <th className="p-1.5 text-right font-bold bg-muted/50">Qtd</th>
-            <th className="p-1.5 text-left font-bold bg-muted/50">Categoria</th>
-            {showDestino && <th className="p-1.5 text-left font-bold bg-muted/50">{isMorte ? 'Motivo' : 'Destino'}</th>}
-            {isGlobal && <th className="p-1.5 text-left font-bold bg-muted/50">{showTipo ? 'Fazenda' : globalColHeader}</th>}
-            <th className="p-1.5 text-right font-bold bg-muted/50">P.Vivo</th>
-            <th className="p-1.5 text-right font-bold bg-muted/50">P.@</th>
-            <th className="p-1.5 text-right font-bold text-primary bg-muted/50">Total</th>
-            <th className="p-1.5 text-right font-bold bg-muted/50">R$/líq @</th>
-            {showLiqKg && <th className="p-1.5 text-right font-bold bg-muted/50">R$/Kg Líq</th>}
-            <th className="p-1.5 text-right font-bold bg-muted/50">Líq/Cab</th>
-            <th className="p-1.5 text-center font-bold bg-muted/50">Status</th>
-            <th className="p-1.5 w-8 bg-muted/50"></th>
+          <tr className="border-b border-border">
+            <th className="p-1.5 text-left font-bold bg-background">Data</th>
+            {showTipo && <th className="p-1.5 text-left font-bold bg-background">Tipo</th>}
+            <th className="p-1.5 text-right font-bold bg-background">Qtd</th>
+            <th className="p-1.5 text-left font-bold bg-background">Categoria</th>
+            {showDestino && <th className="p-1.5 text-left font-bold bg-background">{isMorte ? 'Motivo' : 'Destino'}</th>}
+            {isGlobal && <th className="p-1.5 text-left font-bold bg-background">{showTipo ? 'Fazenda' : globalColHeader}</th>}
+            <th className="p-1.5 text-right font-bold bg-background">P.Vivo</th>
+            <th className="p-1.5 text-right font-bold bg-background">P.@</th>
+            <th className="p-1.5 text-right font-bold text-primary bg-background">Total</th>
+            <th className="p-1.5 text-right font-bold bg-background">R$/líq @</th>
+            {showLiqKg && <th className="p-1.5 text-right font-bold bg-background">R$/Kg Líq</th>}
+            <th className="p-1.5 text-right font-bold bg-background">Líq/Cab</th>
+            <th className="p-1.5 text-center font-bold bg-background">Status</th>
+            <th className="p-1.5 w-8 bg-background"></th>
           </tr>
         </thead>
         <tbody>
