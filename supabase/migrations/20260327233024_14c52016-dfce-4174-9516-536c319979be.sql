@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS public.fazendas_codigo_importacao_unique;
+CREATE UNIQUE INDEX fazendas_cliente_codigo_unique ON public.fazendas (cliente_id, codigo_importacao) WHERE (codigo_importacao IS NOT NULL);

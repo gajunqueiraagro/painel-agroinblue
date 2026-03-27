@@ -28,7 +28,7 @@ export function CodigoFazendaField({ fazendaAtual }: Props) {
       .eq('id', fazendaAtual.id);
     if (error) {
       if (error.message.includes('duplicate') || error.message.includes('unique')) {
-        toast.error('Este código já está em uso por outra fazenda.');
+        toast.error('Este código já está em uso neste cliente.');
       } else {
         toast.error('Erro ao salvar código: ' + error.message);
       }
