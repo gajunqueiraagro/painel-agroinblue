@@ -160,7 +160,7 @@ const Index = () => {
   const fazendaNome = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || '');
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-screen flex flex-col bg-background">
       <SyncStatus online={online} pendingCount={pendingCount} syncing={syncing} onSync={syncQueue} />
       <Header
         title={TITLES[activeTab]}
@@ -174,6 +174,7 @@ const Index = () => {
         }
       />
 
+      <div className="flex-1 overflow-y-auto">
       {activeTab === 'resumo' && (
         <ResumoTab
           lancamentos={lancamentosVisiveis}
@@ -317,6 +318,7 @@ const Index = () => {
           filtroMesInicial={filtroGlobal.mes}
         />
       )}
+      </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
   );
