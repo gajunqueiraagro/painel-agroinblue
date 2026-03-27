@@ -174,19 +174,49 @@ export function AcessosTab() {
             <p className="text-sm text-muted-foreground">Nenhum membro encontrado</p>
           ) : (
             membros.map(m => (
-              <div key={m.id} className="flex items-center justify-between p-2 rounded-lg border bg-card">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate">{m.profiles?.nome || 'Sem nome'}</p>
+              <div key={m.id} className="p-2 rounded-lg border bg-card space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate">{m.profiles?.nome || 'Sem nome'}</p>
+                    </div>
+                    <Badge className={PAPEL_COLORS[m.papel] || ''} variant="secondary">
+                      {PAPEIS[m.papel] || m.papel}
+                    </Badge>
                   </div>
-                  <Badge className={PAPEL_COLORS[m.papel] || ''} variant="secondary">
-                    {PAPEIS[m.papel] || m.papel}
-                  </Badge>
+                  <div className="flex items-center gap-1">
+                    {canManage && m.user_id !== user?.id && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setResetUserId(resetUserId === m.user_id ? null : m.user_id); setResetSenha(''); }}
+                        className="text-muted-foreground hover:text-foreground"
+                        title="Redefinir senha"
+                      >
+                        <KeyRound className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canManage && m.papel !== 'dono' && m.user_id !== user?.id && (
+                      <Button variant="ghost" size="sm" onClick={() => handleRemove(m)} className="text-destructive hover:text-destructive">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                {canManage && m.papel !== 'dono' && m.user_id !== user?.id && (
-                  <Button variant="ghost" size="sm" onClick={() => handleRemove(m)} className="text-destructive hover:text-destructive">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                {resetUserId === m.user_id && (
+                  <div className="flex gap-2 items-end">
+                    <Input
+                      type="text"
+                      placeholder="Nova senha (mín. 6)"
+                      value={resetSenha}
+                      onChange={e => setResetSenha(e.target.value)}
+                      minLength={6}
+                      className="flex-1"
+                    />
+                    <Button size="sm" onClick={() => handleResetSenha(m.user_id)}>
+                      Redefinir
+                    </Button>
+                  </div>
                 )}
               </div>
             ))
