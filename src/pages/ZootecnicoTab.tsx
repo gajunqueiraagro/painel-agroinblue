@@ -587,6 +587,9 @@ interface ChartCardProps {
   type: 'area' | 'line' | 'bar';
   decimals?: number;
   mesFiltro: number;
+  /** Optional: show average line on bar charts + display value in header */
+  averageKey?: string;
+  averageLabel?: string;
 }
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--muted-foreground))'];
