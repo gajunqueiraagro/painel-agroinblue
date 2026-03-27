@@ -251,9 +251,9 @@ const Index = () => {
       {activeTab === 'lancamentos' && (
         <LancamentosTab
           lancamentos={lancamentosVisiveis}
-          onAdicionar={isGlobal ? async () => {} : adicionarLancamento}
-          onEditar={isGlobal ? async () => {} : editarLancamento}
-          onRemover={isGlobal ? async () => {} : removerLancamento}
+          onAdicionar={wrappedAdicionar as any}
+          onEditar={wrappedEditar as any}
+          onRemover={wrappedRemover as any}
           abaInicial={lancamentosFromConciliacao ? 'reclassificacao' : undefined}
           onBackToConciliacao={lancamentosFromConciliacao ? goToConciliacaoCategoria : undefined}
           dataInicial={lancamentosFromConciliacao ? `${filtroGlobal.ano}-${String(filtroGlobal.mes).padStart(2, '0')}-15` : undefined}
