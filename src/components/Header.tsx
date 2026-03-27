@@ -16,20 +16,25 @@ export function Header({ title, fazendaNome, periodo, onBack, rightAction }: Hea
   const { signOut } = useAuth();
 
   return (
-    <header className="sticky top-0 z-40 bg-primary px-4 py-2 shadow-md">
-      <div className="max-w-lg mx-auto space-y-0.5">
-        {/* Linha 1: Back + Logo + Título + Ações */}
+    <header className="sticky top-0 z-40 bg-primary px-4 md:px-6 py-2.5 md:py-4 shadow-md">
+      <div className="max-w-5xl mx-auto space-y-0.5 md:space-y-1">
+        {/* Row 1: Back + Logo + Title + Actions */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2 md:gap-3 min-w-0">
             {onBack && (
-              <button onClick={onBack} className="p-1 rounded-md hover:bg-primary/80 transition-colors shrink-0">
+              <button onClick={onBack} className="p-1 rounded-md hover:bg-primary-foreground/10 transition-colors shrink-0">
                 <ArrowLeft className="h-5 w-5 text-primary-foreground" />
               </button>
             )}
-            <img src={logo} alt="AgroInBlue" className="h-7 w-auto shrink-0" />
-            <h1 className="text-base font-extrabold text-primary-foreground tracking-wide truncate">
-              {title}
-            </h1>
+            <img src={logo} alt="AgroInBlue" className="h-7 md:h-9 w-auto shrink-0" />
+            <div className="min-w-0">
+              <h1 className="text-base md:text-xl font-bold text-primary-foreground tracking-wide truncate">
+                Painel de Controle
+              </h1>
+              <p className="text-[10px] md:text-xs text-primary-foreground/60 font-medium tracking-wider hidden md:block">
+                Agroinblue · Gestão Pecuária e Financeira
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {rightAction}
@@ -37,7 +42,7 @@ export function Header({ title, fazendaNome, periodo, onBack, rightAction }: Hea
               variant="ghost"
               size="icon"
               onClick={signOut}
-              className="text-primary-foreground hover:bg-primary/80 h-8 w-8"
+              className="text-primary-foreground hover:bg-primary-foreground/10 h-8 w-8"
               title="Sair"
             >
               <LogOut className="h-4 w-4" />
@@ -45,15 +50,11 @@ export function Header({ title, fazendaNome, periodo, onBack, rightAction }: Hea
           </div>
         </div>
 
-        {/* Linha 2: Fazenda + Período */}
+        {/* Row 2: Fazenda + Período */}
         {(fazendaNome || periodo) && (
-          <div className="flex items-center gap-3 text-xs text-primary-foreground/80 pl-1">
-            {fazendaNome && (
-              <span className="truncate">📍 {fazendaNome}</span>
-            )}
-            {periodo && (
-              <span className="shrink-0">📅 {periodo}</span>
-            )}
+          <div className="flex items-center gap-3 text-[11px] md:text-xs text-primary-foreground/70 pl-1 md:pl-12">
+            {fazendaNome && <span className="truncate">📍 {fazendaNome}</span>}
+            {periodo && <span className="shrink-0">📅 {periodo}</span>}
           </div>
         )}
       </div>
