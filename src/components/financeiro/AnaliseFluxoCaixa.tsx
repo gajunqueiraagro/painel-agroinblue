@@ -25,6 +25,7 @@ interface FluxoMes {
   mes: number;
   mesLabel: string;
   entradas: number;
+  saidasDeducao: number;
   saidasCusteio: number;
   saidasInvestimentos: number;
   saidasAmortizacoes: number;
