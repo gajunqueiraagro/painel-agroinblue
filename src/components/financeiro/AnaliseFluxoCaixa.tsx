@@ -88,6 +88,7 @@ export function FluxoCaixa({
         entradas,
         saidasDeducao,
         saidasCusteio,
+        saidasInvestimentos,
         saidasAmortizacoes,
         saidasDividendos,
         saidasOutras,
