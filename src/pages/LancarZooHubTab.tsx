@@ -44,23 +44,9 @@ const ACOES_PRINCIPAIS = [
   },
 ];
 
-const EVOLUCAO_PASTOS: GroupItem[] = [
-  { label: 'Mapa de Pastos', tab: 'mapa_pastos', icon: Map, description: 'Visualização consolidada' },
-  { label: 'Resumo de Pastos', tab: 'resumo_pastos', icon: Layers, description: 'Indicadores por pasto' },
-];
-
-const CONCILIACAO_REBANHO: GroupItem[] = [
-  { label: 'Conciliação de Categoria', tab: 'conciliacao_categoria', icon: GitCompare, description: 'Conferência por categoria' },
-];
-
-const CONCILIACAO_PASTOS: GroupItem[] = [
-  { label: 'Conciliação de Pastos', tab: 'conciliacao', icon: GitCompare, description: 'Conferência pasto vs sistema' },
-];
-
-const BLOCKS: { title: string; emoji: string; items: GroupItem[] }[] = [
-  { title: 'Evolução dos Pastos', emoji: '🌿', items: EVOLUCAO_PASTOS },
-  { title: 'Conciliação Rebanho', emoji: '✅', items: CONCILIACAO_REBANHO },
-  { title: 'Conciliação Pastos', emoji: '✅', items: CONCILIACAO_PASTOS },
+const CONCILIACAO_ITEMS = [
+  { label: 'Conciliação de Categoria', tab: 'conciliacao_categoria' as TabId, icon: GitCompare, description: 'Conferência por categoria' },
+  { label: 'Conciliação de Pastos', tab: 'conciliacao' as TabId, icon: GitCompare, description: 'Conferência pasto vs sistema' },
 ];
 
 export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
