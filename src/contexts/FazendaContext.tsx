@@ -67,11 +67,12 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
         setFazendas(list);
         const savedKey = `fazenda-ativa-${clienteAtual?.id}`;
         const savedId = localStorage.getItem(savedKey);
-        if (savedId === '__global__' && list.length > 1) {
-          setFazendaAtualState(GLOBAL_FAZENDA);
-        } else {
+        if (savedId && savedId !== '__global__') {
           const saved = list.find((f: Fazenda) => f.id === savedId);
-          setFazendaAtualState(saved || list[0] || null);
+          setFazendaAtualState(saved || (list.length > 1 ? GLOBAL_FAZENDA : list[0] || null));
+        } else {
+          // Default: Global if multiple fazendas, otherwise the single one
+          setFazendaAtualState(list.length > 1 ? GLOBAL_FAZENDA : list[0] || null);
         }
       } else {
         setFazendas([]);
