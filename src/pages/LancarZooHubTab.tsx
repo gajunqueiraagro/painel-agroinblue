@@ -44,23 +44,9 @@ const ACOES_PRINCIPAIS = [
   },
 ];
 
-const EVOLUCAO_PASTOS: GroupItem[] = [
-  { label: 'Mapa de Pastos', tab: 'mapa_pastos', icon: Map, description: 'Visualização consolidada' },
-  { label: 'Resumo de Pastos', tab: 'resumo_pastos', icon: Layers, description: 'Indicadores por pasto' },
-];
-
-const CONCILIACAO_REBANHO: GroupItem[] = [
-  { label: 'Conciliação de Categoria', tab: 'conciliacao_categoria', icon: GitCompare, description: 'Conferência por categoria' },
-];
-
-const CONCILIACAO_PASTOS: GroupItem[] = [
-  { label: 'Conciliação de Pastos', tab: 'conciliacao', icon: GitCompare, description: 'Conferência pasto vs sistema' },
-];
-
-const BLOCKS: { title: string; emoji: string; items: GroupItem[] }[] = [
-  { title: 'Evolução dos Pastos', emoji: '🌿', items: EVOLUCAO_PASTOS },
-  { title: 'Conciliação Rebanho', emoji: '✅', items: CONCILIACAO_REBANHO },
-  { title: 'Conciliação Pastos', emoji: '✅', items: CONCILIACAO_PASTOS },
+const CONCILIACAO_ITEMS = [
+  { label: 'Conciliação de Categoria', tab: 'conciliacao_categoria' as TabId, icon: GitCompare, description: 'Conferência por categoria' },
+  { label: 'Conciliação de Pastos', tab: 'conciliacao' as TabId, icon: GitCompare, description: 'Conferência pasto vs sistema' },
 ];
 
 export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
@@ -124,40 +110,34 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
         </div>
 
         {/* ── BLOCOS DE CONTROLE ── */}
-        {BLOCKS.map(block => (
-          <Card key={block.title}>
-            <CardContent className="p-4 space-y-2">
-              <h3 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
-                {block.emoji} {block.title}
-              </h3>
-              <div className="space-y-1">
-                {block.items.map(item => {
-                  const blocked = isBlocked(item.tab);
-                  return (
-                    <button
-                      key={item.tab}
-                      onClick={() => navTo(item.tab)}
-                      className={`w-full flex items-center justify-between rounded-lg px-3 py-2.5 transition-colors group ${blocked ? 'bg-muted/20 opacity-50 cursor-not-allowed' : 'bg-muted/40 hover:bg-muted/70'}`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <item.icon className={`h-4 w-4 shrink-0 ${blocked ? 'text-muted-foreground' : 'text-primary'}`} />
-                        <div className="text-left min-w-0">
-                          <p className={`text-sm font-semibold ${blocked ? 'text-muted-foreground' : 'text-foreground'}`}>{item.label}</p>
-                          <p className="text-[10px] text-muted-foreground truncate">{item.description}</p>
-                        </div>
-                      </div>
-                      {blocked ? (
-                        <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        {/* ── CONCILIAÇÃO ── */}
+        <div className="grid grid-cols-2 gap-3">
+          {CONCILIACAO_ITEMS.map(item => {
+            const blocked = isBlocked(item.tab);
+            return (
+              <button
+                key={item.tab}
+                onClick={() => navTo(item.tab)}
+                className={`flex items-center gap-2.5 rounded-xl border bg-card px-3 py-3 transition-all group ${
+                  blocked
+                    ? 'border-border opacity-50 cursor-not-allowed'
+                    : 'border-border hover:border-primary/40 hover:shadow-sm'
+                }`}
+              >
+                <item.icon className={`h-5 w-5 shrink-0 ${blocked ? 'text-muted-foreground' : 'text-primary'}`} />
+                <div className="text-left min-w-0 flex-1">
+                  <p className={`text-xs font-bold leading-tight ${blocked ? 'text-muted-foreground' : 'text-foreground'}`}>{item.label}</p>
+                  <p className="text-[9px] text-muted-foreground mt-0.5 leading-tight">{item.description}</p>
+                </div>
+                {blocked ? (
+                  <Lock className="h-3 w-3 text-muted-foreground shrink-0" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0" />
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
