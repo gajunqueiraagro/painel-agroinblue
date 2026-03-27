@@ -224,6 +224,21 @@ export function useFluxoCaixa(
       if (m && m >= 1 && m <= 12) byMes[m].push(l);
     }
 
+    // DEBUG AUDIT — temporary logs
+    console.log(`[FLUXO-AUDIT] ano=${ano}, mesAte=${mesAte}`);
+    console.log(`[FLUXO-AUDIT] Total lançamentos globais carregados: ${lancamentosGlobais.length}`);
+    console.log(`[FLUXO-AUDIT] Total conciliados no ano: ${conciliados.length}`);
+    for (const debugM of [11, 12]) {
+      const mLancs = conciliados.filter(l => datePagtoMes(l) === debugM);
+      const mEntradas = mLancs.filter(l => isEntradaFinanceira(l));
+      const mSaidas = mLancs.filter(l => isSaidaFinanceira(l));
+      const mIgnorados = mLancs.filter(l => !isEntradaFinanceira(l) && !isSaidaFinanceira(l));
+      console.log(`[FLUXO-AUDIT] Mês ${debugM}: ${mLancs.length} conciliados | ${mEntradas.length} entradas (R$ ${mEntradas.reduce((s,l)=>s+Math.abs(l.valor),0).toFixed(2)}) | ${mSaidas.length} saídas (R$ ${mSaidas.reduce((s,l)=>s+Math.abs(l.valor),0).toFixed(2)}) | ${mIgnorados.length} ignorados`);
+      if (mIgnorados.length > 0) {
+        mIgnorados.forEach(l => console.log(`[FLUXO-AUDIT]   IGNORADO: tipo_operacao="${l.tipo_operacao}" valor=${l.valor} produto="${l.produto}"`));
+      }
+    }
+
     let saldoAcumulado = saldoInicialAno;
     const result: FluxoMensal[] = [];
 
