@@ -20,7 +20,7 @@ interface Props {
   onImported: () => void;
 }
 
-export function ImportMapaPastos({ open, onOpenChange, pastos, categorias, fazendaId, anoMes, onImported }: Props) {
+export function ImportMapaPastos({ open, onOpenChange, pastos, categorias, fazendaId, clienteId, anoMes, onImported }: Props) {
   const [result, setResult] = useState<MapaImportResult | null>(null);
   const [importing, setImporting] = useState(false);
   const [done, setDone] = useState(false);
