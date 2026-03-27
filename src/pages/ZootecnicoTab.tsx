@@ -562,7 +562,8 @@ function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNu
                 type="line" decimals={0} mesFiltro={mesFiltro} />
               <ChartCard title="GMD médio (kg/dia)" subtitle="Kg médio ganho por cabeça, por dia" data={prodData}
                 keys={[`gmdMes_${anoNum}`, `gmdMes_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-                type="bar" decimals={3} mesFiltro={mesFiltro} />
+                type="bar" decimals={3} mesFiltro={mesFiltro}
+                averageKey={`gmdMes_${anoNum}`} averageLabel="kg/dia" />
               <ChartCard title="Desfrute Cab. acumulado (%)" subtitle="% de animais desfrutados (vendidos) em cabeças, em comparação com o saldo do início do ano" data={prodData}
                 keys={[`desfCab_${anoNum}`, `desfCab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
                 type="line" decimals={1} mesFiltro={mesFiltro} />
