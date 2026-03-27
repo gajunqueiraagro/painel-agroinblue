@@ -298,7 +298,7 @@ export function useFinanceiro() {
       } else {
         // Per-fazenda
         const promises: PromiseLike<any>[] = [
-          supabase.from('financeiro_lancamentos').select('*').eq('fazenda_id', fazendaId).order('data_realizacao', { ascending: false }),
+          supabase.from('financeiro_lancamentos').select('*').eq('fazenda_id', fazendaId).order('data_realizacao', { ascending: false }).limit(10000),
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').eq('fazenda_id', fazendaId).eq('ativo', true),
           supabase.from('financeiro_importacoes').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').in('fazenda_id', allFazendaIds).order('data_importacao', { ascending: false }),
         ];
