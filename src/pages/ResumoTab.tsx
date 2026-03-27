@@ -373,14 +373,40 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
               </div>
 
               {/* Per-farm breakdown (Global) */}
-              {isGlobal && farmBreakdown.length > 0 && (
-                <div className="border-t border-border/40 pt-2.5 space-y-0.5">
-                  {farmBreakdown.map(f => (
-                    <div key={f.id} className="flex justify-between items-center">
-                      <span className="text-[11px] text-muted-foreground truncate max-w-[65%]">{f.nome}</span>
-                      <span className="text-[11px] font-semibold text-foreground tabular-nums">{formatNum(f.rebanho)} cab</span>
-                    </div>
-                  ))}
+              {isGlobal && globalFarmKpis.farms.length > 0 && (
+                <div className="border-t border-border/40 pt-2.5 -mx-1">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="text-[9px] h-7 px-1.5">Fazenda</TableHead>
+                          <TableHead className="text-[9px] h-7 px-1.5 text-right">Qtde</TableHead>
+                          <TableHead className="text-[9px] h-7 px-1.5 text-right">Peso Méd.</TableHead>
+                          <TableHead className="text-[9px] h-7 px-1.5 text-right">Kg/ha</TableHead>
+                          <TableHead className="text-[9px] h-7 px-1.5 text-right">Área (ha)</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {globalFarmKpis.farms.map(f => (
+                          <TableRow key={f.id} className="hover:bg-muted/30">
+                            <TableCell className="text-[10px] py-1 px-1.5 font-medium truncate max-w-[100px]">{f.nome}</TableCell>
+                            <TableCell className="text-[10px] py-1 px-1.5 text-right tabular-nums">{formatNum(f.rebanho)}</TableCell>
+                            <TableCell className="text-[10px] py-1 px-1.5 text-right tabular-nums">{f.pesoMedio ? formatNum(f.pesoMedio, 0) : '—'}</TableCell>
+                            <TableCell className="text-[10px] py-1 px-1.5 text-right tabular-nums">{f.lotacaoKgHa ? formatNum(f.lotacaoKgHa, 0) : '—'}</TableCell>
+                            <TableCell className="text-[10px] py-1 px-1.5 text-right tabular-nums">{f.area > 0 ? formatNum(f.area, 0) : '—'}</TableCell>
+                          </TableRow>
+                        ))}
+                        {/* Global consolidated row */}
+                        <TableRow className="border-t-2 border-border bg-muted/30 hover:bg-muted/40 font-semibold">
+                          <TableCell className="text-[10px] py-1.5 px-1.5 font-bold">Global</TableCell>
+                          <TableCell className="text-[10px] py-1.5 px-1.5 text-right tabular-nums font-bold">{formatNum(globalFarmKpis.globalRow.rebanho)}</TableCell>
+                          <TableCell className="text-[10px] py-1.5 px-1.5 text-right tabular-nums font-bold">{globalFarmKpis.globalRow.pesoMedio ? formatNum(globalFarmKpis.globalRow.pesoMedio, 0) : '—'}</TableCell>
+                          <TableCell className="text-[10px] py-1.5 px-1.5 text-right tabular-nums font-bold">{globalFarmKpis.globalRow.lotacaoKgHa ? formatNum(globalFarmKpis.globalRow.lotacaoKgHa, 0) : '—'}</TableCell>
+                          <TableCell className="text-[10px] py-1.5 px-1.5 text-right tabular-nums font-bold">{globalFarmKpis.globalRow.area > 0 ? formatNum(globalFarmKpis.globalRow.area, 0) : '—'}</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
               )}
 
