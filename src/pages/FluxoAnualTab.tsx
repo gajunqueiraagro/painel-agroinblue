@@ -68,7 +68,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-1.5">
         <div className="flex items-center gap-2 flex-wrap">
           <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-            <SelectTrigger className="h-9 text-sm font-bold w-24">
+            <SelectTrigger className="h-7 text-xs font-bold w-20">
               <SelectValue placeholder="Ano" />
             </SelectTrigger>
             <SelectContent>
