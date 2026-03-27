@@ -172,7 +172,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               {MESES_COLS.map((m, i) => {
                 const saldoFim = i < 11 ? dados.saldoInicioMes[MESES_COLS[i + 1].key] : dados.saldoFinalAno;
                 return (
-                  <td key={m.key} className="px-2 py-2 text-center font-extrabold text-foreground">
+                  <td key={m.key} className="px-2 py-1 text-center font-extrabold text-foreground">
                     {saldoFim}
                   </td>
                 );
