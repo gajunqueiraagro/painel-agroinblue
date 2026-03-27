@@ -44,11 +44,11 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
     const mesLabel = MESES_COLS.find(m => m.key === drilldownMonth)?.label || drilldownMonth;
     return (
       <div className="animate-fade-in pb-20">
-        <div className="p-4 flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => setDrilldownMonth(null)} className="gap-1">
-            <ArrowLeft className="h-4 w-4" /> Voltar
+        <div className="px-3 py-1.5 flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setDrilldownMonth(null)} className="gap-1 h-7 text-xs">
+            <ArrowLeft className="h-3.5 w-3.5" /> Voltar
           </Button>
-          <h2 className="text-base font-bold text-foreground">
+          <h2 className="text-sm font-bold text-foreground">
             Evolução — {mesLabel}/{anoFiltro}
           </h2>
         </div>
