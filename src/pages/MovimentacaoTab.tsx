@@ -249,12 +249,12 @@ function CategoryCard({ label, entradas, saidas, lancamentos, isGlobal, fazendaM
         </div>
         <div className="flex items-center gap-3 text-xs font-mono">
           {entradas > 0 && (
-            <span className="text-emerald-700 dark:text-emerald-400 font-bold">+{entradas}</span>
+            <span className="text-primary font-bold">+{entradas}</span>
           )}
           {saidas > 0 && (
-            <span className="text-red-700 dark:text-red-400 font-bold">-{saidas}</span>
+            <span className="text-destructive font-bold">-{saidas}</span>
           )}
-          <span className={`font-bold ${saldo >= 0 ? 'text-foreground' : 'text-red-600'}`}>
+          <span className={`font-bold ${saldo >= 0 ? 'text-foreground' : 'text-destructive'}`}>
             = {saldo >= 0 ? '+' : ''}{saldo}
           </span>
           <span className="text-muted-foreground text-[10px]">{expanded ? '▲' : '▼'}</span>
