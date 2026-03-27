@@ -231,23 +231,47 @@ export function useFluxoCaixa(
       const lancs = byMes[m];
       const isAfterFilter = m > mesAte;
 
-      let receitas = 0, captacao = 0, aportes = 0;
-      let desembolso = 0, reposicao = 0, amortizacoes = 0, dividendos = 0;
+      let receitas = 0, receitasPec = 0, receitasAgri = 0, receitasOutras = 0;
+      let captacao = 0, captacaoPec = 0, captacaoAgri = 0;
+      let aportes = 0;
+      let desembolso = 0, desembolsoPec = 0, desembolsoAgri = 0;
+      let reposicao = 0;
+      let amortizacoes = 0, amortizacoesPec = 0, amortizacoesAgri = 0;
+      let dividendos = 0;
 
       if (!isAfterFilter) {
         for (const l of lancs) {
           const val = Math.abs(l.valor);
+          const escopo = normEscopo(l);
           if (isEntradaFinanceira(l)) {
             const cat = classificarEntrada(l);
-            if (cat === 'receitas') receitas += val;
-            else if (cat === 'captacao') captacao += val;
-            else aportes += val;
+            if (cat === 'receitas') {
+              receitas += val;
+              if (escopo === 'pec') receitasPec += val;
+              else if (escopo === 'agri') receitasAgri += val;
+              else receitasOutras += val;
+            } else if (cat === 'captacao') {
+              captacao += val;
+              if (escopo === 'pec') captacaoPec += val;
+              else captacaoAgri += val;
+            } else {
+              aportes += val;
+            }
           } else if (isSaidaFinanceira(l)) {
             const cat = classificarSaida(l);
-            if (cat === 'desembolso') desembolso += val;
-            else if (cat === 'reposicao') reposicao += val;
-            else if (cat === 'amortizacoes') amortizacoes += val;
-            else dividendos += val;
+            if (cat === 'desembolso') {
+              desembolso += val;
+              if (escopo === 'pec') desembolsoPec += val;
+              else desembolsoAgri += val;
+            } else if (cat === 'reposicao') {
+              reposicao += val;
+            } else if (cat === 'amortizacoes') {
+              amortizacoes += val;
+              if (escopo === 'pec') amortizacoesPec += val;
+              else amortizacoesAgri += val;
+            } else {
+              dividendos += val;
+            }
           }
         }
       }
@@ -266,12 +290,21 @@ export function useFluxoCaixa(
         label: MESES_LABELS[m - 1],
         saldoInicial,
         receitas,
+        receitasPec,
+        receitasAgri,
+        receitasOutras,
         captacao,
+        captacaoPec,
+        captacaoAgri,
         aportes,
         totalEntradas,
         desembolsoProdutivo: desembolso,
+        desembolsoPec,
+        desembolsoAgri,
         reposicao,
         amortizacoes,
+        amortizacoesPec,
+        amortizacoesAgri,
         dividendos,
         totalSaidas,
         saldoFinal,
