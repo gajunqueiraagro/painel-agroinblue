@@ -17,7 +17,7 @@ interface Props {
   onNavigateToValorRebanho?: () => void;
 }
 
-export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao }: Props) {
+export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onNavigateToValorRebanho }: Props) {
   const [drilldownMonth, setDrilldownMonth] = useState<string | null>(null);
 
   const anosDisponiveis = useMemo(() => {
