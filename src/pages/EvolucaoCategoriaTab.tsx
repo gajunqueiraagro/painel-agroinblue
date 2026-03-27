@@ -205,18 +205,18 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
           <tbody>
             {dados.map((cat, i) => (
               <tr key={cat.value} className={i % 2 === 0 ? '' : 'bg-muted/30'}>
-                <td className={`px-2 py-1.5 font-bold text-foreground sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
+                <td className={`px-1.5 py-1 font-bold text-foreground sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
                   {cat.label}
                 </td>
-                <td className="px-2 py-1.5 text-center font-semibold text-foreground bg-primary/5">
+                <td className="px-1.5 py-1 text-center font-semibold text-foreground bg-primary/5">
                   {cat.saldoInicioMes}
                 </td>
                 {cat.movs.map((val, j) => (
-                  <td key={j} className={`px-2 py-1.5 text-center font-semibold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-muted-foreground'}`}>
+                  <td key={j} className={`px-1.5 py-1 text-center font-semibold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-muted-foreground'}`}>
                     {val || '-'}
                   </td>
                 ))}
-                <td className="px-2 py-1.5 text-center font-extrabold text-foreground bg-primary/5">
+                <td className="px-1.5 py-1 text-center font-extrabold text-foreground bg-primary/5">
                   {cat.saldoFinal}
                 </td>
               </tr>
