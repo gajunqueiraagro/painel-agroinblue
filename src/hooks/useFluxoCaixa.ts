@@ -180,6 +180,13 @@ export function useFluxoCaixa(
 
   // Fetch saldo inicial GLOBAL de Dez do ano anterior (registros SALDO da EXPORT_APP_UNICO, sem filtro de fazenda)
   const loadSaldoInicial = useCallback(async () => {
+    if (allFazendaIds.length === 0) {
+      setSaldoInicialAno(0);
+      setSaldoInicialAusente(true);
+      setSaldoInicialAudit(null);
+      setLoadingSaldo(false);
+      return;
+    }
     setLoadingSaldo(true);
     try {
       const anoAnterior = ano - 1;
@@ -187,6 +194,7 @@ export function useFluxoCaixa(
       const { data } = await supabase
         .from('financeiro_saldos_bancarios')
         .select('saldo_final, conta_banco')
+        .in('fazenda_id', allFazendaIds)
         .eq('ano_mes', anoMesDez);
 
       if (data && data.length > 0) {
@@ -219,7 +227,7 @@ export function useFluxoCaixa(
     } finally {
       setLoadingSaldo(false);
     }
-  }, [ano]);
+  }, [ano, allFazendaIds.join(',')]);
 
   useEffect(() => {
     loadSaldoInicial();
