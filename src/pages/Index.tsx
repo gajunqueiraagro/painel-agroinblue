@@ -86,6 +86,10 @@ const TITLES: Record<TabId, string> = {
 const Index = () => {
   const [activeTab, setActiveTab] = useState<TabId>('resumo');
   const [subAbaFinanceiro, setSubAbaFinanceiro] = useState<SubAba | undefined>(undefined);
+  const [movFiltroAno, setMovFiltroAno] = useState<string | undefined>(undefined);
+  const [movFiltroMes, setMovFiltroMes] = useState<string | undefined>(undefined);
+  const [movDrillLabel, setMovDrillLabel] = useState<string | undefined>(undefined);
+  const [movBackTab, setMovBackTab] = useState<TabId | undefined>(undefined);
   const [lancamentosFromConciliacao, setLancamentosFromConciliacao] = useState(false);
   const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
   const { user } = useAuth();
@@ -117,8 +121,12 @@ const Index = () => {
     return lancamentos.filter(l => l.tipo !== 'transferencia_entrada' && l.tipo !== 'transferencia_saida');
   }, [lancamentos, isGlobal]);
 
-  const navigateToMovimentacao = useCallback((subAba: SubAba) => {
+  const navigateToMovimentacao = useCallback((subAba: SubAba, opts?: { ano?: string; mes?: string; label?: string; backTab?: TabId }) => {
     setSubAbaFinanceiro(subAba);
+    setMovFiltroAno(opts?.ano);
+    setMovFiltroMes(opts?.mes);
+    setMovDrillLabel(opts?.label);
+    setMovBackTab(opts?.backTab);
     setActiveTab('financeiro');
   }, []);
 
@@ -137,7 +145,13 @@ const Index = () => {
     if (filtro) {
       setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
     }
-    if (tab !== 'financeiro') setSubAbaFinanceiro(undefined);
+    if (tab !== 'financeiro') {
+      setSubAbaFinanceiro(undefined);
+      setMovFiltroAno(undefined);
+      setMovFiltroMes(undefined);
+      setMovDrillLabel(undefined);
+      setMovBackTab(undefined);
+    }
     if (tab !== 'lancamentos') setLancamentosFromConciliacao(false);
     if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
     setActiveTab(tab);
@@ -273,7 +287,18 @@ const Index = () => {
           filtroMesInicial={filtroGlobal.mes}
         />
       )}
-      {activeTab === 'financeiro' && <FinanceiroTab lancamentos={lancamentosVisiveis} onEditar={wrappedEditar as any} onRemover={wrappedRemover as any} subAbaInicial={subAbaFinanceiro} />}
+      {activeTab === 'financeiro' && (
+        <FinanceiroTab
+          lancamentos={lancamentosVisiveis}
+          onEditar={wrappedEditar as any}
+          onRemover={wrappedRemover as any}
+          subAbaInicial={subAbaFinanceiro}
+          filtroAnoInicial={movFiltroAno}
+          filtroMesInicial={movFiltroMes}
+          drillDownLabel={movDrillLabel}
+          onBack={movBackTab ? () => setActiveTab(movBackTab) : undefined}
+        />
+      )}
       {activeTab === 'acessos' && <AcessosTab />}
       {activeTab === 'analise' && <AnaliseTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} isGlobal={isGlobal} />}
       {activeTab === 'analise_entradas' && <AnaliseEntradasTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
@@ -290,7 +315,7 @@ const Index = () => {
       )}
       {activeTab === 'mapa_pastos' && <MapaPastosTab />}
       {activeTab === 'resumo_pastos' && <ResumoPastosTab onTabChange={handleTabChange} />}
-      {activeTab === 'analise_operacional' && <AnaliseOperacionalTab />}
+      {activeTab === 'analise_operacional' && <AnaliseOperacionalTab onNavigateToMovimentacao={navigateToMovimentacao} />}
       {activeTab === 'visao_anual_zoo' && (
         <VisaoAnualZootecnicaTab
           lancamentos={lancamentosVisiveis}

@@ -4,7 +4,7 @@ import { Lancamento, CATEGORIAS } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { parseISO, format } from 'date-fns';
-import { DollarSign, Info } from 'lucide-react';
+import { DollarSign, Info, ArrowLeft, Filter } from 'lucide-react';
 import { FinanceiroEditDialog } from '@/components/FinanceiroEditDialog';
 import { FinanceiroExportMenu } from '@/components/FinanceiroExportMenu';
 import { ChuvasTab } from './ChuvasTab';
@@ -22,6 +22,14 @@ interface Props {
   subAbaInicial?: SubAba;
   /** Modo compacto para aba Movimentações: sem "Todas"/"Chuvas", filtros menores, header sticky */
   modoMovimentacao?: boolean;
+  /** Filtro de ano inicial (quando vem de drill-down) */
+  filtroAnoInicial?: string;
+  /** Filtro de mês inicial (quando vem de drill-down) — formato '01'-'12' ou 'todos' */
+  filtroMesInicial?: string;
+  /** Callback para voltar à tela anterior (drill-down) */
+  onBack?: () => void;
+  /** Label do filtro aplicado (drill-down) */
+  drillDownLabel?: string;
 }
 
 export type SubAba = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
@@ -298,7 +306,7 @@ function getTopTabFromSubAba(subAba?: SubAba): TopTab {
   return 'todas';
 }
 
-export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao }: Props) {
+export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, onBack, drillDownLabel }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const fazendaMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -325,9 +333,14 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
     return Array.from(anos).sort().reverse();
   }, [lancamentos]);
 
-  const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
-  const [mesFiltro, setMesFiltro] = useState('todos');
+  const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(new Date().getFullYear()));
+  const [mesFiltro, setMesFiltro] = useState(filtroMesInicial || 'todos');
   const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>('todos');
+
+  useEffect(() => {
+    if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
+    if (filtroMesInicial) setMesFiltro(filtroMesInicial);
+  }, [filtroAnoInicial, filtroMesInicial]);
 
   const filtrados = useMemo(() => {
     let tiposFilter: string[] = [];
@@ -396,8 +409,28 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
   return (
     <div className="max-w-full mx-auto animate-fade-in pb-20">
+      {/* Drill-down header */}
+      {(onBack || drillDownLabel) && (
+        <div className="sticky top-0 z-30 bg-background border-b border-border/50 shadow-sm px-3 py-2 space-y-1.5">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="flex items-center gap-1.5 text-xs font-bold text-primary hover:text-primary/80 transition-colors"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Voltar
+            </button>
+          )}
+          {drillDownLabel && (
+            <div className="flex items-center gap-1.5 bg-primary/10 text-primary rounded-md px-2.5 py-1 text-xs font-bold w-fit">
+              <Filter className="h-3 w-3" />
+              {drillDownLabel}
+            </div>
+          )}
+        </div>
+      )}
       {/* Sticky filter bar */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 space-y-1">
+      <div className={`sticky ${onBack || drillDownLabel ? 'top-[60px]' : 'top-0'} z-20 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 space-y-1`}>
       {/* Top tabs */}
       <div className={`grid gap-0.5 bg-muted rounded-md p-0.5 ${modoMovimentacao ? 'grid-cols-2' : `grid-cols-${topTabs.length}`}`}>
         {topTabs.map(t => (

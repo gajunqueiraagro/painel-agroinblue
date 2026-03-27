@@ -9,8 +9,14 @@ import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, CheckCircle, Info, TrendingUp, TrendingDown, ArrowRightLeft, Skull, ShoppingCart, Baby, Beef } from 'lucide-react';
 import { format } from 'date-fns';
 import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
+import type { SubAba } from './FinanceiroTab';
+import type { TabId } from '@/components/BottomNav';
 
-export function AnaliseOperacionalTab() {
+interface Props {
+  onNavigateToMovimentacao?: (subAba: SubAba, opts?: { ano?: string; mes?: string; label?: string; backTab?: TabId }) => void;
+}
+
+export function AnaliseOperacionalTab({ onNavigateToMovimentacao }: Props) {
   const { isGlobal } = useFazenda();
   const { categorias, pastos } = usePastos();
   const { fechamentos, loadFechamentos, loadItens } = useFechamento();
@@ -41,6 +47,17 @@ export function AnaliseOperacionalTab() {
 
   const pastosCount = pastos.filter(p => p.ativo && p.entra_conciliacao).length;
   const fechadosCount = fechamentos.filter(f => f.status === 'fechado').length;
+
+  const LABEL_TO_SUBABA: Record<string, SubAba> = {
+    'Nascimentos': 'nascimento',
+    'Compras': 'compra',
+    'Transf. Entrada': 'transferencia_entrada',
+    'Vendas': 'venda',
+    'Abates': 'abate',
+    'Mortes': 'morte',
+    'Consumo': 'consumo',
+    'Transf. Saída': 'transferencia_saida',
+  };
 
   const movItems = [
     { label: 'Nascimentos', value: resumoMov.nascimentos, icon: Baby, color: 'text-green-600' },
@@ -98,15 +115,33 @@ export function AnaliseOperacionalTab() {
           <div className="text-sm text-muted-foreground">Nenhuma movimentação registrada neste mês.</div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {movItems.map(m => (
-              <div key={m.label} className="rounded-lg border bg-card p-3 flex items-center gap-3">
-                <m.icon className={`h-5 w-5 ${m.color} shrink-0`} />
-                <div>
-                  <div className="text-xs text-muted-foreground">{m.label}</div>
-                  <div className="text-lg font-bold">{m.value}</div>
+            {movItems.map(m => {
+              const subAba = LABEL_TO_SUBABA[m.label];
+              const handleClick = () => {
+                if (onNavigateToMovimentacao && subAba) {
+                  const [ano, mes] = anoMes.split('-');
+                  onNavigateToMovimentacao(subAba, {
+                    ano,
+                    mes,
+                    label: `${m.label} | ${formatAnoMes(anoMes)}`,
+                    backTab: 'analise_operacional',
+                  });
+                }
+              };
+              return (
+                <div
+                  key={m.label}
+                  className={`rounded-lg border bg-card p-3 flex items-center gap-3 ${subAba ? 'cursor-pointer hover:bg-muted/50 transition-colors' : ''}`}
+                  onClick={handleClick}
+                >
+                  <m.icon className={`h-5 w-5 ${m.color} shrink-0`} />
+                  <div>
+                    <div className="text-xs text-muted-foreground">{m.label}</div>
+                    <div className="text-lg font-bold">{m.value}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
         {(resumoMov.totalEntradas > 0 || resumoMov.totalSaidas > 0) && (
