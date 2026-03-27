@@ -507,6 +507,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           onDelete={(id) => { onRemover(id); setEditando(null); }}
         />
       )}
+      </div>
     </div>
   );
 }
