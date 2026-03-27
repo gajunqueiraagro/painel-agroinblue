@@ -485,8 +485,10 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           />
         )}
       </div>
+      </div>
 
       {/* Content */}
+      <div className="p-4 pt-2">
       {topTab === 'todas' ? (
         <UnifiedTable lancamentos={filtrados} onEdit={setEditando} showTipo isGlobal={isGlobal} fazendaMap={fazendaMap} />
       ) : subAba === 'abate' ? (
