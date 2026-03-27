@@ -160,7 +160,7 @@ export function AcessosTab() {
     if (!confirm(`Remover ${membro.nome || 'este membro'}?`)) return;
 
     const res = await supabase.functions.invoke('remover-membro', {
-      body: { membro_id: membro.id, fazenda_id: membro.fazendas_ids[0] || '' },
+      body: { membro_id: membro.id },
     });
 
     if (res.error || res.data?.error) {
