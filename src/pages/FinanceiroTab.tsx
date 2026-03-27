@@ -372,13 +372,12 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   const isFinancial = FINANCIAL_TYPES.includes(subAba);
 
   const allTopTabs: { id: TopTab; label: string; icon: string }[] = [
-    { id: 'todas', label: 'Todas', icon: '📋' },
     { id: 'entradas', label: 'Entradas', icon: '📥' },
     { id: 'saidas', label: 'Saídas', icon: '📤' },
     { id: 'chuvas', label: 'Chuvas', icon: '☁️' },
   ];
   const topTabs = modoMovimentacao
-    ? allTopTabs.filter(t => t.id !== 'todas' && t.id !== 'chuvas')
+    ? allTopTabs.filter(t => t.id !== 'chuvas')
     : allTopTabs;
 
   const subTypes = topTab === 'entradas' ? ENTRY_TYPES : topTab === 'saidas' ? EXIT_TYPES : [];
