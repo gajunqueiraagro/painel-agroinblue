@@ -198,7 +198,7 @@ function AbateTable({ lancamentos, onEdit, isGlobal, fazendaMap }: { lancamentos
   if (lancamentos.length === 0) return <p className="text-center text-muted-foreground py-6">Nenhum abate no período</p>;
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto overflow-y-visible">
       <table className="w-full text-xs border-collapse">
          <thead className="sticky top-0 z-10">
           <tr className="border-b border-border">
