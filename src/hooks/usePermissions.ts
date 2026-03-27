@@ -51,7 +51,7 @@ export function usePermissions(): Permissions {
         case 'financeiro':
           return isFinanceiro;
         case 'cadastros':
-          return isCampo || isFinanceiro;
+          return false; // only managers
         case 'acessos':
           return false;
         default:
