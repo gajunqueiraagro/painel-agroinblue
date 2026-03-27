@@ -520,8 +520,8 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
             {/* Resultado destaque */}
             <div className="text-center">
               <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">Saldo Disponível em Caixa</p>
-              <p className={`text-3xl font-bold tabular-nums leading-tight mt-1 ${financeiro.resultado >= 0 ? 'text-success' : 'text-destructive'}`}>
-                {formatMoeda(financeiro.resultado)}
+              <p className={`text-3xl font-bold tabular-nums leading-tight mt-1 ${financeiro.caixaAtual >= 0 ? 'text-success' : 'text-destructive'}`}>
+                {formatMoeda(financeiro.caixaAtual)}
               </p>
             </div>
 
