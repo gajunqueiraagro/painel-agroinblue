@@ -192,6 +192,7 @@ export function useLancamentos() {
         if (localLanc.length > 0) {
           const inserts = localLanc.map(l => ({
             fazenda_id: fazendaId,
+            cliente_id: clienteId!,
             data: l.data,
             tipo: l.tipo,
             quantidade: l.quantidade,
