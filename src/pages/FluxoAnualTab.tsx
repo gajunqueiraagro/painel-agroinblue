@@ -3,7 +3,7 @@ import { filtrarPorCenario } from '@/lib/statusOperacional';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, DollarSign } from 'lucide-react';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import type { SubAba } from './FinanceiroTab';
 import { calcFluxoAnual, FLUXO_LINHAS } from '@/lib/calculos/zootecnicos';
@@ -14,9 +14,10 @@ interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
   onNavigateToMovimentacao?: (subAba: SubAba) => void;
+  onNavigateToValorRebanho?: () => void;
 }
 
-export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao }: Props) {
+export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onNavigateToValorRebanho }: Props) {
   const [drilldownMonth, setDrilldownMonth] = useState<string | null>(null);
 
   const anosDisponiveis = useMemo(() => {
@@ -100,7 +101,17 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
             ))}
           </div>
 
-          <span className="text-[10px] text-muted-foreground ml-auto">Toque em um mês para ver por categoria</span>
+          <span className="text-[10px] text-muted-foreground ml-auto hidden sm:inline">Toque em um mês para ver por categoria</span>
+
+          {onNavigateToValorRebanho && (
+            <button
+              onClick={onNavigateToValorRebanho}
+              className="flex items-center gap-1 px-2 py-0.5 rounded border border-border bg-card hover:bg-muted/50 text-[10px] font-bold text-foreground transition-colors shrink-0"
+            >
+              <DollarSign className="h-3 w-3 text-primary" />
+              Valor Rebanho
+            </button>
+          )}
         </div>
       </div>
 
