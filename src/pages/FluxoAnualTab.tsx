@@ -110,7 +110,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b bg-primary/10">
-              <th className="text-left px-2 py-2 font-bold text-foreground sticky left-0 bg-primary/10 min-w-[110px]">
+              <th className="text-left px-2 py-1 font-bold text-foreground sticky left-0 bg-primary/10 min-w-[110px]">
                 Movimentação
               </th>
               {MESES_COLS.map(m => (
