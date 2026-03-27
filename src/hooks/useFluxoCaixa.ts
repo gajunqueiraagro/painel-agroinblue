@@ -38,6 +38,7 @@ export interface FluxoMensal {
   captacaoAgri: number;
   aportes: number;
   totalEntradas: number;
+  deducaoReceitas: number;
   desembolsoProdutivo: number;
   desembolsoPec: number;
   desembolsoAgri: number;
