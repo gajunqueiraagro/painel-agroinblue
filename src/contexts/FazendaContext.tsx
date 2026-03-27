@@ -84,6 +84,7 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
   }, [user, clienteAtual]);
 
   useEffect(() => {
+    setFazendas([]);
     setFazendaAtualState(null);
   }, [clienteAtual?.id]);
 
