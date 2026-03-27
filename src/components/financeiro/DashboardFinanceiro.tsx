@@ -719,11 +719,15 @@ export function DashboardFinanceiro({
       if (macro === 'receitas' && escopo === 'pecuaria') return 'Receitas Pecuárias';
       if (macro === 'receitas' && escopo === 'agricultura') return 'Receitas Agrícolas';
       if (macro === 'receitas') return 'Outras Receitas';
+      if (macro === 'outras entradas financeiras' && escopo === 'pecuaria') return 'Captação Financ. Pec.';
+      if (macro === 'outras entradas financeiras' && escopo === 'agricultura') return 'Captação Financ. Agri.';
+      if (macro === 'outras entradas financeiras') return 'Captação Financ. Pec.';
+      if (macro === 'aportes pessoais' || macro === 'aporte pessoal') return 'Aportes Pessoais';
       return 'Outras Receitas';
     };
 
     const entradaDecomp = { mes: new Map<string, number>(), acum: new Map<string, number>() };
-    const categoriasEntrada = ['Receitas Pecuárias', 'Receitas Agrícolas', 'Outras Receitas'];
+    const categoriasEntrada = ['Receitas Pecuárias', 'Receitas Agrícolas', 'Outras Receitas', 'Captação Financ. Pec.', 'Captação Financ. Agri.', 'Aportes Pessoais'];
     for (const cat of categoriasEntrada) { entradaDecomp.mes.set(cat, 0); entradaDecomp.acum.set(cat, 0); }
 
     for (const l of entradasListMes) {
