@@ -399,7 +399,7 @@ function ToggleGroup({ value, onChange }: { value: 'mes' | 'acum'; onChange: (v:
 // Sub: Unified Entradas/Saídas card with toggle
 // ---------------------------------------------------------------------------
 
-function CardEntradaSaidaToggle({ ind, isGlobal }: { ind: any; isGlobal: boolean }) {
+function CardEntradaSaidaToggle({ ind, isGlobal, onDrillDown }: { ind: any; isGlobal: boolean; onDrillDown?: (payload: DrillDownPayload) => void }) {
   const [entradaTab, setEntradaTab] = useState<'mes' | 'acum'>('mes');
   const [saidaTab, setSaidaTab] = useState<'mes' | 'acum'>('mes');
 
