@@ -953,7 +953,7 @@ export function DashboardFinanceiro({
       {/* ================================================================= */}
       {/* 1. CARDS ENTRADAS / SAÍDAS — com toggle Mês/Acumulado */}
       {/* ================================================================= */}
-      <CardEntradaSaidaToggle ind={ind} isGlobal={isGlobal} />
+      <CardEntradaSaidaToggle ind={ind} isGlobal={isGlobal} onDrillDown={onDrillDown} />
 
       {/* ================================================================= */}
       {/* 2. INDICADORES ECONÔMICOS — 2 colunas */}
