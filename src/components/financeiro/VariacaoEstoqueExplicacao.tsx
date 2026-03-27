@@ -51,12 +51,14 @@ export function VariacaoEstoqueExplicacao({
 
     const arrobasInicio = saldosIniciais
       .filter(s => s.ano === anoNum)
-      .reduce((sum, s) => sum + s.quantidade * ((s.pesoMedioKg || 0) / 30), 0);
+      .reduce((sum, s) => {
+        const pesoKg = pesosReaisInicial?.[s.categoria] ?? s.pesoMedioKg ?? 0;
+        return sum + s.quantidade * (pesoKg / 30);
+      }, 0);
 
     let arrobasFim = 0;
     for (const [cat, qtd] of saldoFimMap.entries()) {
-      const si = saldosIniciais.find(s => s.ano === anoNum && s.categoria === cat);
-      const pesoKg = si?.pesoMedioKg || 0;
+      const pesoKg = pesosReaisFinal?.[cat] ?? saldosIniciais.find(s => s.ano === anoNum && s.categoria === cat)?.pesoMedioKg ?? 0;
       arrobasFim += qtd * (pesoKg / 30);
     }
     const deltaArrobas = arrobasFim - arrobasInicio;
