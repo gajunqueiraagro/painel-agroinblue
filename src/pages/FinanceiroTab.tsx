@@ -395,7 +395,9 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   }
 
   return (
-    <div className="p-4 max-w-full mx-auto space-y-3 animate-fade-in pb-20">
+    <div className="max-w-full mx-auto animate-fade-in pb-20">
+      {/* Sticky filter bar */}
+      <div className="sticky top-0 z-20 bg-background p-4 pb-2 space-y-3 border-b border-border/50">
       {/* Top tabs */}
       <div className={`grid gap-1 bg-muted rounded-lg p-1 ${modoMovimentacao ? 'grid-cols-2' : `grid-cols-${topTabs.length}`}`}>
         {topTabs.map(t => (
@@ -483,8 +485,10 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           />
         )}
       </div>
+      </div>
 
       {/* Content */}
+      <div className="p-4 pt-2">
       {topTab === 'todas' ? (
         <UnifiedTable lancamentos={filtrados} onEdit={setEditando} showTipo isGlobal={isGlobal} fazendaMap={fazendaMap} />
       ) : subAba === 'abate' ? (
@@ -503,6 +507,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           onDelete={(id) => { onRemover(id); setEditando(null); }}
         />
       )}
+      </div>
     </div>
   );
 }
