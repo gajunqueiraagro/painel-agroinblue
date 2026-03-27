@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { MovimentacaoTab } from './MovimentacaoTab';
+import { FinanceiroTab } from './FinanceiroTab';
 import { FluxoAnualTab } from './FluxoAnualTab';
 import { ValorRebanhoTab } from './ValorRebanhoTab';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
@@ -30,7 +30,7 @@ export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateT
       </TabsList>
 
       <TabsContent value="movimentacoes">
-        <MovimentacaoTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onEditar={onEditar} onRemover={onRemover} />
+        <FinanceiroTab lancamentos={lancamentos} onEditar={onEditar || (() => {})} onRemover={onRemover || (() => {})} modoMovimentacao />
       </TabsContent>
 
       <TabsContent value="evolucao">

@@ -1,58 +1,48 @@
-import { useState } from 'react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Lancamento, SaldoInicial } from '@/types/cattle';
-import { FinanceiroTab, type SubAba } from './FinanceiroTab';
-import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
-import { FluxoAnualTab } from './FluxoAnualTab';
+import { ArrowLeftRight, TrendingUp } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 
 interface Props {
-  lancamentos: Lancamento[];
-  saldosIniciais: SaldoInicial[];
-  onEditar?: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
-  onRemover?: (id: string) => void;
-  onNavigateToMovimentacao?: (subAba: SubAba) => void;
+  onNavigate: (dest: 'tipos' | 'resumo') => void;
 }
 
 /**
- * Tela de Movimentações do Rebanho com três abas:
- * - Por Tipo: movimentações agrupadas por tipo (Nascimentos, Compras, Vendas, etc.)
- * - Por Categoria: movimentações agrupadas por categoria com totais por período
- * - Fluxo Anual: linhas por mês, colunas por tipo de movimentação
+ * Pré-tela de Movimentações do Rebanho.
+ * Exibe 2 cards para escolher entre:
+ * - Tipos de Movimentação (lista operacional)
+ * - Resumo por Mês (evolução do rebanho e categorias)
  */
-export function MovimentacaoTab({ lancamentos, saldosIniciais, onEditar, onRemover, onNavigateToMovimentacao }: Props) {
-  const [activeTab, setActiveTab] = useState('por_tipo');
-
+export function MovimentacaoTab({ onNavigate }: Props) {
   return (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-      <TabsList className="w-full grid grid-cols-3 mx-4 mt-2" style={{ maxWidth: 'calc(100% - 2rem)' }}>
-        <TabsTrigger value="por_tipo" className="text-[11px] font-bold px-1">Por Tipo</TabsTrigger>
-        <TabsTrigger value="por_categoria" className="text-[11px] font-bold px-1">Por Categoria</TabsTrigger>
-        <TabsTrigger value="fluxo_anual" className="text-[11px] font-bold px-1">Evol. Rebanho</TabsTrigger>
-      </TabsList>
+    <div className="p-4 pb-24 space-y-4 max-w-lg mx-auto">
+      <Card
+        className="cursor-pointer hover:shadow-md transition-shadow active:scale-[0.98]"
+        onClick={() => onNavigate('tipos')}
+      >
+        <CardContent className="flex items-center gap-4 p-5">
+          <div className="h-14 w-14 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+            <ArrowLeftRight className="h-7 w-7 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="font-bold text-base text-foreground">Tipos de Movimentação</h3>
+            <p className="text-sm text-muted-foreground mt-0.5">Entradas, saídas e transferências</p>
+          </div>
+        </CardContent>
+      </Card>
 
-      <TabsContent value="por_tipo">
-        <FinanceiroTab
-          lancamentos={lancamentos}
-          onEditar={onEditar || (() => {})}
-          onRemover={onRemover || (() => {})}
-          modoMovimentacao
-        />
-      </TabsContent>
-
-      <TabsContent value="por_categoria">
-        <EvolucaoCategoriaTab
-          lancamentos={lancamentos}
-          saldosIniciais={saldosIniciais}
-        />
-      </TabsContent>
-
-      <TabsContent value="fluxo_anual">
-        <FluxoAnualTab
-          lancamentos={lancamentos}
-          saldosIniciais={saldosIniciais}
-          onNavigateToMovimentacao={onNavigateToMovimentacao}
-        />
-      </TabsContent>
-    </Tabs>
+      <Card
+        className="cursor-pointer hover:shadow-md transition-shadow active:scale-[0.98]"
+        onClick={() => onNavigate('resumo')}
+      >
+        <CardContent className="flex items-center gap-4 p-5">
+          <div className="h-14 w-14 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+            <TrendingUp className="h-7 w-7 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="font-bold text-base text-foreground">Resumo por Mês</h3>
+            <p className="text-sm text-muted-foreground mt-0.5">Evolução do rebanho e categorias</p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
