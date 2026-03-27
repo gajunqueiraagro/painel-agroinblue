@@ -1239,6 +1239,7 @@ export type Database = {
     }
     Functions: {
       get_user_cliente_id: { Args: { _user_id?: string }; Returns: string }
+      get_user_cliente_ids: { Args: { _user_id?: string }; Returns: string[] }
       get_user_perfil: {
         Args: { _cliente_id: string; _user_id: string }
         Returns: Database["public"]["Enums"]["perfil_acesso"]
