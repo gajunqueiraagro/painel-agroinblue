@@ -86,6 +86,10 @@ const TITLES: Record<TabId, string> = {
 const Index = () => {
   const [activeTab, setActiveTab] = useState<TabId>('resumo');
   const [subAbaFinanceiro, setSubAbaFinanceiro] = useState<SubAba | undefined>(undefined);
+  const [movFiltroAno, setMovFiltroAno] = useState<string | undefined>(undefined);
+  const [movFiltroMes, setMovFiltroMes] = useState<string | undefined>(undefined);
+  const [movDrillLabel, setMovDrillLabel] = useState<string | undefined>(undefined);
+  const [movBackTab, setMovBackTab] = useState<TabId | undefined>(undefined);
   const [lancamentosFromConciliacao, setLancamentosFromConciliacao] = useState(false);
   const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
   const { user } = useAuth();
