@@ -134,6 +134,11 @@ export function useFluxoCaixa(
   const [loadingSaldo, setLoadingSaldo] = useState(true);
 
   const loadLancamentosGlobais = useCallback(async () => {
+    if (allFazendaIds.length === 0) {
+      setLancamentosGlobais([]);
+      setLoadingLancamentos(false);
+      return;
+    }
     setLoadingLancamentos(true);
     try {
       const PAGE_SIZE = 1000;
@@ -144,6 +149,7 @@ export function useFluxoCaixa(
         const { data } = await supabase
           .from('financeiro_lancamentos')
           .select('status_transacao, data_pagamento, valor, tipo_operacao, macro_custo, produto, escopo_negocio')
+          .in('fazenda_id', allFazendaIds)
           .gte('data_pagamento', `${ano}-01-01`)
           .lte('data_pagamento', `${ano}-12-31`)
           .range(from, from + PAGE_SIZE - 1);
@@ -170,7 +176,7 @@ export function useFluxoCaixa(
     } finally {
       setLoadingLancamentos(false);
     }
-  }, [ano]);
+  }, [ano, allFazendaIds.join(',')]);
 
   // Fetch saldo inicial GLOBAL de Dez do ano anterior (registros SALDO da EXPORT_APP_UNICO, sem filtro de fazenda)
   const loadSaldoInicial = useCallback(async () => {
