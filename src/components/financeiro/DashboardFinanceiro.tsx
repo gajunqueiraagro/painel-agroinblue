@@ -436,8 +436,8 @@ function CardEntradaSaidaToggle({ ind, isGlobal }: { ind: any; isGlobal: boolean
           </p>
           <div className="space-y-0.5 border-t border-border/50 pt-1.5">
             {ind.categoriasSaida.map((cat: string) => (
-              <div key={cat} className="flex justify-between text-xs">
-                <span className={`text-muted-foreground truncate max-w-[55%] mr-2 ${(cat === 'Reposição de Bovinos' || cat === 'Dedução de Receitas') ? 'italic' : ''}`}>{cat}</span>
+              <div key={cat} className="flex justify-between text-xs italic">
+                <span className="text-muted-foreground truncate max-w-[55%] mr-2">{cat}</span>
                 <span className="font-mono font-semibold whitespace-nowrap text-red-600 dark:text-red-400">
                   {formatMoeda((saidaTab === 'mes' ? ind.saidaDecomp.mes : ind.saidaDecomp.acum).get(cat) || 0)}
                 </span>
