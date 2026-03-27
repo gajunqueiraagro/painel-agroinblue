@@ -17,6 +17,7 @@ export function useLancamentos() {
   const [migrated, setMigrated] = useState(false);
 
   const fazendaId = fazendaAtual?.id;
+  const clienteId = fazendaAtual?.cliente_id;
 
   const loadData = useCallback(async () => {
     if (!fazendaId) { setLancamentos([]); setSaldosIniciais([]); setLoading(false); return; }
