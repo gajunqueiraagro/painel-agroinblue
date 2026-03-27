@@ -21,6 +21,10 @@ export interface FinanceiroLancamentoBase {
 
 const norm = (v: string | null | undefined) => (v || '').toLowerCase().trim();
 
+/** Normaliza tipo_operacao removendo espaços, hífens e traços especiais */
+const normTipo = (v: string | null | undefined): string =>
+  norm(v).replace(/[\s\-–—]/g, '');
+
 /** Lançamento conciliado? */
 export const isConciliado = (l: FinanceiroLancamentoBase): boolean =>
   norm(l.status_transacao) === 'conciliado';
