@@ -22,7 +22,8 @@ import {
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, AreaChart, Area, Legend,
+  Tooltip, ResponsiveContainer, AreaChart, Area, Legend, ReferenceLine,
+  ComposedChart,
 } from 'recharts';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
