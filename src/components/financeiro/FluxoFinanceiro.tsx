@@ -53,6 +53,7 @@ const ROWS: RowDef[] = [
   { label: 'Aportes Pessoais', key: 'aportes', indent: 1, tipo: 'entrada' },
 
   { label: 'Total Saídas', key: 'totalSaidas', bold: true, tipo: 'saida' },
+  { label: 'Dedução de Receitas', key: 'deducaoReceitas', indent: 1, tipo: 'saida' },
   { label: 'Desemb. Produtivo', key: 'desembolsoProdutivo', indent: 1, tipo: 'saida' },
   { label: 'Desemb. Produtivo Pec.', key: 'desembolsoPec', indent: 2, tipo: 'saida', amploOnly: true },
   { label: 'Desemb. Produtivo Agri.', key: 'desembolsoAgri', indent: 2, tipo: 'saida', amploOnly: true },

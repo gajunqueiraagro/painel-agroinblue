@@ -87,7 +87,7 @@ export function FluxoCaixa({
         mesLabel: MESES_NOMES[m - 1],
         entradas,
         saidasDeducao,
-        saidasInvestimentos,
+        saidasCusteio,
         saidasAmortizacoes,
         saidasDividendos,
         saidasOutras,
