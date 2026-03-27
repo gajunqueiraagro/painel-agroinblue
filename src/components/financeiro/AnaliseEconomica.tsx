@@ -90,6 +90,7 @@ export function AnaliseEconomica({
   filtroMesInicial,
 }: Props) {
   const [bloco, setBloco] = useState<Bloco>('indicadores');
+  const [cenario, setCenario] = useState<Cenario>('realizado');
   const { fazendas } = useFazenda();
 
   // Anos disponíveis
