@@ -22,6 +22,14 @@ interface Props {
   subAbaInicial?: SubAba;
   /** Modo compacto para aba Movimentações: sem "Todas"/"Chuvas", filtros menores, header sticky */
   modoMovimentacao?: boolean;
+  /** Filtro de ano inicial (quando vem de drill-down) */
+  filtroAnoInicial?: string;
+  /** Filtro de mês inicial (quando vem de drill-down) — formato '01'-'12' ou 'todos' */
+  filtroMesInicial?: string;
+  /** Callback para voltar à tela anterior (drill-down) */
+  onBack?: () => void;
+  /** Label do filtro aplicado (drill-down) */
+  drillDownLabel?: string;
 }
 
 export type SubAba = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
