@@ -252,8 +252,40 @@ export function ClientesTab() {
                   <Button size="sm" onClick={handleUpdate} disabled={saving} className="flex-1">
                     <Save className="h-4 w-4 mr-1" /> {saving ? '...' : 'Salvar'}
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => setEditing(null)}>
+                  <Button size="sm" variant="outline" onClick={() => { setEditing(null); setConfirmDelete(''); }}>
                     <X className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <Separator className="my-3" />
+
+                <div className="space-y-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
+                  <div className="flex items-center gap-2 text-destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <p className="text-xs font-bold">Zona Perigosa</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Apagar o cliente remove todas as fazendas, membros e dados vinculados. Esta ação é irreversível.
+                  </p>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">
+                      Digite <span className="font-bold text-foreground">{editing.nome}</span> para confirmar
+                    </Label>
+                    <Input
+                      value={confirmDelete}
+                      onChange={e => setConfirmDelete(e.target.value)}
+                      placeholder={editing.nome}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="w-full"
+                    disabled={deleting || confirmDelete !== editing.nome}
+                    onClick={() => handleDelete(editing.id, editing.nome)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" /> {deleting ? 'Apagando...' : 'Apagar Cliente Permanentemente'}
                   </Button>
                 </div>
               </CardContent>
