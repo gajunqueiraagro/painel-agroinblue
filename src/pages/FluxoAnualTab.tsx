@@ -99,12 +99,12 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               </button>
             ))}
           </div>
+
+          <span className="text-[10px] text-muted-foreground ml-auto">Toque em um mês para ver por categoria</span>
         </div>
       </div>
 
       <div className="p-3 pt-2 space-y-2">
-
-      <p className="text-[10px] text-muted-foreground">Toque em um mês para ver a evolução por categoria</p>
 
       <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
         <table className="w-full text-xs">
