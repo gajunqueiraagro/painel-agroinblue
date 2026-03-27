@@ -74,24 +74,62 @@ export function ClientesTab() {
       return;
     }
     setSaving(true);
-    const { error } = await supabase
-      .from('clientes')
-      .insert({ nome: nome.trim(), slug: slug.trim() });
 
-    if (error) {
-      if (error.message.includes('duplicate') || error.message.includes('unique')) {
+    // 1. Criar cliente
+    const { data: novoCliente, error } = await supabase
+      .from('clientes')
+      .insert({ nome: nome.trim(), slug: slug.trim() })
+      .select('id')
+      .single();
+
+    if (error || !novoCliente) {
+      if (error?.message.includes('duplicate') || error?.message.includes('unique')) {
         toast.error('Já existe um cliente com este identificador.');
       } else {
-        toast.error('Erro ao criar cliente: ' + error.message);
+        toast.error('Erro ao criar cliente: ' + (error?.message || 'desconhecido'));
       }
-    } else {
-      toast.success('Cliente criado com sucesso!');
-      setNome('');
-      setSlug('');
-      setShowForm(false);
-      await loadClientes();
-      await reloadClientes();
+      setSaving(false);
+      return;
     }
+
+    const clienteId = novoCliente.id;
+    const userId = (await supabase.auth.getUser()).data.user?.id;
+
+    // 2. Criar fazenda Administrativo + vincular usuário como admin
+    const promises: Promise<any>[] = [];
+
+    promises.push(
+      supabase.from('fazendas').insert({
+        nome: 'Administrativo',
+        cliente_id: clienteId,
+        tem_pecuaria: false,
+        owner_id: userId!,
+      })
+    );
+
+    promises.push(
+      supabase.from('cliente_membros').insert({
+        cliente_id: clienteId,
+        user_id: userId!,
+        perfil: 'admin_agroinblue',
+      })
+    );
+
+    const results = await Promise.all(promises);
+    const erros = results.filter(r => r.error);
+
+    if (erros.length > 0) {
+      console.error('Erros no bootstrap:', erros.map(r => r.error));
+      toast.warning('Cliente criado, mas houve erros na configuração automática.');
+    } else {
+      toast.success('Cliente criado e configurado com sucesso!');
+    }
+
+    setNome('');
+    setSlug('');
+    setShowForm(false);
+    await loadClientes();
+    await reloadClientes();
     setSaving(false);
   };
 
