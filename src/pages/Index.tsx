@@ -185,7 +185,8 @@ const Index = () => {
     analise_economica: goToVisaoFinHub,
     fin_caixa: goToLancarFinHub,
     fechamento: goToZootecnico,
-    evolucao_rebanho_hub: () => setActiveTab('movimentacao'),
+    evolucao_rebanho_hub: goToLancarZooHub,
+    fluxo_anual: () => setActiveTab('movimentacao'),
   };
 
   const clienteNomeHeader = clientes.length > 1 ? (clienteAtual?.nome || '') : '';
@@ -266,7 +267,7 @@ const Index = () => {
       {activeTab === 'movimentacao' && (
         <MovimentacaoTab onNavigate={(dest) => {
           if (dest === 'tipos') setActiveTab('financeiro');
-          if (dest === 'resumo') setActiveTab('evolucao_rebanho_hub');
+          if (dest === 'resumo') setActiveTab('fluxo_anual');
         }} />
       )}
       {activeTab === 'lancamentos' && (
