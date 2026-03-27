@@ -184,41 +184,40 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
   }, [statusZoo.pendencias, financeiro.status, fazendaNaoPecuaria]);
 
   return (
-    <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-5 animate-fade-in pb-24">
-      {/* ── Header ── */}
-      <header className="flex items-end justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-lg md:text-xl font-bold tracking-tight text-foreground leading-tight">
-            Resumo Executivo
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
+    <div className="max-w-5xl mx-auto animate-fade-in pb-24">
+      {/* ── Sticky filter bar ── */}
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/40 px-4 md:px-6 py-2.5 -mx-0">
+        <div className="flex items-center justify-between gap-3 max-w-5xl mx-auto">
+          <p className="text-xs text-muted-foreground font-medium">
             {mesLabel} / {filtroGlobal.ano}
             {isGlobal ? ' · Consolidado' : ` · ${fazendaAtual?.nome || ''}`}
           </p>
+          <div className="flex gap-1.5">
+            <Select value={filtroGlobal.ano} onValueChange={v => onFiltroChange({ ano: v })}>
+              <SelectTrigger className="w-[72px] h-8 text-xs font-medium border-border/60 bg-card">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent side="bottom">
+                {anosDisponiveis.map(a => (
+                  <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={String(mesNum)} onValueChange={v => onFiltroChange({ mes: Number(v) })}>
+              <SelectTrigger className="w-[68px] h-8 text-xs font-medium border-border/60 bg-card">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent side="bottom">
+                {MESES.map(m => (
+                  <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-        <div className="flex gap-1.5">
-          <Select value={filtroGlobal.ano} onValueChange={v => onFiltroChange({ ano: v })}>
-            <SelectTrigger className="w-[72px] h-8 text-xs font-medium border-border/60 bg-card">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent side="bottom">
-              {anosDisponiveis.map(a => (
-                <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={String(mesNum)} onValueChange={v => onFiltroChange({ mes: Number(v) })}>
-            <SelectTrigger className="w-[68px] h-8 text-xs font-medium border-border/60 bg-card">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent side="bottom">
-              {MESES.map(m => (
-                <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </header>
+      </div>
+
+      <div className="p-4 md:p-6 space-y-5">
 
       {/* ── Status Strip ── */}
       <button
