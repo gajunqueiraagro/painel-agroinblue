@@ -351,7 +351,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
   if (isAdmin) {
     return (
       <div className="max-w-4xl mx-auto animate-fade-in pb-20">
-        <div className="sticky top-0 z-20 bg-background border-b border-border px-4 pt-3 pb-2">
+        <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 pt-3 pb-2">
           <div className="flex gap-2 items-center">
             <Select value={anoFiltro} onValueChange={handleAnoChange}>
               <SelectTrigger className="w-24 text-base font-bold"><SelectValue /></SelectTrigger>
