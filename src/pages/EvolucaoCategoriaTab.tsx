@@ -148,7 +148,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
           </SelectContent>
         </Select>
         <Select value={mesFiltro} onValueChange={setMesFiltro}>
-          <SelectTrigger className="h-9 text-sm font-bold w-28">
+          <SelectTrigger className="h-7 text-xs font-bold w-24">
             <SelectValue placeholder="Mês" />
           </SelectTrigger>
           <SelectContent>
