@@ -145,7 +145,13 @@ const Index = () => {
     if (filtro) {
       setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
     }
-    if (tab !== 'financeiro') setSubAbaFinanceiro(undefined);
+    if (tab !== 'financeiro') {
+      setSubAbaFinanceiro(undefined);
+      setMovFiltroAno(undefined);
+      setMovFiltroMes(undefined);
+      setMovDrillLabel(undefined);
+      setMovBackTab(undefined);
+    }
     if (tab !== 'lancamentos') setLancamentosFromConciliacao(false);
     if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
     setActiveTab(tab);
