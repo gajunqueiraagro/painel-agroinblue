@@ -2,7 +2,7 @@
  * Resumo Executivo — Dashboard profissional de gestão.
  * Visual: software financeiro / ERP / BI executivo.
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { parseISO, format } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
