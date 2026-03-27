@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:wght@400;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,36 +6,38 @@
 
 @layer base {
   :root {
-    --background: 40 30% 96%;
-    --foreground: 30 20% 15%;
-    --card: 40 25% 93%;
-    --card-foreground: 30 20% 15%;
-    --popover: 40 30% 96%;
-    --popover-foreground: 30 20% 15%;
-    --primary: 90 35% 32%;
-    --primary-foreground: 40 30% 96%;
-    --secondary: 30 40% 45%;
-    --secondary-foreground: 40 30% 96%;
-    --muted: 40 15% 88%;
-    --muted-foreground: 30 10% 45%;
-    --accent: 45 70% 55%;
-    --accent-foreground: 30 20% 15%;
-    --destructive: 0 65% 50%;
-    --destructive-foreground: 40 30% 96%;
-    --success: 120 40% 40%;
-    --success-foreground: 40 30% 96%;
-    --border: 30 15% 82%;
-    --input: 30 15% 82%;
-    --ring: 90 35% 32%;
-    --radius: 0.75rem;
-    --sidebar-background: 40 25% 93%;
-    --sidebar-foreground: 30 20% 15%;
-    --sidebar-primary: 90 35% 32%;
-    --sidebar-primary-foreground: 40 30% 96%;
-    --sidebar-accent: 40 15% 88%;
-    --sidebar-accent-foreground: 30 20% 15%;
-    --sidebar-border: 30 15% 82%;
-    --sidebar-ring: 90 35% 32%;
+    --background: 213 33% 97%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 213 52% 24%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 209 49% 36%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 213 68% 95%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 213 68% 95%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 122 46% 33%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 213 52% 24%;
+    --radius: 0.5rem;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 213 52% 24%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 213 68% 95%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 213 52% 24%;
   }
 }
 
@@ -45,7 +47,7 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Nunito', sans-serif;
+    font-family: 'Inter', 'Nunito', sans-serif;
   }
 }
 

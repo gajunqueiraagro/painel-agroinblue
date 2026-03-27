@@ -63,7 +63,7 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Nunito', 'sans-serif'],
+        sans: ['Inter', 'Nunito', 'sans-serif'],
       },
       borderRadius: {
         lg: "var(--radius)",
