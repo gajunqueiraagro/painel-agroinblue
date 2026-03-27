@@ -42,7 +42,7 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const loadFazendas = useCallback(async () => {
-    if (!user || !clienteAtual) {
+    if (!user || !clienteAtual?.id) {
       setFazendas([]);
       setFazendaAtualState(null);
       setLoading(false);
