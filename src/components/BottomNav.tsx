@@ -1,4 +1,4 @@
-import { LayoutDashboard, ArrowLeftRight, PenSquare, DollarSign, Settings } from 'lucide-react';
+import { LayoutDashboard, ArrowLeftRight, PenSquare, BarChart3, DollarSign, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -13,6 +13,7 @@ const allTabs: { id: TabId; label: string; icon: React.ComponentType<{ className
   { id: 'resumo', label: 'Resumo', icon: LayoutDashboard },
   { id: 'movimentacao', label: 'Mov. Reb.', icon: ArrowLeftRight },
   { id: 'lancar_zoo_hub', label: 'Lanç. Zoo.', icon: PenSquare },
+  { id: 'visao_zoo_hub', label: 'Análises', icon: BarChart3 },
   { id: 'fin_caixa', label: 'Financeiro', icon: DollarSign },
   { id: 'cadastros', label: 'Cadastro', icon: Settings },
 ];
@@ -24,11 +25,14 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     // Movimentações sub-screens
     const movTabs: TabId[] = ['movimentacao', 'fluxo_anual', 'evolucao_rebanho_hub', 'evolucao_categoria'];
     // Lançamentos sub-screens
-    const lancarTabs: TabId[] = ['lancar_zoo_hub', 'lancamentos', 'fechamento', 'chuvas', 'conciliacao', 'conciliacao_categoria', 'valor_rebanho', 'mapa_pastos', 'resumo_pastos', 'financeiro', 'visao_zoo_hub', 'zootecnico', 'zootecnico_hub', 'indicadores', 'visao_anual_zoo', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute', 'evolucao', 'analise_operacional', 'pastos', 'lancar_fin_hub', 'visao_fin_hub', 'analise_economica'];
+    const lancarTabs: TabId[] = ['lancar_zoo_hub', 'lancamentos', 'fechamento', 'chuvas', 'conciliacao', 'conciliacao_categoria', 'valor_rebanho', 'mapa_pastos', 'resumo_pastos', 'financeiro'];
+    // Análises sub-screens
+    const analiseTabs: TabId[] = ['visao_zoo_hub', 'zootecnico', 'zootecnico_hub', 'indicadores', 'visao_anual_zoo', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute', 'evolucao', 'analise_operacional', 'pastos', 'lancar_fin_hub', 'visao_fin_hub', 'analise_economica'];
     const finTabs: TabId[] = ['fin_caixa'];
     const cadTabs: TabId[] = ['cadastros', 'acessos'];
     if (movTabs.includes(tab)) return 'movimentacao';
     if (lancarTabs.includes(tab)) return 'lancar_zoo_hub';
+    if (analiseTabs.includes(tab)) return 'visao_zoo_hub';
     if (finTabs.includes(tab)) return 'fin_caixa';
     if (cadTabs.includes(tab)) return 'cadastros';
     return 'resumo';
