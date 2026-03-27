@@ -167,14 +167,37 @@ interface FarmKpi {
 
 function useGlobalFarmKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: number, mes: number) {
   const { fazendas } = useFazenda();
+  const { categorias } = usePastos();
   const [allPastos, setAllPastos] = useState<{ fazenda_id: string; ativo: boolean; entra_conciliacao: boolean; area_produtiva_ha: number | null }[]>([]);
+  const [allPesosPorFazMes, setAllPesosPorFazMes] = useState<Record<string, Record<number, Record<string, number>>>>({});
+
+  const pecuariaIds = useMemo(() =>
+    fazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false).map(f => f.id),
+  [fazendas]);
 
   useEffect(() => {
-    const ids = fazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false).map(f => f.id);
-    if (ids.length === 0) return;
-    supabase.from('pastos').select('fazenda_id, ativo, entra_conciliacao, area_produtiva_ha').in('fazenda_id', ids)
+    if (pecuariaIds.length === 0) return;
+    supabase.from('pastos').select('fazenda_id, ativo, entra_conciliacao, area_produtiva_ha').in('fazenda_id', pecuariaIds)
       .then(({ data }) => { if (data) setAllPastos(data); });
-  }, [fazendas]);
+  }, [pecuariaIds]);
+
+  // Load fechamento weights for all farms × all months
+  useEffect(() => {
+    if (pecuariaIds.length === 0 || !categorias.length) return;
+    let cancelled = false;
+    (async () => {
+      const result: Record<string, Record<number, Record<string, number>>> = {};
+      for (const fId of pecuariaIds) {
+        result[fId] = {};
+        for (let m = 1; m <= mes; m++) {
+          const anoMes = `${ano}-${String(m).padStart(2, '0')}`;
+          result[fId][m] = await loadPesosPastosPorCategoria(fId, anoMes, categorias);
+        }
+      }
+      if (!cancelled) setAllPesosPorFazMes(result);
+    })();
+    return () => { cancelled = true; };
+  }, [pecuariaIds, ano, mes, categorias]);
 
   return useMemo(() => {
     const pecuarias = fazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false);
@@ -187,7 +210,7 @@ function useGlobalFarmKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInici
       const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancsFaz, ano, mes);
       const rebanho = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
 
-      // Acumulado: calcular saldo e peso para cada mês jan→mes, depois média
+      // Acumulado with official weight hierarchy
       let sumSaldo = 0;
       let sumPesoTotal = 0;
       let mesesComDado = 0;
@@ -199,20 +222,19 @@ function useGlobalFarmKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInici
         mesesComDado++;
         sumSaldo += saldoTotal;
 
-        const itens = Array.from(saldoM.entries())
-          .filter(([, q]) => q > 0)
-          .map(([cat, qtd]) => {
-            const si = saldosIniciais.find(s => s.categoria === cat && s.ano === ano);
-            return { quantidade: qtd, pesoKg: si?.pesoMedioKg || null };
-          });
-        const pesoM = calcPesoMedioPonderado(itens);
-        if (pesoM) sumPesoTotal += pesoM * saldoTotal;
+        const pesosPastosMes = allPesosPorFazMes[faz.id]?.[m] || {};
+        let pesoTotalMes = 0;
+        for (const [cat, qtd] of saldoM.entries()) {
+          if (qtd <= 0) continue;
+          const { valor: pesoKg } = resolverPesoOficial(cat, pesosPastosMes, saldosIniciais, lancsFaz, ano, m);
+          if (pesoKg) pesoTotalMes += pesoKg * qtd;
+        }
+        sumPesoTotal += pesoTotalMes;
       }
 
-      const rebanhoMedio = mesesComDado > 0 ? sumSaldo / mesesComDado : 0;
-      const pesoMedio = rebanhoMedio > 0 ? sumPesoTotal / sumSaldo : null;
-      const area = calcAreaProdutivaPecuaria(pastosFaz); // area doesn't vary monthly in this model
-      const pesoTotalKg = pesoMedio && rebanhoMedio > 0 ? pesoMedio * rebanhoMedio : null;
+      const pesoMedio = sumSaldo > 0 ? sumPesoTotal / sumSaldo : null;
+      const area = calcAreaProdutivaPecuaria(pastosFaz);
+      const pesoTotalKg = pesoMedio && rebanho > 0 ? pesoMedio * rebanho : null;
       const lotacaoKgHa = pesoTotalKg && area > 0 ? pesoTotalKg / area : null;
 
       return { id: faz.id, nome: faz.nome, rebanho, pesoMedio, area, lotacaoKgHa };
