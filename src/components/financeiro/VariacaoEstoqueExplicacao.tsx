@@ -33,6 +33,8 @@ export function VariacaoEstoqueExplicacao({
   fazendaId,
   precosMap,
   reposicaoFinanceiro,
+  pesosReaisInicial,
+  pesosReaisFinal,
 }: Props) {
   const [aberto, setAberto] = useState(false);
   const anoNum = Number(anoFiltro);
