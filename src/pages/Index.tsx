@@ -89,10 +89,19 @@ const Index = () => {
   const [lancamentosFromConciliacao, setLancamentosFromConciliacao] = useState(false);
   const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
   const { user } = useAuth();
+  const { canViewTab, canEdit, isReadOnly } = usePermissions();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clientes } = useCliente();
   const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial, loadData } = useLancamentos();
   const { pendingCount, syncing, online, syncQueue } = useOfflineSync(fazendaAtual?.id === '__global__' ? undefined : fazendaAtual?.id, loadData);
+
+  // Wrap edit actions based on permissions
+  const noOp = async () => {};
+  const canEditZoo = canEdit('zootecnico') && !isGlobal;
+  const canEditFin = canEdit('financeiro') && !isGlobal;
+  const wrappedAdicionar = canEditZoo ? adicionarLancamento : noOp;
+  const wrappedEditar = canEditZoo ? editarLancamento : noOp;
+  const wrappedRemover = canEditZoo ? removerLancamento : noOp;
 
   const [filtroGlobal, setFiltroGlobal] = useState<FiltroGlobal>({
     ano: String(new Date().getFullYear()),
