@@ -364,28 +364,13 @@ export function CadastrosTab() {
           </AccordionItem>
         )}
 
-        {/* Fazendas - only in global mode */}
-        {isGlobal && (
-          <AccordionItem value="fazendas" className="border rounded-lg">
-            <AccordionTrigger className="px-4 py-3 text-sm font-bold">🏡 Fazendas</AccordionTrigger>
-            <AccordionContent className="px-4 pb-4">
-              <FazendasList />
-            </AccordionContent>
-          </AccordionItem>
-        )}
-
-        {/* Fazenda atual info when not global */}
-        {!isGlobal && fazendaAtual && (
-          <div className="rounded-lg border bg-card p-4">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🏡</span>
-              <div>
-                <p className="text-sm font-bold text-foreground">{fazendaAtual.nome}</p>
-                <p className="text-xs text-muted-foreground font-mono">{fazendaAtual.codigo_importacao || '—'}</p>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Fazendas - always visible */}
+        <AccordionItem value="fazendas" className="border rounded-lg">
+          <AccordionTrigger className="px-4 py-3 text-sm font-bold">🏡 Fazendas</AccordionTrigger>
+          <AccordionContent className="px-4 pb-4">
+            <FazendasList />
+          </AccordionContent>
+        </AccordionItem>
 
         <AccordionItem value="dados" className="border rounded-lg">
           <AccordionTrigger className="px-4 py-3 text-sm font-bold">🏠 Dados da Fazenda</AccordionTrigger>
