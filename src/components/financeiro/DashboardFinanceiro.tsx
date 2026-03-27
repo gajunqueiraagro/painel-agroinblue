@@ -757,10 +757,14 @@ export function DashboardFinanceiro({
       if (macro === 'investimento na fazenda') return 'Investimento Pecuário';
       if (macro === 'investimento em bovinos') return 'Reposição de Bovinos';
       if (macro.includes('dedu') && macro.includes('receita')) return 'Dedução de Receitas';
+      if (macro === 'amortizações financeiras' && escopo === 'pecuaria') return 'Amortizações Fin. Pec.';
+      if (macro === 'amortizações financeiras' && escopo === 'agricultura') return 'Amortizações Fin. Agri.';
+      if (macro === 'amortizações financeiras') return 'Amortizações Fin. Pec.';
+      if (macro === 'dividendos') return 'Dividendos';
       return 'Outros';
     };
 
-    const categoriasSaida = ['Custeio Pecuário', 'Investimento Pecuário', 'Custeio Agrícola', 'Investimento Agrícola', 'Reposição de Bovinos', 'Dedução de Receitas'];
+    const categoriasSaida = ['Custeio Pecuário', 'Investimento Pecuário', 'Custeio Agrícola', 'Investimento Agrícola', 'Reposição de Bovinos', 'Dedução de Receitas', 'Amortizações Fin. Pec.', 'Amortizações Fin. Agri.', 'Dividendos'];
     const saidaDecomp = { mes: new Map<string, number>(), acum: new Map<string, number>() };
     for (const cat of categoriasSaida) { saidaDecomp.mes.set(cat, 0); saidaDecomp.acum.set(cat, 0); }
 
