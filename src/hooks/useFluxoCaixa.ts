@@ -38,6 +38,7 @@ export interface FluxoMensal {
   captacaoAgri: number;
   aportes: number;
   totalEntradas: number;
+  deducaoReceitas: number;
   desembolsoProdutivo: number;
   desembolsoPec: number;
   desembolsoAgri: number;
@@ -94,7 +95,7 @@ const normEscopo = (l: FluxoLancamentoBase): 'pec' | 'agri' | 'outras' => {
   return 'outras';
 };
 
-type CategoriaFluxo = 'receitas' | 'captacao' | 'aportes' | 'desembolso' | 'reposicao' | 'amortizacoes' | 'dividendos';
+type CategoriaFluxo = 'receitas' | 'captacao' | 'aportes' | 'deducao' | 'desembolso' | 'reposicao' | 'amortizacoes' | 'dividendos';
 
 function classificarEntrada(l: FluxoLancamentoBase): CategoriaFluxo {
   const macro = normMacro(l);
@@ -105,6 +106,7 @@ function classificarEntrada(l: FluxoLancamentoBase): CategoriaFluxo {
 
 function classificarSaida(l: FluxoLancamentoBase): CategoriaFluxo {
   const macro = normMacro(l);
+  if (macro.includes('dedução') || macro.includes('deducao') || macro === 'dedução de receitas') return 'deducao';
   if (macro.includes('reposição') || macro.includes('reposicao')) return 'reposicao';
   if (macro.includes('amortização') || macro.includes('amortizacao') || macro.includes('amortizaç')) return 'amortizacoes';
   if (macro.includes('dividendo') || macro.includes('retirada')) return 'dividendos';
@@ -278,6 +280,7 @@ export function useFluxoCaixa(
       let receitas = 0, receitasPec = 0, receitasAgri = 0, receitasOutras = 0;
       let captacao = 0, captacaoPec = 0, captacaoAgri = 0;
       let aportes = 0;
+      let deducaoReceitas = 0;
       let desembolso = 0, desembolsoPec = 0, desembolsoAgri = 0;
       let reposicao = 0;
       let amortizacoes = 0, amortizacoesPec = 0, amortizacoesAgri = 0;
@@ -303,7 +306,9 @@ export function useFluxoCaixa(
             }
           } else if (isSaidaFinanceira(l)) {
             const cat = classificarSaida(l);
-            if (cat === 'desembolso') {
+            if (cat === 'deducao') {
+              deducaoReceitas += val;
+            } else if (cat === 'desembolso') {
               desembolso += val;
               if (escopo === 'pec') desembolsoPec += val;
               else desembolsoAgri += val;
@@ -321,7 +326,7 @@ export function useFluxoCaixa(
       }
 
       const totalEntradas = receitas + captacao + aportes;
-      const totalSaidas = desembolso + reposicao + amortizacoes + dividendos;
+      const totalSaidas = deducaoReceitas + desembolso + reposicao + amortizacoes + dividendos;
       const saldoInicial = m === 1 ? saldoInicialAno : result[m - 2].saldoFinal;
       const saldoFinal = isAfterFilter ? saldoInicial : saldoInicial + totalEntradas - totalSaidas;
 
@@ -342,6 +347,7 @@ export function useFluxoCaixa(
         captacaoAgri,
         aportes,
         totalEntradas,
+        deducaoReceitas,
         desembolsoProdutivo: desembolso,
         desembolsoPec,
         desembolsoAgri,

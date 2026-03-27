@@ -25,6 +25,7 @@ interface FluxoMes {
   mes: number;
   mesLabel: string;
   entradas: number;
+  saidasDeducao: number;
   saidasCusteio: number;
   saidasInvestimentos: number;
   saidasAmortizacoes: number;
@@ -52,6 +53,7 @@ export function FluxoCaixa({
       const entradas = somaAbs(lancs.filter(isEntrada));
 
       const saidasAll = lancs.filter(isSaida);
+      let saidasDeducao = 0;
       let saidasCusteio = 0;
       let saidasInvestimentos = 0;
       let saidasAmortizacoes = 0;
@@ -61,7 +63,9 @@ export function FluxoCaixa({
       for (const l of saidasAll) {
         const macro = normMacro(l);
         const valor = Math.abs(l.valor);
-        if (macro === 'custeio produtivo') {
+        if (macro.includes('dedução') || macro.includes('deducao') || macro === 'dedução de receitas') {
+          saidasDeducao += valor;
+        } else if (macro === 'custeio produtivo') {
           saidasCusteio += valor;
         } else if (macro === 'investimento na fazenda' || macro === 'investimento em bovinos') {
           saidasInvestimentos += valor;
@@ -74,7 +78,7 @@ export function FluxoCaixa({
         }
       }
 
-      const totalSaidas = saidasCusteio + saidasInvestimentos + saidasAmortizacoes + saidasDividendos + saidasOutras;
+      const totalSaidas = saidasDeducao + saidasCusteio + saidasInvestimentos + saidasAmortizacoes + saidasDividendos + saidasOutras;
       const saldoMes = entradas - totalSaidas;
       saldoAcum += saldoMes;
 
@@ -82,6 +86,7 @@ export function FluxoCaixa({
         mes: m,
         mesLabel: MESES_NOMES[m - 1],
         entradas,
+        saidasDeducao,
         saidasCusteio,
         saidasInvestimentos,
         saidasAmortizacoes,
@@ -162,6 +167,7 @@ export function FluxoCaixa({
                 </TableRow>
 
                 {/* Saídas detalhadas */}
+                <SaidaRow label="  Dedução de Receitas" dados={dados} field="saidasDeducao" />
                 <SaidaRow label="  Custeio Produtivo" dados={dados} field="saidasCusteio" />
                 <SaidaRow label="  Investimentos" dados={dados} field="saidasInvestimentos" />
                 <SaidaRow label="  Amortizações" dados={dados} field="saidasAmortizacoes" />
