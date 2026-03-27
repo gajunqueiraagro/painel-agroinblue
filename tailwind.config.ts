@@ -67,7 +67,7 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'Nunito', 'sans-serif'],
+        sans: ['"IBM Plex Sans"', 'sans-serif'],
       },
       borderRadius: {
         lg: "var(--radius)",

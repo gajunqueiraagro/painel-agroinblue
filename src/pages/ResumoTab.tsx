@@ -45,23 +45,23 @@ const TIPOS_SAIDA = ['abate', 'venda', 'consumo', 'transferencia_saida'];
 // Status visual components
 // ---------------------------------------------------------------------------
 
-function StatusIndicator({ nivel }: { nivel: StatusNivel }) {
-  const config = {
-    aberto: 'bg-red-500',
-    parcial: 'bg-amber-500',
-    fechado: 'bg-emerald-500',
+function StatusDot({ nivel }: { nivel: StatusNivel }) {
+  const bg = {
+    aberto: 'bg-destructive',
+    parcial: 'bg-warning',
+    fechado: 'bg-success',
   };
-  return <span className={`inline-block h-2.5 w-2.5 rounded-full ${config[nivel]}`} />;
+  return <span className={`inline-block h-2 w-2 rounded-full ${bg[nivel]}`} />;
 }
 
-function StatusLabel({ nivel, label }: { nivel: StatusNivel; label: string }) {
-  const config = {
-    aberto: 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/20',
-    parcial: 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20',
-    fechado: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+function StatusBadge({ nivel, label }: { nivel: StatusNivel; label: string }) {
+  const styles = {
+    aberto: 'text-destructive bg-destructive/10 border-destructive/20',
+    parcial: 'text-warning bg-warning/10 border-warning/20',
+    fechado: 'text-success bg-success/10 border-success/20',
   };
   return (
-    <span className={`text-[11px] font-semibold tracking-wide uppercase px-2.5 py-1 rounded border ${config[nivel]}`}>
+    <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded border ${styles[nivel]}`}>
       {label}
     </span>
   );
@@ -102,16 +102,25 @@ function useRebanhoPerFarm(lancamentos: Lancamento[], saldosIniciais: SaldoInici
   const { fazendas } = useFazenda();
   return useMemo(() => {
     const pecuarias = fazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false);
-    // Simple approach: use global saldoMap for total, then estimate per-farm from lancamentos
-    // For accurate per-farm we compute total rebanho and distribute by fazenda lancamentos
     return pecuarias.map(faz => {
       const lancsFaz = lancamentos.filter(l => l.fazendaId === faz.id);
-      // Use full saldosIniciais (they are already filtered by fazenda upstream in useLancamentos)
       const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancsFaz, ano, mes);
       const total = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
       return { id: faz.id, nome: faz.nome, rebanho: total };
     }).filter(f => f.rebanho !== 0);
   }, [fazendas, lancamentos, saldosIniciais, ano, mes]);
+}
+
+// ---------------------------------------------------------------------------
+// Metric row helper
+// ---------------------------------------------------------------------------
+function MetricRow({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div className="flex items-center justify-between py-1">
+      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <span className={`text-[13px] font-semibold tabular-nums ${accent || 'text-foreground'}`}>{value}</span>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -175,21 +184,21 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
   }, [statusZoo.pendencias, financeiro.status, fazendaNaoPecuaria]);
 
   return (
-    <div className="p-3 md:p-6 max-w-5xl mx-auto space-y-4 animate-fade-in pb-24">
+    <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-5 animate-fade-in pb-24">
       {/* ── Header ── */}
-      <div className="flex items-end justify-between gap-3 flex-wrap">
+      <header className="flex items-end justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">
+          <h1 className="text-lg md:text-xl font-bold tracking-tight text-foreground leading-tight">
             Resumo Executivo
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             {mesLabel} / {filtroGlobal.ano}
             {isGlobal ? ' · Consolidado' : ` · ${fazendaAtual?.nome || ''}`}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
           <Select value={filtroGlobal.ano} onValueChange={v => onFiltroChange({ ano: v })}>
-            <SelectTrigger className="w-[76px] h-9 text-xs font-semibold border-border/60">
+            <SelectTrigger className="w-[72px] h-8 text-xs font-medium border-border/60 bg-card">
               <SelectValue />
             </SelectTrigger>
             <SelectContent side="bottom">
@@ -199,7 +208,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
             </SelectContent>
           </Select>
           <Select value={String(mesNum)} onValueChange={v => onFiltroChange({ mes: Number(v) })}>
-            <SelectTrigger className="w-[72px] h-9 text-xs font-semibold border-border/60">
+            <SelectTrigger className="w-[68px] h-8 text-xs font-medium border-border/60 bg-card">
               <SelectValue />
             </SelectTrigger>
             <SelectContent side="bottom">
@@ -209,84 +218,72 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
             </SelectContent>
           </Select>
         </div>
-      </div>
+      </header>
 
       {/* ── Status Strip ── */}
-      <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
-        <button
-          onClick={() => onTabChange('zootecnico' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
-          className="w-full text-left p-4 transition-colors hover:bg-muted/30 active:bg-muted/50"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center">
-                <BarChart3 className="h-4 w-4 text-primary" />
-              </div>
-              <div>
-                <span className="text-sm font-bold text-foreground">Status Geral</span>
-                <span className="text-xs text-muted-foreground ml-2">
-                  {statusGeral === 'fechado' ? 'Conciliado' : statusGeral === 'parcial' ? 'Em andamento' : 'Pendente'}
-                </span>
-              </div>
-            </div>
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <div className="flex gap-6">
+      <button
+        onClick={() => onTabChange('zootecnico' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
+        className="w-full rounded-lg border border-border/60 bg-card p-3.5 flex items-center gap-3 transition-colors hover:bg-muted/30 active:bg-muted/50"
+      >
+        <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
+          <BarChart3 className="h-4 w-4 text-primary" />
+        </div>
+        <div className="flex-1 text-left">
+          <span className="text-xs font-semibold text-foreground">Status Geral</span>
+          <div className="flex gap-4 mt-1">
             {[
-              { label: 'Zootécnico', nivel: zootecnico.status.nivel },
-              { label: 'Financeiro', nivel: financeiro.status.nivel },
-              { label: 'Econômico', nivel: economico.status.nivel },
+              { label: 'Zoo', nivel: zootecnico.status.nivel },
+              { label: 'Fin', nivel: financeiro.status.nivel },
+              { label: 'Eco', nivel: economico.status.nivel },
             ].map(item => (
-              <div key={item.label} className="flex items-center gap-2">
-                <StatusIndicator nivel={item.nivel} />
-                <span className="text-xs text-muted-foreground font-medium">{item.label}</span>
+              <div key={item.label} className="flex items-center gap-1.5">
+                <StatusDot nivel={item.nivel} />
+                <span className="text-[10px] text-muted-foreground font-medium">{item.label}</span>
               </div>
             ))}
           </div>
-        </button>
-      </div>
+        </div>
+        <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+      </button>
 
       {/* ── Grid: Zootécnico + Financeiro ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* ZOOTÉCNICO */}
-        <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
-          <div className="px-4 pt-4 pb-3 border-b border-border/40">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="h-7 w-7 rounded-md bg-emerald-500/10 flex items-center justify-center">
-                  <span className="text-sm">🐄</span>
-                </div>
-                <span className="text-sm font-bold text-foreground">Zootécnico</span>
-              </div>
-              <StatusLabel
-                nivel={zootecnico.status.nivel}
-                label={zootecnico.status.nivel === 'fechado' ? 'Fechado' : zootecnico.status.nivel === 'parcial' ? 'Parcial' : 'Aberto'}
-              />
+        <section className="rounded-lg border border-border/60 bg-card">
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-border/40 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-sm">🐄</span>
+              <span className="text-xs font-semibold text-foreground uppercase tracking-wide">Zootécnico</span>
             </div>
+            <StatusBadge
+              nivel={zootecnico.status.nivel}
+              label={zootecnico.status.nivel === 'fechado' ? 'Fechado' : zootecnico.status.nivel === 'parcial' ? 'Parcial' : 'Aberto'}
+            />
           </div>
 
           {fazendaNaoPecuaria ? (
             <div className="p-4">
-              <p className="text-sm text-muted-foreground italic">Não se aplica a esta unidade.</p>
+              <p className="text-xs text-muted-foreground italic">Não se aplica a esta unidade.</p>
             </div>
           ) : (
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-3">
               {/* Rebanho principal */}
-              <div className="text-center py-2">
-                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Rebanho Atual</p>
-                <p className="text-3xl font-extrabold text-foreground tracking-tight">
+              <div className="text-center">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">Rebanho Atual</p>
+                <p className="text-3xl font-bold text-foreground tabular-nums leading-tight mt-1">
                   {formatNum(zootecnico.rebanhoAtual)}
                 </p>
-                <p className="text-xs text-muted-foreground mt-0.5">cabeças</p>
+                <p className="text-[10px] text-muted-foreground">cabeças</p>
               </div>
 
               {/* Per-farm breakdown (Global) */}
               {isGlobal && farmBreakdown.length > 0 && (
-                <div className="border-t border-border/40 pt-3 space-y-1.5">
+                <div className="border-t border-border/40 pt-2.5 space-y-0.5">
                   {farmBreakdown.map(f => (
-                    <div key={f.id} className="flex justify-between items-center px-1">
-                      <span className="text-xs text-muted-foreground truncate max-w-[60%]">{f.nome}</span>
-                      <span className="text-xs font-semibold text-foreground tabular-nums">{formatNum(f.rebanho)} cab</span>
+                    <div key={f.id} className="flex justify-between items-center">
+                      <span className="text-[11px] text-muted-foreground truncate max-w-[65%]">{f.nome}</span>
+                      <span className="text-[11px] font-semibold text-foreground tabular-nums">{formatNum(f.rebanho)} cab</span>
                     </div>
                   ))}
                 </div>
@@ -294,191 +291,141 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
 
               {/* KPIs por fazenda */}
               {!isGlobal && (
-                <div className="grid grid-cols-3 gap-2 border-t border-border/40 pt-3">
-                  <div className="text-center">
-                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Área Prod.</p>
-                    <p className="text-sm font-bold text-foreground tabular-nums mt-0.5">
-                      {zooKpis.area > 0 ? `${formatNum(zooKpis.area, 0)} ha` : '—'}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Peso Médio</p>
-                    <p className="text-sm font-bold text-foreground tabular-nums mt-0.5">
-                      {zooKpis.pesoMedio ? `${formatNum(zooKpis.pesoMedio, 0)} kg` : '—'}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Lot. kg/ha</p>
-                    <p className="text-sm font-bold text-foreground tabular-nums mt-0.5">
-                      {zooKpis.uaHa !== null ? formatNum(zooKpis.uaHa, 2) : '—'}
-                    </p>
-                  </div>
+                <div className="border-t border-border/40 pt-2.5">
+                  <MetricRow label="Área Produtiva" value={zooKpis.area > 0 ? `${formatNum(zooKpis.area, 0)} ha` : '—'} />
+                  <MetricRow label="Peso Médio" value={zooKpis.pesoMedio ? `${formatNum(zooKpis.pesoMedio, 0)} kg` : '—'} />
+                  <MetricRow label="Lotação (kg/ha)" value={zooKpis.uaHa !== null ? formatNum(zooKpis.uaHa, 2) : '—'} />
                 </div>
               )}
 
               {/* CTA */}
               <button
                 onClick={() => onTabChange('visao_zoo_hub', { ano: filtroGlobal.ano, mes: mesNum })}
-                className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-primary py-2.5 rounded-md border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10"
+                className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold text-primary py-2 rounded border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10 mt-1"
               >
-                Painel Zootécnico <ChevronRight className="h-3.5 w-3.5" />
+                Painel Zootécnico <ChevronRight className="h-3 w-3" />
               </button>
             </div>
           )}
-        </div>
+        </section>
 
         {/* FINANCEIRO */}
-        <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
-          <div className="px-4 pt-4 pb-3 border-b border-border/40">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="h-7 w-7 rounded-md bg-blue-500/10 flex items-center justify-center">
-                  <Wallet className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-                </div>
-                <span className="text-sm font-bold text-foreground">Financeiro</span>
-              </div>
-              <StatusLabel
-                nivel={financeiro.status.nivel}
-                label={financeiro.status.nivel === 'fechado' ? 'Conciliado' : financeiro.status.nivel === 'parcial' ? 'Parcial' : 'Pendente'}
-              />
+        <section className="rounded-lg border border-border/60 bg-card">
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-border/40 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Wallet className="h-3.5 w-3.5 text-primary" />
+              <span className="text-xs font-semibold text-foreground uppercase tracking-wide">Financeiro</span>
             </div>
+            <StatusBadge
+              nivel={financeiro.status.nivel}
+              label={financeiro.status.nivel === 'fechado' ? 'Conciliado' : financeiro.status.nivel === 'parcial' ? 'Parcial' : 'Pendente'}
+            />
           </div>
 
-          <div className="p-4 space-y-4">
+          <div className="p-4 space-y-3">
             {/* Resultado destaque */}
-            <div className="text-center py-2">
-              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Resultado Acumulado</p>
-              <p className={`text-3xl font-extrabold tracking-tight ${financeiro.resultado >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+            <div className="text-center">
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">Resultado Acumulado</p>
+              <p className={`text-3xl font-bold tabular-nums leading-tight mt-1 ${financeiro.resultado >= 0 ? 'text-success' : 'text-destructive'}`}>
                 {formatMoeda(financeiro.resultado)}
               </p>
             </div>
 
             {/* Entradas / Saídas */}
-            <div className="grid grid-cols-2 gap-3 border-t border-border/40 pt-3">
-              <div className="flex items-center gap-2">
-                <div className="h-6 w-6 rounded bg-emerald-500/10 flex items-center justify-center">
-                  <TrendingUp className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-muted-foreground uppercase font-medium">Entradas</p>
-                  <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                    {formatMoeda(financeiro.totalEntradas)}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="h-6 w-6 rounded bg-red-500/10 flex items-center justify-center">
-                  <TrendingDown className="h-3 w-3 text-red-600 dark:text-red-400" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-muted-foreground uppercase font-medium">Saídas</p>
-                  <p className="text-xs font-bold text-red-600 dark:text-red-400 tabular-nums">
-                    {formatMoeda(financeiro.totalSaidas)}
-                  </p>
-                </div>
-              </div>
+            <div className="border-t border-border/40 pt-2.5">
+              <MetricRow
+                label="Entradas"
+                value={formatMoeda(financeiro.totalEntradas)}
+                accent="text-success"
+              />
+              <MetricRow
+                label="Saídas"
+                value={formatMoeda(financeiro.totalSaidas)}
+                accent="text-destructive"
+              />
             </div>
 
             {/* Caixa Atual (global) */}
             {isGlobal && (
-              <div className="border-t border-border/40 pt-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded bg-primary/10 flex items-center justify-center">
-                      <Landmark className="h-3 w-3 text-primary" />
-                    </div>
-                    <span className="text-[10px] text-muted-foreground uppercase font-medium">Caixa Atual</span>
-                  </div>
-                  <span className={`text-sm font-bold tabular-nums ${financeiro.caixaAtual >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                    {formatMoeda(financeiro.caixaAtual)}
-                  </span>
-                </div>
+              <div className="border-t border-border/40 pt-2.5">
+                <MetricRow
+                  label="Caixa Atual"
+                  value={formatMoeda(financeiro.caixaAtual)}
+                  accent={financeiro.caixaAtual >= 0 ? 'text-success' : 'text-destructive'}
+                />
               </div>
             )}
 
             {/* CTA */}
             <button
               onClick={() => onTabChange('fin_caixa', { ano: filtroGlobal.ano, mes: mesNum })}
-              className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-primary py-2.5 rounded-md border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10"
+              className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold text-primary py-2 rounded border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10 mt-1"
             >
-              Fluxo Financeiro <ChevronRight className="h-3.5 w-3.5" />
+              Fluxo Financeiro <ChevronRight className="h-3 w-3" />
             </button>
           </div>
-        </div>
+        </section>
       </div>
 
       {/* ── Econômico ── */}
-      <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
-        <div className="p-4 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="h-7 w-7 rounded-md bg-violet-500/10 flex items-center justify-center">
-              <BarChart3 className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
-            </div>
-            <div>
-              <span className="text-sm font-bold text-foreground">Econômico</span>
-              <span className="text-xs text-muted-foreground ml-2">{economico.status.descricao}</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <StatusLabel
-              nivel={economico.status.nivel}
-              label={economico.status.nivel === 'fechado' ? 'Validado' : economico.status.nivel === 'parcial' ? 'Parcial' : 'Pendente'}
-            />
-            <button
-              onClick={() => onTabChange('analise_economica', { ano: filtroGlobal.ano, mes: mesNum })}
-              className="h-8 px-3 flex items-center gap-1 text-xs font-semibold text-primary rounded-md border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10"
-            >
-              Abrir <ChevronRight className="h-3 w-3" />
-            </button>
-          </div>
+      <button
+        onClick={() => onTabChange('analise_economica', { ano: filtroGlobal.ano, mes: mesNum })}
+        className="w-full rounded-lg border border-border/60 bg-card p-3.5 flex items-center gap-3 transition-colors hover:bg-muted/30 active:bg-muted/50"
+      >
+        <div className="h-8 w-8 rounded bg-secondary/10 flex items-center justify-center flex-shrink-0">
+          <BarChart3 className="h-4 w-4 text-secondary" />
         </div>
-      </div>
+        <div className="flex-1 text-left">
+          <span className="text-xs font-semibold text-foreground">Econômico</span>
+          <p className="text-[10px] text-muted-foreground mt-0.5">{economico.status.descricao}</p>
+        </div>
+        <StatusBadge
+          nivel={economico.status.nivel}
+          label={economico.status.nivel === 'fechado' ? 'Validado' : economico.status.nivel === 'parcial' ? 'Parcial' : 'Pendente'}
+        />
+        <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+      </button>
 
       {/* ── Pendências ── */}
       {alertas.length > 0 && (
-        <div className="rounded-lg border border-amber-500/30 bg-card overflow-hidden">
-          <div className="px-4 py-3 border-b border-amber-500/20 bg-amber-500/5">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              <span className="text-sm font-bold text-foreground">
-                Pendências
-              </span>
-              <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-full ml-auto tabular-nums">
-                {alertas.length}
-              </span>
-            </div>
+        <section className="rounded-lg border border-warning/30 bg-card overflow-hidden">
+          <div className="px-3.5 py-2.5 border-b border-warning/20 bg-warning/5 flex items-center gap-2">
+            <AlertTriangle className="h-3.5 w-3.5 text-warning" />
+            <span className="text-xs font-semibold text-foreground">Pendências</span>
+            <span className="text-[10px] font-semibold text-warning bg-warning/15 px-1.5 py-0.5 rounded tabular-nums ml-auto">
+              {alertas.length}
+            </span>
           </div>
-          <div className="divide-y divide-border/40">
+          <div className="divide-y divide-border/30">
             {alertas.map((a, i) => {
               const blocked = isGlobal && a.blockedGlobal;
               return (
                 <button
                   key={i}
                   onClick={() => !blocked && onTabChange(a.tab, { ano: filtroGlobal.ano, mes: mesNum })}
-                  className={`w-full flex items-center gap-3 text-left px-4 py-3 transition-colors ${blocked ? 'opacity-50 cursor-default' : 'hover:bg-muted/30'}`}
+                  className={`w-full flex items-center gap-2.5 text-left px-3.5 py-2.5 transition-colors ${blocked ? 'opacity-50 cursor-default' : 'hover:bg-muted/30'}`}
                 >
-                  <StatusIndicator nivel={a.nivel} />
-                  <span className="flex-1 text-sm text-foreground">{a.texto}</span>
+                  <StatusDot nivel={a.nivel} />
+                  <span className="flex-1 text-[11px] text-foreground leading-tight">{a.texto}</span>
                   {blocked ? (
-                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">Selecione fazenda</span>
+                    <span className="text-[9px] text-muted-foreground whitespace-nowrap">Selecione fazenda</span>
                   ) : (
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                    <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                   )}
                 </button>
               );
             })}
           </div>
-        </div>
+        </section>
       )}
 
       {alertas.length === 0 && !loading && !statusZoo.loading && (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-              Nenhuma pendência — {mesLabel}/{filtroGlobal.ano}
-            </span>
-          </div>
+        <div className="rounded-lg border border-success/30 bg-success/5 px-3.5 py-3 flex items-center gap-2">
+          <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+          <span className="text-xs font-semibold text-success">
+            Nenhuma pendência — {mesLabel}/{filtroGlobal.ano}
+          </span>
         </div>
       )}
     </div>
