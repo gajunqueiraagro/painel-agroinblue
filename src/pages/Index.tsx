@@ -174,6 +174,7 @@ const Index = () => {
         }
       />
 
+      <div className="flex-1 overflow-y-auto">
       {activeTab === 'resumo' && (
         <ResumoTab
           lancamentos={lancamentosVisiveis}
