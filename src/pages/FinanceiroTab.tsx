@@ -446,7 +446,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           </SelectContent>
         </Select>
         <Select value={mesFiltro} onValueChange={setMesFiltro}>
-          <SelectTrigger className="h-6 text-[10px] font-bold w-[90px]">
+          <SelectTrigger className="h-6 text-[10px] font-bold w-[110px]">
             <SelectValue placeholder="Mês" />
           </SelectTrigger>
           <SelectContent side="bottom">
