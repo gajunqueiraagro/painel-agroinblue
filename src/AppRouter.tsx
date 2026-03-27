@@ -1,4 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext';
+import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import AuthPage from '@/pages/AuthPage';
 import FazendaSetup from '@/pages/FazendaSetup';
@@ -6,6 +7,7 @@ import Index from '@/pages/Index';
 
 export default function AppRouter() {
   const { user, loading: authLoading } = useAuth();
+  const { loading: loadingCliente } = useCliente();
   const { fazendaAtual, loading: fazendaLoading } = useFazenda();
 
   if (authLoading) {
