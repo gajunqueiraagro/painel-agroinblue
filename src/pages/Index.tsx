@@ -160,7 +160,7 @@ const Index = () => {
   const fazendaNome = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || '');
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-screen flex flex-col bg-background">
       <SyncStatus online={online} pendingCount={pendingCount} syncing={syncing} onSync={syncQueue} />
       <Header
         title={TITLES[activeTab]}
