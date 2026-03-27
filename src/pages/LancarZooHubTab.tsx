@@ -95,33 +95,29 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
 
       <div className="p-4 space-y-5">
         {/* ── AÇÕES PRINCIPAIS ── */}
-        <div className="space-y-3">
+        <div className="grid grid-cols-3 gap-4">
           {ACOES_PRINCIPAIS.map(item => {
             const blocked = isBlocked(item.tab);
             return (
               <button
                 key={item.tab}
                 onClick={() => navTo(item.tab)}
-                className={`w-full flex items-center gap-4 rounded-xl border-2 bg-card p-5 transition-all ${
+                className={`flex flex-col items-center justify-center gap-3 rounded-xl border-2 bg-card p-5 min-h-[150px] transition-all ${
                   blocked
                     ? 'border-border opacity-50 cursor-not-allowed'
                     : 'border-primary/20 hover:border-primary hover:shadow-md active:scale-[0.98] shadow-sm'
                 }`}
               >
-                <div className={`rounded-xl p-4 shrink-0 ${blocked ? 'bg-muted' : 'bg-primary/10'}`}>
+                <div className={`rounded-full p-4 ${blocked ? 'bg-muted' : 'bg-primary/10'}`}>
                   <item.icon className={`h-8 w-8 ${blocked ? 'text-muted-foreground' : 'text-primary'}`} />
                 </div>
-                <div className="text-left flex-1 min-w-0">
-                  <p className={`text-base font-bold leading-tight ${blocked ? 'text-muted-foreground' : 'text-foreground'}`}>
+                <div className="text-center">
+                  <p className={`text-sm font-bold leading-tight ${blocked ? 'text-muted-foreground' : 'text-foreground'}`}>
                     {item.label}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1 leading-tight">{item.description}</p>
                 </div>
-                {blocked ? (
-                  <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
-                ) : (
-                  <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
-                )}
+                {blocked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
               </button>
             );
           })}
