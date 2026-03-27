@@ -194,6 +194,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           <ArrowLeft className="h-4 w-4" /> Voltar para Conciliação de Categoria
         </button>
       )}
+      </div>
     </div>
   );
 }
