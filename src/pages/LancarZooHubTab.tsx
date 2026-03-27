@@ -95,29 +95,29 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
 
       <div className="p-4 space-y-5">
         {/* ── AÇÕES PRINCIPAIS ── */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-2">
           {ACOES_PRINCIPAIS.map(item => {
             const blocked = isBlocked(item.tab);
             return (
               <button
                 key={item.tab}
                 onClick={() => navTo(item.tab)}
-                className={`flex flex-col items-center justify-center gap-3 rounded-xl border-2 bg-card p-5 min-h-[150px] transition-all ${
+                className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 bg-card px-2 py-4 min-h-[130px] transition-all ${
                   blocked
                     ? 'border-border opacity-50 cursor-not-allowed'
                     : 'border-primary/20 hover:border-primary hover:shadow-md active:scale-[0.98] shadow-sm'
                 }`}
               >
-                <div className={`rounded-full p-4 ${blocked ? 'bg-muted' : 'bg-primary/10'}`}>
-                  <item.icon className={`h-8 w-8 ${blocked ? 'text-muted-foreground' : 'text-primary'}`} />
+                <div className={`rounded-full p-3 ${blocked ? 'bg-muted' : 'bg-primary/10'}`}>
+                  <item.icon className={`h-7 w-7 ${blocked ? 'text-muted-foreground' : 'text-primary'}`} />
                 </div>
                 <div className="text-center">
-                  <p className={`text-sm font-bold leading-tight ${blocked ? 'text-muted-foreground' : 'text-foreground'}`}>
+                  <p className={`text-[11px] font-bold leading-tight ${blocked ? 'text-muted-foreground' : 'text-foreground'}`}>
                     {item.label}
                   </p>
-                  <p className="text-[10px] text-muted-foreground mt-1 leading-tight">{item.description}</p>
+                  <p className="text-[9px] text-muted-foreground mt-0.5 leading-tight">{item.description}</p>
                 </div>
-                {blocked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
+                {blocked && <Lock className="h-3 w-3 text-muted-foreground" />}
               </button>
             );
           })}
