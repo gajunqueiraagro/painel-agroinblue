@@ -395,20 +395,20 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       {aba === 'reclassificacao' ? (
         <ReclassificacaoForm onAdicionar={onAdicionar} dataInicial={dataInicial} />
       ) : aba !== 'historico' ? (
-        <form onSubmit={handleSubmit} className="bg-card rounded-lg p-4 shadow-sm border space-y-4">
+        <form onSubmit={handleSubmit} className="bg-card rounded-lg p-3 shadow-sm border space-y-2.5">
 
           {/* === STATUS OPERACIONAL === */}
-          <div className="space-y-2">
-            <Label className="font-bold text-foreground text-sm">Status da Operação</Label>
-            <div className="grid grid-cols-3 gap-2">
+          <div className="space-y-1">
+            <Label className="font-bold text-foreground text-xs">Status da Operação</Label>
+            <div className="grid grid-cols-3 gap-1.5">
               {STATUS_OPTIONS.map(s => (
                 <button
                   key={s.value}
                   type="button"
                   onClick={() => setStatusOp(s.value)}
-                  className={`py-2.5 px-2 rounded-lg text-xs font-bold border-2 transition-all touch-target ${
+                  className={`py-1 px-1.5 rounded-md text-[11px] font-bold border transition-all ${
                     statusOp === s.value
-                      ? `${s.bg} text-white border-transparent shadow-md`
+                      ? `${s.bg} text-white border-transparent shadow-sm`
                       : 'border-border text-muted-foreground bg-muted/30'
                   }`}
                 >
@@ -422,12 +422,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
           {/* Tipo */}
           <div>
-            <Label className="font-bold text-foreground">Tipo</Label>
-            <div className="grid grid-cols-2 gap-1.5 mt-1.5">
+            <Label className="font-bold text-foreground text-xs">Tipo</Label>
+            <div className="grid grid-cols-3 gap-1 mt-1">
               {tiposDisponiveis.map(t => (
                 <button key={t.value} type="button"
                   onClick={() => { setTipo(t.value); setFazendaOrigem(''); setFazendaDestino(''); setMotivoMorte(''); setMotivoMorteCustom(''); resetFinancialFields(); setPesoKg(t.value === 'nascimento' ? '30' : ''); }}
-                  className={`py-1.5 px-2 rounded-lg text-xs font-bold border-2 transition-all touch-target ${
+                  className={`py-1 px-1 rounded-md text-[11px] font-bold border transition-all ${
                     tipo === t.value ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground'
                   }`}>
                   {t.icon} {t.label}
