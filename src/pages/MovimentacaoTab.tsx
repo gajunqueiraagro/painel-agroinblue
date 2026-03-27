@@ -32,8 +32,7 @@ export function MovimentacaoTab({ lancamentos, saldosIniciais, onEditar, onRemov
 
   if (mainView === 'tipo') {
     return (
-      <div className="pb-20">
-        {/* Main view toggle */}
+      <div>
         <div className="p-3 pb-0">
           <ViewToggle value={mainView} onChange={setMainView} />
         </div>
