@@ -24,6 +24,7 @@ import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import type { Pasto, CategoriaRebanho } from '@/hooks/usePastos';
 
 type Bloco = 'indicadores' | 'receita' | 'dre' | 'fluxo';
+type Cenario = 'realizado' | 'previsto';
 
 interface Props {
   lancamentos: FinanceiroLancamento[];
