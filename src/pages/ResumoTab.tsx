@@ -204,7 +204,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
               </SelectContent>
             </Select>
             <Select value={String(mesNum)} onValueChange={v => onFiltroChange({ mes: Number(v) })}>
-              <SelectTrigger className="w-[62px] h-7 text-xs font-medium border-border/60 bg-card">
+              <SelectTrigger className="w-[72px] h-7 text-xs font-medium border-border/60 bg-card">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent side="bottom">
