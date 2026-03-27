@@ -93,21 +93,26 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   if (isGlobal) return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda para o fechamento.</div>;
 
   return (
-    <div className="p-4 pb-24 space-y-4">
-      <div className="flex items-center gap-3">
-        <Select value={anoMes} onValueChange={setAnoMes}>
-          <SelectTrigger className="w-40 h-12"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {getAnoMesOptions().map(am => (
-              <SelectItem key={am} value={am}>{formatAnoMes(am)}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="flex flex-col text-sm">
-          <Badge variant="secondary">{preenchidos}/{pastosAtivos.length} iniciados</Badge>
-          <span className="text-xs text-muted-foreground mt-0.5">{fechadosCount} fechados</span>
+    <div className="pb-24">
+      {/* Filtros - sticky */}
+      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-2">
+        <div className="flex items-center gap-3">
+          <Select value={anoMes} onValueChange={setAnoMes}>
+            <SelectTrigger className="w-40 h-12"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {getAnoMesOptions().map(am => (
+                <SelectItem key={am} value={am}>{formatAnoMes(am)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex flex-col text-sm">
+            <Badge variant="secondary">{preenchidos}/{pastosAtivos.length} iniciados</Badge>
+            <span className="text-xs text-muted-foreground mt-0.5">{fechadosCount} fechados</span>
+          </div>
         </div>
       </div>
+
+      <div className="p-4 space-y-4">
 
       {loading ? (
         <div className="text-center py-8 text-muted-foreground">Carregando...</div>
@@ -189,6 +194,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           <ArrowLeft className="h-4 w-4" /> Voltar para Conciliação de Categoria
         </button>
       )}
+      </div>
     </div>
   );
 }
