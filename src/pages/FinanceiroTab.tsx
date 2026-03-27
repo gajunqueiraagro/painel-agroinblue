@@ -300,10 +300,10 @@ function AbateTable({ lancamentos, onEdit, isGlobal, fazendaMap }: { lancamentos
 const FINANCIAL_TYPES: SubAba[] = ['abate', 'compra', 'venda'];
 
 function getTopTabFromSubAba(subAba?: SubAba): TopTab {
-  if (!subAba) return 'todas';
+  if (!subAba) return 'entradas';
   if (ENTRY_TYPES.includes(subAba)) return 'entradas';
   if (EXIT_TYPES.includes(subAba)) return 'saidas';
-  return 'todas';
+  return 'entradas';
 }
 
 export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, onBack, drillDownLabel }: Props) {
