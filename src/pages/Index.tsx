@@ -185,7 +185,7 @@ const Index = () => {
     analise_economica: goToVisaoFinHub,
     fin_caixa: goToLancarFinHub,
     fechamento: goToZootecnico,
-    evolucao_rebanho_hub: goToLancarZooHub,
+    evolucao_rebanho_hub: () => setActiveTab('movimentacao'),
   };
 
   const clienteNomeHeader = clientes.length > 1 ? (clienteAtual?.nome || '') : '';
