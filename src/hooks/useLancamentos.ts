@@ -92,6 +92,7 @@ export function useLancamentos() {
           categoria: s.categoria as Categoria,
           quantidade: s.quantidade,
           pesoMedioKg: (s as any).peso_medio_kg ?? undefined,
+          fazendaId: s.fazenda_id,
         })));
       }
 

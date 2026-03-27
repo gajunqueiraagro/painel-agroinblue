@@ -204,10 +204,11 @@ function useGlobalFarmKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInici
 
     const farms: FarmKpi[] = pecuarias.map(faz => {
       const lancsFaz = lancamentos.filter(l => l.fazendaId === faz.id);
+      const saldosFaz = saldosIniciais.filter(s => s.fazendaId === faz.id);
       const pastosFaz = allPastos.filter(p => p.fazenda_id === faz.id);
 
       // Saldo final no mês filtrado
-      const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancsFaz, ano, mes);
+      const saldoMap = calcSaldoPorCategoriaLegado(saldosFaz, lancsFaz, ano, mes);
       const rebanho = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
 
       // Acumulado with official weight hierarchy
@@ -216,7 +217,7 @@ function useGlobalFarmKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInici
       let mesesComDado = 0;
 
       for (let m = 1; m <= mes; m++) {
-        const saldoM = calcSaldoPorCategoriaLegado(saldosIniciais, lancsFaz, ano, m);
+        const saldoM = calcSaldoPorCategoriaLegado(saldosFaz, lancsFaz, ano, m);
         const saldoTotal = Array.from(saldoM.values()).reduce((s, v) => s + v, 0);
         if (saldoTotal <= 0) continue;
         mesesComDado++;
@@ -226,7 +227,7 @@ function useGlobalFarmKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInici
         let pesoTotalMes = 0;
         for (const [cat, qtd] of saldoM.entries()) {
           if (qtd <= 0) continue;
-          const { valor: pesoKg } = resolverPesoOficial(cat, pesosPastosMes, saldosIniciais, lancsFaz, ano, m);
+          const { valor: pesoKg } = resolverPesoOficial(cat, pesosPastosMes, saldosFaz, lancsFaz, ano, m);
           if (pesoKg) pesoTotalMes += pesoKg * qtd;
         }
         sumPesoTotal += pesoTotalMes;
