@@ -21,34 +21,23 @@ export interface FinanceiroLancamentoBase {
 
 const norm = (v: string | null | undefined) => (v || '').toLowerCase().trim();
 
-const isTransferencia = (l: FinanceiroLancamentoBase): boolean =>
-  norm(l.tipo_operacao).startsWith('3');
-
-const isTransferenciaEntrada = (l: FinanceiroLancamentoBase): boolean =>
-  isTransferencia(l) && norm(l.produto).includes('resgate');
-
-const isTransferenciaSaida = (l: FinanceiroLancamentoBase): boolean =>
-  isTransferencia(l) && norm(l.produto).includes('aplica');
-
 /** Lançamento conciliado? */
 export const isConciliado = (l: FinanceiroLancamentoBase): boolean =>
   norm(l.status_transacao) === 'conciliado';
 
 /**
- * Lançamento de entrada
- * - tipo_operacao 1*
- * - tipo_operacao 3* com produto contendo "resgate"
+ * Lançamento de entrada — somente tipo_operacao 1*
+ * 3-Transferência é movimentação interna e NÃO entra.
  */
 export const isEntradaFinanceira = (l: FinanceiroLancamentoBase): boolean =>
-  norm(l.tipo_operacao).startsWith('1') || isTransferenciaEntrada(l);
+  norm(l.tipo_operacao).startsWith('1');
 
 /**
- * Lançamento de saída
- * - tipo_operacao 2*
- * - tipo_operacao 3* com produto contendo "aplica"
+ * Lançamento de saída — somente tipo_operacao 2*
+ * 3-Transferência é movimentação interna e NÃO entra.
  */
 export const isSaidaFinanceira = (l: FinanceiroLancamentoBase): boolean =>
-  norm(l.tipo_operacao).startsWith('2') || isTransferenciaSaida(l);
+  norm(l.tipo_operacao).startsWith('2');
 
 /** Extrai ano-mês (YYYY-MM) da data_pagamento */
 export const datePagtoAnoMes = (l: FinanceiroLancamentoBase): string | null => {
