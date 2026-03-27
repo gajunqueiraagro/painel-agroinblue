@@ -275,7 +275,7 @@ export function useFinanceiro() {
         }
 
         const [lancResult, ccResult, impResult, saldoResult, lancPecResult] = await Promise.all([
-          supabase.from('financeiro_lancamentos').select('*').in('fazenda_id', allFazendaIds).order('data_realizacao', { ascending: false }),
+          supabase.from('financeiro_lancamentos').select('*').in('fazenda_id', allFazendaIds).order('data_realizacao', { ascending: false }).limit(10000),
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').in('fazenda_id', allFazendaIds).eq('ativo', true),
           supabase.from('financeiro_importacoes').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').in('fazenda_id', allFazendaIds).order('data_importacao', { ascending: false }),
           // Raw pecuário data for rebanho calculation
@@ -298,7 +298,7 @@ export function useFinanceiro() {
       } else {
         // Per-fazenda
         const promises: PromiseLike<any>[] = [
-          supabase.from('financeiro_lancamentos').select('*').eq('fazenda_id', fazendaId).order('data_realizacao', { ascending: false }),
+          supabase.from('financeiro_lancamentos').select('*').eq('fazenda_id', fazendaId).order('data_realizacao', { ascending: false }).limit(10000),
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').eq('fazenda_id', fazendaId).eq('ativo', true),
           supabase.from('financeiro_importacoes').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').in('fazenda_id', allFazendaIds).order('data_importacao', { ascending: false }),
         ];
@@ -306,7 +306,7 @@ export function useFinanceiro() {
         const needsRateio = fazendaADM && fazendaADM.id !== fazendaId;
         if (needsRateio) {
           promises.push(
-            supabase.from('financeiro_lancamentos').select('*').eq('fazenda_id', fazendaADM.id).order('data_realizacao', { ascending: false }),
+            supabase.from('financeiro_lancamentos').select('*').eq('fazenda_id', fazendaADM.id).order('data_realizacao', { ascending: false }).limit(10000),
           );
           // Load raw pecuário for rebanho calc
           if (opIds.length > 0) {
