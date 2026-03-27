@@ -1,9 +1,10 @@
 /**
  * Fluxo de Caixa Global — tabela 12 linhas, jan-dez + coluna Total.
+ * Duas visualizações: Resumido (executivo) e Amplo (analítico com sub-categorias).
  * Base: data_pagamento + Conciliado.
  * SEMPRE GLOBAL — independente da fazenda selecionada.
  */
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFluxoCaixa, type FluxoMensal } from '@/hooks/useFluxoCaixa';
 import { Card, CardContent } from '@/components/ui/card';
@@ -23,6 +24,49 @@ const fmtK = (v: number): string => {
 };
 
 // ---------------------------------------------------------------------------
+// Row definitions
+// ---------------------------------------------------------------------------
+
+type VisaoFluxo = 'resumido' | 'amplo';
+
+interface RowDef {
+  label: string;
+  key: keyof FluxoMensal;
+  bold?: boolean;
+  indent?: number; // 0 = normal, 1 = sub, 2 = sub-sub
+  tipo?: 'entrada' | 'saida' | 'saldo';
+  /** Only show in amplo view */
+  amploOnly?: boolean;
+}
+
+const ROWS: RowDef[] = [
+  { label: 'Saldo Inicial', key: 'saldoInicial', tipo: 'saldo' },
+
+  { label: 'Total Entradas', key: 'totalEntradas', bold: true, tipo: 'entrada' },
+  { label: 'Receitas', key: 'receitas', indent: 1, tipo: 'entrada' },
+  { label: 'Receitas Pecuárias', key: 'receitasPec', indent: 2, tipo: 'entrada', amploOnly: true },
+  { label: 'Receitas Agricultura', key: 'receitasAgri', indent: 2, tipo: 'entrada', amploOnly: true },
+  { label: 'Outras Receitas', key: 'receitasOutras', indent: 2, tipo: 'entrada', amploOnly: true },
+  { label: 'Captação Financ.', key: 'captacao', indent: 1, tipo: 'entrada' },
+  { label: 'Captação Financ. Pec.', key: 'captacaoPec', indent: 2, tipo: 'entrada', amploOnly: true },
+  { label: 'Captação Financ. Agri.', key: 'captacaoAgri', indent: 2, tipo: 'entrada', amploOnly: true },
+  { label: 'Aportes Pessoais', key: 'aportes', indent: 1, tipo: 'entrada' },
+
+  { label: 'Total Saídas', key: 'totalSaidas', bold: true, tipo: 'saida' },
+  { label: 'Desemb. Produtivo', key: 'desembolsoProdutivo', indent: 1, tipo: 'saida' },
+  { label: 'Desemb. Produtivo Pec.', key: 'desembolsoPec', indent: 2, tipo: 'saida', amploOnly: true },
+  { label: 'Desemb. Produtivo Agri.', key: 'desembolsoAgri', indent: 2, tipo: 'saida', amploOnly: true },
+  { label: 'Reposição Bovinos', key: 'reposicao', indent: 1, tipo: 'saida' },
+  { label: 'Amortizações Fin.', key: 'amortizacoes', indent: 1, tipo: 'saida' },
+  { label: 'Amortizações Fin. Pec.', key: 'amortizacoesPec', indent: 2, tipo: 'saida', amploOnly: true },
+  { label: 'Amortizações Fin. Agri.', key: 'amortizacoesAgri', indent: 2, tipo: 'saida', amploOnly: true },
+  { label: 'Dividendos', key: 'dividendos', indent: 1, tipo: 'saida' },
+
+  { label: 'Saldo Final', key: 'saldoFinal', tipo: 'saldo' },
+  { label: 'Saldo Acumulado', key: 'saldoAcumulado', bold: true, tipo: 'saldo' },
+];
+
+// ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
@@ -31,7 +75,6 @@ interface Props {
   rateioADM: RateioADM[];
   ano: number;
   mesAte: number;
-  /** Nome da fazenda atual — se presente, significa que o usuário está numa fazenda específica */
   fazendaAtualNome?: string;
 }
 
@@ -41,6 +84,7 @@ interface Props {
 
 export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAtualNome }: Props) {
   const isMobile = useIsMobile();
+  const [visao, setVisao] = useState<VisaoFluxo>('resumido');
   const { meses, loading, saldoInicialAusente, saldoInicialAudit } = useFluxoCaixa(lancamentos, rateioADM, ano, mesAte);
 
   if (loading) {
@@ -93,10 +137,35 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
       {/* Tabela Fluxo de Caixa */}
       <Card>
         <CardContent className="pt-4 pb-2 overflow-x-auto">
-          <h3 className="text-sm md:text-base font-bold text-card-foreground mb-3">
-            Fluxo de Caixa Global
-          </h3>
-          <FluxoTable meses={meses} mesAte={mesAte} isMobile={isMobile} />
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm md:text-base font-bold text-card-foreground">
+              Fluxo de Caixa Global
+            </h3>
+            {/* Toggle Resumido / Amplo */}
+            <div className="flex rounded-md border border-border overflow-hidden">
+              <button
+                onClick={() => setVisao('resumido')}
+                className={`px-2.5 py-1 text-[10px] font-medium transition-colors ${
+                  visao === 'resumido'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Resumido
+              </button>
+              <button
+                onClick={() => setVisao('amplo')}
+                className={`px-2.5 py-1 text-[10px] font-medium transition-colors ${
+                  visao === 'amplo'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Amplo
+              </button>
+            </div>
+          </div>
+          <FluxoTable meses={meses} mesAte={mesAte} isMobile={isMobile} visao={visao} />
         </CardContent>
       </Card>
     </div>
@@ -104,31 +173,8 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
 }
 
 // ---------------------------------------------------------------------------
-// Tabela 12 linhas + coluna Total
+// Tabela
 // ---------------------------------------------------------------------------
-
-interface RowDef {
-  label: string;
-  key: keyof FluxoMensal;
-  bold?: boolean;
-  indent?: boolean;
-  tipo?: 'entrada' | 'saida' | 'saldo';
-}
-
-const ROWS: RowDef[] = [
-  { label: 'Saldo Inicial', key: 'saldoInicial', tipo: 'saldo' },
-  { label: 'Total Entradas', key: 'totalEntradas', bold: true, tipo: 'entrada' },
-  { label: 'Receitas', key: 'receitas', indent: true, tipo: 'entrada' },
-  { label: 'Captação Financ.', key: 'captacao', indent: true, tipo: 'entrada' },
-  { label: 'Aportes Pessoais', key: 'aportes', indent: true, tipo: 'entrada' },
-  { label: 'Total Saídas', key: 'totalSaidas', bold: true, tipo: 'saida' },
-  { label: 'Desemb. Produtivo', key: 'desembolsoProdutivo', indent: true, tipo: 'saida' },
-  { label: 'Reposição Bovinos', key: 'reposicao', indent: true, tipo: 'saida' },
-  { label: 'Amortizações Fin.', key: 'amortizacoes', indent: true, tipo: 'saida' },
-  { label: 'Dividendos', key: 'dividendos', indent: true, tipo: 'saida' },
-  { label: 'Saldo Final', key: 'saldoFinal', tipo: 'saldo' },
-  { label: 'Saldo Acumulado', key: 'saldoAcumulado', bold: true, tipo: 'saldo' },
-];
 
 function getValueColor(val: number, row: RowDef, isAfter: boolean): string {
   if (isAfter) return 'text-muted-foreground/30';
@@ -138,11 +184,16 @@ function getValueColor(val: number, row: RowDef, isAfter: boolean): string {
   return val >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
 }
 
-function FluxoTable({ meses, mesAte, isMobile }: { meses: FluxoMensal[]; mesAte: number; isMobile: boolean }) {
+function FluxoTable({ meses, mesAte, isMobile, visao }: { meses: FluxoMensal[]; mesAte: number; isMobile: boolean; visao: VisaoFluxo }) {
+  const visibleRows = useMemo(
+    () => ROWS.filter(r => visao === 'amplo' || !r.amploOnly),
+    [visao],
+  );
+
   const totals = useMemo(() => {
     const upTo = meses.filter(m => m.mes <= mesAte);
     const result: Record<string, number> = {};
-    for (const row of ROWS) {
+    for (const row of visibleRows) {
       if (row.key === 'saldoInicial') {
         result[row.key] = meses.length > 0 ? meses[0].saldoInicial : 0;
       } else if (row.key === 'saldoFinal') {
@@ -154,17 +205,24 @@ function FluxoTable({ meses, mesAte, isMobile }: { meses: FluxoMensal[]; mesAte:
       }
     }
     return result;
-  }, [meses, mesAte]);
+  }, [meses, mesAte, visibleRows]);
 
   const fontSize = isMobile ? 'text-[9px]' : 'text-[11px]';
+  const subFontSize = isMobile ? 'text-[8px]' : 'text-[10px]';
   const cellPad = isMobile ? 'px-1 py-1' : 'px-2 py-1.5';
+
+  const getIndentClass = (row: RowDef) => {
+    if (!row.indent) return '';
+    if (row.indent === 2) return isMobile ? 'pl-6' : 'pl-8';
+    return isMobile ? 'pl-4' : 'pl-6';
+  };
 
   return (
     <div className="overflow-x-auto -mx-2">
       <table className={`w-full min-w-[800px] ${fontSize}`}>
         <thead className="sticky top-0 z-20 bg-card">
           <tr className="border-b border-border">
-            <th className={`${cellPad} text-left font-bold text-muted-foreground sticky left-0 bg-card z-30`} style={{ minWidth: isMobile ? 100 : 140 }}>
+            <th className={`${cellPad} text-left font-bold text-muted-foreground sticky left-0 bg-card z-30`} style={{ minWidth: isMobile ? 100 : 160 }}>
               
             </th>
             {meses.map(m => (
@@ -183,35 +241,42 @@ function FluxoTable({ meses, mesAte, isMobile }: { meses: FluxoMensal[]; mesAte:
           </tr>
         </thead>
         <tbody>
-          {ROWS.map(row => (
-            <tr key={row.key} className={`border-b border-border/50 ${row.bold ? 'bg-muted/30' : ''}`}>
-              <td
-                className={`${cellPad} text-left ${row.bold ? 'font-bold' : 'font-normal'} ${
-                  row.indent ? 'pl-4 md:pl-6' : ''
-                } text-card-foreground sticky left-0 bg-card z-10`}
-                style={{ minWidth: isMobile ? 100 : 140 }}
-              >
-                {row.label}
-              </td>
-              {meses.map(m => {
-                const val = m[row.key] as number;
-                const isAfter = m.mes > mesAte;
-                const colorClass = getValueColor(val, row, isAfter);
+          {visibleRows.map(row => {
+            const isSubSub = row.indent === 2;
+            const rowFontSize = isSubSub ? subFontSize : fontSize;
 
-                return (
-                  <td
-                    key={m.mes}
-                    className={`${cellPad} text-right ${row.bold ? 'font-bold' : 'font-normal'} ${colorClass}`}
-                  >
-                    {isAfter ? '-' : fmtK(val)}
-                  </td>
-                );
-              })}
-              <td className={`${cellPad} text-right ${row.bold ? 'font-bold' : 'font-normal'} bg-muted/50 ${getValueColor(totals[row.key] || 0, row, false)}`}>
-                {fmtK(totals[row.key] || 0)}
-              </td>
-            </tr>
-          ))}
+            return (
+              <tr key={row.key} className={`border-b border-border/50 ${row.bold ? 'bg-muted/30' : ''}`}>
+                <td
+                  className={`${cellPad} text-left ${row.bold ? 'font-bold' : 'font-normal'} ${getIndentClass(row)} ${
+                    isSubSub ? `${subFontSize} text-muted-foreground` : 'text-card-foreground'
+                  } sticky left-0 bg-card z-10`}
+                  style={{ minWidth: isMobile ? 100 : 160 }}
+                >
+                  {row.label}
+                </td>
+                {meses.map(m => {
+                  const val = m[row.key] as number;
+                  const isAfter = m.mes > mesAte;
+                  const colorClass = isSubSub && val === 0
+                    ? 'text-muted-foreground/40'
+                    : getValueColor(val, row, isAfter);
+
+                  return (
+                    <td
+                      key={m.mes}
+                      className={`${cellPad} text-right ${row.bold ? 'font-bold' : 'font-normal'} ${isSubSub ? subFontSize : ''} ${colorClass}`}
+                    >
+                      {isAfter ? '-' : fmtK(val)}
+                    </td>
+                  );
+                })}
+                <td className={`${cellPad} text-right ${row.bold ? 'font-bold' : 'font-normal'} ${isSubSub ? subFontSize : ''} bg-muted/50 ${getValueColor(totals[row.key] || 0, row, false)}`}>
+                  {fmtK(totals[row.key] || 0)}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
