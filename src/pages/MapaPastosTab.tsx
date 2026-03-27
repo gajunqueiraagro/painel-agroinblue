@@ -187,58 +187,46 @@ export function MapaPastosTab() {
     <TooltipProvider>
       <div className="pb-24">
         {/* Header - sticky */}
-        <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-2">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3">
+        <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 py-1.5">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
               <Select value={anoMes} onValueChange={setAnoMes}>
-                <SelectTrigger className="w-40 h-12"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-32 h-8 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {getAnoMesOptions().map(am => (
                     <SelectItem key={am} value={am}>{formatAnoMes(am)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <Badge variant="secondary" className="text-sm">{totais.totalCab} cab</Badge>
+              <Badge variant="secondary" className="text-xs h-6">{totais.totalCab} cab</Badge>
               {totais.uaHaGeral !== null && (
-                <Badge variant="outline" className="text-sm">{formatNum(totais.uaHaGeral, 2)} UA/ha</Badge>
+                <Badge variant="outline" className="text-xs h-6">{formatNum(totais.uaHaGeral, 2)} UA/ha</Badge>
               )}
             </div>
-            <div className="flex gap-2 flex-wrap">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => gerarModeloMapaPastos(pastos, categorias, fazendaAtual?.nome || 'Fazenda')}
-              >
-                <FileDown className="h-4 w-4 mr-1" />Baixar modelo
+            <div className="flex gap-1 flex-wrap">
+              <Button variant="outline" size="sm" className="h-7 text-xs px-2"
+                onClick={() => gerarModeloMapaPastos(pastos, categorias, fazendaAtual?.nome || 'Fazenda')}>
+                <FileDown className="h-3.5 w-3.5 mr-1" />Modelo
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setImportOpen(true)}
-              >
-                <Upload className="h-4 w-4 mr-1" />Importar Excel
+              <Button variant="outline" size="sm" className="h-7 text-xs px-2"
+                onClick={() => setImportOpen(true)}>
+                <Upload className="h-3.5 w-3.5 mr-1" />Importar
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
+              <Button variant="outline" size="sm" className="h-7 text-xs px-2"
                 onClick={() => exportMapaPastosXlsx(rows, categorias, totais, resumoAtividades, anoMes, fazendaAtual?.nome || 'Fazenda')}
-                disabled={rows.length === 0}
-              >
-                <Download className="h-4 w-4 mr-1" />Excel
+                disabled={rows.length === 0}>
+                <Download className="h-3.5 w-3.5 mr-1" />Excel
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
+              <Button variant="outline" size="sm" className="h-7 text-xs px-2"
                 onClick={() => exportMapaPastosPdf(rows, categorias, totais, resumoAtividades, anoMes, fazendaAtual?.nome || 'Fazenda')}
-                disabled={rows.length === 0}
-              >
-                <FileText className="h-4 w-4 mr-1" />PDF
+                disabled={rows.length === 0}>
+                <FileText className="h-3.5 w-3.5 mr-1" />PDF
               </Button>
             </div>
           </div>
         </div>
 
-        <div className="p-4 space-y-4">
+        <div className="px-2 pt-2 space-y-2">
         {loading ? (
           <div className="text-center py-8 text-muted-foreground">Carregando mapa...</div>
         ) : rows.length === 0 ? (
@@ -246,8 +234,8 @@ export function MapaPastosTab() {
         ) : (
           <>
             {/* Main Table */}
-            <div className="relative overflow-auto rounded-lg border" style={{ maxHeight: '60vh' }}>
-              <table className="w-full text-sm border-collapse">
+            <div className="relative overflow-auto rounded-lg border" style={{ maxHeight: 'calc(100vh - 180px)' }}>
+              <table className="w-full text-xs border-collapse">
                 <thead className="sticky top-0 z-10 bg-muted">
                   <tr>
                     <th className="sticky left-0 z-20 bg-muted p-2 text-left font-semibold border-b border-r min-w-[120px]">Pasto</th>
