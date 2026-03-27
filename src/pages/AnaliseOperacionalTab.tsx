@@ -9,8 +9,14 @@ import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, CheckCircle, Info, TrendingUp, TrendingDown, ArrowRightLeft, Skull, ShoppingCart, Baby, Beef } from 'lucide-react';
 import { format } from 'date-fns';
 import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
+import type { SubAba } from './FinanceiroTab';
+import type { TabId } from '@/components/BottomNav';
 
-export function AnaliseOperacionalTab() {
+interface Props {
+  onNavigateToMovimentacao?: (subAba: SubAba, opts?: { ano?: string; mes?: string; label?: string; backTab?: TabId }) => void;
+}
+
+export function AnaliseOperacionalTab({ onNavigateToMovimentacao }: Props) {
   const { isGlobal } = useFazenda();
   const { categorias, pastos } = usePastos();
   const { fechamentos, loadFechamentos, loadItens } = useFechamento();
