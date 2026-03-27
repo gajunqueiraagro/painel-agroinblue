@@ -550,24 +550,6 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
         </section>
       </div>
 
-      {/* ── Econômico ── */}
-      <button
-        onClick={() => onTabChange('analise_economica', { ano: filtroGlobal.ano, mes: mesNum })}
-        className="w-full rounded-lg border border-border/60 bg-card p-3.5 flex items-center gap-3 transition-colors hover:bg-muted/30 active:bg-muted/50"
-      >
-        <div className="h-8 w-8 rounded bg-secondary/10 flex items-center justify-center flex-shrink-0">
-          <BarChart3 className="h-4 w-4 text-secondary" />
-        </div>
-        <div className="flex-1 text-left">
-          <span className="text-xs font-semibold text-foreground">Econômico</span>
-          <p className="text-[10px] text-muted-foreground mt-0.5">{economico.status.descricao}</p>
-        </div>
-        <StatusBadge
-          nivel={economico.status.nivel}
-          label={economico.status.nivel === 'fechado' ? 'Validado' : economico.status.nivel === 'parcial' ? 'Parcial' : 'Pendente'}
-        />
-        <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-      </button>
 
       {/* ── Pendências ── */}
       {alertas.length > 0 && (
