@@ -157,6 +157,45 @@ export function ClientesTab() {
     setSaving(false);
   };
 
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState('');
+
+  const handleDelete = async (clienteId: string, clienteNome: string) => {
+    if (confirmDelete !== clienteNome) {
+      toast.error('Digite o nome exato do cliente para confirmar.');
+      return;
+    }
+    setDeleting(true);
+
+    // Delete in order: fazenda_membros → fazendas → cliente_membros → cliente
+    const { data: fazendas } = await supabase
+      .from('fazendas')
+      .select('id')
+      .eq('cliente_id', clienteId);
+
+    const fazendaIds = (fazendas || []).map(f => f.id);
+
+    if (fazendaIds.length > 0) {
+      await supabase.from('fazenda_membros').delete().in('fazenda_id', fazendaIds);
+      await supabase.from('fazendas').delete().eq('cliente_id', clienteId);
+    }
+
+    await supabase.from('cliente_membros').delete().eq('cliente_id', clienteId);
+
+    const { error } = await supabase.from('clientes').delete().eq('id', clienteId);
+
+    if (error) {
+      toast.error('Erro ao apagar cliente: ' + error.message);
+    } else {
+      toast.success('Cliente apagado com sucesso!');
+      setEditing(null);
+      setConfirmDelete('');
+      await loadClientes();
+      await reloadClientes();
+    }
+    setDeleting(false);
+  };
+
   if (!isAdmin) {
     return (
       <div className="p-4 text-center text-muted-foreground text-sm">
