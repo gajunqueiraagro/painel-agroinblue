@@ -41,6 +41,8 @@ export function AcessosTab() {
   const [papel, setPapel] = useState('capataz');
   const [fazendaSelecionada, setFazendaSelecionada] = useState(fazendaAtual?.id || '');
   const [adding, setAdding] = useState(false);
+  const [resetUserId, setResetUserId] = useState<string | null>(null);
+  const [resetSenha, setResetSenha] = useState('');
 
   useEffect(() => {
     if (fazendaAtual) {
