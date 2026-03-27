@@ -662,6 +662,20 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             {type === 'bar' ? (
+              avgValue !== null ? (
+                <ComposedChart data={data}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} />
+                  <Tooltip formatter={(v: any) => typeof v === 'number' ? v.toLocaleString('pt-BR', { maximumFractionDigits: decimals }) : '—'} />
+                  <Legend wrapperStyle={{ fontSize: 10 }} />
+                  {keys.map((k, i) => (
+                    <Bar key={k} dataKey={k} name={labels[i]} fill={COLORS[i]} fillOpacity={i === 0 ? 1 : 0.4} radius={[3, 3, 0, 0]} />
+                  ))}
+                  <ReferenceLine y={avgValue} stroke="hsl(var(--primary))" strokeDasharray="6 3" strokeWidth={1.5}
+                    label={{ value: `Média: ${avgValue.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`, position: 'insideTopRight', fontSize: 9, fill: 'hsl(var(--primary))' }} />
+                </ComposedChart>
+              ) : (
               <BarChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
@@ -672,6 +686,7 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
                   <Bar key={k} dataKey={k} name={labels[i]} fill={COLORS[i]} fillOpacity={i === 0 ? 1 : 0.4} radius={[3, 3, 0, 0]} />
                 ))}
               </BarChart>
+              )
             ) : type === 'area' ? (
               <AreaChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" />
