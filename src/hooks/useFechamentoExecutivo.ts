@@ -91,7 +91,7 @@ export function useFechamentoExecutivo() {
     const { data: existing } = await query;
     const nextVersion = (existing?.length || 0) + 1;
 
-    const insertData: Record<string, any> = {
+    const insertData = {
       cliente_id: clienteId,
       fazenda_id: fazendaId,
       ano,
@@ -99,8 +99,8 @@ export function useFechamentoExecutivo() {
       periodo_texto: periodoTexto,
       versao: nextVersion,
       usuario_gerador: user?.id,
-      json_snapshot_indicadores: snapshot,
-      json_snapshot_textos: {},
+      json_snapshot_indicadores: snapshot as any,
+      json_snapshot_textos: {} as any,
     };
 
     const { data, error } = await supabase
