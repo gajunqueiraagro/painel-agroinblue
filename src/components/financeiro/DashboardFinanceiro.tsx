@@ -26,8 +26,18 @@ import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, C
 import {
   type FinanceiroLancamento,
   type RateioADM,
-  isDesembolsoProdutivo,
 } from '@/hooks/useFinanceiro';
+import {
+  isConciliado as isConciliadoCentral,
+  isEntrada as isEntradaCentral,
+  isSaida as isSaidaCentral,
+  datePagtoAnoMes as datePagtoAnoMesCentral,
+  classificarEntrada as classificarEntradaCentral,
+  classificarSaida as classificarSaidaCentral,
+  isDesembolsoProdutivo as isDesembolsoProdutivoCentral,
+  CATEGORIAS_ENTRADA,
+  CATEGORIAS_SAIDA,
+} from '@/lib/financeiro/classificacao';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { useArrobasGlobal } from '@/hooks/useArrobasGlobal';
 import { useFazenda } from '@/contexts/FazendaContext';
