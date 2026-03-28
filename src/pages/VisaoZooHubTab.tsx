@@ -239,7 +239,7 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
 
   if (isAdministrativa) {
     return (
-      <div className="max-w-lg mx-auto animate-fade-in pb-20 p-4">
+      <div className="w-full animate-fade-in pb-20 px-4 sm:px-6 lg:px-8">
         <Card className="border-l-4 border-l-amber-500">
           <CardContent className="p-6 text-center space-y-3">
             <AlertTriangle className="h-10 w-10 text-amber-500 mx-auto" />
@@ -257,9 +257,9 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
   }
 
   return (
-    <div className="max-w-lg mx-auto animate-fade-in pb-20">
+    <div className="w-full animate-fade-in pb-20">
       {/* Sticky filters */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 pt-2 pb-2 space-y-1.5">
+      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 sm:px-6 lg:px-8 pt-2 pb-2 space-y-1.5">
         {/* Linha 1: Ano + Mês + Realizado|Previsto */}
         <div className="flex gap-1.5 items-center">
           <Select value={anoFiltro} onValueChange={handleAnoChange}>
@@ -329,7 +329,7 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
       </div>
 
       {/* Content */}
-      <div className="p-4 space-y-4">
+      <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-4">
         {bloco === 'indicadores' && (
           <IndicadoresContent
             zoo={zoo}
@@ -370,10 +370,10 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
         )}
 
         {/* Cards: Fechamento Executivo + Análise do Consultor */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
           <button
             onClick={() => onTabChange('fechamento_executivo')}
-            className="flex items-center gap-2.5 rounded-xl border-2 border-primary/30 bg-primary/5 px-3 py-3 transition-all hover:border-primary hover:shadow-md active:scale-[0.98] group"
+            className="flex items-center gap-2.5 rounded-xl border-2 border-primary/30 bg-primary/5 px-4 py-4 min-h-[80px] transition-all hover:border-primary hover:shadow-md active:scale-[0.98] group"
           >
             <div className="rounded-full p-2 bg-primary/10 shrink-0">
               <FileBarChart className="h-5 w-5 text-primary" />
@@ -387,7 +387,7 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
 
           <button
             onClick={() => onTabChange('analise_consultor')}
-            className="flex items-center gap-2.5 rounded-xl border-2 border-primary/30 bg-primary/5 px-3 py-3 transition-all hover:border-primary hover:shadow-md active:scale-[0.98] group"
+            className="flex items-center gap-2.5 rounded-xl border-2 border-primary/30 bg-primary/5 px-4 py-4 min-h-[80px] transition-all hover:border-primary hover:shadow-md active:scale-[0.98] group"
           >
             <div className="rounded-full p-2 bg-primary/10 shrink-0">
               <TrendingUp className="h-5 w-5 text-primary" />
