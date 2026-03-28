@@ -33,6 +33,7 @@ import { calcUA, calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos'
 import { formatNum } from '@/lib/calculos/formatters';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { gerarSugestoes, type Sugestao } from '@/lib/calculos/sugestoesConciliacao';
 
 const CAT_COLS = [
   { codigo: 'mamotes_m', sigla: 'MM' },
