@@ -5,6 +5,7 @@ import { filtrarPorCenario } from '@/lib/statusOperacional';
 import { parseISO, format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { CheckCircle, AlertTriangle, Clock } from 'lucide-react';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -59,7 +60,49 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   const [mesFiltro, setMesFiltro] = useState(initialMes || format(new Date(), 'MM'));
   const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'previsto'>('realizado');
   const [pesosDb, setPesosDb] = useState<Record<string, number>>({});
+  const [conciliacaoStatus, setConciliacaoStatus] = useState<'aberto' | 'fechado' | 'parcial' | null>(null);
 
+  // Fetch conciliação status for the selected month/fazenda
+  useEffect(() => {
+    const anoMes = `${anoFiltro}-${mesFiltro}`;
+    if (!fazendaId || fazendaId === '__global__') {
+      setConciliacaoStatus(null);
+      return;
+    }
+
+    (async () => {
+      try {
+        // Get all pastos for the fazenda
+        const { data: pastos } = await supabase
+          .from('pastos')
+          .select('id')
+          .eq('fazenda_id', fazendaId)
+          .eq('ativo', true)
+          .eq('entra_conciliacao', true);
+
+        const totalPastos = (pastos || []).length;
+        if (totalPastos === 0) {
+          setConciliacaoStatus(null);
+          return;
+        }
+
+        // Get fechamento_pastos for this month
+        const { data: fechamentos } = await supabase
+          .from('fechamento_pastos')
+          .select('pasto_id, status')
+          .eq('fazenda_id', fazendaId)
+          .eq('ano_mes', anoMes);
+
+        const fechados = (fechamentos || []).filter(f => f.status === 'fechado' || f.status === 'conciliado').length;
+
+        if (fechados === 0) setConciliacaoStatus('aberto');
+        else if (fechados >= totalPastos) setConciliacaoStatus('fechado');
+        else setConciliacaoStatus('parcial');
+      } catch {
+        setConciliacaoStatus(null);
+      }
+    })();
+  }, [fazendaId, anoFiltro, mesFiltro]);
   // Fetch peso médio from fechamento_pasto_itens for the selected month
   useEffect(() => {
     const anoMes = `${anoFiltro}-${mesFiltro}`;
@@ -221,49 +264,71 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   return (
     <div className="p-3 max-w-4xl mx-auto space-y-2 animate-fade-in pb-20">
       {/* Filtros */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-          <SelectTrigger className="h-7 text-xs font-bold w-20">
-            <SelectValue placeholder="Ano" />
-          </SelectTrigger>
-          <SelectContent>
-            {anosDisponiveis.map(a => (
-              <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={mesFiltro} onValueChange={setMesFiltro}>
-          <SelectTrigger className="h-7 text-xs font-bold w-24">
-            <SelectValue placeholder="Mês" />
-          </SelectTrigger>
-          <SelectContent>
-            {MESES.map(m => (
-              <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+            <SelectTrigger className="h-7 text-xs font-bold w-20">
+              <SelectValue placeholder="Ano" />
+            </SelectTrigger>
+            <SelectContent>
+              {anosDisponiveis.map(a => (
+                <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={mesFiltro} onValueChange={setMesFiltro}>
+            <SelectTrigger className="h-7 text-xs font-bold w-24">
+              <SelectValue placeholder="Mês" />
+            </SelectTrigger>
+            <SelectContent>
+              {MESES.map(m => (
+                <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-        <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
-          {([
-            { value: 'realizado' as const, label: 'Realizado' },
-            { value: 'previsto' as const, label: 'Previsto' },
-          ]).map(opt => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setStatusFiltro(opt.value)}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                statusFiltro === opt.value
-                  ? opt.value === 'realizado'
-                    ? 'bg-green-700 text-white shadow-sm'
-                    : 'bg-orange-500 text-white shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+          <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
+            {([
+              { value: 'realizado' as const, label: 'Realizado' },
+              { value: 'previsto' as const, label: 'Previsto' },
+            ]).map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setStatusFiltro(opt.value)}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                  statusFiltro === opt.value
+                    ? opt.value === 'realizado'
+                      ? 'bg-green-700 text-white shadow-sm'
+                      : 'bg-orange-500 text-white shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
+
+        {/* Card status conciliação */}
+        {conciliacaoStatus && (
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
+            conciliacaoStatus === 'fechado'
+              ? 'bg-green-50 border-green-300 text-green-800'
+              : conciliacaoStatus === 'parcial'
+                ? 'bg-orange-50 border-orange-300 text-orange-800'
+                : 'bg-muted border-border text-muted-foreground'
+          }`}>
+            {conciliacaoStatus === 'fechado' ? (
+              <CheckCircle className="h-3.5 w-3.5" />
+            ) : conciliacaoStatus === 'parcial' ? (
+              <AlertTriangle className="h-3.5 w-3.5" />
+            ) : (
+              <Clock className="h-3.5 w-3.5" />
+            )}
+            Pasto: {conciliacaoStatus === 'fechado' ? 'Fechado' : conciliacaoStatus === 'parcial' ? 'Parcial' : 'Aberto'}
+          </div>
+        )}
       </div>
 
       {/* Tabela */}
