@@ -401,13 +401,19 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="relative">
-                        <Input
+                         <Input
                           type="text"
                           inputMode="decimal"
-                          className={`h-7 text-right text-xs w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
+                          className={`h-7 text-right text-[10px] w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
                           placeholder="0,00"
                           value={precosDisplay[r.codigo] ?? ''}
                           onChange={e => handlePrecoChange(r.codigo, e.target.value)}
+                          onBlur={() => {
+                            const num = precosLocal[r.codigo];
+                            if (num > 0) {
+                              setPrecosDisplay(prev => ({ ...prev, [r.codigo]: num.toFixed(2).replace('.', ',') }));
+                            }
+                          }}
                           disabled={!canEdit}
                         />
                       </div>
