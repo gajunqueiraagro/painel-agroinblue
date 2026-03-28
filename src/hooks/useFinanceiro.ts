@@ -135,25 +135,14 @@ async function fetchAllPaginated<T>(
 }
 
 /**
- * Desembolso produtivo = macro_custo "Custeio Produtivo" + tipo_operacao 2-Saídas.
- * Exclui: Investimentos, Amortizações, Dividendos, Receitas, Outras Entradas.
+ * Desembolso produtivo — re-exportado da classificação centralizada.
+ * macro_custo "Custeio Produtivo" OU "Investimento na Fazenda" + tipo_operacao 2-Saídas.
  */
-export const isDesembolsoProdutivo = (l: FinanceiroLancamento) => {
-  const macro = (l.macro_custo || '').toLowerCase().trim();
-  const tipo = (l.tipo_operacao || '');
-  // Must be a saída (tipo starts with "2")
-  if (!tipo.startsWith('2')) return false;
-  // Se macro_custo não preenchido, mantém comportamento legado
-  if (!macro) {
-    const escopo = (l.escopo_negocio || '').toLowerCase();
-    if (escopo === 'financeiro') return false;
-    return true;
-  }
-  return macro === 'custeio produtivo';
-};
+export { isDesembolsoProdutivo, isReceita as isReceitaCentral } from '@/lib/financeiro/classificacao';
+import { isDesembolsoProdutivo as isDesembolsoProdutivoCentral } from '@/lib/financeiro/classificacao';
 
 export const isDesembolsoPecuaria = (l: FinanceiroLancamento) =>
-  isDesembolsoProdutivo(l) && (l.escopo_negocio || 'pecuaria') === 'pecuaria';
+  isDesembolsoProdutivoCentral(l) && (l.escopo_negocio || 'pecuaria') === 'pecuaria';
 
 export const isReceita = (l: FinanceiroLancamento) => {
   const tipo = (l.tipo_operacao || '').toLowerCase();
@@ -662,7 +651,7 @@ export function useFinanceiro() {
       const lancs = byAnoMes.get(am)!;
       const entradas = lancs.filter(isReceita).reduce((s, l) => s + Math.abs(l.valor), 0);
       const saidas = lancs.filter(l => !isReceita(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
-      const desembolsoProd = lancs.filter(isDesembolsoProdutivo).reduce((s, l) => s + Math.abs(l.valor), 0);
+      const desembolsoProd = lancs.filter(isDesembolsoProdutivoCentral).reduce((s, l) => s + Math.abs(l.valor), 0);
       const desembolsoPec = lancs.filter(isDesembolsoPecuaria).reduce((s, l) => s + Math.abs(l.valor), 0);
 
       const rateioMes = rateioADM.find(r => r.anoMes === am);
@@ -673,11 +662,11 @@ export function useFinanceiro() {
 
     const porMacro = new Map<string, number>();
     for (const l of lancamentos) {
-      if (!isDesembolsoProdutivo(l) || !l.macro_custo) continue;
+      if (!isDesembolsoProdutivoCentral(l) || !l.macro_custo) continue;
       porMacro.set(l.macro_custo, (porMacro.get(l.macro_custo) || 0) + Math.abs(l.valor));
     }
 
-    const totalDesembolsoProd = lancamentos.filter(isDesembolsoProdutivo).reduce((s, l) => s + Math.abs(l.valor), 0);
+    const totalDesembolsoProd = lancamentos.filter(isDesembolsoProdutivoCentral).reduce((s, l) => s + Math.abs(l.valor), 0);
     const totalDesembolsoPec = lancamentos.filter(isDesembolsoPecuaria).reduce((s, l) => s + Math.abs(l.valor), 0);
     const totalReceitas = lancamentos.filter(isReceita).reduce((s, l) => s + Math.abs(l.valor), 0);
     const totalRateio = rateioADM.reduce((s, r) => s + r.valorRateado, 0);

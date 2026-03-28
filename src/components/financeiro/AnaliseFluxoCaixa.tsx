@@ -1,17 +1,22 @@
 /**
  * Bloco 4: Fluxo de Caixa mensal.
  *
- * Diferente da DRE — aqui entra TUDO que movimentou caixa:
- * receitas, custos, investimentos, amortizações, dividendos, captações.
- *
- * Nota: Saldo inicial é zero por padrão (não há tabela de saldos bancários).
+ * Usa classificação centralizada de src/lib/financeiro/classificacao.ts.
+ * Base: data_pagamento + Conciliado.
  */
 import { useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_NOMES } from '@/lib/calculos/labels';
-import { isEntrada, isSaida, somaAbs, normMacro } from './analiseHelpers';
+import {
+  isConciliado,
+  isEntrada,
+  isSaida,
+  getEscopo,
+  classificarSaidaFluxo,
+  somaAbs,
+} from '@/lib/financeiro/classificacao';
 import type { FinanceiroLancamento } from '@/hooks/useFinanceiro';
 
 interface Props {
@@ -26,11 +31,11 @@ interface FluxoMes {
   mesLabel: string;
   entradas: number;
   saidasDeducao: number;
-  saidasCusteio: number;
-  saidasInvestimentos: number;
+  saidasDesembolso: number;
+  saidasReposicao: number;
+  saidasDespesasReposicao: number;
   saidasAmortizacoes: number;
   saidasDividendos: number;
-  saidasOutras: number;
   totalSaidas: number;
   saldoMes: number;
   saldoAcum: number;
@@ -54,31 +59,26 @@ export function FluxoCaixa({
 
       const saidasAll = lancs.filter(isSaida);
       let saidasDeducao = 0;
-      let saidasCusteio = 0;
-      let saidasInvestimentos = 0;
+      let saidasDesembolso = 0;
+      let saidasReposicao = 0;
+      let saidasDespesasReposicao = 0;
       let saidasAmortizacoes = 0;
       let saidasDividendos = 0;
-      let saidasOutras = 0;
 
       for (const l of saidasAll) {
-        const macro = normMacro(l);
+        const cat = classificarSaidaFluxo(l);
         const valor = Math.abs(l.valor);
-        if (macro.includes('dedução') || macro.includes('deducao') || macro === 'dedução de receitas') {
-          saidasDeducao += valor;
-        } else if (macro === 'custeio produtivo') {
-          saidasCusteio += valor;
-        } else if (macro === 'investimento na fazenda' || macro === 'investimento em bovinos') {
-          saidasInvestimentos += valor;
-        } else if (macro === 'amortizações financeiras') {
-          saidasAmortizacoes += valor;
-        } else if (macro === 'dividendos') {
-          saidasDividendos += valor;
-        } else {
-          saidasOutras += valor;
+        switch (cat) {
+          case 'deducao': saidasDeducao += valor; break;
+          case 'desembolso': saidasDesembolso += valor; break;
+          case 'reposicao': saidasReposicao += valor; break;
+          case 'despesasReposicao': saidasDespesasReposicao += valor; break;
+          case 'amortizacoes': saidasAmortizacoes += valor; break;
+          case 'dividendos': saidasDividendos += valor; break;
         }
       }
 
-      const totalSaidas = saidasDeducao + saidasCusteio + saidasInvestimentos + saidasAmortizacoes + saidasDividendos + saidasOutras;
+      const totalSaidas = saidasDeducao + saidasDesembolso + saidasReposicao + saidasDespesasReposicao + saidasAmortizacoes + saidasDividendos;
       const saldoMes = entradas - totalSaidas;
       saldoAcum += saldoMes;
 
@@ -87,11 +87,11 @@ export function FluxoCaixa({
         mesLabel: MESES_NOMES[m - 1],
         entradas,
         saidasDeducao,
-        saidasCusteio,
-        saidasInvestimentos,
+        saidasDesembolso,
+        saidasReposicao,
+        saidasDespesasReposicao,
         saidasAmortizacoes,
         saidasDividendos,
-        saidasOutras,
         totalSaidas,
         saldoMes,
         saldoAcum,
@@ -168,11 +168,11 @@ export function FluxoCaixa({
 
                 {/* Saídas detalhadas */}
                 <SaidaRow label="  Dedução de Receitas" dados={dados} field="saidasDeducao" />
-                <SaidaRow label="  Custeio Produtivo" dados={dados} field="saidasCusteio" />
-                <SaidaRow label="  Investimentos" dados={dados} field="saidasInvestimentos" />
+                <SaidaRow label="  Desemb. Produtivo" dados={dados} field="saidasDesembolso" />
+                <SaidaRow label="  Reposição Bovinos" dados={dados} field="saidasReposicao" />
+                <SaidaRow label="  Desp. Reposição" dados={dados} field="saidasDespesasReposicao" />
                 <SaidaRow label="  Amortizações" dados={dados} field="saidasAmortizacoes" />
                 <SaidaRow label="  Dividendos" dados={dados} field="saidasDividendos" />
-                <SaidaRow label="  Outras saídas" dados={dados} field="saidasOutras" />
 
                 {/* Total Saídas */}
                 <TableRow className="border-t">
@@ -221,7 +221,7 @@ export function FluxoCaixa({
           </div>
 
           <div className="text-[9px] text-muted-foreground mt-2 border-t pt-2">
-            Base: Data Pagamento · Status Conciliado · Saldo inicial = R$ 0 · Inclui todos os macro_custos (investimentos, amortizações, dividendos)
+            Base: Data Pagamento · Status Conciliado · Saldo inicial = R$ 0 · Classificação: src/lib/financeiro/classificacao.ts
           </div>
         </CardContent>
       </Card>
