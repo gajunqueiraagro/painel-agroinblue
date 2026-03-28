@@ -183,6 +183,12 @@ const Index = () => {
     setFechamentoFromConciliacao(true);
     setActiveTab('fechamento');
   }, []);
+  const goToReclassFromFechamento = useCallback((filtro?: { ano: string; mes: number }) => {
+    if (filtro) setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
+    setLancamentosFromFechamento(true);
+    setActiveTab('lancamentos');
+  }, []);
+  const goToFechamentoTab = useCallback(() => setActiveTab('fechamento'), []);
 
   // Sub-screens that need a back button
   const subScreenBackMap: Partial<Record<TabId, () => void>> = {
