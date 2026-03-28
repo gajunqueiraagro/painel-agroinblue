@@ -149,11 +149,12 @@ export function ResumoAtividadesView({ pastos, fechamentos, itensMap, categorias
       </div>
 
       {/* Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="p-4">
         {resumos.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">Nenhum pasto ativo encontrado.</div>
         ) : (
-          resumos.map(r => {
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {resumos.map(r => {
             const style = TIPO_USO_STYLES[r.tipoUso] || { border: 'border-l-border', text: 'text-foreground', bg: 'bg-muted/20' };
             return (
               <div
