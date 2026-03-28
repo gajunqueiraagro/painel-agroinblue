@@ -33,6 +33,7 @@ interface Props {
   abaInicial?: Aba;
   onBackToConciliacao?: () => void;
   dataInicial?: string;
+  backLabel?: string;
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
