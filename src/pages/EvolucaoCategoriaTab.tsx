@@ -43,7 +43,7 @@ const COLUNAS_MOV = [
   { tipo: 'reclassificacao_saida', label: 'Recl.S', entrada: false },
 ];
 
-export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, initialMes }: Props) {
+export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, initialMes, onNavigateToReclass }: Props) {
   const { fazendaAtual } = useFazenda();
   const fazendaId = fazendaAtual?.id;
 
