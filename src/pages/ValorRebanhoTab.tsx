@@ -246,8 +246,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     const numMap: Record<string, number> = { ...precosLocal };
     const strMap: Record<string, string> = { ...precosDisplay };
     prev.forEach(p => {
-      numMap[p.categoria] = p.preco_kg;
-      strMap[p.categoria] = p.preco_kg > 0 ? String(p.preco_kg).replace('.', ',') : '';
+      const v = Number(p.preco_kg) || 0;
+      numMap[p.categoria] = v;
+      strMap[p.categoria] = fmtKg(v);
     });
     setPrecosLocal(numMap);
     setPrecosDisplay(strMap);
