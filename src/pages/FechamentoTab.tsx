@@ -122,6 +122,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const [itensMap, setItensMap] = useState<Map<string, FechamentoItem[]>>(new Map());
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
   const [bulkClosing, setBulkClosing] = useState(false);
+  const [showResumoAtividades, setShowResumoAtividades] = useState(false);
 
   useEffect(() => { loadFechamentos(anoMes); }, [anoMes, loadFechamentos]);
 
