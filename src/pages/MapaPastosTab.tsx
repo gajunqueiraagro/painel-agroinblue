@@ -205,11 +205,17 @@ export function MapaPastosTab() {
         <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 py-1.5">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
-              <Select value={anoMes} onValueChange={setAnoMes}>
-                <SelectTrigger className="w-32 h-8 text-sm"><SelectValue /></SelectTrigger>
+              <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+                <SelectTrigger className="w-20 h-8 text-xs font-bold"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {getAnoMesOptions().map(am => (
-                    <SelectItem key={am} value={am}>{formatAnoMes(am)}</SelectItem>
+                  {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
+                <SelectTrigger className="w-20 h-8 text-xs font-bold"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MESES_COLS.map((m, i) => (
+                    <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
