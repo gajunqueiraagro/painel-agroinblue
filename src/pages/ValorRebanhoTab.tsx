@@ -373,7 +373,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               <th className="text-left px-2 py-1.5 font-semibold text-foreground text-xs">Categoria</th>
               <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">Qtd</th>
               <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">Peso</th>
-              <th className="text-center px-1 py-1.5 font-semibold text-foreground text-xs w-[55px]">R$/kg</th>
+              <th className="text-center px-1 py-1.5 font-semibold text-foreground text-xs w-[64px]">R$/kg</th>
               <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">R$/cab</th>
               <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">R$/@</th>
               <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">Valor Total</th>
@@ -406,14 +406,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                     </Tooltip>
                   ) : '-'}
                 </td>
-                <td className="px-1 py-0.5 w-[55px]">
+                <td className="px-1 py-0.5 w-[64px]">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="relative">
                         <Input
                           type="text"
                           inputMode="decimal"
-                          className={`h-6 text-right text-[11px] px-1 w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
+                          className={`h-6 text-right !text-[11px] leading-none font-normal tabular-nums px-1.5 w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
                           placeholder="0,00"
                           value={precosDisplay[r.codigo] !== undefined ? precosDisplay[r.codigo] : fmtKg(r.precoKg)}
                           onChange={e => handlePrecoChange(r.codigo, e.target.value)}
@@ -446,7 +446,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               <td className="px-2 py-1.5 font-extrabold text-foreground text-xs">TOTAL</td>
               <td className="px-2 py-1.5 text-right font-extrabold text-foreground text-xs">{totalCabecas}</td>
               <td className="px-2 py-1.5 text-right text-[11px] text-muted-foreground">{formatNum(pesoMedioGeral, 1)} kg</td>
-              <td className="px-1 py-1.5 text-center text-[11px] text-muted-foreground w-[55px]">
+              <td className="px-1 py-1.5 text-center text-[11px] text-muted-foreground w-[64px]">
                 {precoMedioKg > 0 ? `${formatNum(precoMedioKg, 2)}` : ''}
               </td>
               <td className="px-2 py-1.5 text-right text-[11px] font-semibold text-foreground">{formatMoeda(valorMedioCabeca)}</td>
