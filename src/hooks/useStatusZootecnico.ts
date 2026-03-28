@@ -5,6 +5,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useFazenda } from '@/contexts/FazendaContext';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
 
@@ -33,6 +34,7 @@ export function useStatusZootecnico(
   lancamentos: Lancamento[],
   saldosIniciais: SaldoInicial[],
 ): StatusZootecnicoResult {
+  const { fazendas: contextFazendas } = useFazenda();
   const [loading, setLoading] = useState(true);
 
   const [pastosAtivos, setPastosAtivos] = useState(0);
@@ -68,10 +70,12 @@ export function useStatusZootecnico(
     setLoading(true);
     setSemPecuaria(false);
     try {
+      // Use context-filtered fazendas (already scoped to current client)
       let fazendaIdsPecuaria: string[] = [];
       if (isGlobal) {
-        const { data: allFazendas } = await supabase.from('fazendas').select('id, tem_pecuaria');
-        fazendaIdsPecuaria = (allFazendas || []).filter(f => f.tem_pecuaria !== false).map(f => f.id);
+        fazendaIdsPecuaria = contextFazendas
+          .filter(f => f.id !== '__global__' && f.tem_pecuaria !== false)
+          .map(f => f.id);
         if (fazendaIdsPecuaria.length === 0) {
           setPastosAtivos(0); setPastosFechados(0);
           setPastosRascunho(0); setPastosNaoIniciados(0);
@@ -167,7 +171,7 @@ export function useStatusZootecnico(
     } finally {
       setLoading(false);
     }
-  }, [fazendaId, anoMes, ano, mes, saldosIniciais, lancamentos, isGlobal]);
+  }, [fazendaId, anoMes, ano, mes, saldosIniciais, lancamentos, isGlobal, contextFazendas]);
 
   useEffect(() => { load(); }, [load]);
 
