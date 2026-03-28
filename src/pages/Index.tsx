@@ -81,6 +81,7 @@ const TITLES: Record<TabId, string> = {
   visao_anual_zoo: 'Visão Anual Zootécnica',
   indicadores: 'Indicadores',
   evolucao_rebanho_hub: 'Evolução Rebanho',
+  fechamento_executivo: 'Fechamento Executivo',
 };
 
 const Index = () => {
