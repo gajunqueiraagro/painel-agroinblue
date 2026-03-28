@@ -215,7 +215,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
 
   const formatPeso = (v: number | null) => {
     if (v === null || v === undefined || v <= 0) return '—';
-    return v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
   return (
@@ -309,7 +309,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                   <td className={`px-1.5 py-0.5 text-center font-extrabold bg-primary/5 ${cat.saldoFinal === 0 ? 'text-transparent' : 'text-foreground'}`}>
                     {cat.saldoFinal}
                   </td>
-                  <td className={`px-1.5 py-0.5 text-center font-semibold bg-primary/5 ${!cat.pesoMedio ? 'text-muted-foreground' : 'text-foreground'}`}>
+                  <td className={`px-1.5 py-0.5 text-center italic text-[9px] bg-primary/5 ${!cat.pesoMedio || cat.pesoMedio <= 0 ? 'text-transparent' : 'text-foreground'}`}>
                     {formatPeso(cat.pesoMedio)}
                   </td>
                 </tr>
@@ -324,7 +324,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                 </td>
               ))}
               <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoFin}</td>
-              <td className={`px-1.5 py-1 text-center font-extrabold ${!totais.pesoMedio ? 'text-muted-foreground' : 'text-foreground'}`}>
+              <td className={`px-1.5 py-1 text-center italic text-[9px] font-semibold ${!totais.pesoMedio || totais.pesoMedio <= 0 ? 'text-transparent' : 'text-foreground'}`}>
                 {formatPeso(totais.pesoMedio)}
               </td>
             </tr>
