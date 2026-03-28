@@ -210,15 +210,15 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                   <td className={`px-1.5 py-0.5 font-bold text-foreground sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
                     {cat.label}
                   </td>
-                  <td className={`px-1.5 py-0.5 text-center font-semibold bg-primary/5 ${cat.saldoInicioMes === 0 ? 'text-foreground/20' : 'text-foreground'}`}>
+                  <td className={`px-1.5 py-0.5 text-center font-semibold bg-primary/5 ${cat.saldoInicioMes === 0 ? 'text-transparent' : 'text-foreground'}`}>
                     {cat.saldoInicioMes}
                   </td>
                   {cat.movs.map((val, j) => (
-                    <td key={j} className={`px-1.5 py-0.5 text-center font-semibold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-foreground/20'}`}>
+                    <td key={j} className={`px-1.5 py-0.5 text-center font-semibold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-transparent'}`}>
                       {val || '–'}
                     </td>
                   ))}
-                  <td className={`px-1.5 py-0.5 text-center font-extrabold bg-primary/5 ${cat.saldoFinal === 0 ? 'text-foreground/20' : 'text-foreground'}`}>
+                  <td className={`px-1.5 py-0.5 text-center font-extrabold bg-primary/5 ${cat.saldoFinal === 0 ? 'text-transparent' : 'text-foreground'}`}>
                     {cat.saldoFinal}
                   </td>
                 </tr>
@@ -228,7 +228,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
               <td className="px-1.5 py-1 font-extrabold text-foreground sticky left-0 bg-primary/10">TOTAL</td>
               <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoIni}</td>
               {totais.movs.map((val, j) => (
-                <td key={j} className={`px-1.5 py-1 text-center font-extrabold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-foreground/20'}`}>
+                <td key={j} className={`px-1.5 py-1 text-center font-extrabold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-transparent'}`}>
                   {val || '–'}
                 </td>
               ))}
