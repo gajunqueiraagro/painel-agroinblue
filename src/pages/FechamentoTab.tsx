@@ -120,6 +120,33 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     return true;
   }, [anoMes, pendentesCount, canEdit]);
 
+  // ── Conciliation summary data ──
+  const anoNum = Number(anoMes.split('-')[0]);
+  const mesNum = Number(anoMes.split('-')[1]);
+
+  const saldoMap = useMemo(
+    () => calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, anoNum, mesNum),
+    [saldosIniciais, lancamentos, anoNum, mesNum]
+  );
+
+  const pastoDataByCat = useMemo(() => {
+    const catIdToCodigo = new Map((categorias || []).map(c => [c.id, c.codigo]));
+    const map = new Map<string, number>();
+    itensMap.forEach((items) => {
+      items.forEach(i => {
+        if (i.quantidade > 0) {
+          const codigo = catIdToCodigo.get(i.categoria_id);
+          if (codigo) map.set(codigo, (map.get(codigo) || 0) + i.quantidade);
+        }
+      });
+    });
+    return map;
+  }, [itensMap, categorias]);
+
+  const totalPasto = CAT_COLS.reduce((s, c) => s + (pastoDataByCat.get(c.codigo) || 0), 0);
+  const totalSistema = CAT_COLS.reduce((s, c) => s + (saldoMap.get(c.codigo) || 0), 0);
+  const totalDiferenca = totalPasto - totalSistema;
+
   const isAdminClosed = (fech: FechamentoPasto | null) => {
     return fech?.responsavel_nome === FECHAMENTO_GLOBAL_MARKER;
   };
@@ -143,11 +170,9 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       const fazendaId = fazendaAtual.id;
       const clienteId = fazendaAtual.cliente_id;
 
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       const userId = user?.id || null;
 
-      // Identify pastos that need closure
       const pastosParaFechar: string[] = [];
       for (const pasto of pastosAtivos) {
         const fech = getFechamento(pasto.id);
@@ -163,17 +188,14 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         return;
       }
 
-      // For each pasto pending: create fechamento if needed, then mark as fechado
       for (const pastoId of pastosParaFechar) {
         let fech = getFechamento(pastoId);
 
         if (!fech) {
-          // Create fechamento record
           fech = await criarFechamento(pastoId, anoMes);
           if (!fech) continue;
         }
 
-        // Update to fechado + mark as administrative closure
         const { error } = await supabase
           .from('fechamento_pastos')
           .update({
@@ -187,7 +209,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         }
       }
 
-      // Log audit record
       const auditPayload = {
         usuario_id: userId,
         fazenda_id: fazendaId,
@@ -214,26 +235,79 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
   return (
     <div className="pb-24">
-      {/* Filtros - sticky */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-2">
+      {/* Tabela conciliação + Filtros - sticky */}
+      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm pt-2 px-2 pb-2 space-y-2">
+        {/* Tabela resumo conciliação por categoria */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-[10px] border-collapse">
+            <thead>
+              <tr className="border-b border-border/40">
+                <th className="text-left font-bold text-muted-foreground px-1 py-0.5 w-12 border-r border-border/30">Cat.</th>
+                {CAT_COLS.map((c, idx) => (
+                  <th key={c.sigla} className={`text-center font-bold text-muted-foreground px-0.5 py-0.5 min-w-[28px]${idx === 4 ? ' border-r border-border/30' : ''}`}>{c.sigla}</th>
+                ))}
+                <th className="text-center font-bold text-foreground px-1 py-0.5 min-w-[32px] border-l border-border/30">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Linha Pasto */}
+              <tr>
+                <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Pasto</td>
+                {CAT_COLS.map((c, idx) => {
+                  const v = pastoDataByCat.get(c.codigo) || 0;
+                  return <td key={c.sigla} className={`text-center text-foreground px-0.5 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
+                })}
+                <td className="text-center font-bold text-foreground px-1 py-0.5 border-l border-border/30">{totalPasto}</td>
+              </tr>
+              {/* Linha Sistema */}
+              <tr>
+                <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Sistema</td>
+                {CAT_COLS.map((c, idx) => {
+                  const v = saldoMap.get(c.codigo) || 0;
+                  return <td key={c.sigla} className={`text-center text-foreground px-0.5 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
+                })}
+                <td className="text-center font-bold text-foreground px-1 py-0.5 border-l border-border/30">{totalSistema}</td>
+              </tr>
+              {/* Linha Diferença */}
+              <tr className="border-t border-border/40">
+                <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Dif.</td>
+                {CAT_COLS.map((c, idx) => {
+                  const pasto = pastoDataByCat.get(c.codigo) || 0;
+                  const sistema = saldoMap.get(c.codigo) || 0;
+                  const dif = pasto - sistema;
+                  return (
+                    <td key={c.sigla} className={`text-center font-bold px-0.5 py-0.5 ${dif > 0 ? 'text-emerald-600' : dif < 0 ? 'text-red-600' : 'text-muted-foreground'}${idx === 4 ? ' border-r border-border/30' : ''}`}>
+                      {dif !== 0 ? (dif > 0 ? `+${dif}` : dif) : ''}
+                    </td>
+                  );
+                })}
+                <td className={`text-center font-bold px-1 py-0.5 border-l border-border/30 ${totalDiferenca > 0 ? 'text-emerald-600' : totalDiferenca < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                  {totalDiferenca !== 0 ? (totalDiferenca > 0 ? `+${totalDiferenca}` : totalDiferenca) : '0'}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Filtros */}
         <div className="flex items-center gap-3">
           <Select value={anoMes} onValueChange={setAnoMes}>
-            <SelectTrigger className="w-40 h-12"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-36 h-8 text-xs font-bold"><SelectValue /></SelectTrigger>
             <SelectContent>
               {getAnoMesOptions().map(am => (
                 <SelectItem key={am} value={am}>{formatAnoMes(am)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <div className="flex flex-col text-sm">
-            <Badge variant="secondary">{preenchidos}/{pastosAtivos.length} iniciados</Badge>
-            <span className="text-xs text-muted-foreground mt-0.5">{fechadosCount} fechados</span>
+          <div className="flex flex-col text-xs">
+            <Badge variant="secondary" className="text-[10px]">{preenchidos}/{pastosAtivos.length} iniciados</Badge>
+            <span className="text-[10px] text-muted-foreground mt-0.5">{fechadosCount} fechados</span>
           </div>
           {canBulkClose && (
             <Button
               size="sm"
               variant="outline"
-              className="ml-auto text-xs font-bold border-warning text-warning hover:bg-warning/10"
+              className="ml-auto text-xs font-bold border-warning text-warning hover:bg-warning/10 h-8"
               onClick={() => setConfirmBulkOpen(true)}
             >
               <Lock className="h-3.5 w-3.5 mr-1" />
