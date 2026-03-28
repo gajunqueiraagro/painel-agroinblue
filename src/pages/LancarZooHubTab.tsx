@@ -57,7 +57,7 @@ const CONCILIACAO_ITEMS = [
 export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
   const { isGlobal } = useFazenda();
 
-  const ALLOWED_GLOBAL: TabId[] = [];
+  const ALLOWED_GLOBAL: TabId[] = ['fechamento_executivo'];
 
   const navTo = (tab: TabId) => {
     if (isGlobal && !ALLOWED_GLOBAL.includes(tab)) {
