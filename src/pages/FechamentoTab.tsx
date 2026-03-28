@@ -69,11 +69,11 @@ const TIPO_USO_STYLES: Record<string, { border: string; text: string; bg: string
   'benfeitorias':     { border: 'border-l-gray-900 dark:border-l-gray-100', text: 'text-gray-900 dark:text-gray-100', bg: 'bg-gray-900/10 dark:bg-gray-100/10' },
 };
 
-const DEFAULT_TIPO_USO_STYLE = {
+const DEFAULT_TIPO_USO_STYLE: { border: string; text: string; bg: string; icon?: 'plant' } = {
   border: 'border-l-border',
   text: 'text-foreground',
   bg: 'bg-muted/20',
-} as const;
+};
 
 const normalizeTipoUso = (tipoUso?: string) => {
   if (!tipoUso) return '';
