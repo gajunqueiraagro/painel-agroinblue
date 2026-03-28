@@ -370,7 +370,7 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
         )}
 
         {/* Cards: Fechamento Executivo + Análise do Consultor */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
           <button
             onClick={() => onTabChange('fechamento_executivo')}
             className="flex items-center gap-2.5 rounded-xl border-2 border-primary/30 bg-primary/5 px-3 py-3 transition-all hover:border-primary hover:shadow-md active:scale-[0.98] group"
