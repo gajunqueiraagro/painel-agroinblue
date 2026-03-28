@@ -190,20 +190,24 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const dezembroCompleto = isDezembro && categoriasSemPreco.length === 0;
 
   // Sync loaded prices to local state + apply market suggestions for empty ones
+  const fmtKg = (v: number) => v.toFixed(2).replace('.', ',');
+
   useEffect(() => {
     const numMap: Record<string, number> = {};
     const strMap: Record<string, string> = {};
     precos.forEach(p => {
-      numMap[p.categoria] = p.preco_kg;
-      strMap[p.categoria] = p.preco_kg > 0 ? p.preco_kg.toFixed(2).replace('.', ',') : '';
+      const v = Number(p.preco_kg) || 0;
+      numMap[p.categoria] = v;
+      strMap[p.categoria] = v > 0 ? fmtKg(v) : '0,00';
     });
 
     // Auto-fill suggestions for categories without saved price
     let aplicouSugestao = false;
     Object.entries(precosSugeridos).forEach(([codigo, valor]) => {
       if (!numMap[codigo] || numMap[codigo] <= 0) {
-        numMap[codigo] = Number(valor.toFixed(4));
-        strMap[codigo] = valor > 0 ? Number(valor.toFixed(2)).toFixed(2).replace('.', ',') : '';
+        const v = Number(valor.toFixed(4));
+        numMap[codigo] = v;
+        strMap[codigo] = v > 0 ? fmtKg(v) : '0,00';
         aplicouSugestao = true;
       }
     });
@@ -218,6 +222,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     setPrecosDisplay(prev => ({ ...prev, [codigo]: sanitized }));
     const num = parseFloat(sanitized.replace(',', '.'));
     setPrecosLocal(prev => ({ ...prev, [codigo]: isNaN(num) ? 0 : num }));
+  };
+
+  const handlePrecoBlur = (codigo: string) => {
+    const num = precosLocal[codigo] || 0;
+    setPrecosDisplay(prev => ({ ...prev, [codigo]: fmtKg(num) }));
   };
 
   const handleSalvar = async () => {
