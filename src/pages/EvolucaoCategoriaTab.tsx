@@ -104,6 +104,29 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
       }
     })();
   }, [fazendaId, anoFiltro, mesFiltro]);
+
+  // Fetch valor rebanho fechamento status
+  useEffect(() => {
+    const anoMes = `${anoFiltro}-${mesFiltro}`;
+    if (!fazendaId || fazendaId === '__global__') {
+      setRebanhoStatus(null);
+      return;
+    }
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('valor_rebanho_fechamento')
+          .select('status')
+          .eq('fazenda_id', fazendaId)
+          .eq('ano_mes', anoMes)
+          .maybeSingle();
+        setRebanhoStatus(data?.status === 'fechado' ? 'fechado' : 'aberto');
+      } catch {
+        setRebanhoStatus(null);
+      }
+    })();
+  }, [fazendaId, anoFiltro, mesFiltro]);
+
   // Fetch peso médio from fechamento_pasto_itens for the selected month
   useEffect(() => {
     const anoMes = `${anoFiltro}-${mesFiltro}`;
