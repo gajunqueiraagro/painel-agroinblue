@@ -83,6 +83,7 @@ const TITLES: Record<TabId, string> = {
   indicadores: 'Indicadores',
   evolucao_rebanho_hub: 'Evolução Rebanho',
   fechamento_executivo: 'Fechamento Executivo',
+  analise_consultor: 'Análise do Consultor',
 };
 
 const Index = () => {
