@@ -59,15 +59,25 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const { pastos, categorias } = usePastos();
   const { lancamentos, saldosIniciais } = useLancamentos();
   const { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, reabrirPasto, copiarMesAnterior } = useFechamento();
-  const defaultAnoMes = filtroAnoInicial && filtroMesInicial
-    ? `${filtroAnoInicial}-${String(filtroMesInicial).padStart(2, '0')}`
-    : format(new Date(), 'yyyy-MM');
-  const [anoMes, setAnoMes] = useState(defaultAnoMes);
+
+  const anosDisp = useMemo(() => {
+    const set = new Set<string>();
+    const curYear = new Date().getFullYear();
+    for (let y = curYear; y >= curYear - 3; y--) set.add(String(y));
+    lancamentos.forEach(l => { try { set.add(l.data.substring(0, 4)); } catch {} });
+    saldosIniciais.forEach(s => set.add(String(s.ano)));
+    return Array.from(set).sort().reverse();
+  }, [lancamentos, saldosIniciais]);
+
+  const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(new Date().getFullYear()));
+  const anoNum2 = Number(anoFiltro);
+  const mesDefault = filtroMesInicial || (anoNum2 === new Date().getFullYear() ? new Date().getMonth() + 1 : 12);
+  const [mesFiltro, setMesFiltro] = useState(mesDefault);
+  const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
 
   useEffect(() => {
-    if (filtroAnoInicial && filtroMesInicial) {
-      setAnoMes(`${filtroAnoInicial}-${String(filtroMesInicial).padStart(2, '0')}`);
-    }
+    if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
+    if (filtroMesInicial) setMesFiltro(filtroMesInicial);
   }, [filtroAnoInicial, filtroMesInicial]);
   const [selectedPasto, setSelectedPasto] = useState<Pasto | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
