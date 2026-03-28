@@ -468,7 +468,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                       </>
                     )}
                   </div>
-                  {p.tipo_uso && tipoStyle && (
+                  {p.tipo_uso && (
                     <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-4 font-bold uppercase tracking-wide ${tipoStyle.text} border-current/30`}>
                       {tipoStyle.icon === 'plant' && <Sprout className="h-3 w-3 mr-0.5" />}
                       {p.tipo_uso}
