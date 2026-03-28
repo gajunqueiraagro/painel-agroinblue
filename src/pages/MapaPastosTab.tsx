@@ -256,38 +256,40 @@ export function MapaPastosTab() {
           <>
             {/* Main Table */}
             <div className="relative overflow-auto rounded-lg border" style={{ maxHeight: 'calc(100vh - 180px)' }}>
-              <table className="w-full text-xs border-collapse">
+              <table className="w-full border-collapse text-[11px]">
                 <thead>
-                  <tr>
-                    <th className="sticky top-0 left-0 z-40 bg-muted px-2 py-1 text-left text-xs font-semibold border-b border-r min-w-[90px]">Pasto</th>
-                    <th className="sticky top-0 z-30 bg-muted px-1.5 py-1 text-left text-xs font-medium border-b border-r min-w-[60px]">Atividade</th>
-                    <th className="sticky top-0 z-30 bg-muted px-1 py-1 text-left text-[10px] font-medium border-b border-r min-w-[40px]">Lote</th>
+                  <tr className="h-7">
+                    <th className="sticky top-0 left-0 z-40 bg-muted px-1.5 py-0.5 text-left text-[11px] font-semibold border-b border-r min-w-[80px]">Pasto</th>
+                    <th className="sticky top-0 z-30 bg-muted px-1 py-0.5 text-left text-[11px] font-medium border-b border-r min-w-[55px]">Atividade</th>
+                    <th className="sticky top-0 z-30 bg-muted px-1 py-0.5 text-left text-[10px] font-medium border-b border-r min-w-[36px]">Lote</th>
                     {categorias.map(cat => (
-                      <th key={cat.id} className="sticky top-0 z-30 bg-muted px-1 py-1 text-center text-xs font-bold border-b border-r min-w-[32px]">
+                      <th key={cat.id} className="sticky top-0 z-30 bg-muted px-0.5 py-0.5 text-center text-[11px] font-bold border-b border-r min-w-[28px]">
                         {CAT_SIGLAS[cat.codigo] || cat.codigo}
                       </th>
                     ))}
-                    <th className="sticky top-0 z-30 bg-primary/10 px-1.5 py-1 text-center text-xs font-semibold border-b border-r min-w-[40px]">Total</th>
-                    <th className="sticky top-0 z-30 bg-muted px-1.5 py-1 text-center text-xs font-medium border-b border-r min-w-[50px]">Peso</th>
-                    <th className="sticky top-0 z-30 bg-muted px-1.5 py-1 text-center text-xs font-medium border-b border-r min-w-[45px]">Área</th>
-                    <th className="sticky top-0 z-30 bg-muted px-1.5 py-1 text-center text-xs font-medium border-b border-r min-w-[45px]">UA/ha</th>
-                    <th className="sticky top-0 z-30 bg-muted px-1.5 py-1 text-center text-xs font-medium border-b min-w-[35px]">Qual.</th>
+                    <th className="sticky top-0 z-30 bg-primary/10 px-1 py-0.5 text-center text-[11px] font-semibold border-b border-r min-w-[36px]">Total</th>
+                    <th className="sticky top-0 z-30 bg-muted px-1 py-0.5 text-center text-[11px] font-medium border-b border-r min-w-[42px]">Peso</th>
+                    <th className="sticky top-0 z-30 bg-muted px-1 py-0.5 text-center text-[11px] font-medium border-b border-r min-w-[40px]">Área</th>
+                    <th className="sticky top-0 z-30 bg-muted px-1 py-0.5 text-center text-[11px] font-medium border-b border-r min-w-[40px]">UA/ha</th>
+                    <th className="sticky top-0 z-30 bg-muted px-1 py-0.5 text-center text-[11px] font-medium border-b min-w-[32px]">Qual.</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row, idx) => (
-                    <tr key={row.pasto.id} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/30'}>
-                      <td className="sticky left-0 z-[5] px-2 py-1 text-xs font-semibold border-r whitespace-nowrap" style={{ backgroundColor: idx % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--muted) / 0.3)' }}>
+                  {rows.map((row, idx) => {
+                    const bgStyle = { backgroundColor: idx % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--muted) / 0.3)' };
+                    return (
+                    <tr key={row.pasto.id} className="h-7" style={bgStyle}>
+                      <td className="sticky left-0 z-20 px-1.5 py-0.5 text-[11px] font-semibold border-r whitespace-nowrap" style={bgStyle}>
                         {row.pasto.nome}
                       </td>
-                      <td className="px-1.5 py-1 text-xs border-r text-muted-foreground">{tipoUsoLabel(row.tipoUso)}</td>
-                      <td className="px-1 py-1 text-[10px] text-muted-foreground border-r">{row.lote || '—'}</td>
+                      <td className="px-1 py-0.5 text-[11px] border-r text-muted-foreground">{tipoUsoLabel(row.tipoUso)}</td>
+                      <td className="px-1 py-0.5 text-[10px] text-muted-foreground border-r">{row.lote || <span className="opacity-20">—</span>}</td>
                       {categorias.map(cat => {
                         const val = row.categorias.get(cat.id);
                         const qty = val?.quantidade || 0;
                         const peso = val?.peso_medio_kg;
                         return (
-                          <td key={cat.id} className="px-1 py-1 text-center text-xs border-r">
+                          <td key={cat.id} className="px-0.5 py-0.5 text-center text-[11px] border-r">
                             {qty > 0 ? (
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -299,24 +301,25 @@ export function MapaPastosTab() {
                                 </TooltipContent>
                               </Tooltip>
                             ) : (
-                              <span className="text-muted-foreground/40">—</span>
+                              <span className="opacity-15">—</span>
                             )}
                           </td>
                         );
                       })}
-                      <td className="px-1.5 py-1 text-center text-xs font-bold border-r bg-primary/5">{row.totalCabecas || '—'}</td>
-                      <td className="px-1.5 py-1 text-center text-xs border-r">{row.pesoMedio ? formatNum(row.pesoMedio, 0) : '—'}</td>
-                      <td className="px-1.5 py-1 text-center text-xs border-r">{row.pasto.area_produtiva_ha ? formatNum(row.pasto.area_produtiva_ha, 1) : '—'}</td>
-                      <td className={`px-1.5 py-1 text-center text-xs border-r ${getUaHaColor(row.uaHa)}`}>{row.uaHa ? formatNum(row.uaHa, 2) : '—'}</td>
-                      <td className="px-1.5 py-1 text-center text-xs">
+                      <td className="px-1 py-0.5 text-center text-[11px] font-bold border-r bg-primary/5">{row.totalCabecas || <span className="opacity-15">—</span>}</td>
+                      <td className="px-1 py-0.5 text-center text-[11px] border-r">{row.pesoMedio ? formatNum(row.pesoMedio, 0) : <span className="opacity-15">—</span>}</td>
+                      <td className="px-1 py-0.5 text-center text-[11px] border-r">{row.pasto.area_produtiva_ha ? formatNum(row.pasto.area_produtiva_ha, 1) : <span className="opacity-15">—</span>}</td>
+                      <td className={`px-1 py-0.5 text-center text-[11px] border-r ${getUaHaColor(row.uaHa)}`}>{row.uaHa ? formatNum(row.uaHa, 2) : <span className="opacity-15">—</span>}</td>
+                      <td className="px-1 py-0.5 text-center text-[11px]">
                         {row.qualidade ? (
-                          <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${getQualidadeColor(row.qualidade)}`}>
+                          <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold ${getQualidadeColor(row.qualidade)}`}>
                             {row.qualidade}
                           </span>
-                        ) : '—'}
+                        ) : <span className="opacity-15">—</span>}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
                 <tfoot>
                   <tr className="bg-muted font-bold border-t-2 text-xs">
