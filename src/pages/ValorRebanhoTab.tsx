@@ -413,7 +413,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                         <Input
                           type="text"
                           inputMode="decimal"
-                          className={`h-6 text-right text-[11px] px-1 w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
+                          className={`h-6 text-right text-[11px] md:text-[11px] tabular-nums px-1 w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
                           placeholder="0,00"
                           value={precosDisplay[r.codigo] !== undefined ? precosDisplay[r.codigo] : fmtKg(r.precoKg)}
                           onChange={e => handlePrecoChange(r.codigo, e.target.value)}
