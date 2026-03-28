@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowLeft, CheckCircle, Circle, Lock, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Circle, Lock, AlertTriangle, Sprout } from 'lucide-react';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -55,6 +55,24 @@ interface Props {
 }
 
 const FECHAMENTO_GLOBAL_MARKER = 'fechamento_global_administrativo';
+
+// Color map for tipo_uso
+const TIPO_USO_STYLES: Record<string, { border: string; text: string; bg: string; icon?: 'plant' }> = {
+  'Cria':              { border: 'border-l-orange-500', text: 'text-orange-700 dark:text-orange-400', bg: 'bg-orange-500/10' },
+  'Recria':            { border: 'border-l-emerald-500', text: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-500/10' },
+  'Engorda':           { border: 'border-l-blue-500', text: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-500/10' },
+  'Vedado':            { border: 'border-l-green-800', text: 'text-green-800 dark:text-green-400', bg: 'bg-green-800/10' },
+  'Reforma Pecuária':  { border: 'border-l-gray-600', text: 'text-gray-700 dark:text-gray-300', bg: 'bg-gray-600/10' },
+  'Agricultura':       { border: 'border-l-lime-600', text: 'text-lime-700 dark:text-lime-400', bg: 'bg-lime-600/10', icon: 'plant' },
+  'APP':               { border: 'border-l-gray-900 dark:border-l-gray-100', text: 'text-gray-900 dark:text-gray-100', bg: 'bg-gray-900/10 dark:bg-gray-100/10' },
+  'Reserva Legal':     { border: 'border-l-gray-900 dark:border-l-gray-100', text: 'text-gray-900 dark:text-gray-100', bg: 'bg-gray-900/10 dark:bg-gray-100/10' },
+  'Benfeitorias':      { border: 'border-l-gray-900 dark:border-l-gray-100', text: 'text-gray-900 dark:text-gray-100', bg: 'bg-gray-900/10 dark:bg-gray-100/10' },
+};
+
+const getTipoUsoStyle = (tipoUso: string | undefined) => {
+  if (!tipoUso) return null;
+  return TIPO_USO_STYLES[tipoUso] || null;
+};
 
 export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao }: Props = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
@@ -366,11 +384,12 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             const status = fech?.status;
             const resumo = getResumo(fech, p);
             const adminClose = isAdminClosed(fech);
+            const tipoStyle = getTipoUsoStyle(p.tipo_uso);
             return (
               <button
                 key={p.id}
                 onClick={() => handleOpenPasto(p)}
-                className="w-full rounded-lg border p-3 text-left hover:bg-accent/50 transition-colors"
+                className={`w-full rounded-lg border p-3 text-left hover:bg-accent/50 transition-colors ${tipoStyle ? `border-l-4 ${tipoStyle.border}` : ''}`}
               >
                 {/* Header: nome + badge */}
                 <div className="flex items-center justify-between mb-1">
@@ -434,8 +453,9 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                       </>
                     )}
                   </div>
-                  {p.tipo_uso && (
-                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 font-bold uppercase tracking-wide">
+                  {p.tipo_uso && tipoStyle && (
+                    <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-4 font-bold uppercase tracking-wide ${tipoStyle.text} border-current/30`}>
+                      {tipoStyle.icon === 'plant' && <Sprout className="h-3 w-3 mr-0.5" />}
                       {p.tipo_uso}
                     </Badge>
                   )}
