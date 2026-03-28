@@ -31,7 +31,7 @@ export const BLOCOS_PRECO: PrecoMercadoItem[] = [
   // Bloco Gado Magro - Fêmeas
   { bloco: 'magro_femea', categoria: '200 kg média', unidade: 'R$/kg', valor: 0, agio_perc: 0 },
   { bloco: 'magro_femea', categoria: '250 kg média', unidade: 'R$/kg', valor: 0, agio_perc: 0 },
-  { bloco: 'magro_femea', categoria: 'Novilhas 350 kg média', unidade: 'R$/kg', valor: 0, agio_perc: 0 },
+  { bloco: 'magro_femea', categoria: 'Novilhas 300 kg média', unidade: 'R$/kg', valor: 0, agio_perc: 0 },
 ];
 
 export function usePrecoMercado(anoMes: string) {
