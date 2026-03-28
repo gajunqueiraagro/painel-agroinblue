@@ -28,6 +28,7 @@ interface Props {
   onTabChange: (tab: TabId, filtro?: { ano: string; mes: number }) => void;
   filtroGlobal: FiltroGlobal;
   onFiltroChange: (f: Partial<FiltroGlobal>) => void;
+  onSetSaldo?: (ano: number, categoria: Categoria, quantidade: number, pesoMedioKg?: number) => void;
 }
 
 const MESES = [
