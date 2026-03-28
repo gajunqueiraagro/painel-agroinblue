@@ -727,34 +727,13 @@ export function DashboardFinanceiro({
       })
       .reduce((s, l) => s + Math.abs(l.valor), 0);
 
-    // --- Decomposição entradas ---
-    const classifyEntrada = (l: FinanceiroLancamento) => {
-      const macro = normMacro(l);
-      const escopo = normEscopo(l);
-      const grupo = (l.grupo_custo || '').toLowerCase().trim();
-      const centro = (l.centro_custo || '').toLowerCase().trim();
-      const sub = (l.subcentro || '').toLowerCase().trim();
-      // Aportes Pessoais — checar macro, grupo, centro ou subcentro
-      const isAporte = macro === 'aportes pessoais' || macro === 'aporte pessoal'
-        || grupo.includes('aporte pessoal') || grupo.includes('aportes pessoais')
-        || centro.includes('aporte pessoal') || centro.includes('aportes pessoais')
-        || sub.includes('aporte pessoal') || sub.includes('aportes pessoais');
-      if (isAporte) return 'Aportes Pessoais';
-      if (macro === 'receitas' && escopo === 'pecuaria') return 'Receitas Pecuárias';
-      if (macro === 'receitas' && escopo === 'agricultura') return 'Receitas Agrícolas';
-      if (macro === 'receitas') return 'Outras Receitas';
-      if (macro === 'outras entradas financeiras' && escopo === 'pecuaria') return 'Captação Financ. Pec.';
-      if (macro === 'outras entradas financeiras' && escopo === 'agricultura') return 'Captação Financ. Agri.';
-      if (macro === 'outras entradas financeiras') return 'Captação Financ. Pec.';
-      return 'Outras Receitas';
-    };
-
+    // --- Decomposição entradas (usa classificação centralizada) ---
     const entradaDecomp = { mes: new Map<string, number>(), acum: new Map<string, number>() };
-    const categoriasEntrada = ['Receitas Pecuárias', 'Receitas Agrícolas', 'Outras Receitas', 'Captação Financ. Pec.', 'Captação Financ. Agri.', 'Aportes Pessoais'];
+    const categoriasEntrada = [...CATEGORIAS_ENTRADA];
     for (const cat of categoriasEntrada) { entradaDecomp.mes.set(cat, 0); entradaDecomp.acum.set(cat, 0); }
 
     for (const l of entradasListMes) {
-      const cat = classifyEntrada(l);
+      const cat = classificarEntradaCentral(l);
       entradaDecomp.mes.set(cat, (entradaDecomp.mes.get(cat) || 0) + Math.abs(l.valor));
     }
 
@@ -764,36 +743,18 @@ export function DashboardFinanceiro({
       if (!am || !am.startsWith(anoFiltro)) return false;
       return Number(am.substring(5, 7)) <= mesLimite;
     }).forEach(l => {
-      const cat = classifyEntrada(l);
+      const cat = classificarEntradaCentral(l);
       entradaDecomp.acum.set(cat, (entradaDecomp.acum.get(cat) || 0) + Math.abs(l.valor));
     });
 
-    // --- Decomposição saídas ---
-    const classifySaida = (l: FinanceiroLancamento) => {
-      const macro = normMacro(l);
-      const escopo = normEscopo(l);
-      if (macro === 'custeio produtivo' && escopo === 'pecuaria') return 'Custeio Pecuário';
-      if (macro === 'custeio produtivo' && escopo === 'agricultura') return 'Custeio Agrícola';
-      if (macro === 'custeio produtivo') return 'Custeio Pecuário';
-      if (macro === 'investimento na fazenda' && escopo === 'pecuaria') return 'Investimento Pecuário';
-      if (macro === 'investimento na fazenda' && escopo === 'agricultura') return 'Investimento Agrícola';
-      if (macro === 'investimento na fazenda') return 'Investimento Pecuário';
-      if (macro === 'investimento em bovinos') return 'Reposição de Bovinos';
-      if (macro.includes('dedu') && macro.includes('receita')) return 'Dedução de Receitas';
-      if (macro === 'amortizações financeiras' && escopo === 'pecuaria') return 'Amortizações Fin. Pec.';
-      if (macro === 'amortizações financeiras' && escopo === 'agricultura') return 'Amortizações Fin. Agri.';
-      if (macro === 'amortizações financeiras') return 'Amortizações Fin. Pec.';
-      if (macro === 'dividendos') return 'Dividendos';
-      return 'Outros';
-    };
-
-    const categoriasSaida = ['Custeio Pecuário', 'Investimento Pecuário', 'Custeio Agrícola', 'Investimento Agrícola', 'Reposição de Bovinos', 'Dedução de Receitas', 'Amortizações Fin. Pec.', 'Amortizações Fin. Agri.', 'Dividendos'];
+    // --- Decomposição saídas (usa classificação centralizada) ---
+    const categoriasSaida = [...CATEGORIAS_SAIDA];
     const saidaDecomp = { mes: new Map<string, number>(), acum: new Map<string, number>() };
     for (const cat of categoriasSaida) { saidaDecomp.mes.set(cat, 0); saidaDecomp.acum.set(cat, 0); }
 
     for (const l of saidasListMes) {
-      const cat = classifySaida(l);
-      if (categoriasSaida.includes(cat)) saidaDecomp.mes.set(cat, (saidaDecomp.mes.get(cat) || 0) + Math.abs(l.valor));
+      const cat = classificarSaidaCentral(l);
+      saidaDecomp.mes.set(cat, (saidaDecomp.mes.get(cat) || 0) + Math.abs(l.valor));
     }
 
     lancamentos.filter(l => {
@@ -802,8 +763,8 @@ export function DashboardFinanceiro({
       if (!am || !am.startsWith(anoFiltro)) return false;
       return Number(am.substring(5, 7)) <= mesLimite;
     }).forEach(l => {
-      const cat = classifySaida(l);
-      if (categoriasSaida.includes(cat)) saidaDecomp.acum.set(cat, (saidaDecomp.acum.get(cat) || 0) + Math.abs(l.valor));
+      const cat = classificarSaidaCentral(l);
+      saidaDecomp.acum.set(cat, (saidaDecomp.acum.get(cat) || 0) + Math.abs(l.valor));
     });
 
     // --- Receitas Pecuárias por Competência ---
