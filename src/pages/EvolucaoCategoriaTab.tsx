@@ -61,6 +61,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'previsto'>('realizado');
   const [pesosDb, setPesosDb] = useState<Record<string, number>>({});
   const [conciliacaoStatus, setConciliacaoStatus] = useState<'aberto' | 'fechado' | 'parcial' | null>(null);
+  const [rebanhoStatus, setRebanhoStatus] = useState<'aberto' | 'fechado' | null>(null);
 
   // Fetch conciliação status for the selected month/fazenda
   useEffect(() => {
@@ -103,6 +104,29 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
       }
     })();
   }, [fazendaId, anoFiltro, mesFiltro]);
+
+  // Fetch valor rebanho fechamento status
+  useEffect(() => {
+    const anoMes = `${anoFiltro}-${mesFiltro}`;
+    if (!fazendaId || fazendaId === '__global__') {
+      setRebanhoStatus(null);
+      return;
+    }
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('valor_rebanho_fechamento')
+          .select('status')
+          .eq('fazenda_id', fazendaId)
+          .eq('ano_mes', anoMes)
+          .maybeSingle();
+        setRebanhoStatus(data?.status === 'fechado' ? 'fechado' : 'aberto');
+      } catch {
+        setRebanhoStatus(null);
+      }
+    })();
+  }, [fazendaId, anoFiltro, mesFiltro]);
+
   // Fetch peso médio from fechamento_pasto_itens for the selected month
   useEffect(() => {
     const anoMes = `${anoFiltro}-${mesFiltro}`;
@@ -327,6 +351,20 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
               <Clock className="h-3.5 w-3.5" />
             )}
             Pasto: {conciliacaoStatus === 'fechado' ? 'Fechado' : conciliacaoStatus === 'parcial' ? 'Parcial' : 'Aberto'}
+          </div>
+        )}
+        {rebanhoStatus && (
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
+            rebanhoStatus === 'fechado'
+              ? 'bg-green-50 border-green-300 text-green-800'
+              : 'bg-muted border-border text-muted-foreground'
+          }`}>
+            {rebanhoStatus === 'fechado' ? (
+              <CheckCircle className="h-3.5 w-3.5" />
+            ) : (
+              <Clock className="h-3.5 w-3.5" />
+            )}
+            Rebanho: {rebanhoStatus === 'fechado' ? 'Fechado' : 'Aberto'}
           </div>
         )}
       </div>
