@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { usePastos, type Pasto, type CategoriaRebanho } from '@/hooks/usePastos';
 import { useFechamento } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -247,126 +247,179 @@ export function MapaPastosTab() {
           </div>
         </div>
 
-        <div className="px-2 pt-2 space-y-2">
+        <div className="px-2 pt-2 flex flex-col" style={{ height: 'calc(100dvh - 160px)' }}>
         {loading ? (
           <div className="text-center py-8 text-muted-foreground">Carregando mapa...</div>
         ) : rows.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">Nenhum pasto ativo para conciliação.</div>
         ) : (
-          <>
-            {/* Main Table */}
-            <div
-              className="relative isolate overflow-auto rounded-lg border bg-background [overscroll-behavior:contain] [scrollbar-gutter:stable]"
-              style={{ maxHeight: 'calc(100dvh - 180px)' }}
-            >
-              <table className="min-w-full w-max border-separate border-spacing-0 text-[11px]">
-                <thead className="relative z-[60]">
-                  <tr className="h-7">
-                    <th className="sticky top-0 left-0 z-[70] bg-muted px-1.5 py-0.5 text-left text-[11px] font-semibold border-b border-r min-w-[80px]">Pasto</th>
-                    <th className="sticky top-0 z-[60] bg-muted px-1 py-0.5 text-left text-[11px] font-medium border-b border-r min-w-[55px]">Atividade</th>
-                    <th className="sticky top-0 z-[60] bg-muted px-1 py-0.5 text-left text-[10px] font-medium border-b border-r min-w-[36px]">Lote</th>
-                    {categorias.map(cat => (
-                      <th key={cat.id} className="sticky top-0 z-[60] bg-muted px-0.5 py-0.5 text-center text-[11px] font-bold border-b border-r min-w-[28px]">
-                        {CAT_SIGLAS[cat.codigo] || cat.codigo}
-                      </th>
-                    ))}
-                    <th className="sticky top-0 z-[60] bg-primary/10 px-1 py-0.5 text-center text-[11px] font-semibold border-b border-r min-w-[36px]">Total</th>
-                    <th className="sticky top-0 z-[60] bg-muted px-1 py-0.5 text-center text-[11px] font-medium border-b border-r min-w-[42px]">Peso</th>
-                    <th className="sticky top-0 z-[60] bg-muted px-1 py-0.5 text-center text-[11px] font-medium border-b border-r min-w-[40px]">Área</th>
-                    <th className="sticky top-0 z-[60] bg-muted px-1 py-0.5 text-center text-[11px] font-medium border-b border-r min-w-[40px]">UA/ha</th>
-                    <th className="sticky top-0 z-[60] bg-muted px-1 py-0.5 text-center text-[11px] font-medium border-b min-w-[32px]">Qual.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, idx) => {
-                    const bgStyle = { backgroundColor: idx % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--muted) / 0.3)' };
-                    return (
-                    <tr key={row.pasto.id} className="h-7" style={bgStyle}>
-                      <td className="sticky left-0 z-[50] relative px-1.5 py-0.5 text-[11px] font-semibold border-r whitespace-nowrap after:pointer-events-none after:absolute after:inset-y-0 after:-right-px after:w-px after:bg-border" style={bgStyle}>
-                        {row.pasto.nome}
-                      </td>
-                      <td className="relative z-0 px-1 py-0.5 text-[11px] border-r text-muted-foreground">{tipoUsoLabel(row.tipoUso)}</td>
-                      <td className="relative z-0 px-1 py-0.5 text-[10px] text-muted-foreground border-r">{row.lote || <span className="opacity-20">—</span>}</td>
-                      {categorias.map(cat => {
-                        const val = row.categorias.get(cat.id);
-                        const qty = val?.quantidade || 0;
-                        const peso = val?.peso_medio_kg;
-                        return (
-                          <td key={cat.id} className="relative z-0 px-0.5 py-0.5 text-center text-[11px] border-r">
-                            {qty > 0 ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="font-semibold cursor-default">{qty}</span>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>{cat.nome}: {qty} cab</p>
-                                  {peso && <p>Peso médio: {formatNum(peso, 0)} kg</p>}
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              <span className="opacity-15">—</span>
-                            )}
-                          </td>
-                        );
-                      })}
-                      <td className="relative z-0 px-1 py-0.5 text-center text-[11px] font-bold border-r bg-primary/5">{row.totalCabecas || <span className="opacity-15">—</span>}</td>
-                      <td className="relative z-0 px-1 py-0.5 text-center text-[11px] border-r">{row.pesoMedio ? formatNum(row.pesoMedio, 0) : <span className="opacity-15">—</span>}</td>
-                      <td className="relative z-0 px-1 py-0.5 text-center text-[11px] border-r">{row.pasto.area_produtiva_ha ? formatNum(row.pasto.area_produtiva_ha, 1) : <span className="opacity-15">—</span>}</td>
-                      <td className={`relative z-0 px-1 py-0.5 text-center text-[11px] border-r ${getUaHaColor(row.uaHa)}`}>{row.uaHa ? formatNum(row.uaHa, 2) : <span className="opacity-15">—</span>}</td>
-                      <td className="relative z-0 px-1 py-0.5 text-center text-[11px]">
-                        {row.qualidade ? (
-                          <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold ${getQualidadeColor(row.qualidade)}`}>
-                            {row.qualidade}
-                          </span>
-                        ) : <span className="opacity-15">—</span>}
-                      </td>
-                    </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-muted font-bold border-t-2 text-xs">
-                    <td className="sticky left-0 z-[50] bg-muted px-2 py-1 border-r" colSpan={3}>TOTAL / MÉDIA</td>
-                    {categorias.map(cat => {
-                      const t = totais.catTotals.get(cat.id);
-                      const pesoMed = t && t.qtdComPeso > 0 ? t.pesoTotal / t.qtdComPeso : null;
-                      return (
-                        <td key={cat.id} className="px-1 py-1 text-center border-r">
-                          {t && t.quantidade > 0 ? (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="cursor-default">{t.quantidade}</span>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>{cat.nome}: {t.quantidade} cab</p>
-                                {pesoMed && <p>Peso médio: {formatNum(pesoMed, 0)} kg</p>}
-                              </TooltipContent>
-                            </Tooltip>
-                          ) : '—'}
-                        </td>
-                      );
-                    })}
-                    <td className="px-1.5 py-1 text-center border-r bg-primary/10 text-sm font-extrabold">{totais.totalCab}</td>
-                    <td className="px-1.5 py-1 text-center border-r">{totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 0) : '—'}</td>
-                    <td className="px-1.5 py-1 text-center border-r">{formatNum(totais.areaTotal, 1)}</td>
-                    <td className={`px-1.5 py-1 text-center border-r ${getUaHaColor(totais.uaHaGeral)}`}>
-                      {totais.uaHaGeral ? formatNum(totais.uaHaGeral, 2) : '—'}
-                    </td>
-                    <td className="px-1.5 py-1 text-center">
-                      {totais.qualidadeMedia ? (
-                        <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${getQualidadeColor(totais.qualidadeMedia)}`}>
-                          {formatNum(totais.qualidadeMedia, 1)}
-                        </span>
-                      ) : '—'}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-
-          </>
+          <MapaTable
+            rows={rows}
+            categorias={categorias}
+            totais={totais}
+            getUaHaColor={getUaHaColor}
+            getQualidadeColor={getQualidadeColor}
+          />
         )}
         </div>
+function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }: {
+  rows: PastoMapaRow[];
+  categorias: CategoriaRebanho[];
+  totais: MapaTotais;
+  getUaHaColor: (v: number | null) => string;
+  getQualidadeColor: (v: number | null) => string;
+}) {
+  const headerRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
+
+  const syncScroll = useCallback((source: HTMLDivElement) => {
+    const left = source.scrollLeft;
+    if (headerRef.current && headerRef.current !== source) headerRef.current.scrollLeft = left;
+    if (bodyRef.current && bodyRef.current !== source) bodyRef.current.scrollLeft = left;
+    if (footerRef.current && footerRef.current !== source) footerRef.current.scrollLeft = left;
+  }, []);
+
+  const thCls = "bg-muted px-0.5 py-0.5 text-center text-[11px] font-bold border-b border-r whitespace-nowrap";
+
+  const headerCols = (
+    <>
+      <th className="sticky left-0 z-10 bg-muted px-1.5 py-0.5 text-left text-[11px] font-semibold border-b border-r min-w-[80px]">Pasto</th>
+      <th className={`${thCls} text-left min-w-[55px] font-medium`}>Atividade</th>
+      <th className={`${thCls} text-left min-w-[36px] font-medium text-[10px]`}>Lote</th>
+      {categorias.map(cat => (
+        <th key={cat.id} className={`${thCls} min-w-[28px]`}>{CAT_SIGLAS[cat.codigo] || cat.codigo}</th>
+      ))}
+      <th className="bg-primary/10 px-1 py-0.5 text-center text-[11px] font-semibold border-b border-r min-w-[36px] whitespace-nowrap">Total</th>
+      <th className={`${thCls} min-w-[42px] font-medium`}>Peso</th>
+      <th className={`${thCls} min-w-[40px] font-medium`}>Área</th>
+      <th className={`${thCls} min-w-[40px] font-medium`}>UA/ha</th>
+      <th className="bg-muted px-1 py-0.5 text-center text-[11px] font-medium border-b min-w-[32px] whitespace-nowrap">Qual.</th>
+    </>
+  );
+
+  return (
+    <div className="flex flex-col flex-1 min-h-0 rounded-lg border bg-background overflow-hidden">
+      {/* HEADER - fixed, no vertical scroll */}
+      <div
+        ref={headerRef}
+        className="overflow-x-hidden flex-shrink-0"
+        onScroll={(e) => syncScroll(e.currentTarget)}
+      >
+        <table className="min-w-full w-max border-separate border-spacing-0 text-[11px]">
+          <thead>
+            <tr className="h-7">{headerCols}</tr>
+          </thead>
+        </table>
+      </div>
+
+      {/* BODY - scrolls both axes */}
+      <div
+        ref={bodyRef}
+        className="overflow-auto flex-1 min-h-0"
+        onScroll={(e) => syncScroll(e.currentTarget)}
+      >
+        <table className="min-w-full w-max border-separate border-spacing-0 text-[11px]">
+          <tbody>
+            {rows.map((row, idx) => {
+              const bgStyle = { backgroundColor: idx % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--muted) / 0.3)' };
+              return (
+                <tr key={row.pasto.id} className="h-7" style={bgStyle}>
+                  <td className="sticky left-0 z-10 px-1.5 py-0.5 text-[11px] font-semibold border-r whitespace-nowrap min-w-[80px]" style={bgStyle}>
+                    {row.pasto.nome}
+                  </td>
+                  <td className="px-1 py-0.5 text-[11px] border-r text-muted-foreground min-w-[55px]">{tipoUsoLabel(row.tipoUso)}</td>
+                  <td className="px-1 py-0.5 text-[10px] text-muted-foreground border-r min-w-[36px]">{row.lote || <span className="opacity-20">—</span>}</td>
+                  {categorias.map(cat => {
+                    const val = row.categorias.get(cat.id);
+                    const qty = val?.quantidade || 0;
+                    const peso = val?.peso_medio_kg;
+                    return (
+                      <td key={cat.id} className="px-0.5 py-0.5 text-center text-[11px] border-r min-w-[28px]">
+                        {qty > 0 ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="font-semibold cursor-default">{qty}</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{cat.nome}: {qty} cab</p>
+                              {peso && <p>Peso médio: {formatNum(peso, 0)} kg</p>}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <span className="opacity-15">—</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                  <td className="px-1 py-0.5 text-center text-[11px] font-bold border-r bg-primary/5 min-w-[36px]">{row.totalCabecas || <span className="opacity-15">—</span>}</td>
+                  <td className="px-1 py-0.5 text-center text-[11px] border-r min-w-[42px]">{row.pesoMedio ? formatNum(row.pesoMedio, 0) : <span className="opacity-15">—</span>}</td>
+                  <td className="px-1 py-0.5 text-center text-[11px] border-r min-w-[40px]">{row.pasto.area_produtiva_ha ? formatNum(row.pasto.area_produtiva_ha, 1) : <span className="opacity-15">—</span>}</td>
+                  <td className={`px-1 py-0.5 text-center text-[11px] border-r min-w-[40px] ${getUaHaColor(row.uaHa)}`}>{row.uaHa ? formatNum(row.uaHa, 2) : <span className="opacity-15">—</span>}</td>
+                  <td className="px-1 py-0.5 text-center text-[11px] min-w-[32px]">
+                    {row.qualidade ? (
+                      <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold ${getQualidadeColor(row.qualidade)}`}>
+                        {row.qualidade}
+                      </span>
+                    ) : <span className="opacity-15">—</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* FOOTER - fixed, no vertical scroll */}
+      <div
+        ref={footerRef}
+        className="overflow-x-hidden flex-shrink-0 border-t-2"
+        onScroll={(e) => syncScroll(e.currentTarget)}
+      >
+        <table className="min-w-full w-max border-separate border-spacing-0 text-[11px]">
+          <tfoot>
+            <tr className="bg-muted font-bold text-xs h-8">
+              <td className="sticky left-0 z-10 bg-muted px-2 py-1 border-r min-w-[80px]" colSpan={3}>TOTAL / MÉDIA</td>
+              {categorias.map(cat => {
+                const t = totais.catTotals.get(cat.id);
+                const pesoMed = t && t.qtdComPeso > 0 ? t.pesoTotal / t.qtdComPeso : null;
+                return (
+                  <td key={cat.id} className="px-1 py-1 text-center border-r min-w-[28px]">
+                    {t && t.quantidade > 0 ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="cursor-default">{t.quantidade}</span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{cat.nome}: {t.quantidade} cab</p>
+                          {pesoMed && <p>Peso médio: {formatNum(pesoMed, 0)} kg</p>}
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : '—'}
+                  </td>
+                );
+              })}
+              <td className="px-1.5 py-1 text-center border-r bg-primary/10 text-sm font-extrabold min-w-[36px]">{totais.totalCab}</td>
+              <td className="px-1.5 py-1 text-center border-r min-w-[42px]">{totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 0) : '—'}</td>
+              <td className="px-1.5 py-1 text-center border-r min-w-[40px]">{formatNum(totais.areaTotal, 1)}</td>
+              <td className={`px-1.5 py-1 text-center border-r min-w-[40px] ${getUaHaColor(totais.uaHaGeral)}`}>
+                {totais.uaHaGeral ? formatNum(totais.uaHaGeral, 2) : '—'}
+              </td>
+              <td className="px-1.5 py-1 text-center min-w-[32px]">
+                {totais.qualidadeMedia ? (
+                  <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${getQualidadeColor(totais.qualidadeMedia)}`}>
+                    {formatNum(totais.qualidadeMedia, 1)}
+                  </span>
+                ) : '—'}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
       </div>
 
       <ImportMapaPastos
