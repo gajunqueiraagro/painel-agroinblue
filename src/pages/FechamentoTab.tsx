@@ -478,7 +478,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 className="text-xs font-bold h-8"
                 onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: mesFiltro })}
               >
-                <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                <Pencil className="h-3.5 w-3.5 mr-1" />
                 Evol. Categoria
               </Button>
             )}
