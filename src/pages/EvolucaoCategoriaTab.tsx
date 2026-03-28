@@ -183,7 +183,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
 
       {/* Tabela */}
       <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="w-full text-[10px]">
           <thead>
             <tr className="border-b bg-primary/10">
               <th className="text-left px-1.5 py-1 font-bold text-foreground sticky left-0 bg-primary/10 min-w-[80px]">
@@ -203,30 +203,33 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
             </tr>
           </thead>
           <tbody>
-            {dados.map((cat, i) => (
-              <tr key={cat.value} className={i % 2 === 0 ? '' : 'bg-muted/30'}>
-                <td className={`px-1.5 py-1 font-bold text-foreground sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
-                  {cat.label}
-                </td>
-                <td className="px-1.5 py-1 text-center font-semibold text-foreground bg-primary/5">
-                  {cat.saldoInicioMes}
-                </td>
-                {cat.movs.map((val, j) => (
-                  <td key={j} className={`px-1.5 py-1 text-center font-semibold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-muted-foreground'}`}>
-                    {val || '-'}
+            {dados.map((cat, i) => {
+              const isSeparator = cat.value === 'mamotes_f';
+              return (
+                <tr key={cat.value} className={`${i % 2 === 0 ? '' : 'bg-muted/30'} ${isSeparator ? 'border-t-2 border-border' : ''}`}>
+                  <td className={`px-1.5 py-0.5 font-bold text-foreground sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
+                    {cat.label}
                   </td>
-                ))}
-                <td className="px-1.5 py-1 text-center font-extrabold text-foreground bg-primary/5">
-                  {cat.saldoFinal}
-                </td>
-              </tr>
-            ))}
+                  <td className={`px-1.5 py-0.5 text-center font-semibold bg-primary/5 ${cat.saldoInicioMes === 0 ? 'text-foreground/20' : 'text-foreground'}`}>
+                    {cat.saldoInicioMes}
+                  </td>
+                  {cat.movs.map((val, j) => (
+                    <td key={j} className={`px-1.5 py-0.5 text-center font-semibold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-foreground/20'}`}>
+                      {val || '–'}
+                    </td>
+                  ))}
+                  <td className={`px-1.5 py-0.5 text-center font-extrabold bg-primary/5 ${cat.saldoFinal === 0 ? 'text-foreground/20' : 'text-foreground'}`}>
+                    {cat.saldoFinal}
+                  </td>
+                </tr>
+              );
+            })}
             <tr className="border-t-2 bg-primary/10">
               <td className="px-1.5 py-1 font-extrabold text-foreground sticky left-0 bg-primary/10">TOTAL</td>
               <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoIni}</td>
               {totais.movs.map((val, j) => (
-                <td key={j} className={`px-1.5 py-1 text-center font-extrabold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-muted-foreground'}`}>
-                  {val || '-'}
+                <td key={j} className={`px-1.5 py-1 text-center font-extrabold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-foreground/20'}`}>
+                  {val || '–'}
                 </td>
               ))}
               <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoFin}</td>
