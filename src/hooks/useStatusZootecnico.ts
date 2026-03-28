@@ -171,7 +171,7 @@ export function useStatusZootecnico(
     } finally {
       setLoading(false);
     }
-  }, [fazendaId, anoMes, ano, mes, saldosIniciais, lancamentos, isGlobal]);
+  }, [fazendaId, anoMes, ano, mes, saldosIniciais, lancamentos, isGlobal, contextFazendas]);
 
   useEffect(() => { load(); }, [load]);
 
