@@ -16,6 +16,19 @@ import { usePastos } from '@/hooks/usePastos';
 import { supabase } from '@/integrations/supabase/client';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
+// ── Código padrão das categorias ──
+const CAT_COLS = [
+  { codigo: 'mamotes_m', sigla: 'MM' },
+  { codigo: 'desmama_m', sigla: 'DM' },
+  { codigo: 'garrotes', sigla: 'G' },
+  { codigo: 'bois', sigla: 'B' },
+  { codigo: 'touros', sigla: 'T' },
+  { codigo: 'mamotes_f', sigla: 'MF' },
+  { codigo: 'desmama_f', sigla: 'DF' },
+  { codigo: 'novilhas', sigla: 'N' },
+  { codigo: 'vacas', sigla: 'V' },
+];
+
 // ── Cadeia zootécnica ──
 const CADEIA_MACHOS = ['mamotes_m', 'desmama_m', 'garrotes', 'bois', 'touros'];
 const CADEIA_FEMEAS = ['mamotes_f', 'desmama_f', 'novilhas', 'vacas'];
