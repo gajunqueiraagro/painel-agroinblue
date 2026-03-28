@@ -20,18 +20,18 @@ export interface PrecoMercadoStatusData {
 
 // Definição dos blocos e categorias padrão
 export const BLOCOS_PRECO: PrecoMercadoItem[] = [
-  // Bloco Frigorífico
+  // Bloco Frigorífico no MS
   { bloco: 'frigorifico', categoria: 'Boi Gordo', unidade: 'R$/@', valor: 0, agio_perc: 0 },
   { bloco: 'frigorifico', categoria: 'Vaca', unidade: 'R$/@', valor: 0, agio_perc: 0 },
   { bloco: 'frigorifico', categoria: 'Novilha', unidade: 'R$/@', valor: 0, agio_perc: 0 },
   // Bloco Gado Magro - Machos
-  { bloco: 'magro_macho', categoria: '100-220 kg', unidade: 'R$/kg', valor: 0, agio_perc: 0 },
-  { bloco: 'magro_macho', categoria: '220-300 kg', unidade: 'R$/kg', valor: 0, agio_perc: 0 },
-  { bloco: 'magro_macho', categoria: 'Garrotes', unidade: 'R$/kg', valor: 0, agio_perc: 0 },
+  { bloco: 'magro_macho', categoria: '200 kg média', unidade: 'R$/kg', valor: 0, agio_perc: 0 },
+  { bloco: 'magro_macho', categoria: '250 kg média', unidade: 'R$/kg', valor: 0, agio_perc: 0 },
+  { bloco: 'magro_macho', categoria: 'Garrotes 350 kg média', unidade: 'R$/kg', valor: 0, agio_perc: 0 },
   // Bloco Gado Magro - Fêmeas
-  { bloco: 'magro_femea', categoria: 'Desmama 100-220 kg', unidade: 'R$/kg', valor: 0, agio_perc: 0 },
-  { bloco: 'magro_femea', categoria: 'Desmama 220-300 kg', unidade: 'R$/kg', valor: 0, agio_perc: 0 },
-  { bloco: 'magro_femea', categoria: 'Novilhas', unidade: 'R$/kg', valor: 0, agio_perc: 0 },
+  { bloco: 'magro_femea', categoria: '200 kg média', unidade: 'R$/kg', valor: 0, agio_perc: 0 },
+  { bloco: 'magro_femea', categoria: '250 kg média', unidade: 'R$/kg', valor: 0, agio_perc: 0 },
+  { bloco: 'magro_femea', categoria: 'Novilhas 350 kg média', unidade: 'R$/kg', valor: 0, agio_perc: 0 },
 ];
 
 export function usePrecoMercado(anoMes: string) {
