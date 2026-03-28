@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowLeft, CheckCircle, Circle, Lock, AlertTriangle, Sprout, BarChart3 } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Circle, Lock, AlertTriangle, Sprout, BarChart3, Unlock } from 'lucide-react';
 import { ResumoAtividadesView } from '@/components/ResumoAtividadesView';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
@@ -123,6 +123,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
   const [bulkClosing, setBulkClosing] = useState(false);
   const [showResumoAtividades, setShowResumoAtividades] = useState(false);
+  const [confirmBulkReopenOpen, setConfirmBulkReopenOpen] = useState(false);
+  const [bulkReopening, setBulkReopening] = useState(false);
 
   useEffect(() => { loadFechamentos(anoMes); }, [anoMes, loadFechamentos]);
 
@@ -293,6 +295,34 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     }
   };
 
+  const handleBulkReopen = async () => {
+    setBulkReopening(true);
+    try {
+      const pastosParaReabrir = pastosAtivos.filter(p => {
+        const fech = getFechamento(p.id);
+        return fech?.status === 'fechado';
+      });
+
+      for (const pasto of pastosParaReabrir) {
+        const fech = getFechamento(pasto.id)!;
+        const { error } = await supabase
+          .from('fechamento_pastos')
+          .update({ status: 'rascunho', responsavel_nome: null })
+          .eq('id', fech.id);
+        if (error) console.error('Erro ao reabrir pasto:', error);
+      }
+
+      toast.success(`${pastosParaReabrir.length} pasto(s) reaberto(s).`);
+      await loadFechamentos(anoMes);
+    } catch (e) {
+      console.error('Erro ao reabrir pastos:', e);
+      toast.error('Erro ao reabrir pastos.');
+    } finally {
+      setBulkReopening(false);
+      setConfirmBulkReopenOpen(false);
+    }
+  };
+
   if (isGlobal) return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda para o fechamento.</div>;
 
   if (showResumoAtividades) {
@@ -403,6 +433,17 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               >
                 <Lock className="h-3.5 w-3.5 mr-1" />
                 Fechamento Todos
+              </Button>
+            )}
+            {fechadosCount > 0 && (canEdit('zootecnico') || canEdit('pastos')) && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs font-bold border-destructive text-destructive hover:bg-destructive/10 h-8"
+                onClick={() => setConfirmBulkReopenOpen(true)}
+              >
+                <Unlock className="h-3.5 w-3.5 mr-1" />
+                Reabrir Pastos
               </Button>
             )}
           </div>
@@ -565,6 +606,36 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               className="bg-warning text-warning-foreground hover:bg-warning/90"
             >
               {bulkClosing ? 'Fechando...' : `Fechar ${pendentesCount} pasto(s)`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reopen Confirmation Dialog */}
+      <AlertDialog open={confirmBulkReopenOpen} onOpenChange={setConfirmBulkReopenOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Unlock className="h-5 w-5 text-destructive" />
+              Reabrir Pastos
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-relaxed">
+              Você está reabrindo <strong>{fechadosCount} pasto(s) fechado(s)</strong> da fazenda
+              {fazendaAtual ? ` "${fazendaAtual.nome}"` : ''} para o mês <strong>{formatAnoMes(anoMes)}</strong>.
+              <br /><br />
+              O status será alterado de <strong>"Fechado"</strong> para <strong>"Rascunho"</strong>.
+              <br /><br />
+              <strong>Nenhum dado será alterado</strong>, apenas o status dos pastos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkReopening}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkReopen}
+              disabled={bulkReopening}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {bulkReopening ? 'Reabrindo...' : `Reabrir ${fechadosCount} pasto(s)`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
