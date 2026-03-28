@@ -496,7 +496,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 size="sm"
                 variant="outline"
                 className="text-xs font-bold border-warning text-warning hover:bg-warning/10 h-8"
-                onClick={() => setConfirmBulkOpen(true)}
+                onClick={() => {
+                  if (hasDivergencia) {
+                    toast.error('Não é possível fechar os pastos. Existem categorias desconciliadas entre Pasto e Sistema. Realize a conciliação antes de fechar.');
+                    return;
+                  }
+                  setConfirmBulkOpen(true);
+                }}
               >
                 <Lock className="h-3.5 w-3.5 mr-1" />
                 Fechamento Todos
