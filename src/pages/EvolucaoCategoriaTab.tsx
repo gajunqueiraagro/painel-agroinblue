@@ -309,7 +309,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                   <td className={`px-1.5 py-0.5 text-center font-extrabold bg-primary/5 ${cat.saldoFinal === 0 ? 'text-transparent' : 'text-foreground'}`}>
                     {cat.saldoFinal}
                   </td>
-                  <td className={`px-1.5 py-0.5 text-center font-semibold bg-primary/5 ${!cat.pesoMedio ? 'text-muted-foreground' : 'text-foreground'}`}>
+                  <td className={`px-1.5 py-0.5 text-center italic text-[9px] bg-primary/5 ${!cat.pesoMedio || cat.pesoMedio <= 0 ? 'text-transparent' : 'text-foreground'}`}>
                     {formatPeso(cat.pesoMedio)}
                   </td>
                 </tr>
