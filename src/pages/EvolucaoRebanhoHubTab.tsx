@@ -48,7 +48,7 @@ export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateT
       </TabsContent>
 
       <TabsContent value="categoria">
-        <EvolucaoCategoriaTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} />
+        <EvolucaoCategoriaTab lancamentos={lancamentos} saldosIniciais={saldosIniciais} onNavigateToReclass={onNavigateToReclass} />
       </TabsContent>
     </Tabs>
   );
