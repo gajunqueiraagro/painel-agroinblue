@@ -60,7 +60,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   const [mesFiltro, setMesFiltro] = useState(initialMes || format(new Date(), 'MM'));
   const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'previsto'>('realizado');
   const [pesosDb, setPesosDb] = useState<Record<string, number>>({});
-  const [conciliacaoStatus, setConciliacaoStatus] = useState<'aberto' | 'fechado' | 'parcial' | null>(null);
+  const [conciliacaoRebanhoStatus, setConciliacaoRebanhoStatus] = useState<'aberto' | 'fechado' | null>(null);
 
   // Fetch conciliação status for the selected month/fazenda
   useEffect(() => {
