@@ -11,7 +11,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { MESES_NOMES } from '@/lib/calculos/labels';
 import { usePrecoMercado, BLOCOS_PRECO, type PrecoMercadoItem } from '@/hooks/usePrecoMercado';
 import { usePermissions } from '@/hooks/usePermissions';
-import { Lock, Unlock, Save, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Lock, Unlock, Save, CheckCircle, AlertTriangle, Copy } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface Props {
   filtroAnoInicial?: string;
@@ -37,9 +38,11 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
   const [mes, setMes] = useState(String(filtroMesInicial || now.getMonth() + 1).padStart(2, '0'));
   const anoMes = `${ano}-${mes}`;
 
-  const { itens, setItens, statusMes, loading, saving, isValidado, salvar, reabrir } = usePrecoMercado(anoMes);
+  const { itens, setItens, statusMes, loading, saving, isValidado, salvar, reabrir, copiarMesAnterior } = usePrecoMercado(anoMes);
   const { perfil } = usePermissions();
   const isAdmin = perfil === 'admin_agroinblue';
+  const [showCopiarDialog, setShowCopiarDialog] = useState(false);
+  const [copiando, setCopiando] = useState(false);
 
   const anos = useMemo(() => {
     const a: string[] = [];
@@ -222,9 +225,49 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
                 <StIcon className="h-3 w-3 mr-1" />
                 {stCfg.label}
               </Badge>
+              {isAdmin && !isValidado && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-8"
+                  onClick={() => setShowCopiarDialog(true)}
+                  disabled={copiando || loading}
+                >
+                  <Copy className="h-3.5 w-3.5 mr-1" />
+                  Mês Anterior
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
+
+        <AlertDialog open={showCopiarDialog} onOpenChange={setShowCopiarDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Replicar valores do mês anterior?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {temPreenchimento
+                  ? 'Já existem valores preenchidos neste mês. Deseja sobrescrever com os valores do mês anterior?'
+                  : 'Deseja replicar os valores do mês anterior para este mês?'}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={async () => {
+                setCopiando(true);
+                setShowCopiarDialog(false);
+                const dados = await copiarMesAnterior(anoMes);
+                if (dados) {
+                  setItens(dados);
+                  toast.success('Valores do mês anterior carregados. Salve para confirmar.');
+                }
+                setCopiando(false);
+              }}>
+                {temPreenchimento ? 'Sobrescrever' : 'Replicar'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {loading ? (
           <div className="text-center py-8 text-muted-foreground text-sm">Carregando...</div>
