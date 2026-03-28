@@ -32,6 +32,7 @@ import { ConciliacaoCategoriaTab } from './ConciliacaoCategoriaTab';
 import { ChuvasTab } from './ChuvasTab';
 import { VisaoAnualZootecnicaTab } from './VisaoAnualZootecnicaTab';
 import { FechamentoExecutivoTab } from './FechamentoExecutivoTab';
+import { AnaliseConsultorTab } from './AnaliseConsultorTab';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { SyncStatus } from '@/components/SyncStatus';
@@ -82,6 +83,7 @@ const TITLES: Record<TabId, string> = {
   indicadores: 'Indicadores',
   evolucao_rebanho_hub: 'Evolução Rebanho',
   fechamento_executivo: 'Fechamento Executivo',
+  analise_consultor: 'Análise do Consultor',
 };
 
 const Index = () => {
@@ -375,6 +377,9 @@ const Index = () => {
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
         />
+      )}
+      {activeTab === 'analise_consultor' && (
+        <AnaliseConsultorTab />
       )}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
