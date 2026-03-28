@@ -610,6 +610,36 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reopen Confirmation Dialog */}
+      <AlertDialog open={confirmBulkReopenOpen} onOpenChange={setConfirmBulkReopenOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Unlock className="h-5 w-5 text-destructive" />
+              Reabrir Pastos
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-relaxed">
+              Você está reabrindo <strong>{fechadosCount} pasto(s) fechado(s)</strong> da fazenda
+              {fazendaAtual ? ` "${fazendaAtual.nome}"` : ''} para o mês <strong>{formatAnoMes(anoMes)}</strong>.
+              <br /><br />
+              O status será alterado de <strong>"Fechado"</strong> para <strong>"Rascunho"</strong>.
+              <br /><br />
+              <strong>Nenhum dado será alterado</strong>, apenas o status dos pastos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkReopening}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkReopen}
+              disabled={bulkReopening}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {bulkReopening ? 'Reabrindo...' : `Reabrir ${fechadosCount} pasto(s)`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
