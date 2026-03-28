@@ -264,49 +264,71 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   return (
     <div className="p-3 max-w-4xl mx-auto space-y-2 animate-fade-in pb-20">
       {/* Filtros */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-          <SelectTrigger className="h-7 text-xs font-bold w-20">
-            <SelectValue placeholder="Ano" />
-          </SelectTrigger>
-          <SelectContent>
-            {anosDisponiveis.map(a => (
-              <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={mesFiltro} onValueChange={setMesFiltro}>
-          <SelectTrigger className="h-7 text-xs font-bold w-24">
-            <SelectValue placeholder="Mês" />
-          </SelectTrigger>
-          <SelectContent>
-            {MESES.map(m => (
-              <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+            <SelectTrigger className="h-7 text-xs font-bold w-20">
+              <SelectValue placeholder="Ano" />
+            </SelectTrigger>
+            <SelectContent>
+              {anosDisponiveis.map(a => (
+                <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={mesFiltro} onValueChange={setMesFiltro}>
+            <SelectTrigger className="h-7 text-xs font-bold w-24">
+              <SelectValue placeholder="Mês" />
+            </SelectTrigger>
+            <SelectContent>
+              {MESES.map(m => (
+                <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-        <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
-          {([
-            { value: 'realizado' as const, label: 'Realizado' },
-            { value: 'previsto' as const, label: 'Previsto' },
-          ]).map(opt => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setStatusFiltro(opt.value)}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                statusFiltro === opt.value
-                  ? opt.value === 'realizado'
-                    ? 'bg-green-700 text-white shadow-sm'
-                    : 'bg-orange-500 text-white shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+          <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
+            {([
+              { value: 'realizado' as const, label: 'Realizado' },
+              { value: 'previsto' as const, label: 'Previsto' },
+            ]).map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setStatusFiltro(opt.value)}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                  statusFiltro === opt.value
+                    ? opt.value === 'realizado'
+                      ? 'bg-green-700 text-white shadow-sm'
+                      : 'bg-orange-500 text-white shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
+
+        {/* Card status conciliação */}
+        {conciliacaoStatus && (
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
+            conciliacaoStatus === 'fechado'
+              ? 'bg-green-50 border-green-300 text-green-800'
+              : conciliacaoStatus === 'parcial'
+                ? 'bg-orange-50 border-orange-300 text-orange-800'
+                : 'bg-muted border-border text-muted-foreground'
+          }`}>
+            {conciliacaoStatus === 'fechado' ? (
+              <CheckCircle className="h-3.5 w-3.5" />
+            ) : conciliacaoStatus === 'parcial' ? (
+              <AlertTriangle className="h-3.5 w-3.5" />
+            ) : (
+              <Clock className="h-3.5 w-3.5" />
+            )}
+            Pasto: {conciliacaoStatus === 'fechado' ? 'Fechado' : conciliacaoStatus === 'parcial' ? 'Parcial' : 'Aberto'}
+          </div>
+        )}
       </div>
 
       {/* Tabela */}
