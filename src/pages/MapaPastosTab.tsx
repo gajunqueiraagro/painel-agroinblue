@@ -259,7 +259,7 @@ export function MapaPastosTab() {
               <table className="w-full text-xs border-collapse">
                 <thead className="sticky top-0 z-30 bg-muted">
                   <tr>
-                    <th className="sticky left-0 z-20 bg-muted px-2 py-1 text-left text-xs font-semibold border-b border-r min-w-[90px]">Pasto</th>
+                    <th className="sticky left-0 z-40 bg-muted px-2 py-1 text-left text-xs font-semibold border-b border-r min-w-[90px]">Pasto</th>
                     <th className="px-1.5 py-1 text-left text-xs font-medium border-b border-r min-w-[60px]">Atividade</th>
                     <th className="px-1 py-1 text-left text-[10px] font-medium border-b border-r min-w-[40px]">Lote</th>
                     {categorias.map(cat => (
