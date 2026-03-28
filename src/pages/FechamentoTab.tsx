@@ -755,7 +755,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 onNavigateToReclass({ ano: anoFiltro, mes: mesFiltro });
               }}
             >
-              <RefreshCw className="h-4 w-4 mr-2" />
+              <Pencil className="h-4 w-4 mr-2" />
               Evol. Categoria
             </Button>
           )}
