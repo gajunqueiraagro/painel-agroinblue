@@ -280,7 +280,7 @@ function MetricRow({ label, value, accent }: { label: string; value: string; acc
 // Main component
 // ---------------------------------------------------------------------------
 
-export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlobal, onFiltroChange }: Props) {
+export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlobal, onFiltroChange, onSetSaldo }: Props) {
   const { fazendaAtual, isGlobal } = useFazenda();
   const fazendaNaoPecuaria = fazendaAtual && fazendaAtual.id !== '__global__' && fazendaAtual.tem_pecuaria === false;
 
