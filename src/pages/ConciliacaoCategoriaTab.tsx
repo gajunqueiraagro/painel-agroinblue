@@ -291,13 +291,13 @@ export function ConciliacaoCategoriaTab({ lancamentos, saldosIniciais, onBack, o
         {/* Filtros */}
         <div className="flex gap-2 items-center flex-wrap">
           <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-            <SelectTrigger className="w-24 text-base font-bold"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-20 h-8 text-xs font-bold"><SelectValue /></SelectTrigger>
             <SelectContent>
               {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
-            <SelectTrigger className="w-28 text-sm font-bold"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-20 h-8 text-xs font-bold"><SelectValue /></SelectTrigger>
             <SelectContent>
               {MESES_COLS.map((m, i) => (
                 <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>
