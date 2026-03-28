@@ -5,7 +5,7 @@ import { filtrarPorCenario } from '@/lib/statusOperacional';
 import { parseISO, format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { CheckCircle, AlertTriangle, Clock } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
 
 interface Props {
   lancamentos: Lancamento[];
