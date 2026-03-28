@@ -202,7 +202,7 @@ export function MapaPastosTab() {
     <TooltipProvider>
       <div className="pb-24">
         {/* Header - sticky */}
-        <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 py-1.5">
+        <div className="sticky top-0 z-50 bg-background border-b border-border/50 shadow-sm px-3 py-1.5">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
               <Select value={anoFiltro} onValueChange={setAnoFiltro}>
@@ -255,23 +255,26 @@ export function MapaPastosTab() {
         ) : (
           <>
             {/* Main Table */}
-            <div className="relative overflow-auto rounded-lg border" style={{ maxHeight: 'calc(100vh - 180px)' }}>
-              <table className="w-full border-collapse text-[11px]">
-                <thead>
+            <div
+              className="relative isolate overflow-auto rounded-lg border bg-background [overscroll-behavior:contain] [scrollbar-gutter:stable]"
+              style={{ maxHeight: 'calc(100dvh - 180px)' }}
+            >
+              <table className="min-w-full w-max border-separate border-spacing-0 text-[11px]">
+                <thead className="relative z-[60]">
                   <tr className="h-7">
-                    <th className="sticky top-0 left-0 z-40 bg-muted px-1.5 py-0.5 text-left text-[11px] font-semibold border-b border-r min-w-[80px]">Pasto</th>
-                    <th className="sticky top-0 z-30 bg-muted px-1 py-0.5 text-left text-[11px] font-medium border-b border-r min-w-[55px]">Atividade</th>
-                    <th className="sticky top-0 z-30 bg-muted px-1 py-0.5 text-left text-[10px] font-medium border-b border-r min-w-[36px]">Lote</th>
+                    <th className="sticky top-0 left-0 z-[70] bg-muted px-1.5 py-0.5 text-left text-[11px] font-semibold border-b border-r min-w-[80px]">Pasto</th>
+                    <th className="sticky top-0 z-[60] bg-muted px-1 py-0.5 text-left text-[11px] font-medium border-b border-r min-w-[55px]">Atividade</th>
+                    <th className="sticky top-0 z-[60] bg-muted px-1 py-0.5 text-left text-[10px] font-medium border-b border-r min-w-[36px]">Lote</th>
                     {categorias.map(cat => (
-                      <th key={cat.id} className="sticky top-0 z-30 bg-muted px-0.5 py-0.5 text-center text-[11px] font-bold border-b border-r min-w-[28px]">
+                      <th key={cat.id} className="sticky top-0 z-[60] bg-muted px-0.5 py-0.5 text-center text-[11px] font-bold border-b border-r min-w-[28px]">
                         {CAT_SIGLAS[cat.codigo] || cat.codigo}
                       </th>
                     ))}
-                    <th className="sticky top-0 z-30 bg-primary/10 px-1 py-0.5 text-center text-[11px] font-semibold border-b border-r min-w-[36px]">Total</th>
-                    <th className="sticky top-0 z-30 bg-muted px-1 py-0.5 text-center text-[11px] font-medium border-b border-r min-w-[42px]">Peso</th>
-                    <th className="sticky top-0 z-30 bg-muted px-1 py-0.5 text-center text-[11px] font-medium border-b border-r min-w-[40px]">Área</th>
-                    <th className="sticky top-0 z-30 bg-muted px-1 py-0.5 text-center text-[11px] font-medium border-b border-r min-w-[40px]">UA/ha</th>
-                    <th className="sticky top-0 z-30 bg-muted px-1 py-0.5 text-center text-[11px] font-medium border-b min-w-[32px]">Qual.</th>
+                    <th className="sticky top-0 z-[60] bg-primary/10 px-1 py-0.5 text-center text-[11px] font-semibold border-b border-r min-w-[36px]">Total</th>
+                    <th className="sticky top-0 z-[60] bg-muted px-1 py-0.5 text-center text-[11px] font-medium border-b border-r min-w-[42px]">Peso</th>
+                    <th className="sticky top-0 z-[60] bg-muted px-1 py-0.5 text-center text-[11px] font-medium border-b border-r min-w-[40px]">Área</th>
+                    <th className="sticky top-0 z-[60] bg-muted px-1 py-0.5 text-center text-[11px] font-medium border-b border-r min-w-[40px]">UA/ha</th>
+                    <th className="sticky top-0 z-[60] bg-muted px-1 py-0.5 text-center text-[11px] font-medium border-b min-w-[32px]">Qual.</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -279,17 +282,17 @@ export function MapaPastosTab() {
                     const bgStyle = { backgroundColor: idx % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--muted) / 0.3)' };
                     return (
                     <tr key={row.pasto.id} className="h-7" style={bgStyle}>
-                      <td className="sticky left-0 z-20 px-1.5 py-0.5 text-[11px] font-semibold border-r whitespace-nowrap" style={bgStyle}>
+                      <td className="sticky left-0 z-[50] relative px-1.5 py-0.5 text-[11px] font-semibold border-r whitespace-nowrap after:pointer-events-none after:absolute after:inset-y-0 after:-right-px after:w-px after:bg-border" style={bgStyle}>
                         {row.pasto.nome}
                       </td>
-                      <td className="px-1 py-0.5 text-[11px] border-r text-muted-foreground">{tipoUsoLabel(row.tipoUso)}</td>
-                      <td className="px-1 py-0.5 text-[10px] text-muted-foreground border-r">{row.lote || <span className="opacity-20">—</span>}</td>
+                      <td className="relative z-0 px-1 py-0.5 text-[11px] border-r text-muted-foreground">{tipoUsoLabel(row.tipoUso)}</td>
+                      <td className="relative z-0 px-1 py-0.5 text-[10px] text-muted-foreground border-r">{row.lote || <span className="opacity-20">—</span>}</td>
                       {categorias.map(cat => {
                         const val = row.categorias.get(cat.id);
                         const qty = val?.quantidade || 0;
                         const peso = val?.peso_medio_kg;
                         return (
-                          <td key={cat.id} className="px-0.5 py-0.5 text-center text-[11px] border-r">
+                          <td key={cat.id} className="relative z-0 px-0.5 py-0.5 text-center text-[11px] border-r">
                             {qty > 0 ? (
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -306,11 +309,11 @@ export function MapaPastosTab() {
                           </td>
                         );
                       })}
-                      <td className="px-1 py-0.5 text-center text-[11px] font-bold border-r bg-primary/5">{row.totalCabecas || <span className="opacity-15">—</span>}</td>
-                      <td className="px-1 py-0.5 text-center text-[11px] border-r">{row.pesoMedio ? formatNum(row.pesoMedio, 0) : <span className="opacity-15">—</span>}</td>
-                      <td className="px-1 py-0.5 text-center text-[11px] border-r">{row.pasto.area_produtiva_ha ? formatNum(row.pasto.area_produtiva_ha, 1) : <span className="opacity-15">—</span>}</td>
-                      <td className={`px-1 py-0.5 text-center text-[11px] border-r ${getUaHaColor(row.uaHa)}`}>{row.uaHa ? formatNum(row.uaHa, 2) : <span className="opacity-15">—</span>}</td>
-                      <td className="px-1 py-0.5 text-center text-[11px]">
+                      <td className="relative z-0 px-1 py-0.5 text-center text-[11px] font-bold border-r bg-primary/5">{row.totalCabecas || <span className="opacity-15">—</span>}</td>
+                      <td className="relative z-0 px-1 py-0.5 text-center text-[11px] border-r">{row.pesoMedio ? formatNum(row.pesoMedio, 0) : <span className="opacity-15">—</span>}</td>
+                      <td className="relative z-0 px-1 py-0.5 text-center text-[11px] border-r">{row.pasto.area_produtiva_ha ? formatNum(row.pasto.area_produtiva_ha, 1) : <span className="opacity-15">—</span>}</td>
+                      <td className={`relative z-0 px-1 py-0.5 text-center text-[11px] border-r ${getUaHaColor(row.uaHa)}`}>{row.uaHa ? formatNum(row.uaHa, 2) : <span className="opacity-15">—</span>}</td>
+                      <td className="relative z-0 px-1 py-0.5 text-center text-[11px]">
                         {row.qualidade ? (
                           <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold ${getQualidadeColor(row.qualidade)}`}>
                             {row.qualidade}
@@ -323,7 +326,7 @@ export function MapaPastosTab() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-muted font-bold border-t-2 text-xs">
-                    <td className="sticky left-0 z-[5] bg-muted px-2 py-1 border-r" colSpan={3}>TOTAL / MÉDIA</td>
+                    <td className="sticky left-0 z-[50] bg-muted px-2 py-1 border-r" colSpan={3}>TOTAL / MÉDIA</td>
                     {categorias.map(cat => {
                       const t = totais.catTotals.get(cat.id);
                       const pesoMed = t && t.qtdComPeso > 0 ? t.pesoTotal / t.qtdComPeso : null;
