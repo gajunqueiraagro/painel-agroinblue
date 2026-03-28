@@ -18,14 +18,15 @@ interface Props {
  * Shows a warning banner when no saldo exists, or a discrete edit button when it does.
  */
 export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase }: Props) {
-  // Determine the single year for this fazenda's saldo inicial
+  // The saldo inicial is ALWAYS for the earliest year only
   const anoSaldo = useMemo(() => {
-    if (anoBase) return anoBase;
-    // Use the earliest year that has saldo, or current year
     const anos = saldosIniciais.map(s => s.ano);
     if (anos.length > 0) return Math.min(...anos);
-    return new Date().getFullYear();
+    return anoBase || new Date().getFullYear();
   }, [saldosIniciais, anoBase]);
+
+  // Only render if viewing the earliest year (or no saldo exists yet)
+  const shouldRender = !anoBase || anoBase === anoSaldo;
 
   const hasSaldo = useMemo(() => {
     return saldosIniciais.some(s => s.ano === anoSaldo && s.quantidade > 0);
