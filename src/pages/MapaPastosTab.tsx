@@ -257,7 +257,7 @@ export function MapaPastosTab() {
             {/* Main Table */}
             <div className="relative overflow-auto rounded-lg border" style={{ maxHeight: 'calc(100vh - 180px)' }}>
               <table className="w-full text-xs border-collapse">
-                <thead className="sticky top-0 z-10 bg-muted">
+                <thead className="sticky top-0 z-30 bg-muted">
                   <tr>
                     <th className="sticky left-0 z-20 bg-muted px-2 py-1 text-left text-xs font-semibold border-b border-r min-w-[90px]">Pasto</th>
                     <th className="px-1.5 py-1 text-left text-xs font-medium border-b border-r min-w-[60px]">Atividade</th>
