@@ -158,7 +158,10 @@ const Index = () => {
       setMovDrillLabel(undefined);
       setMovBackTab(undefined);
     }
-    if (tab !== 'lancamentos') setLancamentosFromConciliacao(false);
+    if (tab !== 'lancamentos') {
+      setLancamentosFromConciliacao(false);
+      setLancamentosFromFechamento(false);
+    }
     if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
     setActiveTab(tab);
   }, [isGlobal, canViewTab]);
