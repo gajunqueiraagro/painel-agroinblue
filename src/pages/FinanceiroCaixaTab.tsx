@@ -202,7 +202,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
             className="flex items-center gap-1.5 text-xs font-bold text-primary hover:text-primary/80 transition-colors"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Voltar para Financeiro
+            Voltar para Dashboard
           </button>
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-1.5 bg-primary/10 text-primary rounded-md px-2.5 py-1 text-xs font-bold">
