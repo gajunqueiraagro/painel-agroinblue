@@ -48,24 +48,12 @@ import type { Pasto, CategoriaRebanho } from '@/hooks/usePastos';
 // Helpers
 // ---------------------------------------------------------------------------
 
-// Use shared filters — FONTE ÚNICA DE VERDADE (src/lib/financeiro/filters.ts)
-import {
-  isConciliado as isConciliadoShared,
-  isEntradaFinanceira,
-  isSaidaFinanceira,
-  datePagtoAnoMes as datePagtoAnoMesShared,
-} from '@/lib/financeiro/filters';
-
-const isConciliado = (l: FinanceiroLancamento) => isConciliadoShared(l);
-const isEntrada = (l: FinanceiroLancamento) => isEntradaFinanceira(l);
-const isSaida = (l: FinanceiroLancamento) => isSaidaFinanceira(l);
-const datePagtoAnoMes = (l: FinanceiroLancamento) => datePagtoAnoMesShared(l);
-
-const normMacro = (l: FinanceiroLancamento) =>
-  (l.macro_custo || '').toLowerCase().trim();
-
-const normEscopo = (l: FinanceiroLancamento) =>
-  (l.escopo_negocio || '').toLowerCase().trim();
+// Use centralized classification — FONTE ÚNICA DE VERDADE (src/lib/financeiro/classificacao.ts)
+const isConciliado = (l: FinanceiroLancamento) => isConciliadoCentral(l);
+const isEntrada = (l: FinanceiroLancamento) => isEntradaCentral(l);
+const isSaida = (l: FinanceiroLancamento) => isSaidaCentral(l);
+const datePagtoAnoMes = (l: FinanceiroLancamento) => datePagtoAnoMesCentral(l);
+const isDesembolsoProdutivo = (l: FinanceiroLancamento) => isDesembolsoProdutivoCentral(l);
 
 // ---------------------------------------------------------------------------
 // Props
