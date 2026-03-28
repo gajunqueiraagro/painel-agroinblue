@@ -162,6 +162,7 @@ const Index = () => {
     if (tab !== 'lancamentos') {
       setLancamentosFromConciliacao(false);
       setLancamentosFromFechamento(false);
+      setLancamentosFromEvolCategoria(false);
     }
     if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
     setActiveTab(tab);
