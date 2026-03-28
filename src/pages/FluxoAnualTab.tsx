@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, DollarSign } from 'lucide-react';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import type { SubAba } from './FinanceiroTab';
+import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { calcFluxoAnual, FLUXO_LINHAS } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { parseISO, format } from 'date-fns';
