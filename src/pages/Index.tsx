@@ -188,6 +188,7 @@ const Index = () => {
     conciliacao_categoria: goToZootecnico,
     visao_anual_zoo: goToVisaoZooHub,
     analise_economica: goToVisaoFinHub,
+    preco_mercado: goToVisaoZooHub,
     fin_caixa: goToLancarFinHub,
     fechamento: goToZootecnico,
     evolucao_rebanho_hub: goToLancarZooHub,
