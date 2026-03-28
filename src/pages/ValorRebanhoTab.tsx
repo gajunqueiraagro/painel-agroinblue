@@ -195,7 +195,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     const strMap: Record<string, string> = {};
     precos.forEach(p => {
       numMap[p.categoria] = p.preco_kg;
-      strMap[p.categoria] = p.preco_kg > 0 ? String(p.preco_kg).replace('.', ',') : '';
+      strMap[p.categoria] = p.preco_kg > 0 ? p.preco_kg.toFixed(2).replace('.', ',') : '';
     });
 
     // Auto-fill suggestions for categories without saved price
