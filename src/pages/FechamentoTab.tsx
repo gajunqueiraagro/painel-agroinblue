@@ -264,6 +264,14 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
   const handleBulkClose = async () => {
     if (!fazendaAtual || fazendaAtual.id === '__global__') return;
+
+    // Block if any category has divergence
+    if (hasDivergencia) {
+      toast.error('Não é possível fechar os pastos. Existem categorias desconciliadas entre Pasto e Sistema. Realize a conciliação antes de fechar.');
+      setConfirmBulkOpen(false);
+      return;
+    }
+
     setBulkClosing(true);
 
     try {
