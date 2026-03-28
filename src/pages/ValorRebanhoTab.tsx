@@ -35,7 +35,7 @@ const ORIGEM_LABEL: Record<OrigemPeso, string> = {
 /**
  * Mapeamento categoria → preço de mercado
  * bloco + categoria conforme tela Preço de Mercado
- * unidade: 'kg' = já em R$/kg; 'arroba' = R$/@ (converter dividindo por 15)
+ * unidade: 'kg' = já em R$/kg; 'arroba' = R$/@ (converter dividindo por 30)
  */
 const MAPA_PRECO_MERCADO: Record<string, { bloco: string; categoria: string; unidade: 'kg' | 'arroba' }> = {
   mamotes_m: { bloco: 'magro_macho', categoria: '200 kg média', unidade: 'kg' },
@@ -92,8 +92,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       // Ajuste de ágio
       const valorComAgio = item.valor * (1 + (item.agio_perc || 0) / 100);
       if (ref.unidade === 'arroba') {
-        // R$/@ → R$/kg: dividir por 15
-        map[codigo] = valorComAgio / 15;
+        // R$/@ → R$/kg: dividir por 30 (fator padrão peso vivo)
+        map[codigo] = valorComAgio / 30;
       } else {
         map[codigo] = valorComAgio;
       }
