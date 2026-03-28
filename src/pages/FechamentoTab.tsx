@@ -43,6 +43,9 @@ interface PastoResumo {
   totalCabecas: number;
   pesoMedio: number | null;
   uaHa: number | null;
+  uaTotal: number;
+  catBreakdown: { sigla: string; qty: number }[];
+  lotacaoKgHa: number | null;
 }
 
 interface Props {
@@ -106,7 +109,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const getFechamento = useCallback((pastoId: string) => fechamentos.find(f => f.pasto_id === pastoId) || null, [fechamentos]);
 
   const getResumo = useCallback((fech: FechamentoPasto | null, pasto: Pasto): PastoResumo => {
-    if (!fech) return { totalCabecas: 0, pesoMedio: null, uaHa: null };
+    if (!fech) return { totalCabecas: 0, pesoMedio: null, uaHa: null, uaTotal: 0, catBreakdown: [], lotacaoKgHa: null };
     const items = itensMap.get(fech.id) || [];
     const totalCab = items.reduce((s, i) => s + i.quantidade, 0);
     const comPeso = items.filter(i => i.quantidade > 0 && i.peso_medio_kg);
@@ -116,8 +119,21 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     let uaTotal = 0;
     items.forEach(i => { uaTotal += calcUA(i.quantidade, i.peso_medio_kg); });
     const uaHa = pasto.area_produtiva_ha && uaTotal > 0 ? uaTotal / pasto.area_produtiva_ha : null;
-    return { totalCabecas: totalCab, pesoMedio, uaHa };
-  }, [itensMap]);
+
+    // Category breakdown
+    const catIdToCodigo = new Map((categorias || []).map(c => [c.id, c.codigo]));
+    const catBreakdown: { sigla: string; qty: number }[] = [];
+    for (const col of CAT_COLS) {
+      const qty = items.filter(i => catIdToCodigo.get(i.categoria_id) === col.codigo).reduce((s, i) => s + i.quantidade, 0);
+      if (qty > 0) catBreakdown.push({ sigla: col.sigla, qty });
+    }
+
+    // Lotação kg/ha
+    const pesoTotal = comPeso.reduce((s, i) => s + (i.peso_medio_kg || 0) * i.quantidade, 0);
+    const lotacaoKgHa = pasto.area_produtiva_ha && pesoTotal > 0 ? pesoTotal / pasto.area_produtiva_ha : null;
+
+    return { totalCabecas: totalCab, pesoMedio, uaHa, uaTotal, catBreakdown, lotacaoKgHa };
+  }, [itensMap, categorias]);
 
   const preenchidos = pastosAtivos.filter(p => getFechamento(p.id)).length;
   const fechadosCount = pastosAtivos.filter(p => getFechamento(p.id)?.status === 'fechado').length;
@@ -344,7 +360,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           <p className="text-xs mt-1">Cadastre pastos na aba "Pastos" e marque "Entra na conciliação".</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {pastosAtivos.map(p => {
             const fech = getFechamento(p.id);
             const status = fech?.status;
@@ -354,43 +370,69 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               <button
                 key={p.id}
                 onClick={() => handleOpenPasto(p)}
-                className="w-full rounded-lg border p-4 text-left hover:bg-accent/50 transition-colors"
+                className="w-full rounded-lg border p-3 text-left hover:bg-accent/50 transition-colors"
               >
+                {/* Header: nome + badge */}
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-semibold text-base">{p.nome}</span>
+                  <span className="font-semibold text-sm">{p.nome}</span>
                   <div className="flex items-center gap-1.5">
                     {status === 'fechado' ? (
                       adminClose ? (
-                        <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">
-                          <Lock className="h-3 w-3 mr-1" />Fechamento Global
+                        <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[10px]">
+                          <Lock className="h-3 w-3 mr-0.5" />Global
                         </Badge>
                       ) : (
-                        <Badge variant="default"><CheckCircle className="h-3 w-3 mr-1" />Fechado</Badge>
+                        <Badge variant="default" className="text-[10px]"><CheckCircle className="h-3 w-3 mr-0.5" />Fechado</Badge>
                       )
                     ) : status === 'rascunho' ? (
-                      <Badge variant="secondary"><Circle className="h-3 w-3 mr-1" />Rascunho</Badge>
+                      <Badge variant="secondary" className="text-[10px]"><Circle className="h-3 w-3 mr-0.5" />Rascunho</Badge>
                     ) : (
-                      <Badge variant="outline"><Circle className="h-3 w-3 mr-1" />Não iniciado</Badge>
+                      <Badge variant="outline" className="text-[10px]"><Circle className="h-3 w-3 mr-0.5" />Não iniciado</Badge>
                     )}
                   </div>
                 </div>
 
-                <div className="text-sm text-muted-foreground">
-                  {p.area_produtiva_ha ? `${formatNum(p.area_produtiva_ha, 1)} ha` : '—'}
-                  {fech?.lote_mes && ` · Lote: ${fech.lote_mes}`}
-                </div>
+                {/* Lote info */}
+                {fech?.lote_mes && (
+                  <div className="text-[10px] text-muted-foreground mb-1">Lote: {fech.lote_mes}</div>
+                )}
 
+                {/* Category breakdown */}
+                {fech && resumo.catBreakdown.length > 0 && (
+                  <div className="flex flex-wrap gap-x-2 gap-y-0 text-[10px] text-muted-foreground mb-1">
+                    {resumo.catBreakdown.map(cb => (
+                      <span key={cb.sigla}>
+                        <span className="font-medium text-foreground">{cb.sigla}</span> {cb.qty}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Indicadores: Qualidade, UA/ha, Lotação */}
                 {fech && resumo.totalCabecas > 0 && (
-                  <div className="text-sm mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                    <span className="font-medium text-foreground">{resumo.totalCabecas} cabeças</span>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0 text-[10px] text-muted-foreground mb-1.5">
                     {fech.qualidade_mes && (
-                      <span>Qualidade: <span className="font-medium text-foreground">{fech.qualidade_mes}</span></span>
+                      <span>Qual: <span className="font-medium text-foreground">{fech.qualidade_mes}</span></span>
                     )}
                     {resumo.uaHa && (
                       <span>UA/ha: <span className="font-medium text-foreground">{formatNum(resumo.uaHa, 2)}</span></span>
                     )}
+                    {resumo.lotacaoKgHa && (
+                      <span>Lotação: <span className="font-medium text-foreground">{formatNum(resumo.lotacaoKgHa, 0)} kg/ha</span></span>
+                    )}
                   </div>
                 )}
+
+                {/* Footer: área | cabeças */}
+                <div className="flex items-center text-[11px] text-muted-foreground border-t border-border/30 pt-1 mt-1">
+                  <span>{p.area_produtiva_ha ? `📍 ${formatNum(p.area_produtiva_ha, 1)} ha` : '—'}</span>
+                  {resumo.totalCabecas > 0 && (
+                    <>
+                      <span className="mx-2 text-border">|</span>
+                      <span className="font-medium text-foreground">{resumo.totalCabecas} cab</span>
+                    </>
+                  )}
+                </div>
               </button>
             );
           })}
