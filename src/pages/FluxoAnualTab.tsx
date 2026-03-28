@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
 import { filtrarPorCenario } from '@/lib/statusOperacional';
-import { Lancamento, SaldoInicial } from '@/types/cattle';
+import { Lancamento, SaldoInicial, Categoria } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, DollarSign } from 'lucide-react';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import type { SubAba } from './FinanceiroTab';
+import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { calcFluxoAnual, FLUXO_LINHAS } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { parseISO, format } from 'date-fns';
@@ -15,9 +16,10 @@ interface Props {
   saldosIniciais: SaldoInicial[];
   onNavigateToMovimentacao?: (subAba: SubAba) => void;
   onNavigateToValorRebanho?: () => void;
+  onSetSaldo?: (ano: number, categoria: Categoria, quantidade: number, pesoMedioKg?: number) => void;
 }
 
-export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onNavigateToValorRebanho }: Props) {
+export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onNavigateToValorRebanho, onSetSaldo }: Props) {
   const [drilldownMonth, setDrilldownMonth] = useState<string | null>(null);
 
   const anosDisponiveis = useMemo(() => {
@@ -114,6 +116,15 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
           )}
         </div>
       </div>
+
+      {/* Saldo Inicial banner/edit */}
+      {onSetSaldo && (
+        <SaldoInicialForm
+          saldosIniciais={saldosIniciais}
+          onSetSaldo={onSetSaldo}
+          anoBase={Number(anoFiltro)}
+        />
+      )}
 
       <div className="p-3 pt-2 space-y-2">
 

@@ -18,6 +18,8 @@ import { calcSaldoPorCategoriaLegado, calcPesoMedioPonderado, calcUA, calcUAHa, 
 import { loadPesosPastosPorCategoria, resolverPesoOficial } from '@/hooks/useFechamentoCategoria';
 import { calcArrobasSafe } from '@/lib/calculos/economicos';
 import { ChevronRight, AlertTriangle, CheckCircle2, TrendingUp, TrendingDown, Wallet, BarChart3, Landmark } from 'lucide-react';
+import { SaldoInicialForm } from '@/components/SaldoInicialForm';
+import { Categoria } from '@/types/cattle';
 import type { FiltroGlobal } from './Index';
 
 interface Props {
@@ -26,6 +28,7 @@ interface Props {
   onTabChange: (tab: TabId, filtro?: { ano: string; mes: number }) => void;
   filtroGlobal: FiltroGlobal;
   onFiltroChange: (f: Partial<FiltroGlobal>) => void;
+  onSetSaldo?: (ano: number, categoria: Categoria, quantidade: number, pesoMedioKg?: number) => void;
 }
 
 const MESES = [
@@ -277,7 +280,7 @@ function MetricRow({ label, value, accent }: { label: string; value: string; acc
 // Main component
 // ---------------------------------------------------------------------------
 
-export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlobal, onFiltroChange }: Props) {
+export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlobal, onFiltroChange, onSetSaldo }: Props) {
   const { fazendaAtual, isGlobal } = useFazenda();
   const fazendaNaoPecuaria = fazendaAtual && fazendaAtual.id !== '__global__' && fazendaAtual.tem_pecuaria === false;
 
@@ -366,6 +369,14 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
           </div>
         </div>
       </div>
+
+      {/* Saldo Inicial banner/edit */}
+      {onSetSaldo && !isGlobal && (
+        <SaldoInicialForm
+          saldosIniciais={saldosIniciais}
+          onSetSaldo={onSetSaldo}
+        />
+      )}
 
       <div className="p-4 md:p-6 space-y-5">
 

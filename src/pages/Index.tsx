@@ -233,6 +233,7 @@ const Index = () => {
           onTabChange={handleTabChange}
           filtroGlobal={filtroGlobal}
           onFiltroChange={handleFiltroChange}
+          onSetSaldo={canEditZoo ? setSaldoInicial : undefined}
         />
       )}
 
@@ -298,7 +299,7 @@ const Index = () => {
           backLabel={lancamentosFromFechamento ? 'Voltar para Lançamento de Pasto' : undefined}
         />
       )}
-      {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} onNavigateToValorRebanho={() => setActiveTab('valor_rebanho')} />}
+      {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} onNavigateToValorRebanho={() => setActiveTab('valor_rebanho')} onSetSaldo={canEditZoo ? setSaldoInicial : undefined} />}
       {activeTab === 'evolucao_rebanho_hub' && (
         <EvolucaoRebanhoHubTab
           lancamentos={lancamentosVisiveis}
