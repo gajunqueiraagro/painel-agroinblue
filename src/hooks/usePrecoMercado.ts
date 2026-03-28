@@ -141,5 +141,29 @@ export function usePrecoMercado(anoMes: string) {
     }
   }, [anoMes, loadData]);
 
-  return { itens, setItens, statusMes, loading, saving, isValidado, salvar, reabrir };
+  const copiarMesAnterior = useCallback(async (anoMesAtual: string): Promise<PrecoMercadoItem[] | null> => {
+    const [aStr, mStr] = anoMesAtual.split('-');
+    let aNum = parseInt(aStr);
+    let mNum = parseInt(mStr);
+    mNum -= 1;
+    if (mNum < 1) { mNum = 12; aNum -= 1; }
+    const mesAnterior = `${aNum}-${String(mNum).padStart(2, '0')}`;
+
+    const { data, error } = await supabase
+      .from('preco_mercado')
+      .select('*')
+      .eq('ano_mes', mesAnterior);
+    if (error) { toast.error('Erro ao buscar mês anterior: ' + error.message); return null; }
+    if (!data || data.length === 0) { toast.warning('Nenhum preço encontrado no mês anterior.'); return null; }
+
+    const merged = BLOCOS_PRECO.map(def => {
+      const saved = data.find((p: any) => p.bloco === def.bloco && p.categoria === def.categoria);
+      return saved
+        ? { ...def, valor: Number(saved.valor), agio_perc: Number(saved.agio_perc) }
+        : { ...def };
+    });
+    return merged;
+  }, []);
+
+  return { itens, setItens, statusMes, loading, saving, isValidado, salvar, reabrir, copiarMesAnterior };
 }
