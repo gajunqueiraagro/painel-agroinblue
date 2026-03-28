@@ -185,11 +185,11 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
       <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
         <table className="w-full text-[10px]">
           <thead>
-            <tr className="border-b bg-primary/10">
-              <th className="text-left px-1.5 py-1 font-bold text-foreground sticky left-0 bg-primary/10 min-w-[80px]">
+            <tr className="border-b bg-muted">
+              <th className="text-left px-1.5 py-1 font-bold text-foreground sticky left-0 bg-muted min-w-[80px]">
                 Categoria
               </th>
-              <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-primary/20">
+              <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-muted">
                 Saldo Ini.
               </th>
               {COLUNAS_MOV.map(col => (
@@ -197,7 +197,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                   {col.label}
                 </th>
               ))}
-              <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-primary/20">
+              <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-muted">
                 Saldo Fin.
               </th>
             </tr>
