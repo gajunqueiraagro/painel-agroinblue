@@ -5,13 +5,14 @@ import { filtrarPorCenario } from '@/lib/statusOperacional';
 import { parseISO, format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { CheckCircle, AlertTriangle, Clock } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
 
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
   initialAno?: string;
   initialMes?: string;
+  onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
 }
 
 const MESES = [
@@ -42,7 +43,7 @@ const COLUNAS_MOV = [
   { tipo: 'reclassificacao_saida', label: 'Recl.S', entrada: false },
 ];
 
-export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, initialMes }: Props) {
+export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, initialMes, onNavigateToReclass }: Props) {
   const { fazendaAtual } = useFazenda();
   const fazendaId = fazendaAtual?.id;
 
@@ -366,6 +367,15 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
             )}
             Rebanho: {rebanhoStatus === 'fechado' ? 'Fechado' : 'Aberto'}
           </div>
+        )}
+        {onNavigateToReclass && (
+          <button
+            onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: Number(mesFiltro) })}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 transition-colors"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Reclass.
+          </button>
         )}
       </div>
 
