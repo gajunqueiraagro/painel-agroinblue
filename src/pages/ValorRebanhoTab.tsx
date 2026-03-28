@@ -294,16 +294,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           <tbody>
             {rows.map((r, i) => (
               <tr key={r.codigo} className={`border-b ${i % 2 === 0 ? '' : 'bg-muted/20'}`}>
-                <td className="px-3 py-2 font-medium text-foreground">
+                <td className="px-2 py-1 font-medium text-foreground text-xs whitespace-nowrap">
                   {r.nome}
                   {isDezembro && r.saldo === 0 && (
-                    <span className="text-[10px] text-muted-foreground ml-1">(sem saldo)</span>
+                    <span className="text-[10px] text-muted-foreground ml-1">(0)</span>
                   )}
                 </td>
-                <td className="px-2 py-2 text-right text-foreground font-semibold">
+                <td className="px-2 py-1 text-right text-foreground font-semibold text-xs">
                   {r.saldo > 0 ? r.saldo : '-'}
                 </td>
-                <td className="px-2 py-2 text-right text-xs">
+                <td className="px-2 py-1 text-right text-[11px]">
                   {r.pesoMedio > 0 ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -318,24 +318,24 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                     </Tooltip>
                   ) : '-'}
                 </td>
-                <td className="px-1 py-1">
+                <td className="px-1 py-0.5">
                   <Input
                     type="text"
                     inputMode="decimal"
-                    className="h-8 text-right text-sm w-full"
+                    className="h-7 text-right text-xs w-full"
                     placeholder="0,00"
                     value={precosDisplay[r.codigo] ?? ''}
                     onChange={e => handlePrecoChange(r.codigo, e.target.value)}
                     disabled={!canEdit}
                   />
                 </td>
-                <td className="px-2 py-2 text-right text-muted-foreground text-xs">
+                <td className="px-2 py-1 text-right text-muted-foreground text-[11px]">
                   {r.valorCabeca > 0 ? formatMoeda(r.valorCabeca) : '-'}
                 </td>
-                <td className="px-2 py-2 text-right text-muted-foreground text-xs">
+                <td className="px-2 py-1 text-right text-muted-foreground text-[11px]">
                   {r.precoArroba > 0 ? formatMoeda(r.precoArroba) : '-'}
                 </td>
-                <td className="px-3 py-2 text-right font-semibold text-foreground">
+                <td className="px-2 py-1 text-right font-semibold text-foreground text-xs">
                   {r.valorTotal > 0 ? formatMoeda(r.valorTotal) : '-'}
                 </td>
               </tr>
