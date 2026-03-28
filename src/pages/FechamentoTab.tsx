@@ -238,7 +238,14 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     return gerarSugestoes(rows, catMap);
   }, [saldoMap, pastoDataByCat, catMap]);
 
-  const hasDivergencia = totalDiferenca !== 0;
+  const hasDivergencia = useMemo(() => {
+    if (totalDiferenca !== 0) return true;
+    return CAT_COLS.some(c => {
+      const qtdPasto = pastoDataByCat.get(c.codigo) || 0;
+      const qtdSistema = saldoMap.get(c.codigo) || 0;
+      return qtdPasto - qtdSistema !== 0;
+    });
+  }, [totalDiferenca, pastoDataByCat, saldoMap]);
 
   const isAdminClosed = (fech: FechamentoPasto | null) => {
     return fech?.responsavel_nome === FECHAMENTO_GLOBAL_MARKER;
@@ -257,6 +264,14 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
   const handleBulkClose = async () => {
     if (!fazendaAtual || fazendaAtual.id === '__global__') return;
+
+    // Block if any category has divergence
+    if (hasDivergencia) {
+      toast.error('Não é possível fechar os pastos. Existem categorias desconciliadas entre Pasto e Sistema. Realize a conciliação antes de fechar.');
+      setConfirmBulkOpen(false);
+      return;
+    }
+
     setBulkClosing(true);
 
     try {
@@ -481,7 +496,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 size="sm"
                 variant="outline"
                 className="text-xs font-bold border-warning text-warning hover:bg-warning/10 h-8"
-                onClick={() => setConfirmBulkOpen(true)}
+                onClick={() => {
+                  if (hasDivergencia) {
+                    toast.error('Não é possível fechar os pastos. Existem categorias desconciliadas entre Pasto e Sistema. Realize a conciliação antes de fechar.');
+                    return;
+                  }
+                  setConfirmBulkOpen(true);
+                }}
               >
                 <Lock className="h-3.5 w-3.5 mr-1" />
                 Fechamento Todos
