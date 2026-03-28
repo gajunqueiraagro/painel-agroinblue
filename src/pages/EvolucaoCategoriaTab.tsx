@@ -218,7 +218,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                       {val || '–'}
                     </td>
                   ))}
-                  <td className={`px-1.5 py-0.5 text-center font-extrabold bg-primary/5 ${cat.saldoFinal === 0 ? 'text-foreground/20' : 'text-foreground'}`}>
+                  <td className={`px-1.5 py-0.5 text-center font-extrabold bg-primary/5 ${cat.saldoFinal === 0 ? 'text-transparent' : 'text-foreground'}`}>
                     {cat.saldoFinal}
                   </td>
                 </tr>
