@@ -25,6 +25,12 @@ const STATUS_CONFIG = {
   validado: { label: 'Validado', color: 'bg-emerald-500/20 text-emerald-700 border-emerald-300', icon: CheckCircle },
 };
 
+/** Extrai o peso médio (kg) a partir do nome da categoria */
+const getPesoMedio = (categoria: string): number => {
+  const match = categoria.match(/(\d+)\s*kg/);
+  return match ? parseInt(match[1]) : 0;
+};
+
 export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: Props) {
   const now = new Date();
   const [ano, setAno] = useState(filtroAnoInicial || String(now.getFullYear()));
@@ -54,6 +60,10 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
   const magroMacho = itens.filter(i => i.bloco === 'magro_macho');
   const magroFemea = itens.filter(i => i.bloco === 'magro_femea');
 
+  // Preço boi gordo em R$/kg vivo (para cálculo de ágio automático do magro)
+  const boiGordoArroba = frigorifico.find(i => i.categoria === 'Boi Gordo')?.valor || 0;
+  const boiGordoKg = boiGordoArroba > 0 ? boiGordoArroba / 30 : 0;
+
   const stCfg = STATUS_CONFIG[statusMes.status];
   const StIcon = stCfg.icon;
 
@@ -64,27 +74,31 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
     salvar(itens, status);
   };
 
-  const renderBlock = (title: string, items: PrecoMercadoItem[]) => (
-    <Card key={title}>
+  const calcAgioAuto = (precoKg: number): number => {
+    if (boiGordoKg <= 0 || precoKg <= 0) return 0;
+    return ((precoKg / boiGordoKg) - 1) * 100;
+  };
+
+  const renderFrigorifico = () => (
+    <Card>
       <CardContent className="p-3 space-y-2">
-        <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">{title}</h3>
+        <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">🥩 Preço Base (Frigorífico no MS)</h3>
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b text-muted-foreground">
               <th className="text-left py-1 px-1 font-medium">Categoria</th>
-              <th className="text-left py-1 px-1 font-medium w-20">Unidade</th>
               <th className="text-right py-1 px-1 font-medium w-24">Valor</th>
               <th className="text-right py-1 px-1 font-medium w-20">Ágio %</th>
-              <th className="text-right py-1 px-1 font-medium w-24">Final</th>
+              <th className="text-right py-1 px-1 font-medium w-24">R$/@</th>
             </tr>
           </thead>
           <tbody>
-            {items.map((item, idx) => {
-              const final_ = item.valor * (1 + item.agio_perc / 100);
+            {frigorifico.map((item, idx) => {
+              const isBoi = item.categoria === 'Boi Gordo';
+              const final_ = isBoi ? item.valor : item.valor * (1 + item.agio_perc / 100);
               return (
-                <tr key={`${item.bloco}-${item.categoria}`} className={idx % 2 ? 'bg-muted/20' : ''}>
+                <tr key={item.categoria} className={idx % 2 ? 'bg-muted/20' : ''}>
                   <td className="py-1 px-1 font-medium text-foreground whitespace-nowrap">{item.categoria}</td>
-                  <td className="py-1 px-1 text-muted-foreground">{item.unidade}</td>
                   <td className="py-1 px-1">
                     <Input
                       type="number"
@@ -97,17 +111,70 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
                     />
                   </td>
                   <td className="py-1 px-1">
+                    {isBoi ? (
+                      <span className="block text-right text-muted-foreground">—</span>
+                    ) : (
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={item.agio_perc || ''}
+                        onChange={e => updateItem(item.bloco, item.categoria, 'agio_perc', e.target.value)}
+                        disabled={isValidado}
+                        className="h-7 text-xs text-right w-full"
+                      />
+                    )}
+                  </td>
+                  <td className="py-1 px-1 text-right font-semibold text-foreground">
+                    {final_ > 0 ? final_.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
+  );
+
+  const renderMagro = (title: string, items: PrecoMercadoItem[]) => (
+    <Card key={title}>
+      <CardContent className="p-3 space-y-2">
+        <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">{title}</h3>
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b text-muted-foreground">
+              <th className="text-left py-1 px-1 font-medium">Categoria</th>
+              <th className="text-right py-1 px-1 font-medium w-20">R$/kg</th>
+              <th className="text-right py-1 px-1 font-medium w-24">R$/cab</th>
+              <th className="text-right py-1 px-1 font-medium w-20">Ágio %</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item, idx) => {
+              const pesoMedio = getPesoMedio(item.categoria);
+              const precoCab = item.valor > 0 && pesoMedio > 0 ? item.valor * pesoMedio : 0;
+              const agioAuto = calcAgioAuto(item.valor);
+              return (
+                <tr key={`${item.bloco}-${item.categoria}`} className={idx % 2 ? 'bg-muted/20' : ''}>
+                  <td className="py-1 px-1 font-medium text-foreground whitespace-nowrap text-[11px]">{item.categoria}</td>
+                  <td className="py-1 px-1">
                     <Input
                       type="number"
-                      step="0.1"
-                      value={item.agio_perc || ''}
-                      onChange={e => updateItem(item.bloco, item.categoria, 'agio_perc', e.target.value)}
+                      step="0.01"
+                      min="0"
+                      value={item.valor || ''}
+                      onChange={e => updateItem(item.bloco, item.categoria, 'valor', e.target.value)}
                       disabled={isValidado}
                       className="h-7 text-xs text-right w-full"
                     />
                   </td>
-                  <td className="py-1 px-1 text-right font-semibold text-foreground">
-                    {final_ > 0 ? final_.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
+                  <td className="py-1 px-1 text-right text-foreground">
+                    {precoCab > 0 ? precoCab.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '-'}
+                  </td>
+                  <td className="py-1 px-1 text-right text-muted-foreground">
+                    {item.valor > 0 && boiGordoKg > 0
+                      ? `${agioAuto >= 0 ? '+' : ''}${agioAuto.toFixed(1)}%`
+                      : '-'}
                   </td>
                 </tr>
               );
@@ -157,49 +224,46 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
           <div className="text-center py-8 text-muted-foreground text-sm">Carregando...</div>
         ) : (
           <>
-            {/* Blocos */}
-            {renderBlock('🥩 Preço Base (Frigorífico)', frigorifico)}
-            {renderBlock('🐂 Gado Magro — Machos', magroMacho)}
-            {renderBlock('🐄 Gado Magro — Fêmeas', magroFemea)}
+            {renderFrigorifico()}
+            {renderMagro('🐂 Gado Magro — Machos', magroMacho)}
+            {renderMagro('🐄 Gado Magro — Fêmeas', magroFemea)}
 
             {/* Actions */}
             {isAdmin && (
               <div className="flex flex-col gap-2 pt-2">
                 {!isValidado && (
-                  <>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 text-xs"
-                        onClick={() => handleSalvar(temPreenchimento && !todosPreenchidos ? 'parcial' : 'rascunho')}
-                        disabled={saving}
-                      >
-                        <Save className="h-3.5 w-3.5 mr-1" />
-                        Salvar Rascunho
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button size="sm" className="flex-1 text-xs" disabled={saving || !todosPreenchidos}>
-                            <CheckCircle className="h-3.5 w-3.5 mr-1" />
-                            Validar Mês
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Validar preços de {MESES_NOMES[Number(mes) - 1]}/{ano}?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Ao validar, os preços serão travados e utilizados como base para o cálculo do valor do rebanho de todos os clientes neste mês. Você poderá reabrir depois se necessário.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleSalvar('validado')}>Validar</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 text-xs"
+                      onClick={() => handleSalvar(temPreenchimento && !todosPreenchidos ? 'parcial' : 'rascunho')}
+                      disabled={saving}
+                    >
+                      <Save className="h-3.5 w-3.5 mr-1" />
+                      Salvar Rascunho
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button size="sm" className="flex-1 text-xs" disabled={saving || !todosPreenchidos}>
+                          <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                          Validar Mês
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Validar preços de {MESES_NOMES[Number(mes) - 1]}/{ano}?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Ao validar, os preços serão travados e utilizados como base para o cálculo do valor do rebanho de todos os clientes neste mês.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleSalvar('validado')}>Validar</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 )}
 
                 {isValidado && (
