@@ -384,11 +384,12 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             const status = fech?.status;
             const resumo = getResumo(fech, p);
             const adminClose = isAdminClosed(fech);
+            const tipoStyle = getTipoUsoStyle(p.tipo_uso);
             return (
               <button
                 key={p.id}
                 onClick={() => handleOpenPasto(p)}
-                className="w-full rounded-lg border p-3 text-left hover:bg-accent/50 transition-colors"
+                className={`w-full rounded-lg border p-3 text-left hover:bg-accent/50 transition-colors ${tipoStyle ? `border-l-4 ${tipoStyle.border}` : ''}`}
               >
                 {/* Header: nome + badge */}
                 <div className="flex items-center justify-between mb-1">
