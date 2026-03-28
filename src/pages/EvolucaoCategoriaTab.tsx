@@ -12,6 +12,7 @@ interface Props {
   saldosIniciais: SaldoInicial[];
   initialAno?: string;
   initialMes?: string;
+  onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
 }
 
 const MESES = [
