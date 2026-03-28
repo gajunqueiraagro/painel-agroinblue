@@ -239,7 +239,7 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
 
   if (isAdministrativa) {
     return (
-      <div className="max-w-lg mx-auto animate-fade-in pb-20 p-4">
+      <div className="w-full animate-fade-in pb-20 px-4 sm:px-6 lg:px-8">
         <Card className="border-l-4 border-l-amber-500">
           <CardContent className="p-6 text-center space-y-3">
             <AlertTriangle className="h-10 w-10 text-amber-500 mx-auto" />
