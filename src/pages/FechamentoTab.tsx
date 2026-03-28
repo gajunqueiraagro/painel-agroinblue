@@ -238,7 +238,14 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     return gerarSugestoes(rows, catMap);
   }, [saldoMap, pastoDataByCat, catMap]);
 
-  const hasDivergencia = totalDiferenca !== 0;
+  const hasDivergencia = useMemo(() => {
+    if (totalDiferenca !== 0) return true;
+    return CAT_COLS.some(c => {
+      const qtdPasto = pastoDataByCat.get(c.codigo) || 0;
+      const qtdSistema = saldoMap.get(c.codigo) || 0;
+      return qtdPasto - qtdSistema !== 0;
+    });
+  }, [totalDiferenca, pastoDataByCat, saldoMap]);
 
   const isAdminClosed = (fech: FechamentoPasto | null) => {
     return fech?.responsavel_nome === FECHAMENTO_GLOBAL_MARKER;
