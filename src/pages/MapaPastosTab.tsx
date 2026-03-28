@@ -200,9 +200,9 @@ export function MapaPastosTab() {
 
   return (
     <TooltipProvider>
-      <div className="pb-24">
-        {/* Header - sticky */}
-        <div className="sticky top-0 z-50 bg-background border-b border-border/50 shadow-sm px-3 py-1.5">
+      <div className="flex flex-col h-[100dvh] overflow-hidden">
+        {/* Filtros - fixo no topo */}
+        <div className="flex-shrink-0 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 z-50">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
               <Select value={anoFiltro} onValueChange={setAnoFiltro}>
@@ -247,7 +247,8 @@ export function MapaPastosTab() {
           </div>
         </div>
 
-        <div className="px-2 pt-2 flex flex-col" style={{ height: 'calc(100dvh - 160px)' }}>
+        {/* Tabela - ocupa todo o espaço restante */}
+        <div className="flex-1 min-h-0 px-2 pt-2 pb-16 flex flex-col">
         {loading ? (
           <div className="text-center py-8 text-muted-foreground">Carregando mapa...</div>
         ) : rows.length === 0 ? (
