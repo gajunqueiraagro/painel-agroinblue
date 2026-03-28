@@ -60,6 +60,7 @@ interface Props {
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
   onBackToConciliacao?: () => void;
+  onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
 }
 
 const FECHAMENTO_GLOBAL_MARKER = 'fechamento_global_administrativo';
