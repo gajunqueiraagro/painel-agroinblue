@@ -9,7 +9,7 @@ import { Pencil, AlertTriangle, Plus } from 'lucide-react';
 interface Props {
   saldosIniciais: SaldoInicial[];
   onSetSaldo: (ano: number, categoria: Categoria, quantidade: number, pesoMedioKg?: number) => void;
-  /** The year for the initial balance (January of this year) */
+  /** Current year being viewed — form only renders if this matches the earliest year */
   anoBase?: number;
 }
 
@@ -18,14 +18,15 @@ interface Props {
  * Shows a warning banner when no saldo exists, or a discrete edit button when it does.
  */
 export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase }: Props) {
-  // Determine the single year for this fazenda's saldo inicial
+  // The saldo inicial is ALWAYS for the earliest year only
   const anoSaldo = useMemo(() => {
-    if (anoBase) return anoBase;
-    // Use the earliest year that has saldo, or current year
     const anos = saldosIniciais.map(s => s.ano);
     if (anos.length > 0) return Math.min(...anos);
-    return new Date().getFullYear();
+    return anoBase || new Date().getFullYear();
   }, [saldosIniciais, anoBase]);
+
+  // Only render if viewing the earliest year (or no saldo exists yet)
+  const shouldRender = !anoBase || anoBase === anoSaldo;
 
   const hasSaldo = useMemo(() => {
     return saldosIniciais.some(s => s.ano === anoSaldo && s.quantidade > 0);
@@ -58,6 +59,9 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase }: Props)
     });
     setOpen(false);
   };
+
+  // Don't render if viewing a year other than the earliest
+  if (!shouldRender) return null;
 
   // Warning banner when no saldo exists
   if (!hasSaldo) {
