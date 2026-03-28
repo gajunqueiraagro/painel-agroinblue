@@ -329,7 +329,7 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
       </div>
 
       {/* Content */}
-      <div className="p-4 space-y-4">
+      <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-4">
         {bloco === 'indicadores' && (
           <IndicadoresContent
             zoo={zoo}
