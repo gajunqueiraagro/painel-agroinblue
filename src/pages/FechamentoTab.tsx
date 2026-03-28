@@ -109,7 +109,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const getFechamento = useCallback((pastoId: string) => fechamentos.find(f => f.pasto_id === pastoId) || null, [fechamentos]);
 
   const getResumo = useCallback((fech: FechamentoPasto | null, pasto: Pasto): PastoResumo => {
-    if (!fech) return { totalCabecas: 0, pesoMedio: null, uaHa: null };
+    if (!fech) return { totalCabecas: 0, pesoMedio: null, uaHa: null, uaTotal: 0, catBreakdown: [], lotacaoKgHa: null };
     const items = itensMap.get(fech.id) || [];
     const totalCab = items.reduce((s, i) => s + i.quantidade, 0);
     const comPeso = items.filter(i => i.quantidade > 0 && i.peso_medio_kg);
@@ -119,8 +119,21 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     let uaTotal = 0;
     items.forEach(i => { uaTotal += calcUA(i.quantidade, i.peso_medio_kg); });
     const uaHa = pasto.area_produtiva_ha && uaTotal > 0 ? uaTotal / pasto.area_produtiva_ha : null;
-    return { totalCabecas: totalCab, pesoMedio, uaHa };
-  }, [itensMap]);
+
+    // Category breakdown
+    const catIdToCodigo = new Map((categorias || []).map(c => [c.id, c.codigo]));
+    const catBreakdown: { sigla: string; qty: number }[] = [];
+    for (const col of CAT_COLS) {
+      const qty = items.filter(i => catIdToCodigo.get(i.categoria_id) === col.codigo).reduce((s, i) => s + i.quantidade, 0);
+      if (qty > 0) catBreakdown.push({ sigla: col.sigla, qty });
+    }
+
+    // Lotação kg/ha
+    const pesoTotal = comPeso.reduce((s, i) => s + (i.peso_medio_kg || 0) * i.quantidade, 0);
+    const lotacaoKgHa = pasto.area_produtiva_ha && pesoTotal > 0 ? pesoTotal / pasto.area_produtiva_ha : null;
+
+    return { totalCabecas: totalCab, pesoMedio, uaHa, uaTotal, catBreakdown, lotacaoKgHa };
+  }, [itensMap, categorias]);
 
   const preenchidos = pastosAtivos.filter(p => getFechamento(p.id)).length;
   const fechadosCount = pastosAtivos.filter(p => getFechamento(p.id)?.status === 'fechado').length;
