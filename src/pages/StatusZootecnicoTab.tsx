@@ -38,7 +38,7 @@ interface FazendaStatus {
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const ROWS: { id: keyof MonthStatus; label: string; tab: TabId }[] = [
-  { id: 'pastos', label: 'Conciliação de Pastos', tab: 'fechamento' },
+  { id: 'pastos', label: 'Fechamento de Pastos', tab: 'fechamento' },
   { id: 'valor', label: 'Valor do Rebanho', tab: 'valor_rebanho' },
   { id: 'categorias', label: 'Conciliação de Categorias', tab: 'conciliacao_categoria' },
 ];

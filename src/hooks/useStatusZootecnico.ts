@@ -266,7 +266,7 @@ export function useStatusZootecnico(
       const desc = 'Sem operação pecuária';
       const ids = ['pastos', 'valor', 'categorias'];
       const labels: Record<string, string> = {
-        pastos: 'Conciliação de Pastos', valor: 'Valor do Rebanho', categorias: 'Conciliação de Categorias',
+        pastos: 'Fechamento de Pastos', valor: 'Valor do Rebanho', categorias: 'Conciliação de Categorias',
       };
       ids.forEach(id => pendencias.push({ id, label: labels[id], descricao: desc, status: 'fechado' }));
       return {
@@ -310,7 +310,7 @@ export function useStatusZootecnico(
       descPastos = `${fazendasFechadas}/${fazendasComPastos.length} fazenda(s) fechada(s)`;
     }
 
-    pendencias.push({ id: 'pastos', label: 'Conciliação de Pastos', descricao: descPastos, status: statusPastos, resolverTab: 'fechamento' });
+    pendencias.push({ id: 'pastos', label: 'Fechamento de Pastos', descricao: descPastos, status: statusPastos, resolverTab: 'fechamento' });
 
     // 2. Valor do Rebanho
     let statusValor: StatusItem = 'aberto';

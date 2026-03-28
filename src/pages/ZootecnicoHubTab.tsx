@@ -52,7 +52,7 @@ const GROUPS: { title: string; emoji: string; items: GroupItem[] }[] = [
     title: 'Conciliação',
     emoji: '✅',
     items: [
-      { label: 'Conciliação de Pastos', tab: 'conciliacao', icon: GitCompare, description: 'Conferência pasto vs sistema' },
+      { label: 'Fechamento de Pastos', tab: 'conciliacao', icon: GitCompare, description: 'Conferência pasto vs sistema' },
       { label: 'Conciliação de Categoria', tab: 'conciliacao_categoria', icon: GitCompare, description: 'Conferência por categoria' },
     ],
   },

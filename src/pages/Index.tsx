@@ -351,6 +351,7 @@ const Index = () => {
           onBack={goToVisaoZooHub}
           onNavigateToReclass={goToReclassFromConciliacao}
           onNavigateToFechamento={goToFechamentoFromConciliacao}
+          filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
         />
       )}
