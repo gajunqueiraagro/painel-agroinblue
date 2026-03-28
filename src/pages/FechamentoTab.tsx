@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowLeft, CheckCircle, Circle, Lock, AlertTriangle, Sprout } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Circle, Lock, AlertTriangle, Sprout, BarChart3 } from 'lucide-react';
+import { ResumoAtividadesView } from '@/components/ResumoAtividadesView';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -121,6 +122,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const [itensMap, setItensMap] = useState<Map<string, FechamentoItem[]>>(new Map());
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
   const [bulkClosing, setBulkClosing] = useState(false);
+  const [showResumoAtividades, setShowResumoAtividades] = useState(false);
 
   useEffect(() => { loadFechamentos(anoMes); }, [anoMes, loadFechamentos]);
 
@@ -293,6 +295,19 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
   if (isGlobal) return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda para o fechamento.</div>;
 
+  if (showResumoAtividades) {
+    return (
+      <ResumoAtividadesView
+        pastos={pastos}
+        fechamentos={fechamentos}
+        itensMap={itensMap}
+        categorias={categorias}
+        anoMes={anoMes}
+        onBack={() => setShowResumoAtividades(false)}
+      />
+    );
+  }
+
   return (
     <div className="pb-24">
       {/* Tabela conciliação + Filtros - sticky */}
@@ -369,17 +384,28 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             <Badge variant="secondary" className="text-[10px]">{preenchidos}/{pastosAtivos.length} iniciados</Badge>
             <span className="text-[10px] text-muted-foreground mt-0.5">{fechadosCount} fechados</span>
           </div>
-          {canBulkClose && (
+          <div className="ml-auto flex items-center gap-1.5">
             <Button
               size="sm"
               variant="outline"
-              className="ml-auto text-xs font-bold border-warning text-warning hover:bg-warning/10 h-8"
-              onClick={() => setConfirmBulkOpen(true)}
+              className="text-xs font-bold h-8"
+              onClick={() => setShowResumoAtividades(true)}
             >
-              <Lock className="h-3.5 w-3.5 mr-1" />
-              Fechamento Todos
+              <BarChart3 className="h-3.5 w-3.5 mr-1" />
+              Resumo Atividades
             </Button>
-          )}
+            {canBulkClose && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs font-bold border-warning text-warning hover:bg-warning/10 h-8"
+                onClick={() => setConfirmBulkOpen(true)}
+              >
+                <Lock className="h-3.5 w-3.5 mr-1" />
+                Fechamento Todos
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
