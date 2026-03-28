@@ -364,31 +364,6 @@ export function MapaPastosTab() {
               </table>
             </div>
 
-            {/* Activity Summary */}
-            {resumoAtividades.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Resumo por Atividade</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {resumoAtividades.map(a => (
-                    <div key={a.tipo} className="rounded-lg border bg-card p-3 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-sm capitalize">{tipoUsoLabel(a.tipo)}</span>
-                        <Badge variant="secondary" className="text-xs">{a.qtdPastos} pastos</Badge>
-                      </div>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                        <span>Área:</span><span className="text-right font-medium text-foreground">{formatNum(a.area, 1)} ha</span>
-                        <span>Cabeças:</span><span className="text-right font-medium text-foreground">{a.cabecas}</span>
-                        <span>Peso Méd.:</span><span className="text-right font-medium text-foreground">{a.pesoMedio ? formatNum(a.pesoMedio, 2) + ' kg' : '—'}</span>
-                        <span>UA/ha:</span>
-                        <span className={`text-right font-medium ${getUaHaColor(a.uaHa)}`}>
-                          {a.uaHa ? formatNum(a.uaHa, 2) : '—'}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </>
         )}
         </div>
