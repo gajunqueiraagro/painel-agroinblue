@@ -56,6 +56,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const { isGlobal, fazendaAtual } = useFazenda();
   const { canEdit } = usePermissions();
   const { pastos, categorias } = usePastos();
+  const { lancamentos, saldosIniciais } = useLancamentos();
   const { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, reabrirPasto, copiarMesAnterior } = useFechamento();
   const defaultAnoMes = filtroAnoInicial && filtroMesInicial
     ? `${filtroAnoInicial}-${String(filtroMesInicial).padStart(2, '0')}`
