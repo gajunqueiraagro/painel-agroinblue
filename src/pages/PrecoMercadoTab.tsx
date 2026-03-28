@@ -32,7 +32,8 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
   const anoMes = `${ano}-${mes}`;
 
   const { itens, setItens, statusMes, loading, saving, isValidado, salvar, reabrir } = usePrecoMercado(anoMes);
-  const { isAdmin } = usePermissions();
+  const { perfil } = usePermissions();
+  const isAdmin = perfil === 'admin_agroinblue';
 
   const anos = useMemo(() => {
     const a: string[] = [];
