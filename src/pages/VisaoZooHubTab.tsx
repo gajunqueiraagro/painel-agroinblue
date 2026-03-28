@@ -474,11 +474,11 @@ function IndicadoresContent({ zoo, vista, mesLabel, mesFiltro, anoFiltro, kgHa, 
               semBase={vista === 'mes' ? zoo.arrobasProduzidasMes === null : zoo.arrobasProduzidasAcumulado === null} />
             <KpiCard label="@/ha"
               valor={vista === 'mes'
-                ? (zoo.arrobasHaMes !== null ? formatNum(zoo.arrobasHaMes, 2) : '—')
-                : (zoo.arrobasHaAcumuladoAno !== null ? formatNum(zoo.arrobasHaAcumuladoAno, 2) : '—')}
-              compMensal={vista === 'mes' ? zoo.comparacoes.arrobasHaMes.mensal : zoo.comparacoes.arrobasHaAcumuladoAno.mensal}
-              compAnual={vista === 'mes' ? zoo.comparacoes.arrobasHaMes.anual : zoo.comparacoes.arrobasHaAcumuladoAno.anual}
-              semBase={vista === 'mes' ? zoo.arrobasHaMes === null : zoo.arrobasHaAcumuladoAno === null} />
+                ? (zoo.arrobasProduzidasMes !== null && zoo.areaProdutiva > 0 ? formatNum(zoo.arrobasProduzidasMes / zoo.areaProdutiva, 2) : '—')
+                : (zoo.arrobasProduzidasAcumulado !== null && zoo.areaProdutiva > 0 ? formatNum(zoo.arrobasProduzidasAcumulado / zoo.areaProdutiva, 2) : '—')}
+              semBase={vista === 'mes'
+                ? (zoo.arrobasProduzidasMes === null || zoo.areaProdutiva <= 0)
+                : (zoo.arrobasProduzidasAcumulado === null || zoo.areaProdutiva <= 0)} />
             <KpiCard label="GMD"
               valor={vista === 'mes'
                 ? (zoo.gmdMes !== null ? formatNum(zoo.gmdMes, 3) : '—')
