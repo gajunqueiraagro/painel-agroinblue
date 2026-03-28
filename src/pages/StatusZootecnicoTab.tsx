@@ -412,7 +412,19 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
             <div className="space-y-2">
               {statusZoo.pendencias.map(p => {
                 const isExpanded = expandedIndicator === p.id;
-                const farmProblems = isGlobal ? perFarmStatus.filter(fs => fs[p.id as keyof MonthStatus] !== 'fechado').length : 0;
+                const farmRows = p.id === 'pastos'
+                  ? statusZoo.pastosPorFazenda.map(fs => ({
+                      fazendaId: fs.fazendaId,
+                      fazendaNome: fs.fazendaNome,
+                      status: fs.status as CellStatus,
+                    }))
+                  : perFarmStatus.map(fs => ({
+                      fazendaId: fs.fazendaId,
+                      fazendaNome: fs.fazendaNome,
+                      status: fs[p.id as keyof MonthStatus] as CellStatus,
+                    }));
+                const farmProblems = isGlobal ? farmRows.filter(fs => fs.status !== 'fechado').length : 0;
+                const hasFarmRows = farmRows.length > 0;
 
                 return (
                   <div key={p.id}>
@@ -435,7 +447,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
                             Resolver <ChevronRight className="h-3 w-3" />
                           </button>
                         )}
-                        {isGlobal && perFarmStatus.length > 0 && (
+                        {isGlobal && hasFarmRows && (
                           <button
                             onClick={() => setExpandedIndicator(isExpanded ? null : p.id)}
                             className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground hover:text-foreground transition-colors"
@@ -452,12 +464,12 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
                     </div>
 
                     {/* Per-farm breakdown - expandable */}
-                    {isGlobal && isExpanded && perFarmStatus.length > 0 && (
+                    {isGlobal && isExpanded && hasFarmRows && (
                       <div className="ml-6 mt-1 mb-2 space-y-0.5 animate-fade-in">
-                        {[...perFarmStatus]
-                          .sort((a, b) => STATUS_ORDER[a[p.id as keyof MonthStatus]] - STATUS_ORDER[b[p.id as keyof MonthStatus]])
+                        {[...farmRows]
+                          .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status])
                           .map(fs => {
-                            const st = fs[p.id as keyof MonthStatus];
+                            const st = fs.status;
                             return (
                               <div key={fs.fazendaId} className="flex items-center justify-between text-[11px] px-2 py-0.5 rounded bg-muted/20">
                                 <span className="text-muted-foreground truncate mr-2">{fs.fazendaNome}</span>

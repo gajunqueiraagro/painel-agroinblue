@@ -20,11 +20,22 @@ export interface Pendencia {
   resolverTab?: string;
 }
 
+export interface PastosFazendaStatus {
+  fazendaId: string;
+  fazendaNome: string;
+  totalPastos: number;
+  fechados: number;
+  rascunho: number;
+  naoIniciados: number;
+  status: StatusItem;
+}
+
 export interface StatusZootecnicoResult {
   status: StatusGeral;
   pendencias: Pendencia[];
   contadores: { aberto: number; parcial: number; fechado: number };
   loading: boolean;
+  pastosPorFazenda: PastosFazendaStatus[];
 }
 
 export function useStatusZootecnico(
@@ -41,6 +52,7 @@ export function useStatusZootecnico(
   const [pastosFechados, setPastosFechados] = useState(0);
   const [pastosRascunho, setPastosRascunho] = useState(0);
   const [pastosNaoIniciados, setPastosNaoIniciados] = useState(0);
+  const [pastosPorFazenda, setPastosPorFazenda] = useState<PastosFazendaStatus[]>([]);
   const [itensTotais, setItensTotais] = useState(0);
   const [precosDefinidos, setPrecosDefinidos] = useState(0);
   const [categoriasComSaldo, setCategoriasComSaldo] = useState(0);
@@ -52,62 +64,135 @@ export function useStatusZootecnico(
   const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
   const isGlobal = !fazendaId || fazendaId === '__global__';
 
+  const resetZooState = useCallback(() => {
+    setPastosAtivos(0);
+    setPastosFechados(0);
+    setPastosRascunho(0);
+    setPastosNaoIniciados(0);
+    setPastosPorFazenda([]);
+    setItensTotais(0);
+    setPrecosDefinidos(0);
+    setCategoriasComSaldo(0);
+    setCatsDivergentes(0);
+    setDifTotalCabecas(0);
+    setSaldoTotalSistema(0);
+  }, []);
+
   const load = useCallback(async () => {
     if (!fazendaId) { setLoading(false); return; }
-    if (!isGlobal) {
-      const { data: fazData } = await supabase.from('fazendas').select('tem_pecuaria').eq('id', fazendaId).single();
-      if (fazData && fazData.tem_pecuaria === false) {
-        setPastosAtivos(0); setPastosFechados(0);
-        setPastosRascunho(0); setPastosNaoIniciados(0);
-        setItensTotais(0);
-        setPrecosDefinidos(0); setCategoriasComSaldo(0);
-        setCatsDivergentes(0); setDifTotalCabecas(0);
-        setSaldoTotalSistema(0); setSemPecuaria(true);
+
+    const fazendasPecuariaContexto = contextFazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false);
+    const fazendaNomeById = new Map(fazendasPecuariaContexto.map(f => [f.id, f.nome]));
+
+    let fazendaIdsPecuaria: string[] = [];
+    if (isGlobal) {
+      fazendaIdsPecuaria = fazendasPecuariaContexto.map(f => f.id);
+    } else if (fazendaId !== '__global__') {
+      const fazendaSelecionada = contextFazendas.find(f => f.id === fazendaId);
+      if (fazendaSelecionada?.tem_pecuaria === false) {
+        resetZooState();
+        setSemPecuaria(true);
         setLoading(false);
         return;
       }
+      fazendaIdsPecuaria = [fazendaId];
+      if (fazendaSelecionada) fazendaNomeById.set(fazendaSelecionada.id, fazendaSelecionada.nome);
     }
+
+    if (fazendaIdsPecuaria.length === 0) {
+      resetZooState();
+      setSemPecuaria(true);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setSemPecuaria(false);
-    try {
-      // Use context-filtered fazendas (already scoped to current client)
-      let fazendaIdsPecuaria: string[] = [];
-      if (isGlobal) {
-        fazendaIdsPecuaria = contextFazendas
-          .filter(f => f.id !== '__global__' && f.tem_pecuaria !== false)
-          .map(f => f.id);
-        if (fazendaIdsPecuaria.length === 0) {
-          setPastosAtivos(0); setPastosFechados(0);
-          setPastosRascunho(0); setPastosNaoIniciados(0);
-          setItensTotais(0);
-          setPrecosDefinidos(0); setCategoriasComSaldo(0);
-          setCatsDivergentes(0); setDifTotalCabecas(0);
-          setSaldoTotalSistema(0); setSemPecuaria(true);
-          setLoading(false);
-          return;
-        }
-      }
 
-      const fqPec = (q: any) => isGlobal ? q.in('fazenda_id', fazendaIdsPecuaria) : q.eq('fazenda_id', fazendaId);
+    try {
+      const fqPec = (q: any) => q.in('fazenda_id', fazendaIdsPecuaria);
 
       // 1. Pastos ativos com conciliação
-      const { data: pastosData } = await fqPec(supabase.from('pastos').select('id').eq('ativo', true).eq('entra_conciliacao', true));
-      const totalPastos = (pastosData || []).length;
-      setPastosAtivos(totalPastos);
+      const { data: pastosData } = await fqPec(
+        supabase.from('pastos').select('id, fazenda_id').eq('ativo', true).eq('entra_conciliacao', true),
+      );
 
-      // 2. Fechamento de pastos — detailed status
-      const { data: fpData } = await fqPec(supabase.from('fechamento_pastos').select('id, status, pasto_id').eq('ano_mes', anoMes));
+      // 2. Fechamento de pastos no período
+      const { data: fpData } = await fqPec(
+        supabase.from('fechamento_pastos').select('id, status, pasto_id, fazenda_id, updated_at').eq('ano_mes', anoMes),
+      );
+
+      const pastosAtivosByFaz = new Map<string, Set<string>>();
+      (pastosData || []).forEach((p: any) => {
+        if (!pastosAtivosByFaz.has(p.fazenda_id)) pastosAtivosByFaz.set(p.fazenda_id, new Set());
+        pastosAtivosByFaz.get(p.fazenda_id)!.add(p.id);
+      });
+
+      // Deduplicação estrutural: 1 registro efetivo por pasto no período (mais recente)
+      const fechamentoMaisRecentePorPasto = new Map<string, { status: string; updated_at: string | null }>();
+      (fpData || []).forEach((f: any) => {
+        const key = `${f.fazenda_id}:${f.pasto_id}`;
+        const atual = fechamentoMaisRecentePorPasto.get(key);
+        const tsAtual = atual?.updated_at || '';
+        const tsNovo = f.updated_at || '';
+        if (!atual || tsNovo >= tsAtual) {
+          fechamentoMaisRecentePorPasto.set(key, { status: f.status, updated_at: f.updated_at });
+        }
+      });
+
+      const fechamentoPorFaz = new Map<string, Map<string, string>>();
+      fechamentoMaisRecentePorPasto.forEach((v, key) => {
+        const [fId, pastoId] = key.split(':');
+        if (!fechamentoPorFaz.has(fId)) fechamentoPorFaz.set(fId, new Map());
+        fechamentoPorFaz.get(fId)!.set(pastoId, v.status);
+      });
+
+      const detalhesPastos: PastosFazendaStatus[] = fazendaIdsPecuaria.map(fId => {
+        const ativos = pastosAtivosByFaz.get(fId) || new Set<string>();
+        const fechamentos = fechamentoPorFaz.get(fId) || new Map<string, string>();
+
+        const total = ativos.size;
+        let fechados = 0;
+        let comFechamento = 0;
+
+        ativos.forEach(pastoId => {
+          const st = fechamentos.get(pastoId);
+          if (!st) return;
+          comFechamento++;
+          if (st === 'fechado') fechados++;
+        });
+
+        const rascunho = Math.max(comFechamento - fechados, 0);
+        const naoIniciados = Math.max(total - comFechamento, 0);
+
+        let status: StatusItem = 'aberto';
+        if (total > 0) {
+          if (fechados === total) status = 'fechado';
+          else if (fechados > 0) status = 'parcial';
+          else status = 'aberto';
+        }
+
+        return {
+          fazendaId: fId,
+          fazendaNome: fazendaNomeById.get(fId) || fId,
+          totalPastos: total,
+          fechados,
+          rascunho,
+          naoIniciados,
+          status,
+        };
+      });
+
+      detalhesPastos.sort((a, b) => a.fazendaNome.localeCompare(b.fazendaNome, 'pt-BR'));
+      setPastosPorFazenda(detalhesPastos);
+      setPastosAtivos(detalhesPastos.reduce((s, f) => s + f.totalPastos, 0));
+      setPastosFechados(detalhesPastos.reduce((s, f) => s + f.fechados, 0));
+      setPastosRascunho(detalhesPastos.reduce((s, f) => s + f.rascunho, 0));
+      setPastosNaoIniciados(detalhesPastos.reduce((s, f) => s + f.naoIniciados, 0));
+
+      // Itens for categorias comparison (mantém lógica atual)
       const fps = fpData || [];
-      const fechados = fps.filter(f => f.status === 'fechado').length;
-      const rascunhos = fps.filter(f => f.status !== 'fechado').length;
-      const pastosComFechamento = new Set(fps.map(f => f.pasto_id));
-      const naoIniciados = totalPastos - pastosComFechamento.size;
-      setPastosFechados(fechados);
-      setPastosRascunho(rascunhos);
-      setPastosNaoIniciados(naoIniciados);
-
-      // Itens for categorias comparison
-      const fechIds = fps.map(f => f.id);
+      const fechIds = fps.map((f: any) => f.id);
       if (fechIds.length > 0) {
         const { data: itensData } = await supabase
           .from('fechamento_pasto_itens')
@@ -125,13 +210,13 @@ export function useStatusZootecnico(
         setSaldoTotalSistema(totalSist);
 
         const pastosMap = new Map<string, number>();
-        itens.forEach(i => {
+        itens.forEach((i: any) => {
           pastosMap.set(i.categoria_id, (pastosMap.get(i.categoria_id) || 0) + i.quantidade);
         });
 
         const { data: catsData } = await supabase.from('categorias_rebanho').select('id, codigo');
-        const idToCodigo = new Map((catsData || []).map(c => [c.id, c.codigo]));
-        
+        const idToCodigo = new Map((catsData || []).map((c: any) => [c.id, c.codigo]));
+
         const pastosMapByCodigo = new Map<string, number>();
         pastosMap.forEach((qtd, catId) => {
           const codigo = idToCodigo.get(catId);
@@ -165,13 +250,12 @@ export function useStatusZootecnico(
       // Valor do rebanho (precos)
       const { data: vrData } = await fqPec(supabase.from('valor_rebanho_mensal').select('categoria').eq('ano_mes', anoMes));
       setPrecosDefinidos((vrData || []).length);
-
     } catch (e) {
       console.error('useStatusZootecnico error:', e);
     } finally {
       setLoading(false);
     }
-  }, [fazendaId, anoMes, ano, mes, saldosIniciais, lancamentos, isGlobal, contextFazendas]);
+  }, [fazendaId, anoMes, ano, mes, saldosIniciais, lancamentos, isGlobal, contextFazendas, resetZooState]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -185,26 +269,47 @@ export function useStatusZootecnico(
         pastos: 'Conciliação de Pastos', valor: 'Valor do Rebanho', categorias: 'Conciliação de Categorias',
       };
       ids.forEach(id => pendencias.push({ id, label: labels[id], descricao: desc, status: 'fechado' }));
-      return { status: 'fechado' as StatusGeral, pendencias, contadores: { aberto: 0, parcial: 0, fechado: 3 }, loading };
+      return {
+        status: 'fechado' as StatusGeral,
+        pendencias,
+        contadores: { aberto: 0, parcial: 0, fechado: 3 },
+        loading,
+        pastosPorFazenda: [],
+      };
     }
 
-    // 1. Conciliação de Pastos — detailed
+    // 1. Conciliação de Pastos — agora consolidada por fazenda (mesma regra do Global)
     let statusPastos: StatusItem = 'aberto';
     let descPastos = '';
-    if (pastosAtivos === 0) {
+
+    const fazendasComPastos = pastosPorFazenda.filter(f => f.totalPastos > 0);
+    const fazendasFechadas = fazendasComPastos.filter(f => f.status === 'fechado').length;
+
+    if (fazendasComPastos.length === 0) {
       statusPastos = 'aberto';
       descPastos = 'Nenhum pasto cadastrado';
-    } else if (pastosFechados === pastosAtivos) {
+    } else if (fazendasFechadas === fazendasComPastos.length) {
       statusPastos = 'fechado';
-      descPastos = `${pastosAtivos} fechado(s)`;
+      if (isGlobal) {
+        descPastos = `${fazendasFechadas}/${fazendasComPastos.length} fazenda(s) fechada(s)`;
+      } else {
+        descPastos = `${pastosFechados} fechado(s)`;
+      }
+    } else if (fazendasFechadas === 0) {
+      statusPastos = 'aberto';
+      if (isGlobal) {
+        descPastos = `0/${fazendasComPastos.length} fazenda(s) fechada(s)`;
+      } else {
+        const parts: string[] = [];
+        if (pastosRascunho > 0) parts.push(`${pastosRascunho} em rascunho`);
+        if (pastosNaoIniciados > 0) parts.push(`${pastosNaoIniciados} não iniciado(s)`);
+        descPastos = parts.length ? parts.join(' · ') : 'Sem fechamento no período';
+      }
     } else {
-      const parts: string[] = [];
-      if (pastosFechados > 0) parts.push(`${pastosFechados} fechado(s)`);
-      if (pastosRascunho > 0) parts.push(`${pastosRascunho} em rascunho`);
-      if (pastosNaoIniciados > 0) parts.push(`${pastosNaoIniciados} não iniciado(s)`);
-      descPastos = parts.join(' · ');
-      statusPastos = pastosFechados > 0 ? 'parcial' : 'aberto';
+      statusPastos = 'parcial';
+      descPastos = `${fazendasFechadas}/${fazendasComPastos.length} fazenda(s) fechada(s)`;
     }
+
     pendencias.push({ id: 'pastos', label: 'Conciliação de Pastos', descricao: descPastos, status: statusPastos, resolverTab: 'fechamento' });
 
     // 2. Valor do Rebanho
@@ -247,8 +352,22 @@ export function useStatusZootecnico(
     if (contadores.fechado === 3) status = 'fechado';
     else if (contadores.aberto === 3) status = 'aberto';
 
-    return { status, pendencias, contadores, loading };
-  }, [semPecuaria, pastosAtivos, pastosFechados, pastosRascunho, pastosNaoIniciados, precosDefinidos, categoriasComSaldo, catsDivergentes, difTotalCabecas, saldoTotalSistema, itensTotais, loading]);
+    return { status, pendencias, contadores, loading, pastosPorFazenda };
+  }, [
+    semPecuaria,
+    pastosPorFazenda,
+    pastosFechados,
+    pastosRascunho,
+    pastosNaoIniciados,
+    precosDefinidos,
+    categoriasComSaldo,
+    catsDivergentes,
+    difTotalCabecas,
+    saldoTotalSistema,
+    itensTotais,
+    loading,
+    isGlobal,
+  ]);
 
   return result;
 }
