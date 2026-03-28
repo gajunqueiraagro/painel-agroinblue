@@ -15,9 +15,10 @@ interface Props {
   onRemover?: (id: string) => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
+  onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
 }
 
-export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onEditar, onRemover, filtroAnoInicial, filtroMesInicial }: Props) {
+export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onEditar, onRemover, filtroAnoInicial, filtroMesInicial, onNavigateToReclass }: Props) {
   const [activeTab, setActiveTab] = useState('movimentacoes');
 
   return (
