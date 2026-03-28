@@ -4,6 +4,7 @@ import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useLancamentos } from '@/hooks/useLancamentos';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -20,10 +21,22 @@ import {
 import { format } from 'date-fns';
 import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
 import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
-import { calcUA } from '@/lib/calculos/zootecnicos';
+import { calcUA, calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
 import { formatNum } from '@/lib/calculos/formatters';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+const CAT_COLS = [
+  { codigo: 'mamotes_m', sigla: 'MM' },
+  { codigo: 'desmama_m', sigla: 'DM' },
+  { codigo: 'garrotes', sigla: 'G' },
+  { codigo: 'bois', sigla: 'B' },
+  { codigo: 'touros', sigla: 'T' },
+  { codigo: 'mamotes_f', sigla: 'MF' },
+  { codigo: 'desmama_f', sigla: 'DF' },
+  { codigo: 'novilhas', sigla: 'N' },
+  { codigo: 'vacas', sigla: 'V' },
+];
 
 interface PastoResumo {
   totalCabecas: number;
