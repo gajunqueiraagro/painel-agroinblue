@@ -25,7 +25,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     // Movimentações sub-screens
     const movTabs: TabId[] = ['movimentacao', 'fluxo_anual', 'evolucao_rebanho_hub', 'evolucao_categoria'];
     // Lançamentos sub-screens
-    const lancarTabs: TabId[] = ['lancar_zoo_hub', 'lancamentos', 'fechamento', 'chuvas', 'conciliacao', 'conciliacao_categoria', 'valor_rebanho', 'mapa_pastos', 'resumo_pastos', 'financeiro'];
+    const lancarTabs: TabId[] = ['lancar_zoo_hub', 'lancamentos', 'fechamento', 'chuvas', 'conciliacao', 'conciliacao_categoria', 'valor_rebanho', 'mapa_pastos', 'resumo_pastos', 'financeiro', 'fechamento_executivo'];
     // Análises sub-screens
     const analiseTabs: TabId[] = ['visao_zoo_hub', 'zootecnico', 'zootecnico_hub', 'indicadores', 'visao_anual_zoo', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute', 'evolucao', 'analise_operacional', 'pastos', 'lancar_fin_hub', 'visao_fin_hub', 'analise_economica'];
     const finTabs: TabId[] = ['fin_caixa'];
