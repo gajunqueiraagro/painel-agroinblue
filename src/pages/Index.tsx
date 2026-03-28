@@ -97,6 +97,7 @@ const Index = () => {
   const [movBackTab, setMovBackTab] = useState<TabId | undefined>(undefined);
   const [lancamentosFromConciliacao, setLancamentosFromConciliacao] = useState(false);
   const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
+  const [lancamentosFromFechamento, setLancamentosFromFechamento] = useState(false);
   const { user } = useAuth();
   const { canViewTab, canEdit, isReadOnly } = usePermissions();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
@@ -157,7 +158,10 @@ const Index = () => {
       setMovDrillLabel(undefined);
       setMovBackTab(undefined);
     }
-    if (tab !== 'lancamentos') setLancamentosFromConciliacao(false);
+    if (tab !== 'lancamentos') {
+      setLancamentosFromConciliacao(false);
+      setLancamentosFromFechamento(false);
+    }
     if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
     setActiveTab(tab);
   }, [isGlobal, canViewTab]);
@@ -179,6 +183,12 @@ const Index = () => {
     setFechamentoFromConciliacao(true);
     setActiveTab('fechamento');
   }, []);
+  const goToReclassFromFechamento = useCallback((filtro?: { ano: string; mes: number }) => {
+    if (filtro) setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
+    setLancamentosFromFechamento(true);
+    setActiveTab('lancamentos');
+  }, []);
+  const goToFechamentoTab = useCallback(() => setActiveTab('fechamento'), []);
 
   // Sub-screens that need a back button
   const subScreenBackMap: Partial<Record<TabId, () => void>> = {
@@ -282,9 +292,10 @@ const Index = () => {
           onAdicionar={wrappedAdicionar as any}
           onEditar={wrappedEditar as any}
           onRemover={wrappedRemover as any}
-          abaInicial={lancamentosFromConciliacao ? 'reclassificacao' : undefined}
-          onBackToConciliacao={lancamentosFromConciliacao ? goToConciliacaoCategoria : undefined}
-          dataInicial={lancamentosFromConciliacao ? `${filtroGlobal.ano}-${String(filtroGlobal.mes).padStart(2, '0')}-15` : undefined}
+          abaInicial={(lancamentosFromConciliacao || lancamentosFromFechamento) ? 'reclassificacao' : undefined}
+          onBackToConciliacao={lancamentosFromConciliacao ? goToConciliacaoCategoria : lancamentosFromFechamento ? goToFechamentoTab : undefined}
+          dataInicial={(lancamentosFromConciliacao || lancamentosFromFechamento) ? `${filtroGlobal.ano}-${String(filtroGlobal.mes).padStart(2, '0')}-15` : undefined}
+          backLabel={lancamentosFromFechamento ? 'Voltar para Lançamento de Pasto' : undefined}
         />
       )}
       {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} onNavigateToValorRebanho={() => setActiveTab('valor_rebanho')} />}
@@ -323,6 +334,7 @@ const Index = () => {
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
           onBackToConciliacao={fechamentoFromConciliacao ? goToConciliacaoCategoria : undefined}
+          onNavigateToReclass={goToReclassFromFechamento}
         />
       )}
       {activeTab === 'mapa_pastos' && <MapaPastosTab />}

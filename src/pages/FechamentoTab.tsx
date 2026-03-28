@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowLeft, CheckCircle, Circle, Lock, AlertTriangle, Sprout, BarChart3, Unlock } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Circle, Lock, AlertTriangle, Sprout, BarChart3, Unlock, Lightbulb, RefreshCw } from 'lucide-react';
 import { ResumoAtividadesView } from '@/components/ResumoAtividadesView';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
@@ -19,6 +19,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 import { formatAnoMes } from '@/lib/dateUtils';
 import { MESES_COLS } from '@/lib/calculos/labels';
@@ -27,6 +33,7 @@ import { calcUA, calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos'
 import { formatNum } from '@/lib/calculos/formatters';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { gerarSugestoes, type Sugestao } from '@/lib/calculos/sugestoesConciliacao';
 
 const CAT_COLS = [
   { codigo: 'mamotes_m', sigla: 'MM' },
@@ -53,6 +60,7 @@ interface Props {
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
   onBackToConciliacao?: () => void;
+  onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
 }
 
 const FECHAMENTO_GLOBAL_MARKER = 'fechamento_global_administrativo';
@@ -90,7 +98,7 @@ const getTipoUsoStyle = (tipoUso: string | undefined) => {
   return TIPO_USO_STYLES[normalizeTipoUso(tipoUso)] || DEFAULT_TIPO_USO_STYLE;
 };
 
-export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao }: Props = {}) {
+export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass }: Props = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { canEdit } = usePermissions();
   const { pastos, categorias } = usePastos();
@@ -125,6 +133,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const [showResumoAtividades, setShowResumoAtividades] = useState(false);
   const [confirmBulkReopenOpen, setConfirmBulkReopenOpen] = useState(false);
   const [bulkReopening, setBulkReopening] = useState(false);
+  const [showSugestoes, setShowSugestoes] = useState(false);
 
   useEffect(() => { loadFechamentos(anoMes); }, [anoMes, loadFechamentos]);
 
@@ -210,6 +219,26 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const totalPasto = CAT_COLS.reduce((s, c) => s + (pastoDataByCat.get(c.codigo) || 0), 0);
   const totalSistema = CAT_COLS.reduce((s, c) => s + (saldoMap.get(c.codigo) || 0), 0);
   const totalDiferenca = totalPasto - totalSistema;
+
+  // Sugestões de conciliação (mesma lógica da tela Conciliação de Categoria)
+  const catMap = useMemo(
+    () => new Map((categorias || []).map(c => [c.codigo, c.nome])),
+    [categorias]
+  );
+
+  const sugestoes = useMemo(() => {
+    const allCodigos = new Set([...saldoMap.keys(), ...pastoDataByCat.keys()]);
+    const rows: { codigo: string; nome: string; qtdSistema: number; qtdPasto: number; diferenca: number }[] = [];
+    allCodigos.forEach(codigo => {
+      const qtdSistema = saldoMap.get(codigo) || 0;
+      const qtdPasto = pastoDataByCat.get(codigo) || 0;
+      if (qtdSistema === 0 && qtdPasto === 0) return;
+      rows.push({ codigo, nome: catMap.get(codigo) || codigo, qtdSistema, qtdPasto, diferenca: qtdPasto - qtdSistema });
+    });
+    return gerarSugestoes(rows, catMap);
+  }, [saldoMap, pastoDataByCat, catMap]);
+
+  const hasDivergencia = totalDiferenca !== 0;
 
   const isAdminClosed = (fech: FechamentoPasto | null) => {
     return fech?.responsavel_nome === FECHAMENTO_GLOBAL_MARKER;
@@ -343,55 +372,67 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       {/* Tabela conciliação + Filtros - sticky */}
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm pt-2 px-2 pb-2 space-y-2">
         {/* Tabela resumo conciliação por categoria */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-[10px] border-collapse">
-            <thead>
-              <tr className="border-b border-border/40">
-                <th className="text-left font-bold text-muted-foreground px-1 py-0.5 w-12 border-r border-border/30">Cat.</th>
-                {CAT_COLS.map((c, idx) => (
-                  <th key={c.sigla} className={`text-center font-bold text-muted-foreground px-0.5 py-0.5 min-w-[28px]${idx === 4 ? ' border-r border-border/30' : ''}`}>{c.sigla}</th>
-                ))}
-                <th className="text-center font-bold text-foreground px-1 py-0.5 min-w-[32px] border-l border-border/30">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {/* Linha Pasto */}
-              <tr>
-                <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Pasto</td>
-                {CAT_COLS.map((c, idx) => {
-                  const v = pastoDataByCat.get(c.codigo) || 0;
-                  return <td key={c.sigla} className={`text-center text-foreground px-0.5 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
-                })}
-                <td className="text-center font-bold text-foreground px-1 py-0.5 border-l border-border/30">{totalPasto}</td>
-              </tr>
-              {/* Linha Sistema */}
-              <tr>
-                <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Sistema</td>
-                {CAT_COLS.map((c, idx) => {
-                  const v = saldoMap.get(c.codigo) || 0;
-                  return <td key={c.sigla} className={`text-center text-foreground px-0.5 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
-                })}
-                <td className="text-center font-bold text-foreground px-1 py-0.5 border-l border-border/30">{totalSistema}</td>
-              </tr>
-              {/* Linha Diferença */}
-              <tr className="border-t border-border/40">
-                <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Dif.</td>
-                {CAT_COLS.map((c, idx) => {
-                  const pasto = pastoDataByCat.get(c.codigo) || 0;
-                  const sistema = saldoMap.get(c.codigo) || 0;
-                  const dif = pasto - sistema;
-                  return (
-                    <td key={c.sigla} className={`text-center font-bold px-0.5 py-0.5 ${dif > 0 ? 'text-emerald-600' : dif < 0 ? 'text-red-600' : 'text-muted-foreground'}${idx === 4 ? ' border-r border-border/30' : ''}`}>
-                      {dif !== 0 ? (dif > 0 ? `+${dif}` : dif) : ''}
-                    </td>
-                  );
-                })}
-                <td className={`text-center font-bold px-1 py-0.5 border-l border-border/30 ${totalDiferenca > 0 ? 'text-emerald-600' : totalDiferenca < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
-                  {totalDiferenca !== 0 ? (totalDiferenca > 0 ? `+${totalDiferenca}` : totalDiferenca) : '0'}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div className="flex items-start gap-1">
+          <div className="overflow-x-auto flex-1">
+            <table className="w-full text-[10px] border-collapse">
+              <thead>
+                <tr className="border-b border-border/40">
+                  <th className="text-left font-bold text-muted-foreground px-1 py-0.5 w-12 border-r border-border/30">Cat.</th>
+                  {CAT_COLS.map((c, idx) => (
+                    <th key={c.sigla} className={`text-center font-bold text-muted-foreground px-0.5 py-0.5 min-w-[28px]${idx === 4 ? ' border-r border-border/30' : ''}`}>{c.sigla}</th>
+                  ))}
+                  <th className="text-center font-bold text-foreground px-1 py-0.5 min-w-[32px] border-l border-border/30">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Linha Pasto */}
+                <tr>
+                  <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Pasto</td>
+                  {CAT_COLS.map((c, idx) => {
+                    const v = pastoDataByCat.get(c.codigo) || 0;
+                    return <td key={c.sigla} className={`text-center text-foreground px-0.5 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
+                  })}
+                  <td className="text-center font-bold text-foreground px-1 py-0.5 border-l border-border/30">{totalPasto}</td>
+                </tr>
+                {/* Linha Sistema */}
+                <tr>
+                  <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Sistema</td>
+                  {CAT_COLS.map((c, idx) => {
+                    const v = saldoMap.get(c.codigo) || 0;
+                    return <td key={c.sigla} className={`text-center text-foreground px-0.5 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
+                  })}
+                  <td className="text-center font-bold text-foreground px-1 py-0.5 border-l border-border/30">{totalSistema}</td>
+                </tr>
+                {/* Linha Diferença */}
+                <tr className="border-t border-border/40">
+                  <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Dif.</td>
+                  {CAT_COLS.map((c, idx) => {
+                    const pasto = pastoDataByCat.get(c.codigo) || 0;
+                    const sistema = saldoMap.get(c.codigo) || 0;
+                    const dif = pasto - sistema;
+                    return (
+                      <td key={c.sigla} className={`text-center font-bold px-0.5 py-0.5 ${dif > 0 ? 'text-emerald-600' : dif < 0 ? 'text-red-600' : 'text-muted-foreground'}${idx === 4 ? ' border-r border-border/30' : ''}`}>
+                        {dif !== 0 ? (dif > 0 ? `+${dif}` : dif) : ''}
+                      </td>
+                    );
+                  })}
+                  <td className={`text-center font-bold px-1 py-0.5 border-l border-border/30 ${totalDiferenca > 0 ? 'text-emerald-600' : totalDiferenca < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                    {totalDiferenca !== 0 ? (totalDiferenca > 0 ? `+${totalDiferenca}` : totalDiferenca) : '0'}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          {/* Ícone de sugestões */}
+          {sugestoes.length > 0 && (
+            <button
+              onClick={() => setShowSugestoes(true)}
+              className="shrink-0 mt-1 p-1 rounded-md hover:bg-accent transition-colors"
+              title="Ver sugestões de ajuste"
+            >
+              <Lightbulb className="h-4 w-4 text-amber-500" />
+            </button>
+          )}
         </div>
 
         {/* Filtros */}
@@ -414,7 +455,18 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             <Badge variant="secondary" className="text-[10px]">{preenchidos}/{pastosAtivos.length} iniciados</Badge>
             <span className="text-[10px] text-muted-foreground mt-0.5">{fechadosCount} fechados</span>
           </div>
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className="ml-auto flex items-center gap-1.5 flex-wrap justify-end">
+            {onNavigateToReclass && hasDivergencia && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs font-bold h-8"
+                onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: mesFiltro })}
+              >
+                <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                Evol. Categoria
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
@@ -640,6 +692,54 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Sugestões de Ajuste Dialog */}
+      <Dialog open={showSugestoes} onOpenChange={setShowSugestoes}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lightbulb className="h-5 w-5 text-amber-500" />
+              Sugestões de Ajuste
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            {sugestoes.map((s, i) => (
+              <div
+                key={i}
+                className={`rounded-lg border p-3 text-sm ${
+                  s.tipo === 'evolucao'
+                    ? 'border-primary/30 bg-primary/5'
+                    : s.tipo === 'excesso'
+                    ? 'border-amber-500/30 bg-amber-500/5'
+                    : 'border-red-500/30 bg-red-500/5'
+                }`}
+              >
+                <div className="flex items-start gap-2">
+                  <span className="shrink-0 mt-0.5">
+                    {s.tipo === 'evolucao' ? '🔄' : s.tipo === 'excesso' ? '⚠️' : '❌'}
+                  </span>
+                  <span className="text-foreground">{s.mensagem}</span>
+                </div>
+              </div>
+            ))}
+            {sugestoes.length === 0 && (
+              <p className="text-center text-muted-foreground py-4">Nenhuma sugestão de ajuste.</p>
+            )}
+          </div>
+          {onNavigateToReclass && sugestoes.some(s => s.tipo === 'evolucao') && (
+            <Button
+              className="w-full mt-2"
+              onClick={() => {
+                setShowSugestoes(false);
+                onNavigateToReclass({ ano: anoFiltro, mes: mesFiltro });
+              }}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Evol. Categoria
+            </Button>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

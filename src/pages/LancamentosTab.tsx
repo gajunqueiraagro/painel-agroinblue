@@ -33,6 +33,7 @@ interface Props {
   abaInicial?: Aba;
   onBackToConciliacao?: () => void;
   dataInicial?: string;
+  backLabel?: string;
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
@@ -85,7 +86,7 @@ function fmt(v?: number, decimals = 2) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, abaInicial, onBackToConciliacao, dataInicial }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, abaInicial, onBackToConciliacao, dataInicial, backLabel }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const nomeFazenda = fazendaAtual?.nome || '';
   const isAdministrativo = fazendaAtual?.tem_pecuaria === false;
@@ -352,7 +353,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
         {onBackToConciliacao && (
           <button onClick={onBackToConciliacao} className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2.5 transition-colors hover:bg-primary/20 mb-2">
-            <ArrowLeft className="h-4 w-4" /> Retornar à Conciliação de Categoria
+            <ArrowLeft className="h-4 w-4" /> {backLabel || 'Retornar à Conciliação de Categoria'}
           </button>
         )}
         <div className="grid grid-cols-4 gap-1 bg-muted rounded-lg p-1">
@@ -380,7 +381,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
       {onBackToConciliacao && (
         <button onClick={onBackToConciliacao} className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2.5 transition-colors hover:bg-primary/20 mb-2">
-          <ArrowLeft className="h-4 w-4" /> Retornar à Conciliação de Categoria
+          <ArrowLeft className="h-4 w-4" /> {backLabel || 'Retornar à Conciliação de Categoria'}
         </button>
       )}
       <div className="grid grid-cols-4 gap-1 bg-muted rounded-lg p-1">
