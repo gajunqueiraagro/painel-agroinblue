@@ -292,9 +292,10 @@ const Index = () => {
           onAdicionar={wrappedAdicionar as any}
           onEditar={wrappedEditar as any}
           onRemover={wrappedRemover as any}
-          abaInicial={lancamentosFromConciliacao ? 'reclassificacao' : undefined}
-          onBackToConciliacao={lancamentosFromConciliacao ? goToConciliacaoCategoria : undefined}
-          dataInicial={lancamentosFromConciliacao ? `${filtroGlobal.ano}-${String(filtroGlobal.mes).padStart(2, '0')}-15` : undefined}
+          abaInicial={(lancamentosFromConciliacao || lancamentosFromFechamento) ? 'reclassificacao' : undefined}
+          onBackToConciliacao={lancamentosFromConciliacao ? goToConciliacaoCategoria : lancamentosFromFechamento ? goToFechamentoTab : undefined}
+          dataInicial={(lancamentosFromConciliacao || lancamentosFromFechamento) ? `${filtroGlobal.ano}-${String(filtroGlobal.mes).padStart(2, '0')}-15` : undefined}
+          backLabel={lancamentosFromFechamento ? 'Voltar para Lançamento de Pasto' : undefined}
         />
       )}
       {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} onNavigateToValorRebanho={() => setActiveTab('valor_rebanho')} />}
