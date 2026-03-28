@@ -35,7 +35,7 @@ const ORIGEM_LABEL: Record<OrigemPeso, string> = {
 /**
  * Mapeamento categoria → preço de mercado
  * bloco + categoria conforme tela Preço de Mercado
- * unidade: 'kg' = já em R$/kg; 'arroba' = R$/@ (converter dividindo por 15)
+ * unidade: 'kg' = já em R$/kg; 'arroba' = R$/@ (converter dividindo por 30)
  */
 const MAPA_PRECO_MERCADO: Record<string, { bloco: string; categoria: string; unidade: 'kg' | 'arroba' }> = {
   mamotes_m: { bloco: 'magro_macho', categoria: '200 kg média', unidade: 'kg' },
