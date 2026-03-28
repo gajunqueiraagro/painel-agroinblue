@@ -662,7 +662,7 @@ export function useFinanceiro() {
 
     const porMacro = new Map<string, number>();
     for (const l of lancamentos) {
-      if (!isDesembolsoProdutivo(l) || !l.macro_custo) continue;
+      if (!isDesembolsoProdutivoCentral(l) || !l.macro_custo) continue;
       porMacro.set(l.macro_custo, (porMacro.get(l.macro_custo) || 0) + Math.abs(l.valor));
     }
 
