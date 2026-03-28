@@ -686,7 +686,7 @@ function GraficosContent({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro, 
   }, [zoo.historico, anoNum, mesFiltro]);
 
   return (
-    <>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <ChartCard title="Rebanho Final do mês (cab)" subtitle="Quantidade de cabeças no final do mês" data={chartData}
         keys={[`cab_${anoNum}`, `cab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
         type="area" mesFiltro={mesFiltro} />
@@ -710,7 +710,7 @@ function GraficosContent({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro, 
             type="line" decimals={1} mesFiltro={mesFiltro} />
         </>
       )}
-    </>
+    </div>
   );
 }
 
