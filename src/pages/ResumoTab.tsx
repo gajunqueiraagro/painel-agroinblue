@@ -18,6 +18,8 @@ import { calcSaldoPorCategoriaLegado, calcPesoMedioPonderado, calcUA, calcUAHa, 
 import { loadPesosPastosPorCategoria, resolverPesoOficial } from '@/hooks/useFechamentoCategoria';
 import { calcArrobasSafe } from '@/lib/calculos/economicos';
 import { ChevronRight, AlertTriangle, CheckCircle2, TrendingUp, TrendingDown, Wallet, BarChart3, Landmark } from 'lucide-react';
+import { SaldoInicialForm } from '@/components/SaldoInicialForm';
+import { Categoria } from '@/types/cattle';
 import type { FiltroGlobal } from './Index';
 
 interface Props {
