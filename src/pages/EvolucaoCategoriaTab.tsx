@@ -210,7 +210,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                   <td className={`px-1.5 py-0.5 font-bold text-foreground sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
                     {cat.label}
                   </td>
-                  <td className={`px-1.5 py-0.5 text-center font-semibold bg-primary/5 ${cat.saldoInicioMes === 0 ? 'text-foreground/20' : 'text-foreground'}`}>
+                  <td className={`px-1.5 py-0.5 text-center font-semibold bg-primary/5 ${cat.saldoInicioMes === 0 ? 'text-transparent' : 'text-foreground'}`}>
                     {cat.saldoInicioMes}
                   </td>
                   {cat.movs.map((val, j) => (
