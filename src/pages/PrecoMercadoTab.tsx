@@ -222,9 +222,49 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
                 <StIcon className="h-3 w-3 mr-1" />
                 {stCfg.label}
               </Badge>
+              {isAdmin && !isValidado && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-8"
+                  onClick={() => setShowCopiarDialog(true)}
+                  disabled={copiando || loading}
+                >
+                  <Copy className="h-3.5 w-3.5 mr-1" />
+                  Mês Anterior
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
+
+        <AlertDialog open={showCopiarDialog} onOpenChange={setShowCopiarDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Replicar valores do mês anterior?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {temPreenchimento
+                  ? 'Já existem valores preenchidos neste mês. Deseja sobrescrever com os valores do mês anterior?'
+                  : 'Deseja replicar os valores do mês anterior para este mês?'}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={async () => {
+                setCopiando(true);
+                setShowCopiarDialog(false);
+                const dados = await copiarMesAnterior(anoMes);
+                if (dados) {
+                  setItens(dados);
+                  toast.success('Valores do mês anterior carregados. Salve para confirmar.');
+                }
+                setCopiando(false);
+              }}>
+                {temPreenchimento ? 'Sobrescrever' : 'Replicar'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {loading ? (
           <div className="text-center py-8 text-muted-foreground text-sm">Carregando...</div>
