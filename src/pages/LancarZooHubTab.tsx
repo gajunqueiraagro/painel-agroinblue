@@ -7,7 +7,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import {
   ChevronRight, Lock, AlertCircle,
   ArrowLeftRight, LayoutGrid, CloudRain,
-  GitCompare, Map, Layers,
+  GitCompare, Map, Layers, FileBarChart,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
