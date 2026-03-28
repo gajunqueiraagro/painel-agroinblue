@@ -424,13 +424,20 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 )}
 
                 {/* Footer: área | cabeças */}
-                <div className="flex items-center text-[11px] text-muted-foreground border-t border-border/30 pt-1 mt-1">
-                  <span>{p.area_produtiva_ha ? `📍 ${formatNum(p.area_produtiva_ha, 1)} ha` : '—'}</span>
-                  {resumo.totalCabecas > 0 && (
-                    <>
-                      <span className="mx-2 text-border">|</span>
-                      <span className="font-medium text-foreground">{resumo.totalCabecas} cab</span>
-                    </>
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/30 pt-1 mt-1">
+                  <div className="flex items-center">
+                    <span>{p.area_produtiva_ha ? `📍 ${formatNum(p.area_produtiva_ha, 1)} ha` : '—'}</span>
+                    {resumo.totalCabecas > 0 && (
+                      <>
+                        <span className="mx-2 text-border">|</span>
+                        <span className="font-medium text-foreground">{resumo.totalCabecas} cab</span>
+                      </>
+                    )}
+                  </div>
+                  {p.tipo_uso && (
+                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 font-bold uppercase tracking-wide">
+                      {p.tipo_uso}
+                    </Badge>
                   )}
                 </div>
               </button>
