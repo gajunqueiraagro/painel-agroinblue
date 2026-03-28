@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowLeft, CheckCircle, Circle, Lock, AlertTriangle, Sprout, BarChart3, Unlock, Lightbulb, RefreshCw } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Circle, Lock, AlertTriangle, Sprout, BarChart3, Unlock, Lightbulb, Pencil } from 'lucide-react';
 import { ResumoAtividadesView } from '@/components/ResumoAtividadesView';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
@@ -478,7 +478,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 className="text-xs font-bold h-8"
                 onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: mesFiltro })}
               >
-                <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                <Pencil className="h-3.5 w-3.5 mr-1" />
                 Evol. Categoria
               </Button>
             )}
@@ -755,7 +755,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 onNavigateToReclass({ ano: anoFiltro, mes: mesFiltro });
               }}
             >
-              <RefreshCw className="h-4 w-4 mr-2" />
+              <Pencil className="h-4 w-4 mr-2" />
               Evol. Categoria
             </Button>
           )}
