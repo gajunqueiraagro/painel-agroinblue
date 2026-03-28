@@ -257,7 +257,7 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
   }
 
   return (
-    <div className="max-w-lg mx-auto animate-fade-in pb-20">
+    <div className="w-full animate-fade-in pb-20">
       {/* Sticky filters */}
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 pt-2 pb-2 space-y-1.5">
         {/* Linha 1: Ano + Mês + Realizado|Previsto */}
