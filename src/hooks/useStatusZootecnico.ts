@@ -310,7 +310,7 @@ export function useStatusZootecnico(
       descPastos = `${fazendasFechadas}/${fazendasComPastos.length} fazenda(s) fechada(s)`;
     }
 
-    pendencias.push({ id: 'pastos', label: 'Conciliação de Pastos', descricao: descPastos, status: statusPastos, resolverTab: 'fechamento' });
+    pendencias.push({ id: 'pastos', label: 'Fechamento de Pastos', descricao: descPastos, status: statusPastos, resolverTab: 'fechamento' });
 
     // 2. Valor do Rebanho
     let statusValor: StatusItem = 'aberto';
