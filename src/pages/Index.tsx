@@ -334,6 +334,7 @@ const Index = () => {
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
           onBackToConciliacao={fechamentoFromConciliacao ? goToConciliacaoCategoria : undefined}
+          onNavigateToReclass={goToReclassFromFechamento}
         />
       )}
       {activeTab === 'mapa_pastos' && <MapaPastosTab />}
