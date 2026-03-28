@@ -317,6 +317,7 @@ const Index = () => {
           onRemover={wrappedRemover as any}
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
+          onNavigateToReclass={goToReclassFromEvolCategoria}
         />
       )}
       {activeTab === 'financeiro' && (
