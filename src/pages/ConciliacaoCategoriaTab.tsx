@@ -273,47 +273,6 @@ export function ConciliacaoCategoriaTab({ lancamentos, saldosIniciais, onBack, o
         </div>
       )}
 
-      {/* Table */}
-      {loading ? (
-        <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>
-      ) : rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-8">Sem dados para o período.</p>
-      ) : (
-        <div className="rounded-lg border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="text-foreground font-bold">Categoria</TableHead>
-                <TableHead className="text-right text-foreground font-bold">Sistema</TableHead>
-                <TableHead className="text-right text-foreground font-bold">Pasto</TableHead>
-                <TableHead className="text-right text-foreground font-bold text-xs">Dif. no Pasto</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map(r => (
-                <TableRow key={r.codigo} className={r.diferenca !== 0 ? 'bg-destructive/5' : ''}>
-                  <TableCell className="font-medium text-foreground">{r.nome}</TableCell>
-                  <TableCell className="text-right text-foreground">{formatNum(r.qtdSistema)}</TableCell>
-                  <TableCell className="text-right text-foreground">{formatNum(r.qtdPasto)}</TableCell>
-                  <TableCell className={`text-right font-bold ${r.diferenca !== 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                    {r.diferenca > 0 ? '+' : ''}{r.diferenca}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-            <TableFooter>
-              <TableRow className="bg-muted/60">
-                <TableCell className="font-extrabold text-foreground">TOTAL</TableCell>
-                <TableCell className="text-right font-extrabold text-foreground">{formatNum(totalSistema)}</TableCell>
-                <TableCell className="text-right font-extrabold text-foreground">{formatNum(totalPasto)}</TableCell>
-                <TableCell className={`text-right font-extrabold ${totalDiferenca !== 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                  {totalDiferenca > 0 ? '+' : ''}{totalDiferenca}
-                </TableCell>
-              </TableRow>
-            </TableFooter>
-          </Table>
-        </div>
-      )}
 
       {/* Return button */}
       <button
