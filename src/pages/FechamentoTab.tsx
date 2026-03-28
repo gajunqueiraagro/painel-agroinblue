@@ -1,16 +1,29 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Circle, Lock, AlertTriangle } from 'lucide-react';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CheckCircle, Circle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { format } from 'date-fns';
 import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
 import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
 import { calcUA } from '@/lib/calculos/zootecnicos';
 import { formatNum } from '@/lib/calculos/formatters';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface PastoResumo {
   totalCabecas: number;
@@ -24,8 +37,11 @@ interface Props {
   onBackToConciliacao?: () => void;
 }
 
+const FECHAMENTO_GLOBAL_MARKER = 'fechamento_global_administrativo';
+
 export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao }: Props = {}) {
-  const { isGlobal } = useFazenda();
+  const { isGlobal, fazendaAtual } = useFazenda();
+  const { canEdit } = usePermissions();
   const { pastos, categorias } = usePastos();
   const { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, reabrirPasto, copiarMesAnterior } = useFechamento();
   const defaultAnoMes = filtroAnoInicial && filtroMesInicial
@@ -42,6 +58,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeFechamento, setActiveFechamento] = useState<FechamentoPasto | null>(null);
   const [itensMap, setItensMap] = useState<Map<string, FechamentoItem[]>>(new Map());
+  const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
+  const [bulkClosing, setBulkClosing] = useState(false);
 
   useEffect(() => { loadFechamentos(anoMes); }, [anoMes, loadFechamentos]);
 
@@ -78,6 +96,19 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
   const preenchidos = pastosAtivos.filter(p => getFechamento(p.id)).length;
   const fechadosCount = pastosAtivos.filter(p => getFechamento(p.id)?.status === 'fechado').length;
+  const pendentesCount = pastosAtivos.length - fechadosCount;
+
+  // Determine if bulk close button should show
+  const canBulkClose = useMemo(() => {
+    if (!anoMes) return false;
+    if (pendentesCount === 0) return false;
+    if (!canEdit('zootecnico') && !canEdit('pastos')) return false;
+    return true;
+  }, [anoMes, pendentesCount, canEdit]);
+
+  const isAdminClosed = (fech: FechamentoPasto | null) => {
+    return fech?.responsavel_nome === FECHAMENTO_GLOBAL_MARKER;
+  };
 
   const handleOpenPasto = async (pasto: Pasto) => {
     let fech = getFechamento(pasto.id);
@@ -88,6 +119,81 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     setActiveFechamento(fech);
     setSelectedPasto(pasto);
     setDialogOpen(true);
+  };
+
+  const handleBulkClose = async () => {
+    if (!fazendaAtual || fazendaAtual.id === '__global__') return;
+    setBulkClosing(true);
+
+    try {
+      const fazendaId = fazendaAtual.id;
+      const clienteId = fazendaAtual.cliente_id;
+
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || null;
+
+      // Identify pastos that need closure
+      const pastosParaFechar: string[] = [];
+      for (const pasto of pastosAtivos) {
+        const fech = getFechamento(pasto.id);
+        if (!fech || fech.status !== 'fechado') {
+          pastosParaFechar.push(pasto.id);
+        }
+      }
+
+      if (pastosParaFechar.length === 0) {
+        toast.info('Todos os pastos já estão fechados.');
+        setBulkClosing(false);
+        setConfirmBulkOpen(false);
+        return;
+      }
+
+      // For each pasto pending: create fechamento if needed, then mark as fechado
+      for (const pastoId of pastosParaFechar) {
+        let fech = getFechamento(pastoId);
+
+        if (!fech) {
+          // Create fechamento record
+          fech = await criarFechamento(pastoId, anoMes);
+          if (!fech) continue;
+        }
+
+        // Update to fechado + mark as administrative closure
+        const { error } = await supabase
+          .from('fechamento_pastos')
+          .update({
+            status: 'fechado',
+            responsavel_nome: FECHAMENTO_GLOBAL_MARKER,
+          })
+          .eq('id', fech.id);
+
+        if (error) {
+          console.error('Erro ao fechar pasto administrativamente:', error);
+        }
+      }
+
+      // Log audit record
+      const auditPayload = {
+        usuario_id: userId,
+        fazenda_id: fazendaId,
+        cliente_id: clienteId,
+        competencia: anoMes,
+        tipo_acao: FECHAMENTO_GLOBAL_MARKER,
+        pastos_fechados: pastosParaFechar.length,
+        data_hora: new Date().toISOString(),
+      };
+      console.info('[AUDIT] Fechamento Global Administrativo:', auditPayload);
+
+      toast.success(`${pastosParaFechar.length} pasto(s) fechado(s) administrativamente.`);
+      await loadFechamentos(anoMes);
+    } catch (e) {
+      console.error('Erro no fechamento global:', e);
+      toast.error('Erro ao realizar fechamento global.');
+    } finally {
+      setBulkClosing(false);
+      setConfirmBulkOpen(false);
+    }
   };
 
   if (isGlobal) return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda para o fechamento.</div>;
@@ -109,6 +215,17 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             <Badge variant="secondary">{preenchidos}/{pastosAtivos.length} iniciados</Badge>
             <span className="text-xs text-muted-foreground mt-0.5">{fechadosCount} fechados</span>
           </div>
+          {canBulkClose && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-auto text-xs font-bold border-warning text-warning hover:bg-warning/10"
+              onClick={() => setConfirmBulkOpen(true)}
+            >
+              <Lock className="h-3.5 w-3.5 mr-1" />
+              Fechamento Todos
+            </Button>
+          )}
         </div>
       </div>
 
@@ -127,6 +244,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             const fech = getFechamento(p.id);
             const status = fech?.status;
             const resumo = getResumo(fech, p);
+            const adminClose = isAdminClosed(fech);
             return (
               <button
                 key={p.id}
@@ -135,9 +253,15 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-semibold text-base">{p.nome}</span>
-                  <div>
+                  <div className="flex items-center gap-1.5">
                     {status === 'fechado' ? (
-                      <Badge variant="default"><CheckCircle className="h-3 w-3 mr-1" />Fechado</Badge>
+                      adminClose ? (
+                        <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">
+                          <Lock className="h-3 w-3 mr-1" />Fechamento Global
+                        </Badge>
+                      ) : (
+                        <Badge variant="default"><CheckCircle className="h-3 w-3 mr-1" />Fechado</Badge>
+                      )
                     ) : status === 'rascunho' ? (
                       <Badge variant="secondary"><Circle className="h-3 w-3 mr-1" />Rascunho</Badge>
                     ) : (
@@ -195,6 +319,41 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         </button>
       )}
       </div>
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={confirmBulkOpen} onOpenChange={setConfirmBulkOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-warning" />
+              Fechamento Global da Fazenda
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-relaxed">
+              Você está realizando um <strong>fechamento global</strong> da fazenda
+              {fazendaAtual ? ` "${fazendaAtual.nome}"` : ''} para o mês <strong>{formatAnoMes(anoMes)}</strong>.
+              <br /><br />
+              Os <strong>{pendentesCount} pasto(s)</strong> ainda não fechados serão marcados como{' '}
+              <strong>"Fechamento Global"</strong> (fechamento administrativo).
+              <br /><br />
+              Pastos já fechados individualmente <strong>não serão alterados</strong>.
+              <br /><br />
+              <span className="text-muted-foreground text-xs">
+                Esta ação ficará registrada para auditoria.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkClosing}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkClose}
+              disabled={bulkClosing}
+              className="bg-warning text-warning-foreground hover:bg-warning/90"
+            >
+              {bulkClosing ? 'Fechando...' : `Fechar ${pendentesCount} pasto(s)`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
