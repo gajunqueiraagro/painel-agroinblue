@@ -220,6 +220,26 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const totalSistema = CAT_COLS.reduce((s, c) => s + (saldoMap.get(c.codigo) || 0), 0);
   const totalDiferenca = totalPasto - totalSistema;
 
+  // Sugestões de conciliação (mesma lógica da tela Conciliação de Categoria)
+  const catMap = useMemo(
+    () => new Map((categorias || []).map(c => [c.codigo, c.nome])),
+    [categorias]
+  );
+
+  const sugestoes = useMemo(() => {
+    const allCodigos = new Set([...saldoMap.keys(), ...pastoDataByCat.keys()]);
+    const rows: { codigo: string; nome: string; qtdSistema: number; qtdPasto: number; diferenca: number }[] = [];
+    allCodigos.forEach(codigo => {
+      const qtdSistema = saldoMap.get(codigo) || 0;
+      const qtdPasto = pastoDataByCat.get(codigo) || 0;
+      if (qtdSistema === 0 && qtdPasto === 0) return;
+      rows.push({ codigo, nome: catMap.get(codigo) || codigo, qtdSistema, qtdPasto, diferenca: qtdPasto - qtdSistema });
+    });
+    return gerarSugestoes(rows, catMap);
+  }, [saldoMap, pastoDataByCat, catMap]);
+
+  const hasDivergencia = totalDiferenca !== 0;
+
   const isAdminClosed = (fech: FechamentoPasto | null) => {
     return fech?.responsavel_nome === FECHAMENTO_GLOBAL_MARKER;
   };
