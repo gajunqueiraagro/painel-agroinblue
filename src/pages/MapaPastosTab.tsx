@@ -320,12 +320,12 @@ export function MapaPastosTab() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-muted font-bold border-t-2 text-xs">
-                    <td className="sticky left-0 z-10 bg-muted px-2 py-1.5 border-r" colSpan={3}>TOTAL / MÉDIA</td>
+                    <td className="sticky left-0 z-20 bg-muted px-2 py-1 border-r" colSpan={3}>TOTAL / MÉDIA</td>
                     {categorias.map(cat => {
                       const t = totais.catTotals.get(cat.id);
                       const pesoMed = t && t.qtdComPeso > 0 ? t.pesoTotal / t.qtdComPeso : null;
                       return (
-                        <td key={cat.id} className="p-2 text-center border-r">
+                        <td key={cat.id} className="px-1 py-1 text-center border-r">
                           {t && t.quantidade > 0 ? (
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -340,15 +340,15 @@ export function MapaPastosTab() {
                         </td>
                       );
                     })}
-                    <td className="p-2 text-center border-r bg-primary/10 text-lg">{totais.totalCab}</td>
-                    <td className="p-2 text-center border-r">{totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 2) : '—'}</td>
-                    <td className="p-2 text-center border-r">{formatNum(totais.areaTotal, 1)}</td>
-                    <td className={`p-2 text-center border-r ${getUaHaColor(totais.uaHaGeral)}`}>
+                    <td className="px-1.5 py-1 text-center border-r bg-primary/10 text-sm font-extrabold">{totais.totalCab}</td>
+                    <td className="px-1.5 py-1 text-center border-r">{totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 0) : '—'}</td>
+                    <td className="px-1.5 py-1 text-center border-r">{formatNum(totais.areaTotal, 1)}</td>
+                    <td className={`px-1.5 py-1 text-center border-r ${getUaHaColor(totais.uaHaGeral)}`}>
                       {totais.uaHaGeral ? formatNum(totais.uaHaGeral, 2) : '—'}
                     </td>
-                    <td className="p-2 text-center">
+                    <td className="px-1.5 py-1 text-center">
                       {totais.qualidadeMedia ? (
-                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${getQualidadeColor(totais.qualidadeMedia)}`}>
+                        <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${getQualidadeColor(totais.qualidadeMedia)}`}>
                           {formatNum(totais.qualidadeMedia, 1)}
                         </span>
                       ) : '—'}
