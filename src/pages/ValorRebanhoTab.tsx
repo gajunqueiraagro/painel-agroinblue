@@ -282,13 +282,13 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50">
-              <th className="text-left px-3 py-2 font-semibold text-foreground">Categoria</th>
-              <th className="text-right px-2 py-2 font-semibold text-foreground">Qtd</th>
-              <th className="text-right px-2 py-2 font-semibold text-foreground">Peso</th>
-              <th className="text-center px-1 py-2 font-semibold text-foreground min-w-[70px]">R$/kg</th>
-              <th className="text-right px-2 py-2 font-semibold text-foreground">R$/cab</th>
-              <th className="text-right px-2 py-2 font-semibold text-foreground">R$/@</th>
-              <th className="text-right px-3 py-2 font-semibold text-foreground">Valor Total</th>
+              <th className="text-left px-2 py-1.5 font-semibold text-foreground text-xs">Categoria</th>
+              <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">Qtd</th>
+              <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">Peso</th>
+              <th className="text-center px-1 py-1.5 font-semibold text-foreground text-xs min-w-[65px]">R$/kg</th>
+              <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">R$/cab</th>
+              <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">R$/@</th>
+              <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">Valor Total</th>
             </tr>
           </thead>
           <tbody>
