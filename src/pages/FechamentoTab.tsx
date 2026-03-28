@@ -692,6 +692,54 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Sugestões de Ajuste Dialog */}
+      <Dialog open={showSugestoes} onOpenChange={setShowSugestoes}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lightbulb className="h-5 w-5 text-amber-500" />
+              Sugestões de Ajuste
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            {sugestoes.map((s, i) => (
+              <div
+                key={i}
+                className={`rounded-lg border p-3 text-sm ${
+                  s.tipo === 'evolucao'
+                    ? 'border-primary/30 bg-primary/5'
+                    : s.tipo === 'excesso'
+                    ? 'border-amber-500/30 bg-amber-500/5'
+                    : 'border-red-500/30 bg-red-500/5'
+                }`}
+              >
+                <div className="flex items-start gap-2">
+                  <span className="shrink-0 mt-0.5">
+                    {s.tipo === 'evolucao' ? '🔄' : s.tipo === 'excesso' ? '⚠️' : '❌'}
+                  </span>
+                  <span className="text-foreground">{s.mensagem}</span>
+                </div>
+              </div>
+            ))}
+            {sugestoes.length === 0 && (
+              <p className="text-center text-muted-foreground py-4">Nenhuma sugestão de ajuste.</p>
+            )}
+          </div>
+          {onNavigateToReclass && sugestoes.some(s => s.tipo === 'evolucao') && (
+            <Button
+              className="w-full mt-2"
+              onClick={() => {
+                setShowSugestoes(false);
+                onNavigateToReclass({ ano: anoFiltro, mes: mesFiltro });
+              }}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Evol. Categoria
+            </Button>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
