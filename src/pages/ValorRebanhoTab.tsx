@@ -195,7 +195,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     const strMap: Record<string, string> = {};
     precos.forEach(p => {
       numMap[p.categoria] = p.preco_kg;
-      strMap[p.categoria] = p.preco_kg > 0 ? String(p.preco_kg).replace('.', ',') : '';
+      strMap[p.categoria] = p.preco_kg > 0 ? p.preco_kg.toFixed(2).replace('.', ',') : '';
     });
 
     // Auto-fill suggestions for categories without saved price
@@ -203,7 +203,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     Object.entries(precosSugeridos).forEach(([codigo, valor]) => {
       if (!numMap[codigo] || numMap[codigo] <= 0) {
         numMap[codigo] = Number(valor.toFixed(4));
-        strMap[codigo] = valor > 0 ? String(Number(valor.toFixed(2))).replace('.', ',') : '';
+        strMap[codigo] = valor > 0 ? Number(valor.toFixed(2)).toFixed(2).replace('.', ',') : '';
         aplicouSugestao = true;
       }
     });
@@ -401,13 +401,19 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="relative">
-                        <Input
+                         <Input
                           type="text"
                           inputMode="decimal"
-                          className={`h-7 text-right text-xs w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
+                          className={`h-7 text-right text-[10px] w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
                           placeholder="0,00"
                           value={precosDisplay[r.codigo] ?? ''}
                           onChange={e => handlePrecoChange(r.codigo, e.target.value)}
+                          onBlur={() => {
+                            const num = precosLocal[r.codigo];
+                            if (num > 0) {
+                              setPrecosDisplay(prev => ({ ...prev, [r.codigo]: num.toFixed(2).replace('.', ',') }));
+                            }
+                          }}
                           disabled={!canEdit}
                         />
                       </div>
