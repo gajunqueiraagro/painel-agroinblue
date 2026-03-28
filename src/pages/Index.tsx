@@ -31,7 +31,7 @@ import { ValorRebanhoTab } from './ValorRebanhoTab';
 import { ConciliacaoCategoriaTab } from './ConciliacaoCategoriaTab';
 import { ChuvasTab } from './ChuvasTab';
 import { VisaoAnualZootecnicaTab } from './VisaoAnualZootecnicaTab';
-
+import { FechamentoExecutivoTab } from './FechamentoExecutivoTab';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { SyncStatus } from '@/components/SyncStatus';
