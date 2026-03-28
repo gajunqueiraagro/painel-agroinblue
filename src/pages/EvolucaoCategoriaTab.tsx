@@ -324,7 +324,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                 </td>
               ))}
               <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoFin}</td>
-              <td className={`px-1.5 py-1 text-center font-extrabold ${!totais.pesoMedio ? 'text-muted-foreground' : 'text-foreground'}`}>
+              <td className={`px-1.5 py-1 text-center italic text-[9px] font-semibold ${!totais.pesoMedio || totais.pesoMedio <= 0 ? 'text-transparent' : 'text-foreground'}`}>
                 {formatPeso(totais.pesoMedio)}
               </td>
             </tr>
