@@ -405,7 +405,23 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
 }
 
 // ---------------------------------------------------------------------------
-// Indicadores Content
+// Section Card wrapper
+// ---------------------------------------------------------------------------
+function SectionCard({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
+  return (
+    <Card className="h-full">
+      <CardContent className="p-4 space-y-3 h-full">
+        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+          <span>{icon}</span> {title}
+        </h3>
+        {children}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Indicadores Content — 6 blocos temáticos
 // ---------------------------------------------------------------------------
 interface IndicadoresContentProps {
   zoo: ReturnType<typeof useIndicadoresZootecnicos>;
@@ -419,140 +435,168 @@ interface IndicadoresContentProps {
 }
 
 function IndicadoresContent({ zoo, vista, mesLabel, mesFiltro, anoFiltro, kgHa, kgHaComps, acumulado }: IndicadoresContentProps) {
+  const isMes = vista === 'mes';
+  const periodoLabel = isMes ? mesLabel : `Média Jan → ${mesLabel}`;
+
   return (
     <>
-      {/* Estoque + Lotação */}
-      <Card>
-        <CardContent className="p-4 space-y-3">
-          <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
-            {vista === 'mes' ? `Indicadores Zootécnicos ${mesLabel}` : `Indicadores Zootécnicos — Média Jan → ${mesLabel}`}
-          </h3>
+      {/* ── Grid principal: 6 blocos ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
 
-          {vista === 'mes' ? (
-            <>
-              <div className="grid grid-cols-3 gap-3">
-                <KpiCard label="Cabeças no mês" valor={formatNum(zoo.saldoFinalMes)} unidade="cab"
-                  compMensal={zoo.comparacoes.saldoFinalMes.mensal} compAnual={zoo.comparacoes.saldoFinalMes.anual} />
-                <KpiCard label="Peso Final no mês"
-                  valor={zoo.pesoMedioRebanhoKg !== null ? formatNum(zoo.pesoMedioRebanhoKg, 1) : '—'}
-                  unidade="kg" estimado={zoo.qualidade.pesoMedioEstimado}
-                  compMensal={zoo.comparacoes.pesoMedioRebanhoKg.mensal} compAnual={zoo.comparacoes.pesoMedioRebanhoKg.anual}
-                  semBase={zoo.pesoMedioRebanhoKg === null} />
-                <KpiCard label="Valor Rebanho"
-                  valor={zoo.valorRebanho !== null ? formatMoedaCompacto(zoo.valorRebanho) : '—'}
-                  compMensal={zoo.comparacoes.valorRebanho.mensal} compAnual={zoo.comparacoes.valorRebanho.anual}
-                  semBase={zoo.valorRebanho === null} />
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <KpiCard label="Área Prod. no mês" valor={formatNum(zoo.areaProdutiva, 1)} unidade="ha"
-                  estimado={zoo.qualidade.areaProdutivaEstimativa} />
-                <KpiCard label="UA/ha no mês"
-                  valor={zoo.uaHa !== null ? formatNum(zoo.uaHa, 2) : '—'}
-                  compMensal={zoo.comparacoes.uaHa.mensal} compAnual={zoo.comparacoes.uaHa.anual}
-                  semBase={zoo.uaHa === null} />
-                <KpiCard label="Kg/ha no mês"
-                  valor={kgHa !== null ? formatNum(kgHa, 2) : '—'}
-                  compMensal={kgHaComps.mensal} compAnual={kgHaComps.anual}
-                  semBase={kgHa === null} />
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="grid grid-cols-3 gap-3">
-                <KpiCard label="Cabeças na média" valor={formatNum(acumulado.cabMedia, 0)} unidade="cab"
-                  compMensal={acumulado.compCab.mensal} compAnual={acumulado.compCab.anual} />
-                <KpiCard label="Peso Médio Final"
-                  valor={acumulado.pesoMedioFinal !== null ? formatNum(acumulado.pesoMedioFinal, 1) : '—'}
-                  unidade="kg"
-                  compMensal={acumulado.compPeso.mensal} compAnual={acumulado.compPeso.anual}
-                  semBase={acumulado.pesoMedioFinal === null} />
-                <KpiCard label="Valor Rebanho"
-                  valor={zoo.valorRebanho !== null ? formatMoedaCompacto(zoo.valorRebanho) : '—'}
-                  compMensal={zoo.comparacoes.valorRebanho.mensal} compAnual={zoo.comparacoes.valorRebanho.anual}
-                  semBase={zoo.valorRebanho === null} />
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <KpiCard label="Área Prod. média" valor={formatNum(acumulado.areaMedia, 1)} unidade="ha"
-                  compMensal={acumulado.compArea.mensal} compAnual={acumulado.compArea.anual} />
-                <KpiCard label="UA/ha médio"
-                  valor={acumulado.uaHaMedio !== null ? formatNum(acumulado.uaHaMedio, 2) : '—'}
-                  compMensal={acumulado.compUaHa.mensal} compAnual={acumulado.compUaHa.anual}
-                  semBase={acumulado.uaHaMedio === null} />
-                <KpiCard label="Kg/ha médio"
-                  valor={acumulado.kgHaMedio !== null ? formatNum(acumulado.kgHaMedio, 2) : '—'}
-                  compMensal={acumulado.compKgHa.mensal} compAnual={acumulado.compKgHa.anual}
-                  semBase={acumulado.kgHaMedio === null} />
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Produção */}
-      <Card>
-        <CardContent className="p-4 space-y-3">
-          <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
-            Produção {vista === 'mes' ? mesLabel : 'Acumulado'}
-          </h3>
-          <div className="grid grid-cols-3 gap-3">
+        {/* 1. PRODUÇÃO */}
+        <SectionCard title="Produção" icon="🐂">
+          <div className="grid grid-cols-2 gap-2">
+            <KpiCard label="Cabeças"
+              valor={isMes ? formatNum(zoo.saldoFinalMes) : formatNum(acumulado.cabMedia, 0)}
+              unidade="cab"
+              compMensal={isMes ? zoo.comparacoes.saldoFinalMes.mensal : acumulado.compCab.mensal}
+              compAnual={isMes ? zoo.comparacoes.saldoFinalMes.anual : acumulado.compCab.anual} />
+            <KpiCard label="Peso Médio Final"
+              valor={isMes
+                ? (zoo.pesoMedioRebanhoKg !== null ? formatNum(zoo.pesoMedioRebanhoKg, 1) : '—')
+                : (acumulado.pesoMedioFinal !== null ? formatNum(acumulado.pesoMedioFinal, 1) : '—')}
+              unidade="kg"
+              estimado={isMes ? zoo.qualidade.pesoMedioEstimado : false}
+              compMensal={isMes ? zoo.comparacoes.pesoMedioRebanhoKg.mensal : acumulado.compPeso.mensal}
+              compAnual={isMes ? zoo.comparacoes.pesoMedioRebanhoKg.anual : acumulado.compPeso.anual}
+              semBase={isMes ? zoo.pesoMedioRebanhoKg === null : acumulado.pesoMedioFinal === null} />
             <KpiCard label="@ produzidas"
-              valor={vista === 'mes'
+              valor={isMes
                 ? (zoo.arrobasProduzidasMes !== null ? formatNum(zoo.arrobasProduzidasMes, 1) : '—')
                 : (zoo.arrobasProduzidasAcumulado !== null ? formatNum(zoo.arrobasProduzidasAcumulado, 1) : '—')}
               unidade="@"
-              compMensal={vista === 'acumulado' ? zoo.comparacoes.arrobasProduzidasAcumulado.mensal : null}
-              compAnual={vista === 'acumulado' ? zoo.comparacoes.arrobasProduzidasAcumulado.anual : null}
-              semBase={vista === 'mes' ? zoo.arrobasProduzidasMes === null : zoo.arrobasProduzidasAcumulado === null} />
-            <KpiCard label="@/ha"
-              valor={vista === 'mes'
-                ? (zoo.arrobasProduzidasMes !== null && zoo.areaProdutiva > 0 ? formatNum(zoo.arrobasProduzidasMes / zoo.areaProdutiva, 2) : '—')
-                : (zoo.arrobasProduzidasAcumulado !== null && zoo.areaProdutiva > 0 ? formatNum(zoo.arrobasProduzidasAcumulado / zoo.areaProdutiva, 2) : '—')}
-              semBase={vista === 'mes'
-                ? (zoo.arrobasProduzidasMes === null || zoo.areaProdutiva <= 0)
-                : (zoo.arrobasProduzidasAcumulado === null || zoo.areaProdutiva <= 0)} />
-            <KpiCard label="GMD"
-              valor={vista === 'mes'
-                ? (zoo.gmdMes !== null ? formatNum(zoo.gmdMes, 3) : '—')
-                : (zoo.gmdAcumulado !== null ? formatNum(zoo.gmdAcumulado, 3) : '—')}
-              unidade="kg/dia"
-              compMensal={vista === 'mes' ? zoo.comparacoes.gmdMes.mensal : zoo.comparacoes.gmdAcumulado.mensal}
-              compAnual={vista === 'mes' ? zoo.comparacoes.gmdMes.anual : zoo.comparacoes.gmdAcumulado.anual} />
-          </div>
-          <div className="grid grid-cols-3 gap-3">
+              compMensal={!isMes ? zoo.comparacoes.arrobasProduzidasAcumulado.mensal : null}
+              compAnual={!isMes ? zoo.comparacoes.arrobasProduzidasAcumulado.anual : null}
+              semBase={isMes ? zoo.arrobasProduzidasMes === null : zoo.arrobasProduzidasAcumulado === null} />
             <KpiCard label="Desfrute cab."
-              valor={vista === 'mes'
+              valor={isMes
                 ? (zoo.desfruteCabecasMes !== null ? formatNum(zoo.desfruteCabecasMes, 1) : '—')
                 : (zoo.desfruteCabecasAcumulado !== null ? formatNum(zoo.desfruteCabecasAcumulado, 1) : '—')}
               unidade="%"
-              compAnual={vista === 'acumulado' ? zoo.comparacoes.desfruteCabecasAcumulado.anual : null}
-              semBase={vista === 'mes' ? zoo.desfruteCabecasMes === null : zoo.desfruteCabecasAcumulado === null} />
-            <KpiCard label="Desfrute @"
-              valor={vista === 'mes'
-                ? (zoo.desfruteArrobasMes !== null ? formatNum(zoo.desfruteArrobasMes, 1) : '—')
-                : (zoo.desfruteArrobasAcumulado !== null ? formatNum(zoo.desfruteArrobasAcumulado, 1) : '—')}
-              unidade="%"
-              compAnual={vista === 'acumulado' ? zoo.comparacoes.desfruteArrobasAcumulado.anual : null}
-              semBase={vista === 'mes' ? zoo.desfruteArrobasMes === null : zoo.desfruteArrobasAcumulado === null} />
-            <KpiCard label="@ desfrutadas"
-              valor={vista === 'mes'
-                ? formatNum(zoo.arrobasSaidasMes, 1)
-                : formatNum(zoo.arrobasSaidasAcumuladoAno, 1)}
-              unidade="@"
-              compMensal={vista === 'mes' ? zoo.comparacoes.arrobasSaidasMes.mensal : zoo.comparacoes.arrobasDesfrutadasAcum.mensal}
-              compAnual={vista === 'mes' ? zoo.comparacoes.arrobasSaidasMes.anual : zoo.comparacoes.arrobasDesfrutadasAcum.anual} />
+              compAnual={!isMes ? zoo.comparacoes.desfruteCabecasAcumulado.anual : null}
+              semBase={isMes ? zoo.desfruteCabecasMes === null : zoo.desfruteCabecasAcumulado === null} />
+            <KpiCard label="GMD"
+              valor={isMes
+                ? (zoo.gmdMes !== null ? formatNum(zoo.gmdMes, 3) : '—')
+                : (zoo.gmdAcumulado !== null ? formatNum(zoo.gmdAcumulado, 3) : '—')}
+              unidade="kg/dia"
+              compMensal={isMes ? zoo.comparacoes.gmdMes.mensal : zoo.comparacoes.gmdAcumulado.mensal}
+              compAnual={isMes ? zoo.comparacoes.gmdMes.anual : zoo.comparacoes.gmdAcumulado.anual} />
+            <KpiCard label="Valor Rebanho"
+              valor={zoo.valorRebanho !== null ? formatMoedaCompacto(zoo.valorRebanho) : '—'}
+              compMensal={zoo.comparacoes.valorRebanho.mensal}
+              compAnual={zoo.comparacoes.valorRebanho.anual}
+              semBase={zoo.valorRebanho === null} />
           </div>
           {zoo.qualidade.gmdDisponivel && (
             <GmdDetalheSheet abertura={zoo.gmdAberturaMes} mesLabel={mesLabel} anoLabel={anoFiltro} />
           )}
-        </CardContent>
-      </Card>
+        </SectionCard>
 
-      {zoo.qualidade.pesoMedioEstimado && (
-        <div className="flex items-start gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 rounded-md">
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-          <span>Peso médio estimado — realize fechamento de pastos para maior precisão</span>
-        </div>
-      )}
+        {/* 2. EFICIÊNCIA */}
+        <SectionCard title="Eficiência" icon="📐">
+          <div className="grid grid-cols-2 gap-2">
+            <KpiCard label="Área Produtiva"
+              valor={isMes ? formatNum(zoo.areaProdutiva, 1) : formatNum(acumulado.areaMedia, 1)}
+              unidade="ha"
+              estimado={isMes ? zoo.qualidade.areaProdutivaEstimativa : false}
+              compMensal={!isMes ? acumulado.compArea.mensal : null}
+              compAnual={!isMes ? acumulado.compArea.anual : null} />
+            <KpiCard label="UA/ha"
+              valor={isMes
+                ? (zoo.uaHa !== null ? formatNum(zoo.uaHa, 2) : '—')
+                : (acumulado.uaHaMedio !== null ? formatNum(acumulado.uaHaMedio, 2) : '—')}
+              compMensal={isMes ? zoo.comparacoes.uaHa.mensal : acumulado.compUaHa.mensal}
+              compAnual={isMes ? zoo.comparacoes.uaHa.anual : acumulado.compUaHa.anual}
+              semBase={isMes ? zoo.uaHa === null : acumulado.uaHaMedio === null} />
+            <KpiCard label="Kg/ha"
+              valor={isMes
+                ? (kgHa !== null ? formatNum(kgHa, 2) : '—')
+                : (acumulado.kgHaMedio !== null ? formatNum(acumulado.kgHaMedio, 2) : '—')}
+              compMensal={isMes ? kgHaComps.mensal : acumulado.compKgHa.mensal}
+              compAnual={isMes ? kgHaComps.anual : acumulado.compKgHa.anual}
+              semBase={isMes ? kgHa === null : acumulado.kgHaMedio === null} />
+            <KpiCard label="@/ha"
+              valor={isMes
+                ? (zoo.arrobasProduzidasMes !== null && zoo.areaProdutiva > 0 ? formatNum(zoo.arrobasProduzidasMes / zoo.areaProdutiva, 2) : '—')
+                : (zoo.arrobasProduzidasAcumulado !== null && zoo.areaProdutiva > 0 ? formatNum(zoo.arrobasProduzidasAcumulado / zoo.areaProdutiva, 2) : '—')}
+              semBase={isMes
+                ? (zoo.arrobasProduzidasMes === null || zoo.areaProdutiva <= 0)
+                : (zoo.arrobasProduzidasAcumulado === null || zoo.areaProdutiva <= 0)} />
+          </div>
+        </SectionCard>
+
+        {/* 3. FINANCEIRO PRODUTIVO */}
+        <SectionCard title="Financeiro Produtivo" icon="💰">
+          <div className="grid grid-cols-2 gap-2">
+            <KpiCard label="Receita por @" valor="—" semBase />
+            <KpiCard label="Custo por @" valor="—" semBase />
+            <KpiCard label="Margem por @" valor="—" semBase />
+            <KpiCard label="Desembolso total" valor="—" semBase />
+            <KpiCard label="Resultado operacional" valor="—" semBase />
+          </div>
+          <p className="text-[9px] text-muted-foreground italic text-center">Disponível após integração financeira completa</p>
+        </SectionCard>
+
+        {/* 4. ESTRUTURA FINANCEIRA */}
+        <SectionCard title="Estrutura Financeira" icon="🏦">
+          <div className="grid grid-cols-2 gap-2">
+            <KpiCard label="Endividamento" valor="—" unidade="%" semBase />
+            <KpiCard label="Caixa disponível" valor="—" semBase />
+            <KpiCard label="Dívida / Rebanho" valor="—" semBase />
+            <KpiCard label="Curto vs Longo prazo" valor="—" semBase />
+          </div>
+          <p className="text-[9px] text-muted-foreground italic text-center">Disponível após integração financeira completa</p>
+        </SectionCard>
+
+        {/* 5. EVOLUÇÃO */}
+        <SectionCard title="Evolução" icon="📊">
+          <div className="grid grid-cols-2 gap-2">
+            <KpiCard label="Desfrute @"
+              valor={isMes
+                ? (zoo.desfruteArrobasMes !== null ? formatNum(zoo.desfruteArrobasMes, 1) : '—')
+                : (zoo.desfruteArrobasAcumulado !== null ? formatNum(zoo.desfruteArrobasAcumulado, 1) : '—')}
+              unidade="%"
+              compAnual={!isMes ? zoo.comparacoes.desfruteArrobasAcumulado.anual : null}
+              semBase={isMes ? zoo.desfruteArrobasMes === null : zoo.desfruteArrobasAcumulado === null} />
+            <KpiCard label="@ desfrutadas"
+              valor={isMes ? formatNum(zoo.arrobasSaidasMes, 1) : formatNum(zoo.arrobasSaidasAcumuladoAno, 1)}
+              unidade="@"
+              compMensal={isMes ? zoo.comparacoes.arrobasSaidasMes.mensal : zoo.comparacoes.arrobasDesfrutadasAcum.mensal}
+              compAnual={isMes ? zoo.comparacoes.arrobasSaidasMes.anual : zoo.comparacoes.arrobasDesfrutadasAcum.anual} />
+            <KpiCard label="vs Meta" valor="—" semBase />
+            <KpiCard label="Classificação" valor="—" semBase />
+          </div>
+        </SectionCard>
+
+        {/* 6. ALERTAS */}
+        <SectionCard title="Alertas" icon="🚨">
+          <div className="space-y-2">
+            {zoo.qualidade.pesoMedioEstimado && (
+              <div className="flex items-start gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 rounded-md">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <span>Peso médio estimado — realize fechamento de pastos para maior precisão</span>
+              </div>
+            )}
+            {zoo.areaProdutiva <= 0 && (
+              <div className="flex items-start gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 rounded-md">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <span>Área produtiva não cadastrada — indicadores de lotação indisponíveis</span>
+              </div>
+            )}
+            {zoo.saldoFinalMes === 0 && (
+              <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 px-3 py-2 rounded-md">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <span>Sem rebanho registrado para o período selecionado</span>
+              </div>
+            )}
+            {!zoo.qualidade.pesoMedioEstimado && zoo.areaProdutiva > 0 && zoo.saldoFinalMes > 0 && (
+              <p className="text-[10px] text-muted-foreground italic text-center py-2">Nenhum alerta no momento ✓</p>
+            )}
+          </div>
+        </SectionCard>
+
+      </div>
     </>
   );
 }
