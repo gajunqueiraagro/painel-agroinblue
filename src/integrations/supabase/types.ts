@@ -293,6 +293,81 @@ export type Database = {
           },
         ]
       }
+      fechamento_executivo: {
+        Row: {
+          ano: number
+          cliente_id: string
+          created_at: string
+          data_fechamento: string | null
+          data_geracao: string
+          fazenda_id: string | null
+          id: string
+          json_snapshot_indicadores: Json
+          json_snapshot_textos: Json
+          mes: number
+          observacoes_manuais: string | null
+          pdf_url: string | null
+          periodo_texto: string
+          status_fechamento: string
+          updated_at: string
+          usuario_gerador: string | null
+          versao: number
+        }
+        Insert: {
+          ano: number
+          cliente_id: string
+          created_at?: string
+          data_fechamento?: string | null
+          data_geracao?: string
+          fazenda_id?: string | null
+          id?: string
+          json_snapshot_indicadores?: Json
+          json_snapshot_textos?: Json
+          mes: number
+          observacoes_manuais?: string | null
+          pdf_url?: string | null
+          periodo_texto?: string
+          status_fechamento?: string
+          updated_at?: string
+          usuario_gerador?: string | null
+          versao?: number
+        }
+        Update: {
+          ano?: number
+          cliente_id?: string
+          created_at?: string
+          data_fechamento?: string | null
+          data_geracao?: string
+          fazenda_id?: string | null
+          id?: string
+          json_snapshot_indicadores?: Json
+          json_snapshot_textos?: Json
+          mes?: number
+          observacoes_manuais?: string | null
+          pdf_url?: string | null
+          periodo_texto?: string
+          status_fechamento?: string
+          updated_at?: string
+          usuario_gerador?: string | null
+          versao?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fechamento_executivo_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fechamento_executivo_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fechamento_pasto_itens: {
         Row: {
           categoria_id: string
