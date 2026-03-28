@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { LogOut, ArrowLeft, KeyRound } from 'lucide-react';
+import { LogOut, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { AlterarSenhaDialog } from '@/components/AlterarSenhaDialog';
@@ -10,11 +10,11 @@ interface HeaderProps {
   clienteNome?: string;
   fazendaNome?: string;
   periodo?: string;
-  onBack?: () => void;
+  
   rightAction?: ReactNode;
 }
 
-export function Header({ title, clienteNome, fazendaNome, periodo, onBack, rightAction }: HeaderProps) {
+export function Header({ title, clienteNome, fazendaNome, periodo, rightAction }: HeaderProps) {
   const { signOut } = useAuth();
 
   return (
@@ -23,11 +23,6 @@ export function Header({ title, clienteNome, fazendaNome, periodo, onBack, right
         {/* Row 1: Back + Logo + Title + Actions */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 md:gap-3 min-w-0">
-            {onBack && (
-              <button onClick={onBack} className="p-1 rounded-md hover:bg-primary-foreground/10 transition-colors shrink-0">
-                <ArrowLeft className="h-5 w-5 text-primary-foreground" />
-              </button>
-            )}
             <img src={logo} alt="AgroInBlue" className="h-6 md:h-9 w-auto shrink-0" />
             <div className="min-w-0">
               <h1 className="text-sm md:text-xl font-bold text-primary-foreground tracking-wide truncate leading-tight">
