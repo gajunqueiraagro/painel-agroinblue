@@ -29,27 +29,7 @@ const CAT_COLS = [
   { codigo: 'vacas', sigla: 'V' },
 ];
 
-// ── Cadeia zootécnica ──
-const CADEIA_MACHOS = ['mamotes_m', 'desmama_m', 'garrotes', 'bois', 'touros'];
-const CADEIA_FEMEAS = ['mamotes_f', 'desmama_f', 'novilhas', 'vacas'];
-
-function getCadeiaVizinhos(codigo: string): string[] {
-  const idxM = CADEIA_MACHOS.indexOf(codigo);
-  if (idxM >= 0) {
-    const vizinhos: string[] = [];
-    if (idxM > 0) vizinhos.push(CADEIA_MACHOS[idxM - 1]);
-    if (idxM < CADEIA_MACHOS.length - 1) vizinhos.push(CADEIA_MACHOS[idxM + 1]);
-    return vizinhos;
-  }
-  const idxF = CADEIA_FEMEAS.indexOf(codigo);
-  if (idxF >= 0) {
-    const vizinhos: string[] = [];
-    if (idxF > 0) vizinhos.push(CADEIA_FEMEAS[idxF - 1]);
-    if (idxF < CADEIA_FEMEAS.length - 1) vizinhos.push(CADEIA_FEMEAS[idxF + 1]);
-    return vizinhos;
-  }
-  return [];
-}
+// gerarSugestoes imported from shared util
 
 interface Props {
   lancamentos: Lancamento[];
