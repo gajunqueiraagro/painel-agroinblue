@@ -370,6 +370,12 @@ const Index = () => {
           filtroMesInicial={filtroGlobal.mes}
         />
       )}
+      {activeTab === 'fechamento_executivo' && (
+        <FechamentoExecutivoTab
+          filtroAnoInicial={filtroGlobal.ano}
+          filtroMesInicial={filtroGlobal.mes}
+        />
+      )}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
