@@ -455,7 +455,18 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             <Badge variant="secondary" className="text-[10px]">{preenchidos}/{pastosAtivos.length} iniciados</Badge>
             <span className="text-[10px] text-muted-foreground mt-0.5">{fechadosCount} fechados</span>
           </div>
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className="ml-auto flex items-center gap-1.5 flex-wrap justify-end">
+            {onNavigateToReclass && hasDivergencia && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs font-bold h-8"
+                onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: mesFiltro })}
+              >
+                <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                Evol. Categoria
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
