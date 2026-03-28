@@ -203,7 +203,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     Object.entries(precosSugeridos).forEach(([codigo, valor]) => {
       if (!numMap[codigo] || numMap[codigo] <= 0) {
         numMap[codigo] = Number(valor.toFixed(4));
-        strMap[codigo] = valor > 0 ? String(Number(valor.toFixed(2))).replace('.', ',') : '';
+        strMap[codigo] = valor > 0 ? Number(valor.toFixed(2)).toFixed(2).replace('.', ',') : '';
         aplicouSugestao = true;
       }
     });
