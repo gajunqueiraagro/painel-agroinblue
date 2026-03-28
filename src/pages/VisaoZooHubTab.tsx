@@ -495,7 +495,7 @@ function IndicadoresContent({ zoo, vista, mesLabel, mesFiltro, anoFiltro, kgHa, 
         </SectionCard>
 
         {/* 2. EFICIÊNCIA */}
-        <SectionCard title="Eficiência" icon="📐">
+        <SectionCard title="Eficiência" subtitle="do uso da área" icon="📐">
           <div className="grid grid-cols-2 gap-2">
             <KpiCard label="Área Produtiva"
               valor={isMes ? formatNum(zoo.areaProdutiva, 1) : formatNum(acumulado.areaMedia, 1)}
