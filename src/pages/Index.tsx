@@ -33,6 +33,7 @@ import { ChuvasTab } from './ChuvasTab';
 import { VisaoAnualZootecnicaTab } from './VisaoAnualZootecnicaTab';
 import { FechamentoExecutivoTab } from './FechamentoExecutivoTab';
 import { AnaliseConsultorTab } from './AnaliseConsultorTab';
+import { PrecoMercadoTab } from './PrecoMercadoTab';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { SyncStatus } from '@/components/SyncStatus';
@@ -84,6 +85,7 @@ const TITLES: Record<TabId, string> = {
   evolucao_rebanho_hub: 'Evolução Rebanho',
   fechamento_executivo: 'Fechamento Executivo',
   analise_consultor: 'Análise do Consultor',
+  preco_mercado: 'Preço de Mercado',
 };
 
 const Index = () => {
@@ -186,6 +188,7 @@ const Index = () => {
     conciliacao_categoria: goToZootecnico,
     visao_anual_zoo: goToVisaoZooHub,
     analise_economica: goToVisaoFinHub,
+    preco_mercado: goToVisaoZooHub,
     fin_caixa: goToLancarFinHub,
     fechamento: goToZootecnico,
     evolucao_rebanho_hub: goToLancarZooHub,
@@ -381,6 +384,13 @@ const Index = () => {
       )}
       {activeTab === 'analise_consultor' && (
         <AnaliseConsultorTab />
+      )}
+      {activeTab === 'preco_mercado' && (
+        <PrecoMercadoTab
+          filtroAnoInicial={filtroGlobal.ano}
+          filtroMesInicial={filtroGlobal.mes}
+          onBack={goToVisaoZooHub}
+        />
       )}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />

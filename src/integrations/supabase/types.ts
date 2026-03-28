@@ -1455,6 +1455,108 @@ export type Database = {
           },
         ]
       }
+      preco_mercado: {
+        Row: {
+          agio_perc: number
+          ano_mes: string
+          bloco: string
+          categoria: string
+          created_at: string
+          id: string
+          unidade: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          agio_perc?: number
+          ano_mes: string
+          bloco: string
+          categoria: string
+          created_at?: string
+          id?: string
+          unidade?: string
+          updated_at?: string
+          valor?: number
+        }
+        Update: {
+          agio_perc?: number
+          ano_mes?: string
+          bloco?: string
+          categoria?: string
+          created_at?: string
+          id?: string
+          unidade?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: []
+      }
+      preco_mercado_ajuste: {
+        Row: {
+          agio_perc: number
+          ano_mes: string
+          bloco: string
+          categoria: string
+          cliente_id: string
+          created_at: string
+          fazenda_id: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          agio_perc?: number
+          ano_mes: string
+          bloco: string
+          categoria: string
+          cliente_id: string
+          created_at?: string
+          fazenda_id: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          agio_perc?: number
+          ano_mes?: string
+          bloco?: string
+          categoria?: string
+          cliente_id?: string
+          created_at?: string
+          fazenda_id?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      preco_mercado_status: {
+        Row: {
+          ano_mes: string
+          created_at: string
+          id: string
+          status: string
+          updated_at: string
+          validado_em: string | null
+          validado_por: string | null
+        }
+        Insert: {
+          ano_mes: string
+          created_at?: string
+          id?: string
+          status?: string
+          updated_at?: string
+          validado_em?: string | null
+          validado_por?: string | null
+        }
+        Update: {
+          ano_mes?: string
+          created_at?: string
+          id?: string
+          status?: string
+          updated_at?: string
+          validado_em?: string | null
+          validado_por?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           cliente_id: string | null
