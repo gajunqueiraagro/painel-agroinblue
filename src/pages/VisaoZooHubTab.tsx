@@ -235,6 +235,27 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
     { id: 'dre', label: '📋 DRE' },
   ];
 
+  const isAdministrativa = fazendaAtual && fazendaAtual.id !== '__global__' && fazendaAtual.tem_pecuaria === false;
+
+  if (isAdministrativa) {
+    return (
+      <div className="max-w-lg mx-auto animate-fade-in pb-20 p-4">
+        <Card className="border-l-4 border-l-amber-500">
+          <CardContent className="p-6 text-center space-y-3">
+            <AlertTriangle className="h-10 w-10 text-amber-500 mx-auto" />
+            <h2 className="text-lg font-bold text-foreground">Sem dados zootécnicos</h2>
+            <p className="text-sm text-muted-foreground">
+              A fazenda <strong>{fazendaAtual.nome}</strong> é classificada como administrativa e não possui dados de rebanho.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Para visualizar indicadores zootécnicos, selecione uma fazenda com pecuária ativa.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-lg mx-auto animate-fade-in pb-20">
       {/* Sticky filters */}
@@ -289,8 +310,8 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
           </div>
         )}
 
-        {/* Sub-blocos */}
-        <div className="grid grid-cols-3 gap-1 bg-muted rounded-md p-0.5">
+        {/* Linha 3: Blocos */}
+        <div className="grid grid-cols-3 bg-muted rounded-md p-0.5">
           {blocos.map(b => (
             <button
               key={b.id}
