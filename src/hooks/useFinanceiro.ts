@@ -135,25 +135,14 @@ async function fetchAllPaginated<T>(
 }
 
 /**
- * Desembolso produtivo = macro_custo "Custeio Produtivo" + tipo_operacao 2-Saídas.
- * Exclui: Investimentos, Amortizações, Dividendos, Receitas, Outras Entradas.
+ * Desembolso produtivo — re-exportado da classificação centralizada.
+ * macro_custo "Custeio Produtivo" OU "Investimento na Fazenda" + tipo_operacao 2-Saídas.
  */
-export const isDesembolsoProdutivo = (l: FinanceiroLancamento) => {
-  const macro = (l.macro_custo || '').toLowerCase().trim();
-  const tipo = (l.tipo_operacao || '');
-  // Must be a saída (tipo starts with "2")
-  if (!tipo.startsWith('2')) return false;
-  // Se macro_custo não preenchido, mantém comportamento legado
-  if (!macro) {
-    const escopo = (l.escopo_negocio || '').toLowerCase();
-    if (escopo === 'financeiro') return false;
-    return true;
-  }
-  return macro === 'custeio produtivo';
-};
+export { isDesembolsoProdutivo, isReceita as isReceitaCentral } from '@/lib/financeiro/classificacao';
+import { isDesembolsoProdutivo as isDesembolsoProdutivoCentral } from '@/lib/financeiro/classificacao';
 
 export const isDesembolsoPecuaria = (l: FinanceiroLancamento) =>
-  isDesembolsoProdutivo(l) && (l.escopo_negocio || 'pecuaria') === 'pecuaria';
+  isDesembolsoProdutivoCentral(l) && (l.escopo_negocio || 'pecuaria') === 'pecuaria';
 
 export const isReceita = (l: FinanceiroLancamento) => {
   const tipo = (l.tipo_operacao || '').toLowerCase();
