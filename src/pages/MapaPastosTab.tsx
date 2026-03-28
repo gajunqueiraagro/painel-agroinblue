@@ -262,6 +262,22 @@ export function MapaPastosTab() {
           />
         )}
         </div>
+      </div>
+
+      <ImportMapaPastos
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        pastos={pastos}
+        categorias={categorias}
+        fazendaId={fazendaAtual?.id || ''}
+        clienteId={fazendaAtual?.cliente_id || ''}
+        anoMes={anoMes}
+        onImported={() => loadFechamentos(anoMes)}
+      />
+    </TooltipProvider>
+  );
+}
+
 function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }: {
   rows: PastoMapaRow[];
   categorias: CategoriaRebanho[];
@@ -417,21 +433,5 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
         </table>
       </div>
     </div>
-  );
-}
-
-      </div>
-
-      <ImportMapaPastos
-        open={importOpen}
-        onOpenChange={setImportOpen}
-        pastos={pastos}
-        categorias={categorias}
-        fazendaId={fazendaAtual?.id || ''}
-        clienteId={fazendaAtual?.cliente_id || ''}
-        anoMes={anoMes}
-        onImported={() => loadFechamentos(anoMes)}
-      />
-    </TooltipProvider>
   );
 }
