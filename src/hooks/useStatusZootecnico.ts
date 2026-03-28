@@ -34,6 +34,7 @@ export function useStatusZootecnico(
   lancamentos: Lancamento[],
   saldosIniciais: SaldoInicial[],
 ): StatusZootecnicoResult {
+  const { fazendas: contextFazendas } = useFazenda();
   const [loading, setLoading] = useState(true);
 
   const [pastosAtivos, setPastosAtivos] = useState(0);
