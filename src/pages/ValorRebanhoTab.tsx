@@ -343,15 +343,15 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           </tbody>
           <tfoot>
             <tr className="border-t-2 bg-primary/10">
-              <td className="px-3 py-2 font-extrabold text-foreground">TOTAL</td>
-              <td className="px-2 py-2 text-right font-extrabold text-foreground">{totalCabecas}</td>
-              <td className="px-2 py-2 text-right text-xs text-muted-foreground">{formatNum(pesoMedioGeral, 1)} kg</td>
-              <td className="px-1 py-2 text-center text-xs text-muted-foreground">
+              <td className="px-2 py-1.5 font-extrabold text-foreground text-xs">TOTAL</td>
+              <td className="px-2 py-1.5 text-right font-extrabold text-foreground text-xs">{totalCabecas}</td>
+              <td className="px-2 py-1.5 text-right text-[11px] text-muted-foreground">{formatNum(pesoMedioGeral, 1)} kg</td>
+              <td className="px-1 py-1.5 text-center text-[11px] text-muted-foreground">
                 {precoMedioKg > 0 ? `${formatNum(precoMedioKg, 2)}/kg` : ''}
               </td>
-              <td className="px-2 py-2 text-right text-xs font-semibold text-foreground">{formatMoeda(valorMedioCabeca)}</td>
-              <td className="px-2 py-2 text-right text-xs font-semibold text-foreground">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '-'}</td>
-              <td className="px-3 py-2 text-right font-extrabold text-foreground">{formatMoeda(totalRebanho)}</td>
+              <td className="px-2 py-1.5 text-right text-[11px] font-semibold text-foreground">{formatMoeda(valorMedioCabeca)}</td>
+              <td className="px-2 py-1.5 text-right text-[11px] font-semibold text-foreground">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '-'}</td>
+              <td className="px-2 py-1.5 text-right font-extrabold text-foreground text-xs">{formatMoeda(totalRebanho)}</td>
             </tr>
           </tfoot>
         </table>
