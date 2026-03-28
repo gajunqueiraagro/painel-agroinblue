@@ -68,10 +68,33 @@ export const isSaida = (l: LancamentoClassificavel): boolean => {
 
 export type Escopo = 'pec' | 'agri' | 'outras';
 
+/**
+ * Determina escopo (pecuária vs agricultura) baseado nos campos estruturais.
+ *
+ * REGRA (auditoria 2026-03-28):
+ * 1. Prioridade: centro_custo / subcentro / grupo_custo — se contém "agri" → agricultura
+ * 2. Fallback: escopo_negocio (campo frequentemente incorreto nos dados importados)
+ *
+ * O campo escopo_negocio está como "pecuaria" em TODOS os lançamentos importados,
+ * portanto NÃO pode ser a regra principal para distinguir Pec vs Agri.
+ */
 export function getEscopo(l: LancamentoClassificavel): Escopo {
+  // 1. Verificar campos estruturais (fonte confiável)
+  const centro = norm(l.centro_custo);
+  const sub = norm(l.subcentro);
+  const grupo = norm(l.grupo_custo);
+
+  const hasAgri = centro.includes('agri') || sub.startsWith('agri/') || sub.startsWith('agri\\') || grupo.includes('agri');
+  if (hasAgri) return 'agri';
+
+  const hasPec = centro.includes('pec') || sub.startsWith('pec/') || sub.startsWith('pec\\') || grupo.includes('pecuári') || grupo.includes('pecuaria');
+  if (hasPec) return 'pec';
+
+  // 2. Fallback: escopo_negocio
   const e = norm(l.escopo_negocio);
-  if (e.includes('pecuári') || e.includes('pecuaria') || e.includes('pec')) return 'pec';
   if (e.includes('agricul') || e.includes('agri')) return 'agri';
+  if (e.includes('pecuári') || e.includes('pecuaria') || e.includes('pec')) return 'pec';
+
   return 'outras';
 }
 
