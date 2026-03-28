@@ -666,7 +666,7 @@ export function useFinanceiro() {
       porMacro.set(l.macro_custo, (porMacro.get(l.macro_custo) || 0) + Math.abs(l.valor));
     }
 
-    const totalDesembolsoProd = lancamentos.filter(isDesembolsoProdutivo).reduce((s, l) => s + Math.abs(l.valor), 0);
+    const totalDesembolsoProd = lancamentos.filter(isDesembolsoProdutivoCentral).reduce((s, l) => s + Math.abs(l.valor), 0);
     const totalDesembolsoPec = lancamentos.filter(isDesembolsoPecuaria).reduce((s, l) => s + Math.abs(l.valor), 0);
     const totalReceitas = lancamentos.filter(isReceita).reduce((s, l) => s + Math.abs(l.valor), 0);
     const totalRateio = rateioADM.reduce((s, r) => s + r.valorRateado, 0);
