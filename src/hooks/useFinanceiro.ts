@@ -651,7 +651,7 @@ export function useFinanceiro() {
       const lancs = byAnoMes.get(am)!;
       const entradas = lancs.filter(isReceita).reduce((s, l) => s + Math.abs(l.valor), 0);
       const saidas = lancs.filter(l => !isReceita(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
-      const desembolsoProd = lancs.filter(isDesembolsoProdutivo).reduce((s, l) => s + Math.abs(l.valor), 0);
+      const desembolsoProd = lancs.filter(isDesembolsoProdutivoCentral).reduce((s, l) => s + Math.abs(l.valor), 0);
       const desembolsoPec = lancs.filter(isDesembolsoPecuaria).reduce((s, l) => s + Math.abs(l.valor), 0);
 
       const rateioMes = rateioADM.find(r => r.anoMes === am);
