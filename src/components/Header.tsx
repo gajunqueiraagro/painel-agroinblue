@@ -14,7 +14,7 @@ interface HeaderProps {
   rightAction?: ReactNode;
 }
 
-export function Header({ title, clienteNome, fazendaNome, periodo, onBack, rightAction }: HeaderProps) {
+export function Header({ title, clienteNome, fazendaNome, periodo, rightAction }: HeaderProps) {
   const { signOut } = useAuth();
 
   return (
