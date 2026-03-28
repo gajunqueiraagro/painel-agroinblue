@@ -200,7 +200,7 @@ const Index = () => {
         clienteNome={clienteNomeHeader}
         fazendaNome={fazendaNome}
         periodo={undefined}
-        onBack={subScreenBackMap[activeTab]}
+        
         rightAction={
           <div className="flex flex-col gap-1">
             {clientes.length > 1 && <ClienteSelector />}
