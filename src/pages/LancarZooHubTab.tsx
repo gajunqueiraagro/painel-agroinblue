@@ -46,12 +46,6 @@ const ACOES_PRINCIPAIS = [
 
 const PASTOS_ITEMS = [
   { label: 'Mapa de Pastos', tab: 'mapa_pastos' as TabId, icon: Map, description: 'Visualização consolidada' },
-  { label: 'Resumo de Pastos', tab: 'resumo_pastos' as TabId, icon: Layers, description: 'Indicadores por pasto' },
-];
-
-const CONCILIACAO_ITEMS = [
-  { label: 'Conciliação de Categoria', tab: 'conciliacao_categoria' as TabId, icon: GitCompare, description: 'Conferência por categoria' },
-  { label: 'Fechamento de Pastos', tab: 'conciliacao' as TabId, icon: GitCompare, description: 'Conferência pasto vs sistema' },
 ];
 
 export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
