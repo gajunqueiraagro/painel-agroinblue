@@ -353,6 +353,20 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
             Pasto: {conciliacaoStatus === 'fechado' ? 'Fechado' : conciliacaoStatus === 'parcial' ? 'Parcial' : 'Aberto'}
           </div>
         )}
+        {rebanhoStatus && (
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
+            rebanhoStatus === 'fechado'
+              ? 'bg-green-50 border-green-300 text-green-800'
+              : 'bg-muted border-border text-muted-foreground'
+          }`}>
+            {rebanhoStatus === 'fechado' ? (
+              <CheckCircle className="h-3.5 w-3.5" />
+            ) : (
+              <Clock className="h-3.5 w-3.5" />
+            )}
+            Rebanho: {rebanhoStatus === 'fechado' ? 'Fechado' : 'Aberto'}
+          </div>
+        )}
       </div>
 
       {/* Tabela */}
