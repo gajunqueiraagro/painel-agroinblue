@@ -407,12 +407,13 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
 // ---------------------------------------------------------------------------
 // Section Card wrapper
 // ---------------------------------------------------------------------------
-function SectionCard({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
+function SectionCard({ title, subtitle, icon, children }: { title: string; subtitle?: string; icon: string; children: React.ReactNode }) {
   return (
     <Card className="h-full">
       <CardContent className="p-4 space-y-3 h-full">
         <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
           <span>{icon}</span> {title}
+          {subtitle && <span className="font-normal normal-case tracking-normal text-muted-foreground/70">({subtitle})</span>}
         </h3>
         {children}
       </CardContent>
