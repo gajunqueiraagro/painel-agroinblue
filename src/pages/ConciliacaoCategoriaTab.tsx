@@ -234,8 +234,65 @@ export function ConciliacaoCategoriaTab({ lancamentos, saldosIniciais, onBack, o
 
   return (
     <div className="max-w-lg mx-auto animate-fade-in pb-20">
-      {/* Filtros - sticky */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm pt-4 px-4 pb-2">
+      {/* Resumo de conciliação + Filtros - sticky */}
+      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm pt-2 px-2 pb-2 space-y-2">
+        {/* Tabela resumo compacta */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-[10px] border-collapse">
+            <thead>
+              <tr className="border-b border-border/40">
+                <th className="text-left font-bold text-muted-foreground px-1 py-0.5 w-12">Cat.</th>
+                {CAT_COLS.map(c => (
+                  <th key={c.sigla} className="text-center font-bold text-muted-foreground px-0.5 py-0.5 min-w-[28px]">{c.sigla}</th>
+                ))}
+                <th className="text-center font-bold text-foreground px-1 py-0.5 min-w-[32px]">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Linha Pasto */}
+              <tr>
+                <td className="font-bold text-foreground px-1 py-0.5">Pasto</td>
+                {CAT_COLS.map(c => {
+                  const v = pastoData.get(c.codigo) || 0;
+                  return <td key={c.sigla} className="text-center text-foreground px-0.5 py-0.5">{v || ''}</td>;
+                })}
+                <td className="text-center font-bold text-foreground px-1 py-0.5">{totalPasto}</td>
+              </tr>
+              {/* Linha Sistema */}
+              <tr>
+                <td className="font-bold text-foreground px-1 py-0.5">Sistema</td>
+                {CAT_COLS.map(c => {
+                  const v = saldoMap.get(c.codigo) || 0;
+                  return <td key={c.sigla} className="text-center text-foreground px-0.5 py-0.5">{v || ''}</td>;
+                })}
+                <td className="text-center font-bold text-foreground px-1 py-0.5">{totalSistema}</td>
+              </tr>
+              {/* Linha Diferença */}
+              <tr className="border-t border-border/40">
+                <td className="font-bold text-foreground px-1 py-0.5">Dif.</td>
+                {CAT_COLS.map(c => {
+                  const pasto = pastoData.get(c.codigo) || 0;
+                  const sistema = saldoMap.get(c.codigo) || 0;
+                  const dif = pasto - sistema;
+                  return (
+                    <td key={c.sigla} className={`text-center font-bold px-0.5 py-0.5 ${dif > 0 ? 'text-emerald-600' : dif < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                      {dif !== 0 ? (dif > 0 ? `+${dif}` : dif) : ''}
+                    </td>
+                  );
+                })}
+                {(() => {
+                  return (
+                    <td className={`text-center font-bold px-1 py-0.5 ${totalDiferenca > 0 ? 'text-emerald-600' : totalDiferenca < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                      {totalDiferenca !== 0 ? (totalDiferenca > 0 ? `+${totalDiferenca}` : totalDiferenca) : '0'}
+                    </td>
+                  );
+                })()}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Filtros */}
         <div className="flex gap-2 items-center flex-wrap">
           <Select value={anoFiltro} onValueChange={setAnoFiltro}>
             <SelectTrigger className="w-24 text-base font-bold"><SelectValue /></SelectTrigger>
