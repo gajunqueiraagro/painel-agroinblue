@@ -70,10 +70,12 @@ export function useStatusZootecnico(
     setLoading(true);
     setSemPecuaria(false);
     try {
+      // Use context-filtered fazendas (already scoped to current client)
       let fazendaIdsPecuaria: string[] = [];
       if (isGlobal) {
-        const { data: allFazendas } = await supabase.from('fazendas').select('id, tem_pecuaria');
-        fazendaIdsPecuaria = (allFazendas || []).filter(f => f.tem_pecuaria !== false).map(f => f.id);
+        fazendaIdsPecuaria = contextFazendas
+          .filter(f => f.id !== '__global__' && f.tem_pecuaria !== false)
+          .map(f => f.id);
         if (fazendaIdsPecuaria.length === 0) {
           setPastosAtivos(0); setPastosFechados(0);
           setPastosRascunho(0); setPastosNaoIniciados(0);
