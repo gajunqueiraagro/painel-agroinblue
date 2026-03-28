@@ -149,7 +149,7 @@ export function ResumoAtividadesView({ pastos, fechamentos, itensMap, categorias
       </div>
 
       {/* Cards */}
-      <div className="p-4 space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {resumos.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">Nenhum pasto ativo encontrado.</div>
         ) : (
