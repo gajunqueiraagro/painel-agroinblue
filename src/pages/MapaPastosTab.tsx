@@ -257,21 +257,21 @@ export function MapaPastosTab() {
             {/* Main Table */}
             <div className="relative overflow-auto rounded-lg border" style={{ maxHeight: 'calc(100vh - 180px)' }}>
               <table className="w-full text-xs border-collapse">
-                <thead className="sticky top-0 z-30 bg-muted">
+                <thead>
                   <tr>
-                    <th className="sticky left-0 z-40 bg-muted px-2 py-1 text-left text-xs font-semibold border-b border-r min-w-[90px]">Pasto</th>
-                    <th className="px-1.5 py-1 text-left text-xs font-medium border-b border-r min-w-[60px]">Atividade</th>
-                    <th className="px-1 py-1 text-left text-[10px] font-medium border-b border-r min-w-[40px]">Lote</th>
+                    <th className="sticky top-0 left-0 z-40 bg-muted px-2 py-1 text-left text-xs font-semibold border-b border-r min-w-[90px]">Pasto</th>
+                    <th className="sticky top-0 z-30 bg-muted px-1.5 py-1 text-left text-xs font-medium border-b border-r min-w-[60px]">Atividade</th>
+                    <th className="sticky top-0 z-30 bg-muted px-1 py-1 text-left text-[10px] font-medium border-b border-r min-w-[40px]">Lote</th>
                     {categorias.map(cat => (
-                      <th key={cat.id} className="px-1 py-1 text-center text-xs font-bold border-b border-r min-w-[32px]">
+                      <th key={cat.id} className="sticky top-0 z-30 bg-muted px-1 py-1 text-center text-xs font-bold border-b border-r min-w-[32px]">
                         {CAT_SIGLAS[cat.codigo] || cat.codigo}
                       </th>
                     ))}
-                    <th className="px-1.5 py-1 text-center text-xs font-semibold border-b border-r min-w-[40px] bg-primary/10">Total</th>
-                    <th className="px-1.5 py-1 text-center text-xs font-medium border-b border-r min-w-[50px]">Peso</th>
-                    <th className="px-1.5 py-1 text-center text-xs font-medium border-b border-r min-w-[45px]">Área</th>
-                    <th className="px-1.5 py-1 text-center text-xs font-medium border-b border-r min-w-[45px]">UA/ha</th>
-                    <th className="px-1.5 py-1 text-center text-xs font-medium border-b min-w-[35px]">Qual.</th>
+                    <th className="sticky top-0 z-30 bg-primary/10 px-1.5 py-1 text-center text-xs font-semibold border-b border-r min-w-[40px]">Total</th>
+                    <th className="sticky top-0 z-30 bg-muted px-1.5 py-1 text-center text-xs font-medium border-b border-r min-w-[50px]">Peso</th>
+                    <th className="sticky top-0 z-30 bg-muted px-1.5 py-1 text-center text-xs font-medium border-b border-r min-w-[45px]">Área</th>
+                    <th className="sticky top-0 z-30 bg-muted px-1.5 py-1 text-center text-xs font-medium border-b border-r min-w-[45px]">UA/ha</th>
+                    <th className="sticky top-0 z-30 bg-muted px-1.5 py-1 text-center text-xs font-medium border-b min-w-[35px]">Qual.</th>
                   </tr>
                 </thead>
                 <tbody>
