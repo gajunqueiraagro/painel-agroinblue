@@ -79,6 +79,9 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
     return ((precoKg / boiGordoKg) - 1) * 100;
   };
 
+  const agioColor = (val: number) =>
+    val > 0 ? 'text-emerald-600' : val < 0 ? 'text-red-600' : 'text-muted-foreground';
+
   const renderFrigorifico = () => (
     <Card>
       <CardContent className="p-3 space-y-2">
@@ -95,7 +98,9 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
           <tbody>
             {frigorifico.map((item, idx) => {
               const isBoi = item.categoria === 'Boi Gordo';
-              const final_ = isBoi ? item.valor : item.valor * (1 + item.agio_perc / 100);
+              const agioAuto = !isBoi && boiGordoArroba > 0 && item.valor > 0
+                ? ((item.valor / boiGordoArroba) - 1) * 100
+                : 0;
               return (
                 <tr key={item.categoria} className={idx % 2 ? 'bg-muted/20' : ''}>
                   <td className="py-1 px-1 font-medium text-foreground whitespace-nowrap">{item.categoria}</td>
@@ -110,22 +115,19 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
                       className="h-7 text-xs text-right w-full"
                     />
                   </td>
-                  <td className="py-1 px-1">
+                  <td className="py-1 px-1 text-right">
                     {isBoi ? (
-                      <span className="block text-right text-muted-foreground">—</span>
+                      <span className="text-muted-foreground">—</span>
+                    ) : item.valor > 0 && boiGordoArroba > 0 ? (
+                      <span className={agioColor(agioAuto)}>
+                        {agioAuto >= 0 ? '+' : ''}{agioAuto.toFixed(1)}%
+                      </span>
                     ) : (
-                      <Input
-                        type="number"
-                        step="0.1"
-                        value={item.agio_perc || ''}
-                        onChange={e => updateItem(item.bloco, item.categoria, 'agio_perc', e.target.value)}
-                        disabled={isValidado}
-                        className="h-7 text-xs text-right w-full"
-                      />
+                      <span className="text-muted-foreground">-</span>
                     )}
                   </td>
                   <td className="py-1 px-1 text-right font-semibold text-foreground">
-                    {final_ > 0 ? final_.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
+                    {item.valor > 0 ? item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
                   </td>
                 </tr>
               );
@@ -145,8 +147,8 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
             <tr className="border-b text-muted-foreground">
               <th className="text-left py-1 px-1 font-medium">Categoria</th>
               <th className="text-right py-1 px-1 font-medium w-20">R$/kg</th>
-              <th className="text-right py-1 px-1 font-medium w-24">R$/cab</th>
               <th className="text-right py-1 px-1 font-medium w-20">Ágio %</th>
+              <th className="text-right py-1 px-1 font-medium w-24">R$/cab</th>
             </tr>
           </thead>
           <tbody>
@@ -168,13 +170,17 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
                       className="h-7 text-xs text-right w-full"
                     />
                   </td>
-                  <td className="py-1 px-1 text-right text-foreground">
-                    {precoCab > 0 ? precoCab.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '-'}
+                  <td className="py-1 px-1 text-right">
+                    {item.valor > 0 && boiGordoKg > 0 ? (
+                      <span className={agioColor(agioAuto)}>
+                        {agioAuto >= 0 ? '+' : ''}{agioAuto.toFixed(1)}%
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
                   </td>
-                  <td className="py-1 px-1 text-right text-muted-foreground">
-                    {item.valor > 0 && boiGordoKg > 0
-                      ? `${agioAuto >= 0 ? '+' : ''}${agioAuto.toFixed(1)}%`
-                      : '-'}
+                  <td className="py-1 px-1 text-right font-semibold text-foreground">
+                    {precoCab > 0 ? precoCab.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '-'}
                   </td>
                 </tr>
               );
