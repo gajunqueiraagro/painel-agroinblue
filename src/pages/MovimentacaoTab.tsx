@@ -39,7 +39,7 @@ export function MovimentacaoTab({ onNavigate }: Props) {
             <TrendingUp className="h-7 w-7 text-primary" />
           </div>
           <div className="min-w-0">
-            <h3 className="font-bold text-base text-foreground">Resumo por Mês</h3>
+            <h3 className="font-bold text-base text-foreground">Movimentações por Mês</h3>
             <p className="text-sm text-muted-foreground mt-0.5">Evolução do rebanho e categorias</p>
           </div>
         </CardContent>
