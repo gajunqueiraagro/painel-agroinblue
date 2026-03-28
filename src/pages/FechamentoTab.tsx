@@ -19,7 +19,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { format } from 'date-fns';
-import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
+import { formatAnoMes } from '@/lib/dateUtils';
+import { MESES_COLS } from '@/lib/calculos/labels';
 import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
 import { calcUA, calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
 import { formatNum } from '@/lib/calculos/formatters';
