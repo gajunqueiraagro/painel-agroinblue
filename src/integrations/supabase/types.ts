@@ -293,6 +293,41 @@ export type Database = {
           },
         ]
       }
+      fechamento_execucoes: {
+        Row: {
+          acao: string
+          created_at: string
+          detalhes: Json | null
+          fechamento_id: string
+          id: string
+          usuario_id: string | null
+        }
+        Insert: {
+          acao: string
+          created_at?: string
+          detalhes?: Json | null
+          fechamento_id: string
+          id?: string
+          usuario_id?: string | null
+        }
+        Update: {
+          acao?: string
+          created_at?: string
+          detalhes?: Json | null
+          fechamento_id?: string
+          id?: string
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fechamento_execucoes_fechamento_id_fkey"
+            columns: ["fechamento_id"]
+            isOneToOne: false
+            referencedRelation: "fechamentos_executivos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fechamento_executivo: {
         Row: {
           ano: number
@@ -364,6 +399,112 @@ export type Database = {
             columns: ["fazenda_id"]
             isOneToOne: false
             referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fechamento_graficos: {
+        Row: {
+          created_at: string
+          fechamento_id: string
+          id: string
+          json_config: Json | null
+          json_dados: Json
+          ordem: number
+          secao: string
+          subtitulo: string | null
+          tipo: string
+          titulo: string
+        }
+        Insert: {
+          created_at?: string
+          fechamento_id: string
+          id?: string
+          json_config?: Json | null
+          json_dados?: Json
+          ordem?: number
+          secao: string
+          subtitulo?: string | null
+          tipo: string
+          titulo: string
+        }
+        Update: {
+          created_at?: string
+          fechamento_id?: string
+          id?: string
+          json_config?: Json | null
+          json_dados?: Json
+          ordem?: number
+          secao?: string
+          subtitulo?: string | null
+          tipo?: string
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fechamento_graficos_fechamento_id_fkey"
+            columns: ["fechamento_id"]
+            isOneToOne: false
+            referencedRelation: "fechamentos_executivos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fechamento_indicadores: {
+        Row: {
+          chave: string
+          created_at: string
+          fechamento_id: string
+          formato: string | null
+          grupo: string
+          id: string
+          json_origem: Json | null
+          label: string
+          ordem: number
+          subgrupo: string | null
+          unidade: string | null
+          valor_ano_anterior: number | null
+          valor_meta: number | null
+          valor_real: number | null
+        }
+        Insert: {
+          chave: string
+          created_at?: string
+          fechamento_id: string
+          formato?: string | null
+          grupo: string
+          id?: string
+          json_origem?: Json | null
+          label: string
+          ordem?: number
+          subgrupo?: string | null
+          unidade?: string | null
+          valor_ano_anterior?: number | null
+          valor_meta?: number | null
+          valor_real?: number | null
+        }
+        Update: {
+          chave?: string
+          created_at?: string
+          fechamento_id?: string
+          formato?: string | null
+          grupo?: string
+          id?: string
+          json_origem?: Json | null
+          label?: string
+          ordem?: number
+          subgrupo?: string | null
+          unidade?: string | null
+          valor_ano_anterior?: number | null
+          valor_meta?: number | null
+          valor_real?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fechamento_indicadores_fechamento_id_fkey"
+            columns: ["fechamento_id"]
+            isOneToOne: false
+            referencedRelation: "fechamentos_executivos"
             referencedColumns: ["id"]
           },
         ]
@@ -485,6 +626,128 @@ export type Database = {
             columns: ["pasto_id"]
             isOneToOne: false
             referencedRelation: "pastos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fechamento_textos: {
+        Row: {
+          created_at: string
+          editado_em: string | null
+          fechamento_id: string
+          gerado_em: string | null
+          id: string
+          modelo_ia: string | null
+          prompt_usado: string | null
+          secao: string
+          texto_editado: string | null
+          texto_final: string | null
+          texto_ia: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          editado_em?: string | null
+          fechamento_id: string
+          gerado_em?: string | null
+          id?: string
+          modelo_ia?: string | null
+          prompt_usado?: string | null
+          secao: string
+          texto_editado?: string | null
+          texto_final?: string | null
+          texto_ia?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          editado_em?: string | null
+          fechamento_id?: string
+          gerado_em?: string | null
+          id?: string
+          modelo_ia?: string | null
+          prompt_usado?: string | null
+          secao?: string
+          texto_editado?: string | null
+          texto_final?: string | null
+          texto_ia?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fechamento_textos_fechamento_id_fkey"
+            columns: ["fechamento_id"]
+            isOneToOne: false
+            referencedRelation: "fechamentos_executivos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fechamentos_executivos: {
+        Row: {
+          ano: number
+          cliente_id: string
+          created_at: string
+          data_fechamento: string | null
+          data_geracao: string
+          fazenda_id: string | null
+          id: string
+          mes: number
+          observacoes_manuais: string | null
+          pdf_url: string | null
+          periodo_texto: string
+          status_fechamento: string
+          updated_at: string
+          usuario_gerador: string | null
+          versao: number
+        }
+        Insert: {
+          ano: number
+          cliente_id: string
+          created_at?: string
+          data_fechamento?: string | null
+          data_geracao?: string
+          fazenda_id?: string | null
+          id?: string
+          mes: number
+          observacoes_manuais?: string | null
+          pdf_url?: string | null
+          periodo_texto?: string
+          status_fechamento?: string
+          updated_at?: string
+          usuario_gerador?: string | null
+          versao?: number
+        }
+        Update: {
+          ano?: number
+          cliente_id?: string
+          created_at?: string
+          data_fechamento?: string | null
+          data_geracao?: string
+          fazenda_id?: string | null
+          id?: string
+          mes?: number
+          observacoes_manuais?: string | null
+          pdf_url?: string | null
+          periodo_texto?: string
+          status_fechamento?: string
+          updated_at?: string
+          usuario_gerador?: string | null
+          versao?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fechamentos_executivos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fechamentos_executivos_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
             referencedColumns: ["id"]
           },
         ]
