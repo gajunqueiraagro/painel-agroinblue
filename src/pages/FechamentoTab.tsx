@@ -295,6 +295,34 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     }
   };
 
+  const handleBulkReopen = async () => {
+    setBulkReopening(true);
+    try {
+      const pastosParaReabrir = pastosAtivos.filter(p => {
+        const fech = getFechamento(p.id);
+        return fech?.status === 'fechado';
+      });
+
+      for (const pasto of pastosParaReabrir) {
+        const fech = getFechamento(pasto.id)!;
+        const { error } = await supabase
+          .from('fechamento_pastos')
+          .update({ status: 'rascunho', responsavel_nome: null })
+          .eq('id', fech.id);
+        if (error) console.error('Erro ao reabrir pasto:', error);
+      }
+
+      toast.success(`${pastosParaReabrir.length} pasto(s) reaberto(s).`);
+      await loadFechamentos(anoMes);
+    } catch (e) {
+      console.error('Erro ao reabrir pastos:', e);
+      toast.error('Erro ao reabrir pastos.');
+    } finally {
+      setBulkReopening(false);
+      setConfirmBulkReopenOpen(false);
+    }
+  };
+
   if (isGlobal) return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda para o fechamento.</div>;
 
   if (showResumoAtividades) {
