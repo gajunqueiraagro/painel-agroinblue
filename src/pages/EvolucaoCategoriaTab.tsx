@@ -70,48 +70,38 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
 
     (async () => {
       try {
-        const { data, error } = await supabase
-          .from('fechamento_pasto_itens')
-          .select('categoria_id, peso_medio_kg, quantidade, fechamento_id')
-          .in('fechamento_id',
-            supabase
-              .from('fechamento_pastos')
-              .select('id')
-              .eq('fazenda_id', fazendaId)
-              .eq('ano_mes', anoMes)
-              .then(r => (r.data || []).map(d => d.id))
-          );
+        // Get fechamento_pastos IDs for this month/fazenda
+        const { data: fechamentos } = await supabase
+          .from('fechamento_pastos')
+          .select('id')
+          .eq('fazenda_id', fazendaId)
+          .eq('ano_mes', anoMes);
 
-        // Build weighted average per category from fechamento_pasto_itens
-        // We need to map categoria_id (uuid) to categoria code
+        const fechIds = (fechamentos || []).map(f => f.id);
+
+        // Get categorias mapping
         const { data: catData } = await supabase
           .from('categorias_rebanho')
           .select('id, codigo');
-
         const catMap: Record<string, string> = {};
         (catData || []).forEach(c => { catMap[c.id] = c.codigo; });
 
-        // Also try direct query joining
-        const { data: itens } = await supabase
-          .from('fechamento_pasto_itens')
-          .select(`
-            categoria_id,
-            peso_medio_kg,
-            quantidade,
-            fechamento_pastos!inner(fazenda_id, ano_mes)
-          `)
-          .eq('fechamento_pastos.fazenda_id', fazendaId)
-          .eq('fechamento_pastos.ano_mes', anoMes);
-
         const pesosPorCat: Record<string, { somaQtdPeso: number; somaQtd: number }> = {};
 
-        (itens || []).forEach((item: any) => {
-          const codigo = catMap[item.categoria_id];
-          if (!codigo || !item.peso_medio_kg || item.peso_medio_kg <= 0) return;
-          if (!pesosPorCat[codigo]) pesosPorCat[codigo] = { somaQtdPeso: 0, somaQtd: 0 };
-          pesosPorCat[codigo].somaQtdPeso += item.quantidade * item.peso_medio_kg;
-          pesosPorCat[codigo].somaQtd += item.quantidade;
-        });
+        if (fechIds.length > 0) {
+          const { data: itens } = await supabase
+            .from('fechamento_pasto_itens')
+            .select('categoria_id, peso_medio_kg, quantidade')
+            .in('fechamento_id', fechIds);
+
+          (itens || []).forEach((item) => {
+            const codigo = catMap[item.categoria_id];
+            if (!codigo || !item.peso_medio_kg || item.peso_medio_kg <= 0) return;
+            if (!pesosPorCat[codigo]) pesosPorCat[codigo] = { somaQtdPeso: 0, somaQtd: 0 };
+            pesosPorCat[codigo].somaQtdPeso += item.quantidade * item.peso_medio_kg;
+            pesosPorCat[codigo].somaQtd += item.quantidade;
+          });
+        }
 
         const result: Record<string, number> = {};
         for (const [cod, v] of Object.entries(pesosPorCat)) {
@@ -127,7 +117,6 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
 
         setPesosDb(result);
       } catch {
-        // Fallback to saldosIniciais
         const result: Record<string, number> = {};
         saldosIniciais
           .filter(s => s.ano === Number(anoFiltro) && s.pesoMedioKg && s.pesoMedioKg > 0)
