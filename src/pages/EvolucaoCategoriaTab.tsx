@@ -60,7 +60,49 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   const [mesFiltro, setMesFiltro] = useState(initialMes || format(new Date(), 'MM'));
   const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'previsto'>('realizado');
   const [pesosDb, setPesosDb] = useState<Record<string, number>>({});
+  const [conciliacaoStatus, setConciliacaoStatus] = useState<'aberto' | 'fechado' | 'parcial' | null>(null);
 
+  // Fetch conciliação status for the selected month/fazenda
+  useEffect(() => {
+    const anoMes = `${anoFiltro}-${mesFiltro}`;
+    if (!fazendaId || fazendaId === '__global__') {
+      setConciliacaoStatus(null);
+      return;
+    }
+
+    (async () => {
+      try {
+        // Get all pastos for the fazenda
+        const { data: pastos } = await supabase
+          .from('pastos')
+          .select('id')
+          .eq('fazenda_id', fazendaId)
+          .eq('ativo', true)
+          .eq('entra_conciliacao', true);
+
+        const totalPastos = (pastos || []).length;
+        if (totalPastos === 0) {
+          setConciliacaoStatus(null);
+          return;
+        }
+
+        // Get fechamento_pastos for this month
+        const { data: fechamentos } = await supabase
+          .from('fechamento_pastos')
+          .select('pasto_id, status')
+          .eq('fazenda_id', fazendaId)
+          .eq('ano_mes', anoMes);
+
+        const fechados = (fechamentos || []).filter(f => f.status === 'fechado' || f.status === 'conciliado').length;
+
+        if (fechados === 0) setConciliacaoStatus('aberto');
+        else if (fechados >= totalPastos) setConciliacaoStatus('fechado');
+        else setConciliacaoStatus('parcial');
+      } catch {
+        setConciliacaoStatus(null);
+      }
+    })();
+  }, [fazendaId, anoFiltro, mesFiltro]);
   // Fetch peso médio from fechamento_pasto_itens for the selected month
   useEffect(() => {
     const anoMes = `${anoFiltro}-${mesFiltro}`;
