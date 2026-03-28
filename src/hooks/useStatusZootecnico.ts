@@ -5,6 +5,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useFazenda } from '@/contexts/FazendaContext';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
 
