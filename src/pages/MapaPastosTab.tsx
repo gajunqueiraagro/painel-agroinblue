@@ -47,11 +47,27 @@ export interface AtividadeResumo {
   qtdPastos: number;
 }
 
+const CAT_SIGLAS: Record<string, string> = {
+  mamotes_m: 'MM', desmama_m: 'DM', garrotes: 'G', bois: 'B', touros: 'T',
+  mamotes_f: 'MF', desmama_f: 'DF', novilhas: 'N', vacas: 'V',
+};
+
 export function MapaPastosTab() {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
   const { fechamentos, loadFechamentos, loadItens } = useFechamento();
-  const [anoMes, setAnoMes] = useState(format(new Date(), 'yyyy-MM'));
+
+  const curYear = new Date().getFullYear();
+  const anosDisp = useMemo(() => {
+    const set = new Set<string>();
+    for (let y = curYear; y >= curYear - 3; y--) set.add(String(y));
+    return Array.from(set).sort().reverse();
+  }, [curYear]);
+
+  const [anoFiltro, setAnoFiltro] = useState(String(curYear));
+  const [mesFiltro, setMesFiltro] = useState(new Date().getMonth() + 1);
+  const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
+
   const [rows, setRows] = useState<PastoMapaRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
