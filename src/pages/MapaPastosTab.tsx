@@ -257,9 +257,9 @@ export function MapaPastosTab() {
             {/* Main Table */}
             <div className="relative overflow-auto rounded-lg border" style={{ maxHeight: 'calc(100vh - 180px)' }}>
               <table className="w-full text-xs border-collapse">
-                <thead className="sticky top-0 z-10 bg-muted">
+                <thead className="sticky top-0 z-30 bg-muted">
                   <tr>
-                    <th className="sticky left-0 z-20 bg-muted px-2 py-1 text-left text-xs font-semibold border-b border-r min-w-[90px]">Pasto</th>
+                    <th className="sticky left-0 z-40 bg-muted px-2 py-1 text-left text-xs font-semibold border-b border-r min-w-[90px]">Pasto</th>
                     <th className="px-1.5 py-1 text-left text-xs font-medium border-b border-r min-w-[60px]">Atividade</th>
                     <th className="px-1 py-1 text-left text-[10px] font-medium border-b border-r min-w-[40px]">Lote</th>
                     {categorias.map(cat => (
@@ -277,7 +277,7 @@ export function MapaPastosTab() {
                 <tbody>
                   {rows.map((row, idx) => (
                     <tr key={row.pasto.id} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/30'}>
-                      <td className="sticky left-0 z-10 px-2 py-1 text-xs font-semibold border-r whitespace-nowrap" style={{ backgroundColor: idx % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--muted) / 0.3)' }}>
+                      <td className="sticky left-0 z-[5] px-2 py-1 text-xs font-semibold border-r whitespace-nowrap" style={{ backgroundColor: idx % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--muted) / 0.3)' }}>
                         {row.pasto.nome}
                       </td>
                       <td className="px-1.5 py-1 text-xs border-r text-muted-foreground">{tipoUsoLabel(row.tipoUso)}</td>
@@ -320,7 +320,7 @@ export function MapaPastosTab() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-muted font-bold border-t-2 text-xs">
-                    <td className="sticky left-0 z-20 bg-muted px-2 py-1 border-r" colSpan={3}>TOTAL / MÉDIA</td>
+                    <td className="sticky left-0 z-[5] bg-muted px-2 py-1 border-r" colSpan={3}>TOTAL / MÉDIA</td>
                     {categorias.map(cat => {
                       const t = totais.catTotals.get(cat.id);
                       const pesoMed = t && t.qtdComPeso > 0 ? t.pesoTotal / t.qtdComPeso : null;
