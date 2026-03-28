@@ -384,17 +384,28 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             <Badge variant="secondary" className="text-[10px]">{preenchidos}/{pastosAtivos.length} iniciados</Badge>
             <span className="text-[10px] text-muted-foreground mt-0.5">{fechadosCount} fechados</span>
           </div>
-          {canBulkClose && (
+          <div className="ml-auto flex items-center gap-1.5">
             <Button
               size="sm"
               variant="outline"
-              className="ml-auto text-xs font-bold border-warning text-warning hover:bg-warning/10 h-8"
-              onClick={() => setConfirmBulkOpen(true)}
+              className="text-xs font-bold h-8"
+              onClick={() => setShowResumoAtividades(true)}
             >
-              <Lock className="h-3.5 w-3.5 mr-1" />
-              Fechamento Todos
+              <BarChart3 className="h-3.5 w-3.5 mr-1" />
+              Resumo Atividades
             </Button>
-          )}
+            {canBulkClose && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs font-bold border-warning text-warning hover:bg-warning/10 h-8"
+                onClick={() => setConfirmBulkOpen(true)}
+              >
+                <Lock className="h-3.5 w-3.5 mr-1" />
+                Fechamento Todos
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
