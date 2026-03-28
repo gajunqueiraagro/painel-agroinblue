@@ -37,12 +37,13 @@ export const TIPOS_USO = [
 ];
 
 export function usePastos() {
-  const { fazendaAtual } = useFazenda();
+  const { fazendaAtual, fazendas: todasFazendas } = useFazenda();
   const [pastos, setPastos] = useState<Pasto[]>([]);
   const [categorias, setCategorias] = useState<CategoriaRebanho[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fazendaId = fazendaAtual?.id === '__global__' ? undefined : fazendaAtual?.id;
+  const isGlobal = fazendaAtual?.id === '__global__';
+  const fazendaId = isGlobal ? undefined : fazendaAtual?.id;
 
   const loadCategorias = useCallback(async () => {
     const { data } = await supabase
@@ -52,7 +53,27 @@ export function usePastos() {
     if (data) setCategorias(data);
   }, []);
 
+  // IDs de fazendas com pecuária para modo global
+  const globalFazendaIds = useMemo(() => {
+    if (!isGlobal) return [];
+    return todasFazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false).map(f => f.id);
+  }, [isGlobal, todasFazendas]);
+
   const loadPastos = useCallback(async () => {
+    // Global mode: load pastos from all pecuária farms
+    if (isGlobal) {
+      if (globalFazendaIds.length === 0) { setPastos([]); setLoading(false); return; }
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('pastos')
+        .select('*')
+        .in('fazenda_id', globalFazendaIds)
+        .order('nome');
+      if (error) { toast.error('Erro ao carregar pastos'); console.error(error); }
+      else setPastos(data || []);
+      setLoading(false);
+      return;
+    }
     if (!fazendaId) { setPastos([]); setLoading(false); return; }
     setLoading(true);
     const { data, error } = await supabase
@@ -63,7 +84,7 @@ export function usePastos() {
     if (error) { toast.error('Erro ao carregar pastos'); console.error(error); }
     else setPastos(data || []);
     setLoading(false);
-  }, [fazendaId]);
+  }, [fazendaId, isGlobal, globalFazendaIds]);
 
   useEffect(() => { loadCategorias(); }, [loadCategorias]);
   useEffect(() => { loadPastos(); }, [loadPastos]);
