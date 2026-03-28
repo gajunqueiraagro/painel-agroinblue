@@ -238,10 +238,10 @@ export function ResumoAtividadesView({ pastos, fechamentos, itensMap, categorias
                 </div>
               </div>
             );
-          })
           })}
           </div>
         )}
       </div>
+    </div>
   );
 }
