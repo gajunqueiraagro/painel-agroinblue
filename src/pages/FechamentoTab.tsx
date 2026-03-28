@@ -295,6 +295,19 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
   if (isGlobal) return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda para o fechamento.</div>;
 
+  if (showResumoAtividades) {
+    return (
+      <ResumoAtividadesView
+        pastos={pastos}
+        fechamentos={fechamentos}
+        itensMap={itensMap}
+        categorias={categorias}
+        anoMes={anoMes}
+        onBack={() => setShowResumoAtividades(false)}
+      />
+    );
+  }
+
   return (
     <div className="pb-24">
       {/* Tabela conciliação + Filtros - sticky */}
