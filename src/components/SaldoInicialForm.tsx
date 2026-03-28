@@ -9,7 +9,7 @@ import { Pencil, AlertTriangle, Plus } from 'lucide-react';
 interface Props {
   saldosIniciais: SaldoInicial[];
   onSetSaldo: (ano: number, categoria: Categoria, quantidade: number, pesoMedioKg?: number) => void;
-  /** The year for the initial balance (January of this year) */
+  /** Current year being viewed — form only renders if this matches the earliest year */
   anoBase?: number;
 }
 
