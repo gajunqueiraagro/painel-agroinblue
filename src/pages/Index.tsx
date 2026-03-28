@@ -31,7 +31,7 @@ import { ValorRebanhoTab } from './ValorRebanhoTab';
 import { ConciliacaoCategoriaTab } from './ConciliacaoCategoriaTab';
 import { ChuvasTab } from './ChuvasTab';
 import { VisaoAnualZootecnicaTab } from './VisaoAnualZootecnicaTab';
-
+import { FechamentoExecutivoTab } from './FechamentoExecutivoTab';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { SyncStatus } from '@/components/SyncStatus';
@@ -81,6 +81,7 @@ const TITLES: Record<TabId, string> = {
   visao_anual_zoo: 'Visão Anual Zootécnica',
   indicadores: 'Indicadores',
   evolucao_rebanho_hub: 'Evolução Rebanho',
+  fechamento_executivo: 'Fechamento Executivo',
 };
 
 const Index = () => {
@@ -365,6 +366,12 @@ const Index = () => {
           lancamentosPecuarios={lancamentos}
           saldosIniciais={saldosIniciais}
           onBack={goToVisaoFinHub}
+          filtroAnoInicial={filtroGlobal.ano}
+          filtroMesInicial={filtroGlobal.mes}
+        />
+      )}
+      {activeTab === 'fechamento_executivo' && (
+        <FechamentoExecutivoTab
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
         />
