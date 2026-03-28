@@ -92,8 +92,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       // Ajuste de ágio
       const valorComAgio = item.valor * (1 + (item.agio_perc || 0) / 100);
       if (ref.unidade === 'arroba') {
-        // R$/@ → R$/kg: dividir por 15
-        map[codigo] = valorComAgio / 15;
+        // R$/@ → R$/kg: dividir por 30 (fator padrão peso vivo)
+        map[codigo] = valorComAgio / 30;
       } else {
         map[codigo] = valorComAgio;
       }
