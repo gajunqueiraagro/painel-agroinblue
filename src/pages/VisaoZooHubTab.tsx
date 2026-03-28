@@ -407,12 +407,13 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
 // ---------------------------------------------------------------------------
 // Section Card wrapper
 // ---------------------------------------------------------------------------
-function SectionCard({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
+function SectionCard({ title, subtitle, icon, children }: { title: string; subtitle?: string; icon: string; children: React.ReactNode }) {
   return (
     <Card className="h-full">
       <CardContent className="p-4 space-y-3 h-full">
         <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
           <span>{icon}</span> {title}
+          {subtitle && <span className="font-normal normal-case tracking-normal text-muted-foreground/70">({subtitle})</span>}
         </h3>
         {children}
       </CardContent>
@@ -444,7 +445,7 @@ function IndicadoresContent({ zoo, vista, mesLabel, mesFiltro, anoFiltro, kgHa, 
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
 
         {/* 1. PRODUÇÃO */}
-        <SectionCard title="Produção" icon="🐂">
+        <SectionCard title="Produção" subtitle="o que a fazenda entregou" icon="🐂">
           <div className="grid grid-cols-2 gap-2">
             <KpiCard label="Cabeças"
               valor={isMes ? formatNum(zoo.saldoFinalMes) : formatNum(acumulado.cabMedia, 0)}
@@ -494,7 +495,7 @@ function IndicadoresContent({ zoo, vista, mesLabel, mesFiltro, anoFiltro, kgHa, 
         </SectionCard>
 
         {/* 2. EFICIÊNCIA */}
-        <SectionCard title="Eficiência" icon="📐">
+        <SectionCard title="Eficiência" subtitle="do uso da área" icon="📐">
           <div className="grid grid-cols-2 gap-2">
             <KpiCard label="Área Produtiva"
               valor={isMes ? formatNum(zoo.areaProdutiva, 1) : formatNum(acumulado.areaMedia, 1)}
