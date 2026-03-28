@@ -140,26 +140,40 @@ export const CATEGORIAS_ENTRADA: CategoriaEntrada[] = [
  * Classifica uma ENTRADA para exibição no Dashboard / drill-down.
  *
  * Receitas (macro_custo = "receitas"):
+ *   → grupo_custo "Rendimentos e Outros" → Outras Receitas
  *   → Receitas Pecuárias / Agrícolas / Outras (por escopo)
  *
  * Outras Entradas (macro_custo ≠ "receitas"):
  *   → Aportes ou Outros (se macro/grupo/centro/subcentro contém "aporte")
  *   → Financiamentos Pecuária / Agricultura (por escopo)
+ *
+ * Anomalias (macro_custo inesperado como entrada):
+ *   → Aportes ou Outros (fallback explícito, marcado para revisão)
  */
 export function classificarEntrada(l: LancamentoClassificavel): CategoriaEntrada {
   const macro = normMacro(l);
   const escopo = getEscopo(l);
+  const grupo = norm(l.grupo_custo);
 
   // Receitas: macro_custo = "receitas"
   if (macro === 'receitas') {
-    if (escopo === 'pec') return 'Receitas Pecuárias';
+    // "Rendimentos e Outros" → Outras Receitas (não é receita operacional pecuária/agri)
+    if (grupo.includes('rendimentos')) return 'Outras Receitas';
     if (escopo === 'agri') return 'Receitas Agrícolas';
+    if (escopo === 'pec') return 'Receitas Pecuárias';
     return 'Outras Receitas';
   }
 
   // Outras Entradas: macro_custo ≠ "receitas"
   if (isAporte(l)) return 'Aportes ou Outros';
   if (escopo === 'agri') return 'Financiamentos Agricultura';
+
+  // Anomalia: entrada com macro_custo inesperado (ex: "Custeio Produtivo", "Dividendos")
+  // Fallback explícito: agrupa em Aportes ou Outros para não distorcer receitas
+  if (macro && macro !== 'outras entradas financeiras') {
+    return 'Aportes ou Outros';
+  }
+
   return 'Financiamentos Pecuária';
 }
 
