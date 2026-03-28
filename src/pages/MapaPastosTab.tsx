@@ -277,7 +277,7 @@ export function MapaPastosTab() {
                 <tbody>
                   {rows.map((row, idx) => (
                     <tr key={row.pasto.id} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/30'}>
-                      <td className="sticky left-0 z-10 px-2 py-1 text-xs font-semibold border-r whitespace-nowrap" style={{ backgroundColor: idx % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--muted) / 0.3)' }}>
+                      <td className="sticky left-0 z-[5] px-2 py-1 text-xs font-semibold border-r whitespace-nowrap" style={{ backgroundColor: idx % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--muted) / 0.3)' }}>
                         {row.pasto.nome}
                       </td>
                       <td className="px-1.5 py-1 text-xs border-r text-muted-foreground">{tipoUsoLabel(row.tipoUso)}</td>
