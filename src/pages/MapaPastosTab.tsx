@@ -7,10 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Download, FileText, Upload, FileDown } from 'lucide-react';
-import { format } from 'date-fns';
 import { gerarModeloMapaPastos } from '@/lib/importMapaPastos';
 import { ImportMapaPastos } from '@/components/ImportMapaPastos';
-import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
+import { MESES_COLS } from '@/lib/calculos/labels';
 import { exportMapaPastosXlsx } from '@/lib/exportMapaPastos';
 import { exportMapaPastosPdf } from '@/lib/exportMapaPastosPdf';
 import { calcUA, calcUAHa, calcPesoMedioPonderado } from '@/lib/calculos/zootecnicos';
@@ -48,11 +47,27 @@ export interface AtividadeResumo {
   qtdPastos: number;
 }
 
+const CAT_SIGLAS: Record<string, string> = {
+  mamotes_m: 'MM', desmama_m: 'DM', garrotes: 'G', bois: 'B', touros: 'T',
+  mamotes_f: 'MF', desmama_f: 'DF', novilhas: 'N', vacas: 'V',
+};
+
 export function MapaPastosTab() {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
   const { fechamentos, loadFechamentos, loadItens } = useFechamento();
-  const [anoMes, setAnoMes] = useState(format(new Date(), 'yyyy-MM'));
+
+  const curYear = new Date().getFullYear();
+  const anosDisp = useMemo(() => {
+    const set = new Set<string>();
+    for (let y = curYear; y >= curYear - 3; y--) set.add(String(y));
+    return Array.from(set).sort().reverse();
+  }, [curYear]);
+
+  const [anoFiltro, setAnoFiltro] = useState(String(curYear));
+  const [mesFiltro, setMesFiltro] = useState(new Date().getMonth() + 1);
+  const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
+
   const [rows, setRows] = useState<PastoMapaRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -190,11 +205,17 @@ export function MapaPastosTab() {
         <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 py-1.5">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
-              <Select value={anoMes} onValueChange={setAnoMes}>
-                <SelectTrigger className="w-32 h-8 text-sm"><SelectValue /></SelectTrigger>
+              <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+                <SelectTrigger className="w-20 h-8 text-xs font-bold"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {getAnoMesOptions().map(am => (
-                    <SelectItem key={am} value={am}>{formatAnoMes(am)}</SelectItem>
+                  {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
+                <SelectTrigger className="w-20 h-8 text-xs font-bold"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MESES_COLS.map((m, i) => (
+                    <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -238,35 +259,35 @@ export function MapaPastosTab() {
               <table className="w-full text-xs border-collapse">
                 <thead className="sticky top-0 z-10 bg-muted">
                   <tr>
-                    <th className="sticky left-0 z-20 bg-muted px-2 py-1.5 text-left text-xs font-semibold border-b border-r min-w-[100px]">Pasto</th>
-                    <th className="px-2 py-1.5 text-left text-xs font-medium border-b border-r min-w-[70px]">Atividade</th>
-                    <th className="px-2 py-1.5 text-left text-xs font-medium border-b border-r min-w-[50px]">Lote</th>
+                    <th className="sticky left-0 z-20 bg-muted px-2 py-1 text-left text-xs font-semibold border-b border-r min-w-[90px]">Pasto</th>
+                    <th className="px-1.5 py-1 text-left text-xs font-medium border-b border-r min-w-[60px]">Atividade</th>
+                    <th className="px-1 py-1 text-left text-[10px] font-medium border-b border-r min-w-[40px]">Lote</th>
                     {categorias.map(cat => (
-                      <th key={cat.id} className="px-1.5 py-1.5 text-center text-xs font-medium border-b border-r min-w-[60px]">
-                        <div className="leading-tight">{cat.nome}</div>
+                      <th key={cat.id} className="px-1 py-1 text-center text-xs font-bold border-b border-r min-w-[32px]">
+                        {CAT_SIGLAS[cat.codigo] || cat.codigo}
                       </th>
                     ))}
-                    <th className="px-2 py-1.5 text-center text-xs font-semibold border-b border-r min-w-[60px] bg-primary/10">Total</th>
-                    <th className="px-2 py-1.5 text-center text-xs font-medium border-b border-r min-w-[65px]">Peso Méd.</th>
-                    <th className="px-2 py-1.5 text-center text-xs font-medium border-b border-r min-w-[55px]">Área</th>
-                    <th className="px-2 py-1.5 text-center text-xs font-medium border-b border-r min-w-[55px]">UA/ha</th>
-                    <th className="px-2 py-1.5 text-center text-xs font-medium border-b min-w-[45px]">Qual.</th>
+                    <th className="px-1.5 py-1 text-center text-xs font-semibold border-b border-r min-w-[40px] bg-primary/10">Total</th>
+                    <th className="px-1.5 py-1 text-center text-xs font-medium border-b border-r min-w-[50px]">Peso</th>
+                    <th className="px-1.5 py-1 text-center text-xs font-medium border-b border-r min-w-[45px]">Área</th>
+                    <th className="px-1.5 py-1 text-center text-xs font-medium border-b border-r min-w-[45px]">UA/ha</th>
+                    <th className="px-1.5 py-1 text-center text-xs font-medium border-b min-w-[35px]">Qual.</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((row, idx) => (
                     <tr key={row.pasto.id} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/30'}>
-                      <td className="sticky left-0 z-10 px-2 py-1.5 text-xs font-semibold border-r whitespace-nowrap" style={{ backgroundColor: idx % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--muted) / 0.3)' }}>
+                      <td className="sticky left-0 z-10 px-2 py-1 text-xs font-semibold border-r whitespace-nowrap" style={{ backgroundColor: idx % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--muted) / 0.3)' }}>
                         {row.pasto.nome}
                       </td>
-                      <td className="px-2 py-1.5 text-xs border-r text-muted-foreground">{tipoUsoLabel(row.tipoUso)}</td>
-                      <td className="px-2 py-1.5 text-xs text-muted-foreground border-r">{row.lote || '—'}</td>
+                      <td className="px-1.5 py-1 text-xs border-r text-muted-foreground">{tipoUsoLabel(row.tipoUso)}</td>
+                      <td className="px-1 py-1 text-[10px] text-muted-foreground border-r">{row.lote || '—'}</td>
                       {categorias.map(cat => {
                         const val = row.categorias.get(cat.id);
                         const qty = val?.quantidade || 0;
                         const peso = val?.peso_medio_kg;
                         return (
-                          <td key={cat.id} className="px-1.5 py-1.5 text-center text-xs border-r">
+                          <td key={cat.id} className="px-1 py-1 text-center text-xs border-r">
                             {qty > 0 ? (
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -283,13 +304,13 @@ export function MapaPastosTab() {
                           </td>
                         );
                       })}
-                      <td className="px-2 py-1.5 text-center text-xs font-bold border-r bg-primary/5">{row.totalCabecas || '—'}</td>
-                      <td className="px-2 py-1.5 text-center text-xs border-r">{row.pesoMedio ? formatNum(row.pesoMedio, 2) : '—'}</td>
-                      <td className="px-2 py-1.5 text-center text-xs border-r">{row.pasto.area_produtiva_ha ? formatNum(row.pasto.area_produtiva_ha, 1) : '—'}</td>
-                      <td className={`px-2 py-1.5 text-center text-xs border-r ${getUaHaColor(row.uaHa)}`}>{row.uaHa ? formatNum(row.uaHa, 2) : '—'}</td>
-                      <td className="px-2 py-1.5 text-center text-xs">
+                      <td className="px-1.5 py-1 text-center text-xs font-bold border-r bg-primary/5">{row.totalCabecas || '—'}</td>
+                      <td className="px-1.5 py-1 text-center text-xs border-r">{row.pesoMedio ? formatNum(row.pesoMedio, 0) : '—'}</td>
+                      <td className="px-1.5 py-1 text-center text-xs border-r">{row.pasto.area_produtiva_ha ? formatNum(row.pasto.area_produtiva_ha, 1) : '—'}</td>
+                      <td className={`px-1.5 py-1 text-center text-xs border-r ${getUaHaColor(row.uaHa)}`}>{row.uaHa ? formatNum(row.uaHa, 2) : '—'}</td>
+                      <td className="px-1.5 py-1 text-center text-xs">
                         {row.qualidade ? (
-                          <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold ${getQualidadeColor(row.qualidade)}`}>
+                          <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${getQualidadeColor(row.qualidade)}`}>
                             {row.qualidade}
                           </span>
                         ) : '—'}
@@ -299,12 +320,12 @@ export function MapaPastosTab() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-muted font-bold border-t-2 text-xs">
-                    <td className="sticky left-0 z-10 bg-muted px-2 py-1.5 border-r" colSpan={3}>TOTAL / MÉDIA</td>
+                    <td className="sticky left-0 z-20 bg-muted px-2 py-1 border-r" colSpan={3}>TOTAL / MÉDIA</td>
                     {categorias.map(cat => {
                       const t = totais.catTotals.get(cat.id);
                       const pesoMed = t && t.qtdComPeso > 0 ? t.pesoTotal / t.qtdComPeso : null;
                       return (
-                        <td key={cat.id} className="p-2 text-center border-r">
+                        <td key={cat.id} className="px-1 py-1 text-center border-r">
                           {t && t.quantidade > 0 ? (
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -319,15 +340,15 @@ export function MapaPastosTab() {
                         </td>
                       );
                     })}
-                    <td className="p-2 text-center border-r bg-primary/10 text-lg">{totais.totalCab}</td>
-                    <td className="p-2 text-center border-r">{totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 2) : '—'}</td>
-                    <td className="p-2 text-center border-r">{formatNum(totais.areaTotal, 1)}</td>
-                    <td className={`p-2 text-center border-r ${getUaHaColor(totais.uaHaGeral)}`}>
+                    <td className="px-1.5 py-1 text-center border-r bg-primary/10 text-sm font-extrabold">{totais.totalCab}</td>
+                    <td className="px-1.5 py-1 text-center border-r">{totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 0) : '—'}</td>
+                    <td className="px-1.5 py-1 text-center border-r">{formatNum(totais.areaTotal, 1)}</td>
+                    <td className={`px-1.5 py-1 text-center border-r ${getUaHaColor(totais.uaHaGeral)}`}>
                       {totais.uaHaGeral ? formatNum(totais.uaHaGeral, 2) : '—'}
                     </td>
-                    <td className="p-2 text-center">
+                    <td className="px-1.5 py-1 text-center">
                       {totais.qualidadeMedia ? (
-                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${getQualidadeColor(totais.qualidadeMedia)}`}>
+                        <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${getQualidadeColor(totais.qualidadeMedia)}`}>
                           {formatNum(totais.qualidadeMedia, 1)}
                         </span>
                       ) : '—'}
