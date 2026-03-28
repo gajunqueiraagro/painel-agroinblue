@@ -369,20 +369,36 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
           />
         )}
 
-        {/* Fechamento Executivo */}
-        <button
-          onClick={() => onTabChange('fechamento_executivo')}
-          className="w-full flex items-center gap-3 rounded-xl border-2 border-primary/30 bg-primary/5 px-4 py-4 transition-all hover:border-primary hover:shadow-md active:scale-[0.98] group"
-        >
-          <div className="rounded-full p-3 bg-primary/10">
-            <FileBarChart className="h-6 w-6 text-primary" />
-          </div>
-          <div className="text-left flex-1">
-            <p className="text-sm font-bold text-foreground">Fechamento Executivo</p>
-            <p className="text-[10px] text-muted-foreground">Relatório mensal com IA, gráficos e PDF</p>
-          </div>
-          <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0" />
-        </button>
+        {/* Cards: Fechamento Executivo + Análise do Consultor */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            onClick={() => onTabChange('fechamento_executivo')}
+            className="flex items-center gap-2.5 rounded-xl border-2 border-primary/30 bg-primary/5 px-3 py-3 transition-all hover:border-primary hover:shadow-md active:scale-[0.98] group"
+          >
+            <div className="rounded-full p-2 bg-primary/10 shrink-0">
+              <FileBarChart className="h-5 w-5 text-primary" />
+            </div>
+            <div className="text-left flex-1 min-w-0">
+              <p className="text-xs font-bold text-foreground">Fechamento Executivo</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">Relatório mensal com IA e PDF</p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0" />
+          </button>
+
+          <button
+            onClick={() => onTabChange('analise_consultor')}
+            className="flex items-center gap-2.5 rounded-xl border-2 border-primary/30 bg-primary/5 px-3 py-3 transition-all hover:border-primary hover:shadow-md active:scale-[0.98] group"
+          >
+            <div className="rounded-full p-2 bg-primary/10 shrink-0">
+              <TrendingUp className="h-5 w-5 text-primary" />
+            </div>
+            <div className="text-left flex-1 min-w-0">
+              <p className="text-xs font-bold text-foreground">Análise do Consultor</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">Área técnica para observações</p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0" />
+          </button>
+        </div>
       </div>
     </div>
   );

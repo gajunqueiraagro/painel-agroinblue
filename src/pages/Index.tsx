@@ -378,6 +378,9 @@ const Index = () => {
           filtroMesInicial={filtroGlobal.mes}
         />
       )}
+      {activeTab === 'analise_consultor' && (
+        <AnaliseConsultorTab />
+      )}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
