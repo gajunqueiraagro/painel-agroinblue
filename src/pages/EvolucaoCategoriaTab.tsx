@@ -1,8 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Lancamento, SaldoInicial, CATEGORIAS, Categoria, isEntrada, isReclassificacao } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { filtrarPorCenario } from '@/lib/statusOperacional';
 import { parseISO, format } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
+import { useFazenda } from '@/contexts/FazendaContext';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -40,6 +42,9 @@ const COLUNAS_MOV = [
 ];
 
 export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, initialMes }: Props) {
+  const { fazendaAtual } = useFazenda();
+  const fazendaId = fazendaAtual?.id;
+
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
@@ -53,6 +58,84 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   const [anoFiltro, setAnoFiltro] = useState(initialAno || String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState(initialMes || format(new Date(), 'MM'));
   const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'previsto'>('realizado');
+  const [pesosDb, setPesosDb] = useState<Record<string, number>>({});
+
+  // Fetch peso médio from fechamento_pasto_itens for the selected month
+  useEffect(() => {
+    const anoMes = `${anoFiltro}-${mesFiltro}`;
+    if (!fazendaId || fazendaId === '__global__') {
+      setPesosDb({});
+      return;
+    }
+
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('fechamento_pasto_itens')
+          .select('categoria_id, peso_medio_kg, quantidade, fechamento_id')
+          .in('fechamento_id',
+            supabase
+              .from('fechamento_pastos')
+              .select('id')
+              .eq('fazenda_id', fazendaId)
+              .eq('ano_mes', anoMes)
+              .then(r => (r.data || []).map(d => d.id))
+          );
+
+        // Build weighted average per category from fechamento_pasto_itens
+        // We need to map categoria_id (uuid) to categoria code
+        const { data: catData } = await supabase
+          .from('categorias_rebanho')
+          .select('id, codigo');
+
+        const catMap: Record<string, string> = {};
+        (catData || []).forEach(c => { catMap[c.id] = c.codigo; });
+
+        // Also try direct query joining
+        const { data: itens } = await supabase
+          .from('fechamento_pasto_itens')
+          .select(`
+            categoria_id,
+            peso_medio_kg,
+            quantidade,
+            fechamento_pastos!inner(fazenda_id, ano_mes)
+          `)
+          .eq('fechamento_pastos.fazenda_id', fazendaId)
+          .eq('fechamento_pastos.ano_mes', anoMes);
+
+        const pesosPorCat: Record<string, { somaQtdPeso: number; somaQtd: number }> = {};
+
+        (itens || []).forEach((item: any) => {
+          const codigo = catMap[item.categoria_id];
+          if (!codigo || !item.peso_medio_kg || item.peso_medio_kg <= 0) return;
+          if (!pesosPorCat[codigo]) pesosPorCat[codigo] = { somaQtdPeso: 0, somaQtd: 0 };
+          pesosPorCat[codigo].somaQtdPeso += item.quantidade * item.peso_medio_kg;
+          pesosPorCat[codigo].somaQtd += item.quantidade;
+        });
+
+        const result: Record<string, number> = {};
+        for (const [cod, v] of Object.entries(pesosPorCat)) {
+          if (v.somaQtd > 0) result[cod] = v.somaQtdPeso / v.somaQtd;
+        }
+
+        // Fallback: if no fechamento data, use saldosIniciais peso_medio_kg
+        if (Object.keys(result).length === 0) {
+          saldosIniciais
+            .filter(s => s.ano === Number(anoFiltro) && s.pesoMedioKg && s.pesoMedioKg > 0)
+            .forEach(s => { result[s.categoria] = s.pesoMedioKg!; });
+        }
+
+        setPesosDb(result);
+      } catch {
+        // Fallback to saldosIniciais
+        const result: Record<string, number> = {};
+        saldosIniciais
+          .filter(s => s.ano === Number(anoFiltro) && s.pesoMedioKg && s.pesoMedioKg > 0)
+          .forEach(s => { result[s.categoria] = s.pesoMedioKg!; });
+        setPesosDb(result);
+      }
+    })();
+  }, [fazendaId, anoFiltro, mesFiltro, saldosIniciais]);
 
   const lancFiltrados = useMemo(() => {
     const cenario = statusFiltro === 'realizado' ? 'realizado' : 'meta';
@@ -122,16 +205,29 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
       const totalSaidas = movs.slice(4).reduce((a, b) => a + b, 0);
       const saldoFinal = saldoInicioMes + totalEntradas - totalSaidas;
 
-      return { ...cat, saldoInicioMes, movs, saldoFinal };
+      const pesoMedio = pesosDb[cat.value] || null;
+
+      return { ...cat, saldoInicioMes, movs, saldoFinal, pesoMedio };
     });
-  }, [lancFiltrados, saldosIniciais, anoFiltro, mesFiltro]);
+  }, [lancFiltrados, saldosIniciais, anoFiltro, mesFiltro, pesosDb]);
 
   const totais = useMemo(() => {
     const saldoIni = dados.reduce((s, d) => s + d.saldoInicioMes, 0);
     const movs = COLUNAS_MOV.map((_, i) => dados.reduce((s, d) => s + d.movs[i], 0));
     const saldoFin = dados.reduce((s, d) => s + d.saldoFinal, 0);
-    return { saldoIni, movs, saldoFin };
+
+    // Weighted average peso
+    const somaPeso = dados.reduce((s, d) => s + (d.pesoMedio && d.saldoFinal > 0 ? d.saldoFinal * d.pesoMedio : 0), 0);
+    const somaQtd = dados.reduce((s, d) => s + (d.pesoMedio && d.saldoFinal > 0 ? d.saldoFinal : 0), 0);
+    const pesoMedio = somaQtd > 0 ? somaPeso / somaQtd : null;
+
+    return { saldoIni, movs, saldoFin, pesoMedio };
   }, [dados]);
+
+  const formatPeso = (v: number | null) => {
+    if (v === null || v === undefined || v <= 0) return '—';
+    return v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  };
 
   return (
     <div className="p-3 max-w-4xl mx-auto space-y-2 animate-fade-in pb-20">
@@ -200,6 +296,9 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
               <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-muted">
                 Saldo Fin.
               </th>
+              <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[55px] bg-muted">
+                Peso (kg)
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -221,6 +320,9 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                   <td className={`px-1.5 py-0.5 text-center font-extrabold bg-primary/5 ${cat.saldoFinal === 0 ? 'text-transparent' : 'text-foreground'}`}>
                     {cat.saldoFinal}
                   </td>
+                  <td className={`px-1.5 py-0.5 text-center font-semibold bg-primary/5 ${!cat.pesoMedio ? 'text-muted-foreground' : 'text-foreground'}`}>
+                    {formatPeso(cat.pesoMedio)}
+                  </td>
                 </tr>
               );
             })}
@@ -233,6 +335,9 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                 </td>
               ))}
               <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoFin}</td>
+              <td className={`px-1.5 py-1 text-center font-extrabold ${!totais.pesoMedio ? 'text-muted-foreground' : 'text-foreground'}`}>
+                {formatPeso(totais.pesoMedio)}
+              </td>
             </tr>
           </tbody>
         </table>
