@@ -117,6 +117,15 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
         </div>
       </div>
 
+      {/* Saldo Inicial banner/edit */}
+      {onSetSaldo && (
+        <SaldoInicialForm
+          saldosIniciais={saldosIniciais}
+          onSetSaldo={onSetSaldo}
+          anoBase={Number(anoFiltro)}
+        />
+      )}
+
       <div className="p-3 pt-2 space-y-2">
 
       <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
