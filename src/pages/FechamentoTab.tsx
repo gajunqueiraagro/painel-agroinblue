@@ -43,6 +43,9 @@ interface PastoResumo {
   totalCabecas: number;
   pesoMedio: number | null;
   uaHa: number | null;
+  uaTotal: number;
+  catBreakdown: { sigla: string; qty: number }[];
+  lotacaoKgHa: number | null;
 }
 
 interface Props {
