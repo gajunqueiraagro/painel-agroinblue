@@ -370,6 +370,14 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
         </div>
       </div>
 
+      {/* Saldo Inicial banner/edit */}
+      {onSetSaldo && !isGlobal && (
+        <SaldoInicialForm
+          saldosIniciais={saldosIniciais}
+          onSetSaldo={onSetSaldo}
+        />
+      )}
+
       <div className="p-4 md:p-6 space-y-5">
 
       {/* ── Status Strip ── */}
