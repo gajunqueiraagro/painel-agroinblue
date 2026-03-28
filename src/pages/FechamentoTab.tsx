@@ -435,6 +435,17 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 Fechamento Todos
               </Button>
             )}
+            {fechadosCount > 0 && (canEdit('zootecnico') || canEdit('pastos')) && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs font-bold border-destructive text-destructive hover:bg-destructive/10 h-8"
+                onClick={() => setConfirmBulkReopenOpen(true)}
+              >
+                <Unlock className="h-3.5 w-3.5 mr-1" />
+                Reabrir Pastos
+              </Button>
+            )}
           </div>
         </div>
       </div>
