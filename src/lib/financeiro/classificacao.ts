@@ -68,10 +68,33 @@ export const isSaida = (l: LancamentoClassificavel): boolean => {
 
 export type Escopo = 'pec' | 'agri' | 'outras';
 
+/**
+ * Determina escopo (pecuária vs agricultura) baseado nos campos estruturais.
+ *
+ * REGRA (auditoria 2026-03-28):
+ * 1. Prioridade: centro_custo / subcentro / grupo_custo — se contém "agri" → agricultura
+ * 2. Fallback: escopo_negocio (campo frequentemente incorreto nos dados importados)
+ *
+ * O campo escopo_negocio está como "pecuaria" em TODOS os lançamentos importados,
+ * portanto NÃO pode ser a regra principal para distinguir Pec vs Agri.
+ */
 export function getEscopo(l: LancamentoClassificavel): Escopo {
+  // 1. Verificar campos estruturais (fonte confiável)
+  const centro = norm(l.centro_custo);
+  const sub = norm(l.subcentro);
+  const grupo = norm(l.grupo_custo);
+
+  const hasAgri = centro.includes('agri') || sub.startsWith('agri/') || sub.startsWith('agri\\') || grupo.includes('agri');
+  if (hasAgri) return 'agri';
+
+  const hasPec = centro.includes('pec') || sub.startsWith('pec/') || sub.startsWith('pec\\') || grupo.includes('pecuári') || grupo.includes('pecuaria');
+  if (hasPec) return 'pec';
+
+  // 2. Fallback: escopo_negocio
   const e = norm(l.escopo_negocio);
-  if (e.includes('pecuári') || e.includes('pecuaria') || e.includes('pec')) return 'pec';
   if (e.includes('agricul') || e.includes('agri')) return 'agri';
+  if (e.includes('pecuári') || e.includes('pecuaria') || e.includes('pec')) return 'pec';
+
   return 'outras';
 }
 
@@ -117,26 +140,40 @@ export const CATEGORIAS_ENTRADA: CategoriaEntrada[] = [
  * Classifica uma ENTRADA para exibição no Dashboard / drill-down.
  *
  * Receitas (macro_custo = "receitas"):
+ *   → grupo_custo "Rendimentos e Outros" → Outras Receitas
  *   → Receitas Pecuárias / Agrícolas / Outras (por escopo)
  *
  * Outras Entradas (macro_custo ≠ "receitas"):
  *   → Aportes ou Outros (se macro/grupo/centro/subcentro contém "aporte")
  *   → Financiamentos Pecuária / Agricultura (por escopo)
+ *
+ * Anomalias (macro_custo inesperado como entrada):
+ *   → Aportes ou Outros (fallback explícito, marcado para revisão)
  */
 export function classificarEntrada(l: LancamentoClassificavel): CategoriaEntrada {
   const macro = normMacro(l);
   const escopo = getEscopo(l);
+  const grupo = norm(l.grupo_custo);
 
   // Receitas: macro_custo = "receitas"
   if (macro === 'receitas') {
-    if (escopo === 'pec') return 'Receitas Pecuárias';
+    // "Rendimentos e Outros" → Outras Receitas (não é receita operacional pecuária/agri)
+    if (grupo.includes('rendimentos')) return 'Outras Receitas';
     if (escopo === 'agri') return 'Receitas Agrícolas';
+    if (escopo === 'pec') return 'Receitas Pecuárias';
     return 'Outras Receitas';
   }
 
   // Outras Entradas: macro_custo ≠ "receitas"
   if (isAporte(l)) return 'Aportes ou Outros';
   if (escopo === 'agri') return 'Financiamentos Agricultura';
+
+  // Anomalia: entrada com macro_custo inesperado (ex: "Custeio Produtivo", "Dividendos")
+  // Fallback explícito: agrupa em Aportes ou Outros para não distorcer receitas
+  if (macro && macro !== 'outras entradas financeiras') {
+    return 'Aportes ou Outros';
+  }
+
   return 'Financiamentos Pecuária';
 }
 
@@ -219,6 +256,8 @@ export function classificarEntradaFluxo(l: LancamentoClassificavel): CategoriaFl
   const macro = normMacro(l);
   if (macro === 'receitas') return 'receitas';
   if (isAporte(l)) return 'aportes';
+  // Anomalias (macro inesperado como entrada) → aportes para não distorcer receitas
+  if (macro && macro !== 'outras entradas financeiras') return 'aportes';
   return 'captacao';
 }
 
