@@ -18,7 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { format } from 'date-fns';
+
 import { formatAnoMes } from '@/lib/dateUtils';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
