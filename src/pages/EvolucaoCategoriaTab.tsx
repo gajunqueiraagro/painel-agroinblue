@@ -368,6 +368,15 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
             Rebanho: {rebanhoStatus === 'fechado' ? 'Fechado' : 'Aberto'}
           </div>
         )}
+        {onNavigateToReclass && (
+          <button
+            onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: Number(mesFiltro) })}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 transition-colors"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Reclass.
+          </button>
+        )}
       </div>
 
       {/* Tabela */}
