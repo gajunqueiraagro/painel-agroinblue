@@ -256,6 +256,8 @@ export function classificarEntradaFluxo(l: LancamentoClassificavel): CategoriaFl
   const macro = normMacro(l);
   if (macro === 'receitas') return 'receitas';
   if (isAporte(l)) return 'aportes';
+  // Anomalias (macro inesperado como entrada) → aportes para não distorcer receitas
+  if (macro && macro !== 'outras entradas financeiras') return 'aportes';
   return 'captacao';
 }
 
