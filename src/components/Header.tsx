@@ -10,7 +10,7 @@ interface HeaderProps {
   clienteNome?: string;
   fazendaNome?: string;
   periodo?: string;
-  onBack?: () => void;
+  
   rightAction?: ReactNode;
 }
 
