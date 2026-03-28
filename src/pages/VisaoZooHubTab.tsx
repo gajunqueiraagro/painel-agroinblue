@@ -445,7 +445,7 @@ function IndicadoresContent({ zoo, vista, mesLabel, mesFiltro, anoFiltro, kgHa, 
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
 
         {/* 1. PRODUÇÃO */}
-        <SectionCard title="Produção" icon="🐂">
+        <SectionCard title="Produção" subtitle="o que a fazenda entregou" icon="🐂">
           <div className="grid grid-cols-2 gap-2">
             <KpiCard label="Cabeças"
               valor={isMes ? formatNum(zoo.saldoFinalMes) : formatNum(acumulado.cabMedia, 0)}
