@@ -60,6 +60,9 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase }: Props)
     setOpen(false);
   };
 
+  // Don't render if viewing a year other than the earliest
+  if (!shouldRender) return null;
+
   // Warning banner when no saldo exists
   if (!hasSaldo) {
     return (
