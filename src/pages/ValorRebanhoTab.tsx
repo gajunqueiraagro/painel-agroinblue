@@ -10,6 +10,7 @@ import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
 import { useValorRebanho } from '@/hooks/useValorRebanho';
+import { usePrecoMercado } from '@/hooks/usePrecoMercado';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { toast } from 'sonner';
@@ -29,6 +30,23 @@ const ORIGEM_LABEL: Record<OrigemPeso, string> = {
   lancamento: 'Último lançamento',
   saldo_inicial: 'Saldo inicial do ano',
   sem_base: 'Sem dados',
+};
+
+/**
+ * Mapeamento categoria → preço de mercado
+ * bloco + categoria conforme tela Preço de Mercado
+ * unidade: 'kg' = já em R$/kg; 'arroba' = R$/@ (converter dividindo por 15)
+ */
+const MAPA_PRECO_MERCADO: Record<string, { bloco: string; categoria: string; unidade: 'kg' | 'arroba' }> = {
+  mamotes_m: { bloco: 'magro_macho', categoria: '200 kg média', unidade: 'kg' },
+  desmama_m: { bloco: 'magro_macho', categoria: '200 kg média', unidade: 'kg' },
+  garrotes:  { bloco: 'magro_macho', categoria: 'Garrotes 350 kg média', unidade: 'kg' },
+  bois:      { bloco: 'frigorifico', categoria: 'Boi Gordo', unidade: 'arroba' },
+  touros:    { bloco: 'frigorifico', categoria: 'Vaca', unidade: 'arroba' },
+  mamotes_f: { bloco: 'magro_femea', categoria: '200 kg média', unidade: 'kg' },
+  desmama_f: { bloco: 'magro_femea', categoria: '200 kg média', unidade: 'kg' },
+  novilhas:  { bloco: 'frigorifico', categoria: 'Novilha', unidade: 'arroba' },
+  vacas:     { bloco: 'frigorifico', categoria: 'Vaca', unidade: 'arroba' },
 };
 
 export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAnoInicial, filtroMesInicial }: Props) {
@@ -54,11 +72,6 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   }, [filtroAnoInicial, filtroMesInicial]);
   const [mostrarZerados, setMostrarZerados] = useState(false);
 
-  useEffect(() => {
-    if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
-    if (filtroMesInicial) setMesFiltro(String(filtroMesInicial).padStart(2, '0'));
-  }, [filtroAnoInicial, filtroMesInicial]);
-
   const anoMes = `${anoFiltro}-${mesFiltro}`;
   const isDezembro = mesFiltro === '12';
 
@@ -67,8 +80,30 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     isFechado, isAdmin, reabrirFechamento,
   } = useValorRebanho(anoMes);
 
+  // Preço de mercado do mês
+  const { itens: precosMercado, isValidado: mercadoValidado } = usePrecoMercado(anoMes);
+
+  // Build a lookup: codigo → R$/kg sugerido
+  const precosSugeridos = useMemo(() => {
+    const map: Record<string, number> = {};
+    Object.entries(MAPA_PRECO_MERCADO).forEach(([codigo, ref]) => {
+      const item = precosMercado.find(p => p.bloco === ref.bloco && p.categoria === ref.categoria);
+      if (!item || item.valor <= 0) return;
+      // Ajuste de ágio
+      const valorComAgio = item.valor * (1 + (item.agio_perc || 0) / 100);
+      if (ref.unidade === 'arroba') {
+        // R$/@ → R$/kg: dividir por 15
+        map[codigo] = valorComAgio / 15;
+      } else {
+        map[codigo] = valorComAgio;
+      }
+    });
+    return map;
+  }, [precosMercado]);
+
   const [precosLocal, setPrecosLocal] = useState<Record<string, number>>({});
   const [precosDisplay, setPrecosDisplay] = useState<Record<string, string>>({});
+  const [sugestaoAplicada, setSugestaoAplicada] = useState(false);
 
   // --- BASE OFICIAL: useFechamentoCategoria ---
   const resumoOficial = useFechamentoCategoria(
@@ -79,6 +114,22 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     saldosIniciais,
     categorias,
   );
+
+  // Track which categories are using suggested prices
+  const categoriasComSugestao = useMemo(() => {
+    const set = new Set<string>();
+    Object.keys(precosSugeridos).forEach(codigo => {
+      const temPrecoSalvo = precos.some(p => p.categoria === codigo && p.preco_kg > 0);
+      const precoAtual = precosLocal[codigo];
+      const sugerido = precosSugeridos[codigo];
+      if (!temPrecoSalvo && sugerido > 0 && precoAtual === sugerido) {
+        set.add(codigo);
+      }
+    });
+    return set;
+  }, [precosSugeridos, precos, precosLocal]);
+
+  const temSugestao = categoriasComSugestao.size > 0;
 
   // Build rows from official source
   const allRows = useMemo(() => {
@@ -101,9 +152,10 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         valorCabeca,
         precoArroba,
         valorTotal,
+        isSugerido: categoriasComSugestao.has(row.categoriaCodigo),
       };
     });
-  }, [resumoOficial.rows, precosLocal]);
+  }, [resumoOficial.rows, precosLocal, categoriasComSugestao]);
 
   const rows = useMemo(() => {
     if (mostrarZerados || isDezembro) return allRows;
@@ -137,7 +189,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const dezembroCompleto = isDezembro && categoriasSemPreco.length === 0;
 
-  // Sync loaded prices to local state
+  // Sync loaded prices to local state + apply market suggestions for empty ones
   useEffect(() => {
     const numMap: Record<string, number> = {};
     const strMap: Record<string, string> = {};
@@ -145,9 +197,21 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       numMap[p.categoria] = p.preco_kg;
       strMap[p.categoria] = p.preco_kg > 0 ? String(p.preco_kg).replace('.', ',') : '';
     });
+
+    // Auto-fill suggestions for categories without saved price
+    let aplicouSugestao = false;
+    Object.entries(precosSugeridos).forEach(([codigo, valor]) => {
+      if (!numMap[codigo] || numMap[codigo] <= 0) {
+        numMap[codigo] = Number(valor.toFixed(4));
+        strMap[codigo] = valor > 0 ? String(Number(valor.toFixed(2))).replace('.', ',') : '';
+        aplicouSugestao = true;
+      }
+    });
+
     setPrecosLocal(numMap);
     setPrecosDisplay(strMap);
-  }, [precos]);
+    setSugestaoAplicada(aplicouSugestao);
+  }, [precos, precosSugeridos]);
 
   const handlePrecoChange = (codigo: string, value: string) => {
     const sanitized = value.replace(/[^0-9.,]/g, '');
@@ -249,6 +313,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         </CardContent>
       </Card>
 
+      {/* Aviso de sugestão de mercado */}
+      {temSugestao && (
+        <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 rounded-md px-3 py-2 border border-amber-200 dark:border-amber-800">
+          <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <span>
+            <strong>Preço de mercado sugerido.</strong> O valor só será considerado definitivo após validação do fechamento do valor do rebanho.
+          </span>
+        </div>
+      )}
+
       {/* Aviso de estimativa */}
       {temEstimativa && (
         <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/40 rounded-md px-3 py-2 border border-border">
@@ -290,7 +364,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               <th className="text-left px-2 py-1.5 font-semibold text-foreground text-xs">Categoria</th>
               <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">Qtd</th>
               <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">Peso</th>
-              <th className="text-center px-1 py-1.5 font-semibold text-foreground text-xs min-w-[65px]">R$/kg</th>
+              <th className="text-center px-1 py-1.5 font-semibold text-foreground text-xs w-[55px]">R$/kg</th>
               <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">R$/cab</th>
               <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">R$/@</th>
               <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">Valor Total</th>
@@ -323,16 +397,27 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                     </Tooltip>
                   ) : '-'}
                 </td>
-                <td className="px-1 py-0.5">
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    className="h-7 text-right text-xs w-full"
-                    placeholder="0,00"
-                    value={precosDisplay[r.codigo] ?? ''}
-                    onChange={e => handlePrecoChange(r.codigo, e.target.value)}
-                    disabled={!canEdit}
-                  />
+                <td className="px-1 py-0.5 w-[55px]">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="relative">
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          className={`h-7 text-right text-xs w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
+                          placeholder="0,00"
+                          value={precosDisplay[r.codigo] ?? ''}
+                          onChange={e => handlePrecoChange(r.codigo, e.target.value)}
+                          disabled={!canEdit}
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    {r.isSugerido && (
+                      <TooltipContent side="top" className="text-xs max-w-[200px]">
+                        Preço sugerido pelo mercado. Edite se necessário.
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
                 </td>
                 <td className="px-2 py-1 text-right text-muted-foreground text-[11px]">
                   {r.valorCabeca > 0 ? formatMoeda(r.valorCabeca) : '-'}
@@ -351,8 +436,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               <td className="px-2 py-1.5 font-extrabold text-foreground text-xs">TOTAL</td>
               <td className="px-2 py-1.5 text-right font-extrabold text-foreground text-xs">{totalCabecas}</td>
               <td className="px-2 py-1.5 text-right text-[11px] text-muted-foreground">{formatNum(pesoMedioGeral, 1)} kg</td>
-              <td className="px-1 py-1.5 text-center text-[11px] text-muted-foreground">
-                {precoMedioKg > 0 ? `${formatNum(precoMedioKg, 2)}/kg` : ''}
+              <td className="px-1 py-1.5 text-center text-[11px] text-muted-foreground w-[55px]">
+                {precoMedioKg > 0 ? `${formatNum(precoMedioKg, 2)}` : ''}
               </td>
               <td className="px-2 py-1.5 text-right text-[11px] font-semibold text-foreground">{formatMoeda(valorMedioCabeca)}</td>
               <td className="px-2 py-1.5 text-right text-[11px] font-semibold text-foreground">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '-'}</td>
