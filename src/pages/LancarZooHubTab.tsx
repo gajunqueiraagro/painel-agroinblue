@@ -7,7 +7,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import {
   ChevronRight, Lock, AlertCircle,
   ArrowLeftRight, LayoutGrid, CloudRain,
-  GitCompare, Map, Layers, FileBarChart,
+  GitCompare, Map, Layers,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -143,21 +143,6 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
             );
           })}
         </div>
-
-        {/* ── FECHAMENTO EXECUTIVO ── */}
-        <button
-          onClick={() => navTo('fechamento_executivo')}
-          className="w-full flex items-center gap-3 rounded-xl border-2 border-primary/30 bg-primary/5 px-4 py-4 transition-all hover:border-primary hover:shadow-md active:scale-[0.98] group"
-        >
-          <div className="rounded-full p-3 bg-primary/10">
-            <FileBarChart className="h-6 w-6 text-primary" />
-          </div>
-          <div className="text-left flex-1">
-            <p className="text-sm font-bold text-foreground">Fechamento Executivo</p>
-            <p className="text-[10px] text-muted-foreground">Relatório mensal com IA, gráficos e PDF</p>
-          </div>
-          <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0" />
-        </button>
 
         {/* ── PASTOS ── */}
         <div className="grid grid-cols-2 gap-3">

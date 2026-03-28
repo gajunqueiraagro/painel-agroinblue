@@ -20,7 +20,7 @@ import { DREAtividade } from '@/components/financeiro/AnaliseDRE';
 import { calcCabMediasMensais } from '@/components/financeiro/AnaliseEconomica';
 import { TabId } from '@/components/BottomNav';
 import {
-  AlertTriangle, TrendingUp,
+  AlertTriangle, TrendingUp, FileBarChart, ChevronRight,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -368,6 +368,21 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
             pastos={pastos}
           />
         )}
+
+        {/* Fechamento Executivo */}
+        <button
+          onClick={() => onTabChange('fechamento_executivo')}
+          className="w-full flex items-center gap-3 rounded-xl border-2 border-primary/30 bg-primary/5 px-4 py-4 transition-all hover:border-primary hover:shadow-md active:scale-[0.98] group"
+        >
+          <div className="rounded-full p-3 bg-primary/10">
+            <FileBarChart className="h-6 w-6 text-primary" />
+          </div>
+          <div className="text-left flex-1">
+            <p className="text-sm font-bold text-foreground">Fechamento Executivo</p>
+            <p className="text-[10px] text-muted-foreground">Relatório mensal com IA, gráficos e PDF</p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0" />
+        </button>
       </div>
     </div>
   );
