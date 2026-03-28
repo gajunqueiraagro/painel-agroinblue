@@ -233,6 +233,7 @@ const Index = () => {
           onTabChange={handleTabChange}
           filtroGlobal={filtroGlobal}
           onFiltroChange={handleFiltroChange}
+          onSetSaldo={canEditZoo ? setSaldoInicial : undefined}
         />
       )}
 
