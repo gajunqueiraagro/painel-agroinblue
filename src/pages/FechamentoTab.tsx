@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowLeft, CheckCircle, Circle, Lock, AlertTriangle, Sprout, BarChart3 } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Circle, Lock, AlertTriangle, Sprout, BarChart3, Unlock } from 'lucide-react';
 import { ResumoAtividadesView } from '@/components/ResumoAtividadesView';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
