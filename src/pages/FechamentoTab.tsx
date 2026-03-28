@@ -404,7 +404,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               <button
                 key={p.id}
                 onClick={() => handleOpenPasto(p)}
-                className={`w-full rounded-lg border p-3 text-left hover:bg-accent/50 transition-colors ${tipoStyle ? `border-l-4 ${tipoStyle.border}` : ''}`}
+                className={`w-full rounded-lg border p-3 text-left hover:bg-accent/50 transition-colors border-l-4 ${tipoStyle.border} ${tipoStyle.bg}`}
               >
                 {/* Header: nome + badge */}
                 <div className="flex items-center justify-between mb-1">
