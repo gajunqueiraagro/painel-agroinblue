@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { filtrarPorCenario } from '@/lib/statusOperacional';
-import { Lancamento, SaldoInicial } from '@/types/cattle';
+import { Lancamento, SaldoInicial, Categoria } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, DollarSign } from 'lucide-react';
