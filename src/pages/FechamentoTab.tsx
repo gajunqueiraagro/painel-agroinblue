@@ -372,55 +372,67 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       {/* Tabela conciliação + Filtros - sticky */}
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm pt-2 px-2 pb-2 space-y-2">
         {/* Tabela resumo conciliação por categoria */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-[10px] border-collapse">
-            <thead>
-              <tr className="border-b border-border/40">
-                <th className="text-left font-bold text-muted-foreground px-1 py-0.5 w-12 border-r border-border/30">Cat.</th>
-                {CAT_COLS.map((c, idx) => (
-                  <th key={c.sigla} className={`text-center font-bold text-muted-foreground px-0.5 py-0.5 min-w-[28px]${idx === 4 ? ' border-r border-border/30' : ''}`}>{c.sigla}</th>
-                ))}
-                <th className="text-center font-bold text-foreground px-1 py-0.5 min-w-[32px] border-l border-border/30">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {/* Linha Pasto */}
-              <tr>
-                <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Pasto</td>
-                {CAT_COLS.map((c, idx) => {
-                  const v = pastoDataByCat.get(c.codigo) || 0;
-                  return <td key={c.sigla} className={`text-center text-foreground px-0.5 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
-                })}
-                <td className="text-center font-bold text-foreground px-1 py-0.5 border-l border-border/30">{totalPasto}</td>
-              </tr>
-              {/* Linha Sistema */}
-              <tr>
-                <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Sistema</td>
-                {CAT_COLS.map((c, idx) => {
-                  const v = saldoMap.get(c.codigo) || 0;
-                  return <td key={c.sigla} className={`text-center text-foreground px-0.5 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
-                })}
-                <td className="text-center font-bold text-foreground px-1 py-0.5 border-l border-border/30">{totalSistema}</td>
-              </tr>
-              {/* Linha Diferença */}
-              <tr className="border-t border-border/40">
-                <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Dif.</td>
-                {CAT_COLS.map((c, idx) => {
-                  const pasto = pastoDataByCat.get(c.codigo) || 0;
-                  const sistema = saldoMap.get(c.codigo) || 0;
-                  const dif = pasto - sistema;
-                  return (
-                    <td key={c.sigla} className={`text-center font-bold px-0.5 py-0.5 ${dif > 0 ? 'text-emerald-600' : dif < 0 ? 'text-red-600' : 'text-muted-foreground'}${idx === 4 ? ' border-r border-border/30' : ''}`}>
-                      {dif !== 0 ? (dif > 0 ? `+${dif}` : dif) : ''}
-                    </td>
-                  );
-                })}
-                <td className={`text-center font-bold px-1 py-0.5 border-l border-border/30 ${totalDiferenca > 0 ? 'text-emerald-600' : totalDiferenca < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
-                  {totalDiferenca !== 0 ? (totalDiferenca > 0 ? `+${totalDiferenca}` : totalDiferenca) : '0'}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div className="flex items-start gap-1">
+          <div className="overflow-x-auto flex-1">
+            <table className="w-full text-[10px] border-collapse">
+              <thead>
+                <tr className="border-b border-border/40">
+                  <th className="text-left font-bold text-muted-foreground px-1 py-0.5 w-12 border-r border-border/30">Cat.</th>
+                  {CAT_COLS.map((c, idx) => (
+                    <th key={c.sigla} className={`text-center font-bold text-muted-foreground px-0.5 py-0.5 min-w-[28px]${idx === 4 ? ' border-r border-border/30' : ''}`}>{c.sigla}</th>
+                  ))}
+                  <th className="text-center font-bold text-foreground px-1 py-0.5 min-w-[32px] border-l border-border/30">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Linha Pasto */}
+                <tr>
+                  <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Pasto</td>
+                  {CAT_COLS.map((c, idx) => {
+                    const v = pastoDataByCat.get(c.codigo) || 0;
+                    return <td key={c.sigla} className={`text-center text-foreground px-0.5 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
+                  })}
+                  <td className="text-center font-bold text-foreground px-1 py-0.5 border-l border-border/30">{totalPasto}</td>
+                </tr>
+                {/* Linha Sistema */}
+                <tr>
+                  <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Sistema</td>
+                  {CAT_COLS.map((c, idx) => {
+                    const v = saldoMap.get(c.codigo) || 0;
+                    return <td key={c.sigla} className={`text-center text-foreground px-0.5 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
+                  })}
+                  <td className="text-center font-bold text-foreground px-1 py-0.5 border-l border-border/30">{totalSistema}</td>
+                </tr>
+                {/* Linha Diferença */}
+                <tr className="border-t border-border/40">
+                  <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Dif.</td>
+                  {CAT_COLS.map((c, idx) => {
+                    const pasto = pastoDataByCat.get(c.codigo) || 0;
+                    const sistema = saldoMap.get(c.codigo) || 0;
+                    const dif = pasto - sistema;
+                    return (
+                      <td key={c.sigla} className={`text-center font-bold px-0.5 py-0.5 ${dif > 0 ? 'text-emerald-600' : dif < 0 ? 'text-red-600' : 'text-muted-foreground'}${idx === 4 ? ' border-r border-border/30' : ''}`}>
+                        {dif !== 0 ? (dif > 0 ? `+${dif}` : dif) : ''}
+                      </td>
+                    );
+                  })}
+                  <td className={`text-center font-bold px-1 py-0.5 border-l border-border/30 ${totalDiferenca > 0 ? 'text-emerald-600' : totalDiferenca < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                    {totalDiferenca !== 0 ? (totalDiferenca > 0 ? `+${totalDiferenca}` : totalDiferenca) : '0'}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          {/* Ícone de sugestões */}
+          {sugestoes.length > 0 && (
+            <button
+              onClick={() => setShowSugestoes(true)}
+              className="shrink-0 mt-1 p-1 rounded-md hover:bg-accent transition-colors"
+              title="Ver sugestões de ajuste"
+            >
+              <Lightbulb className="h-4 w-4 text-amber-500" />
+            </button>
+          )}
         </div>
 
         {/* Filtros */}
