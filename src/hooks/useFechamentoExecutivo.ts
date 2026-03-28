@@ -121,7 +121,7 @@ export function useFechamentoExecutivo() {
     setSaving(true);
     const { error } = await supabase
       .from('fechamento_executivo')
-      .update({ json_snapshot_textos: textos as unknown as any[] })
+      .update({ json_snapshot_textos: textos as any })
       .eq('id', id);
     if (error) { toast.error('Erro ao salvar textos'); console.error(error); }
     else {
