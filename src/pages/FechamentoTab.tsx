@@ -19,6 +19,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 import { formatAnoMes } from '@/lib/dateUtils';
 import { MESES_COLS } from '@/lib/calculos/labels';
