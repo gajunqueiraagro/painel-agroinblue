@@ -259,19 +259,19 @@ export function MapaPastosTab() {
               <table className="w-full text-xs border-collapse">
                 <thead className="sticky top-0 z-10 bg-muted">
                   <tr>
-                    <th className="sticky left-0 z-20 bg-muted px-2 py-1.5 text-left text-xs font-semibold border-b border-r min-w-[100px]">Pasto</th>
-                    <th className="px-2 py-1.5 text-left text-xs font-medium border-b border-r min-w-[70px]">Atividade</th>
-                    <th className="px-2 py-1.5 text-left text-xs font-medium border-b border-r min-w-[50px]">Lote</th>
+                    <th className="sticky left-0 z-20 bg-muted px-2 py-1 text-left text-xs font-semibold border-b border-r min-w-[90px]">Pasto</th>
+                    <th className="px-1.5 py-1 text-left text-xs font-medium border-b border-r min-w-[60px]">Atividade</th>
+                    <th className="px-1 py-1 text-left text-[10px] font-medium border-b border-r min-w-[40px]">Lote</th>
                     {categorias.map(cat => (
-                      <th key={cat.id} className="px-1.5 py-1.5 text-center text-xs font-medium border-b border-r min-w-[60px]">
-                        <div className="leading-tight">{cat.nome}</div>
+                      <th key={cat.id} className="px-1 py-1 text-center text-xs font-bold border-b border-r min-w-[32px]">
+                        {CAT_SIGLAS[cat.codigo] || cat.codigo}
                       </th>
                     ))}
-                    <th className="px-2 py-1.5 text-center text-xs font-semibold border-b border-r min-w-[60px] bg-primary/10">Total</th>
-                    <th className="px-2 py-1.5 text-center text-xs font-medium border-b border-r min-w-[65px]">Peso Méd.</th>
-                    <th className="px-2 py-1.5 text-center text-xs font-medium border-b border-r min-w-[55px]">Área</th>
-                    <th className="px-2 py-1.5 text-center text-xs font-medium border-b border-r min-w-[55px]">UA/ha</th>
-                    <th className="px-2 py-1.5 text-center text-xs font-medium border-b min-w-[45px]">Qual.</th>
+                    <th className="px-1.5 py-1 text-center text-xs font-semibold border-b border-r min-w-[40px] bg-primary/10">Total</th>
+                    <th className="px-1.5 py-1 text-center text-xs font-medium border-b border-r min-w-[50px]">Peso</th>
+                    <th className="px-1.5 py-1 text-center text-xs font-medium border-b border-r min-w-[45px]">Área</th>
+                    <th className="px-1.5 py-1 text-center text-xs font-medium border-b border-r min-w-[45px]">UA/ha</th>
+                    <th className="px-1.5 py-1 text-center text-xs font-medium border-b min-w-[35px]">Qual.</th>
                   </tr>
                 </thead>
                 <tbody>
