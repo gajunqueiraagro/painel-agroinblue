@@ -387,7 +387,7 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
 
           <button
             onClick={() => onTabChange('analise_consultor')}
-            className="flex items-center gap-2.5 rounded-xl border-2 border-primary/30 bg-primary/5 px-3 py-3 transition-all hover:border-primary hover:shadow-md active:scale-[0.98] group"
+            className="flex items-center gap-2.5 rounded-xl border-2 border-primary/30 bg-primary/5 px-4 py-4 min-h-[80px] transition-all hover:border-primary hover:shadow-md active:scale-[0.98] group"
           >
             <div className="rounded-full p-2 bg-primary/10 shrink-0">
               <TrendingUp className="h-5 w-5 text-primary" />
