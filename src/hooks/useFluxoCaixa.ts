@@ -5,20 +5,29 @@
  *
  * REGRA: O fluxo de caixa é SEMPRE GLOBAL (todas as fazendas),
  * independentemente da fazenda selecionada.
+ *
+ * CLASSIFICAÇÃO: usa src/lib/financeiro/classificacao.ts como fonte única.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { isEntradaFinanceira, isSaidaFinanceira } from '@/lib/financeiro/filters';
+import {
+  isConciliado,
+  isEntrada as isEntradaClass,
+  isSaida as isSaidaClass,
+  getEscopo,
+  classificarEntradaFluxo,
+  classificarSaidaFluxo,
+  datePagtoMes as datePagtoMesClass,
+  datePagtoAno as datePagtoAnoClass,
+  type LancamentoClassificavel,
+} from '@/lib/financeiro/classificacao';
 
-interface FluxoLancamentoBase {
-  status_transacao: string | null;
-  data_pagamento: string | null;
-  valor: number;
-  tipo_operacao: string | null;
-  macro_custo: string | null;
+interface FluxoLancamentoBase extends LancamentoClassificavel {
   produto: string | null;
-  escopo_negocio: string | null;
+  grupo_custo: string | null;
+  centro_custo: string | null;
+  subcentro: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -29,25 +38,35 @@ export interface FluxoMensal {
   mes: number;
   label: string;
   saldoInicial: number;
+  // Entradas
   receitas: number;
   receitasPec: number;
   receitasAgri: number;
   receitasOutras: number;
+  outrasEntradas: number;
   captacao: number;
   captacaoPec: number;
   captacaoAgri: number;
   aportes: number;
   totalEntradas: number;
+  // Saídas
   deducaoReceitas: number;
   desembolsoProdutivo: number;
   desembolsoPec: number;
   desembolsoAgri: number;
+  custeioPec: number;
+  custoioAgri: number;
+  investPec: number;
+  investAgri: number;
   reposicao: number;
+  despesasReposicao: number;
   amortizacoes: number;
   amortizacoesPec: number;
   amortizacoesAgri: number;
   dividendos: number;
+  outrasSaidas: number;
   totalSaidas: number;
+  // Saldos
   saldoFinal: number;
   saldoAcumulado: number;
 }
@@ -66,51 +85,6 @@ export interface FluxoCaixaResult {
   saldoInicialAno: number;
   saldoInicialAusente: boolean;
   saldoInicialAudit: SaldoInicialAudit | null;
-}
-
-// ---------------------------------------------------------------------------
-// Classification helpers
-// ---------------------------------------------------------------------------
-
-const isConciliado = (l: FluxoLancamentoBase) =>
-  (l.status_transacao || '').toLowerCase().trim() === 'conciliado';
-
-const datePagtoMes = (l: FluxoLancamentoBase): number | null => {
-  if (!l.data_pagamento || l.data_pagamento.length < 7) return null;
-  return Number(l.data_pagamento.substring(5, 7));
-};
-
-const datePagtoAno = (l: FluxoLancamentoBase): number | null => {
-  if (!l.data_pagamento || l.data_pagamento.length < 4) return null;
-  return Number(l.data_pagamento.substring(0, 4));
-};
-
-const normMacro = (l: FluxoLancamentoBase) =>
-  (l.macro_custo || '').toLowerCase().trim();
-
-const normEscopo = (l: FluxoLancamentoBase): 'pec' | 'agri' | 'outras' => {
-  const e = (l.escopo_negocio || '').toLowerCase().trim();
-  if (e.includes('pecuári') || e.includes('pecuaria') || e.includes('pec')) return 'pec';
-  if (e.includes('agricul') || e.includes('agri')) return 'agri';
-  return 'outras';
-};
-
-type CategoriaFluxo = 'receitas' | 'captacao' | 'aportes' | 'deducao' | 'desembolso' | 'reposicao' | 'amortizacoes' | 'dividendos';
-
-function classificarEntrada(l: FluxoLancamentoBase): CategoriaFluxo {
-  const macro = normMacro(l);
-  if (macro.includes('financiamento') || macro.includes('captação') || macro.includes('captacao')) return 'captacao';
-  if (macro.includes('aporte')) return 'aportes';
-  return 'receitas';
-}
-
-function classificarSaida(l: FluxoLancamentoBase): CategoriaFluxo {
-  const macro = normMacro(l);
-  if (macro.includes('dedução') || macro.includes('deducao') || macro === 'dedução de receitas') return 'deducao';
-  if (macro.includes('reposição') || macro.includes('reposicao')) return 'reposicao';
-  if (macro.includes('amortização') || macro.includes('amortizacao') || macro.includes('amortizaç')) return 'amortizacoes';
-  if (macro.includes('dividendo') || macro.includes('retirada')) return 'dividendos';
-  return 'desembolso';
 }
 
 // ---------------------------------------------------------------------------
@@ -150,7 +124,7 @@ export function useFluxoCaixa(
       while (true) {
         const { data } = await supabase
           .from('financeiro_lancamentos')
-          .select('status_transacao, data_pagamento, valor, tipo_operacao, macro_custo, produto, escopo_negocio')
+          .select('status_transacao, data_pagamento, valor, tipo_operacao, macro_custo, produto, escopo_negocio, grupo_custo, centro_custo, subcentro')
           .in('fazenda_id', allFazendaIds)
           .gte('data_pagamento', `${ano}-01-01`)
           .lte('data_pagamento', `${ano}-12-31`)
@@ -171,6 +145,9 @@ export function useFluxoCaixa(
           macro_custo: r.macro_custo,
           produto: r.produto,
           escopo_negocio: r.escopo_negocio,
+          grupo_custo: r.grupo_custo,
+          centro_custo: r.centro_custo,
+          subcentro: r.subcentro,
         })),
       );
     } catch {
@@ -180,7 +157,7 @@ export function useFluxoCaixa(
     }
   }, [ano, allFazendaIds.join(',')]);
 
-  // Fetch saldo inicial GLOBAL de Dez do ano anterior (registros SALDO da EXPORT_APP_UNICO, sem filtro de fazenda)
+  // Fetch saldo inicial GLOBAL de Dez do ano anterior
   const loadSaldoInicial = useCallback(async () => {
     if (allFazendaIds.length === 0) {
       setSaldoInicialAno(0);
@@ -238,12 +215,10 @@ export function useFluxoCaixa(
 
   // Compute 12-line fluxo
   const meses = useMemo((): FluxoMensal[] => {
-    const anoStr = String(ano);
-
     // Filter: conciliado + data_pagamento in the given year
     const conciliados = lancamentosGlobais.filter(l => {
       if (!isConciliado(l)) return false;
-      const a = datePagtoAno(l);
+      const a = datePagtoAnoClass(l);
       return a === ano;
     });
 
@@ -251,23 +226,8 @@ export function useFluxoCaixa(
     const byMes: Record<number, FluxoLancamentoBase[]> = {};
     for (let m = 1; m <= 12; m++) byMes[m] = [];
     for (const l of conciliados) {
-      const m = datePagtoMes(l);
+      const m = datePagtoMesClass(l);
       if (m && m >= 1 && m <= 12) byMes[m].push(l);
-    }
-
-    // DEBUG AUDIT — temporary logs
-    console.log(`[FLUXO-AUDIT] ano=${ano}, mesAte=${mesAte}`);
-    console.log(`[FLUXO-AUDIT] Total lançamentos globais carregados: ${lancamentosGlobais.length}`);
-    console.log(`[FLUXO-AUDIT] Total conciliados no ano: ${conciliados.length}`);
-    for (const debugM of [11, 12]) {
-      const mLancs = conciliados.filter(l => datePagtoMes(l) === debugM);
-      const mEntradas = mLancs.filter(l => isEntradaFinanceira(l));
-      const mSaidas = mLancs.filter(l => isSaidaFinanceira(l));
-      const mIgnorados = mLancs.filter(l => !isEntradaFinanceira(l) && !isSaidaFinanceira(l));
-      console.log(`[FLUXO-AUDIT] Mês ${debugM}: ${mLancs.length} conciliados | ${mEntradas.length} entradas (R$ ${mEntradas.reduce((s,l)=>s+Math.abs(l.valor),0).toFixed(2)}) | ${mSaidas.length} saídas (R$ ${mSaidas.reduce((s,l)=>s+Math.abs(l.valor),0).toFixed(2)}) | ${mIgnorados.length} ignorados`);
-      if (mIgnorados.length > 0) {
-        mIgnorados.forEach(l => console.log(`[FLUXO-AUDIT]   IGNORADO: tipo_operacao="${l.tipo_operacao}" valor=${l.valor} produto="${l.produto}"`));
-      }
     }
 
     let saldoAcumulado = saldoInicialAno;
@@ -282,16 +242,18 @@ export function useFluxoCaixa(
       let aportes = 0;
       let deducaoReceitas = 0;
       let desembolso = 0, desembolsoPec = 0, desembolsoAgri = 0;
-      let reposicao = 0;
+      let custeioPec = 0, custoioAgri = 0, investPec = 0, investAgri = 0;
+      let reposicao = 0, despesasReposicao = 0;
       let amortizacoes = 0, amortizacoesPec = 0, amortizacoesAgri = 0;
       let dividendos = 0;
 
       if (!isAfterFilter) {
         for (const l of lancs) {
           const val = Math.abs(l.valor);
-          const escopo = normEscopo(l);
-          if (isEntradaFinanceira(l)) {
-            const cat = classificarEntrada(l);
+          const escopo = getEscopo(l);
+
+          if (isEntradaClass(l)) {
+            const cat = classificarEntradaFluxo(l);
             if (cat === 'receitas') {
               receitas += val;
               if (escopo === 'pec') receitasPec += val;
@@ -299,25 +261,38 @@ export function useFluxoCaixa(
               else receitasOutras += val;
             } else if (cat === 'captacao') {
               captacao += val;
-              if (escopo === 'pec') captacaoPec += val;
-              else captacaoAgri += val;
+              if (escopo === 'agri') captacaoAgri += val;
+              else captacaoPec += val;
             } else {
               aportes += val;
             }
-          } else if (isSaidaFinanceira(l)) {
-            const cat = classificarSaida(l);
+          } else if (isSaidaClass(l)) {
+            const cat = classificarSaidaFluxo(l);
+            const macro = (l.macro_custo || '').toLowerCase().trim();
+
             if (cat === 'deducao') {
               deducaoReceitas += val;
             } else if (cat === 'desembolso') {
               desembolso += val;
               if (escopo === 'pec') desembolsoPec += val;
               else desembolsoAgri += val;
+              // Detail: custeio vs investimento
+              if (macro === 'custeio produtivo') {
+                if (escopo === 'agri') custoioAgri += val;
+                else custeioPec += val;
+              } else {
+                // investimento na fazenda (or fallback)
+                if (escopo === 'agri') investAgri += val;
+                else investPec += val;
+              }
             } else if (cat === 'reposicao') {
               reposicao += val;
+            } else if (cat === 'despesasReposicao') {
+              despesasReposicao += val;
             } else if (cat === 'amortizacoes') {
               amortizacoes += val;
-              if (escopo === 'pec') amortizacoesPec += val;
-              else amortizacoesAgri += val;
+              if (escopo === 'agri') amortizacoesAgri += val;
+              else amortizacoesPec += val;
             } else {
               dividendos += val;
             }
@@ -325,8 +300,10 @@ export function useFluxoCaixa(
         }
       }
 
-      const totalEntradas = receitas + captacao + aportes;
-      const totalSaidas = deducaoReceitas + desembolso + reposicao + amortizacoes + dividendos;
+      const outrasEntradas = captacao + aportes;
+      const totalEntradas = receitas + outrasEntradas;
+      const outrasSaidas = reposicao + despesasReposicao + deducaoReceitas + amortizacoes + dividendos;
+      const totalSaidas = deducaoReceitas + desembolso + reposicao + despesasReposicao + amortizacoes + dividendos;
       const saldoInicial = m === 1 ? saldoInicialAno : result[m - 2].saldoFinal;
       const saldoFinal = isAfterFilter ? saldoInicial : saldoInicial + totalEntradas - totalSaidas;
 
@@ -342,6 +319,7 @@ export function useFluxoCaixa(
         receitasPec,
         receitasAgri,
         receitasOutras,
+        outrasEntradas,
         captacao,
         captacaoPec,
         captacaoAgri,
@@ -351,11 +329,17 @@ export function useFluxoCaixa(
         desembolsoProdutivo: desembolso,
         desembolsoPec,
         desembolsoAgri,
+        custeioPec,
+        custoioAgri,
+        investPec,
+        investAgri,
         reposicao,
+        despesasReposicao,
         amortizacoes,
         amortizacoesPec,
         amortizacoesAgri,
         dividendos,
+        outrasSaidas,
         totalSaidas,
         saldoFinal,
         saldoAcumulado: isAfterFilter ? 0 : saldoAcumulado,
