@@ -788,15 +788,18 @@ export function DashboardFinanceiro({
       .reduce((s, l) => s + calcValorTotal(l), 0);
 
     // --- Receitas Pecuárias por Caixa ---
+    const normMacroLocal = (l: FinanceiroLancamento) => (l.macro_custo || '').toLowerCase().trim();
+    const normEscopoLocal = (l: FinanceiroLancamento) => (l.escopo_negocio || '').toLowerCase().trim();
+
     const recPecCaixaMes = entradasListMes
-      .filter(l => normMacro(l) === 'receitas' && (normEscopo(l) === 'pecuaria' || !l.escopo_negocio))
+      .filter(l => normMacroLocal(l) === 'receitas' && (normEscopoLocal(l) === 'pecuaria' || !l.escopo_negocio))
       .reduce((s, l) => s + Math.abs(l.valor), 0);
 
     const recPecCaixaAcum = lancamentos
       .filter(l => {
         if (!isConciliado(l) || !isEntrada(l)) return false;
-        if (normMacro(l) !== 'receitas') return false;
-        if (normEscopo(l) !== 'pecuaria' && l.escopo_negocio) return false;
+        if (normMacroLocal(l) !== 'receitas') return false;
+        if (normEscopoLocal(l) !== 'pecuaria' && l.escopo_negocio) return false;
         const am = datePagtoAnoMes(l);
         if (!am || !am.startsWith(anoFiltro)) return false;
         return Number(am.substring(5, 7)) <= mesLimite;
