@@ -301,12 +301,18 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         </div>
 
         {/* Filtros */}
-        <div className="flex items-center gap-3">
-          <Select value={anoMes} onValueChange={setAnoMes}>
-            <SelectTrigger className="w-36 h-8 text-xs font-bold"><SelectValue /></SelectTrigger>
+        <div className="flex items-center gap-2">
+          <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+            <SelectTrigger className="w-20 h-8 text-xs font-bold"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {getAnoMesOptions().map(am => (
-                <SelectItem key={am} value={am}>{formatAnoMes(am)}</SelectItem>
+              {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
+            <SelectTrigger className="w-20 h-8 text-xs font-bold"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {MESES_COLS.map((m, i) => (
+                <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
