@@ -191,6 +191,12 @@ const Index = () => {
     setActiveTab('lancamentos');
   }, []);
   const goToFechamentoTab = useCallback(() => setActiveTab('fechamento'), []);
+  const goToEvolucaoRebanhoHub = useCallback(() => setActiveTab('evolucao_rebanho_hub'), []);
+  const goToReclassFromEvolCategoria = useCallback((filtro?: { ano: string; mes: number }) => {
+    if (filtro) setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
+    setLancamentosFromEvolCategoria(true);
+    setActiveTab('lancamentos');
+  }, []);
 
   // Sub-screens that need a back button
   const subScreenBackMap: Partial<Record<TabId, () => void>> = {
