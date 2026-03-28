@@ -20,7 +20,7 @@ import { DREAtividade } from '@/components/financeiro/AnaliseDRE';
 import { calcCabMediasMensais } from '@/components/financeiro/AnaliseEconomica';
 import { TabId } from '@/components/BottomNav';
 import {
-  AlertTriangle, TrendingUp,
+  AlertTriangle, TrendingUp, FileBarChart, ChevronRight,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
