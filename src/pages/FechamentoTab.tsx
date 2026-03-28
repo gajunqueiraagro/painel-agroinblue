@@ -123,6 +123,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
   const [bulkClosing, setBulkClosing] = useState(false);
   const [showResumoAtividades, setShowResumoAtividades] = useState(false);
+  const [confirmBulkReopenOpen, setConfirmBulkReopenOpen] = useState(false);
+  const [bulkReopening, setBulkReopening] = useState(false);
 
   useEffect(() => { loadFechamentos(anoMes); }, [anoMes, loadFechamentos]);
 
