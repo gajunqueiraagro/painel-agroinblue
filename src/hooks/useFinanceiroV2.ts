@@ -64,6 +64,13 @@ export interface FiltrosV2 {
   status_transacao?: string;
 }
 
+export interface ClassificacaoItem {
+  subcentro: string;
+  centro_custo: string;
+  macro_custo: string;
+  tipo_operacao: string;
+}
+
 const PAGE_SIZE = 50;
 
 export function useFinanceiroV2() {
