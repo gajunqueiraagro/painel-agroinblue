@@ -224,10 +224,10 @@ function ZootecnicoCharts({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro,
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <ChartCard title="Rebanho Final do mês (cab)" subtitle="Quantidade de cabeças no final do mês" data={chartData}
         keys={[`cab_${anoNum}`, `cab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-        type="area" mesFiltro={mesFiltro} />
+        type="area" mesFiltro={mesFiltro} valueSuffix=" cab." />
       <ChartCard title="Lotação: Kg vivo por ha (Kg/ha)" subtitle="Quantidade de Kg sobre cada hectare produtivo" data={chartData}
         keys={[`kgHa_${anoNum}`, `kgHa_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
-        type="line" mesFiltro={mesFiltro} />
+        type="line" mesFiltro={mesFiltro} decimals={2} valueSuffix=" kg/ha" />
       {prodData.length > 0 && (
         <>
           <ChartCard title="Arrobas Produzidas por mês" subtitle="Quantidade de arrobas produzidas por mês" data={prodData}
@@ -407,9 +407,10 @@ interface ChartCardProps {
   averageKey?: string;
   averageLabel?: string;
   isCurrency?: boolean;
+  valueSuffix?: string;
 }
 
-function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, mesFiltro, averageKey, averageLabel, isCurrency }: ChartCardProps) {
+function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, mesFiltro, averageKey, averageLabel, isCurrency, valueSuffix }: ChartCardProps) {
   const comparisons = useMemo(() => {
     if (!data || data.length === 0 || keys.length < 2) return { mom: null, yoy: null };
     const mesIdx = mesFiltro - 1;
@@ -478,6 +479,7 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
             {displayValue !== null && (
               <span className="text-sm font-bold text-foreground">
                 {formatVal(displayValue)}
+                {valueSuffix && <span className="text-[10px] font-normal text-muted-foreground">{valueSuffix}</span>}
                 {averageLabel && <span className="text-[10px] font-normal text-muted-foreground ml-1">{averageLabel}</span>}
               </span>
             )}
