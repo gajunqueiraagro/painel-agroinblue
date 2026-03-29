@@ -164,6 +164,9 @@ export function LancamentoV2Dialog({
       setMacroCusto('');
       setCentroCusto('');
       setTipoOperacao('2-Saídas');
+      setSubcentro('');
+      setMacroCusto('');
+      setCentroCusto('');
       setStatusTransacao('previsto');
       setValorDisplay('0,00');
       setContaOrigemId('');
