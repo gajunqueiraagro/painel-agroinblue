@@ -70,10 +70,14 @@ export interface FornecedorV2 {
 export interface FiltrosV2 {
   fazenda_id?: string;
   ano?: string;
-  mes?: string;
+  mes?: string;           // single month or 'todos'
+  meses?: string[];       // multi-month select
   conta_bancaria_id?: string;
   tipo_operacao?: string;
   status_transacao?: string;
+  macro_custo?: string;
+  centro_custo?: string;
+  subcentro?: string;
 }
 
 export interface ClassificacaoItem {
