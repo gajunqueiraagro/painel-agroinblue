@@ -315,9 +315,15 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
           {blocos.map(b => (
             <button
               key={b.id}
-              onClick={() => setBloco(b.id)}
+              onClick={() => {
+                if (b.id === 'graficos_nav') {
+                  onTabChange('graficos_analise', { ano: anoFiltro, mes: mesFiltro });
+                } else {
+                  setBloco(b.id);
+                }
+              }}
               className={`py-1.5 px-1 rounded text-[10px] sm:text-xs font-bold transition-colors ${
-                bloco === b.id
+                b.id !== 'graficos_nav' && bloco === b.id
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-muted-foreground'
               }`}
