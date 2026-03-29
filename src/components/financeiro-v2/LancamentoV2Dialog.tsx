@@ -16,6 +16,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSave: (form: LancamentoV2Form, id?: string) => Promise<boolean>;
+  onDelete?: (id: string) => Promise<boolean>;
   lancamento?: LancamentoV2 | null;
   fazendas: Fazenda[];
   contas: ContaBancariaV2[];
@@ -66,7 +67,7 @@ function parseBRL(s: string): number {
 }
 
 export function LancamentoV2Dialog({
-  open, onClose, onSave, lancamento, fazendas, contas, classificacoes,
+  open, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
   fornecedores, defaultFazendaId, onCriarFornecedor,
 }: Props) {
   const isEdit = !!lancamento;
@@ -521,9 +522,24 @@ export function LancamentoV2Dialog({
               </div>
             </div>
 
-            <Button onClick={handleSubmit} disabled={saving || !canSave} className="w-full">
-              {saving ? 'Salvando...' : isEdit ? 'Salvar Alterações' : 'Criar Lançamento'}
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={handleSubmit} disabled={saving || !canSave} className="flex-1">
+                {saving ? 'Salvando...' : isEdit ? 'Salvar Alterações' : 'Criar Lançamento'}
+              </Button>
+              {isEdit && onDelete && (
+                <Button
+                  variant="destructive"
+                  onClick={async () => {
+                    if (!confirm('Tem certeza que deseja excluir este lançamento?')) return;
+                    const ok = await onDelete(lancamento!.id);
+                    if (ok) onClose();
+                  }}
+                  className="px-4"
+                >
+                  Excluir
+                </Button>
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
