@@ -389,7 +389,7 @@ export function LancamentoV2Dialog({
                       <SelectContent className="max-h-60">
                         <SelectItem value="__none__">Selecione...</SelectItem>
                         {contasDisponiveis.map(c => (
-                          <SelectItem key={c.id} value={c.id}>{c.nome_conta}{c.banco ? ` (${c.banco})` : ''}</SelectItem>
+                          <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}{c.banco ? ` (${c.banco})` : ''}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -404,7 +404,7 @@ export function LancamentoV2Dialog({
                       <SelectContent className="max-h-60">
                         <SelectItem value="__none__">Selecione...</SelectItem>
                         {contasDisponiveis.map(c => (
-                          <SelectItem key={c.id} value={c.id}>{c.nome_conta}{c.banco ? ` (${c.banco})` : ''}</SelectItem>
+                          <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}{c.banco ? ` (${c.banco})` : ''}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -415,7 +415,7 @@ export function LancamentoV2Dialog({
                 <div className="p-1.5 bg-yellow-50 border border-yellow-200 rounded text-[10px] text-yellow-800">
                   <strong>🔍 DEBUG Contas:</strong> {contasDisponiveis.length} carregada(s) (total: {contas.length})
                   {contasDisponiveis.length > 0 && (
-                    <span> · {contasDisponiveis.map(c => c.nome_conta).join(' | ')}</span>
+                    <span> · {contasDisponiveis.map(c => c.nome_exibicao || c.nome_conta).join(' | ')}</span>
                   )}
                   {contasDisponiveis.length === 0 && (
                     <span className="text-red-600"> · NENHUMA CONTA p/ fazenda {fazendaId || '(nenhuma)'}</span>

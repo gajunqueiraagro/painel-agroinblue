@@ -20,18 +20,28 @@ import { format, parseISO } from 'date-fns';
 
 const CONTA_GROUP_ORDER: Record<string, number> = { cc: 0, inv: 1, cartao: 2 };
 
-function sortContas<T extends { nome_conta: string }>(contas: T[]): T[] {
+function sortContas<T extends { nome_conta: string; tipo_conta?: string | null; codigo_conta?: string | null }>(contas: T[]): T[] {
   return [...contas].sort((a, b) => {
-    const prefA = a.nome_conta.split('-')[0]?.toLowerCase() || '';
-    const prefB = b.nome_conta.split('-')[0]?.toLowerCase() || '';
+    const tA = (a.tipo_conta || '').toLowerCase();
+    const tB = (b.tipo_conta || '').toLowerCase();
+    // Fallback: extract prefix from codigo_conta or nome_conta
+    const prefA = tA || (a.codigo_conta || a.nome_conta).split('-')[0]?.toLowerCase() || '';
+    const prefB = tB || (b.codigo_conta || b.nome_conta).split('-')[0]?.toLowerCase() || '';
     const gA = CONTA_GROUP_ORDER[prefA] ?? 99;
     const gB = CONTA_GROUP_ORDER[prefB] ?? 99;
     if (gA !== gB) return gA - gB;
-    // Within same group, descending by numeric suffix
-    const numA = parseInt(a.nome_conta.split('-')[1] || '0', 10);
-    const numB = parseInt(b.nome_conta.split('-')[1] || '0', 10);
+    // Within same group, descending by numeric suffix from codigo_conta
+    const codeA = a.codigo_conta || a.nome_conta;
+    const codeB = b.codigo_conta || b.nome_conta;
+    const numA = parseInt(codeA.split('-')[1] || '0', 10);
+    const numB = parseInt(codeB.split('-')[1] || '0', 10);
     return numB - numA;
   });
+}
+
+/** Display name for a conta: prefer nome_exibicao, fallback to nome_conta */
+function contaLabel(c: { nome_conta: string; nome_exibicao?: string | null }): string {
+  return c.nome_exibicao || c.nome_conta;
 }
 
 const MACRO_ORDER = [
@@ -421,7 +431,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 <SelectTrigger className={`${selCls} ${isEntrada ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
-                  {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{c.nome_conta}</SelectItem>)}
+                  {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -431,7 +441,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 <SelectTrigger className={`${selCls} ${isSaida ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
-                  {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{c.nome_conta}</SelectItem>)}
+                  {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

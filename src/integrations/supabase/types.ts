@@ -1006,10 +1006,12 @@ export type Database = {
           ativa: boolean
           banco: string | null
           cliente_id: string
+          codigo_conta: string | null
           created_at: string
           fazenda_id: string
           id: string
           nome_conta: string
+          nome_exibicao: string | null
           numero_conta: string | null
           ordem_exibicao: number
           tipo_conta: string | null
@@ -1020,10 +1022,12 @@ export type Database = {
           ativa?: boolean
           banco?: string | null
           cliente_id: string
+          codigo_conta?: string | null
           created_at?: string
           fazenda_id: string
           id?: string
           nome_conta: string
+          nome_exibicao?: string | null
           numero_conta?: string | null
           ordem_exibicao?: number
           tipo_conta?: string | null
@@ -1034,10 +1038,12 @@ export type Database = {
           ativa?: boolean
           banco?: string | null
           cliente_id?: string
+          codigo_conta?: string | null
           created_at?: string
           fazenda_id?: string
           id?: string
           nome_conta?: string
+          nome_exibicao?: string | null
           numero_conta?: string | null
           ordem_exibicao?: number
           tipo_conta?: string | null

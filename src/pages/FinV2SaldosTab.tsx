@@ -28,6 +28,7 @@ interface SaldoBancario {
 interface ContaRef {
   id: string;
   nome_conta: string;
+  nome_exibicao: string | null;
 }
 
 function fmtBRL(v: number): string {
@@ -74,7 +75,7 @@ export function FinV2SaldosTab() {
         .order('ano_mes', { ascending: false }),
       supabase
         .from('financeiro_contas_bancarias')
-        .select('id, nome_conta')
+        .select('id, nome_conta, nome_exibicao')
         .eq('cliente_id', clienteAtual.id)
         .eq('ativa', true),
     ]);
@@ -85,7 +86,7 @@ export function FinV2SaldosTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  const contaNome = (id: string) => contas.find(c => c.id === id)?.nome_conta || '-';
+  const contaNome = (id: string) => { const c = contas.find(c => c.id === id); return c?.nome_exibicao || c?.nome_conta || '-'; };
 
   const parseBRL = (s: string) => parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
   const toBRL = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -212,7 +213,7 @@ export function FinV2SaldosTab() {
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {contas.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.nome_conta}</SelectItem>
+                    <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

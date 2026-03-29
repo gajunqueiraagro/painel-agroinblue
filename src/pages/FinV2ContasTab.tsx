@@ -21,6 +21,8 @@ interface ContaBancaria {
   numero_conta: string | null;
   agencia: string | null;
   tipo_conta: string | null;
+  codigo_conta: string | null;
+  nome_exibicao: string | null;
   fazenda_id: string;
   ativa: boolean;
   ordem_exibicao: number;
@@ -39,6 +41,9 @@ export function FinV2ContasTab() {
   const [numero, setNumero] = useState('');
   const [fazendaId, setFazendaId] = useState('');
   const [ativa, setAtiva] = useState(true);
+  const [tipoConta, setTipoConta] = useState('cc');
+  const [codigoConta, setCodigoConta] = useState('');
+  const [nomeExibicao, setNomeExibicao] = useState('');
 
   const load = useCallback(async () => {
     if (!clienteAtual?.id) return;
@@ -59,6 +64,7 @@ export function FinV2ContasTab() {
     setNome(''); setBanco(''); setNumero('');
     setFazendaId(fazendas[0]?.id || '');
     setAtiva(true);
+    setTipoConta('cc'); setCodigoConta(''); setNomeExibicao('');
     setDialogOpen(true);
   };
 
@@ -69,6 +75,9 @@ export function FinV2ContasTab() {
     setNumero(c.numero_conta || '');
     setFazendaId(c.fazenda_id);
     setAtiva(c.ativa);
+    setTipoConta(c.tipo_conta || 'cc');
+    setCodigoConta(c.codigo_conta || '');
+    setNomeExibicao(c.nome_exibicao || '');
     setDialogOpen(true);
   };
 
@@ -83,6 +92,9 @@ export function FinV2ContasTab() {
       nome_conta: nome.trim(),
       banco: banco.trim() || null,
       numero_conta: numero.trim() || null,
+      tipo_conta: tipoConta,
+      codigo_conta: codigoConta.trim() || null,
+      nome_exibicao: nomeExibicao.trim() || null,
       ativa,
     };
 
@@ -111,24 +123,30 @@ export function FinV2ContasTab() {
       <Card>
         <CardContent className="p-0">
           <Table>
-            <TableHeader>
+             <TableHeader>
               <TableRow>
-                <TableHead>Nome</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead>Código</TableHead>
+                <TableHead>Nome Exibição</TableHead>
                 <TableHead>Banco</TableHead>
-                <TableHead>Nº Conta</TableHead>
                 <TableHead>Fazenda</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>}
-              {!loading && contas.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhuma conta cadastrada</TableCell></TableRow>}
+              {loading && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>}
+              {!loading && contas.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhuma conta cadastrada</TableCell></TableRow>}
               {contas.map(c => (
                 <TableRow key={c.id}>
-                  <TableCell className="font-medium">{c.nome_conta}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-[10px]">
+                      {c.tipo_conta === 'inv' ? 'Investimento' : c.tipo_conta === 'cartao' ? 'Cartão' : 'Conta Corrente'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">{c.codigo_conta || '-'}</TableCell>
+                  <TableCell className="font-medium">{c.nome_exibicao || c.nome_conta}</TableCell>
                   <TableCell>{c.banco || '-'}</TableCell>
-                  <TableCell>{c.numero_conta || '-'}</TableCell>
                   <TableCell className="text-xs">{fazendaNome(c.fazenda_id)}</TableCell>
                   <TableCell>
                     <Badge variant={c.ativa ? 'default' : 'secondary'} className="text-[10px]">
@@ -153,17 +171,40 @@ export function FinV2ContasTab() {
             <DialogTitle>{editing ? 'Editar Conta' : 'Nova Conta Bancária'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div>
-              <Label>Nome da Conta *</Label>
-              <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Bradesco Operação" />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Tipo de Conta *</Label>
+                <Select value={tipoConta} onValueChange={setTipoConta}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cc">Conta Corrente</SelectItem>
+                    <SelectItem value="inv">Investimento</SelectItem>
+                    <SelectItem value="cartao">Cartão de Crédito</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Código</Label>
+                <Input value={codigoConta} onChange={e => setCodigoConta(e.target.value)} placeholder="Ex: cc-001" />
+              </div>
             </div>
             <div>
-              <Label>Banco</Label>
-              <Input value={banco} onChange={e => setBanco(e.target.value)} placeholder="Ex: Bradesco" />
+              <Label>Nome de Exibição</Label>
+              <Input value={nomeExibicao} onChange={e => setNomeExibicao(e.target.value)} placeholder="Ex: BB Operação" />
             </div>
             <div>
-              <Label>Nº Conta</Label>
-              <Input value={numero} onChange={e => setNumero(e.target.value)} placeholder="Ex: 12345-6" />
+              <Label>Nome interno (legado)</Label>
+              <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Bradesco Operação" className="text-muted-foreground" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Banco</Label>
+                <Input value={banco} onChange={e => setBanco(e.target.value)} placeholder="Ex: Bradesco" />
+              </div>
+              <div>
+                <Label>Nº Conta</Label>
+                <Input value={numero} onChange={e => setNumero(e.target.value)} placeholder="Ex: 12345-6" />
+              </div>
             </div>
             <div>
               <Label>Fazenda *</Label>
