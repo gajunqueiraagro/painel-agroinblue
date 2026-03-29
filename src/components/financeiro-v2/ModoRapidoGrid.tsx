@@ -262,7 +262,7 @@ export function ModoRapidoGrid({ fazendaId, contas, classificacoes, onSaveBatch,
                   <td className="px-1 py-0.5 text-muted-foreground font-mono text-center">
                     {rowIdx + 1}
                     {hasError && (
-                      <AlertCircle className="h-3 w-3 text-destructive inline ml-0.5" title={rowErrors?.join(', ')} />
+                      <span title={rowErrors?.join(', ')}><AlertCircle className="h-3 w-3 text-destructive inline ml-0.5" /></span>
                     )}
                   </td>
                   {/* Data Competência */}
