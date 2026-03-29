@@ -2,7 +2,7 @@
  * Análises — container com sub-abas: Indicadores | Gráficos | DRE
  * Segue o padrão visual da tela Econômico (AnaliseEconomica).
  */
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { MESES_NOMES, MESES_COLS } from '@/lib/calculos/labels';
@@ -10,17 +10,28 @@ import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 import { calcSaldoPorCategoriaLegado, calcPesoMedioPonderado, calcUA, calcUAHa, calcAreaProdutivaPecuaria } from '@/lib/calculos/zootecnicos';
 import { calcArrobasSafe } from '@/lib/calculos/economicos';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
-import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
+import { useFinanceiro, type FinanceiroLancamento, type RateioADM } from '@/hooks/useFinanceiro';
 import { useArrobasGlobal } from '@/hooks/useArrobasGlobal';
 import { usePastos } from '@/hooks/usePastos';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { supabase } from '@/integrations/supabase/client';
 import { KpiCard } from '@/components/indicadores/KpiCard';
 import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';
 import { DREAtividade } from '@/components/financeiro/AnaliseDRE';
 import { calcCabMediasMensais } from '@/components/financeiro/AnaliseEconomica';
+import {
+  isConciliado as isConciliadoClass,
+  isEntrada as isEntradaClass,
+  isSaida as isSaidaClass,
+  getEscopo,
+  classificarSaidaFluxo,
+  datePagtoAno,
+  datePagtoMes,
+} from '@/lib/financeiro/classificacao';
+import { isDesembolsoProdutivo, isReceita as isReceitaMacro } from '@/lib/financeiro/classificacao';
 import { TabId } from '@/components/BottomNav';
 import {
-  AlertTriangle, TrendingUp, FileBarChart, ChevronRight,
+  AlertTriangle, TrendingUp, FileBarChart, ChevronRight, Info,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
