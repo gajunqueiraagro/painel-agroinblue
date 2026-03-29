@@ -171,17 +171,40 @@ export function FinV2ContasTab() {
             <DialogTitle>{editing ? 'Editar Conta' : 'Nova Conta Bancária'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div>
-              <Label>Nome da Conta *</Label>
-              <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Bradesco Operação" />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Tipo de Conta *</Label>
+                <Select value={tipoConta} onValueChange={setTipoConta}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cc">Conta Corrente</SelectItem>
+                    <SelectItem value="inv">Investimento</SelectItem>
+                    <SelectItem value="cartao">Cartão de Crédito</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Código</Label>
+                <Input value={codigoConta} onChange={e => setCodigoConta(e.target.value)} placeholder="Ex: cc-001" />
+              </div>
             </div>
             <div>
-              <Label>Banco</Label>
-              <Input value={banco} onChange={e => setBanco(e.target.value)} placeholder="Ex: Bradesco" />
+              <Label>Nome de Exibição</Label>
+              <Input value={nomeExibicao} onChange={e => setNomeExibicao(e.target.value)} placeholder="Ex: BB Operação" />
             </div>
             <div>
-              <Label>Nº Conta</Label>
-              <Input value={numero} onChange={e => setNumero(e.target.value)} placeholder="Ex: 12345-6" />
+              <Label>Nome interno (legado)</Label>
+              <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Bradesco Operação" className="text-muted-foreground" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Banco</Label>
+                <Input value={banco} onChange={e => setBanco(e.target.value)} placeholder="Ex: Bradesco" />
+              </div>
+              <div>
+                <Label>Nº Conta</Label>
+                <Input value={numero} onChange={e => setNumero(e.target.value)} placeholder="Ex: 12345-6" />
+              </div>
             </div>
             <div>
               <Label>Fazenda *</Label>
