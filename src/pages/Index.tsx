@@ -220,6 +220,7 @@ const Index = () => {
     analise_economica: goToVisaoFinHub,
     preco_mercado: goToVisaoZooHub,
     fin_caixa: goToLancarFinHub,
+    financeiro_v2: goToLancarFinHub,
     fechamento: goToZootecnico,
     evolucao_rebanho_hub: goToLancarZooHub,
     fluxo_anual: () => setActiveTab('movimentacao'),
