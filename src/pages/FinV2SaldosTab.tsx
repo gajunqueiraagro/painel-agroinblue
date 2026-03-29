@@ -213,7 +213,7 @@ export function FinV2SaldosTab() {
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {contas.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.nome_conta}</SelectItem>
+                    <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
