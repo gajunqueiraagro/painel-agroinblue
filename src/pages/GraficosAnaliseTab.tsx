@@ -239,7 +239,7 @@ function ZootecnicoCharts({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro,
           <ChartCard title="GMD médio (kg/dia)" subtitle="Kg médio ganho por cabeça, por dia" data={prodData}
             keys={[`gmdMes_${anoNum}`, `gmdMes_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
             type="bar" decimals={3} mesFiltro={mesFiltro}
-            averageKey={`gmdMes_${anoNum}`} averageLabel="kg/dia" />
+            lineOverlayKey={`gmdMes_${anoNum}`} valueSuffix=" kg/dia" />
         </>
       )}
     </div>
