@@ -58,6 +58,9 @@ export interface ContaBancariaV2 {
   nome_conta: string;
   banco: string | null;
   fazenda_id: string;
+  tipo_conta: string | null;
+  codigo_conta: string | null;
+  nome_exibicao: string | null;
 }
 
 export interface FornecedorV2 {
