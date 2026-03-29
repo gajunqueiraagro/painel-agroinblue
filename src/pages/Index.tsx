@@ -34,8 +34,9 @@ import { VisaoAnualZootecnicaTab } from './VisaoAnualZootecnicaTab';
 import { FechamentoExecutivoTab } from './FechamentoExecutivoTab';
 import { AnaliseConsultorTab } from './AnaliseConsultorTab';
 import { PrecoMercadoTab } from './PrecoMercadoTab';
-import { FazendaSelector } from '@/components/FazendaSelector';
+import { GraficosAnaliseTab } from './GraficosAnaliseTab';
 import { ClienteSelector } from '@/components/ClienteSelector';
+import { FazendaSelector } from '@/components/FazendaSelector';
 import { SyncStatus } from '@/components/SyncStatus';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
@@ -86,6 +87,7 @@ const TITLES: Record<TabId, string> = {
   fechamento_executivo: 'Fechamento Executivo',
   analise_consultor: 'Análise do Consultor',
   preco_mercado: 'Preço de Mercado',
+  graficos_analise: 'Gráficos',
 };
 
 const Index = () => {
@@ -420,6 +422,15 @@ const Index = () => {
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
           onBack={goToVisaoZooHub}
+        />
+      )}
+      {activeTab === 'graficos_analise' && (
+        <GraficosAnaliseTab
+          lancamentos={lancamentosVisiveis}
+          saldosIniciais={saldosIniciais}
+          onBack={goToVisaoZooHub}
+          filtroAnoInicial={filtroGlobal.ano}
+          filtroMesInicial={filtroGlobal.mes}
         />
       )}
       </div>

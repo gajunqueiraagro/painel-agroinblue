@@ -29,7 +29,7 @@ import {
 } from 'recharts';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
-type Bloco = 'indicadores' | 'graficos' | 'dre';
+type Bloco = 'indicadores' | 'dre';
 type Vista = 'mes' | 'acumulado';
 type Cenario = 'realizado' | 'previsto';
 
@@ -229,9 +229,9 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
   // Meses options
   const mesesOpt = MESES_COLS.map((m, i) => ({ value: i + 1, label: m.label }));
 
-  const blocos: { id: Bloco; label: string }[] = [
+  const blocos: { id: Bloco | 'graficos_nav'; label: string }[] = [
     { id: 'indicadores', label: '📊 Indicadores' },
-    { id: 'graficos', label: '📈 Gráficos' },
+    { id: 'graficos_nav', label: '📈 Gráficos' },
     { id: 'dre', label: '📋 DRE' },
   ];
 
@@ -315,9 +315,15 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
           {blocos.map(b => (
             <button
               key={b.id}
-              onClick={() => setBloco(b.id)}
+              onClick={() => {
+                if (b.id === 'graficos_nav') {
+                  onTabChange('graficos_analise', { ano: anoFiltro, mes: mesFiltro });
+                } else {
+                  setBloco(b.id);
+                }
+              }}
               className={`py-1.5 px-1 rounded text-[10px] sm:text-xs font-bold transition-colors ${
-                bloco === b.id
+                b.id !== 'graficos_nav' && bloco === b.id
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-muted-foreground'
               }`}
@@ -340,17 +346,6 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
             kgHa={kgHa}
             kgHaComps={kgHaComps}
             acumulado={acumulado}
-          />
-        )}
-
-        {bloco === 'graficos' && (
-          <GraficosContent
-            zoo={zoo}
-            lancamentos={lancamentos}
-            saldosIniciais={saldosIniciais}
-            anoNum={anoNum}
-            mesFiltro={mesFiltro}
-            pastos={pastos}
           />
         )}
 
