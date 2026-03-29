@@ -300,8 +300,8 @@ export function useFluxoCaixa(
 
       const outrasEntradas = captacao + aportes;
       const totalEntradas = receitas + outrasEntradas;
-      const outrasSaidas = reposicao + despesasReposicao + deducaoReceitas + amortizacoes + dividendos;
-      const totalSaidas = deducaoReceitas + desembolso + reposicao + despesasReposicao + amortizacoes + dividendos;
+      const outrasSaidas = reposicao + deducaoReceitas + amortizacoes + dividendos;
+      const totalSaidas = deducaoReceitas + desembolso + reposicao + amortizacoes + dividendos;
       const saldoInicial = m === 1 ? saldoInicialAno : result[m - 2].saldoFinal;
       const saldoFinal = isAfterFilter ? saldoInicial : saldoInicial + totalEntradas - totalSaidas;
 
