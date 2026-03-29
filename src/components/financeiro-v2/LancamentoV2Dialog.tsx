@@ -437,7 +437,7 @@ export function LancamentoV2Dialog({
                         aria-expanded={subcentroOpen}
                         className="w-full h-9 justify-between font-normal text-sm"
                       >
-                        {subcentro || 'Selecione o subcentro...'}
+                        {subcentro ? shortLabel(subcentro) : 'Selecione o subcentro...'}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
