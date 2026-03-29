@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Plus, Pencil, Search, Link2, AlertTriangle } from 'lucide-react';
+import { FornecedorFormDialog } from '@/components/financeiro-v2/FornecedorFormDialog';
 import { toast } from 'sonner';
 
 interface Fornecedor {
