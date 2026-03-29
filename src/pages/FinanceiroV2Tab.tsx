@@ -96,9 +96,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     fazenda_id: fazendaId,
     ano,
     mes,
-    conta_bancaria_id: contaBancariaId || undefined,
-    tipo_operacao: tipoOperacao || undefined,
-    status_transacao: statusTransacao || undefined,
+    conta_bancaria_id: contaBancariaId !== '__all__' ? contaBancariaId : undefined,
+    tipo_operacao: tipoOperacao !== '__all__' ? tipoOperacao : undefined,
+    status_transacao: statusTransacao !== '__all__' ? statusTransacao : undefined,
   }), [fazendaId, ano, mes, contaBancariaId, tipoOperacao, statusTransacao]);
 
   // Load on filter change
