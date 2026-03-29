@@ -258,8 +258,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         </div>
       )}
 
-      {/* Table */}
-      {!hook.loading && fazendaId && ano && (
+      {/* Modo Rápido */}
+      {mode === 'rapido' && fazendaId && (
+        <ModoRapidoGrid
+          fazendaId={fazendaId}
+          contas={hook.contasBancarias}
+          classificacoes={hook.classificacoes}
+          onSaveBatch={hook.criarLancamentosEmLote}
+          onDone={() => hook.loadLancamentos(filtros, 0)}
+        />
+      )}
+
+      {/* Table (list mode) */}
+      {mode === 'list' && !hook.loading && fazendaId && ano && (
         <>
           <div className="rounded-lg border overflow-x-auto">
             <Table>
