@@ -55,11 +55,6 @@ export function FinV2FornecedoresTab() {
   const [searchText, setSearchText] = useState('');
   const [activeTab, setActiveTab] = useState('cadastro');
 
-  const [nome, setNome] = useState('');
-  const [cpfCnpj, setCpfCnpj] = useState('');
-  const [fazendaId, setFazendaId] = useState('');
-  const [ativo, setAtivo] = useState(true);
-
   // Pending items
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
   const [loadingPending, setLoadingPending] = useState(false);
