@@ -309,7 +309,7 @@ export function useFinanceiro() {
         const needsRateio = fazendaADM && fazendaADM.id !== fazendaId;
 
         const lancPromise = fetchAllPaginated<FinanceiroLancamento>((from, to) =>
-          supabase.from('financeiro_lancamentos').select('*').eq('fazenda_id', fazendaId).order('data_realizacao', { ascending: false }).range(from, to),
+          (supabase.from('financeiro_lancamentos').select('*') as any).eq('fazenda_id', fazendaId).order('data_realizacao', { ascending: false }).range(from, to),
         );
 
         const admPromise = needsRateio
