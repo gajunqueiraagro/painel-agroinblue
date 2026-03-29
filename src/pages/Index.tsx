@@ -36,6 +36,11 @@ import { AnaliseConsultorTab } from './AnaliseConsultorTab';
 import { PrecoMercadoTab } from './PrecoMercadoTab';
 import { GraficosAnaliseTab } from './GraficosAnaliseTab';
 import { FinanceiroV2Tab } from './FinanceiroV2Tab';
+import { FinanceiroV2HubTab } from './FinanceiroV2HubTab';
+import { FinV2ContasTab } from './FinV2ContasTab';
+import { FinV2FornecedoresTab } from './FinV2FornecedoresTab';
+import { FinV2PlanoContasTab } from './FinV2PlanoContasTab';
+import { FinV2SaldosTab } from './FinV2SaldosTab';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { SyncStatus } from '@/components/SyncStatus';
@@ -90,6 +95,11 @@ const TITLES: Record<TabId, string> = {
   preco_mercado: 'Preço de Mercado',
   graficos_analise: 'Gráficos',
   financeiro_v2: 'Financeiro v2',
+  financeiro_v2_hub: 'Financeiro v2',
+  fin_v2_contas: 'Contas Bancárias',
+  fin_v2_fornecedores: 'Fornecedores',
+  fin_v2_plano: 'Plano de Contas',
+  fin_v2_saldos: 'Saldos Mensais',
 };
 
 const Index = () => {
@@ -220,7 +230,12 @@ const Index = () => {
     analise_economica: goToVisaoFinHub,
     preco_mercado: goToVisaoZooHub,
     fin_caixa: goToLancarFinHub,
-    financeiro_v2: goToLancarFinHub,
+    financeiro_v2: () => setActiveTab('financeiro_v2_hub'),
+    financeiro_v2_hub: goToLancarFinHub,
+    fin_v2_contas: () => setActiveTab('financeiro_v2_hub'),
+    fin_v2_fornecedores: () => setActiveTab('financeiro_v2_hub'),
+    fin_v2_plano: () => setActiveTab('financeiro_v2_hub'),
+    fin_v2_saldos: () => setActiveTab('financeiro_v2_hub'),
     fechamento: goToZootecnico,
     evolucao_rebanho_hub: goToLancarZooHub,
     fluxo_anual: () => setActiveTab('movimentacao'),
@@ -247,10 +262,10 @@ const Index = () => {
       />
 
       {/* Botão fixo de acesso ao Financeiro v2 */}
-      {activeTab !== 'financeiro_v2' && (
+      {!['financeiro_v2', 'financeiro_v2_hub', 'fin_v2_contas', 'fin_v2_fornecedores', 'fin_v2_plano', 'fin_v2_saldos'].includes(activeTab) && (
         <div className="px-2 py-1">
           <button
-            onClick={() => handleTabChange('financeiro_v2')}
+            onClick={() => handleTabChange('financeiro_v2_hub')}
             className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-xs font-bold hover:bg-primary/90 transition-colors"
           >
             ⚡ ABRIR FINANCEIRO V2
@@ -455,6 +470,13 @@ const Index = () => {
           filtroMesInicial={filtroGlobal.mes}
         />
       )}
+      {activeTab === 'financeiro_v2_hub' && (
+        <FinanceiroV2HubTab onTabChange={handleTabChange} />
+      )}
+      {activeTab === 'fin_v2_contas' && <FinV2ContasTab />}
+      {activeTab === 'fin_v2_fornecedores' && <FinV2FornecedoresTab />}
+      {activeTab === 'fin_v2_plano' && <FinV2PlanoContasTab />}
+      {activeTab === 'fin_v2_saldos' && <FinV2SaldosTab />}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
