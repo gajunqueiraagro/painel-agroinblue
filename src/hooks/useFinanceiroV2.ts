@@ -166,7 +166,7 @@ export function useFinanceiroV2() {
 
   const loadLancamentos = useCallback(async (filtros: FiltrosV2, pageNum: number = 0) => {
     if (!clienteId) return;
-    if (!filtros.fazenda_id || !filtros.ano) {
+    if (!filtros.ano) {
       setLancamentos([]);
       setTotal(0);
       return;
