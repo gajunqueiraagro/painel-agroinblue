@@ -34,9 +34,12 @@ const STATUS_COLORS: Record<string, string> = {
   conciliado: 'bg-success/20 text-success border-success/30',
 };
 
+function fmtBRL(v: number): string {
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function fmtValor(v: number, sinal: number) {
-  const abs = Math.abs(v);
-  const formatted = abs.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatted = fmtBRL(Math.abs(v));
   return sinal >= 0 ? `R$ ${formatted}` : `- R$ ${formatted}`;
 }
 
@@ -207,10 +210,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           <div className="flex items-center justify-between">
             <div className="flex gap-3 text-xs">
               <span className="text-success font-bold">
-                Entradas: R$ {totalEntradas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                Entradas: R$ {fmtBRL(totalEntradas)}
               </span>
               <span className="text-destructive font-bold">
-                Saídas: R$ {totalSaidas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                Saídas: R$ {fmtBRL(totalSaidas)}
               </span>
               <span className="text-muted-foreground">{hook.total} lançamentos</span>
             </div>

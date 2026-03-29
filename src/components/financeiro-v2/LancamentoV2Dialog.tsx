@@ -51,10 +51,6 @@ function formatNotaFiscal(raw: string): string {
   return `${padded.slice(0, 3)}.${padded.slice(3, 6)}.${padded.slice(6, 9)}`;
 }
 
-function cleanNotaFiscal(formatted: string): string {
-  return formatted.replace(/\D/g, '');
-}
-
 export function LancamentoV2Dialog({
   open, onClose, onSave, lancamento, fazendas, contas, classificacoes,
   fornecedores, defaultFazendaId, onCriarFornecedor,
@@ -63,7 +59,6 @@ export function LancamentoV2Dialog({
   const [saving, setSaving] = useState(false);
   const [fornecedorDialogOpen, setFornecedorDialogOpen] = useState(false);
 
-  // Form state
   const [fazendaId, setFazendaId] = useState('');
   const [dataCompetencia, setDataCompetencia] = useState('');
   const [dataPagamento, setDataPagamento] = useState('');
@@ -83,7 +78,6 @@ export function LancamentoV2Dialog({
   const isTransferencia = tipoOperacao === '3-Transferências';
   const isEntrada = tipoOperacao === '1-Entradas';
 
-  // Build lookup map for subcentro → classification
   const classMap = useMemo(() => {
     const m = new Map<string, ClassificacaoItem>();
     for (const c of classificacoes) {
@@ -151,22 +145,26 @@ export function LancamentoV2Dialog({
 
   const handleNotaFiscalChange = (raw: string) => {
     const digits = raw.replace(/\D/g, '');
-    if (digits.length <= 9) {
-      setNotaFiscal(digits);
-    }
+    if (digits.length <= 9) setNotaFiscal(digits);
   };
 
   const notaFiscalDisplay = notaFiscal ? formatNotaFiscal(notaFiscal) : '';
 
-  const contasFazenda = useMemo(() => contas.filter(c => c.fazenda_id === fazendaId), [contas, fazendaId]);
-  const fornecedoresFazenda = useMemo(() => fornecedores.filter(f => f.fazenda_id === fazendaId), [fornecedores, fazendaId]);
+  // Contas: show all contas for the fazenda OR contas without fazenda_id
+  const contasFazenda = useMemo(() =>
+    contas.filter(c => c.fazenda_id === fazendaId || !c.fazenda_id),
+  [contas, fazendaId]);
+
+  const fornecedoresList = useMemo(() => {
+    // Show fornecedores for the current fazenda + global ones
+    return fornecedores.filter(f => f.fazenda_id === fazendaId || !f.fazenda_id);
+  }, [fornecedores, fazendaId]);
 
   const fazOperacionais = fazendas.filter(f => f.id !== '__global__');
 
   // Validation
   const contaOrigemValid = isTransferencia || !isEntrada ? !!contaOrigemId && contaOrigemId !== '__none__' : true;
   const contaDestinoValid = isTransferencia || isEntrada ? !!contaDestinoId && contaDestinoId !== '__none__' : true;
-  // For non-transfer: use single conta field
   const contaSimpleValid = !isTransferencia
     ? (isEntrada ? contaDestinoValid : contaOrigemValid)
     : (contaOrigemValid && contaDestinoValid);
@@ -179,7 +177,6 @@ export function LancamentoV2Dialog({
     if (!canSave) return;
     setSaving(true);
 
-    // Determine conta_bancaria_id for the record
     let contaBancariaId: string | null = null;
     if (isTransferencia) {
       contaBancariaId = contaOrigemId && contaOrigemId !== '__none__' ? contaOrigemId : null;
@@ -216,6 +213,10 @@ export function LancamentoV2Dialog({
     setFornecedorDialogOpen(false);
   };
 
+  // Debug info
+  const debugSubcentros = classificacoes.slice(0, 5).map(c => c.subcentro);
+  const debugContas = contasFazenda.map(c => c.nome_conta);
+
   return (
     <>
       <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
@@ -228,7 +229,7 @@ export function LancamentoV2Dialog({
             {/* Fazenda */}
             <div>
               <Label className="text-xs font-semibold">Fazenda *</Label>
-              <Select value={fazendaId} onValueChange={v => { setFazendaId(v); setContaOrigemId(''); setContaDestinoId(''); setFavorecidoId(''); }}>
+              <Select value={fazendaId} onValueChange={v => { setFazendaId(v); setContaOrigemId(''); setContaDestinoId(''); }}>
                 <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {fazOperacionais.map(f => (
@@ -266,9 +267,9 @@ export function LancamentoV2Dialog({
                   <div className="flex gap-1.5">
                     <Select value={favorecidoId || '__none_forn__'} onValueChange={v => setFavorecidoId(v === '__none_forn__' ? '' : v)}>
                       <SelectTrigger className="h-9 flex-1"><SelectValue placeholder="Selecione o fornecedor" /></SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60">
                         <SelectItem value="__none_forn__">Selecione...</SelectItem>
-                        {fornecedoresFazenda.map(f => (
+                        {fornecedoresList.map(f => (
                           <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
                         ))}
                       </SelectContent>
@@ -291,11 +292,21 @@ export function LancamentoV2Dialog({
                     <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o subcentro" /></SelectTrigger>
                     <SelectContent className="max-h-60">
                       <SelectItem value="__none_sub__">Selecione...</SelectItem>
-                      {classificacoes.map(c => (
-                        <SelectItem key={c.subcentro} value={c.subcentro}>{c.subcentro}</SelectItem>
+                      {classificacoes.map((c, i) => (
+                        <SelectItem key={`${c.subcentro}-${i}`} value={c.subcentro}>{c.subcentro}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {/* DEBUG — remover após validação */}
+                  <div className="mt-1 p-1.5 bg-yellow-50 border border-yellow-200 rounded text-[10px] text-yellow-800">
+                    <strong>🔍 DEBUG Subcentro:</strong> {classificacoes.length} carregado(s)
+                    {debugSubcentros.length > 0 && (
+                      <span> · Primeiros: {debugSubcentros.join(' | ')}</span>
+                    )}
+                    {classificacoes.length === 0 && (
+                      <span className="text-red-600"> · NENHUM SUBCENTRO ENCONTRADO — verificar financeiro_plano_contas</span>
+                    )}
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -348,13 +359,12 @@ export function LancamentoV2Dialog({
                   <Input type="number" min="0" step="0.01" value={valor} onChange={e => setValor(e.target.value)} className="h-9" placeholder="0,00" />
                 </div>
 
-                {/* Saídas ou Transferências: Conta Origem */}
                 {(!isEntrada || isTransferencia) && (
                   <div>
-                    <Label className="text-xs">{isTransferencia ? 'Conta de Origem *' : 'Conta de Origem *'}</Label>
+                    <Label className="text-xs">Conta de Origem *</Label>
                     <Select value={contaOrigemId || '__none__'} onValueChange={setContaOrigemId}>
                       <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60">
                         <SelectItem value="__none__">Selecione...</SelectItem>
                         {contasFazenda.map(c => (
                           <SelectItem key={c.id} value={c.id}>{c.nome_conta}</SelectItem>
@@ -364,13 +374,12 @@ export function LancamentoV2Dialog({
                   </div>
                 )}
 
-                {/* Entradas ou Transferências: Conta Destino */}
                 {(isEntrada || isTransferencia) && (
                   <div>
-                    <Label className="text-xs">{isTransferencia ? 'Conta de Destino *' : 'Conta de Destino *'}</Label>
+                    <Label className="text-xs">Conta de Destino *</Label>
                     <Select value={contaDestinoId || '__none__'} onValueChange={setContaDestinoId}>
                       <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60">
                         <SelectItem value="__none__">Selecione...</SelectItem>
                         {contasFazenda.map(c => (
                           <SelectItem key={c.id} value={c.id}>{c.nome_conta}</SelectItem>
@@ -379,6 +388,17 @@ export function LancamentoV2Dialog({
                     </Select>
                   </div>
                 )}
+
+                {/* DEBUG — remover após validação */}
+                <div className="p-1.5 bg-yellow-50 border border-yellow-200 rounded text-[10px] text-yellow-800">
+                  <strong>🔍 DEBUG Contas:</strong> {contasFazenda.length} carregada(s) (total global: {contas.length})
+                  {contasFazenda.length > 0 && (
+                    <span> · {debugContas.join(' | ')}</span>
+                  )}
+                  {contasFazenda.length === 0 && (
+                    <span className="text-red-600"> · NENHUMA CONTA — verificar financeiro_contas_bancarias para fazenda {fazendaId || '(nenhuma)'}</span>
+                  )}
+                </div>
               </div>
             </div>
 
