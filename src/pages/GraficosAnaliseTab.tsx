@@ -239,7 +239,7 @@ function ZootecnicoCharts({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro,
           <ChartCard title="GMD médio (kg/dia)" subtitle="Kg médio ganho por cabeça, por dia" data={prodData}
             keys={[`gmdMes_${anoNum}`, `gmdMes_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
             type="bar" decimals={3} mesFiltro={mesFiltro}
-            averageKey={`gmdMes_${anoNum}`} averageLabel="kg/dia" />
+            lineOverlayKey={`gmdMes_${anoNum}`} valueSuffix=" kg/dia" />
         </>
       )}
     </div>
@@ -408,9 +408,10 @@ interface ChartCardProps {
   averageLabel?: string;
   isCurrency?: boolean;
   valueSuffix?: string;
+  lineOverlayKey?: string;
 }
 
-function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, mesFiltro, averageKey, averageLabel, isCurrency, valueSuffix }: ChartCardProps) {
+function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, mesFiltro, averageKey, averageLabel, isCurrency, valueSuffix, lineOverlayKey }: ChartCardProps) {
   const comparisons = useMemo(() => {
     if (!data || data.length === 0 || keys.length < 2) return { mom: null, yoy: null };
     const mesIdx = mesFiltro - 1;
@@ -490,25 +491,30 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             {type === 'bar' ? (
-              avgValue !== null ? (
+              (avgValue !== null || lineOverlayKey) ? (
                 <ComposedChart data={data}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip formatter={(v: any) => typeof v === 'number' ? (isCurrency ? formatMoeda(v) : v.toLocaleString('pt-BR', { maximumFractionDigits: decimals })) : '—'} />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} />
+                  <Tooltip formatter={(v: any) => typeof v === 'number' ? (isCurrency ? formatMoeda(v) : v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })) : '—'} />
                   <Legend wrapperStyle={{ fontSize: 10 }} />
                   {keys.map((k, i) => (
                     <Bar key={k} dataKey={k} name={labels[i]} fill={CHART_COLORS[i]} fillOpacity={i === 0 ? 1 : 0.4} radius={[3, 3, 0, 0]} />
                   ))}
-                  <ReferenceLine y={avgValue} stroke="hsl(var(--primary))" strokeDasharray="6 3" strokeWidth={1.5}
-                    label={{ value: `Média: ${formatVal(avgValue)}`, position: 'insideTopRight', fontSize: 9, fill: 'hsl(var(--primary))' }} />
+                  {lineOverlayKey && (
+                    <Line type="monotone" dataKey={lineOverlayKey} name="Tendência" stroke="hsl(var(--primary))" strokeWidth={2} strokeDasharray="6 3" dot={DOT_STYLE} activeDot={ACTIVE_DOT_STYLE} connectNulls />
+                  )}
+                  {avgValue !== null && !lineOverlayKey && (
+                    <ReferenceLine y={avgValue} stroke="hsl(var(--primary))" strokeDasharray="6 3" strokeWidth={1.5}
+                      label={{ value: `Média: ${formatVal(avgValue)}`, position: 'insideTopRight', fontSize: 9, fill: 'hsl(var(--primary))' }} />
+                  )}
                 </ComposedChart>
               ) : (
                 <BarChart data={data}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip formatter={(v: any) => typeof v === 'number' ? (isCurrency ? formatMoeda(v) : v.toLocaleString('pt-BR', { maximumFractionDigits: decimals })) : '—'} />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} />
+                  <Tooltip formatter={(v: any) => typeof v === 'number' ? (isCurrency ? formatMoeda(v) : v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })) : '—'} />
                   <Legend wrapperStyle={{ fontSize: 10 }} />
                   {keys.map((k, i) => (
                     <Bar key={k} dataKey={k} name={labels[i]} fill={CHART_COLORS[i]} fillOpacity={i === 0 ? 1 : 0.4} radius={[3, 3, 0, 0]} />
