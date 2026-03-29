@@ -90,6 +90,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [subcentroFiltro, setSubcentroFiltro] = useState(defaults.subcentroFiltro);
   const [produtoFiltro, setProdutoFiltro] = useState(defaults.produtoFiltro);
   const [fornecedorFiltro, setFornecedorFiltro] = useState(defaults.fornecedorFiltro);
+  const [atividadeFiltro, setAtividadeFiltro] = useState(defaults.atividadeFiltro);
   const [mesPopoverOpen, setMesPopoverOpen] = useState(false);
   // Track if macro/centro were auto-filled by subcentro
   const [macroLocked, setMacroLocked] = useState(false);
