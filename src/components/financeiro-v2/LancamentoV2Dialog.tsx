@@ -185,7 +185,7 @@ export function LancamentoV2Dialog({
     if (cls) {
       setMacroCusto(cls.macro_custo);
       setCentroCusto(cls.centro_custo);
-      setTipoOperacao(cls.tipo_operacao);
+      // Don't override tipoOperacao — subcentro is already filtered by it
     }
   };
 
