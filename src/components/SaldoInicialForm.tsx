@@ -168,20 +168,6 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
               Editar
             </button>
           </div>
-        </div>
-
-        {/* Compact category summary */}
-        <div className="px-3 py-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
-          {categoriasComSaldo.map(c => (
-            <span key={c.label} className="text-[10px] text-muted-foreground whitespace-nowrap">
-              <span className="font-semibold text-foreground">{c.qtd}</span> {c.label}
-              {c.peso ? <span className="text-muted-foreground/70 ml-0.5">({c.peso}kg)</span> : null}
-            </span>
-          ))}
-          {categoriasComSaldo.length === 0 && (
-            <span className="text-[10px] text-muted-foreground italic">Nenhuma categoria com saldo</span>
-          )}
-        </div>
       </div>
 
       {/* Edit confirmation dialog */}
