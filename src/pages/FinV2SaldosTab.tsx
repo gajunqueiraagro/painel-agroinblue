@@ -86,7 +86,7 @@ export function FinV2SaldosTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  const contaNome = (id: string) => contas.find(c => c.id === id)?.nome_conta || '-';
+  const contaNome = (id: string) => { const c = contas.find(c => c.id === id); return c?.nome_exibicao || c?.nome_conta || '-'; };
 
   const parseBRL = (s: string) => parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
   const toBRL = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
