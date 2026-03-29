@@ -166,7 +166,6 @@ export function FluxoCaixa({
                 <SaidaRow label="  Dedução de Receitas" dados={dados} field="saidasDeducao" />
                 <SaidaRow label="  Desemb. Produtivo" dados={dados} field="saidasDesembolso" />
                 <SaidaRow label="  Reposição Bovinos" dados={dados} field="saidasReposicao" />
-                <SaidaRow label="  Desp. Reposição" dados={dados} field="saidasDespesasReposicao" />
                 <SaidaRow label="  Amortizações" dados={dados} field="saidasAmortizacoes" />
                 <SaidaRow label="  Dividendos" dados={dados} field="saidasDividendos" />
 
