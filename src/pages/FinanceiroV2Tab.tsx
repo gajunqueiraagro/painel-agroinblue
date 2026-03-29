@@ -23,11 +23,17 @@ const MESES_LIST = [
   { value: '11', label: 'Nov' }, { value: '12', label: 'Dez' },
 ];
 
-const STATUS_COLORS: Record<string, string> = {
-  previsto: 'bg-warning/20 text-warning border-warning/30',
-  agendado: 'bg-blue-500/20 text-blue-600 border-blue-500/30',
-  confirmado: 'bg-primary/20 text-primary border-primary/30',
-  conciliado: 'bg-success/20 text-success border-success/30',
+const STATUS_LABELS: Record<string, string> = {
+  previsto: 'Previsto',
+  agendado: 'Agendado',
+  confirmado: 'Confirmado',
+  conciliado: 'Conciliado',
+};
+const STATUS_TEXT_COLORS: Record<string, string> = {
+  previsto: 'text-orange-500',
+  agendado: 'text-emerald-400',
+  confirmado: 'text-sky-500',
+  conciliado: 'text-green-700 dark:text-green-400 font-bold',
 };
 
 function fmtBRL(v: number): string {
@@ -485,14 +491,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <Table>
               <TableHeader>
                 <TableRow className="!h-auto">
-                  <TableHead className="py-[2px] px-1">Comp.</TableHead>
-                  <TableHead className="py-[2px] px-1">Pgto</TableHead>
+                  <TableHead className="py-[2px] px-1 w-[52px]">Comp.</TableHead>
+                  <TableHead className="py-[2px] px-1 w-[52px]">Pgto</TableHead>
                   <TableHead className="py-[2px] px-1">Produto</TableHead>
                   <TableHead className="py-[2px] px-1">Fornecedor</TableHead>
-                  <TableHead className="py-[2px] px-1 text-right">Valor</TableHead>
-                  <TableHead className="py-[2px] px-1">NF</TableHead>
-                  <TableHead className="py-[2px] px-1">St</TableHead>
-                  <TableHead className="py-[2px] px-1 w-[28px]"></TableHead>
+                  <TableHead className="py-[2px] px-1 text-right w-[80px]">Valor</TableHead>
+                  <TableHead className="py-[2px] px-1 text-center w-[72px]">NF</TableHead>
+                  <TableHead className="py-[2px] px-1 text-center w-[68px]">Status</TableHead>
+                  <TableHead className="py-[2px] px-1 text-center w-[40px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -505,28 +511,30 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 ) : (
                   filteredLancamentos.map(l => {
                     const fornNome = hook.fornecedores.find(f => f.id === l.favorecido_id)?.nome;
-                    const statusShort = l.status_transacao ? l.status_transacao.substring(0, 4) : '-';
+                    const stKey = (l.status_transacao || '').toLowerCase();
+                    const stLabel = STATUS_LABELS[stKey] || l.status_transacao || '-';
+                    const stColor = STATUS_TEXT_COLORS[stKey] || 'text-muted-foreground';
 
                     return (
                       <TableRow key={l.id} className="italic !h-auto">
-                        <TableCell className="font-mono">{fmtDate(l.data_competencia)}</TableCell>
-                        <TableCell className="font-mono">{fmtDate(l.data_pagamento)}</TableCell>
-                        <TableCell className="max-w-[140px] truncate" title={l.descricao || ''}>{l.descricao || '-'}</TableCell>
-                        <TableCell className="max-w-[100px] truncate" title={fornNome || ''}>
+                        <TableCell className="font-mono w-[52px]">{fmtDate(l.data_competencia)}</TableCell>
+                        <TableCell className="font-mono w-[52px]">{fmtDate(l.data_pagamento)}</TableCell>
+                        <TableCell className="truncate max-w-0" title={l.descricao || ''}>{l.descricao || '-'}</TableCell>
+                        <TableCell className="truncate max-w-0" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
                         </TableCell>
-                        <TableCell className={`text-right font-semibold ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
+                        <TableCell className={`text-right font-semibold w-[80px] ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
                           {fmtValor(l.valor, l.sinal)}
                         </TableCell>
-                        <TableCell className="font-mono text-muted-foreground">{l.nota_fiscal || '-'}</TableCell>
-                        <TableCell className="text-muted-foreground">{statusShort}</TableCell>
-                        <TableCell className="!py-0 !px-0">
-                          <div className="flex gap-0">
-                            <Button variant="ghost" size="icon" className="h-3 w-3" onClick={() => openEdit(l)}>
-                              <Pencil className="h-2 w-2" />
+                        <TableCell className="font-mono text-muted-foreground text-center w-[72px]">{l.nota_fiscal || '-'}</TableCell>
+                        <TableCell className={`text-center w-[68px] ${stColor}`}>{stLabel}</TableCell>
+                        <TableCell className="!py-0 px-0 w-[40px]">
+                          <div className="flex items-center justify-center gap-0.5">
+                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => openEdit(l)}>
+                              <Pencil className="h-2.5 w-2.5" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-3 w-3" onClick={() => handleDuplicate(l)}>
-                              <Copy className="h-2 w-2" />
+                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => handleDuplicate(l)}>
+                              <Copy className="h-2.5 w-2.5" />
                             </Button>
                           </div>
                         </TableCell>
