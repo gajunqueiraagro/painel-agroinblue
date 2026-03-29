@@ -120,6 +120,8 @@ export function useFinanceiroV2() {
     }
     setClassificacoes(Array.from(map.values()).sort((a, b) => a.subcentro.localeCompare(b.subcentro)));
   }, [clienteId]);
+
+  const loadLancamentos = useCallback(async (filtros: FiltrosV2, pageNum: number = 0) => {
     if (!clienteId) return;
 
     // Require at least fazenda + year
