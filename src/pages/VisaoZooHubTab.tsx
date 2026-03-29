@@ -2,7 +2,7 @@
  * Análises — container com sub-abas: Indicadores | Gráficos | DRE
  * Segue o padrão visual da tela Econômico (AnaliseEconomica).
  */
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { MESES_NOMES, MESES_COLS } from '@/lib/calculos/labels';
@@ -10,17 +10,28 @@ import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 import { calcSaldoPorCategoriaLegado, calcPesoMedioPonderado, calcUA, calcUAHa, calcAreaProdutivaPecuaria } from '@/lib/calculos/zootecnicos';
 import { calcArrobasSafe } from '@/lib/calculos/economicos';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
-import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
+import { useFinanceiro, type FinanceiroLancamento, type RateioADM } from '@/hooks/useFinanceiro';
 import { useArrobasGlobal } from '@/hooks/useArrobasGlobal';
 import { usePastos } from '@/hooks/usePastos';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { supabase } from '@/integrations/supabase/client';
 import { KpiCard } from '@/components/indicadores/KpiCard';
 import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';
 import { DREAtividade } from '@/components/financeiro/AnaliseDRE';
 import { calcCabMediasMensais } from '@/components/financeiro/AnaliseEconomica';
+import {
+  isConciliado as isConciliadoClass,
+  isEntrada as isEntradaClass,
+  isSaida as isSaidaClass,
+  getEscopo,
+  classificarSaidaFluxo,
+  datePagtoAno,
+  datePagtoMes,
+} from '@/lib/financeiro/classificacao';
+import { isDesembolsoProdutivo, isReceita as isReceitaMacro } from '@/lib/financeiro/classificacao';
 import { TabId } from '@/components/BottomNav';
 import {
-  AlertTriangle, TrendingUp, FileBarChart, ChevronRight,
+  AlertTriangle, TrendingUp, FileBarChart, ChevronRight, Info,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -58,6 +69,65 @@ const datePagtoAnoMes = (l: FinanceiroLancamento): string | null => {
   if (!l.data_pagamento || l.data_pagamento.length < 7) return null;
   return l.data_pagamento.substring(0, 7);
 };
+
+// ---------------------------------------------------------------------------
+// Financial helpers for Indicadores blocks
+// ---------------------------------------------------------------------------
+
+/** Receita Pecuária conciliada no período (acumulado jan→mesFiltro) */
+function calcReceitaPecuaria(lancFin: FinanceiroLancamento[], ano: number, ateMes: number): number {
+  let total = 0;
+  for (const l of lancFin) {
+    if (!isConciliado(l)) continue;
+    const a = datePagtoAno(l);
+    const m = datePagtoMes(l);
+    if (a !== ano || m === null || m > ateMes) continue;
+    if (!isReceitaMacro(l)) continue;
+    if (!isEntradaClass(l)) continue;
+    const escopo = getEscopo(l);
+    if (escopo !== 'pec') continue;
+    total += Math.abs(l.valor);
+  }
+  return total;
+}
+
+/** Desembolso Produtivo Pecuário conciliado no período */
+function calcDesembolsoProdPec(lancFin: FinanceiroLancamento[], rateioADM: RateioADM[], ano: number, ateMes: number, isGlobal: boolean): number {
+  let total = 0;
+  for (const l of lancFin) {
+    if (!isConciliado(l)) continue;
+    const a = datePagtoAno(l);
+    const m = datePagtoMes(l);
+    if (a !== ano || m === null || m > ateMes) continue;
+    if (!isSaidaClass(l)) continue;
+    if (!isDesembolsoProdutivo(l)) continue;
+    const escopo = getEscopo(l);
+    if (escopo !== 'pec' && escopo !== 'outras') continue;
+    total += Math.abs(l.valor);
+  }
+  // Add rateio ADM if per-fazenda
+  if (!isGlobal) {
+    for (const r of rateioADM) {
+      const [rAnoStr, rMesStr] = r.anoMes.split('-');
+      if (Number(rAnoStr) === ano && Number(rMesStr) <= ateMes) {
+        total += r.valorRateado;
+      }
+    }
+  }
+  return total;
+}
+
+/** Saldo bancário disponível (último mês com dados) */
+async function fetchSaldoBancario(fazendaIds: string[], anoMes: string): Promise<number | null> {
+  if (fazendaIds.length === 0) return null;
+  const { data } = await supabase
+    .from('financeiro_saldos_bancarios')
+    .select('saldo_final')
+    .in('fazenda_id', fazendaIds)
+    .eq('ano_mes', anoMes);
+  if (!data || data.length === 0) return null;
+  return data.reduce((s, r) => s + (Number(r.saldo_final) || 0), 0);
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -346,6 +416,10 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
             kgHa={kgHa}
             kgHaComps={kgHaComps}
             acumulado={acumulado}
+            lancFin={lancFin}
+            rateioADM={rateioADM}
+            isGlobal={isGlobal}
+            arrobasProduzidasAcum={arrobasProduzidasAcum}
           />
         )}
 
@@ -442,11 +516,102 @@ interface IndicadoresContentProps {
   kgHa: number | null;
   kgHaComps: any;
   acumulado: any;
+  lancFin: FinanceiroLancamento[];
+  rateioADM: RateioADM[];
+  isGlobal: boolean;
+  arrobasProduzidasAcum: number | null;
 }
 
-function IndicadoresContent({ zoo, vista, mesLabel, mesFiltro, anoFiltro, kgHa, kgHaComps, acumulado }: IndicadoresContentProps) {
+function IndicadoresContent({ zoo, vista, mesLabel, mesFiltro, anoFiltro, kgHa, kgHaComps, acumulado, lancFin, rateioADM, isGlobal, arrobasProduzidasAcum }: IndicadoresContentProps) {
   const isMes = vista === 'mes';
   const periodoLabel = isMes ? mesLabel : `Média Jan → ${mesLabel}`;
+  const anoNum = Number(anoFiltro);
+
+  const { fazendas } = useFazenda();
+  const allFazendaIds = useMemo(() => fazendas.filter(f => f.id !== '__global__').map(f => f.id), [fazendas]);
+
+  // ── Financial KPIs ──
+  const finProd = useMemo(() => {
+    const buildComp = (atual: number | null, ref: number | null) => {
+      if (atual === null || ref === null || (atual === 0 && ref === 0)) return null;
+      if (ref === 0) return null;
+      const pct = ((atual - ref) / Math.abs(ref)) * 100;
+      return { diferencaPercentual: pct, disponivel: true } as any;
+    };
+
+    const arrobas = arrobasProduzidasAcum ?? 0;
+    const receitaPec = calcReceitaPecuaria(lancFin, anoNum, mesFiltro);
+    const desembolsoPec = calcDesembolsoProdPec(lancFin, rateioADM, anoNum, mesFiltro, isGlobal);
+
+    const receitaPorArroba = arrobas > 0 ? receitaPec / arrobas : null;
+    const custoPorArroba = arrobas > 0 ? desembolsoPec / arrobas : null;
+    const margemPorArroba = receitaPorArroba !== null && custoPorArroba !== null
+      ? receitaPorArroba - custoPorArroba : null;
+    const resultadoOp = receitaPec - desembolsoPec;
+
+    // vs mês anterior (acumulado até mesFiltro-1)
+    const mesAnt = mesFiltro > 1 ? mesFiltro - 1 : null;
+    const recMesAnt = mesAnt ? calcReceitaPecuaria(lancFin, anoNum, mesAnt) : null;
+    const desMesAnt = mesAnt ? calcDesembolsoProdPec(lancFin, rateioADM, anoNum, mesAnt, isGlobal) : null;
+    // For MoM we compare incremental (current month only)
+    const recMesAtual = mesAnt ? receitaPec - (recMesAnt || 0) : receitaPec;
+    const desMesAtual = mesAnt ? desembolsoPec - (desMesAnt || 0) : desembolsoPec;
+    // vs ano anterior (same period)
+    const recAnoAnt = calcReceitaPecuaria(lancFin, anoNum - 1, mesFiltro);
+    const desAnoAnt = calcDesembolsoProdPec(lancFin, rateioADM, anoNum - 1, mesFiltro, isGlobal);
+    const arrobasAnoAnt = zoo.historico?.find(h => h.ano === anoNum - 1)?.meses[mesFiltro - 1]?.arrobasProduzidasAcum ?? null;
+    const recPorArrAnoAnt = arrobasAnoAnt && arrobasAnoAnt > 0 ? recAnoAnt / arrobasAnoAnt : null;
+    const cusPorArrAnoAnt = arrobasAnoAnt && arrobasAnoAnt > 0 ? desAnoAnt / arrobasAnoAnt : null;
+    const margemAnoAnt = recPorArrAnoAnt !== null && cusPorArrAnoAnt !== null ? recPorArrAnoAnt - cusPorArrAnoAnt : null;
+    const resultadoOpAnoAnt = recAnoAnt - desAnoAnt;
+
+    const temDados = lancFin.length > 0 && (receitaPec > 0 || desembolsoPec > 0);
+
+    return {
+      receitaPorArroba, custoPorArroba, margemPorArroba,
+      desembolsoPec, resultadoOp, temDados,
+      compRecArr: { mensal: null, anual: buildComp(receitaPorArroba, recPorArrAnoAnt) },
+      compCusArr: { mensal: null, anual: buildComp(custoPorArroba, cusPorArrAnoAnt) },
+      compMargArr: { mensal: null, anual: buildComp(margemPorArroba, margemAnoAnt) },
+      compDesemp: { mensal: buildComp(desembolsoPec, desMesAnt), anual: buildComp(desembolsoPec, desAnoAnt) },
+      compResult: { mensal: null, anual: buildComp(resultadoOp, resultadoOpAnoAnt) },
+    };
+  }, [lancFin, rateioADM, anoNum, mesFiltro, isGlobal, arrobasProduzidasAcum, zoo.historico]);
+
+  // ── Saldo Bancário (Caixa Disponível) ──
+  const [saldoBancario, setSaldoBancario] = useState<number | null>(null);
+  const [saldoBancarioAnt, setSaldoBancarioAnt] = useState<number | null>(null);
+  const [saldoBancarioAnoAnt, setSaldoBancarioAnoAnt] = useState<number | null>(null);
+
+  useEffect(() => {
+    const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
+    const mesAntNum = mesFiltro > 1 ? mesFiltro - 1 : 12;
+    const anoAntMes = mesFiltro > 1 ? anoFiltro : String(anoNum - 1);
+    const anoMesAnt = `${anoAntMes}-${String(mesAntNum).padStart(2, '0')}`;
+    const anoMesYoY = `${anoNum - 1}-${String(mesFiltro).padStart(2, '0')}`;
+
+    Promise.all([
+      fetchSaldoBancario(allFazendaIds, anoMes),
+      fetchSaldoBancario(allFazendaIds, anoMesAnt),
+      fetchSaldoBancario(allFazendaIds, anoMesYoY),
+    ]).then(([atual, ant, yoy]) => {
+      setSaldoBancario(atual);
+      setSaldoBancarioAnt(ant);
+      setSaldoBancarioAnoAnt(yoy);
+    });
+  }, [allFazendaIds.join(','), anoFiltro, mesFiltro, anoNum]);
+
+  const compCaixa = useMemo(() => {
+    const buildComp = (atual: number | null, ref: number | null) => {
+      if (atual === null || ref === null || (atual === 0 && ref === 0)) return null;
+      if (ref === 0) return null;
+      return { diferencaPercentual: ((atual - ref) / Math.abs(ref)) * 100, disponivel: true } as any;
+    };
+    return {
+      mensal: buildComp(saldoBancario, saldoBancarioAnt),
+      anual: buildComp(saldoBancario, saldoBancarioAnoAnt),
+    };
+  }, [saldoBancario, saldoBancarioAnt, saldoBancarioAnoAnt]);
 
   return (
     <>
@@ -537,26 +702,68 @@ function IndicadoresContent({ zoo, vista, mesLabel, mesFiltro, anoFiltro, kgHa, 
         </SectionCard>
 
         {/* 3. FINANCEIRO PRODUTIVO */}
-        <SectionCard title="Financeiro Produtivo" icon="💰">
-          <div className="grid grid-cols-2 gap-2">
-            <KpiCard label="Receita por @" valor="—" semBase />
-            <KpiCard label="Custo por @" valor="—" semBase />
-            <KpiCard label="Margem por @" valor="—" semBase />
-            <KpiCard label="Desembolso total" valor="—" semBase />
-            <KpiCard label="Resultado operacional" valor="—" semBase />
-          </div>
-          <p className="text-[9px] text-muted-foreground italic text-center">Disponível após integração financeira completa</p>
+        <SectionCard title="Financeiro Produtivo" subtitle="receita × custo por @" icon="💰">
+          {finProd.temDados ? (
+            <div className="grid grid-cols-2 gap-2">
+              <KpiCard label="Receita por @"
+                valor={finProd.receitaPorArroba !== null ? formatMoeda(finProd.receitaPorArroba) : '—'}
+                unidade="R$/@"
+                compAnual={finProd.compRecArr.anual}
+                semBase={finProd.receitaPorArroba === null} />
+              <KpiCard label="Custo por @"
+                valor={finProd.custoPorArroba !== null ? formatMoeda(finProd.custoPorArroba) : '—'}
+                unidade="R$/@"
+                compAnual={finProd.compCusArr.anual}
+                semBase={finProd.custoPorArroba === null} />
+              <KpiCard label="Margem por @"
+                valor={finProd.margemPorArroba !== null ? formatMoeda(finProd.margemPorArroba) : '—'}
+                unidade="R$/@"
+                compAnual={finProd.compMargArr.anual}
+                semBase={finProd.margemPorArroba === null} />
+              <KpiCard label="Desembolso total"
+                valor={formatMoedaCompacto(finProd.desembolsoPec)}
+                compMensal={finProd.compDesemp.mensal}
+                compAnual={finProd.compDesemp.anual} />
+              <KpiCard label="Resultado operacional"
+                valor={formatMoedaCompacto(finProd.resultadoOp)}
+                compAnual={finProd.compResult.anual} />
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground py-3">
+              <Info className="h-4 w-4 shrink-0" />
+              <span>Aguardando integração — importe lançamentos financeiros para ativar</span>
+            </div>
+          )}
         </SectionCard>
 
         {/* 4. ESTRUTURA FINANCEIRA */}
-        <SectionCard title="Estrutura Financeira" icon="🏦">
+        <SectionCard title="Estrutura Financeira" subtitle="posição patrimonial" icon="🏦">
           <div className="grid grid-cols-2 gap-2">
-            <KpiCard label="Endividamento" valor="—" unidade="%" semBase />
-            <KpiCard label="Caixa disponível" valor="—" semBase />
-            <KpiCard label="Dívida / Rebanho" valor="—" semBase />
-            <KpiCard label="Curto vs Longo prazo" valor="—" semBase />
+            <KpiCard label="Caixa disponível"
+              valor={saldoBancario !== null ? formatMoedaCompacto(saldoBancario) : '—'}
+              compMensal={compCaixa.mensal}
+              compAnual={compCaixa.anual}
+              semBase={saldoBancario === null} />
+            <KpiCard label="Valor Rebanho"
+              valor={zoo.valorRebanho !== null ? formatMoedaCompacto(zoo.valorRebanho) : '—'}
+              compMensal={zoo.comparacoes.valorRebanho.mensal}
+              compAnual={zoo.comparacoes.valorRebanho.anual}
+              semBase={zoo.valorRebanho === null} />
           </div>
-          <p className="text-[9px] text-muted-foreground italic text-center">Disponível após integração financeira completa</p>
+          <div className="mt-2 space-y-1">
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+              <Info className="h-3 w-3 shrink-0" />
+              <span><strong>Endividamento</strong> — Aguardando integração da fórmula (Dívida total / Valor do rebanho)</span>
+            </div>
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+              <Info className="h-3 w-3 shrink-0" />
+              <span><strong>Dívida / Rebanho</strong> — Aguardando integração da fórmula</span>
+            </div>
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+              <Info className="h-3 w-3 shrink-0" />
+              <span><strong>Curto vs Longo prazo</strong> — Aguardando integração da fórmula (composição da dívida por prazo)</span>
+            </div>
+          </div>
         </SectionCard>
 
         {/* 5. EVOLUÇÃO */}
