@@ -346,17 +346,17 @@ export function ModoRapidoGrid({ fazendaId, contas, classificacoes, onSaveBatch,
                   </td>
                   {/* Subcentro */}
                   <td className="px-0.5 py-0.5">
-                    <input
-                      type="text"
-                      list="subcentro-options"
+                    <select
                       data-row={rowIdx}
                       data-col={6}
                       value={row.subcentro}
                       onChange={e => updateRow(row.id, 'subcentro', e.target.value)}
                       onKeyDown={e => handleKeyDown(e, rowIdx, 6)}
-                      placeholder="Subcentro..."
-                      className="w-full h-7 px-1 text-[11px] bg-transparent border border-transparent focus:border-primary/40 rounded outline-none placeholder:text-muted-foreground/40"
-                    />
+                      className="w-full h-7 px-0.5 text-[11px] bg-transparent border border-transparent focus:border-primary/40 rounded outline-none"
+                    >
+                      <option value="">Selecione...</option>
+                      {subcentroOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
                   </td>
                   {/* Status */}
                   <td className="px-0.5 py-0.5">

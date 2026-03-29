@@ -99,26 +99,24 @@ export function useFinanceiroV2() {
   const loadClassificacoes = useCallback(async () => {
     if (!clienteId) return;
     const { data } = await supabase
-      .from('financeiro_lancamentos_v2')
+      .from('financeiro_plano_contas')
       .select('subcentro, centro_custo, macro_custo, tipo_operacao')
       .eq('cliente_id', clienteId)
-      .not('subcentro', 'is', null);
+      .eq('ativo', true)
+      .not('subcentro', 'is', null)
+      .order('ordem_exibicao');
 
-    // Deduplicate
-    const map = new Map<string, ClassificacaoItem>();
+    const items: ClassificacaoItem[] = [];
     for (const row of (data || []) as any[]) {
       if (!row.subcentro) continue;
-      const key = row.subcentro;
-      if (!map.has(key)) {
-        map.set(key, {
-          subcentro: row.subcentro,
-          centro_custo: row.centro_custo || '',
-          macro_custo: row.macro_custo || '',
-          tipo_operacao: row.tipo_operacao || '',
-        });
-      }
+      items.push({
+        subcentro: row.subcentro,
+        centro_custo: row.centro_custo || '',
+        macro_custo: row.macro_custo || '',
+        tipo_operacao: row.tipo_operacao || '',
+      });
     }
-    setClassificacoes(Array.from(map.values()).sort((a, b) => a.subcentro.localeCompare(b.subcentro)));
+    setClassificacoes(items);
   }, [clienteId]);
 
   const loadLancamentos = useCallback(async (filtros: FiltrosV2, pageNum: number = 0) => {
