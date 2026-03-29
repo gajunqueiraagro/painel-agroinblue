@@ -349,17 +349,6 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
           />
         )}
 
-        {bloco === 'graficos' && (
-          <GraficosContent
-            zoo={zoo}
-            lancamentos={lancamentos}
-            saldosIniciais={saldosIniciais}
-            anoNum={anoNum}
-            mesFiltro={mesFiltro}
-            pastos={pastos}
-          />
-        )}
-
         {bloco === 'dre' && (
           <DREAtividade
             lancConciliadosPorMes={lancConciliadosPorMes}
