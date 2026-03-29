@@ -467,7 +467,7 @@ export function LancamentoV2Dialog({
                             onClick={() => handleSubcentroSelect(c.subcentro)}
                           >
                             <Check className={cn("mr-2 h-4 w-4", subcentro === c.subcentro ? "opacity-100" : "opacity-0")} />
-                            {c.subcentro}
+                            <span className="truncate">{shortLabel(c.subcentro)}</span>
                           </button>
                         ))}
                       </div>
