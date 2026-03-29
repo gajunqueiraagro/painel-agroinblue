@@ -82,8 +82,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     fazendaId ? hook.contasBancarias.filter(c => c.fazenda_id === fazendaId) : hook.contasBancarias
   , [fazendaId, hook.contasBancarias]);
 
-  // Load contas on mount
-  useEffect(() => { hook.loadContas(); }, [hook.loadContas]);
+  // Load contas + classificacoes on mount
+  useEffect(() => { hook.loadContas(); hook.loadClassificacoes(); }, [hook.loadContas, hook.loadClassificacoes]);
 
   // Auto-set fazenda from context
   useEffect(() => {
