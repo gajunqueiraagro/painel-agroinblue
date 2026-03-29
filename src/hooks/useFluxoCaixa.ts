@@ -332,7 +332,7 @@ export function useFluxoCaixa(
         investPec,
         investAgri,
         reposicao,
-        despesasReposicao,
+        despesasReposicao: 0,
         amortizacoes,
         amortizacoesPec,
         amortizacoesAgri,
