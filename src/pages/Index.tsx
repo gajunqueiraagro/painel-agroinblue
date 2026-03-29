@@ -199,6 +199,12 @@ const Index = () => {
     setLancamentosFromEvolCategoria(true);
     setActiveTab('lancamentos');
   }, []);
+  const goToFluxoAnual = useCallback(() => setActiveTab('fluxo_anual'), []);
+  const goToReclassFromFluxoAnual = useCallback((filtro?: { ano: string; mes: number }) => {
+    if (filtro) setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
+    setLancamentosFromFluxoAnual(true);
+    setActiveTab('lancamentos');
+  }, []);
 
   // Sub-screens that need a back button
   const subScreenBackMap: Partial<Record<TabId, () => void>> = {
