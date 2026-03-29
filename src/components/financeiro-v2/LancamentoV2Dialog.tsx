@@ -85,7 +85,7 @@ export function LancamentoV2Dialog({ open, onClose, onSave, lancamento, fazendas
     setSaving(true);
     const form: LancamentoV2Form = {
       fazenda_id: fazendaId,
-      conta_bancaria_id: contaBancariaId || null,
+      conta_bancaria_id: contaBancariaId && contaBancariaId !== '__none__' ? contaBancariaId : null,
       data_competencia: dataCompetencia,
       data_pagamento: dataPagamento || null,
       valor: Math.abs(parseFloat(valor)),
@@ -171,7 +171,7 @@ export function LancamentoV2Dialog({ open, onClose, onSave, lancamento, fazendas
               <Select value={contaBancariaId} onValueChange={setContaBancariaId}>
                 <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhuma</SelectItem>
+                  <SelectItem value="__none__">Nenhuma</SelectItem>
                   {contasFiltradas.map(c => (
                     <SelectItem key={c.id} value={c.id}>{c.nome_conta}</SelectItem>
                   ))}
