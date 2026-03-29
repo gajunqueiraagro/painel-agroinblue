@@ -157,7 +157,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLanc, setEditingLanc] = useState<LancamentoV2 | null>(null);
 
-  const fazOperacionais = useMemo(() => fazendas.filter(f => f.id !== '__global__'), [fazendas]);
+  const fazOperacionais = useMemo(() => sortFazendas(fazendas.filter(f => f.id !== '__global__')), [fazendas]);
+
+  const sortedContas = useMemo(() => sortContas(hook.contasBancarias), [hook.contasBancarias]);
 
   const isEntrada = tipoOperacao === '1-Entradas';
   const isSaida = tipoOperacao === '2-Saídas';
@@ -166,7 +168,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   // Classification helpers
   const macrosUnicos = useMemo(() => {
     const set = new Set(hook.classificacoes.map(c => c.macro_custo).filter(Boolean));
-    return Array.from(set).sort();
+    return sortMacros(Array.from(set));
   }, [hook.classificacoes]);
 
   const centrosUnicos = useMemo(() => {
