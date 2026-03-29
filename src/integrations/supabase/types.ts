@@ -1143,6 +1143,60 @@ export type Database = {
           },
         ]
       }
+      financeiro_fechamentos: {
+        Row: {
+          ano_mes: string
+          cliente_id: string
+          created_at: string
+          fazenda_id: string
+          fechado_em: string | null
+          fechado_por: string | null
+          id: string
+          observacao: string | null
+          status_fechamento: string
+          updated_at: string
+        }
+        Insert: {
+          ano_mes: string
+          cliente_id: string
+          created_at?: string
+          fazenda_id: string
+          fechado_em?: string | null
+          fechado_por?: string | null
+          id?: string
+          observacao?: string | null
+          status_fechamento?: string
+          updated_at?: string
+        }
+        Update: {
+          ano_mes?: string
+          cliente_id?: string
+          created_at?: string
+          fazenda_id?: string
+          fechado_em?: string | null
+          fechado_por?: string | null
+          id?: string
+          observacao?: string | null
+          status_fechamento?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_fechamentos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_fechamentos_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financeiro_fornecedores: {
         Row: {
           ativo: boolean
@@ -1674,6 +1728,105 @@ export type Database = {
             columns: ["cliente_id"]
             isOneToOne: false
             referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financeiro_rateio_adm: {
+        Row: {
+          ano_mes: string
+          cliente_id: string
+          created_at: string
+          created_by: string | null
+          criterio_rateio: string
+          id: string
+          observacao: string | null
+          updated_at: string
+          valor_total_rateado: number
+        }
+        Insert: {
+          ano_mes: string
+          cliente_id: string
+          created_at?: string
+          created_by?: string | null
+          criterio_rateio?: string
+          id?: string
+          observacao?: string | null
+          updated_at?: string
+          valor_total_rateado?: number
+        }
+        Update: {
+          ano_mes?: string
+          cliente_id?: string
+          created_at?: string
+          created_by?: string | null
+          criterio_rateio?: string
+          id?: string
+          observacao?: string | null
+          updated_at?: string
+          valor_total_rateado?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_rateio_adm_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financeiro_rateio_adm_itens: {
+        Row: {
+          base_rateio: string | null
+          cliente_id: string
+          created_at: string
+          fazenda_id: string
+          id: string
+          percentual_rateio: number
+          rateio_id: string
+          valor_rateado: number
+        }
+        Insert: {
+          base_rateio?: string | null
+          cliente_id: string
+          created_at?: string
+          fazenda_id: string
+          id?: string
+          percentual_rateio?: number
+          rateio_id: string
+          valor_rateado?: number
+        }
+        Update: {
+          base_rateio?: string | null
+          cliente_id?: string
+          created_at?: string
+          fazenda_id?: string
+          id?: string
+          percentual_rateio?: number
+          rateio_id?: string
+          valor_rateado?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_rateio_adm_itens_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_rateio_adm_itens_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_rateio_adm_itens_rateio_id_fkey"
+            columns: ["rateio_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_rateio_adm"
             referencedColumns: ["id"]
           },
         ]
