@@ -388,33 +388,32 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           <div className="grid grid-cols-5 gap-1">
             <div>
               <label className={lblCls}>Macro</label>
-              <Select value={macroFiltro} onValueChange={v => { setMacroFiltro(v); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }} disabled={macroLocked}>
-                <SelectTrigger className={`${selCls} ${macroLocked ? 'opacity-50' : ''}`}><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
-                  {macrosUnicos.map(m => <SelectItem key={m} value={m} className={itemCls}>{m}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={macroFiltro}
+                onValueChange={v => { setMacroFiltro(v); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
+                options={macrosUnicos.map(m => ({ value: m, label: m }))}
+                disabled={macroLocked}
+                placeholder="Buscar macro..."
+              />
             </div>
             <div>
               <label className={lblCls}>Centro</label>
-              <Select value={centroFiltro} onValueChange={v => { setCentroFiltro(v); setSubcentroFiltro('__all__'); setMacroLocked(false); }} disabled={macroLocked}>
-                <SelectTrigger className={`${selCls} ${macroLocked ? 'opacity-50' : ''}`}><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
-                  {centrosUnicos.map(c => <SelectItem key={c} value={c} className={itemCls}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={centroFiltro}
+                onValueChange={v => { setCentroFiltro(v); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
+                options={centrosUnicos.map(c => ({ value: c, label: c }))}
+                disabled={macroLocked}
+                placeholder="Buscar centro..."
+              />
             </div>
             <div>
               <label className={lblCls}>Subcentro</label>
-              <Select value={subcentroFiltro} onValueChange={handleSubcentroChange}>
-                <SelectTrigger className={selCls}><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
-                  {subcentrosUnicos.map(s => <SelectItem key={s} value={s} className={itemCls}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={subcentroFiltro}
+                onValueChange={handleSubcentroChange}
+                options={subcentrosUnicos.map(s => ({ value: s, label: s }))}
+                placeholder="Buscar subcentro..."
+              />
             </div>
             <div>
               <label className={lblCls}>Produto</label>
