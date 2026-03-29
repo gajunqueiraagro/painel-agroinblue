@@ -264,7 +264,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <TableHeader>
                 <TableRow className="text-xs">
                   <TableHead className="w-[90px]">Data Pgto</TableHead>
-                  <TableHead>Descrição</TableHead>
+                  <TableHead>Produto</TableHead>
                   <TableHead className="w-[100px]">Conta</TableHead>
                   <TableHead className="w-[110px] text-right">Valor</TableHead>
                   <TableHead className="w-[80px]">Tipo</TableHead>
