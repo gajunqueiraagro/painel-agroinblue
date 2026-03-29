@@ -235,6 +235,26 @@ export function LancarFinHubTab({ onTabChange, filtroGlobal, lancamentosPecuario
 
   return (
     <div className="max-w-full mx-auto animate-fade-in pb-20">
+      {/* ── Card de acesso ao Lançamentos v2 ── */}
+      <div className="px-4 pt-3 pb-1">
+        <button
+          onClick={() => onTabChange('financeiro_v2', { ano: localAno, mes: localMes })}
+          className="w-full flex items-center justify-between bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded-lg px-4 py-3 transition-colors group"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <Sparkles className="h-5 w-5 text-primary shrink-0" />
+            <div className="text-left min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-bold text-foreground">Lançamentos (Novo)</p>
+                <Badge variant="secondary" className="text-[9px] px-1.5 py-0 bg-primary text-primary-foreground">NOVO</Badge>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Novo módulo de lançamentos financeiros (v2)</p>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-primary group-hover:translate-x-0.5 transition-transform shrink-0" />
+        </button>
+      </div>
+
       {/* ── Topo fixo: filtros ── */}
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm">
         <div className="flex gap-2 px-4 pb-2">
