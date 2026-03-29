@@ -73,7 +73,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     centroFiltro: '__all__',
     subcentroFiltro: '__all__',
     produtoFiltro: '',
-    fornecedorFiltro: '__all__',
+    fornecedorFiltro: '',
+    atividadeFiltro: '__all__',
   });
 
   const defaults = getDefaults();
@@ -89,6 +90,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [subcentroFiltro, setSubcentroFiltro] = useState(defaults.subcentroFiltro);
   const [produtoFiltro, setProdutoFiltro] = useState(defaults.produtoFiltro);
   const [fornecedorFiltro, setFornecedorFiltro] = useState(defaults.fornecedorFiltro);
+  const [atividadeFiltro, setAtividadeFiltro] = useState(defaults.atividadeFiltro);
   const [mesPopoverOpen, setMesPopoverOpen] = useState(false);
   // Track if macro/centro were auto-filled by subcentro
   const [macroLocked, setMacroLocked] = useState(false);
@@ -195,18 +197,33 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const openNew = () => { setEditingLanc(null); setDialogOpen(true); };
   const openEdit = (l: LancamentoV2) => { setEditingLanc(l); setDialogOpen(true); };
 
-  // Client-side filter for produto
+  // Derive atividade from subcentro
+  const getAtividade = (subcentro: string | null): string => {
+    if (!subcentro) return 'outros';
+    const s = subcentro.toUpperCase();
+    if (s.startsWith('PEC/') || s.startsWith('PEC ')) return 'pecuaria';
+    if (s.startsWith('AGRI/') || s.startsWith('AGRI ')) return 'agricultura';
+    return 'outros';
+  };
+
   const filteredLancamentos = useMemo(() => {
     let items = hook.lancamentos;
     if (produtoFiltro.trim()) {
       const q = produtoFiltro.toLowerCase();
       items = items.filter(l => l.descricao?.toLowerCase().includes(q));
     }
-    if (fornecedorFiltro !== '__all__') {
-      items = items.filter(l => l.favorecido_id === fornecedorFiltro);
+    if (fornecedorFiltro.trim()) {
+      const q = fornecedorFiltro.toLowerCase();
+      items = items.filter(l => {
+        const nome = hook.fornecedores.find(f => f.id === l.favorecido_id)?.nome || '';
+        return nome.toLowerCase().includes(q);
+      });
+    }
+    if (atividadeFiltro !== '__all__') {
+      items = items.filter(l => getAtividade(l.subcentro) === atividadeFiltro);
     }
     return items;
-  }, [hook.lancamentos, produtoFiltro, fornecedorFiltro]);
+  }, [hook.lancamentos, produtoFiltro, fornecedorFiltro, atividadeFiltro, hook.fornecedores]);
 
   const totalEntradas = filteredLancamentos.filter(l => l.sinal > 0).reduce((s, l) => s + l.valor, 0);
   const totalSaidas = filteredLancamentos.filter(l => l.sinal < 0).reduce((s, l) => s + l.valor, 0);
@@ -236,7 +253,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     setCentroFiltro('__all__');
     setSubcentroFiltro('__all__');
     setProdutoFiltro('');
-    setFornecedorFiltro('__all__');
+    setFornecedorFiltro('');
+    setAtividadeFiltro('__all__');
     setMacroLocked(false);
   };
 
@@ -253,8 +271,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       {/* FILTERS */}
       <Card>
         <CardContent className="p-1.5 space-y-1">
-          {/* LINE 1: Ano | Mês | Status | Fazenda */}
-          <div className="grid grid-cols-4 gap-1">
+          {/* LINE 1: Ano | Mês | Status | Fazenda | Atividade */}
+          <div className="grid grid-cols-5 gap-1">
             <div>
               <label className={lblCls}>Ano</label>
               <Select value={ano} onValueChange={setAno}>
@@ -307,6 +325,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
                   {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id} className={itemCls}>{f.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className={lblCls}>Atividade</label>
+              <Select value={atividadeFiltro} onValueChange={setAtividadeFiltro}>
+                <SelectTrigger className={selCls}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
+                  <SelectItem value="pecuaria" className={itemCls}>Pecuária</SelectItem>
+                  <SelectItem value="agricultura" className={itemCls}>Agricultura</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -391,13 +420,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </div>
             <div>
               <label className={lblCls}>Fornecedor</label>
-              <Select value={fornecedorFiltro} onValueChange={setFornecedorFiltro}>
-                <SelectTrigger className={selCls}><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
-                  {hook.fornecedores.map(f => <SelectItem key={f.id} value={f.id} className={itemCls}>{f.nome}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Input
+                value={fornecedorFiltro}
+                onChange={e => setFornecedorFiltro(e.target.value)}
+                placeholder="Buscar..."
+                className="h-6 text-[10px] px-1.5"
+              />
             </div>
           </div>
 
@@ -456,56 +484,48 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           <div className="rounded-lg border overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="h-6">
-                  <TableHead className="text-[9px] py-0.5 px-1.5 font-semibold">Dt Comp</TableHead>
-                  <TableHead className="text-[9px] py-0.5 px-1.5 font-semibold">Dt Pgto</TableHead>
-                  <TableHead className="text-[9px] py-0.5 px-1.5 font-semibold">Produto</TableHead>
-                  <TableHead className="text-[9px] py-0.5 px-1.5 font-semibold">Fornecedor</TableHead>
-                  <TableHead className="text-[9px] py-0.5 px-1.5 font-semibold text-right">Valor</TableHead>
-                  <TableHead className="text-[9px] py-0.5 px-1.5 font-semibold">Fazenda</TableHead>
-                  <TableHead className="text-[9px] py-0.5 px-1.5 font-semibold">Tipo</TableHead>
-                  <TableHead className="text-[9px] py-0.5 px-1.5 font-semibold">Conta</TableHead>
-                  <TableHead className="text-[9px] py-0.5 px-1.5 font-semibold">Macro</TableHead>
-                  <TableHead className="text-[9px] py-0.5 px-1.5 font-semibold">Subcentro</TableHead>
-                  <TableHead className="text-[9px] py-0.5 px-1.5 font-semibold">NF</TableHead>
-                  <TableHead className="text-[9px] py-0.5 px-1.5 font-semibold w-[40px]">Ações</TableHead>
+                <TableRow className="h-5">
+                  <TableHead className="text-[8px] py-0 px-1 font-semibold">Dt Comp</TableHead>
+                  <TableHead className="text-[8px] py-0 px-1 font-semibold">Dt Pgto</TableHead>
+                  <TableHead className="text-[8px] py-0 px-1 font-semibold">Produto</TableHead>
+                  <TableHead className="text-[8px] py-0 px-1 font-semibold">Fornecedor</TableHead>
+                  <TableHead className="text-[8px] py-0 px-1 font-semibold text-right">Valor</TableHead>
+                  <TableHead className="text-[8px] py-0 px-1 font-semibold">NF</TableHead>
+                  <TableHead className="text-[8px] py-0 px-1 font-semibold">St</TableHead>
+                  <TableHead className="text-[8px] py-0 px-1 font-semibold w-[36px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredLancamentos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={12} className="text-center text-muted-foreground py-4 text-[10px]">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-4 text-[9px]">
                       Nenhum lançamento encontrado.
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredLancamentos.map(l => {
-                    const contaNome = hook.contasBancarias.find(c => c.id === l.conta_bancaria_id)?.nome_conta || '-';
-                    const tipoLabel = l.tipo_operacao?.replace(/^\d-/, '').substring(0, 5) || '-';
-                    const fazNome = fazendas.find(f => f.id === l.fazenda_id)?.nome || '-';
-                    const fornNome = hook.fornecedores.find(f => f.id === l.favorecido_id)?.nome || '-';
+                    const fornNome = hook.fornecedores.find(f => f.id === l.favorecido_id)?.nome;
+                    const statusShort = l.status_transacao ? l.status_transacao.substring(0, 4) : '-';
 
                     return (
-                      <TableRow key={l.id} className="text-[8px] h-[18px] leading-none">
-                        <TableCell className="font-mono py-px px-1">{fmtDate(l.data_competencia)}</TableCell>
-                        <TableCell className="font-mono py-px px-1">{fmtDate(l.data_pagamento)}</TableCell>
-                        <TableCell className="max-w-[120px] truncate py-px px-1" title={l.descricao || ''}>{l.descricao || '-'}</TableCell>
-                        <TableCell className="max-w-[80px] truncate py-px px-1" title={fornNome}>{fornNome}</TableCell>
-                        <TableCell className={`text-right font-bold py-px px-1 ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
+                      <TableRow key={l.id} className="text-[8px] h-[16px] leading-none">
+                        <TableCell className="font-mono py-0 px-1">{fmtDate(l.data_competencia)}</TableCell>
+                        <TableCell className="font-mono py-0 px-1">{fmtDate(l.data_pagamento)}</TableCell>
+                        <TableCell className="max-w-[140px] truncate py-0 px-1" title={l.descricao || ''}>{l.descricao || '-'}</TableCell>
+                        <TableCell className="max-w-[100px] truncate py-0 px-1" title={fornNome || ''}>
+                          {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning italic">n/c</span>)}
+                        </TableCell>
+                        <TableCell className={`text-right font-bold py-0 px-1 ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
                           {fmtValor(l.valor, l.sinal)}
                         </TableCell>
-                        <TableCell className="truncate max-w-[60px] py-px px-1" title={fazNome}>{fazNome}</TableCell>
-                        <TableCell className="py-px px-1">{tipoLabel}</TableCell>
-                        <TableCell className="truncate max-w-[70px] py-px px-1" title={contaNome}>{contaNome}</TableCell>
-                        <TableCell className="truncate max-w-[50px] py-px px-1 text-muted-foreground">{l.macro_custo || '-'}</TableCell>
-                        <TableCell className="truncate max-w-[70px] py-px px-1 text-muted-foreground">{l.subcentro || '-'}</TableCell>
-                        <TableCell className="font-mono py-px px-1 text-muted-foreground">{l.nota_fiscal || '-'}</TableCell>
-                        <TableCell className="py-0.5 px-1.5">
-                          <div className="flex gap-0.5">
-                            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => openEdit(l)}>
+                        <TableCell className="font-mono py-0 px-1 text-muted-foreground">{l.nota_fiscal || '-'}</TableCell>
+                        <TableCell className="py-0 px-1 text-muted-foreground">{statusShort}</TableCell>
+                        <TableCell className="py-0 px-0.5">
+                          <div className="flex gap-0">
+                            <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => openEdit(l)}>
                               <Pencil className="h-2.5 w-2.5" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleDuplicate(l)}>
+                            <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => handleDuplicate(l)}>
                               <Copy className="h-2.5 w-2.5" />
                             </Button>
                           </div>
