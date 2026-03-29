@@ -314,7 +314,7 @@ export function useFinanceiro() {
 
         const admPromise = needsRateio
           ? fetchAllPaginated<FinanceiroLancamento>((from, to) =>
-              supabase.from('financeiro_lancamentos').select('*').eq('fazenda_id', fazendaADM.id).order('data_realizacao', { ascending: false }).range(from, to),
+              (supabase.from('financeiro_lancamentos').select('*') as any).eq('fazenda_id', fazendaADM.id).order('data_realizacao', { ascending: false }).range(from, to),
             )
           : Promise.resolve([] as FinanceiroLancamento[]);
 
