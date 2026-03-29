@@ -43,9 +43,12 @@ export const isDividendo = (l: FinanceiroLancamento) =>
 export const isInvestimento = (l: FinanceiroLancamento) =>
   normMacro(l) === 'investimento na fazenda' || normMacro(l) === 'investimento em bovinos';
 
-/** É Investimento em Bovinos (Reposição) */
-export const isReposicaoBovinos = (l: FinanceiroLancamento) =>
-  normMacro(l) === 'investimento em bovinos';
+/** É Investimento em Bovinos (Reposição) — macro OU centro_custo */
+export const isReposicaoBovinos = (l: FinanceiroLancamento) => {
+  const macro = normMacro(l);
+  const centro = (l.centro_custo || '').toLowerCase().trim();
+  return macro === 'investimento em bovinos' || centro.includes('reposição') || centro.includes('reposicao');
+};
 
 /** É Conciliado */
 export const isConciliado = (l: FinanceiroLancamento) =>
