@@ -67,7 +67,7 @@ function parseBRL(s: string): number {
 }
 
 export function LancamentoV2Dialog({
-  open, onClose, onSave, lancamento, fazendas, contas, classificacoes,
+  open, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
   fornecedores, defaultFazendaId, onCriarFornecedor,
 }: Props) {
   const isEdit = !!lancamento;
