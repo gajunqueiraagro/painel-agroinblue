@@ -298,42 +298,16 @@ export function FinV2FornecedoresTab() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Editar Fornecedor' : 'Novo Fornecedor'}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Nome *</Label>
-              <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome do fornecedor" />
-            </div>
-            <div>
-              <Label>CPF/CNPJ</Label>
-              <Input value={cpfCnpj} onChange={e => setCpfCnpj(e.target.value)} placeholder="000.000.000-00" />
-            </div>
-            <div>
-              <Label>Fazenda *</Label>
-              <Select value={fazendaId} onValueChange={setFazendaId}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  {fazendas.map(f => (
-                    <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch checked={ativo} onCheckedChange={setAtivo} />
-              <Label>Ativo</Label>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={save}>{editing ? 'Salvar' : 'Criar'}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <FornecedorFormDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        editing={editing}
+        allFornecedores={items}
+        fazendas={fazendas}
+        clienteId={clienteAtual?.id || ''}
+        onSaved={load}
+        onSelectExisting={(f) => { toast.info(`Fornecedor "${f.nome}" selecionado.`); }}
+      />
     </div>
   );
 }
