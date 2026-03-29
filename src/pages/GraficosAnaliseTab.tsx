@@ -204,6 +204,26 @@ function ZootecnicoCharts({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro,
       if (prev === null || prev === undefined) return cur;
       return cur - prev;
     };
+    // Build accumulated weighted GMD average
+    const buildGmdAcum = (meses: typeof anoAtual.meses, ateMes: number) => {
+      const acums: (number | null)[] = [];
+      let sumGmd = 0;
+      let count = 0;
+      for (let i = 0; i < 12; i++) {
+        const gmdMes = mensal(meses, i, 'gmdAcumulado');
+        if (i < ateMes && gmdMes !== null && typeof gmdMes === 'number') {
+          sumGmd += gmdMes;
+          count++;
+          acums.push(sumGmd / count);
+        } else {
+          acums.push(null);
+        }
+      }
+      return acums;
+    };
+    const gmdAcumAtual = buildGmdAcum(anoAtual.meses, mesFiltro);
+    const gmdAcumAnt = anoAnt ? buildGmdAcum(anoAnt.meses, 12) : Array(12).fill(null);
+
     return MESES_NOMES.map((mes, i) => {
       const m = anoAtual.meses[i];
       const mAnt = anoAnt?.meses[i];
@@ -216,6 +236,8 @@ function ZootecnicoCharts({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro,
         [`arrProd_${anoNum - 1}`]: mAnt?.arrobasProduzidasAcum ? Math.round(mAnt.arrobasProduzidasAcum) : null,
         [`gmdMes_${anoNum}`]: isFuturo ? null : mensal(anoAtual.meses, i, 'gmdAcumulado'),
         [`gmdMes_${anoNum - 1}`]: anoAnt ? mensal(anoAnt.meses, i, 'gmdAcumulado') : null,
+        [`gmdAcum_${anoNum}`]: isFuturo ? null : gmdAcumAtual[i],
+        [`gmdAcum_${anoNum - 1}`]: gmdAcumAnt[i],
       };
     });
   }, [zoo.historico, anoNum, mesFiltro]);
