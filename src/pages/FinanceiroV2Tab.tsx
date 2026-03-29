@@ -271,8 +271,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       {/* FILTERS */}
       <Card>
         <CardContent className="p-1.5 space-y-1">
-          {/* LINE 1: Ano | Mês | Status | Fazenda */}
-          <div className="grid grid-cols-4 gap-1">
+          {/* LINE 1: Ano | Mês | Status | Fazenda | Atividade */}
+          <div className="grid grid-cols-5 gap-1">
             <div>
               <label className={lblCls}>Ano</label>
               <Select value={ano} onValueChange={setAno}>
@@ -325,6 +325,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
                   {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id} className={itemCls}>{f.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className={lblCls}>Atividade</label>
+              <Select value={atividadeFiltro} onValueChange={setAtividadeFiltro}>
+                <SelectTrigger className={selCls}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
+                  <SelectItem value="pecuaria" className={itemCls}>Pecuária</SelectItem>
+                  <SelectItem value="agricultura" className={itemCls}>Agricultura</SelectItem>
                 </SelectContent>
               </Select>
             </div>
