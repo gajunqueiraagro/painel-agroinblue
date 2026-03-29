@@ -23,11 +23,17 @@ const MESES_LIST = [
   { value: '11', label: 'Nov' }, { value: '12', label: 'Dez' },
 ];
 
-const STATUS_COLORS: Record<string, string> = {
-  previsto: 'bg-warning/20 text-warning border-warning/30',
-  agendado: 'bg-blue-500/20 text-blue-600 border-blue-500/30',
-  confirmado: 'bg-primary/20 text-primary border-primary/30',
-  conciliado: 'bg-success/20 text-success border-success/30',
+const STATUS_LABELS: Record<string, string> = {
+  previsto: 'Previsto',
+  agendado: 'Agendado',
+  confirmado: 'Confirmado',
+  conciliado: 'Conciliado',
+};
+const STATUS_TEXT_COLORS: Record<string, string> = {
+  previsto: 'text-orange-500',
+  agendado: 'text-emerald-400',
+  confirmado: 'text-sky-500',
+  conciliado: 'text-green-700 dark:text-green-400 font-bold',
 };
 
 function fmtBRL(v: number): string {
