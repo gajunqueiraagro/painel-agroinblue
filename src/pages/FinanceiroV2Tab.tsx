@@ -191,7 +191,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <Select value={tipoOperacao} onValueChange={setTipoOperacao}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="__all__">Todos</SelectItem>
                   <SelectItem value="1-Entradas">Entradas</SelectItem>
                   <SelectItem value="2-Saídas">Saídas</SelectItem>
                   <SelectItem value="3-Transferências">Transferências</SelectItem>
