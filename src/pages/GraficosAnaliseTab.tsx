@@ -258,10 +258,11 @@ function ZootecnicoCharts({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro,
           <ChartCard title="Arrobas Produzidas acumulado" subtitle="Quantidade de arrobas produzidas no acumulado do ano" data={prodData}
             keys={[`arrProd_${anoNum}`, `arrProd_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
             type="line" decimals={0} mesFiltro={mesFiltro} />
-          <ChartCard title="GMD médio (kg/dia)" subtitle="Kg médio ganho por cabeça, por dia" data={prodData}
+          <ChartCard title="GMD na média do período (kg/dia)" subtitle="Kg médio ganho por cabeça considerando o período acumulado" data={prodData}
             keys={[`gmdMes_${anoNum}`, `gmdMes_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
             type="bar" decimals={3} mesFiltro={mesFiltro}
-            lineOverlayKey={`gmdMes_${anoNum}`} valueSuffix=" kg/dia" />
+            lineOverlayKey={`gmdAcum_${anoNum}`} valueSuffix=" kg/dia"
+            displayValueKey={`gmdAcum_${anoNum}`} compKeys={[`gmdAcum_${anoNum}`, `gmdAcum_${anoNum - 1}`]} />
         </>
       )}
     </div>
