@@ -459,9 +459,10 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
   const currentValue = useMemo(() => {
     if (!data || data.length === 0) return null;
     const mesIdx = mesFiltro - 1;
-    const val = data[mesIdx]?.[keys[0]];
+    const key = displayValueKey || keys[0];
+    const val = data[mesIdx]?.[key];
     return typeof val === 'number' ? val : null;
-  }, [data, keys, mesFiltro]);
+  }, [data, keys, mesFiltro, displayValueKey]);
 
   const avgValue = useMemo(() => {
     if (!averageKey || !data || data.length === 0) return null;
