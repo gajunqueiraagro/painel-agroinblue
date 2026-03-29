@@ -309,13 +309,13 @@ const Index = () => {
           onAdicionar={wrappedAdicionar as any}
           onEditar={wrappedEditar as any}
           onRemover={wrappedRemover as any}
-          abaInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria) ? 'reclassificacao' : undefined}
-          onBackToConciliacao={lancamentosFromConciliacao ? goToConciliacaoCategoria : lancamentosFromFechamento ? goToFechamentoTab : lancamentosFromEvolCategoria ? goToEvolucaoRebanhoHub : undefined}
-          dataInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria) ? `${filtroGlobal.ano}-${String(filtroGlobal.mes).padStart(2, '0')}-15` : undefined}
-          backLabel={lancamentosFromFechamento ? 'Voltar para Lançamento de Pasto' : lancamentosFromEvolCategoria ? 'Voltar para Evolução por Categoria' : undefined}
+          abaInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? 'reclassificacao' : undefined}
+          onBackToConciliacao={lancamentosFromConciliacao ? goToConciliacaoCategoria : lancamentosFromFechamento ? goToFechamentoTab : lancamentosFromEvolCategoria ? goToEvolucaoRebanhoHub : lancamentosFromFluxoAnual ? goToFluxoAnual : undefined}
+          dataInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? `${filtroGlobal.ano}-${String(filtroGlobal.mes).padStart(2, '0')}-15` : undefined}
+          backLabel={lancamentosFromFechamento ? 'Voltar para Lançamento de Pasto' : (lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? 'Voltar para Evolução por Categoria' : undefined}
         />
       )}
-      {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} onNavigateToValorRebanho={() => setActiveTab('valor_rebanho')} onSetSaldo={canEditZoo ? setSaldoInicial : undefined} />}
+      {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} onNavigateToValorRebanho={() => setActiveTab('valor_rebanho')} onSetSaldo={canEditZoo ? setSaldoInicial : undefined} onNavigateToReclass={goToReclassFromFluxoAnual} />}
       {activeTab === 'evolucao_rebanho_hub' && (
         <EvolucaoRebanhoHubTab
           lancamentos={lancamentosVisiveis}
