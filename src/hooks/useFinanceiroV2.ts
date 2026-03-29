@@ -109,7 +109,7 @@ export function useFinanceiroV2() {
     if (!clienteId) return;
     const { data } = await supabase
       .from('financeiro_contas_bancarias')
-      .select('id, nome_conta, banco, fazenda_id')
+      .select('id, nome_conta, banco, fazenda_id, tipo_conta, codigo_conta, nome_exibicao')
       .eq('cliente_id', clienteId)
       .eq('ativa', true)
       .order('ordem_exibicao');

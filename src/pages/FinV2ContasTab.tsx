@@ -21,6 +21,8 @@ interface ContaBancaria {
   numero_conta: string | null;
   agencia: string | null;
   tipo_conta: string | null;
+  codigo_conta: string | null;
+  nome_exibicao: string | null;
   fazenda_id: string;
   ativa: boolean;
   ordem_exibicao: number;
