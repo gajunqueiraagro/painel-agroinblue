@@ -179,7 +179,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <Select value={contaBancariaId} onValueChange={setContaBancariaId}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas</SelectItem>
+                  <SelectItem value="__all__">Todas</SelectItem>
                   {contasFiltradas.map(c => (
                     <SelectItem key={c.id} value={c.id}>{c.nome_conta}</SelectItem>
                   ))}
