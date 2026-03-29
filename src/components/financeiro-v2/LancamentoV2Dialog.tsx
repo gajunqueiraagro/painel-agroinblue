@@ -94,8 +94,24 @@ export function LancamentoV2Dialog({
   const [subcentroSearch, setSubcentroSearch] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const isTransferencia = tipoOperacao === '3-Transferências';
+  const isTransferencia = tipoOperacao === '3-Transferência';
   const isEntrada = tipoOperacao === '1-Entradas';
+
+  /** Build a short friendly label from the raw subcentro name */
+  function shortLabel(raw: string): string {
+    // Remove long prefix paths, keep last meaningful segment
+    const parts = raw.split('/').map(p => p.trim()).filter(Boolean);
+    if (parts.length <= 1) return raw;
+    // For PEC/ADM/CONTABILIDADE/JURIDICO/CONSULTORIA → ADM / Contab./Jurídico
+    // Keep first as scope abbreviation, last as name
+    const scope = parts[0]; // PEC, AGRI, etc.
+    const name = parts.slice(1).join(' / ');
+    // Capitalize nicely
+    const formatted = name.split(' / ').map(p =>
+      p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()
+    ).join(' / ');
+    return `${scope} / ${formatted}`;
+  }
 
   const classMap = useMemo(() => {
     const m = new Map<string, ClassificacaoItem>();
