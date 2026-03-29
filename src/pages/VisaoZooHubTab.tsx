@@ -29,7 +29,7 @@ import {
 } from 'recharts';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
-type Bloco = 'indicadores' | 'graficos' | 'dre';
+type Bloco = 'indicadores' | 'dre';
 type Vista = 'mes' | 'acumulado';
 type Cenario = 'realizado' | 'previsto';
 
