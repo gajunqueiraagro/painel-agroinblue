@@ -287,8 +287,6 @@ export function useFluxoCaixa(
               }
             } else if (cat === 'reposicao') {
               reposicao += val;
-            } else if (cat === 'despesasReposicao') {
-              despesasReposicao += val;
             } else if (cat === 'amortizacoes') {
               amortizacoes += val;
               if (escopo === 'agri') amortizacoesAgri += val;
