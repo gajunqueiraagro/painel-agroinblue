@@ -41,6 +41,9 @@ export function FinV2ContasTab() {
   const [numero, setNumero] = useState('');
   const [fazendaId, setFazendaId] = useState('');
   const [ativa, setAtiva] = useState(true);
+  const [tipoConta, setTipoConta] = useState('cc');
+  const [codigoConta, setCodigoConta] = useState('');
+  const [nomeExibicao, setNomeExibicao] = useState('');
 
   const load = useCallback(async () => {
     if (!clienteAtual?.id) return;
