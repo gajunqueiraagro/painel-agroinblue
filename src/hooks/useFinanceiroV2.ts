@@ -80,6 +80,7 @@ export function useFinanceiroV2() {
 
   const [lancamentos, setLancamentos] = useState<LancamentoV2[]>([]);
   const [contasBancarias, setContasBancarias] = useState<ContaBancariaV2[]>([]);
+  const [classificacoes, setClassificacoes] = useState<ClassificacaoItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
