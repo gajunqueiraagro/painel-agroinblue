@@ -4,27 +4,28 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Pencil, Trash2, Copy, ChevronLeft, ChevronRight, Zap, List } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Plus, Pencil, Copy, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown } from 'lucide-react';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, type LancamentoV2, type FiltrosV2 } from '@/hooks/useFinanceiroV2';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
 import { format, parseISO } from 'date-fns';
 
-const MESES = [
-  { value: 'todos', label: 'Todos' },
-  { value: '01', label: 'Janeiro' },
-  { value: '02', label: 'Fevereiro' },
-  { value: '03', label: 'Março' },
-  { value: '04', label: 'Abril' },
-  { value: '05', label: 'Maio' },
-  { value: '06', label: 'Junho' },
-  { value: '07', label: 'Julho' },
-  { value: '08', label: 'Agosto' },
-  { value: '09', label: 'Setembro' },
-  { value: '10', label: 'Outubro' },
-  { value: '11', label: 'Novembro' },
-  { value: '12', label: 'Dezembro' },
+const MESES_LIST = [
+  { value: '01', label: 'Jan' },
+  { value: '02', label: 'Fev' },
+  { value: '03', label: 'Mar' },
+  { value: '04', label: 'Abr' },
+  { value: '05', label: 'Mai' },
+  { value: '06', label: 'Jun' },
+  { value: '07', label: 'Jul' },
+  { value: '08', label: 'Ago' },
+  { value: '09', label: 'Set' },
+  { value: '10', label: 'Out' },
+  { value: '11', label: 'Nov' },
+  { value: '12', label: 'Dez' },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
@@ -45,7 +46,7 @@ function fmtValor(v: number, sinal: number) {
 
 function fmtDate(d: string | null) {
   if (!d) return '-';
-  try { return format(parseISO(d), 'dd/MM/yyyy'); } catch { return d; }
+  try { return format(parseISO(d), 'dd/MM/yy'); } catch { return d; }
 }
 
 interface Props {
@@ -68,19 +69,43 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const defaultFazendaId = fazendaAtual?.id !== '__global__' ? fazendaAtual?.id || '' : '';
   const [fazendaId, setFazendaId] = useState(defaultFazendaId);
   const [ano, setAno] = useState(filtroAnoInicial || String(currentYear));
-  const [mes, setMes] = useState(filtroMesInicial ? String(filtroMesInicial).padStart(2, '0') : 'todos');
+  const [mesesSelecionados, setMesesSelecionados] = useState<string[]>(
+    filtroMesInicial ? [String(filtroMesInicial).padStart(2, '0')] : []
+  );
   const [contaBancariaId, setContaBancariaId] = useState('__all__');
   const [tipoOperacao, setTipoOperacao] = useState('__all__');
   const [statusTransacao, setStatusTransacao] = useState('__all__');
+  const [macroFiltro, setMacroFiltro] = useState('__all__');
+  const [centroFiltro, setCentroFiltro] = useState('__all__');
+  const [subcentroFiltro, setSubcentroFiltro] = useState('__all__');
+  const [mesPopoverOpen, setMesPopoverOpen] = useState(false);
 
   const [mode, setMode] = useState<'list' | 'rapido'>('list');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLanc, setEditingLanc] = useState<LancamentoV2 | null>(null);
 
   const fazOperacionais = useMemo(() => fazendas.filter(f => f.id !== '__global__'), [fazendas]);
-  const contasFiltradas = useMemo(() =>
-    fazendaId ? hook.contasBancarias.filter(c => c.fazenda_id === fazendaId) : hook.contasBancarias
-  , [fazendaId, hook.contasBancarias]);
+
+  // Unique macros/centros/subcentros from classificacoes for filters
+  const macrosUnicos = useMemo(() => {
+    const set = new Set(hook.classificacoes.map(c => c.macro_custo).filter(Boolean));
+    return Array.from(set).sort();
+  }, [hook.classificacoes]);
+
+  const centrosUnicos = useMemo(() => {
+    let items = hook.classificacoes;
+    if (macroFiltro !== '__all__') items = items.filter(c => c.macro_custo === macroFiltro);
+    const set = new Set(items.map(c => c.centro_custo).filter(Boolean));
+    return Array.from(set).sort();
+  }, [hook.classificacoes, macroFiltro]);
+
+  const subcentrosUnicos = useMemo(() => {
+    let items = hook.classificacoes;
+    if (macroFiltro !== '__all__') items = items.filter(c => c.macro_custo === macroFiltro);
+    if (centroFiltro !== '__all__') items = items.filter(c => c.centro_custo === centroFiltro);
+    const set = new Set(items.map(c => c.subcentro).filter(Boolean));
+    return Array.from(set).sort();
+  }, [hook.classificacoes, macroFiltro, centroFiltro]);
 
   useEffect(() => {
     hook.loadContas();
@@ -97,11 +122,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const filtros: FiltrosV2 = useMemo(() => ({
     fazenda_id: fazendaId,
     ano,
-    mes,
+    mes: mesesSelecionados.length === 0 ? 'todos' : undefined,
+    meses: mesesSelecionados.length > 0 ? mesesSelecionados : undefined,
     conta_bancaria_id: contaBancariaId !== '__all__' ? contaBancariaId : undefined,
     tipo_operacao: tipoOperacao !== '__all__' ? tipoOperacao : undefined,
     status_transacao: statusTransacao !== '__all__' ? statusTransacao : undefined,
-  }), [fazendaId, ano, mes, contaBancariaId, tipoOperacao, statusTransacao]);
+    macro_custo: macroFiltro !== '__all__' ? macroFiltro : undefined,
+    centro_custo: centroFiltro !== '__all__' ? centroFiltro : undefined,
+    subcentro: subcentroFiltro !== '__all__' ? subcentroFiltro : undefined,
+  }), [fazendaId, ano, mesesSelecionados, contaBancariaId, tipoOperacao, statusTransacao, macroFiltro, centroFiltro, subcentroFiltro]);
 
   useEffect(() => {
     hook.loadLancamentos(filtros, 0);
@@ -118,9 +147,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Excluir este lançamento?')) return;
     const ok = await hook.excluirLancamento(id);
     if (ok) hook.loadLancamentos(filtros, hook.page);
+    return ok;
   };
 
   const handleDuplicate = async (lanc: LancamentoV2) => {
@@ -134,102 +163,194 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const totalEntradas = hook.lancamentos.filter(l => l.sinal > 0).reduce((s, l) => s + l.valor, 0);
   const totalSaidas = hook.lancamentos.filter(l => l.sinal < 0).reduce((s, l) => s + l.valor, 0);
 
+  const toggleMes = (val: string) => {
+    setMesesSelecionados(prev =>
+      prev.includes(val) ? prev.filter(m => m !== val) : [...prev, val]
+    );
+  };
+
+  const mesLabel = mesesSelecionados.length === 0
+    ? 'Todos'
+    : mesesSelecionados.length <= 3
+      ? mesesSelecionados.map(m => MESES_LIST.find(x => x.value === m)?.label).join(', ')
+      : `${mesesSelecionados.length} meses`;
+
+  // Dynamic conta label based on tipo
+  const isEntrada = tipoOperacao === '1-Entradas';
+  const isSaida = tipoOperacao === '2-Saídas';
+  const isTransf = tipoOperacao === '3-Transferência';
+  const contaLabel = isEntrada ? 'Conta Destino' : isSaida ? 'Conta Origem' : 'Conta';
+
   return (
-    <div className="space-y-4 pb-20">
+    <div className="space-y-2 pb-20">
+      {/* FILTERS */}
       <Card>
-        <CardContent className="p-3 space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <CardContent className="p-2 space-y-1.5">
+          {/* LINE 1: Ano, Mês (multi), Status */}
+          <div className="grid grid-cols-3 gap-1.5">
             <div>
-              <label className="text-xs text-muted-foreground font-medium">Fazenda</label>
-              <Select value={fazendaId} onValueChange={v => { setFazendaId(v); setContaBancariaId('__all__'); }}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  {fazOperacionais.map(f => (
-                    <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground font-medium">Ano</label>
+              <label className="text-[10px] text-muted-foreground font-medium leading-none">Ano</label>
               <Select value={ano} onValueChange={setAno}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {anos.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-                </SelectContent>
+                <SelectTrigger className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
+                <SelectContent>{anos.map(a => <SelectItem key={a} value={a} className="text-xs py-1">{a}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>
-              <label className="text-xs text-muted-foreground font-medium">Mês</label>
-              <Select value={mes} onValueChange={setMes}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {MESES.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <label className="text-[10px] text-muted-foreground font-medium leading-none">Mês</label>
+              <Popover open={mesPopoverOpen} onOpenChange={setMesPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full h-7 text-[11px] justify-between font-normal px-2">
+                    {mesLabel}
+                    <ChevronsUpDown className="h-3 w-3 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-2" align="start">
+                  <div className="flex justify-between mb-1">
+                    <button className="text-[10px] text-primary hover:underline" onClick={() => setMesesSelecionados([])}>
+                      Todos
+                    </button>
+                    <button className="text-[10px] text-primary hover:underline" onClick={() => setMesesSelecionados(MESES_LIST.map(m => m.value))}>
+                      Marcar todos
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    {MESES_LIST.map(m => (
+                      <label key={m.value} className="flex items-center gap-1 text-[11px] cursor-pointer hover:bg-muted rounded px-1 py-0.5">
+                        <Checkbox
+                          checked={mesesSelecionados.includes(m.value)}
+                          onCheckedChange={() => toggleMes(m.value)}
+                          className="h-3 w-3"
+                        />
+                        {m.label}
+                      </label>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
             <div>
-              <label className="text-xs text-muted-foreground font-medium">Conta</label>
-              <Select value={contaBancariaId} onValueChange={setContaBancariaId}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Todas" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">Todas</SelectItem>
-                  {contasFiltradas.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.nome_conta}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground font-medium">Tipo</label>
-              <Select value={tipoOperacao} onValueChange={setTipoOperacao}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Todos" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">Todos</SelectItem>
-                  <SelectItem value="1-Entradas">Entradas</SelectItem>
-                  <SelectItem value="2-Saídas">Saídas</SelectItem>
-                  <SelectItem value="3-Transferências">Transferências</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground font-medium">Status</label>
+              <label className="text-[10px] text-muted-foreground font-medium leading-none">Status</label>
               <Select value={statusTransacao} onValueChange={setStatusTransacao}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Todos" /></SelectTrigger>
+                <SelectTrigger className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">Todos</SelectItem>
-                  <SelectItem value="previsto">Previsto</SelectItem>
-                  <SelectItem value="agendado">Agendado</SelectItem>
-                  <SelectItem value="confirmado">Confirmado</SelectItem>
-                  <SelectItem value="conciliado">Conciliado</SelectItem>
+                  <SelectItem value="__all__" className="text-xs py-1">Todos</SelectItem>
+                  <SelectItem value="previsto" className="text-xs py-1">Previsto</SelectItem>
+                  <SelectItem value="agendado" className="text-xs py-1">Agendado</SelectItem>
+                  <SelectItem value="confirmado" className="text-xs py-1">Confirmado</SelectItem>
+                  <SelectItem value="conciliado" className="text-xs py-1">Conciliado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex gap-3 text-xs">
-              <span className="text-success font-bold">
-                Entradas: R$ {fmtBRL(totalEntradas)}
-              </span>
-              <span className="text-destructive font-bold">
-                Saídas: R$ {fmtBRL(totalSaidas)}
-              </span>
-              <span className="text-muted-foreground">{hook.total} lançamentos</span>
+          {/* LINE 2: Fazenda, Tipo */}
+          <div className="grid grid-cols-2 gap-1.5">
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium leading-none">Fazenda</label>
+              <Select value={fazendaId} onValueChange={v => { setFazendaId(v); setContaBancariaId('__all__'); }}>
+                <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id} className="text-xs py-1">{f.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="flex gap-1.5">
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium leading-none">Tipo</label>
+              <Select value={tipoOperacao} onValueChange={setTipoOperacao}>
+                <SelectTrigger className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__" className="text-xs py-1">Todos</SelectItem>
+                  <SelectItem value="1-Entradas" className="text-xs py-1">Entradas</SelectItem>
+                  <SelectItem value="2-Saídas" className="text-xs py-1">Saídas</SelectItem>
+                  <SelectItem value="3-Transferência" className="text-xs py-1">Transferências</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* LINE 3: Conta (dynamic) */}
+          <div className={`grid ${isTransf ? 'grid-cols-2' : 'grid-cols-1'} gap-1.5`}>
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium leading-none">
+                {isTransf ? 'Conta Origem' : contaLabel}
+              </label>
+              <Select value={contaBancariaId} onValueChange={setContaBancariaId}>
+                <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="Todas" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__" className="text-xs py-1">Todas</SelectItem>
+                  {hook.contasBancarias.map(c => (
+                    <SelectItem key={c.id} value={c.id} className="text-xs py-1">{c.nome_conta}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {isTransf && (
+              <div>
+                <label className="text-[10px] text-muted-foreground font-medium leading-none">Conta Destino</label>
+                <Select value="__all__" disabled>
+                  <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="Todas" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__" className="text-xs py-1">Todas</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+          {/* LINE 4: Macro, Centro, Subcentro */}
+          <div className="grid grid-cols-3 gap-1.5">
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium leading-none">Macro</label>
+              <Select value={macroFiltro} onValueChange={v => { setMacroFiltro(v); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); }}>
+                <SelectTrigger className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__" className="text-xs py-1">Todos</SelectItem>
+                  {macrosUnicos.map(m => <SelectItem key={m} value={m} className="text-xs py-1">{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium leading-none">Centro</label>
+              <Select value={centroFiltro} onValueChange={v => { setCentroFiltro(v); setSubcentroFiltro('__all__'); }}>
+                <SelectTrigger className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__" className="text-xs py-1">Todos</SelectItem>
+                  {centrosUnicos.map(c => <SelectItem key={c} value={c} className="text-xs py-1">{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium leading-none">Subcentro</label>
+              <Select value={subcentroFiltro} onValueChange={setSubcentroFiltro}>
+                <SelectTrigger className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__" className="text-xs py-1">Todos</SelectItem>
+                  {subcentrosUnicos.map(s => <SelectItem key={s} value={s} className="text-xs py-1">{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Summary + actions bar */}
+          <div className="flex items-center justify-between pt-0.5">
+            <div className="flex gap-3 text-[11px]">
+              <span className="text-success font-bold">Ent: R$ {fmtBRL(totalEntradas)}</span>
+              <span className="text-destructive font-bold">Saí: R$ {fmtBRL(totalSaidas)}</span>
+              <span className="text-muted-foreground">{hook.total} lanç.</span>
+            </div>
+            <div className="flex gap-1">
               <Button
                 size="sm"
                 variant={mode === 'rapido' ? 'default' : 'outline'}
                 onClick={() => setMode(mode === 'rapido' ? 'list' : 'rapido')}
-                className="h-8 text-xs gap-1"
+                className="h-7 text-[11px] gap-1 px-2"
               >
-                {mode === 'rapido' ? <List className="h-3.5 w-3.5" /> : <Zap className="h-3.5 w-3.5" />}
-                {mode === 'rapido' ? 'Listagem' : 'Modo Rápido'}
+                {mode === 'rapido' ? <List className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
+                {mode === 'rapido' ? 'Lista' : 'Rápido'}
               </Button>
               {mode === 'list' && (
-                <Button size="sm" onClick={openNew} className="h-8 text-xs gap-1">
-                  <Plus className="h-3.5 w-3.5" /> Novo
+                <Button size="sm" onClick={openNew} className="h-7 text-[11px] gap-1 px-2">
+                  <Plus className="h-3 w-3" /> Novo
                 </Button>
               )}
             </div>
@@ -238,13 +359,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       </Card>
 
       {(!fazendaId || !ano) && (
-        <div className="text-center text-muted-foreground py-12 text-sm">
+        <div className="text-center text-muted-foreground py-8 text-xs">
           Selecione uma fazenda e um ano para carregar os lançamentos.
         </div>
       )}
 
       {hook.loading && (
-        <div className="text-center text-muted-foreground py-8 text-sm animate-pulse">Carregando...</div>
+        <div className="text-center text-muted-foreground py-6 text-xs animate-pulse">Carregando...</div>
       )}
 
       {mode === 'rapido' && fazendaId && (
@@ -262,58 +383,57 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           <div className="rounded-lg border overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="text-xs">
-                  <TableHead className="w-[90px]">Data Pgto</TableHead>
+                <TableRow>
+                  <TableHead className="w-[68px]">Dt Comp</TableHead>
+                  <TableHead className="w-[68px]">Dt Pgto</TableHead>
                   <TableHead>Produto</TableHead>
-                  <TableHead className="w-[100px]">Conta</TableHead>
-                  <TableHead className="w-[110px] text-right">Valor</TableHead>
-                  <TableHead className="w-[80px]">Tipo</TableHead>
-                  <TableHead className="w-[80px]">Status</TableHead>
-                  <TableHead className="w-[100px]">Classificação</TableHead>
-                  <TableHead className="w-[90px]">Ações</TableHead>
+                  <TableHead className="w-[90px]">Fornecedor</TableHead>
+                  <TableHead className="w-[95px] text-right">Valor</TableHead>
+                  <TableHead className="w-[70px]">Fazenda</TableHead>
+                  <TableHead className="w-[55px]">Tipo</TableHead>
+                  <TableHead className="w-[80px]">Conta</TableHead>
+                  <TableHead className="w-[60px]">Macro</TableHead>
+                  <TableHead className="w-[80px]">Subcentro</TableHead>
+                  <TableHead className="w-[75px]">NF</TableHead>
+                  <TableHead className="w-[50px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {hook.lancamentos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8 text-sm">
-                      Nenhum lançamento encontrado para o período selecionado.
+                    <TableCell colSpan={12} className="text-center text-muted-foreground py-6 text-xs">
+                      Nenhum lançamento encontrado.
                     </TableCell>
                   </TableRow>
                 ) : (
                   hook.lancamentos.map(l => {
                     const contaNome = hook.contasBancarias.find(c => c.id === l.conta_bancaria_id)?.nome_conta || '-';
-                    const tipoLabel = l.tipo_operacao?.replace(/^\d-/, '') || '-';
-                    const statusLabel = l.status_transacao || 'previsto';
-                    const classificacao = [l.macro_custo, l.centro_custo, l.subcentro].filter(Boolean).join(' › ');
+                    const tipoLabel = l.tipo_operacao?.replace(/^\d-/, '').substring(0, 5) || '-';
+                    const fazNome = fazendas.find(f => f.id === l.fazenda_id)?.nome || '-';
+                    const fornNome = hook.fornecedores.find(f => f.id === l.favorecido_id)?.nome || '-';
 
                     return (
-                      <TableRow key={l.id} className="text-xs">
-                        <TableCell className="font-mono">{fmtDate(l.data_pagamento)}</TableCell>
-                        <TableCell className="max-w-[200px] truncate" title={l.descricao || ''}>{l.descricao || '-'}</TableCell>
-                        <TableCell className="truncate max-w-[100px]" title={contaNome}>{contaNome}</TableCell>
-                        <TableCell className={`text-right font-bold ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
+                      <TableRow key={l.id} className="text-[11px]">
+                        <TableCell className="font-mono py-1.5 px-2">{fmtDate(l.data_competencia)}</TableCell>
+                        <TableCell className="font-mono py-1.5 px-2">{fmtDate(l.data_pagamento)}</TableCell>
+                        <TableCell className="max-w-[140px] truncate py-1.5 px-2" title={l.descricao || ''}>{l.descricao || '-'}</TableCell>
+                        <TableCell className="max-w-[90px] truncate py-1.5 px-2" title={fornNome}>{fornNome}</TableCell>
+                        <TableCell className={`text-right font-bold py-1.5 px-2 ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
                           {fmtValor(l.valor, l.sinal)}
                         </TableCell>
-                        <TableCell>{tipoLabel}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${STATUS_COLORS[statusLabel] || ''}`}>
-                            {statusLabel}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="truncate max-w-[100px] text-muted-foreground" title={classificacao}>
-                          {classificacao || '-'}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(l)}>
+                        <TableCell className="truncate max-w-[70px] py-1.5 px-2" title={fazNome}>{fazNome}</TableCell>
+                        <TableCell className="py-1.5 px-2">{tipoLabel}</TableCell>
+                        <TableCell className="truncate max-w-[80px] py-1.5 px-2" title={contaNome}>{contaNome}</TableCell>
+                        <TableCell className="truncate max-w-[60px] py-1.5 px-2 text-muted-foreground">{l.macro_custo || '-'}</TableCell>
+                        <TableCell className="truncate max-w-[80px] py-1.5 px-2 text-muted-foreground">{l.subcentro || '-'}</TableCell>
+                        <TableCell className="font-mono py-1.5 px-2 text-muted-foreground">{l.nota_fiscal || '-'}</TableCell>
+                        <TableCell className="py-1.5 px-2">
+                          <div className="flex gap-0.5">
+                            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => openEdit(l)}>
                               <Pencil className="h-3 w-3" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDuplicate(l)}>
+                            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleDuplicate(l)}>
                               <Copy className="h-3 w-3" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDelete(l.id)}>
-                              <Trash2 className="h-3 w-3" />
                             </Button>
                           </div>
                         </TableCell>
@@ -327,12 +447,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
           {hook.totalPages > 1 && (
             <div className="flex items-center justify-center gap-2">
-              <Button variant="outline" size="sm" disabled={hook.page === 0} onClick={() => handlePageChange(hook.page - 1)}>
-                <ChevronLeft className="h-4 w-4" />
+              <Button variant="outline" size="sm" className="h-7" disabled={hook.page === 0} onClick={() => handlePageChange(hook.page - 1)}>
+                <ChevronLeft className="h-3.5 w-3.5" />
               </Button>
-              <span className="text-xs text-muted-foreground">Página {hook.page + 1} de {hook.totalPages}</span>
-              <Button variant="outline" size="sm" disabled={hook.page >= hook.totalPages - 1} onClick={() => handlePageChange(hook.page + 1)}>
-                <ChevronRight className="h-4 w-4" />
+              <span className="text-[11px] text-muted-foreground">Pág {hook.page + 1}/{hook.totalPages}</span>
+              <Button variant="outline" size="sm" className="h-7" disabled={hook.page >= hook.totalPages - 1} onClick={() => handlePageChange(hook.page + 1)}>
+                <ChevronRight className="h-3.5 w-3.5" />
               </Button>
             </div>
           )}
@@ -343,6 +463,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         open={dialogOpen}
         onClose={() => { setDialogOpen(false); setEditingLanc(null); }}
         onSave={handleSave}
+        onDelete={handleDelete}
         lancamento={editingLanc}
         fazendas={fazendas}
         contas={hook.contasBancarias}
