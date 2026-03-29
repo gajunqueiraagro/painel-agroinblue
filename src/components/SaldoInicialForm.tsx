@@ -146,7 +146,7 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
   return (
     <>
       <div className="mx-2 my-2 rounded-lg border border-border bg-card shadow-sm">
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50 bg-muted/30 rounded-t-lg">
+        <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 rounded-lg">
           <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           <div className="flex-1 min-w-0 flex items-center gap-2">
             <span className="text-xs font-bold text-foreground">Saldo Inicial</span>
@@ -168,19 +168,6 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
               Editar
             </button>
           </div>
-        </div>
-
-        {/* Compact category summary */}
-        <div className="px-3 py-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
-          {categoriasComSaldo.map(c => (
-            <span key={c.label} className="text-[10px] text-muted-foreground whitespace-nowrap">
-              <span className="font-semibold text-foreground">{c.qtd}</span> {c.label}
-              {c.peso ? <span className="text-muted-foreground/70 ml-0.5">({c.peso}kg)</span> : null}
-            </span>
-          ))}
-          {categoriasComSaldo.length === 0 && (
-            <span className="text-[10px] text-muted-foreground italic">Nenhuma categoria com saldo</span>
-          )}
         </div>
       </div>
 
