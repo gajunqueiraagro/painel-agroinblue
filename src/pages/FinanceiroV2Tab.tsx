@@ -224,9 +224,22 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 {hook.total} lançamentos
               </span>
             </div>
-            <Button size="sm" onClick={openNew} className="h-8 text-xs gap-1">
-              <Plus className="h-3.5 w-3.5" /> Novo
-            </Button>
+            <div className="flex gap-1.5">
+              <Button
+                size="sm"
+                variant={mode === 'rapido' ? 'default' : 'outline'}
+                onClick={() => setMode(mode === 'rapido' ? 'list' : 'rapido')}
+                className="h-8 text-xs gap-1"
+              >
+                {mode === 'rapido' ? <List className="h-3.5 w-3.5" /> : <Zap className="h-3.5 w-3.5" />}
+                {mode === 'rapido' ? 'Listagem' : 'Modo Rápido'}
+              </Button>
+              {mode === 'list' && (
+                <Button size="sm" onClick={openNew} className="h-8 text-xs gap-1">
+                  <Plus className="h-3.5 w-3.5" /> Novo
+                </Button>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
