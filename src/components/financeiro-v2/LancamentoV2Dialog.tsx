@@ -121,12 +121,21 @@ export function LancamentoV2Dialog({
     return m;
   }, [classificacoes]);
 
+  /** Subcentros filtered by tipo_operacao then by search text */
   const filteredSubcentros = useMemo(() => {
     const unique = Array.from(classMap.values());
-    if (!subcentroSearch.trim()) return unique;
+    // 1. Filter by tipo_operacao match
+    const byTipo = unique.filter(c => {
+      if (!tipoOperacao) return true;
+      // Match prefix: '1-Entradas' matches '1-Entradas', '2-Saídas' matches '2-Saídas'
+      // For transfers, show transfer-specific subcentros
+      return c.tipo_operacao === tipoOperacao;
+    });
+    // 2. Apply text search
+    if (!subcentroSearch.trim()) return byTipo;
     const term = subcentroSearch.toLowerCase();
-    return unique.filter(c => c.subcentro.toLowerCase().includes(term));
-  }, [classMap, subcentroSearch]);
+    return byTipo.filter(c => c.subcentro.toLowerCase().includes(term));
+  }, [classMap, subcentroSearch, tipoOperacao]);
 
   useEffect(() => {
     if (lancamento) {
