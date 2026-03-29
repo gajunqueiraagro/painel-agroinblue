@@ -123,12 +123,14 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
         </div>
       </div>
 
-      {/* Saldo Inicial banner/edit */}
+      {/* Saldo Inicial — always visible */}
       {onSetSaldo && (
         <SaldoInicialForm
           saldosIniciais={saldosIniciais}
           onSetSaldo={onSetSaldo}
           anoBase={Number(anoFiltro)}
+          totalLancamentos={lancamentos.length}
+          alwaysVisible
         />
       )}
 
