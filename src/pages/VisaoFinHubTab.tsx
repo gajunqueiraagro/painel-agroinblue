@@ -21,7 +21,7 @@ interface GroupItem {
 
 const ITEMS: GroupItem[] = [
   { label: 'Financeiro', tab: 'fin_caixa', icon: DollarSign, description: 'Dashboard, fluxo de caixa e importação' },
-  { label: 'Lançamentos v2', tab: 'financeiro_v2', icon: ListChecks, description: 'Novo módulo de lançamentos financeiros' },
+  { label: 'Financeiro v2', tab: 'financeiro_v2_hub' as TabId, icon: ListChecks, description: 'Hub completo: lançamentos, contas, fornecedores' },
 ];
 
 export function VisaoFinHubTab({ onTabChange, filtroGlobal }: Props) {
