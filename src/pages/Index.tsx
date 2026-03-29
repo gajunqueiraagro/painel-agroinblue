@@ -435,6 +435,13 @@ const Index = () => {
           filtroMesInicial={filtroGlobal.mes}
         />
       )}
+      {activeTab === 'financeiro_v2' && (
+        <FinanceiroV2Tab
+          onBack={goToLancarFinHub}
+          filtroAnoInicial={filtroGlobal.ano}
+          filtroMesInicial={filtroGlobal.mes}
+        />
+      )}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
