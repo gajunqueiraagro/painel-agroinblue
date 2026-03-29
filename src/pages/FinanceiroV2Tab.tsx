@@ -486,20 +486,20 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                     const fornNome = hook.fornecedores.find(f => f.id === l.favorecido_id)?.nome || '-';
 
                     return (
-                      <TableRow key={l.id} className="text-[10px] h-6">
-                        <TableCell className="font-mono py-0.5 px-1.5">{fmtDate(l.data_competencia)}</TableCell>
-                        <TableCell className="font-mono py-0.5 px-1.5">{fmtDate(l.data_pagamento)}</TableCell>
-                        <TableCell className="max-w-[120px] truncate py-0.5 px-1.5" title={l.descricao || ''}>{l.descricao || '-'}</TableCell>
-                        <TableCell className="max-w-[80px] truncate py-0.5 px-1.5" title={fornNome}>{fornNome}</TableCell>
-                        <TableCell className={`text-right font-bold py-0.5 px-1.5 ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
+                      <TableRow key={l.id} className="text-[8px] h-[18px] leading-none">
+                        <TableCell className="font-mono py-px px-1">{fmtDate(l.data_competencia)}</TableCell>
+                        <TableCell className="font-mono py-px px-1">{fmtDate(l.data_pagamento)}</TableCell>
+                        <TableCell className="max-w-[120px] truncate py-px px-1" title={l.descricao || ''}>{l.descricao || '-'}</TableCell>
+                        <TableCell className="max-w-[80px] truncate py-px px-1" title={fornNome}>{fornNome}</TableCell>
+                        <TableCell className={`text-right font-bold py-px px-1 ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
                           {fmtValor(l.valor, l.sinal)}
                         </TableCell>
-                        <TableCell className="truncate max-w-[60px] py-0.5 px-1.5" title={fazNome}>{fazNome}</TableCell>
-                        <TableCell className="py-0.5 px-1.5">{tipoLabel}</TableCell>
-                        <TableCell className="truncate max-w-[70px] py-0.5 px-1.5" title={contaNome}>{contaNome}</TableCell>
-                        <TableCell className="truncate max-w-[50px] py-0.5 px-1.5 text-muted-foreground">{l.macro_custo || '-'}</TableCell>
-                        <TableCell className="truncate max-w-[70px] py-0.5 px-1.5 text-muted-foreground">{l.subcentro || '-'}</TableCell>
-                        <TableCell className="font-mono py-0.5 px-1.5 text-muted-foreground">{l.nota_fiscal || '-'}</TableCell>
+                        <TableCell className="truncate max-w-[60px] py-px px-1" title={fazNome}>{fazNome}</TableCell>
+                        <TableCell className="py-px px-1">{tipoLabel}</TableCell>
+                        <TableCell className="truncate max-w-[70px] py-px px-1" title={contaNome}>{contaNome}</TableCell>
+                        <TableCell className="truncate max-w-[50px] py-px px-1 text-muted-foreground">{l.macro_custo || '-'}</TableCell>
+                        <TableCell className="truncate max-w-[70px] py-px px-1 text-muted-foreground">{l.subcentro || '-'}</TableCell>
+                        <TableCell className="font-mono py-px px-1 text-muted-foreground">{l.nota_fiscal || '-'}</TableCell>
                         <TableCell className="py-0.5 px-1.5">
                           <div className="flex gap-0.5">
                             <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => openEdit(l)}>
