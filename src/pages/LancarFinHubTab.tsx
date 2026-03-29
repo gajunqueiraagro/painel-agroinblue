@@ -20,6 +20,8 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
+import { ChevronRight, Sparkles } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import {
   isConciliado as isConciliadoShared,
   datePagtoAnoMes as datePagtoAnoMesShared,
