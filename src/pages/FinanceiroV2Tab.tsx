@@ -499,6 +499,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <Button size="sm" variant="ghost" onClick={handleLimparFiltros} className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground">
                 <FilterX className="h-3 w-3" /> Limpar
               </Button>
+              <FinanceiroV2ExportMenu
+                lancamentos={filteredLancamentos}
+                fornecedores={hook.fornecedores}
+                ano={ano}
+                fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
+              />
               <Button
                 size="sm"
                 variant={mode === 'rapido' ? 'default' : 'outline'}
