@@ -28,7 +28,7 @@ interface Props {
 const TIPOS_OPERACAO = [
   { value: '1-Entradas', label: 'Entradas' },
   { value: '2-Saídas', label: 'Saídas' },
-  { value: '3-Transferências', label: 'Transferências' },
+  { value: '3-Transferência', label: 'Transferências' },
 ];
 
 const STATUS_OPTIONS = [
@@ -94,8 +94,24 @@ export function LancamentoV2Dialog({
   const [subcentroSearch, setSubcentroSearch] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const isTransferencia = tipoOperacao === '3-Transferências';
+  const isTransferencia = tipoOperacao === '3-Transferência';
   const isEntrada = tipoOperacao === '1-Entradas';
+
+  /** Build a short friendly label from the raw subcentro name */
+  function shortLabel(raw: string): string {
+    // Remove long prefix paths, keep last meaningful segment
+    const parts = raw.split('/').map(p => p.trim()).filter(Boolean);
+    if (parts.length <= 1) return raw;
+    // For PEC/ADM/CONTABILIDADE/JURIDICO/CONSULTORIA → ADM / Contab./Jurídico
+    // Keep first as scope abbreviation, last as name
+    const scope = parts[0]; // PEC, AGRI, etc.
+    const name = parts.slice(1).join(' / ');
+    // Capitalize nicely
+    const formatted = name.split(' / ').map(p =>
+      p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()
+    ).join(' / ');
+    return `${scope} / ${formatted}`;
+  }
 
   const classMap = useMemo(() => {
     const m = new Map<string, ClassificacaoItem>();
@@ -105,12 +121,21 @@ export function LancamentoV2Dialog({
     return m;
   }, [classificacoes]);
 
+  /** Subcentros filtered by tipo_operacao then by search text */
   const filteredSubcentros = useMemo(() => {
     const unique = Array.from(classMap.values());
-    if (!subcentroSearch.trim()) return unique;
+    // 1. Filter by tipo_operacao match
+    const byTipo = unique.filter(c => {
+      if (!tipoOperacao) return true;
+      // Match prefix: '1-Entradas' matches '1-Entradas', '2-Saídas' matches '2-Saídas'
+      // For transfers, show transfer-specific subcentros
+      return c.tipo_operacao === tipoOperacao;
+    });
+    // 2. Apply text search
+    if (!subcentroSearch.trim()) return byTipo;
     const term = subcentroSearch.toLowerCase();
-    return unique.filter(c => c.subcentro.toLowerCase().includes(term));
-  }, [classMap, subcentroSearch]);
+    return byTipo.filter(c => c.subcentro.toLowerCase().includes(term));
+  }, [classMap, subcentroSearch, tipoOperacao]);
 
   useEffect(() => {
     if (lancamento) {
@@ -139,6 +164,9 @@ export function LancamentoV2Dialog({
       setMacroCusto('');
       setCentroCusto('');
       setTipoOperacao('2-Saídas');
+      setSubcentro('');
+      setMacroCusto('');
+      setCentroCusto('');
       setStatusTransacao('previsto');
       setValorDisplay('0,00');
       setContaOrigemId('');
@@ -157,7 +185,7 @@ export function LancamentoV2Dialog({
     if (cls) {
       setMacroCusto(cls.macro_custo);
       setCentroCusto(cls.centro_custo);
-      setTipoOperacao(cls.tipo_operacao);
+      // Don't override tipoOperacao — subcentro is already filtered by it
     }
   };
 
@@ -180,9 +208,8 @@ export function LancamentoV2Dialog({
 
   const notaFiscalDisplay = notaFiscal ? formatNotaFiscal(notaFiscal) : '';
 
-  const contasFazenda = useMemo(() =>
-    contas.filter(c => c.fazenda_id === fazendaId || !c.fazenda_id),
-  [contas, fazendaId]);
+  // Contas are GLOBAL (not per-fazenda) — show all active client accounts
+  const contasDisponiveis = contas;
 
   const fornecedoresList = useMemo(() =>
     fornecedores.filter(f => f.fazenda_id === fazendaId || !f.fazenda_id),
@@ -343,7 +370,7 @@ export function LancamentoV2Dialog({
               <div className="space-y-2">
                 <div>
                   <Label className="text-xs">Tipo Operação *</Label>
-                  <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigemId(''); setContaDestinoId(''); }}>
+                  <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigemId(''); setContaDestinoId(''); setSubcentro(''); setMacroCusto(''); setCentroCusto(''); setSubcentroSearch(''); }}>
                     <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {TIPOS_OPERACAO.map(t => (
@@ -360,7 +387,7 @@ export function LancamentoV2Dialog({
                       <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent className="max-h-60">
                         <SelectItem value="__none__">Selecione...</SelectItem>
-                        {contasFazenda.map(c => (
+                        {contasDisponiveis.map(c => (
                           <SelectItem key={c.id} value={c.id}>{c.nome_conta}{c.banco ? ` (${c.banco})` : ''}</SelectItem>
                         ))}
                       </SelectContent>
@@ -375,7 +402,7 @@ export function LancamentoV2Dialog({
                       <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent className="max-h-60">
                         <SelectItem value="__none__">Selecione...</SelectItem>
-                        {contasFazenda.map(c => (
+                        {contasDisponiveis.map(c => (
                           <SelectItem key={c.id} value={c.id}>{c.nome_conta}{c.banco ? ` (${c.banco})` : ''}</SelectItem>
                         ))}
                       </SelectContent>
@@ -385,11 +412,11 @@ export function LancamentoV2Dialog({
 
                 {/* DEBUG contas */}
                 <div className="p-1.5 bg-yellow-50 border border-yellow-200 rounded text-[10px] text-yellow-800">
-                  <strong>🔍 DEBUG Contas:</strong> {contasFazenda.length} carregada(s) (total: {contas.length})
-                  {contasFazenda.length > 0 && (
-                    <span> · {contasFazenda.map(c => c.nome_conta).join(' | ')}</span>
+                  <strong>🔍 DEBUG Contas:</strong> {contasDisponiveis.length} carregada(s) (total: {contas.length})
+                  {contasDisponiveis.length > 0 && (
+                    <span> · {contasDisponiveis.map(c => c.nome_conta).join(' | ')}</span>
                   )}
-                  {contasFazenda.length === 0 && (
+                  {contasDisponiveis.length === 0 && (
                     <span className="text-red-600"> · NENHUMA CONTA p/ fazenda {fazendaId || '(nenhuma)'}</span>
                   )}
                 </div>
@@ -410,7 +437,7 @@ export function LancamentoV2Dialog({
                         aria-expanded={subcentroOpen}
                         className="w-full h-9 justify-between font-normal text-sm"
                       >
-                        {subcentro || 'Selecione o subcentro...'}
+                        {subcentro ? shortLabel(subcentro) : 'Selecione o subcentro...'}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
@@ -440,7 +467,7 @@ export function LancamentoV2Dialog({
                             onClick={() => handleSubcentroSelect(c.subcentro)}
                           >
                             <Check className={cn("mr-2 h-4 w-4", subcentro === c.subcentro ? "opacity-100" : "opacity-0")} />
-                            {c.subcentro}
+                            <span className="truncate">{shortLabel(c.subcentro)}</span>
                           </button>
                         ))}
                       </div>
@@ -448,12 +475,12 @@ export function LancamentoV2Dialog({
                   </Popover>
                   {/* DEBUG subcentro */}
                   <div className="mt-1 p-1.5 bg-yellow-50 border border-yellow-200 rounded text-[10px] text-yellow-800">
-                    <strong>🔍 DEBUG Subcentro:</strong> {classMap.size} único(s)
-                    {classMap.size > 0 && (
-                      <span> · Primeiros: {Array.from(classMap.keys()).slice(0, 5).join(' | ')}</span>
+                    <strong>🔍 DEBUG Subcentro:</strong> {classMap.size} total | {filteredSubcentros.length} p/ tipo "{tipoOperacao}"
+                    {filteredSubcentros.length > 0 && (
+                      <span> · {filteredSubcentros.slice(0, 3).map(c => shortLabel(c.subcentro)).join(' | ')}</span>
                     )}
-                    {classMap.size === 0 && (
-                      <span className="text-red-600"> · NENHUM — verificar financeiro_plano_contas</span>
+                    {filteredSubcentros.length === 0 && (
+                      <span className="text-red-600"> · NENHUM p/ este tipo</span>
                     )}
                   </div>
                 </div>
