@@ -197,18 +197,33 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const openNew = () => { setEditingLanc(null); setDialogOpen(true); };
   const openEdit = (l: LancamentoV2) => { setEditingLanc(l); setDialogOpen(true); };
 
-  // Client-side filter for produto
+  // Derive atividade from subcentro
+  const getAtividade = (subcentro: string | null): string => {
+    if (!subcentro) return 'outros';
+    const s = subcentro.toUpperCase();
+    if (s.startsWith('PEC/') || s.startsWith('PEC ')) return 'pecuaria';
+    if (s.startsWith('AGRI/') || s.startsWith('AGRI ')) return 'agricultura';
+    return 'outros';
+  };
+
   const filteredLancamentos = useMemo(() => {
     let items = hook.lancamentos;
     if (produtoFiltro.trim()) {
       const q = produtoFiltro.toLowerCase();
       items = items.filter(l => l.descricao?.toLowerCase().includes(q));
     }
-    if (fornecedorFiltro !== '__all__') {
-      items = items.filter(l => l.favorecido_id === fornecedorFiltro);
+    if (fornecedorFiltro.trim()) {
+      const q = fornecedorFiltro.toLowerCase();
+      items = items.filter(l => {
+        const nome = hook.fornecedores.find(f => f.id === l.favorecido_id)?.nome || '';
+        return nome.toLowerCase().includes(q);
+      });
+    }
+    if (atividadeFiltro !== '__all__') {
+      items = items.filter(l => getAtividade(l.subcentro) === atividadeFiltro);
     }
     return items;
-  }, [hook.lancamentos, produtoFiltro, fornecedorFiltro]);
+  }, [hook.lancamentos, produtoFiltro, fornecedorFiltro, atividadeFiltro, hook.fornecedores]);
 
   const totalEntradas = filteredLancamentos.filter(l => l.sinal > 0).reduce((s, l) => s + l.valor, 0);
   const totalSaidas = filteredLancamentos.filter(l => l.sinal < 0).reduce((s, l) => s + l.valor, 0);
