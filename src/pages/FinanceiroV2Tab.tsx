@@ -420,13 +420,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </div>
             <div>
               <label className={lblCls}>Fornecedor</label>
-              <Select value={fornecedorFiltro} onValueChange={setFornecedorFiltro}>
-                <SelectTrigger className={selCls}><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
-                  {hook.fornecedores.map(f => <SelectItem key={f.id} value={f.id} className={itemCls}>{f.nome}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Input
+                value={fornecedorFiltro}
+                onChange={e => setFornecedorFiltro(e.target.value)}
+                placeholder="Buscar..."
+                className="h-6 text-[10px] px-1.5"
+              />
             </div>
           </div>
 
