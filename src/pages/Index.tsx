@@ -88,6 +88,7 @@ const TITLES: Record<TabId, string> = {
   analise_consultor: 'Análise do Consultor',
   preco_mercado: 'Preço de Mercado',
   graficos_analise: 'Gráficos',
+  financeiro_v2: 'Financeiro v2',
 };
 
 const Index = () => {
