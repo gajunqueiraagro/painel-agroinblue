@@ -431,7 +431,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 <SelectTrigger className={`${selCls} ${isSaida ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
-                  {hook.contasBancarias.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{c.nome_conta}</SelectItem>)}
+                  {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{c.nome_conta}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
