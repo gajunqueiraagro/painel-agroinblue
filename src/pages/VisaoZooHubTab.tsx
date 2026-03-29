@@ -229,9 +229,9 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
   // Meses options
   const mesesOpt = MESES_COLS.map((m, i) => ({ value: i + 1, label: m.label }));
 
-  const blocos: { id: Bloco; label: string }[] = [
+  const blocos: { id: Bloco | 'graficos_nav'; label: string }[] = [
     { id: 'indicadores', label: '📊 Indicadores' },
-    { id: 'graficos', label: '📈 Gráficos' },
+    { id: 'graficos_nav', label: '📈 Gráficos' },
     { id: 'dre', label: '📋 DRE' },
   ];
 
