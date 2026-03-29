@@ -479,6 +479,7 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
             {displayValue !== null && (
               <span className="text-sm font-bold text-foreground">
                 {formatVal(displayValue)}
+                {valueSuffix && <span className="text-[10px] font-normal text-muted-foreground">{valueSuffix}</span>}
                 {averageLabel && <span className="text-[10px] font-normal text-muted-foreground ml-1">{averageLabel}</span>}
               </span>
             )}
