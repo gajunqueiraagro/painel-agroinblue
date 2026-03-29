@@ -16,6 +16,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSave: (form: LancamentoV2Form, id?: string) => Promise<boolean>;
+  onDelete?: (id: string) => Promise<boolean>;
   lancamento?: LancamentoV2 | null;
   fazendas: Fazenda[];
   contas: ContaBancariaV2[];
