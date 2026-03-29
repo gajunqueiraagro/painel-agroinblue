@@ -208,9 +208,8 @@ export function LancamentoV2Dialog({
 
   const notaFiscalDisplay = notaFiscal ? formatNotaFiscal(notaFiscal) : '';
 
-  const contasFazenda = useMemo(() =>
-    contas.filter(c => c.fazenda_id === fazendaId || !c.fazenda_id),
-  [contas, fazendaId]);
+  // Contas are GLOBAL (not per-fazenda) — show all active client accounts
+  const contasDisponiveis = contas;
 
   const fornecedoresList = useMemo(() =>
     fornecedores.filter(f => f.fazenda_id === fazendaId || !f.fazenda_id),
