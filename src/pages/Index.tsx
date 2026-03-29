@@ -246,6 +246,18 @@ const Index = () => {
         }
       />
 
+      {/* Botão fixo de acesso ao Financeiro v2 */}
+      {activeTab !== 'financeiro_v2' && (
+        <div className="px-2 py-1">
+          <button
+            onClick={() => handleTabChange('financeiro_v2')}
+            className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-xs font-bold hover:bg-primary/90 transition-colors"
+          >
+            ⚡ ABRIR FINANCEIRO V2
+          </button>
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto">
       {activeTab === 'resumo' && (
         <ResumoTab
