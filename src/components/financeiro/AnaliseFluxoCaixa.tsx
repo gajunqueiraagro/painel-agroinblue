@@ -33,7 +33,6 @@ interface FluxoMes {
   saidasDeducao: number;
   saidasDesembolso: number;
   saidasReposicao: number;
-  saidasDespesasReposicao: number;
   saidasAmortizacoes: number;
   saidasDividendos: number;
   totalSaidas: number;
