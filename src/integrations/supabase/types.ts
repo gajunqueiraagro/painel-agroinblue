@@ -935,6 +935,66 @@ export type Database = {
           },
         ]
       }
+      financeiro_contas_bancarias: {
+        Row: {
+          agencia: string | null
+          ativa: boolean
+          banco: string | null
+          cliente_id: string
+          created_at: string
+          fazenda_id: string
+          id: string
+          nome_conta: string
+          numero_conta: string | null
+          ordem_exibicao: number
+          tipo_conta: string | null
+          updated_at: string
+        }
+        Insert: {
+          agencia?: string | null
+          ativa?: boolean
+          banco?: string | null
+          cliente_id: string
+          created_at?: string
+          fazenda_id: string
+          id?: string
+          nome_conta: string
+          numero_conta?: string | null
+          ordem_exibicao?: number
+          tipo_conta?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agencia?: string | null
+          ativa?: boolean
+          banco?: string | null
+          cliente_id?: string
+          created_at?: string
+          fazenda_id?: string
+          id?: string
+          nome_conta?: string
+          numero_conta?: string | null
+          ordem_exibicao?: number
+          tipo_conta?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_contas_bancarias_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_contas_bancarias_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financeiro_fornecedores: {
         Row: {
           ativo: boolean
@@ -1145,6 +1205,115 @@ export type Database = {
             columns: ["importacao_id"]
             isOneToOne: false
             referencedRelation: "financeiro_importacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financeiro_mapa_classificacao: {
+        Row: {
+          ativo: boolean
+          centro_custo: string
+          cliente_id: string
+          created_at: string
+          grupo_dashboard: string | null
+          grupo_dre: string | null
+          grupo_fluxo: string | null
+          id: string
+          macro_custo: string
+          ordem_exibicao: number
+          subcentro: string | null
+          tipo_operacao: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          centro_custo: string
+          cliente_id: string
+          created_at?: string
+          grupo_dashboard?: string | null
+          grupo_dre?: string | null
+          grupo_fluxo?: string | null
+          id?: string
+          macro_custo: string
+          ordem_exibicao?: number
+          subcentro?: string | null
+          tipo_operacao: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          centro_custo?: string
+          cliente_id?: string
+          created_at?: string
+          grupo_dashboard?: string | null
+          grupo_dre?: string | null
+          grupo_fluxo?: string | null
+          id?: string
+          macro_custo?: string
+          ordem_exibicao?: number
+          subcentro?: string | null
+          tipo_operacao?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_mapa_classificacao_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financeiro_plano_contas: {
+        Row: {
+          ativo: boolean
+          centro_custo: string
+          cliente_id: string
+          created_at: string
+          escopo_negocio: string | null
+          grupo_fluxo: string | null
+          id: string
+          macro_custo: string
+          ordem_exibicao: number
+          subcentro: string | null
+          tipo_operacao: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          centro_custo: string
+          cliente_id: string
+          created_at?: string
+          escopo_negocio?: string | null
+          grupo_fluxo?: string | null
+          id?: string
+          macro_custo: string
+          ordem_exibicao?: number
+          subcentro?: string | null
+          tipo_operacao: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          centro_custo?: string
+          cliente_id?: string
+          created_at?: string
+          escopo_negocio?: string | null
+          grupo_fluxo?: string | null
+          id?: string
+          macro_custo?: string
+          ordem_exibicao?: number
+          subcentro?: string | null
+          tipo_operacao?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_plano_contas_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
             referencedColumns: ["id"]
           },
         ]
