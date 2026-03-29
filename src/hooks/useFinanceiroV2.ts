@@ -96,7 +96,30 @@ export function useFinanceiroV2() {
     setContasBancarias((data as ContaBancariaV2[]) || []);
   }, [clienteId]);
 
-  const loadLancamentos = useCallback(async (filtros: FiltrosV2, pageNum: number = 0) => {
+  const loadClassificacoes = useCallback(async () => {
+    if (!clienteId) return;
+    const { data } = await supabase
+      .from('financeiro_lancamentos_v2')
+      .select('subcentro, centro_custo, macro_custo, tipo_operacao')
+      .eq('cliente_id', clienteId)
+      .not('subcentro', 'is', null);
+
+    // Deduplicate
+    const map = new Map<string, ClassificacaoItem>();
+    for (const row of (data || []) as any[]) {
+      if (!row.subcentro) continue;
+      const key = row.subcentro;
+      if (!map.has(key)) {
+        map.set(key, {
+          subcentro: row.subcentro,
+          centro_custo: row.centro_custo || '',
+          macro_custo: row.macro_custo || '',
+          tipo_operacao: row.tipo_operacao || '',
+        });
+      }
+    }
+    setClassificacoes(Array.from(map.values()).sort((a, b) => a.subcentro.localeCompare(b.subcentro)));
+  }, [clienteId]);
     if (!clienteId) return;
 
     // Require at least fazenda + year
