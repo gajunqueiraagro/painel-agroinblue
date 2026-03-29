@@ -99,6 +99,7 @@ const Index = () => {
   const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
   const [lancamentosFromFechamento, setLancamentosFromFechamento] = useState(false);
   const [lancamentosFromEvolCategoria, setLancamentosFromEvolCategoria] = useState(false);
+  const [lancamentosFromFluxoAnual, setLancamentosFromFluxoAnual] = useState(false);
   const { user } = useAuth();
   const { canViewTab, canEdit, isReadOnly } = usePermissions();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
@@ -163,6 +164,7 @@ const Index = () => {
       setLancamentosFromConciliacao(false);
       setLancamentosFromFechamento(false);
       setLancamentosFromEvolCategoria(false);
+      setLancamentosFromFluxoAnual(false);
     }
     if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
     setActiveTab(tab);
@@ -195,6 +197,12 @@ const Index = () => {
   const goToReclassFromEvolCategoria = useCallback((filtro?: { ano: string; mes: number }) => {
     if (filtro) setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
     setLancamentosFromEvolCategoria(true);
+    setActiveTab('lancamentos');
+  }, []);
+  const goToFluxoAnual = useCallback(() => setActiveTab('fluxo_anual'), []);
+  const goToReclassFromFluxoAnual = useCallback((filtro?: { ano: string; mes: number }) => {
+    if (filtro) setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
+    setLancamentosFromFluxoAnual(true);
     setActiveTab('lancamentos');
   }, []);
 
@@ -301,13 +309,13 @@ const Index = () => {
           onAdicionar={wrappedAdicionar as any}
           onEditar={wrappedEditar as any}
           onRemover={wrappedRemover as any}
-          abaInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria) ? 'reclassificacao' : undefined}
-          onBackToConciliacao={lancamentosFromConciliacao ? goToConciliacaoCategoria : lancamentosFromFechamento ? goToFechamentoTab : lancamentosFromEvolCategoria ? goToEvolucaoRebanhoHub : undefined}
-          dataInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria) ? `${filtroGlobal.ano}-${String(filtroGlobal.mes).padStart(2, '0')}-15` : undefined}
-          backLabel={lancamentosFromFechamento ? 'Voltar para Lançamento de Pasto' : lancamentosFromEvolCategoria ? 'Voltar para Evolução por Categoria' : undefined}
+          abaInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? 'reclassificacao' : undefined}
+          onBackToConciliacao={lancamentosFromConciliacao ? goToConciliacaoCategoria : lancamentosFromFechamento ? goToFechamentoTab : lancamentosFromEvolCategoria ? goToEvolucaoRebanhoHub : lancamentosFromFluxoAnual ? goToFluxoAnual : undefined}
+          dataInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? `${filtroGlobal.ano}-${String(filtroGlobal.mes).padStart(2, '0')}-15` : undefined}
+          backLabel={lancamentosFromFechamento ? 'Voltar para Lançamento de Pasto' : (lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? 'Voltar para Evolução por Categoria' : undefined}
         />
       )}
-      {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} onNavigateToValorRebanho={() => setActiveTab('valor_rebanho')} onSetSaldo={canEditZoo ? setSaldoInicial : undefined} />}
+      {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} onNavigateToValorRebanho={() => setActiveTab('valor_rebanho')} onSetSaldo={canEditZoo ? setSaldoInicial : undefined} onNavigateToReclass={goToReclassFromFluxoAnual} />}
       {activeTab === 'evolucao_rebanho_hub' && (
         <EvolucaoRebanhoHubTab
           lancamentos={lancamentosVisiveis}
