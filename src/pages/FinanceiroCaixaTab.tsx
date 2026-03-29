@@ -27,6 +27,10 @@ import {
   isSaidaFinanceira,
   datePagtoAnoMes as datePagtoAnoMesShared,
 } from '@/lib/financeiro/filters';
+import {
+  classificarEntrada as classificarEntradaCentral,
+  classificarSaida as classificarSaidaCentral,
+} from '@/lib/financeiro/classificacao';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
 type SubTab = 'dashboard' | 'fluxo' | 'rateio' | 'importacao';
@@ -48,47 +52,13 @@ const MESES_FILTRO = [
   { value: '11', label: 'Novembro' }, { value: '12', label: 'Dezembro' },
 ];
 
-// Classification helpers (same as DashboardFinanceiro)
-const normMacro = (l: FinanceiroLancamento) => (l.macro_custo || '').toLowerCase().trim();
-const normEscopo = (l: FinanceiroLancamento) => (l.escopo_negocio || '').toLowerCase().trim();
-
+// Classification: use centralized functions from classificacao.ts (centro_custo based)
 function classifyEntrada(l: FinanceiroLancamento): string {
-  const macro = normMacro(l);
-  const escopo = normEscopo(l);
-  const grupo = (l.grupo_custo || '').toLowerCase().trim();
-  const centro = (l.centro_custo || '').toLowerCase().trim();
-  const sub = (l.subcentro || '').toLowerCase().trim();
-  // Aportes Pessoais — checar macro, grupo, centro ou subcentro
-  const isAporte = macro === 'aportes pessoais' || macro === 'aporte pessoal'
-    || grupo.includes('aporte pessoal') || grupo.includes('aportes pessoais')
-    || centro.includes('aporte pessoal') || centro.includes('aportes pessoais')
-    || sub.includes('aporte pessoal') || sub.includes('aportes pessoais');
-  if (isAporte) return 'Aportes Pessoais';
-  if (macro === 'receitas' && escopo === 'pecuaria') return 'Receitas Pecuárias';
-  if (macro === 'receitas' && escopo === 'agricultura') return 'Receitas Agrícolas';
-  if (macro === 'receitas') return 'Outras Receitas';
-  if (macro === 'outras entradas financeiras' && escopo === 'pecuaria') return 'Captação Financ. Pec.';
-  if (macro === 'outras entradas financeiras' && escopo === 'agricultura') return 'Captação Financ. Agri.';
-  if (macro === 'outras entradas financeiras') return 'Captação Financ. Pec.';
-  return 'Outras Receitas';
+  return classificarEntradaCentral(l);
 }
 
 function classifySaida(l: FinanceiroLancamento): string {
-  const macro = normMacro(l);
-  const escopo = normEscopo(l);
-  if (macro === 'custeio produtivo' && escopo === 'pecuaria') return 'Custeio Pecuário';
-  if (macro === 'custeio produtivo' && escopo === 'agricultura') return 'Custeio Agrícola';
-  if (macro === 'custeio produtivo') return 'Custeio Pecuário';
-  if (macro === 'investimento na fazenda' && escopo === 'pecuaria') return 'Investimento Pecuário';
-  if (macro === 'investimento na fazenda' && escopo === 'agricultura') return 'Investimento Agrícola';
-  if (macro === 'investimento na fazenda') return 'Investimento Pecuário';
-  if (macro === 'investimento em bovinos') return 'Reposição de Bovinos';
-  if (macro.includes('dedu') && macro.includes('receita')) return 'Dedução de Receitas';
-  if (macro === 'amortizações financeiras' && escopo === 'pecuaria') return 'Amortizações Fin. Pec.';
-  if (macro === 'amortizações financeiras' && escopo === 'agricultura') return 'Amortizações Fin. Agri.';
-  if (macro === 'amortizações financeiras') return 'Amortizações Fin. Pec.';
-  if (macro === 'dividendos') return 'Dividendos';
-  return 'Outros';
+  return classificarSaidaCentral(l);
 }
 
 export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [], onBack, filtroAnoInicial, filtroMesInicial }: Props) {

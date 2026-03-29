@@ -33,7 +33,6 @@ interface FluxoMes {
   saidasDeducao: number;
   saidasDesembolso: number;
   saidasReposicao: number;
-  saidasDespesasReposicao: number;
   saidasAmortizacoes: number;
   saidasDividendos: number;
   totalSaidas: number;
@@ -61,7 +60,6 @@ export function FluxoCaixa({
       let saidasDeducao = 0;
       let saidasDesembolso = 0;
       let saidasReposicao = 0;
-      let saidasDespesasReposicao = 0;
       let saidasAmortizacoes = 0;
       let saidasDividendos = 0;
 
@@ -72,13 +70,12 @@ export function FluxoCaixa({
           case 'deducao': saidasDeducao += valor; break;
           case 'desembolso': saidasDesembolso += valor; break;
           case 'reposicao': saidasReposicao += valor; break;
-          case 'despesasReposicao': saidasDespesasReposicao += valor; break;
           case 'amortizacoes': saidasAmortizacoes += valor; break;
           case 'dividendos': saidasDividendos += valor; break;
         }
       }
 
-      const totalSaidas = saidasDeducao + saidasDesembolso + saidasReposicao + saidasDespesasReposicao + saidasAmortizacoes + saidasDividendos;
+      const totalSaidas = saidasDeducao + saidasDesembolso + saidasReposicao + saidasAmortizacoes + saidasDividendos;
       const saldoMes = entradas - totalSaidas;
       saldoAcum += saldoMes;
 
@@ -89,7 +86,6 @@ export function FluxoCaixa({
         saidasDeducao,
         saidasDesembolso,
         saidasReposicao,
-        saidasDespesasReposicao,
         saidasAmortizacoes,
         saidasDividendos,
         totalSaidas,
@@ -170,7 +166,6 @@ export function FluxoCaixa({
                 <SaidaRow label="  Dedução de Receitas" dados={dados} field="saidasDeducao" />
                 <SaidaRow label="  Desemb. Produtivo" dados={dados} field="saidasDesembolso" />
                 <SaidaRow label="  Reposição Bovinos" dados={dados} field="saidasReposicao" />
-                <SaidaRow label="  Desp. Reposição" dados={dados} field="saidasDespesasReposicao" />
                 <SaidaRow label="  Amortizações" dados={dados} field="saidasAmortizacoes" />
                 <SaidaRow label="  Dividendos" dados={dados} field="saidasDividendos" />
 

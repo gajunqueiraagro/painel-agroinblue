@@ -4,10 +4,9 @@
  * Toda classificação é baseada exclusivamente nos campos estruturais:
  * - tipo_operacao (Entrada/Saída)
  * - macro_custo
- * - escopo_negocio
- * - centro_custo / subcentro (apenas para aportes)
+ * - centro_custo / subcentro / grupo_custo
  *
- * NÃO é permitido classificar por nome exibido, texto livre ou heurística.
+ * REGRA CRÍTICA: NÃO usar escopo_negocio — derivar tudo de centro_custo.
  *
  * REGRAS:
  * - status_transacao = "Conciliado"
@@ -64,36 +63,35 @@ export const isSaida = (l: LancamentoClassificavel): boolean => {
 
 // ---------------------------------------------------------------------------
 // Escopo (pecuária / agricultura / outras)
+// Derivado EXCLUSIVAMENTE de centro_custo / subcentro / grupo_custo
 // ---------------------------------------------------------------------------
 
 export type Escopo = 'pec' | 'agri' | 'outras';
 
 /**
- * Determina escopo (pecuária vs agricultura) baseado nos campos estruturais.
+ * Determina escopo baseado EXCLUSIVAMENTE nos campos estruturais.
+ * NÃO usa escopo_negocio (campo frequentemente incorreto nos dados importados).
  *
- * REGRA (auditoria 2026-03-28):
- * 1. Prioridade: centro_custo / subcentro / grupo_custo — se contém "agri" → agricultura
- * 2. Fallback: escopo_negocio (campo frequentemente incorreto nos dados importados)
- *
- * O campo escopo_negocio está como "pecuaria" em TODOS os lançamentos importados,
- * portanto NÃO pode ser a regra principal para distinguir Pec vs Agri.
+ * Regra: verificar centro_custo, subcentro e grupo_custo por keywords.
  */
 export function getEscopo(l: LancamentoClassificavel): Escopo {
-  // 1. Verificar campos estruturais (fonte confiável)
   const centro = norm(l.centro_custo);
   const sub = norm(l.subcentro);
   const grupo = norm(l.grupo_custo);
 
-  const hasAgri = centro.includes('agri') || sub.startsWith('agri/') || sub.startsWith('agri\\') || grupo.includes('agri');
+  // Agricultura: centro_custo contém "agri" ou subcentro começa com "agri/"
+  const hasAgri =
+    centro.includes('agri') ||
+    sub.startsWith('agri/') || sub.startsWith('agri\\') ||
+    grupo.includes('agri');
   if (hasAgri) return 'agri';
 
-  const hasPec = centro.includes('pec') || sub.startsWith('pec/') || sub.startsWith('pec\\') || grupo.includes('pecuári') || grupo.includes('pecuaria');
+  // Pecuária: centro_custo contém "pecuári" / "pecuaria" / "pec"
+  const hasPec =
+    centro.includes('pecuári') || centro.includes('pecuaria') || centro.includes('pec') ||
+    sub.startsWith('pec/') || sub.startsWith('pec\\') ||
+    grupo.includes('pecuári') || grupo.includes('pecuaria');
   if (hasPec) return 'pec';
-
-  // 2. Fallback: escopo_negocio
-  const e = norm(l.escopo_negocio);
-  if (e.includes('agricul') || e.includes('agri')) return 'agri';
-  if (e.includes('pecuári') || e.includes('pecuaria') || e.includes('pec')) return 'pec';
 
   return 'outras';
 }
@@ -121,34 +119,34 @@ function isAporte(l: LancamentoClassificavel): boolean {
 
 export type CategoriaEntrada =
   | 'Receitas Pecuárias'
-  | 'Receitas Agrícolas'
+  | 'Receitas Agricultura'
   | 'Outras Receitas'
-  | 'Aportes ou Outros'
-  | 'Financiamentos Pecuária'
-  | 'Financiamentos Agricultura';
+  | 'Aportes Pessoais'
+  | 'Captação Financ. Pec.'
+  | 'Captação Financ. Agri.';
 
 export const CATEGORIAS_ENTRADA: CategoriaEntrada[] = [
   'Receitas Pecuárias',
-  'Receitas Agrícolas',
+  'Receitas Agricultura',
   'Outras Receitas',
-  'Aportes ou Outros',
-  'Financiamentos Pecuária',
-  'Financiamentos Agricultura',
+  'Aportes Pessoais',
+  'Captação Financ. Pec.',
+  'Captação Financ. Agri.',
 ];
 
 /**
  * Classifica uma ENTRADA para exibição no Dashboard / drill-down.
  *
  * Receitas (macro_custo = "receitas"):
- *   → grupo_custo "Rendimentos e Outros" → Outras Receitas
- *   → Receitas Pecuárias / Agrícolas / Outras (por escopo)
+ *   → centro_custo contém Pecuária → Receitas Pecuárias
+ *   → centro_custo contém Agri → Receitas Agricultura
+ *   → else → Outras Receitas
  *
  * Outras Entradas (macro_custo ≠ "receitas"):
- *   → Aportes ou Outros (se macro/grupo/centro/subcentro contém "aporte")
- *   → Financiamentos Pecuária / Agricultura (por escopo)
- *
- * Anomalias (macro_custo inesperado como entrada):
- *   → Aportes ou Outros (fallback explícito, marcado para revisão)
+ *   → centro_custo contém Aporte → Aportes Pessoais
+ *   → centro_custo contém Agri → Captação Financ. Agri.
+ *   → centro_custo contém Pec ou Financiamento Pec → Captação Financ. Pec.
+ *   → fallback → Aportes Pessoais
  */
 export function classificarEntrada(l: LancamentoClassificavel): CategoriaEntrada {
   const macro = normMacro(l);
@@ -157,24 +155,22 @@ export function classificarEntrada(l: LancamentoClassificavel): CategoriaEntrada
 
   // Receitas: macro_custo = "receitas"
   if (macro === 'receitas') {
-    // "Rendimentos e Outros" → Outras Receitas (não é receita operacional pecuária/agri)
+    // "Rendimentos e Outros" → Outras Receitas
     if (grupo.includes('rendimentos')) return 'Outras Receitas';
-    if (escopo === 'agri') return 'Receitas Agrícolas';
+    if (escopo === 'agri') return 'Receitas Agricultura';
     if (escopo === 'pec') return 'Receitas Pecuárias';
     return 'Outras Receitas';
   }
 
   // Outras Entradas: macro_custo ≠ "receitas"
-  if (isAporte(l)) return 'Aportes ou Outros';
-  if (escopo === 'agri') return 'Financiamentos Agricultura';
+  if (isAporte(l)) return 'Aportes Pessoais';
 
-  // Anomalia: entrada com macro_custo inesperado (ex: "Custeio Produtivo", "Dividendos")
-  // Fallback explícito: agrupa em Aportes ou Outros para não distorcer receitas
-  if (macro && macro !== 'outras entradas financeiras') {
-    return 'Aportes ou Outros';
-  }
+  // Financiamentos/Captação — derivar do centro_custo
+  if (escopo === 'agri') return 'Captação Financ. Agri.';
+  if (escopo === 'pec') return 'Captação Financ. Pec.';
 
-  return 'Financiamentos Pecuária';
+  // Anomalias: entrada com macro inesperado → fallback Aportes Pessoais
+  return 'Aportes Pessoais';
 }
 
 // ---------------------------------------------------------------------------
@@ -182,67 +178,71 @@ export function classificarEntrada(l: LancamentoClassificavel): CategoriaEntrada
 // ---------------------------------------------------------------------------
 
 export type CategoriaSaida =
-  | 'Custeio Pecuário'
-  | 'Investimentos Pecuária'
-  | 'Custeio Agrícola'
-  | 'Investimentos Agricultura'
-  | 'Reposição de Bovinos'
-  | 'Despesas com Reposição'
+  | 'Desemb. Produtivo Pec.'
+  | 'Desemb. Produtivo Agri.'
+  | 'Reposição Bovinos'
   | 'Dedução de Receitas'
-  | 'Amortizações Pecuária'
-  | 'Amortizações Agricultura'
+  | 'Amortizações Fin. Pec.'
+  | 'Amortizações Fin. Agri.'
   | 'Dividendos';
 
 export const CATEGORIAS_SAIDA: CategoriaSaida[] = [
-  'Custeio Pecuário',
-  'Investimentos Pecuária',
-  'Custeio Agrícola',
-  'Investimentos Agricultura',
-  'Reposição de Bovinos',
-  'Despesas com Reposição',
+  'Desemb. Produtivo Pec.',
+  'Desemb. Produtivo Agri.',
+  'Reposição Bovinos',
   'Dedução de Receitas',
-  'Amortizações Pecuária',
-  'Amortizações Agricultura',
+  'Amortizações Fin. Pec.',
+  'Amortizações Fin. Agri.',
   'Dividendos',
 ];
 
 /**
  * Classifica uma SAÍDA para exibição no Dashboard / drill-down.
  *
- * Desembolso Produtivo (macro_custo = custeio/investimento):
- *   → Custeio Pecuário/Agrícola (por escopo)
- *   → Investimentos Pecuária/Agricultura (por escopo)
+ * Desembolso Produtivo (macro = custeio produtivo ou investimento na fazenda):
+ *   → centro_custo contém Agri → Desemb. Produtivo Agri.
+ *   → else → Desemb. Produtivo Pec.
  *
- * Outras Saídas (macro_custo ≠ custeio e ≠ investimento):
- *   → Reposição de Bovinos
- *   → Despesas com Reposição
- *   → Dedução de Receitas
- *   → Amortizações Pecuária / Agricultura (por escopo)
- *   → Dividendos
+ * Reposição Bovinos:
+ *   → macro = "investimento em bovinos" OU centro_custo contém "reposição"
+ *
+ * Dedução de Receitas:
+ *   → macro contém "dedução" + "receita"
+ *
+ * Amortizações:
+ *   → macro = "amortizações financeiras" → Pec/Agri por centro_custo
+ *
+ * Dividendos:
+ *   → macro = "dividendos" OU centro_custo = "dividendos"
  */
 export function classificarSaida(l: LancamentoClassificavel): CategoriaSaida {
   const macro = normMacro(l);
   const escopo = getEscopo(l);
+  const centro = norm(l.centro_custo);
+  const sub = norm(l.subcentro);
 
-  // Desembolso Produtivo
-  if (macro === 'custeio produtivo') {
-    return escopo === 'agri' ? 'Custeio Agrícola' : 'Custeio Pecuário';
-  }
-  if (macro === 'investimento na fazenda') {
-    return escopo === 'agri' ? 'Investimentos Agricultura' : 'Investimentos Pecuária';
+  // Dedução de Receitas (prioridade alta para evitar classificar como desembolso)
+  if (macro.includes('dedu') && macro.includes('receita')) return 'Dedução de Receitas';
+  if (centro.includes('dedução') || centro.includes('deducao')) return 'Dedução de Receitas';
+
+  // Dividendos: macro OU centro_custo
+  if (macro === 'dividendos' || centro === 'dividendos' || sub.includes('dividendo')) return 'Dividendos';
+
+  // Reposição Bovinos: macro OU centro_custo contém "reposição"
+  if (macro === 'investimento em bovinos' || centro.includes('reposição') || centro.includes('reposicao')) return 'Reposição Bovinos';
+
+  // Amortizações Financeiras
+  if (macro.includes('amortiza')) {
+    return escopo === 'agri' ? 'Amortizações Fin. Agri.' : 'Amortizações Fin. Pec.';
   }
 
-  // Outras Saídas
-  if (macro === 'investimento em bovinos') return 'Reposição de Bovinos';
-  if (macro === 'despesas com reposição' || macro === 'despesas com reposicao') return 'Despesas com Reposição';
-  if (macro === 'dedução de receitas' || macro === 'deducao de receitas') return 'Dedução de Receitas';
-  if (macro === 'amortizações financeiras' || macro === 'amortizacoes financeiras') {
-    return escopo === 'agri' ? 'Amortizações Agricultura' : 'Amortizações Pecuária';
+  // Desembolso Produtivo (Custeio Produtivo + Investimento na Fazenda)
+  if (macro === 'custeio produtivo' || macro === 'investimento na fazenda') {
+    return escopo === 'agri' ? 'Desemb. Produtivo Agri.' : 'Desemb. Produtivo Pec.';
   }
-  if (macro === 'dividendos') return 'Dividendos';
 
-  // Fallback: classificar pelo escopo como custeio
-  return escopo === 'agri' ? 'Custeio Agrícola' : 'Custeio Pecuário';
+  // Fallback: classificar pelo escopo como desembolso
+  return escopo === 'agri' ? 'Desemb. Produtivo Agri.' : 'Desemb. Produtivo Pec.';
 }
 
 // ---------------------------------------------------------------------------
@@ -261,16 +261,23 @@ export function classificarEntradaFluxo(l: LancamentoClassificavel): CategoriaFl
   return 'captacao';
 }
 
-export type CategoriaFluxoSaida = 'deducao' | 'desembolso' | 'reposicao' | 'despesasReposicao' | 'amortizacoes' | 'dividendos';
+export type CategoriaFluxoSaida = 'deducao' | 'desembolso' | 'reposicao' | 'amortizacoes' | 'dividendos';
 
 /** Classifica saída para o Fluxo de Caixa (agrupamento mais alto) */
 export function classificarSaidaFluxo(l: LancamentoClassificavel): CategoriaFluxoSaida {
   const macro = normMacro(l);
-  if (macro === 'dedução de receitas' || macro === 'deducao de receitas') return 'deducao';
-  if (macro === 'investimento em bovinos') return 'reposicao';
-  if (macro === 'despesas com reposição' || macro === 'despesas com reposicao') return 'despesasReposicao';
-  if (macro === 'amortizações financeiras' || macro === 'amortizacoes financeiras') return 'amortizacoes';
-  if (macro === 'dividendos') return 'dividendos';
+  const centro = norm(l.centro_custo);
+  const sub = norm(l.subcentro);
+
+  if (macro.includes('dedu') && macro.includes('receita')) return 'deducao';
+  if (centro.includes('dedução') || centro.includes('deducao')) return 'deducao';
+
+  if (macro === 'dividendos' || centro === 'dividendos' || sub.includes('dividendo')) return 'dividendos';
+
+  if (macro === 'investimento em bovinos' || centro.includes('reposição') || centro.includes('reposicao')) return 'reposicao';
+
+  if (macro.includes('amortiza')) return 'amortizacoes';
+
   return 'desembolso';
 }
 

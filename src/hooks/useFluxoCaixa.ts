@@ -243,7 +243,7 @@ export function useFluxoCaixa(
       let deducaoReceitas = 0;
       let desembolso = 0, desembolsoPec = 0, desembolsoAgri = 0;
       let custeioPec = 0, custoioAgri = 0, investPec = 0, investAgri = 0;
-      let reposicao = 0, despesasReposicao = 0;
+      let reposicao = 0;
       let amortizacoes = 0, amortizacoesPec = 0, amortizacoesAgri = 0;
       let dividendos = 0;
 
@@ -287,8 +287,6 @@ export function useFluxoCaixa(
               }
             } else if (cat === 'reposicao') {
               reposicao += val;
-            } else if (cat === 'despesasReposicao') {
-              despesasReposicao += val;
             } else if (cat === 'amortizacoes') {
               amortizacoes += val;
               if (escopo === 'agri') amortizacoesAgri += val;
@@ -302,8 +300,8 @@ export function useFluxoCaixa(
 
       const outrasEntradas = captacao + aportes;
       const totalEntradas = receitas + outrasEntradas;
-      const outrasSaidas = reposicao + despesasReposicao + deducaoReceitas + amortizacoes + dividendos;
-      const totalSaidas = deducaoReceitas + desembolso + reposicao + despesasReposicao + amortizacoes + dividendos;
+      const outrasSaidas = reposicao + deducaoReceitas + amortizacoes + dividendos;
+      const totalSaidas = deducaoReceitas + desembolso + reposicao + amortizacoes + dividendos;
       const saldoInicial = m === 1 ? saldoInicialAno : result[m - 2].saldoFinal;
       const saldoFinal = isAfterFilter ? saldoInicial : saldoInicial + totalEntradas - totalSaidas;
 
@@ -334,7 +332,7 @@ export function useFluxoCaixa(
         investPec,
         investAgri,
         reposicao,
-        despesasReposicao,
+        despesasReposicao: 0,
         amortizacoes,
         amortizacoesPec,
         amortizacoesAgri,
