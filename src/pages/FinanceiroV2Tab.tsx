@@ -73,7 +73,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     centroFiltro: '__all__',
     subcentroFiltro: '__all__',
     produtoFiltro: '',
-    fornecedorFiltro: '__all__',
+    fornecedorFiltro: '',
+    atividadeFiltro: '__all__',
   });
 
   const defaults = getDefaults();
