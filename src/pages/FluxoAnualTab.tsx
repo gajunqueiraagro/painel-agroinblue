@@ -17,9 +17,10 @@ interface Props {
   onNavigateToMovimentacao?: (subAba: SubAba) => void;
   onNavigateToValorRebanho?: () => void;
   onSetSaldo?: (ano: number, categoria: Categoria, quantidade: number, pesoMedioKg?: number) => void;
+  onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
 }
 
-export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onNavigateToValorRebanho, onSetSaldo }: Props) {
+export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onNavigateToValorRebanho, onSetSaldo, onNavigateToReclass }: Props) {
   const [drilldownMonth, setDrilldownMonth] = useState<string | null>(null);
 
   const anosDisponiveis = useMemo(() => {
