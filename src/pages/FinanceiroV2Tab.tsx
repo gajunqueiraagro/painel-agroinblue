@@ -4,10 +4,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Pencil, Trash2, Copy, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, Copy, ChevronLeft, ChevronRight, Zap, List } from 'lucide-react';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, type LancamentoV2, type FiltrosV2 } from '@/hooks/useFinanceiroV2';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
+import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
 import { format, parseISO } from 'date-fns';
 
 const MESES = [
