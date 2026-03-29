@@ -1205,6 +1205,7 @@ export type Database = {
       }
       financeiro_fornecedores: {
         Row: {
+          aliases: string[] | null
           ativo: boolean
           cliente_id: string
           cpf_cnpj: string | null
@@ -1212,8 +1213,10 @@ export type Database = {
           fazenda_id: string
           id: string
           nome: string
+          nome_normalizado: string | null
         }
         Insert: {
+          aliases?: string[] | null
           ativo?: boolean
           cliente_id: string
           cpf_cnpj?: string | null
@@ -1221,8 +1224,10 @@ export type Database = {
           fazenda_id: string
           id?: string
           nome: string
+          nome_normalizado?: string | null
         }
         Update: {
+          aliases?: string[] | null
           ativo?: boolean
           cliente_id?: string
           cpf_cnpj?: string | null
@@ -1230,6 +1235,7 @@ export type Database = {
           fazenda_id?: string
           id?: string
           nome?: string
+          nome_normalizado?: string | null
         }
         Relationships: [
           {

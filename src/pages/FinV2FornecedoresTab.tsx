@@ -5,14 +5,12 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Plus, Pencil, Search, Link2, AlertTriangle } from 'lucide-react';
+import { FornecedorFormDialog } from '@/components/financeiro-v2/FornecedorFormDialog';
 import { toast } from 'sonner';
 
 interface Fornecedor {
@@ -53,11 +51,6 @@ export function FinV2FornecedoresTab() {
   const [editing, setEditing] = useState<Fornecedor | null>(null);
   const [searchText, setSearchText] = useState('');
   const [activeTab, setActiveTab] = useState('cadastro');
-
-  const [nome, setNome] = useState('');
-  const [cpfCnpj, setCpfCnpj] = useState('');
-  const [fazendaId, setFazendaId] = useState('');
-  const [ativo, setAtivo] = useState(true);
 
   // Pending items
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
@@ -129,45 +122,12 @@ export function FinV2FornecedoresTab() {
 
   const openNew = () => {
     setEditing(null);
-    setNome(''); setCpfCnpj('');
-    setFazendaId(fazendas[0]?.id || '');
-    setAtivo(true);
     setDialogOpen(true);
   };
 
   const openEdit = (f: Fornecedor) => {
     setEditing(f);
-    setNome(f.nome);
-    setCpfCnpj(f.cpf_cnpj || '');
-    setFazendaId(f.fazenda_id);
-    setAtivo(f.ativo);
     setDialogOpen(true);
-  };
-
-  const save = async () => {
-    if (!clienteAtual?.id || !nome.trim() || !fazendaId) {
-      toast.error('Preencha nome e fazenda');
-      return;
-    }
-    const payload = {
-      cliente_id: clienteAtual.id,
-      fazenda_id: fazendaId,
-      nome: nome.trim(),
-      cpf_cnpj: cpfCnpj.trim() || null,
-      ativo,
-    };
-
-    if (editing) {
-      const { error } = await supabase.from('financeiro_fornecedores').update(payload).eq('id', editing.id);
-      if (error) { toast.error('Erro ao atualizar'); return; }
-      toast.success('Fornecedor atualizado');
-    } else {
-      const { error } = await supabase.from('financeiro_fornecedores').insert(payload);
-      if (error) { toast.error('Erro ao criar'); return; }
-      toast.success('Fornecedor criado');
-    }
-    setDialogOpen(false);
-    load();
   };
 
   // Link pending lancamentos to an existing fornecedor
@@ -335,42 +295,16 @@ export function FinV2FornecedoresTab() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Editar Fornecedor' : 'Novo Fornecedor'}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Nome *</Label>
-              <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome do fornecedor" />
-            </div>
-            <div>
-              <Label>CPF/CNPJ</Label>
-              <Input value={cpfCnpj} onChange={e => setCpfCnpj(e.target.value)} placeholder="000.000.000-00" />
-            </div>
-            <div>
-              <Label>Fazenda *</Label>
-              <Select value={fazendaId} onValueChange={setFazendaId}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  {fazendas.map(f => (
-                    <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch checked={ativo} onCheckedChange={setAtivo} />
-              <Label>Ativo</Label>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={save}>{editing ? 'Salvar' : 'Criar'}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <FornecedorFormDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        editing={editing}
+        allFornecedores={items}
+        fazendas={fazendas}
+        clienteId={clienteAtual?.id || ''}
+        onSaved={load}
+        onSelectExisting={(f) => { toast.info(`Fornecedor "${f.nome}" selecionado.`); }}
+      />
     </div>
   );
 }
