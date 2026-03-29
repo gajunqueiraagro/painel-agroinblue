@@ -365,6 +365,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         lancamento={editingLanc}
         fazendas={fazendas}
         contas={hook.contasBancarias}
+        classificacoes={hook.classificacoes}
         defaultFazendaId={fazendaId}
       />
     </div>
