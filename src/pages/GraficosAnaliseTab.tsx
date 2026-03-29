@@ -408,6 +408,7 @@ interface ChartCardProps {
   averageLabel?: string;
   isCurrency?: boolean;
   valueSuffix?: string;
+  lineOverlayKey?: string;
 }
 
 function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, mesFiltro, averageKey, averageLabel, isCurrency, valueSuffix }: ChartCardProps) {
