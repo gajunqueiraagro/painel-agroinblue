@@ -470,6 +470,13 @@ const Index = () => {
           filtroMesInicial={filtroGlobal.mes}
         />
       )}
+      {activeTab === 'financeiro_v2_hub' && (
+        <FinanceiroV2HubTab onTabChange={handleTabChange} />
+      )}
+      {activeTab === 'fin_v2_contas' && <FinV2ContasTab />}
+      {activeTab === 'fin_v2_fornecedores' && <FinV2FornecedoresTab />}
+      {activeTab === 'fin_v2_plano' && <FinV2PlanoContasTab />}
+      {activeTab === 'fin_v2_saldos' && <FinV2SaldosTab />}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
