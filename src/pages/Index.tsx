@@ -424,6 +424,15 @@ const Index = () => {
           onBack={goToVisaoZooHub}
         />
       )}
+      {activeTab === 'graficos_analise' && (
+        <GraficosAnaliseTab
+          lancamentos={lancamentosVisiveis}
+          saldosIniciais={saldosIniciais}
+          onBack={goToVisaoZooHub}
+          filtroAnoInicial={filtroGlobal.ano}
+          filtroMesInicial={filtroGlobal.mes}
+        />
+      )}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
