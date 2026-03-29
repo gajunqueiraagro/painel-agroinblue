@@ -35,6 +35,7 @@ import { FechamentoExecutivoTab } from './FechamentoExecutivoTab';
 import { AnaliseConsultorTab } from './AnaliseConsultorTab';
 import { PrecoMercadoTab } from './PrecoMercadoTab';
 import { GraficosAnaliseTab } from './GraficosAnaliseTab';
+import { FinanceiroV2Tab } from './FinanceiroV2Tab';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { SyncStatus } from '@/components/SyncStatus';
@@ -88,6 +89,7 @@ const TITLES: Record<TabId, string> = {
   analise_consultor: 'Análise do Consultor',
   preco_mercado: 'Preço de Mercado',
   graficos_analise: 'Gráficos',
+  financeiro_v2: 'Financeiro v2',
 };
 
 const Index = () => {
@@ -218,6 +220,7 @@ const Index = () => {
     analise_economica: goToVisaoFinHub,
     preco_mercado: goToVisaoZooHub,
     fin_caixa: goToLancarFinHub,
+    financeiro_v2: goToLancarFinHub,
     fechamento: goToZootecnico,
     evolucao_rebanho_hub: goToLancarZooHub,
     fluxo_anual: () => setActiveTab('movimentacao'),
@@ -429,6 +432,13 @@ const Index = () => {
           lancamentos={lancamentosVisiveis}
           saldosIniciais={saldosIniciais}
           onBack={goToVisaoZooHub}
+          filtroAnoInicial={filtroGlobal.ano}
+          filtroMesInicial={filtroGlobal.mes}
+        />
+      )}
+      {activeTab === 'financeiro_v2' && (
+        <FinanceiroV2Tab
+          onBack={goToLancarFinHub}
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
         />

@@ -1,0 +1,283 @@
+/**
+ * Hook for financeiro_lancamentos_v2 CRUD with pagination and filters.
+ */
+import { useState, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useCliente } from '@/contexts/ClienteContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
+
+export interface LancamentoV2 {
+  id: string;
+  cliente_id: string;
+  fazenda_id: string;
+  conta_bancaria_id: string | null;
+  data_competencia: string;
+  data_pagamento: string | null;
+  valor: number;
+  sinal: number;
+  tipo_operacao: string;
+  status_transacao: string | null;
+  descricao: string | null;
+  macro_custo: string | null;
+  centro_custo: string | null;
+  subcentro: string | null;
+  escopo_negocio: string | null;
+  observacao: string | null;
+  ano_mes: string;
+  documento: string | null;
+  historico: string | null;
+  origem_lancamento: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LancamentoV2Form {
+  fazenda_id: string;
+  conta_bancaria_id?: string | null;
+  data_competencia: string;
+  data_pagamento?: string | null;
+  valor: number;
+  tipo_operacao: string;
+  status_transacao?: string;
+  descricao?: string;
+  macro_custo?: string;
+  centro_custo?: string;
+  subcentro?: string;
+  escopo_negocio?: string;
+  observacao?: string;
+}
+
+export interface ContaBancariaV2 {
+  id: string;
+  nome_conta: string;
+  banco: string | null;
+  fazenda_id: string;
+}
+
+export interface FiltrosV2 {
+  fazenda_id?: string;
+  ano?: string;
+  mes?: string;
+  conta_bancaria_id?: string;
+  tipo_operacao?: string;
+  status_transacao?: string;
+}
+
+const PAGE_SIZE = 50;
+
+export function useFinanceiroV2() {
+  const { clienteAtual } = useCliente();
+  const { user } = useAuth();
+  const clienteId = clienteAtual?.id;
+
+  const [lancamentos, setLancamentos] = useState<LancamentoV2[]>([]);
+  const [contasBancarias, setContasBancarias] = useState<ContaBancariaV2[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+
+  const loadContas = useCallback(async () => {
+    if (!clienteId) return;
+    const { data } = await supabase
+      .from('financeiro_contas_bancarias')
+      .select('id, nome_conta, banco, fazenda_id')
+      .eq('cliente_id', clienteId)
+      .eq('ativa', true)
+      .order('ordem_exibicao');
+    setContasBancarias((data as ContaBancariaV2[]) || []);
+  }, [clienteId]);
+
+  const loadLancamentos = useCallback(async (filtros: FiltrosV2, pageNum: number = 0) => {
+    if (!clienteId) return;
+
+    // Require at least fazenda + year
+    if (!filtros.fazenda_id || !filtros.ano) {
+      setLancamentos([]);
+      setTotal(0);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      let query = supabase
+        .from('financeiro_lancamentos_v2')
+        .select('*', { count: 'exact' })
+        .eq('cliente_id', clienteId)
+        .eq('fazenda_id', filtros.fazenda_id);
+
+      // ano_mes filter
+      if (filtros.mes && filtros.mes !== 'todos') {
+        query = query.eq('ano_mes', `${filtros.ano}-${filtros.mes.padStart(2, '0')}`);
+      } else {
+        query = query.gte('ano_mes', `${filtros.ano}-01`).lte('ano_mes', `${filtros.ano}-12`);
+      }
+
+      if (filtros.conta_bancaria_id) {
+        query = query.eq('conta_bancaria_id', filtros.conta_bancaria_id);
+      }
+      if (filtros.tipo_operacao) {
+        query = query.eq('tipo_operacao', filtros.tipo_operacao);
+      }
+      if (filtros.status_transacao) {
+        query = query.eq('status_transacao', filtros.status_transacao);
+      }
+
+      const from = pageNum * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data, count, error } = await query
+        .order('data_pagamento', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (error) throw error;
+
+      setLancamentos((data as LancamentoV2[]) || []);
+      setTotal(count || 0);
+      setPage(pageNum);
+    } catch (err: any) {
+      toast.error('Erro ao carregar lançamentos v2');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [clienteId]);
+
+  const criarLancamento = useCallback(async (form: LancamentoV2Form) => {
+    if (!clienteId || !user) return false;
+
+    const anoMes = form.data_pagamento
+      ? form.data_pagamento.substring(0, 7)
+      : form.data_competencia.substring(0, 7);
+
+    const sinal = (form.tipo_operacao || '').startsWith('1') ? 1 : -1;
+
+    const { error } = await supabase.from('financeiro_lancamentos_v2').insert({
+      cliente_id: clienteId,
+      fazenda_id: form.fazenda_id,
+      conta_bancaria_id: form.conta_bancaria_id || null,
+      data_competencia: form.data_competencia,
+      data_pagamento: form.data_pagamento || null,
+      valor: form.valor,
+      sinal,
+      tipo_operacao: form.tipo_operacao,
+      status_transacao: form.status_transacao || 'pendente',
+      descricao: form.descricao || null,
+      macro_custo: form.macro_custo || null,
+      centro_custo: form.centro_custo || null,
+      subcentro: form.subcentro || null,
+      escopo_negocio: form.escopo_negocio || null,
+      observacao: form.observacao || null,
+      ano_mes: anoMes,
+      origem_lancamento: 'manual',
+      created_by: user.id,
+    });
+
+    if (error) {
+      toast.error('Erro ao criar lançamento');
+      console.error(error);
+      return false;
+    }
+    toast.success('Lançamento criado');
+    return true;
+  }, [clienteId, user]);
+
+  const editarLancamento = useCallback(async (id: string, form: LancamentoV2Form) => {
+    if (!clienteId || !user) return false;
+
+    const anoMes = form.data_pagamento
+      ? form.data_pagamento.substring(0, 7)
+      : form.data_competencia.substring(0, 7);
+
+    const sinal = (form.tipo_operacao || '').startsWith('1') ? 1 : -1;
+
+    const { error } = await supabase.from('financeiro_lancamentos_v2').update({
+      fazenda_id: form.fazenda_id,
+      conta_bancaria_id: form.conta_bancaria_id || null,
+      data_competencia: form.data_competencia,
+      data_pagamento: form.data_pagamento || null,
+      valor: form.valor,
+      sinal,
+      tipo_operacao: form.tipo_operacao,
+      status_transacao: form.status_transacao || 'pendente',
+      descricao: form.descricao || null,
+      macro_custo: form.macro_custo || null,
+      centro_custo: form.centro_custo || null,
+      subcentro: form.subcentro || null,
+      escopo_negocio: form.escopo_negocio || null,
+      observacao: form.observacao || null,
+      ano_mes: anoMes,
+      updated_by: user.id,
+    }).eq('id', id);
+
+    if (error) {
+      toast.error('Erro ao editar lançamento');
+      console.error(error);
+      return false;
+    }
+    toast.success('Lançamento atualizado');
+    return true;
+  }, [clienteId, user]);
+
+  const excluirLancamento = useCallback(async (id: string) => {
+    const { error } = await supabase.from('financeiro_lancamentos_v2').delete().eq('id', id);
+    if (error) {
+      toast.error('Erro ao excluir lançamento');
+      return false;
+    }
+    toast.success('Lançamento excluído');
+    return true;
+  }, []);
+
+  const duplicarLancamento = useCallback(async (lanc: LancamentoV2) => {
+    if (!clienteId || !user) return false;
+
+    const { error } = await supabase.from('financeiro_lancamentos_v2').insert({
+      cliente_id: clienteId,
+      fazenda_id: lanc.fazenda_id,
+      conta_bancaria_id: lanc.conta_bancaria_id,
+      data_competencia: lanc.data_competencia,
+      data_pagamento: lanc.data_pagamento,
+      valor: lanc.valor,
+      sinal: lanc.sinal,
+      tipo_operacao: lanc.tipo_operacao,
+      status_transacao: 'pendente',
+      descricao: lanc.descricao ? `(Cópia) ${lanc.descricao}` : '(Cópia)',
+      macro_custo: lanc.macro_custo,
+      centro_custo: lanc.centro_custo,
+      subcentro: lanc.subcentro,
+      escopo_negocio: lanc.escopo_negocio,
+      observacao: lanc.observacao,
+      ano_mes: lanc.ano_mes,
+      origem_lancamento: 'manual',
+      created_by: user.id,
+    });
+
+    if (error) {
+      toast.error('Erro ao duplicar lançamento');
+      return false;
+    }
+    toast.success('Lançamento duplicado');
+    return true;
+  }, [clienteId, user]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  return {
+    lancamentos,
+    contasBancarias,
+    loading,
+    total,
+    page,
+    totalPages,
+    pageSize: PAGE_SIZE,
+    loadContas,
+    loadLancamentos,
+    criarLancamento,
+    editarLancamento,
+    excluirLancamento,
+    duplicarLancamento,
+    setPage,
+  };
+}

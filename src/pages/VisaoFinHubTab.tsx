@@ -4,7 +4,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { TabId } from '@/components/BottomNav';
 import {
-  TrendingUp, DollarSign, ChevronRight,
+  TrendingUp, DollarSign, ChevronRight, ListChecks,
 } from 'lucide-react';
 
 interface Props {
@@ -21,6 +21,7 @@ interface GroupItem {
 
 const ITEMS: GroupItem[] = [
   { label: 'Financeiro', tab: 'fin_caixa', icon: DollarSign, description: 'Dashboard, fluxo de caixa e importação' },
+  { label: 'Lançamentos v2', tab: 'financeiro_v2', icon: ListChecks, description: 'Novo módulo de lançamentos financeiros' },
 ];
 
 export function VisaoFinHubTab({ onTabChange, filtroGlobal }: Props) {
