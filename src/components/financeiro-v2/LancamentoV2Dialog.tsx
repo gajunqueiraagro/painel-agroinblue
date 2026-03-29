@@ -28,7 +28,7 @@ interface Props {
 const TIPOS_OPERACAO = [
   { value: '1-Entradas', label: 'Entradas' },
   { value: '2-Saídas', label: 'Saídas' },
-  { value: '3-Transferências', label: 'Transferências' },
+  { value: '3-Transferência', label: 'Transferências' },
 ];
 
 const STATUS_OPTIONS = [
