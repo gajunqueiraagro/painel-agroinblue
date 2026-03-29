@@ -66,9 +66,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [fazendaId, setFazendaId] = useState(defaultFazendaId);
   const [ano, setAno] = useState(filtroAnoInicial || String(currentYear));
   const [mes, setMes] = useState(filtroMesInicial ? String(filtroMesInicial).padStart(2, '0') : 'todos');
-  const [contaBancariaId, setContaBancariaId] = useState('');
-  const [tipoOperacao, setTipoOperacao] = useState('');
-  const [statusTransacao, setStatusTransacao] = useState('');
+  const [contaBancariaId, setContaBancariaId] = useState('__all__');
+  const [tipoOperacao, setTipoOperacao] = useState('__all__');
+  const [statusTransacao, setStatusTransacao] = useState('__all__');
 
   // Mode: 'list' (default) or 'rapido' (Excel grid)
   const [mode, setMode] = useState<'list' | 'rapido'>('list');
