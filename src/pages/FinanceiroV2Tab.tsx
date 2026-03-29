@@ -66,9 +66,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [fazendaId, setFazendaId] = useState(defaultFazendaId);
   const [ano, setAno] = useState(filtroAnoInicial || String(currentYear));
   const [mes, setMes] = useState(filtroMesInicial ? String(filtroMesInicial).padStart(2, '0') : 'todos');
-  const [contaBancariaId, setContaBancariaId] = useState('');
-  const [tipoOperacao, setTipoOperacao] = useState('');
-  const [statusTransacao, setStatusTransacao] = useState('');
+  const [contaBancariaId, setContaBancariaId] = useState('__all__');
+  const [tipoOperacao, setTipoOperacao] = useState('__all__');
+  const [statusTransacao, setStatusTransacao] = useState('__all__');
 
   // Mode: 'list' (default) or 'rapido' (Excel grid)
   const [mode, setMode] = useState<'list' | 'rapido'>('list');
@@ -96,9 +96,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     fazenda_id: fazendaId,
     ano,
     mes,
-    conta_bancaria_id: contaBancariaId || undefined,
-    tipo_operacao: tipoOperacao || undefined,
-    status_transacao: statusTransacao || undefined,
+    conta_bancaria_id: contaBancariaId !== '__all__' ? contaBancariaId : undefined,
+    tipo_operacao: tipoOperacao !== '__all__' ? tipoOperacao : undefined,
+    status_transacao: statusTransacao !== '__all__' ? statusTransacao : undefined,
   }), [fazendaId, ano, mes, contaBancariaId, tipoOperacao, statusTransacao]);
 
   // Load on filter change
@@ -179,7 +179,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <Select value={contaBancariaId} onValueChange={setContaBancariaId}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas</SelectItem>
+                  <SelectItem value="__all__">Todas</SelectItem>
                   {contasFiltradas.map(c => (
                     <SelectItem key={c.id} value={c.id}>{c.nome_conta}</SelectItem>
                   ))}
@@ -191,7 +191,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <Select value={tipoOperacao} onValueChange={setTipoOperacao}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="__all__">Todos</SelectItem>
                   <SelectItem value="1-Entradas">Entradas</SelectItem>
                   <SelectItem value="2-Saídas">Saídas</SelectItem>
                   <SelectItem value="3-Transferências">Transferências</SelectItem>
@@ -203,7 +203,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <Select value={statusTransacao} onValueChange={setStatusTransacao}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="__all__">Todos</SelectItem>
                   <SelectItem value="pendente">Pendente</SelectItem>
                   <SelectItem value="confirmado">Confirmado</SelectItem>
                   <SelectItem value="conciliado">Conciliado</SelectItem>
