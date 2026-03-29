@@ -2496,7 +2496,126 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      vw_financeiro_auditoria_competencia_caixa: {
+        Row: {
+          centro_custo: string | null
+          cliente_id: string | null
+          fazenda_id: string | null
+          macro_custo: string | null
+          mes_caixa: string | null
+          mes_competencia: string | null
+          qtd_divergente: number | null
+          qtd_lancamentos: number | null
+          subcentro: string | null
+          tipo_operacao: string | null
+          valor_total: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_lancamentos_v2_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_lancamentos_v2_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vw_financeiro_dashboard_mensal: {
+        Row: {
+          amortizacoes: number | null
+          ano_mes: string | null
+          aportes: number | null
+          captacao_financeira: number | null
+          cliente_id: string | null
+          deducao_receitas: number | null
+          desembolso_produtivo_agri: number | null
+          desembolso_produtivo_pec: number | null
+          dividendos: number | null
+          fazenda_id: string | null
+          outras_receitas: number | null
+          receitas_agricultura: number | null
+          receitas_pecuaria: number | null
+          reposicao_bovinos: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_lancamentos_v2_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_lancamentos_v2_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vw_financeiro_desembolso_centro: {
+        Row: {
+          ano_mes: string | null
+          centro_custo: string | null
+          cliente_id: string | null
+          fazenda_id: string | null
+          macro_custo: string | null
+          percentual: number | null
+          qtd_lancamentos: number | null
+          subcentro: string | null
+          valor_total: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_lancamentos_v2_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_lancamentos_v2_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vw_financeiro_fluxo_caixa_mensal: {
+        Row: {
+          ano_mes: string | null
+          cliente_id: string | null
+          fazenda_id: string | null
+          saldo_mes: number | null
+          total_entradas: number | null
+          total_saidas: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_lancamentos_v2_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_lancamentos_v2_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       get_user_cliente_id: { Args: { _user_id?: string }; Returns: string }
