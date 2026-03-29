@@ -75,7 +75,7 @@ export function FinV2SaldosTab() {
         .order('ano_mes', { ascending: false }),
       supabase
         .from('financeiro_contas_bancarias')
-        .select('id, nome_conta')
+        .select('id, nome_conta, nome_exibicao')
         .eq('cliente_id', clienteAtual.id)
         .eq('ativa', true),
     ]);
