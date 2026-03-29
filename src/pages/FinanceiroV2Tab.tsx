@@ -8,12 +8,63 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Plus, Pencil, Copy, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX } from 'lucide-react';
+import { Plus, Pencil, Copy, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download } from 'lucide-react';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, type LancamentoV2, type FiltrosV2 } from '@/hooks/useFinanceiroV2';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
+import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2ExportMenu';
 import { format, parseISO } from 'date-fns';
+
+// ── Sorting helpers ──
+
+const CONTA_GROUP_ORDER: Record<string, number> = { cc: 0, inv: 1, cartao: 2 };
+
+function sortContas<T extends { nome_conta: string }>(contas: T[]): T[] {
+  return [...contas].sort((a, b) => {
+    const prefA = a.nome_conta.split('-')[0]?.toLowerCase() || '';
+    const prefB = b.nome_conta.split('-')[0]?.toLowerCase() || '';
+    const gA = CONTA_GROUP_ORDER[prefA] ?? 99;
+    const gB = CONTA_GROUP_ORDER[prefB] ?? 99;
+    if (gA !== gB) return gA - gB;
+    // Within same group, descending by numeric suffix
+    const numA = parseInt(a.nome_conta.split('-')[1] || '0', 10);
+    const numB = parseInt(b.nome_conta.split('-')[1] || '0', 10);
+    return numB - numA;
+  });
+}
+
+const MACRO_ORDER = [
+  'Receitas',
+  'Dedução de Receitas',
+  'Outras Entradas Financeiras',
+  'Custeio Produtivo',
+  'Investimentos na Fazenda',
+  'Investimentos em Bovinos',
+  'Amortizações Financeiras',
+  'Dividendos',
+];
+
+function sortMacros(macros: string[]): string[] {
+  return [...macros].sort((a, b) => {
+    const iA = MACRO_ORDER.indexOf(a);
+    const iB = MACRO_ORDER.indexOf(b);
+    const oA = iA >= 0 ? iA : 999;
+    const oB = iB >= 0 ? iB : 999;
+    if (oA !== oB) return oA - oB;
+    return a.localeCompare(b, 'pt-BR');
+  });
+}
+
+function sortFazendas<T extends { nome: string; id: string }>(fazendas: T[]): T[] {
+  return [...fazendas].sort((a, b) => {
+    const aIsAdmin = a.nome.toLowerCase().includes('administrativ');
+    const bIsAdmin = b.nome.toLowerCase().includes('administrativ');
+    if (aIsAdmin && !bIsAdmin) return 1;
+    if (!aIsAdmin && bIsAdmin) return -1;
+    return a.nome.localeCompare(b.nome, 'pt-BR');
+  });
+}
 
 const MESES_LIST = [
   { value: '01', label: 'Jan' }, { value: '02', label: 'Fev' },
