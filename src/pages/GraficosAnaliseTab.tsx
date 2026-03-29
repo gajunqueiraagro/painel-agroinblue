@@ -411,7 +411,7 @@ interface ChartCardProps {
   lineOverlayKey?: string;
 }
 
-function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, mesFiltro, averageKey, averageLabel, isCurrency, valueSuffix }: ChartCardProps) {
+function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, mesFiltro, averageKey, averageLabel, isCurrency, valueSuffix, lineOverlayKey }: ChartCardProps) {
   const comparisons = useMemo(() => {
     if (!data || data.length === 0 || keys.length < 2) return { mom: null, yoy: null };
     const mesIdx = mesFiltro - 1;
