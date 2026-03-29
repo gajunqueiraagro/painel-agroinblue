@@ -498,7 +498,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <TableBody>
                 {filteredLancamentos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-4 text-[8px]">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-4 text-[10px]">
                       Nenhum lançamento encontrado.
                     </TableCell>
                   </TableRow>
