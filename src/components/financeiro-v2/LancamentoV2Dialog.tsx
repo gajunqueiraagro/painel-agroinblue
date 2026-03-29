@@ -171,7 +171,7 @@ export function LancamentoV2Dialog({ open, onClose, onSave, lancamento, fazendas
               <Select value={contaBancariaId} onValueChange={setContaBancariaId}>
                 <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhuma</SelectItem>
+                  <SelectItem value="__none__">Nenhuma</SelectItem>
                   {contasFiltradas.map(c => (
                     <SelectItem key={c.id} value={c.id}>{c.nome_conta}</SelectItem>
                   ))}
