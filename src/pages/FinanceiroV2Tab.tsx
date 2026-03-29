@@ -484,15 +484,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           <div className="rounded-lg border overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="h-4">
-                  <TableHead className="text-[9px] py-1 px-1 font-semibold">Comp.</TableHead>
-                  <TableHead className="text-[9px] py-1 px-1 font-semibold">Pgto</TableHead>
-                  <TableHead className="text-[9px] py-1 px-1 font-semibold">Produto</TableHead>
-                  <TableHead className="text-[9px] py-1 px-1 font-semibold">Fornecedor</TableHead>
-                  <TableHead className="text-[9px] py-1 px-1 font-semibold text-right">Valor</TableHead>
-                  <TableHead className="text-[9px] py-1 px-1 font-semibold">NF</TableHead>
-                  <TableHead className="text-[9px] py-1 px-1 font-semibold">St</TableHead>
-                  <TableHead className="text-[9px] py-1 px-1 font-semibold w-[32px]"></TableHead>
+                <TableRow className="!h-auto">
+                  <TableHead className="py-[2px] px-1">Comp.</TableHead>
+                  <TableHead className="py-[2px] px-1">Pgto</TableHead>
+                  <TableHead className="py-[2px] px-1">Produto</TableHead>
+                  <TableHead className="py-[2px] px-1">Fornecedor</TableHead>
+                  <TableHead className="py-[2px] px-1 text-right">Valor</TableHead>
+                  <TableHead className="py-[2px] px-1">NF</TableHead>
+                  <TableHead className="py-[2px] px-1">St</TableHead>
+                  <TableHead className="py-[2px] px-1 w-[28px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -508,24 +508,24 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                     const statusShort = l.status_transacao ? l.status_transacao.substring(0, 4) : '-';
 
                     return (
-                      <TableRow key={l.id} className="text-[10px] leading-tight italic">
-                        <TableCell className="font-mono py-[1px] px-[4px]">{fmtDate(l.data_competencia)}</TableCell>
-                        <TableCell className="font-mono py-[1px] px-[4px]">{fmtDate(l.data_pagamento)}</TableCell>
-                        <TableCell className="max-w-[140px] truncate py-[1px] px-[4px]" title={l.descricao || ''}>{l.descricao || '-'}</TableCell>
-                        <TableCell className="max-w-[100px] truncate py-[1px] px-[4px]" title={fornNome || ''}>
+                      <TableRow key={l.id} className="italic !h-auto">
+                        <TableCell className="font-mono">{fmtDate(l.data_competencia)}</TableCell>
+                        <TableCell className="font-mono">{fmtDate(l.data_pagamento)}</TableCell>
+                        <TableCell className="max-w-[140px] truncate" title={l.descricao || ''}>{l.descricao || '-'}</TableCell>
+                        <TableCell className="max-w-[100px] truncate" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
                         </TableCell>
-                        <TableCell className={`text-right font-semibold py-[1px] px-[4px] ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
+                        <TableCell className={`text-right font-semibold ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
                           {fmtValor(l.valor, l.sinal)}
                         </TableCell>
-                        <TableCell className="font-mono py-[1px] px-[4px] text-muted-foreground">{l.nota_fiscal || '-'}</TableCell>
-                        <TableCell className="py-[1px] px-[4px] text-muted-foreground">{statusShort}</TableCell>
-                        <TableCell className="py-0 px-0">
+                        <TableCell className="font-mono text-muted-foreground">{l.nota_fiscal || '-'}</TableCell>
+                        <TableCell className="text-muted-foreground">{statusShort}</TableCell>
+                        <TableCell className="!py-0 !px-0">
                           <div className="flex gap-0">
-                            <Button variant="ghost" size="icon" className="h-3.5 w-3.5" onClick={() => openEdit(l)}>
+                            <Button variant="ghost" size="icon" className="h-3 w-3" onClick={() => openEdit(l)}>
                               <Pencil className="h-2 w-2" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-3.5 w-3.5" onClick={() => handleDuplicate(l)}>
+                            <Button variant="ghost" size="icon" className="h-3 w-3" onClick={() => handleDuplicate(l)}>
                               <Copy className="h-2 w-2" />
                             </Button>
                           </div>
