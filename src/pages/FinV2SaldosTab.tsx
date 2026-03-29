@@ -28,6 +28,7 @@ interface SaldoBancario {
 interface ContaRef {
   id: string;
   nome_conta: string;
+  nome_exibicao: string | null;
 }
 
 function fmtBRL(v: number): string {
