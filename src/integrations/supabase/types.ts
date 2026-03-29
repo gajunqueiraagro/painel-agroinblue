@@ -878,6 +878,71 @@ export type Database = {
           },
         ]
       }
+      financeiro_conciliacoes: {
+        Row: {
+          cliente_id: string
+          conta_bancaria_id: string
+          created_at: string
+          created_by: string | null
+          extrato_id: string | null
+          id: string
+          lancamento_id: string | null
+          observacao: string | null
+          tipo_conciliacao: string
+        }
+        Insert: {
+          cliente_id: string
+          conta_bancaria_id: string
+          created_at?: string
+          created_by?: string | null
+          extrato_id?: string | null
+          id?: string
+          lancamento_id?: string | null
+          observacao?: string | null
+          tipo_conciliacao?: string
+        }
+        Update: {
+          cliente_id?: string
+          conta_bancaria_id?: string
+          created_at?: string
+          created_by?: string | null
+          extrato_id?: string | null
+          id?: string
+          lancamento_id?: string | null
+          observacao?: string | null
+          tipo_conciliacao?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_conciliacoes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_conciliacoes_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_contas_bancarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_conciliacoes_extrato_id_fkey"
+            columns: ["extrato_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_extrato_bancario"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_conciliacoes_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_lancamentos_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financeiro_contas: {
         Row: {
           agencia_conta: string | null
@@ -991,6 +1056,89 @@ export type Database = {
             columns: ["fazenda_id"]
             isOneToOne: false
             referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financeiro_extrato_bancario: {
+        Row: {
+          cliente_id: string
+          conciliado: boolean
+          conciliado_em: string | null
+          conta_bancaria_id: string
+          created_at: string
+          data_movimento: string
+          descricao_banco: string | null
+          documento: string | null
+          hash_conciliacao: string | null
+          id: string
+          importacao_id: string | null
+          lancamento_id: string | null
+          saldo_apos: number | null
+          tipo_movimento: string
+          valor: number
+        }
+        Insert: {
+          cliente_id: string
+          conciliado?: boolean
+          conciliado_em?: string | null
+          conta_bancaria_id: string
+          created_at?: string
+          data_movimento: string
+          descricao_banco?: string | null
+          documento?: string | null
+          hash_conciliacao?: string | null
+          id?: string
+          importacao_id?: string | null
+          lancamento_id?: string | null
+          saldo_apos?: number | null
+          tipo_movimento?: string
+          valor?: number
+        }
+        Update: {
+          cliente_id?: string
+          conciliado?: boolean
+          conciliado_em?: string | null
+          conta_bancaria_id?: string
+          created_at?: string
+          data_movimento?: string
+          descricao_banco?: string | null
+          documento?: string | null
+          hash_conciliacao?: string | null
+          id?: string
+          importacao_id?: string | null
+          lancamento_id?: string | null
+          saldo_apos?: number | null
+          tipo_movimento?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_extrato_bancario_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_extrato_bancario_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_contas_bancarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_extrato_bancario_importacao_id_fkey"
+            columns: ["importacao_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_importacoes_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_extrato_bancario_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_lancamentos_v2"
             referencedColumns: ["id"]
           },
         ]
@@ -1639,6 +1787,76 @@ export type Database = {
             columns: ["importacao_id"]
             isOneToOne: false
             referencedRelation: "financeiro_importacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financeiro_saldos_bancarios_v2: {
+        Row: {
+          ano_mes: string
+          cliente_id: string
+          conta_bancaria_id: string
+          created_at: string
+          created_by: string | null
+          fazenda_id: string
+          fechado: boolean
+          id: string
+          observacao: string | null
+          origem_saldo: string | null
+          saldo_final: number
+          saldo_inicial: number
+          updated_at: string
+        }
+        Insert: {
+          ano_mes: string
+          cliente_id: string
+          conta_bancaria_id: string
+          created_at?: string
+          created_by?: string | null
+          fazenda_id: string
+          fechado?: boolean
+          id?: string
+          observacao?: string | null
+          origem_saldo?: string | null
+          saldo_final?: number
+          saldo_inicial?: number
+          updated_at?: string
+        }
+        Update: {
+          ano_mes?: string
+          cliente_id?: string
+          conta_bancaria_id?: string
+          created_at?: string
+          created_by?: string | null
+          fazenda_id?: string
+          fechado?: boolean
+          id?: string
+          observacao?: string | null
+          origem_saldo?: string | null
+          saldo_final?: number
+          saldo_inicial?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_saldos_bancarios_v2_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_saldos_bancarios_v2_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_contas_bancarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_saldos_bancarios_v2_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
             referencedColumns: ["id"]
           },
         ]
