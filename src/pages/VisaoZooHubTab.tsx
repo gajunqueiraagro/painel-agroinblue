@@ -346,6 +346,10 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
             kgHa={kgHa}
             kgHaComps={kgHaComps}
             acumulado={acumulado}
+            lancFin={lancFin}
+            rateioADM={rateioADM}
+            isGlobal={isGlobal}
+            arrobasProduzidasAcum={arrobasProduzidasAcum}
           />
         )}
 
