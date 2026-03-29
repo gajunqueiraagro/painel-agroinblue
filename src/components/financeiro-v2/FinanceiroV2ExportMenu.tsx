@@ -1,0 +1,156 @@
+import { useState } from 'react';
+import { Download, FileSpreadsheet, FileText } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { format, parseISO } from 'date-fns';
+import type { LancamentoV2 } from '@/hooks/useFinanceiroV2';
+
+interface FornecedorMap {
+  id: string;
+  nome: string;
+}
+
+interface Props {
+  lancamentos: LancamentoV2[];
+  fornecedores: FornecedorMap[];
+  ano: string;
+  fazendaNome?: string;
+}
+
+function fmtDate(d: string | null) {
+  if (!d) return '';
+  try { return format(parseISO(d), 'dd/MM/yyyy'); } catch { return d; }
+}
+
+function fmtBRL(v: number): string {
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function buildRows(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[]) {
+  return lancamentos.map(l => {
+    const forn = fornecedores.find(f => f.id === l.favorecido_id)?.nome || '';
+    const valor = l.sinal >= 0 ? l.valor : -l.valor;
+    return {
+      comp: fmtDate(l.data_competencia),
+      pgto: fmtDate(l.data_pagamento),
+      produto: l.descricao || '',
+      fornecedor: forn,
+      valor,
+      valorFmt: fmtBRL(Math.abs(l.valor)),
+      nf: l.nota_fiscal || '',
+      status: l.status_transacao || '',
+      macro: l.macro_custo || '',
+      centro: l.centro_custo || '',
+      subcentro: l.subcentro || '',
+      sinal: l.sinal,
+    };
+  });
+}
+
+function exportExcel(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], ano: string, fazendaNome?: string) {
+  const rows = buildRows(lancamentos, fornecedores);
+  const data = rows.map(r => ({
+    'Comp.': r.comp,
+    'Pgto': r.pgto,
+    'Produto': r.produto,
+    'Fornecedor': r.fornecedor,
+    'Valor': r.valor,
+    'NF': r.nf,
+    'Status': r.status,
+    'Macro': r.macro,
+    'Centro': r.centro,
+    'Subcentro': r.subcentro,
+  }));
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws['!cols'] = [
+    { wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 25 },
+    { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 20 },
+    { wch: 18 }, { wch: 18 },
+  ];
+  XLSX.utils.book_append_sheet(wb, ws, 'Lançamentos');
+
+  const faz = fazendaNome ? `_${fazendaNome.replace(/\s+/g, '_')}` : '';
+  XLSX.writeFile(wb, `financeiro_v2_${ano}${faz}.xlsx`);
+}
+
+function exportPDF(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], ano: string, fazendaNome?: string) {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+
+  let y = 10;
+  doc.setFontSize(14);
+  doc.text(`Financeiro - ${ano}`, pageW / 2, y, { align: 'center' });
+  y += 6;
+  if (fazendaNome) {
+    doc.setFontSize(10);
+    doc.text(fazendaNome, pageW / 2, y, { align: 'center' });
+    y += 5;
+  }
+  doc.setFontSize(8);
+  doc.text(`${lancamentos.length} lançamentos`, pageW / 2, y, { align: 'center' });
+  y += 4;
+
+  const rows = buildRows(lancamentos, fornecedores);
+  const head = [['Comp.', 'Pgto', 'Produto', 'Fornecedor', 'Valor', 'NF', 'Status']];
+  const body = rows.map(r => [
+    r.comp, r.pgto, r.produto, r.fornecedor,
+    (r.sinal >= 0 ? '' : '- ') + `R$ ${r.valorFmt}`,
+    r.nf, r.status,
+  ]);
+
+  const totalEnt = rows.filter(r => r.sinal > 0).reduce((s, r) => s + Math.abs(r.valor), 0);
+  const totalSai = rows.filter(r => r.sinal < 0).reduce((s, r) => s + Math.abs(r.valor), 0);
+  body.push(['', '', '', 'ENTRADAS', `R$ ${fmtBRL(totalEnt)}`, '', '']);
+  body.push(['', '', '', 'SAÍDAS', `- R$ ${fmtBRL(totalSai)}`, '', '']);
+
+  autoTable(doc, {
+    startY: y,
+    head,
+    body,
+    theme: 'grid',
+    headStyles: { fillColor: [34, 120, 74], fontSize: 7 },
+    bodyStyles: { fontSize: 7 },
+    margin: { left: 8, right: 8 },
+  });
+
+  const faz = fazendaNome ? `_${fazendaNome.replace(/\s+/g, '_')}` : '';
+  doc.save(`financeiro_v2_${ano}${faz}.pdf`);
+}
+
+export function FinanceiroV2ExportMenu({ lancamentos, fornecedores, ano, fazendaNome }: Props) {
+  const [open, setOpen] = useState(false);
+
+  if (lancamentos.length === 0) return null;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="outline" className="h-6 text-[10px] gap-0.5 px-2">
+          <Download className="h-3 w-3" /> Exportar
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-36 p-1" align="end">
+        <Button variant="ghost" className="w-full justify-start gap-2 h-7 text-[10px]" onClick={() => {
+          exportExcel(lancamentos, fornecedores, ano, fazendaNome);
+          setOpen(false);
+          toast.success('Excel exportado!');
+        }}>
+          <FileSpreadsheet className="h-3.5 w-3.5 text-green-600" /> Excel
+        </Button>
+        <Button variant="ghost" className="w-full justify-start gap-2 h-7 text-[10px]" onClick={() => {
+          exportPDF(lancamentos, fornecedores, ano, fazendaNome);
+          setOpen(false);
+          toast.success('PDF exportado!');
+        }}>
+          <FileText className="h-3.5 w-3.5 text-destructive" /> PDF
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
