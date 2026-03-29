@@ -516,11 +516,102 @@ interface IndicadoresContentProps {
   kgHa: number | null;
   kgHaComps: any;
   acumulado: any;
+  lancFin: FinanceiroLancamento[];
+  rateioADM: RateioADM[];
+  isGlobal: boolean;
+  arrobasProduzidasAcum: number | null;
 }
 
-function IndicadoresContent({ zoo, vista, mesLabel, mesFiltro, anoFiltro, kgHa, kgHaComps, acumulado }: IndicadoresContentProps) {
+function IndicadoresContent({ zoo, vista, mesLabel, mesFiltro, anoFiltro, kgHa, kgHaComps, acumulado, lancFin, rateioADM, isGlobal, arrobasProduzidasAcum }: IndicadoresContentProps) {
   const isMes = vista === 'mes';
   const periodoLabel = isMes ? mesLabel : `Média Jan → ${mesLabel}`;
+  const anoNum = Number(anoFiltro);
+
+  const { fazendas } = useFazenda();
+  const allFazendaIds = useMemo(() => fazendas.filter(f => f.id !== '__global__').map(f => f.id), [fazendas]);
+
+  // ── Financial KPIs ──
+  const finProd = useMemo(() => {
+    const buildComp = (atual: number | null, ref: number | null) => {
+      if (atual === null || ref === null || (atual === 0 && ref === 0)) return null;
+      if (ref === 0) return null;
+      const pct = ((atual - ref) / Math.abs(ref)) * 100;
+      return { diferencaPercentual: pct, disponivel: true } as any;
+    };
+
+    const arrobas = arrobasProduzidasAcum ?? 0;
+    const receitaPec = calcReceitaPecuaria(lancFin, anoNum, mesFiltro);
+    const desembolsoPec = calcDesembolsoProdPec(lancFin, rateioADM, anoNum, mesFiltro, isGlobal);
+
+    const receitaPorArroba = arrobas > 0 ? receitaPec / arrobas : null;
+    const custoPorArroba = arrobas > 0 ? desembolsoPec / arrobas : null;
+    const margemPorArroba = receitaPorArroba !== null && custoPorArroba !== null
+      ? receitaPorArroba - custoPorArroba : null;
+    const resultadoOp = receitaPec - desembolsoPec;
+
+    // vs mês anterior (acumulado até mesFiltro-1)
+    const mesAnt = mesFiltro > 1 ? mesFiltro - 1 : null;
+    const recMesAnt = mesAnt ? calcReceitaPecuaria(lancFin, anoNum, mesAnt) : null;
+    const desMesAnt = mesAnt ? calcDesembolsoProdPec(lancFin, rateioADM, anoNum, mesAnt, isGlobal) : null;
+    // For MoM we compare incremental (current month only)
+    const recMesAtual = mesAnt ? receitaPec - (recMesAnt || 0) : receitaPec;
+    const desMesAtual = mesAnt ? desembolsoPec - (desMesAnt || 0) : desembolsoPec;
+    // vs ano anterior (same period)
+    const recAnoAnt = calcReceitaPecuaria(lancFin, anoNum - 1, mesFiltro);
+    const desAnoAnt = calcDesembolsoProdPec(lancFin, rateioADM, anoNum - 1, mesFiltro, isGlobal);
+    const arrobasAnoAnt = zoo.historico?.find(h => h.ano === anoNum - 1)?.meses[mesFiltro - 1]?.arrobasProduzidasAcum ?? null;
+    const recPorArrAnoAnt = arrobasAnoAnt && arrobasAnoAnt > 0 ? recAnoAnt / arrobasAnoAnt : null;
+    const cusPorArrAnoAnt = arrobasAnoAnt && arrobasAnoAnt > 0 ? desAnoAnt / arrobasAnoAnt : null;
+    const margemAnoAnt = recPorArrAnoAnt !== null && cusPorArrAnoAnt !== null ? recPorArrAnoAnt - cusPorArrAnoAnt : null;
+    const resultadoOpAnoAnt = recAnoAnt - desAnoAnt;
+
+    const temDados = lancFin.length > 0 && (receitaPec > 0 || desembolsoPec > 0);
+
+    return {
+      receitaPorArroba, custoPorArroba, margemPorArroba,
+      desembolsoPec, resultadoOp, temDados,
+      compRecArr: { mensal: null, anual: buildComp(receitaPorArroba, recPorArrAnoAnt) },
+      compCusArr: { mensal: null, anual: buildComp(custoPorArroba, cusPorArrAnoAnt) },
+      compMargArr: { mensal: null, anual: buildComp(margemPorArroba, margemAnoAnt) },
+      compDesemp: { mensal: buildComp(desembolsoPec, desMesAnt), anual: buildComp(desembolsoPec, desAnoAnt) },
+      compResult: { mensal: null, anual: buildComp(resultadoOp, resultadoOpAnoAnt) },
+    };
+  }, [lancFin, rateioADM, anoNum, mesFiltro, isGlobal, arrobasProduzidasAcum, zoo.historico]);
+
+  // ── Saldo Bancário (Caixa Disponível) ──
+  const [saldoBancario, setSaldoBancario] = useState<number | null>(null);
+  const [saldoBancarioAnt, setSaldoBancarioAnt] = useState<number | null>(null);
+  const [saldoBancarioAnoAnt, setSaldoBancarioAnoAnt] = useState<number | null>(null);
+
+  useEffect(() => {
+    const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
+    const mesAntNum = mesFiltro > 1 ? mesFiltro - 1 : 12;
+    const anoAntMes = mesFiltro > 1 ? anoFiltro : String(anoNum - 1);
+    const anoMesAnt = `${anoAntMes}-${String(mesAntNum).padStart(2, '0')}`;
+    const anoMesYoY = `${anoNum - 1}-${String(mesFiltro).padStart(2, '0')}`;
+
+    Promise.all([
+      fetchSaldoBancario(allFazendaIds, anoMes),
+      fetchSaldoBancario(allFazendaIds, anoMesAnt),
+      fetchSaldoBancario(allFazendaIds, anoMesYoY),
+    ]).then(([atual, ant, yoy]) => {
+      setSaldoBancario(atual);
+      setSaldoBancarioAnt(ant);
+      setSaldoBancarioAnoAnt(yoy);
+    });
+  }, [allFazendaIds.join(','), anoFiltro, mesFiltro, anoNum]);
+
+  const compCaixa = useMemo(() => {
+    const buildComp = (atual: number | null, ref: number | null) => {
+      if (atual === null || ref === null || (atual === 0 && ref === 0)) return null;
+      if (ref === 0) return null;
+      return { diferencaPercentual: ((atual - ref) / Math.abs(ref)) * 100, disponivel: true } as any;
+    };
+    return {
+      mensal: buildComp(saldoBancario, saldoBancarioAnt),
+      anual: buildComp(saldoBancario, saldoBancarioAnoAnt),
+    };
+  }, [saldoBancario, saldoBancarioAnt, saldoBancarioAnoAnt]);
 
   return (
     <>
@@ -611,26 +702,68 @@ function IndicadoresContent({ zoo, vista, mesLabel, mesFiltro, anoFiltro, kgHa, 
         </SectionCard>
 
         {/* 3. FINANCEIRO PRODUTIVO */}
-        <SectionCard title="Financeiro Produtivo" icon="💰">
-          <div className="grid grid-cols-2 gap-2">
-            <KpiCard label="Receita por @" valor="—" semBase />
-            <KpiCard label="Custo por @" valor="—" semBase />
-            <KpiCard label="Margem por @" valor="—" semBase />
-            <KpiCard label="Desembolso total" valor="—" semBase />
-            <KpiCard label="Resultado operacional" valor="—" semBase />
-          </div>
-          <p className="text-[9px] text-muted-foreground italic text-center">Disponível após integração financeira completa</p>
+        <SectionCard title="Financeiro Produtivo" subtitle="receita × custo por @" icon="💰">
+          {finProd.temDados ? (
+            <div className="grid grid-cols-2 gap-2">
+              <KpiCard label="Receita por @"
+                valor={finProd.receitaPorArroba !== null ? formatMoeda(finProd.receitaPorArroba) : '—'}
+                unidade="R$/@"
+                compAnual={finProd.compRecArr.anual}
+                semBase={finProd.receitaPorArroba === null} />
+              <KpiCard label="Custo por @"
+                valor={finProd.custoPorArroba !== null ? formatMoeda(finProd.custoPorArroba) : '—'}
+                unidade="R$/@"
+                compAnual={finProd.compCusArr.anual}
+                semBase={finProd.custoPorArroba === null} />
+              <KpiCard label="Margem por @"
+                valor={finProd.margemPorArroba !== null ? formatMoeda(finProd.margemPorArroba) : '—'}
+                unidade="R$/@"
+                compAnual={finProd.compMargArr.anual}
+                semBase={finProd.margemPorArroba === null} />
+              <KpiCard label="Desembolso total"
+                valor={formatMoedaCompacto(finProd.desembolsoPec)}
+                compMensal={finProd.compDesemp.mensal}
+                compAnual={finProd.compDesemp.anual} />
+              <KpiCard label="Resultado operacional"
+                valor={formatMoedaCompacto(finProd.resultadoOp)}
+                compAnual={finProd.compResult.anual} />
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground py-3">
+              <Info className="h-4 w-4 shrink-0" />
+              <span>Aguardando integração — importe lançamentos financeiros para ativar</span>
+            </div>
+          )}
         </SectionCard>
 
         {/* 4. ESTRUTURA FINANCEIRA */}
-        <SectionCard title="Estrutura Financeira" icon="🏦">
+        <SectionCard title="Estrutura Financeira" subtitle="posição patrimonial" icon="🏦">
           <div className="grid grid-cols-2 gap-2">
-            <KpiCard label="Endividamento" valor="—" unidade="%" semBase />
-            <KpiCard label="Caixa disponível" valor="—" semBase />
-            <KpiCard label="Dívida / Rebanho" valor="—" semBase />
-            <KpiCard label="Curto vs Longo prazo" valor="—" semBase />
+            <KpiCard label="Caixa disponível"
+              valor={saldoBancario !== null ? formatMoedaCompacto(saldoBancario) : '—'}
+              compMensal={compCaixa.mensal}
+              compAnual={compCaixa.anual}
+              semBase={saldoBancario === null} />
+            <KpiCard label="Valor Rebanho"
+              valor={zoo.valorRebanho !== null ? formatMoedaCompacto(zoo.valorRebanho) : '—'}
+              compMensal={zoo.comparacoes.valorRebanho.mensal}
+              compAnual={zoo.comparacoes.valorRebanho.anual}
+              semBase={zoo.valorRebanho === null} />
           </div>
-          <p className="text-[9px] text-muted-foreground italic text-center">Disponível após integração financeira completa</p>
+          <div className="mt-2 space-y-1">
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+              <Info className="h-3 w-3 shrink-0" />
+              <span><strong>Endividamento</strong> — Aguardando integração da fórmula (Dívida total / Valor do rebanho)</span>
+            </div>
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+              <Info className="h-3 w-3 shrink-0" />
+              <span><strong>Dívida / Rebanho</strong> — Aguardando integração da fórmula</span>
+            </div>
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+              <Info className="h-3 w-3 shrink-0" />
+              <span><strong>Curto vs Longo prazo</strong> — Aguardando integração da fórmula (composição da dívida por prazo)</span>
+            </div>
+          </div>
         </SectionCard>
 
         {/* 5. EVOLUÇÃO */}
