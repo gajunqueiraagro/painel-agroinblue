@@ -123,24 +123,30 @@ export function FinV2ContasTab() {
       <Card>
         <CardContent className="p-0">
           <Table>
-            <TableHeader>
+             <TableHeader>
               <TableRow>
-                <TableHead>Nome</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead>Código</TableHead>
+                <TableHead>Nome Exibição</TableHead>
                 <TableHead>Banco</TableHead>
-                <TableHead>Nº Conta</TableHead>
                 <TableHead>Fazenda</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>}
-              {!loading && contas.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhuma conta cadastrada</TableCell></TableRow>}
+              {loading && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>}
+              {!loading && contas.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhuma conta cadastrada</TableCell></TableRow>}
               {contas.map(c => (
                 <TableRow key={c.id}>
-                  <TableCell className="font-medium">{c.nome_conta}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-[10px]">
+                      {c.tipo_conta === 'inv' ? 'Investimento' : c.tipo_conta === 'cartao' ? 'Cartão' : 'Conta Corrente'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">{c.codigo_conta || '-'}</TableCell>
+                  <TableCell className="font-medium">{c.nome_exibicao || c.nome_conta}</TableCell>
                   <TableCell>{c.banco || '-'}</TableCell>
-                  <TableCell>{c.numero_conta || '-'}</TableCell>
                   <TableCell className="text-xs">{fazendaNome(c.fazenda_id)}</TableCell>
                   <TableCell>
                     <Badge variant={c.ativa ? 'default' : 'secondary'} className="text-[10px]">
