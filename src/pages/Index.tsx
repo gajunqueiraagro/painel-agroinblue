@@ -87,6 +87,7 @@ const TITLES: Record<TabId, string> = {
   fechamento_executivo: 'Fechamento Executivo',
   analise_consultor: 'Análise do Consultor',
   preco_mercado: 'Preço de Mercado',
+  graficos_analise: 'Gráficos',
 };
 
 const Index = () => {
