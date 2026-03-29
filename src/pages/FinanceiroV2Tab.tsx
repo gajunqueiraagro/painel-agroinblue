@@ -485,14 +485,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <Table>
               <TableHeader>
                 <TableRow className="h-4">
-                  <TableHead className="text-[7px] py-0 px-0.5 font-semibold">Comp.</TableHead>
-                  <TableHead className="text-[7px] py-0 px-0.5 font-semibold">Pgto</TableHead>
-                  <TableHead className="text-[7px] py-0 px-0.5 font-semibold">Produto</TableHead>
-                  <TableHead className="text-[7px] py-0 px-0.5 font-semibold">Fornecedor</TableHead>
-                  <TableHead className="text-[7px] py-0 px-0.5 font-semibold text-right">Valor</TableHead>
-                  <TableHead className="text-[7px] py-0 px-0.5 font-semibold">NF</TableHead>
-                  <TableHead className="text-[7px] py-0 px-0.5 font-semibold">St</TableHead>
-                  <TableHead className="text-[7px] py-0 px-0.5 font-semibold w-[32px]"></TableHead>
+                  <TableHead className="text-[9px] py-1 px-1 font-semibold">Comp.</TableHead>
+                  <TableHead className="text-[9px] py-1 px-1 font-semibold">Pgto</TableHead>
+                  <TableHead className="text-[9px] py-1 px-1 font-semibold">Produto</TableHead>
+                  <TableHead className="text-[9px] py-1 px-1 font-semibold">Fornecedor</TableHead>
+                  <TableHead className="text-[9px] py-1 px-1 font-semibold text-right">Valor</TableHead>
+                  <TableHead className="text-[9px] py-1 px-1 font-semibold">NF</TableHead>
+                  <TableHead className="text-[9px] py-1 px-1 font-semibold">St</TableHead>
+                  <TableHead className="text-[9px] py-1 px-1 font-semibold w-[32px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
