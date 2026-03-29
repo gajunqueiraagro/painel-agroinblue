@@ -35,6 +35,7 @@ import { FechamentoExecutivoTab } from './FechamentoExecutivoTab';
 import { AnaliseConsultorTab } from './AnaliseConsultorTab';
 import { PrecoMercadoTab } from './PrecoMercadoTab';
 import { GraficosAnaliseTab } from './GraficosAnaliseTab';
+import { ClienteSelector } from '@/components/ClienteSelector';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { SyncStatus } from '@/components/SyncStatus';
 import { useLancamentos } from '@/hooks/useLancamentos';
