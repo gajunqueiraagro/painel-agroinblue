@@ -125,45 +125,12 @@ export function FinV2FornecedoresTab() {
 
   const openNew = () => {
     setEditing(null);
-    setNome(''); setCpfCnpj('');
-    setFazendaId(fazendas[0]?.id || '');
-    setAtivo(true);
     setDialogOpen(true);
   };
 
   const openEdit = (f: Fornecedor) => {
     setEditing(f);
-    setNome(f.nome);
-    setCpfCnpj(f.cpf_cnpj || '');
-    setFazendaId(f.fazenda_id);
-    setAtivo(f.ativo);
     setDialogOpen(true);
-  };
-
-  const save = async () => {
-    if (!clienteAtual?.id || !nome.trim() || !fazendaId) {
-      toast.error('Preencha nome e fazenda');
-      return;
-    }
-    const payload = {
-      cliente_id: clienteAtual.id,
-      fazenda_id: fazendaId,
-      nome: nome.trim(),
-      cpf_cnpj: cpfCnpj.trim() || null,
-      ativo,
-    };
-
-    if (editing) {
-      const { error } = await supabase.from('financeiro_fornecedores').update(payload).eq('id', editing.id);
-      if (error) { toast.error('Erro ao atualizar'); return; }
-      toast.success('Fornecedor atualizado');
-    } else {
-      const { error } = await supabase.from('financeiro_fornecedores').insert(payload);
-      if (error) { toast.error('Erro ao criar'); return; }
-      toast.success('Fornecedor criado');
-    }
-    setDialogOpen(false);
-    load();
   };
 
   // Link pending lancamentos to an existing fornecedor
