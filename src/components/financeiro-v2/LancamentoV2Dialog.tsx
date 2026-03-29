@@ -404,7 +404,7 @@ export function LancamentoV2Dialog({
                       <SelectContent className="max-h-60">
                         <SelectItem value="__none__">Selecione...</SelectItem>
                         {contasDisponiveis.map(c => (
-                          <SelectItem key={c.id} value={c.id}>{c.nome_conta}{c.banco ? ` (${c.banco})` : ''}</SelectItem>
+                          <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}{c.banco ? ` (${c.banco})` : ''}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
