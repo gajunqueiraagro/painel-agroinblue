@@ -23,11 +23,17 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   const [drilldownMonth, setDrilldownMonth] = useState<string | null>(null);
 
   const anosDisponiveis = useMemo(() => {
-    const anos = new Set<string>();
-    anos.add(String(new Date().getFullYear()));
-    lancamentos.forEach(l => { try { anos.add(format(parseISO(l.data), 'yyyy')); } catch {} });
-    saldosIniciais.forEach(s => anos.add(String(s.ano)));
-    return Array.from(anos).sort().reverse();
+    const anos = new Set<number>();
+    anos.add(new Date().getFullYear());
+    lancamentos.forEach(l => { try { anos.add(Number(format(parseISO(l.data), 'yyyy'))); } catch {} });
+    saldosIniciais.forEach(s => anos.add(s.ano));
+    const minAno = Math.min(...Array.from(anos));
+    const maxAno = Math.max(...Array.from(anos));
+    const result: string[] = [];
+    for (let y = maxAno; y >= minAno; y--) {
+      result.push(String(y));
+    }
+    return result;
   }, [lancamentos, saldosIniciais]);
 
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
