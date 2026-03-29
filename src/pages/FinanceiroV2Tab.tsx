@@ -28,7 +28,8 @@ const MESES = [
 ];
 
 const STATUS_COLORS: Record<string, string> = {
-  pendente: 'bg-warning/20 text-warning border-warning/30',
+  previsto: 'bg-warning/20 text-warning border-warning/30',
+  agendado: 'bg-blue-500/20 text-blue-600 border-blue-500/30',
   confirmado: 'bg-primary/20 text-primary border-primary/30',
   conciliado: 'bg-success/20 text-success border-success/30',
 };
@@ -61,7 +62,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     return arr;
   }, [currentYear]);
 
-  // Filters
   const defaultFazendaId = fazendaAtual?.id !== '__global__' ? fazendaAtual?.id || '' : '';
   const [fazendaId, setFazendaId] = useState(defaultFazendaId);
   const [ano, setAno] = useState(filtroAnoInicial || String(currentYear));
@@ -70,10 +70,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [tipoOperacao, setTipoOperacao] = useState('__all__');
   const [statusTransacao, setStatusTransacao] = useState('__all__');
 
-  // Mode: 'list' (default) or 'rapido' (Excel grid)
   const [mode, setMode] = useState<'list' | 'rapido'>('list');
-
-  // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLanc, setEditingLanc] = useState<LancamentoV2 | null>(null);
 
@@ -82,10 +79,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     fazendaId ? hook.contasBancarias.filter(c => c.fazenda_id === fazendaId) : hook.contasBancarias
   , [fazendaId, hook.contasBancarias]);
 
-  // Load contas + classificacoes on mount
-  useEffect(() => { hook.loadContas(); hook.loadClassificacoes(); }, [hook.loadContas, hook.loadClassificacoes]);
+  useEffect(() => {
+    hook.loadContas();
+    hook.loadClassificacoes();
+    hook.loadFornecedores();
+  }, [hook.loadContas, hook.loadClassificacoes, hook.loadFornecedores]);
 
-  // Auto-set fazenda from context
   useEffect(() => {
     if (fazendaAtual && fazendaAtual.id !== '__global__') {
       setFazendaId(fazendaAtual.id);
@@ -101,22 +100,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     status_transacao: statusTransacao !== '__all__' ? statusTransacao : undefined,
   }), [fazendaId, ano, mes, contaBancariaId, tipoOperacao, statusTransacao]);
 
-  // Load on filter change
   useEffect(() => {
     hook.loadLancamentos(filtros, 0);
   }, [filtros]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handlePageChange = (p: number) => {
-    hook.loadLancamentos(filtros, p);
-  };
+  const handlePageChange = (p: number) => hook.loadLancamentos(filtros, p);
 
   const handleSave = async (form: any, id?: string) => {
     let ok: boolean;
-    if (id) {
-      ok = await hook.editarLancamento(id, form);
-    } else {
-      ok = await hook.criarLancamento(form);
-    }
+    if (id) ok = await hook.editarLancamento(id, form);
+    else ok = await hook.criarLancamento(form);
     if (ok) hook.loadLancamentos(filtros, hook.page);
     return ok;
   };
@@ -135,19 +128,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const openNew = () => { setEditingLanc(null); setDialogOpen(true); };
   const openEdit = (l: LancamentoV2) => { setEditingLanc(l); setDialogOpen(true); };
 
-  // Totals
   const totalEntradas = hook.lancamentos.filter(l => l.sinal > 0).reduce((s, l) => s + l.valor, 0);
   const totalSaidas = hook.lancamentos.filter(l => l.sinal < 0).reduce((s, l) => s + l.valor, 0);
 
   return (
     <div className="space-y-4 pb-20">
-      {/* Filters */}
       <Card>
         <CardContent className="p-3 space-y-3">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             <div>
               <label className="text-xs text-muted-foreground font-medium">Fazenda</label>
-              <Select value={fazendaId} onValueChange={v => { setFazendaId(v); setContaBancariaId(''); }}>
+              <Select value={fazendaId} onValueChange={v => { setFazendaId(v); setContaBancariaId('__all__'); }}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {fazOperacionais.map(f => (
@@ -204,7 +195,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">Todos</SelectItem>
-                  <SelectItem value="pendente">Pendente</SelectItem>
+                  <SelectItem value="previsto">Previsto</SelectItem>
+                  <SelectItem value="agendado">Agendado</SelectItem>
                   <SelectItem value="confirmado">Confirmado</SelectItem>
                   <SelectItem value="conciliado">Conciliado</SelectItem>
                 </SelectContent>
@@ -220,9 +212,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <span className="text-destructive font-bold">
                 Saídas: R$ {totalSaidas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
-              <span className="text-muted-foreground">
-                {hook.total} lançamentos
-              </span>
+              <span className="text-muted-foreground">{hook.total} lançamentos</span>
             </div>
             <div className="flex gap-1.5">
               <Button
@@ -244,21 +234,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         </CardContent>
       </Card>
 
-      {/* No filter warning */}
       {(!fazendaId || !ano) && (
         <div className="text-center text-muted-foreground py-12 text-sm">
           Selecione uma fazenda e um ano para carregar os lançamentos.
         </div>
       )}
 
-      {/* Loading */}
       {hook.loading && (
-        <div className="text-center text-muted-foreground py-8 text-sm animate-pulse">
-          Carregando...
-        </div>
+        <div className="text-center text-muted-foreground py-8 text-sm animate-pulse">Carregando...</div>
       )}
 
-      {/* Modo Rápido */}
       {mode === 'rapido' && fazendaId && (
         <ModoRapidoGrid
           fazendaId={fazendaId}
@@ -269,7 +254,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         />
       )}
 
-      {/* Table (list mode) */}
       {mode === 'list' && !hook.loading && fazendaId && ano && (
         <>
           <div className="rounded-lg border overflow-x-auto">
@@ -297,15 +281,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                   hook.lancamentos.map(l => {
                     const contaNome = hook.contasBancarias.find(c => c.id === l.conta_bancaria_id)?.nome_conta || '-';
                     const tipoLabel = l.tipo_operacao?.replace(/^\d-/, '') || '-';
-                    const statusLabel = l.status_transacao || 'pendente';
+                    const statusLabel = l.status_transacao || 'previsto';
                     const classificacao = [l.macro_custo, l.centro_custo, l.subcentro].filter(Boolean).join(' › ');
 
                     return (
                       <TableRow key={l.id} className="text-xs">
                         <TableCell className="font-mono">{fmtDate(l.data_pagamento)}</TableCell>
-                        <TableCell className="max-w-[200px] truncate" title={l.descricao || ''}>
-                          {l.descricao || '-'}
-                        </TableCell>
+                        <TableCell className="max-w-[200px] truncate" title={l.descricao || ''}>{l.descricao || '-'}</TableCell>
                         <TableCell className="truncate max-w-[100px]" title={contaNome}>{contaNome}</TableCell>
                         <TableCell className={`text-right font-bold ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
                           {fmtValor(l.valor, l.sinal)}
@@ -340,15 +322,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </Table>
           </div>
 
-          {/* Pagination */}
           {hook.totalPages > 1 && (
             <div className="flex items-center justify-center gap-2">
               <Button variant="outline" size="sm" disabled={hook.page === 0} onClick={() => handlePageChange(hook.page - 1)}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="text-xs text-muted-foreground">
-                Página {hook.page + 1} de {hook.totalPages}
-              </span>
+              <span className="text-xs text-muted-foreground">Página {hook.page + 1} de {hook.totalPages}</span>
               <Button variant="outline" size="sm" disabled={hook.page >= hook.totalPages - 1} onClick={() => handlePageChange(hook.page + 1)}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -357,7 +336,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         </>
       )}
 
-      {/* Dialog */}
       <LancamentoV2Dialog
         open={dialogOpen}
         onClose={() => { setDialogOpen(false); setEditingLanc(null); }}
@@ -366,7 +344,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         fazendas={fazendas}
         contas={hook.contasBancarias}
         classificacoes={hook.classificacoes}
+        fornecedores={hook.fornecedores}
         defaultFazendaId={fazendaId}
+        onCriarFornecedor={hook.criarFornecedor}
       />
     </div>
   );

@@ -27,6 +27,8 @@ export interface LancamentoV2 {
   ano_mes: string;
   documento: string | null;
   historico: string | null;
+  nota_fiscal: string | null;
+  favorecido_id: string | null;
   origem_lancamento: string;
   created_at: string;
   updated_at: string;
@@ -35,6 +37,7 @@ export interface LancamentoV2 {
 export interface LancamentoV2Form {
   fazenda_id: string;
   conta_bancaria_id?: string | null;
+  conta_destino_id?: string | null; // For transfers
   data_competencia: string;
   data_pagamento?: string | null;
   valor: number;
@@ -46,12 +49,21 @@ export interface LancamentoV2Form {
   subcentro?: string;
   escopo_negocio?: string;
   observacao?: string;
+  nota_fiscal?: string | null;
+  favorecido_id?: string | null;
 }
 
 export interface ContaBancariaV2 {
   id: string;
   nome_conta: string;
   banco: string | null;
+  fazenda_id: string;
+}
+
+export interface FornecedorV2 {
+  id: string;
+  nome: string;
+  cpf_cnpj: string | null;
   fazenda_id: string;
 }
 
@@ -80,6 +92,7 @@ export function useFinanceiroV2() {
 
   const [lancamentos, setLancamentos] = useState<LancamentoV2[]>([]);
   const [contasBancarias, setContasBancarias] = useState<ContaBancariaV2[]>([]);
+  const [fornecedores, setFornecedores] = useState<FornecedorV2[]>([]);
   const [classificacoes, setClassificacoes] = useState<ClassificacaoItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
@@ -94,6 +107,34 @@ export function useFinanceiroV2() {
       .eq('ativa', true)
       .order('ordem_exibicao');
     setContasBancarias((data as ContaBancariaV2[]) || []);
+  }, [clienteId]);
+
+  const loadFornecedores = useCallback(async () => {
+    if (!clienteId) return;
+    const { data } = await supabase
+      .from('financeiro_fornecedores')
+      .select('id, nome, cpf_cnpj, fazenda_id')
+      .eq('cliente_id', clienteId)
+      .eq('ativo', true)
+      .order('nome');
+    setFornecedores((data as FornecedorV2[]) || []);
+  }, [clienteId]);
+
+  const criarFornecedor = useCallback(async (nome: string, fazendaId: string, cpfCnpj?: string) => {
+    if (!clienteId) return null;
+    const { data, error } = await supabase
+      .from('financeiro_fornecedores')
+      .insert({ cliente_id: clienteId, fazenda_id: fazendaId, nome, cpf_cnpj: cpfCnpj || null })
+      .select('id, nome, cpf_cnpj, fazenda_id')
+      .single();
+    if (error) {
+      toast.error('Erro ao criar fornecedor');
+      console.error(error);
+      return null;
+    }
+    setFornecedores(prev => [...prev, data as FornecedorV2]);
+    toast.success('Fornecedor criado');
+    return data as FornecedorV2;
   }, [clienteId]);
 
   const loadClassificacoes = useCallback(async () => {
@@ -121,8 +162,6 @@ export function useFinanceiroV2() {
 
   const loadLancamentos = useCallback(async (filtros: FiltrosV2, pageNum: number = 0) => {
     if (!clienteId) return;
-
-    // Require at least fazenda + year
     if (!filtros.fazenda_id || !filtros.ano) {
       setLancamentos([]);
       setTotal(0);
@@ -137,22 +176,15 @@ export function useFinanceiroV2() {
         .eq('cliente_id', clienteId)
         .eq('fazenda_id', filtros.fazenda_id);
 
-      // ano_mes filter
       if (filtros.mes && filtros.mes !== 'todos') {
         query = query.eq('ano_mes', `${filtros.ano}-${filtros.mes.padStart(2, '0')}`);
       } else {
         query = query.gte('ano_mes', `${filtros.ano}-01`).lte('ano_mes', `${filtros.ano}-12`);
       }
 
-      if (filtros.conta_bancaria_id) {
-        query = query.eq('conta_bancaria_id', filtros.conta_bancaria_id);
-      }
-      if (filtros.tipo_operacao) {
-        query = query.eq('tipo_operacao', filtros.tipo_operacao);
-      }
-      if (filtros.status_transacao) {
-        query = query.eq('status_transacao', filtros.status_transacao);
-      }
+      if (filtros.conta_bancaria_id) query = query.eq('conta_bancaria_id', filtros.conta_bancaria_id);
+      if (filtros.tipo_operacao) query = query.eq('tipo_operacao', filtros.tipo_operacao);
+      if (filtros.status_transacao) query = query.eq('status_transacao', filtros.status_transacao);
 
       const from = pageNum * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
@@ -175,17 +207,14 @@ export function useFinanceiroV2() {
     }
   }, [clienteId]);
 
-  const criarLancamento = useCallback(async (form: LancamentoV2Form) => {
-    if (!clienteId || !user) return false;
-
+  const buildInsertRow = (form: LancamentoV2Form, userId: string) => {
     const anoMes = form.data_pagamento
       ? form.data_pagamento.substring(0, 7)
       : form.data_competencia.substring(0, 7);
-
     const sinal = (form.tipo_operacao || '').startsWith('1') ? 1 : -1;
 
-    const { error } = await supabase.from('financeiro_lancamentos_v2').insert({
-      cliente_id: clienteId,
+    return {
+      cliente_id: clienteId!,
       fazenda_id: form.fazenda_id,
       conta_bancaria_id: form.conta_bancaria_id || null,
       data_competencia: form.data_competencia,
@@ -193,17 +222,26 @@ export function useFinanceiroV2() {
       valor: form.valor,
       sinal,
       tipo_operacao: form.tipo_operacao,
-      status_transacao: form.status_transacao || 'pendente',
+      status_transacao: form.status_transacao || 'previsto',
       descricao: form.descricao || null,
       macro_custo: form.macro_custo || null,
       centro_custo: form.centro_custo || null,
       subcentro: form.subcentro || null,
       escopo_negocio: form.escopo_negocio || null,
       observacao: form.observacao || null,
+      nota_fiscal: form.nota_fiscal || null,
+      favorecido_id: form.favorecido_id || null,
       ano_mes: anoMes,
       origem_lancamento: 'manual',
-      created_by: user.id,
-    });
+      created_by: userId,
+    };
+  };
+
+  const criarLancamento = useCallback(async (form: LancamentoV2Form) => {
+    if (!clienteId || !user) return false;
+
+    const row = buildInsertRow(form, user.id);
+    const { error } = await supabase.from('financeiro_lancamentos_v2').insert(row);
 
     if (error) {
       toast.error('Erro ao criar lançamento');
@@ -220,7 +258,6 @@ export function useFinanceiroV2() {
     const anoMes = form.data_pagamento
       ? form.data_pagamento.substring(0, 7)
       : form.data_competencia.substring(0, 7);
-
     const sinal = (form.tipo_operacao || '').startsWith('1') ? 1 : -1;
 
     const { error } = await supabase.from('financeiro_lancamentos_v2').update({
@@ -231,13 +268,15 @@ export function useFinanceiroV2() {
       valor: form.valor,
       sinal,
       tipo_operacao: form.tipo_operacao,
-      status_transacao: form.status_transacao || 'pendente',
+      status_transacao: form.status_transacao || 'previsto',
       descricao: form.descricao || null,
       macro_custo: form.macro_custo || null,
       centro_custo: form.centro_custo || null,
       subcentro: form.subcentro || null,
       escopo_negocio: form.escopo_negocio || null,
       observacao: form.observacao || null,
+      nota_fiscal: form.nota_fiscal || null,
+      favorecido_id: form.favorecido_id || null,
       ano_mes: anoMes,
       updated_by: user.id,
     }).eq('id', id);
@@ -273,13 +312,15 @@ export function useFinanceiroV2() {
       valor: lanc.valor,
       sinal: lanc.sinal,
       tipo_operacao: lanc.tipo_operacao,
-      status_transacao: 'pendente',
+      status_transacao: 'previsto',
       descricao: lanc.descricao ? `(Cópia) ${lanc.descricao}` : '(Cópia)',
       macro_custo: lanc.macro_custo,
       centro_custo: lanc.centro_custo,
       subcentro: lanc.subcentro,
       escopo_negocio: lanc.escopo_negocio,
       observacao: lanc.observacao,
+      nota_fiscal: lanc.nota_fiscal,
+      favorecido_id: lanc.favorecido_id,
       ano_mes: lanc.ano_mes,
       origem_lancamento: 'manual',
       created_by: user.id,
@@ -296,33 +337,7 @@ export function useFinanceiroV2() {
   const criarLancamentosEmLote = useCallback(async (forms: LancamentoV2Form[]) => {
     if (!clienteId || !user || forms.length === 0) return false;
 
-    const rows = forms.map(form => {
-      const anoMes = form.data_pagamento
-        ? form.data_pagamento.substring(0, 7)
-        : form.data_competencia.substring(0, 7);
-      const sinal = (form.tipo_operacao || '').startsWith('1') ? 1 : -1;
-
-      return {
-        cliente_id: clienteId,
-        fazenda_id: form.fazenda_id,
-        conta_bancaria_id: form.conta_bancaria_id || null,
-        data_competencia: form.data_competencia,
-        data_pagamento: form.data_pagamento || null,
-        valor: form.valor,
-        sinal,
-        tipo_operacao: form.tipo_operacao,
-        status_transacao: form.status_transacao || 'pendente',
-        descricao: form.descricao || null,
-        macro_custo: form.macro_custo || null,
-        centro_custo: form.centro_custo || null,
-        subcentro: form.subcentro || null,
-        escopo_negocio: form.escopo_negocio || null,
-        observacao: form.observacao || null,
-        ano_mes: anoMes,
-        origem_lancamento: 'manual',
-        created_by: user.id,
-      };
-    });
+    const rows = forms.map(form => buildInsertRow(form, user.id));
 
     const { error } = await supabase.from('financeiro_lancamentos_v2').insert(rows);
 
@@ -340,6 +355,7 @@ export function useFinanceiroV2() {
   return {
     lancamentos,
     contasBancarias,
+    fornecedores,
     classificacoes,
     loading,
     total,
@@ -347,7 +363,9 @@ export function useFinanceiroV2() {
     totalPages,
     pageSize: PAGE_SIZE,
     loadContas,
+    loadFornecedores,
     loadClassificacoes,
+    criarFornecedor,
     loadLancamentos,
     criarLancamento,
     criarLancamentosEmLote,
