@@ -432,16 +432,20 @@ interface ChartCardProps {
   isCurrency?: boolean;
   valueSuffix?: string;
   lineOverlayKey?: string;
+  displayValueKey?: string;
+  compKeys?: string[];
 }
 
-function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, mesFiltro, averageKey, averageLabel, isCurrency, valueSuffix, lineOverlayKey }: ChartCardProps) {
+function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, mesFiltro, averageKey, averageLabel, isCurrency, valueSuffix, lineOverlayKey, displayValueKey, compKeys }: ChartCardProps) {
+  const effectiveCompKeys = compKeys || keys;
+
   const comparisons = useMemo(() => {
-    if (!data || data.length === 0 || keys.length < 2) return { mom: null, yoy: null };
+    if (!data || data.length === 0 || effectiveCompKeys.length < 2) return { mom: null, yoy: null };
     const mesIdx = mesFiltro - 1;
     const mesAntIdx = mesFiltro > 1 ? mesFiltro - 2 : null;
-    const valAtual = data[mesIdx]?.[keys[0]];
-    const valMesAnt = mesAntIdx !== null ? data[mesAntIdx]?.[keys[0]] : null;
-    const valAnoAnt = data[mesIdx]?.[keys[1]];
+    const valAtual = data[mesIdx]?.[effectiveCompKeys[0]];
+    const valMesAnt = mesAntIdx !== null ? data[mesAntIdx]?.[effectiveCompKeys[0]] : null;
+    const valAnoAnt = data[mesIdx]?.[effectiveCompKeys[1]];
     const calcPct = (cur: any, ref: any) => {
       if (cur === null || cur === undefined || ref === null || ref === undefined) return null;
       if (typeof cur !== 'number' || typeof ref !== 'number') return null;
@@ -450,7 +454,7 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
       return ((cur - ref) / Math.abs(ref)) * 100;
     };
     return { mom: calcPct(valAtual, valMesAnt), yoy: calcPct(valAtual, valAnoAnt) };
-  }, [data, keys, mesFiltro]);
+  }, [data, effectiveCompKeys, mesFiltro]);
 
   const currentValue = useMemo(() => {
     if (!data || data.length === 0) return null;
