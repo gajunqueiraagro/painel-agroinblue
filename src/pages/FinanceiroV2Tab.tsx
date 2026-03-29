@@ -4,10 +4,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Pencil, Trash2, Copy, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, Copy, ChevronLeft, ChevronRight, Zap, List } from 'lucide-react';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, type LancamentoV2, type FiltrosV2 } from '@/hooks/useFinanceiroV2';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
+import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
 import { format, parseISO } from 'date-fns';
 
 const MESES = [
@@ -69,6 +70,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [tipoOperacao, setTipoOperacao] = useState('');
   const [statusTransacao, setStatusTransacao] = useState('');
 
+  // Mode: 'list' (default) or 'rapido' (Excel grid)
+  const [mode, setMode] = useState<'list' | 'rapido'>('list');
+
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLanc, setEditingLanc] = useState<LancamentoV2 | null>(null);
@@ -78,8 +82,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     fazendaId ? hook.contasBancarias.filter(c => c.fazenda_id === fazendaId) : hook.contasBancarias
   , [fazendaId, hook.contasBancarias]);
 
-  // Load contas on mount
-  useEffect(() => { hook.loadContas(); }, [hook.loadContas]);
+  // Load contas + classificacoes on mount
+  useEffect(() => { hook.loadContas(); hook.loadClassificacoes(); }, [hook.loadContas, hook.loadClassificacoes]);
 
   // Auto-set fazenda from context
   useEffect(() => {
@@ -220,9 +224,22 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 {hook.total} lançamentos
               </span>
             </div>
-            <Button size="sm" onClick={openNew} className="h-8 text-xs gap-1">
-              <Plus className="h-3.5 w-3.5" /> Novo
-            </Button>
+            <div className="flex gap-1.5">
+              <Button
+                size="sm"
+                variant={mode === 'rapido' ? 'default' : 'outline'}
+                onClick={() => setMode(mode === 'rapido' ? 'list' : 'rapido')}
+                className="h-8 text-xs gap-1"
+              >
+                {mode === 'rapido' ? <List className="h-3.5 w-3.5" /> : <Zap className="h-3.5 w-3.5" />}
+                {mode === 'rapido' ? 'Listagem' : 'Modo Rápido'}
+              </Button>
+              {mode === 'list' && (
+                <Button size="sm" onClick={openNew} className="h-8 text-xs gap-1">
+                  <Plus className="h-3.5 w-3.5" /> Novo
+                </Button>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -241,8 +258,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         </div>
       )}
 
-      {/* Table */}
-      {!hook.loading && fazendaId && ano && (
+      {/* Modo Rápido */}
+      {mode === 'rapido' && fazendaId && (
+        <ModoRapidoGrid
+          fazendaId={fazendaId}
+          contas={hook.contasBancarias}
+          classificacoes={hook.classificacoes}
+          onSaveBatch={hook.criarLancamentosEmLote}
+          onDone={() => hook.loadLancamentos(filtros, 0)}
+        />
+      )}
+
+      {/* Table (list mode) */}
+      {mode === 'list' && !hook.loading && fazendaId && ano && (
         <>
           <div className="rounded-lg border overflow-x-auto">
             <Table>

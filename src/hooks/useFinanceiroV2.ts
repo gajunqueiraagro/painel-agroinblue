@@ -64,6 +64,13 @@ export interface FiltrosV2 {
   status_transacao?: string;
 }
 
+export interface ClassificacaoItem {
+  subcentro: string;
+  centro_custo: string;
+  macro_custo: string;
+  tipo_operacao: string;
+}
+
 const PAGE_SIZE = 50;
 
 export function useFinanceiroV2() {
@@ -73,6 +80,7 @@ export function useFinanceiroV2() {
 
   const [lancamentos, setLancamentos] = useState<LancamentoV2[]>([]);
   const [contasBancarias, setContasBancarias] = useState<ContaBancariaV2[]>([]);
+  const [classificacoes, setClassificacoes] = useState<ClassificacaoItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -86,6 +94,31 @@ export function useFinanceiroV2() {
       .eq('ativa', true)
       .order('ordem_exibicao');
     setContasBancarias((data as ContaBancariaV2[]) || []);
+  }, [clienteId]);
+
+  const loadClassificacoes = useCallback(async () => {
+    if (!clienteId) return;
+    const { data } = await supabase
+      .from('financeiro_lancamentos_v2')
+      .select('subcentro, centro_custo, macro_custo, tipo_operacao')
+      .eq('cliente_id', clienteId)
+      .not('subcentro', 'is', null);
+
+    // Deduplicate
+    const map = new Map<string, ClassificacaoItem>();
+    for (const row of (data || []) as any[]) {
+      if (!row.subcentro) continue;
+      const key = row.subcentro;
+      if (!map.has(key)) {
+        map.set(key, {
+          subcentro: row.subcentro,
+          centro_custo: row.centro_custo || '',
+          macro_custo: row.macro_custo || '',
+          tipo_operacao: row.tipo_operacao || '',
+        });
+      }
+    }
+    setClassificacoes(Array.from(map.values()).sort((a, b) => a.subcentro.localeCompare(b.subcentro)));
   }, [clienteId]);
 
   const loadLancamentos = useCallback(async (filtros: FiltrosV2, pageNum: number = 0) => {
@@ -262,19 +295,64 @@ export function useFinanceiroV2() {
     return true;
   }, [clienteId, user]);
 
+  const criarLancamentosEmLote = useCallback(async (forms: LancamentoV2Form[]) => {
+    if (!clienteId || !user || forms.length === 0) return false;
+
+    const rows = forms.map(form => {
+      const anoMes = form.data_pagamento
+        ? form.data_pagamento.substring(0, 7)
+        : form.data_competencia.substring(0, 7);
+      const sinal = (form.tipo_operacao || '').startsWith('1') ? 1 : -1;
+
+      return {
+        cliente_id: clienteId,
+        fazenda_id: form.fazenda_id,
+        conta_bancaria_id: form.conta_bancaria_id || null,
+        data_competencia: form.data_competencia,
+        data_pagamento: form.data_pagamento || null,
+        valor: form.valor,
+        sinal,
+        tipo_operacao: form.tipo_operacao,
+        status_transacao: form.status_transacao || 'pendente',
+        descricao: form.descricao || null,
+        macro_custo: form.macro_custo || null,
+        centro_custo: form.centro_custo || null,
+        subcentro: form.subcentro || null,
+        escopo_negocio: form.escopo_negocio || null,
+        observacao: form.observacao || null,
+        ano_mes: anoMes,
+        origem_lancamento: 'manual',
+        created_by: user.id,
+      };
+    });
+
+    const { error } = await supabase.from('financeiro_lancamentos_v2').insert(rows);
+
+    if (error) {
+      toast.error(`Erro ao salvar lote: ${error.message}`);
+      console.error(error);
+      return false;
+    }
+    toast.success(`${forms.length} lançamentos salvos`);
+    return true;
+  }, [clienteId, user]);
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return {
     lancamentos,
     contasBancarias,
+    classificacoes,
     loading,
     total,
     page,
     totalPages,
     pageSize: PAGE_SIZE,
     loadContas,
+    loadClassificacoes,
     loadLancamentos,
     criarLancamento,
+    criarLancamentosEmLote,
     editarLancamento,
     excluirLancamento,
     duplicarLancamento,
