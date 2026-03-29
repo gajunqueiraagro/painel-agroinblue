@@ -484,21 +484,21 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           <div className="rounded-lg border overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="h-5">
-                  <TableHead className="text-[8px] py-0 px-1 font-semibold">Dt Comp</TableHead>
-                  <TableHead className="text-[8px] py-0 px-1 font-semibold">Dt Pgto</TableHead>
-                  <TableHead className="text-[8px] py-0 px-1 font-semibold">Produto</TableHead>
-                  <TableHead className="text-[8px] py-0 px-1 font-semibold">Fornecedor</TableHead>
-                  <TableHead className="text-[8px] py-0 px-1 font-semibold text-right">Valor</TableHead>
-                  <TableHead className="text-[8px] py-0 px-1 font-semibold">NF</TableHead>
-                  <TableHead className="text-[8px] py-0 px-1 font-semibold">St</TableHead>
-                  <TableHead className="text-[8px] py-0 px-1 font-semibold w-[36px]"></TableHead>
+                <TableRow className="h-4">
+                  <TableHead className="text-[7px] py-0 px-0.5 font-semibold">Comp.</TableHead>
+                  <TableHead className="text-[7px] py-0 px-0.5 font-semibold">Pgto</TableHead>
+                  <TableHead className="text-[7px] py-0 px-0.5 font-semibold">Produto</TableHead>
+                  <TableHead className="text-[7px] py-0 px-0.5 font-semibold">Fornecedor</TableHead>
+                  <TableHead className="text-[7px] py-0 px-0.5 font-semibold text-right">Valor</TableHead>
+                  <TableHead className="text-[7px] py-0 px-0.5 font-semibold">NF</TableHead>
+                  <TableHead className="text-[7px] py-0 px-0.5 font-semibold">St</TableHead>
+                  <TableHead className="text-[7px] py-0 px-0.5 font-semibold w-[32px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredLancamentos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-4 text-[9px]">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-4 text-[8px]">
                       Nenhum lançamento encontrado.
                     </TableCell>
                   </TableRow>
@@ -508,25 +508,25 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                     const statusShort = l.status_transacao ? l.status_transacao.substring(0, 4) : '-';
 
                     return (
-                      <TableRow key={l.id} className="text-[8px] h-[16px] leading-none">
-                        <TableCell className="font-mono py-0 px-1">{fmtDate(l.data_competencia)}</TableCell>
-                        <TableCell className="font-mono py-0 px-1">{fmtDate(l.data_pagamento)}</TableCell>
-                        <TableCell className="max-w-[140px] truncate py-0 px-1" title={l.descricao || ''}>{l.descricao || '-'}</TableCell>
-                        <TableCell className="max-w-[100px] truncate py-0 px-1" title={fornNome || ''}>
+                      <TableRow key={l.id} className="text-[7px] h-[14px] leading-none">
+                        <TableCell className="font-mono py-0 px-0.5">{fmtDate(l.data_competencia)}</TableCell>
+                        <TableCell className="font-mono py-0 px-0.5">{fmtDate(l.data_pagamento)}</TableCell>
+                        <TableCell className="max-w-[140px] truncate py-0 px-0.5" title={l.descricao || ''}>{l.descricao || '-'}</TableCell>
+                        <TableCell className="max-w-[100px] truncate py-0 px-0.5" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning italic">n/c</span>)}
                         </TableCell>
-                        <TableCell className={`text-right font-bold py-0 px-1 ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
+                        <TableCell className={`text-right font-semibold italic py-0 px-0.5 ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
                           {fmtValor(l.valor, l.sinal)}
                         </TableCell>
-                        <TableCell className="font-mono py-0 px-1 text-muted-foreground">{l.nota_fiscal || '-'}</TableCell>
-                        <TableCell className="py-0 px-1 text-muted-foreground">{statusShort}</TableCell>
-                        <TableCell className="py-0 px-0.5">
+                        <TableCell className="font-mono py-0 px-0.5 text-muted-foreground">{l.nota_fiscal || '-'}</TableCell>
+                        <TableCell className="py-0 px-0.5 text-muted-foreground">{statusShort}</TableCell>
+                        <TableCell className="py-0 px-0">
                           <div className="flex gap-0">
-                            <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => openEdit(l)}>
-                              <Pencil className="h-2.5 w-2.5" />
+                            <Button variant="ghost" size="icon" className="h-3.5 w-3.5" onClick={() => openEdit(l)}>
+                              <Pencil className="h-2 w-2" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => handleDuplicate(l)}>
-                              <Copy className="h-2.5 w-2.5" />
+                            <Button variant="ghost" size="icon" className="h-3.5 w-3.5" onClick={() => handleDuplicate(l)}>
+                              <Copy className="h-2 w-2" />
                             </Button>
                           </div>
                         </TableCell>
