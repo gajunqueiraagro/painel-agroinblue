@@ -243,7 +243,7 @@ export function useFluxoCaixa(
       let deducaoReceitas = 0;
       let desembolso = 0, desembolsoPec = 0, desembolsoAgri = 0;
       let custeioPec = 0, custoioAgri = 0, investPec = 0, investAgri = 0;
-      let reposicao = 0, despesasReposicao = 0;
+      let reposicao = 0;
       let amortizacoes = 0, amortizacoesPec = 0, amortizacoesAgri = 0;
       let dividendos = 0;
 
