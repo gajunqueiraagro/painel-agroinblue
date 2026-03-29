@@ -177,8 +177,11 @@ export function useFinanceiroV2() {
       let query = supabase
         .from('financeiro_lancamentos_v2')
         .select('*', { count: 'exact' })
-        .eq('cliente_id', clienteId)
-        .eq('fazenda_id', filtros.fazenda_id);
+        .eq('cliente_id', clienteId);
+
+      if (filtros.fazenda_id) {
+        query = query.eq('fazenda_id', filtros.fazenda_id);
+      }
 
       // Multi-month support
       if (filtros.meses && filtros.meses.length > 0 && !filtros.meses.includes('todos')) {
