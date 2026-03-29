@@ -484,15 +484,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           <div className="rounded-lg border overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="h-4">
-                  <TableHead className="text-[9px] py-1 px-1 font-semibold">Comp.</TableHead>
-                  <TableHead className="text-[9px] py-1 px-1 font-semibold">Pgto</TableHead>
-                  <TableHead className="text-[9px] py-1 px-1 font-semibold">Produto</TableHead>
-                  <TableHead className="text-[9px] py-1 px-1 font-semibold">Fornecedor</TableHead>
-                  <TableHead className="text-[9px] py-1 px-1 font-semibold text-right">Valor</TableHead>
-                  <TableHead className="text-[9px] py-1 px-1 font-semibold">NF</TableHead>
-                  <TableHead className="text-[9px] py-1 px-1 font-semibold">St</TableHead>
-                  <TableHead className="text-[9px] py-1 px-1 font-semibold w-[32px]"></TableHead>
+                <TableRow className="!h-auto">
+                  <TableHead className="py-[2px] px-1">Comp.</TableHead>
+                  <TableHead className="py-[2px] px-1">Pgto</TableHead>
+                  <TableHead className="py-[2px] px-1">Produto</TableHead>
+                  <TableHead className="py-[2px] px-1">Fornecedor</TableHead>
+                  <TableHead className="py-[2px] px-1 text-right">Valor</TableHead>
+                  <TableHead className="py-[2px] px-1">NF</TableHead>
+                  <TableHead className="py-[2px] px-1">St</TableHead>
+                  <TableHead className="py-[2px] px-1 w-[28px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
