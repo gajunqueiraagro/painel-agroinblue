@@ -92,6 +92,9 @@ export function FinV2ContasTab() {
       nome_conta: nome.trim(),
       banco: banco.trim() || null,
       numero_conta: numero.trim() || null,
+      tipo_conta: tipoConta,
+      codigo_conta: codigoConta.trim() || null,
+      nome_exibicao: nomeExibicao.trim() || null,
       ativa,
     };
 
