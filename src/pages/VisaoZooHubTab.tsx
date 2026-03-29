@@ -71,6 +71,65 @@ const datePagtoAnoMes = (l: FinanceiroLancamento): string | null => {
 };
 
 // ---------------------------------------------------------------------------
+// Financial helpers for Indicadores blocks
+// ---------------------------------------------------------------------------
+
+/** Receita Pecuária conciliada no período (acumulado jan→mesFiltro) */
+function calcReceitaPecuaria(lancFin: FinanceiroLancamento[], ano: number, ateMes: number): number {
+  let total = 0;
+  for (const l of lancFin) {
+    if (!isConciliado(l)) continue;
+    const a = datePagtoAno(l);
+    const m = datePagtoMes(l);
+    if (a !== ano || m === null || m > ateMes) continue;
+    if (!isReceitaMacro(l)) continue;
+    if (!isEntradaClass(l)) continue;
+    const escopo = getEscopo(l);
+    if (escopo !== 'pec') continue;
+    total += Math.abs(l.valor);
+  }
+  return total;
+}
+
+/** Desembolso Produtivo Pecuário conciliado no período */
+function calcDesembolsoProdPec(lancFin: FinanceiroLancamento[], rateioADM: RateioADM[], ano: number, ateMes: number, isGlobal: boolean): number {
+  let total = 0;
+  for (const l of lancFin) {
+    if (!isConciliado(l)) continue;
+    const a = datePagtoAno(l);
+    const m = datePagtoMes(l);
+    if (a !== ano || m === null || m > ateMes) continue;
+    if (!isSaidaClass(l)) continue;
+    if (!isDesembolsoProdutivo(l)) continue;
+    const escopo = getEscopo(l);
+    if (escopo !== 'pec' && escopo !== 'outras') continue;
+    total += Math.abs(l.valor);
+  }
+  // Add rateio ADM if per-fazenda
+  if (!isGlobal) {
+    for (const r of rateioADM) {
+      const [rAnoStr, rMesStr] = r.anoMes.split('-');
+      if (Number(rAnoStr) === ano && Number(rMesStr) <= ateMes) {
+        total += r.valorRateado;
+      }
+    }
+  }
+  return total;
+}
+
+/** Saldo bancário disponível (último mês com dados) */
+async function fetchSaldoBancario(fazendaIds: string[], anoMes: string): Promise<number | null> {
+  if (fazendaIds.length === 0) return null;
+  const { data } = await supabase
+    .from('financeiro_saldos_bancarios')
+    .select('saldo_final')
+    .in('fazenda_id', fazendaIds)
+    .eq('ano_mes', anoMes);
+  if (!data || data.length === 0) return null;
+  return data.reduce((s, r) => s + (Number(r.saldo_final) || 0), 0);
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtroGlobal }: Props) {
