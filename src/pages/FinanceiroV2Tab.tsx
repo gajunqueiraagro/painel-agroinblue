@@ -203,7 +203,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <Select value={statusTransacao} onValueChange={setStatusTransacao}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="__all__">Todos</SelectItem>
                   <SelectItem value="pendente">Pendente</SelectItem>
                   <SelectItem value="confirmado">Confirmado</SelectItem>
                   <SelectItem value="conciliado">Conciliado</SelectItem>
