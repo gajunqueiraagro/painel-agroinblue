@@ -166,7 +166,7 @@ export function useFinanceiroV2() {
 
   const loadLancamentos = useCallback(async (filtros: FiltrosV2, pageNum: number = 0) => {
     if (!clienteId) return;
-    if (!filtros.fazenda_id || !filtros.ano) {
+    if (!filtros.ano) {
       setLancamentos([]);
       setTotal(0);
       return;
@@ -177,8 +177,11 @@ export function useFinanceiroV2() {
       let query = supabase
         .from('financeiro_lancamentos_v2')
         .select('*', { count: 'exact' })
-        .eq('cliente_id', clienteId)
-        .eq('fazenda_id', filtros.fazenda_id);
+        .eq('cliente_id', clienteId);
+
+      if (filtros.fazenda_id) {
+        query = query.eq('fazenda_id', filtros.fazenda_id);
+      }
 
       // Multi-month support
       if (filtros.meses && filtros.meses.length > 0 && !filtros.meses.includes('todos')) {
