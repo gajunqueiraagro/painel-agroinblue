@@ -95,6 +95,11 @@ const TITLES: Record<TabId, string> = {
   preco_mercado: 'Preço de Mercado',
   graficos_analise: 'Gráficos',
   financeiro_v2: 'Financeiro v2',
+  financeiro_v2_hub: 'Financeiro v2',
+  fin_v2_contas: 'Contas Bancárias',
+  fin_v2_fornecedores: 'Fornecedores',
+  fin_v2_plano: 'Plano de Contas',
+  fin_v2_saldos: 'Saldos Mensais',
 };
 
 const Index = () => {
