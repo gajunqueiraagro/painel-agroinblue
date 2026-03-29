@@ -514,11 +514,21 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
                     <TableRow key={row.id}>
                       <TableCell className="text-xs font-semibold sticky left-0 bg-background z-10">{row.label}</TableCell>
                       {monthData.map((md, i) => {
+                        const mesNum = i + 1;
+                        const now = new Date();
+                        const currentYear = now.getFullYear();
+                        const currentMonth = now.getMonth() + 1;
+                        const isFuture = anoNum > currentYear || (anoNum === currentYear && mesNum > currentMonth);
+
+                        if (isFuture) {
+                          return <TableCell key={i} className="text-center px-1 py-1.5" />;
+                        }
+
                         const st = md[row.id];
                         return (
                           <TableCell key={i} className="text-center px-1 py-1.5">
                             <button
-                              onClick={() => handleCellClick(row.id, i + 1)}
+                              onClick={() => handleCellClick(row.id, mesNum)}
                               className="w-full flex justify-center hover:scale-110 transition-transform"
                               title={`${row.label} — ${MESES_LABELS[i]}/${anoFiltro}`}
                             >
