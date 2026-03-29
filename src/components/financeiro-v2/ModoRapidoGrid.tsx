@@ -380,7 +380,6 @@ export function ModoRapidoGrid({ fazendaId, contas, classificacoes, onSaveBatch,
                     >
                       <Trash2 className="h-3 w-3" />
                     </button>
-                    </button>
                   </td>
                 </tr>
               );
