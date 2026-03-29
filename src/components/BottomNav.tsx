@@ -29,11 +29,12 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     // Análises sub-screens
     const analiseTabs: TabId[] = ['visao_zoo_hub', 'zootecnico', 'zootecnico_hub', 'indicadores', 'visao_anual_zoo', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute', 'evolucao', 'analise_operacional', 'pastos', 'lancar_fin_hub', 'visao_fin_hub', 'analise_economica', 'fechamento_executivo', 'analise_consultor', 'preco_mercado', 'graficos_analise'];
     const finV2Tabs: TabId[] = ['financeiro_v2', 'financeiro_v2_hub', 'fin_v2_contas', 'fin_v2_fornecedores', 'fin_v2_plano', 'fin_v2_saldos'];
-    const finTabs: TabId[] = ['fin_caixa', 'financeiro_v2'];
+    const finTabs: TabId[] = ['fin_caixa'];
     const cadTabs: TabId[] = ['cadastros', 'acessos'];
     if (movTabs.includes(tab)) return 'movimentacao';
     if (lancarTabs.includes(tab)) return 'lancar_zoo_hub';
     if (analiseTabs.includes(tab)) return 'visao_zoo_hub';
+    if (finV2Tabs.includes(tab)) return 'fin_caixa';
     if (finTabs.includes(tab)) return 'fin_caixa';
     if (cadTabs.includes(tab)) return 'cadastros';
     return 'resumo';
