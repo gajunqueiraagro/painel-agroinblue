@@ -1,14 +1,16 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Plus, Search, Check, ChevronsUpDown } from 'lucide-react';
 import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { NovoFornecedorDialog } from './NovoFornecedorDialog';
+import { cn } from '@/lib/utils';
 
 interface Props {
   open: boolean;
@@ -51,6 +53,18 @@ function formatNotaFiscal(raw: string): string {
   return `${padded.slice(0, 3)}.${padded.slice(3, 6)}.${padded.slice(6, 9)}`;
 }
 
+/** Format number to BRL string with 2 decimals */
+function toBRL(v: number): string {
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** Parse BRL string back to number */
+function parseBRL(s: string): number {
+  const cleaned = s.replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? 0 : n;
+}
+
 export function LancamentoV2Dialog({
   open, onClose, onSave, lancamento, fazendas, contas, classificacoes,
   fornecedores, defaultFazendaId, onCriarFornecedor,
@@ -69,11 +83,16 @@ export function LancamentoV2Dialog({
   const [centroCusto, setCentroCusto] = useState('');
   const [tipoOperacao, setTipoOperacao] = useState('2-Saídas');
   const [statusTransacao, setStatusTransacao] = useState('previsto');
-  const [valor, setValor] = useState('');
+  const [valorDisplay, setValorDisplay] = useState('0,00');
   const [contaOrigemId, setContaOrigemId] = useState('');
   const [contaDestinoId, setContaDestinoId] = useState('');
   const [notaFiscal, setNotaFiscal] = useState('');
   const [observacao, setObservacao] = useState('');
+
+  // Subcentro search
+  const [subcentroOpen, setSubcentroOpen] = useState(false);
+  const [subcentroSearch, setSubcentroSearch] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const isTransferencia = tipoOperacao === '3-Transferências';
   const isEntrada = tipoOperacao === '1-Entradas';
@@ -85,6 +104,13 @@ export function LancamentoV2Dialog({
     }
     return m;
   }, [classificacoes]);
+
+  const filteredSubcentros = useMemo(() => {
+    const unique = Array.from(classMap.values());
+    if (!subcentroSearch.trim()) return unique;
+    const term = subcentroSearch.toLowerCase();
+    return unique.filter(c => c.subcentro.toLowerCase().includes(term));
+  }, [classMap, subcentroSearch]);
 
   useEffect(() => {
     if (lancamento) {
@@ -98,7 +124,7 @@ export function LancamentoV2Dialog({
       setCentroCusto(lancamento.centro_custo || '');
       setTipoOperacao(lancamento.tipo_operacao);
       setStatusTransacao(lancamento.status_transacao || 'previsto');
-      setValor(String(lancamento.valor));
+      setValorDisplay(toBRL(lancamento.valor));
       setContaOrigemId(lancamento.conta_bancaria_id || '');
       setContaDestinoId('');
       setNotaFiscal(lancamento.nota_fiscal || '');
@@ -114,20 +140,19 @@ export function LancamentoV2Dialog({
       setCentroCusto('');
       setTipoOperacao('2-Saídas');
       setStatusTransacao('previsto');
-      setValor('');
+      setValorDisplay('0,00');
       setContaOrigemId('');
       setContaDestinoId('');
       setNotaFiscal('');
       setObservacao('');
     }
+    setSubcentroSearch('');
   }, [lancamento, defaultFazendaId]);
 
-  const handleSubcentroChange = (value: string) => {
-    if (value === '__none_sub__') {
-      setSubcentro('');
-      return;
-    }
+  const handleSubcentroSelect = (value: string) => {
     setSubcentro(value);
+    setSubcentroOpen(false);
+    setSubcentroSearch('');
     const cls = classMap.get(value);
     if (cls) {
       setMacroCusto(cls.macro_custo);
@@ -143,6 +168,11 @@ export function LancamentoV2Dialog({
     }
   };
 
+  const handleValorBlur = () => {
+    const num = parseBRL(valorDisplay);
+    setValorDisplay(toBRL(num));
+  };
+
   const handleNotaFiscalChange = (raw: string) => {
     const digits = raw.replace(/\D/g, '');
     if (digits.length <= 9) setNotaFiscal(digits);
@@ -150,19 +180,18 @@ export function LancamentoV2Dialog({
 
   const notaFiscalDisplay = notaFiscal ? formatNotaFiscal(notaFiscal) : '';
 
-  // Contas: show all contas for the fazenda OR contas without fazenda_id
   const contasFazenda = useMemo(() =>
     contas.filter(c => c.fazenda_id === fazendaId || !c.fazenda_id),
   [contas, fazendaId]);
 
-  const fornecedoresList = useMemo(() => {
-    // Show fornecedores for the current fazenda + global ones
-    return fornecedores.filter(f => f.fazenda_id === fazendaId || !f.fazenda_id);
-  }, [fornecedores, fazendaId]);
+  const fornecedoresList = useMemo(() =>
+    fornecedores.filter(f => f.fazenda_id === fazendaId || !f.fazenda_id),
+  [fornecedores, fazendaId]);
 
   const fazOperacionais = fazendas.filter(f => f.id !== '__global__');
 
   // Validation
+  const valorNum = parseBRL(valorDisplay);
   const contaOrigemValid = isTransferencia || !isEntrada ? !!contaOrigemId && contaOrigemId !== '__none__' : true;
   const contaDestinoValid = isTransferencia || isEntrada ? !!contaDestinoId && contaDestinoId !== '__none__' : true;
   const contaSimpleValid = !isTransferencia
@@ -170,7 +199,7 @@ export function LancamentoV2Dialog({
     : (contaOrigemValid && contaDestinoValid);
 
   const canSave = !!fazendaId && !!dataCompetencia && !!descricao && !!favorecidoId && favorecidoId !== '__none_forn__'
-    && !!subcentro && !!tipoOperacao && !!statusTransacao && !!valor && parseFloat(valor) > 0
+    && !!subcentro && !!tipoOperacao && !!statusTransacao && valorNum > 0
     && contaSimpleValid;
 
   const handleSubmit = async () => {
@@ -191,7 +220,7 @@ export function LancamentoV2Dialog({
       conta_bancaria_id: contaBancariaId,
       data_competencia: dataCompetencia,
       data_pagamento: dataPagamento || null,
-      valor: Math.abs(parseFloat(valor)),
+      valor: Math.abs(valorNum),
       tipo_operacao: tipoOperacao,
       status_transacao: statusTransacao,
       descricao,
@@ -212,10 +241,6 @@ export function LancamentoV2Dialog({
     setFavorecidoId(f.id);
     setFornecedorDialogOpen(false);
   };
-
-  // Debug info
-  const debugSubcentros = classificacoes.slice(0, 5).map(c => c.subcentro);
-  const debugContas = contasFazenda.map(c => c.nome_conta);
 
   return (
     <>
@@ -259,8 +284,8 @@ export function LancamentoV2Dialog({
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Identificação</p>
               <div className="space-y-2">
                 <div>
-                  <Label className="text-xs">Descrição *</Label>
-                  <Input value={descricao} onChange={e => setDescricao(e.target.value)} className="h-9" placeholder="Descrição do lançamento" />
+                  <Label className="text-xs">Produto *</Label>
+                  <Input value={descricao} onChange={e => setDescricao(e.target.value)} className="h-9" placeholder="Descrição do produto" />
                 </div>
                 <div>
                   <Label className="text-xs">Fornecedor *</Label>
@@ -282,59 +307,21 @@ export function LancamentoV2Dialog({
               </div>
             </div>
 
-            {/* BLOCO 3 — Classificação */}
+            {/* BLOCO 3 — Financeiro básico */}
             <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Classificação</p>
-              <div className="space-y-2">
-                <div>
-                  <Label className="text-xs">Subcentro *</Label>
-                  <Select value={subcentro || '__none_sub__'} onValueChange={handleSubcentroChange}>
-                    <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o subcentro" /></SelectTrigger>
-                    <SelectContent className="max-h-60">
-                      <SelectItem value="__none_sub__">Selecione...</SelectItem>
-                      {classificacoes.map((c, i) => (
-                        <SelectItem key={`${c.subcentro}-${i}`} value={c.subcentro}>{c.subcentro}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {/* DEBUG — remover após validação */}
-                  <div className="mt-1 p-1.5 bg-yellow-50 border border-yellow-200 rounded text-[10px] text-yellow-800">
-                    <strong>🔍 DEBUG Subcentro:</strong> {classificacoes.length} carregado(s)
-                    {debugSubcentros.length > 0 && (
-                      <span> · Primeiros: {debugSubcentros.join(' | ')}</span>
-                    )}
-                    {classificacoes.length === 0 && (
-                      <span className="text-red-600"> · NENHUM SUBCENTRO ENCONTRADO — verificar financeiro_plano_contas</span>
-                    )}
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Macro Custo (auto)</Label>
-                    <Input value={macroCusto} readOnly disabled className="h-9 bg-muted/50" />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Centro Custo (auto)</Label>
-                    <Input value={centroCusto} readOnly disabled className="h-9 bg-muted/50" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* BLOCO 4 — Operação */}
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Operação</p>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Financeiro</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs">Tipo Operação *</Label>
-                  <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigemId(''); setContaDestinoId(''); }}>
-                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {TIPOS_OPERACAO.map(t => (
-                        <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label className="text-xs">Valor (R$) *</Label>
+                  <Input
+                    value={valorDisplay}
+                    onChange={e => setValorDisplay(e.target.value)}
+                    onBlur={handleValorBlur}
+                    onFocus={e => e.target.select()}
+                    className="h-9"
+                    placeholder="0,00"
+                    inputMode="decimal"
+                  />
                 </div>
                 <div>
                   <Label className="text-xs">Status *</Label>
@@ -350,13 +337,20 @@ export function LancamentoV2Dialog({
               </div>
             </div>
 
-            {/* BLOCO 5 — Valor e Conta */}
+            {/* BLOCO 4 — Conta bancária */}
             <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Valor e Conta</p>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Conta Bancária</p>
               <div className="space-y-2">
                 <div>
-                  <Label className="text-xs">Valor (R$) *</Label>
-                  <Input type="number" min="0" step="0.01" value={valor} onChange={e => setValor(e.target.value)} className="h-9" placeholder="0,00" />
+                  <Label className="text-xs">Tipo Operação *</Label>
+                  <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigemId(''); setContaDestinoId(''); }}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {TIPOS_OPERACAO.map(t => (
+                        <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {(!isEntrada || isTransferencia) && (
@@ -367,7 +361,7 @@ export function LancamentoV2Dialog({
                       <SelectContent className="max-h-60">
                         <SelectItem value="__none__">Selecione...</SelectItem>
                         {contasFazenda.map(c => (
-                          <SelectItem key={c.id} value={c.id}>{c.nome_conta}</SelectItem>
+                          <SelectItem key={c.id} value={c.id}>{c.nome_conta}{c.banco ? ` (${c.banco})` : ''}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -382,22 +376,96 @@ export function LancamentoV2Dialog({
                       <SelectContent className="max-h-60">
                         <SelectItem value="__none__">Selecione...</SelectItem>
                         {contasFazenda.map(c => (
-                          <SelectItem key={c.id} value={c.id}>{c.nome_conta}</SelectItem>
+                          <SelectItem key={c.id} value={c.id}>{c.nome_conta}{c.banco ? ` (${c.banco})` : ''}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                 )}
 
-                {/* DEBUG — remover após validação */}
+                {/* DEBUG contas */}
                 <div className="p-1.5 bg-yellow-50 border border-yellow-200 rounded text-[10px] text-yellow-800">
-                  <strong>🔍 DEBUG Contas:</strong> {contasFazenda.length} carregada(s) (total global: {contas.length})
+                  <strong>🔍 DEBUG Contas:</strong> {contasFazenda.length} carregada(s) (total: {contas.length})
                   {contasFazenda.length > 0 && (
-                    <span> · {debugContas.join(' | ')}</span>
+                    <span> · {contasFazenda.map(c => c.nome_conta).join(' | ')}</span>
                   )}
                   {contasFazenda.length === 0 && (
-                    <span className="text-red-600"> · NENHUMA CONTA — verificar financeiro_contas_bancarias para fazenda {fazendaId || '(nenhuma)'}</span>
+                    <span className="text-red-600"> · NENHUMA CONTA p/ fazenda {fazendaId || '(nenhuma)'}</span>
                   )}
+                </div>
+              </div>
+            </div>
+
+            {/* BLOCO 5 — Classificação */}
+            <div>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Classificação</p>
+              <div className="space-y-2">
+                <div>
+                  <Label className="text-xs">Subcentro *</Label>
+                  <Popover open={subcentroOpen} onOpenChange={setSubcentroOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={subcentroOpen}
+                        className="w-full h-9 justify-between font-normal text-sm"
+                      >
+                        {subcentro || 'Selecione o subcentro...'}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                      <div className="flex items-center border-b px-3 py-2">
+                        <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                        <input
+                          ref={searchInputRef}
+                          className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                          placeholder="Buscar subcentro..."
+                          value={subcentroSearch}
+                          onChange={e => setSubcentroSearch(e.target.value)}
+                          autoFocus
+                        />
+                      </div>
+                      <div className="max-h-48 overflow-y-auto p-1">
+                        {filteredSubcentros.length === 0 && (
+                          <p className="text-sm text-muted-foreground p-2 text-center">Nenhum resultado</p>
+                        )}
+                        {filteredSubcentros.map((c, i) => (
+                          <button
+                            key={`${c.subcentro}-${i}`}
+                            className={cn(
+                              "relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                              subcentro === c.subcentro && "bg-accent"
+                            )}
+                            onClick={() => handleSubcentroSelect(c.subcentro)}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", subcentro === c.subcentro ? "opacity-100" : "opacity-0")} />
+                            {c.subcentro}
+                          </button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  {/* DEBUG subcentro */}
+                  <div className="mt-1 p-1.5 bg-yellow-50 border border-yellow-200 rounded text-[10px] text-yellow-800">
+                    <strong>🔍 DEBUG Subcentro:</strong> {classMap.size} único(s)
+                    {classMap.size > 0 && (
+                      <span> · Primeiros: {Array.from(classMap.keys()).slice(0, 5).join(' | ')}</span>
+                    )}
+                    {classMap.size === 0 && (
+                      <span className="text-red-600"> · NENHUM — verificar financeiro_plano_contas</span>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Macro Custo (auto)</Label>
+                    <Input value={macroCusto} readOnly disabled className="h-9 bg-muted/50" />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Centro Custo (auto)</Label>
+                    <Input value={centroCusto} readOnly disabled className="h-9 bg-muted/50" />
+                  </div>
                 </div>
               </div>
             </div>
