@@ -1504,6 +1504,7 @@ export type Database = {
           id: string
           lote_importacao_id: string | null
           macro_custo: string | null
+          nota_fiscal: string | null
           observacao: string | null
           origem_lancamento: string
           plano_conta_id: string | null
@@ -1535,6 +1536,7 @@ export type Database = {
           id?: string
           lote_importacao_id?: string | null
           macro_custo?: string | null
+          nota_fiscal?: string | null
           observacao?: string | null
           origem_lancamento?: string
           plano_conta_id?: string | null
@@ -1566,6 +1568,7 @@ export type Database = {
           id?: string
           lote_importacao_id?: string | null
           macro_custo?: string | null
+          nota_fiscal?: string | null
           observacao?: string | null
           origem_lancamento?: string
           plano_conta_id?: string | null
