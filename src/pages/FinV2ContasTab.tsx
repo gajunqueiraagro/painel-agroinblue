@@ -75,6 +75,9 @@ export function FinV2ContasTab() {
     setNumero(c.numero_conta || '');
     setFazendaId(c.fazenda_id);
     setAtiva(c.ativa);
+    setTipoConta(c.tipo_conta || 'cc');
+    setCodigoConta(c.codigo_conta || '');
+    setNomeExibicao(c.nome_exibicao || '');
     setDialogOpen(true);
   };
 
