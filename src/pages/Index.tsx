@@ -164,6 +164,7 @@ const Index = () => {
       setLancamentosFromConciliacao(false);
       setLancamentosFromFechamento(false);
       setLancamentosFromEvolCategoria(false);
+      setLancamentosFromFluxoAnual(false);
     }
     if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
     setActiveTab(tab);
