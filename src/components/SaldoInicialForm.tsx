@@ -30,7 +30,8 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
     return anoBase || new Date().getFullYear();
   }, [saldosIniciais, anoBase]);
 
-  const shouldRender = alwaysVisible || !anoBase || anoBase === anoSaldo || saldosIniciais.length === 0;
+  // Only show when viewing the base year (earliest with saldo) or when no saldo exists yet
+  const shouldRender = !anoBase || anoBase === anoSaldo;
 
   const hasSaldo = useMemo(() => {
     return saldosIniciais.some(s => s.ano === anoSaldo && s.quantidade > 0);
