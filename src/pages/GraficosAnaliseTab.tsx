@@ -204,6 +204,26 @@ function ZootecnicoCharts({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro,
       if (prev === null || prev === undefined) return cur;
       return cur - prev;
     };
+    // Build accumulated weighted GMD average
+    const buildGmdAcum = (meses: typeof anoAtual.meses, ateMes: number) => {
+      const acums: (number | null)[] = [];
+      let sumGmd = 0;
+      let count = 0;
+      for (let i = 0; i < 12; i++) {
+        const gmdMes = mensal(meses, i, 'gmdAcumulado');
+        if (i < ateMes && gmdMes !== null && typeof gmdMes === 'number') {
+          sumGmd += gmdMes;
+          count++;
+          acums.push(sumGmd / count);
+        } else {
+          acums.push(null);
+        }
+      }
+      return acums;
+    };
+    const gmdAcumAtual = buildGmdAcum(anoAtual.meses, mesFiltro);
+    const gmdAcumAnt = anoAnt ? buildGmdAcum(anoAnt.meses, 12) : Array(12).fill(null);
+
     return MESES_NOMES.map((mes, i) => {
       const m = anoAtual.meses[i];
       const mAnt = anoAnt?.meses[i];
@@ -216,6 +236,8 @@ function ZootecnicoCharts({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro,
         [`arrProd_${anoNum - 1}`]: mAnt?.arrobasProduzidasAcum ? Math.round(mAnt.arrobasProduzidasAcum) : null,
         [`gmdMes_${anoNum}`]: isFuturo ? null : mensal(anoAtual.meses, i, 'gmdAcumulado'),
         [`gmdMes_${anoNum - 1}`]: anoAnt ? mensal(anoAnt.meses, i, 'gmdAcumulado') : null,
+        [`gmdAcum_${anoNum}`]: isFuturo ? null : gmdAcumAtual[i],
+        [`gmdAcum_${anoNum - 1}`]: gmdAcumAnt[i],
       };
     });
   }, [zoo.historico, anoNum, mesFiltro]);
@@ -236,10 +258,11 @@ function ZootecnicoCharts({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro,
           <ChartCard title="Arrobas Produzidas acumulado" subtitle="Quantidade de arrobas produzidas no acumulado do ano" data={prodData}
             keys={[`arrProd_${anoNum}`, `arrProd_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
             type="line" decimals={0} mesFiltro={mesFiltro} />
-          <ChartCard title="GMD médio (kg/dia)" subtitle="Kg médio ganho por cabeça, por dia" data={prodData}
+          <ChartCard title="GMD na média do período (kg/dia)" subtitle="Kg médio ganho por cabeça considerando o período acumulado" data={prodData}
             keys={[`gmdMes_${anoNum}`, `gmdMes_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
             type="bar" decimals={3} mesFiltro={mesFiltro}
-            lineOverlayKey={`gmdMes_${anoNum}`} valueSuffix=" kg/dia" />
+            lineOverlayKey={`gmdAcum_${anoNum}`} valueSuffix=" kg/dia"
+            displayValueKey={`gmdAcum_${anoNum}`} compKeys={[`gmdAcum_${anoNum}`, `gmdAcum_${anoNum - 1}`]} />
         </>
       )}
     </div>
@@ -409,16 +432,20 @@ interface ChartCardProps {
   isCurrency?: boolean;
   valueSuffix?: string;
   lineOverlayKey?: string;
+  displayValueKey?: string;
+  compKeys?: string[];
 }
 
-function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, mesFiltro, averageKey, averageLabel, isCurrency, valueSuffix, lineOverlayKey }: ChartCardProps) {
+function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, mesFiltro, averageKey, averageLabel, isCurrency, valueSuffix, lineOverlayKey, displayValueKey, compKeys }: ChartCardProps) {
+  const effectiveCompKeys = compKeys || keys;
+
   const comparisons = useMemo(() => {
-    if (!data || data.length === 0 || keys.length < 2) return { mom: null, yoy: null };
+    if (!data || data.length === 0 || effectiveCompKeys.length < 2) return { mom: null, yoy: null };
     const mesIdx = mesFiltro - 1;
     const mesAntIdx = mesFiltro > 1 ? mesFiltro - 2 : null;
-    const valAtual = data[mesIdx]?.[keys[0]];
-    const valMesAnt = mesAntIdx !== null ? data[mesAntIdx]?.[keys[0]] : null;
-    const valAnoAnt = data[mesIdx]?.[keys[1]];
+    const valAtual = data[mesIdx]?.[effectiveCompKeys[0]];
+    const valMesAnt = mesAntIdx !== null ? data[mesAntIdx]?.[effectiveCompKeys[0]] : null;
+    const valAnoAnt = data[mesIdx]?.[effectiveCompKeys[1]];
     const calcPct = (cur: any, ref: any) => {
       if (cur === null || cur === undefined || ref === null || ref === undefined) return null;
       if (typeof cur !== 'number' || typeof ref !== 'number') return null;
@@ -427,14 +454,15 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
       return ((cur - ref) / Math.abs(ref)) * 100;
     };
     return { mom: calcPct(valAtual, valMesAnt), yoy: calcPct(valAtual, valAnoAnt) };
-  }, [data, keys, mesFiltro]);
+  }, [data, effectiveCompKeys, mesFiltro]);
 
   const currentValue = useMemo(() => {
     if (!data || data.length === 0) return null;
     const mesIdx = mesFiltro - 1;
-    const val = data[mesIdx]?.[keys[0]];
+    const key = displayValueKey || keys[0];
+    const val = data[mesIdx]?.[key];
     return typeof val === 'number' ? val : null;
-  }, [data, keys, mesFiltro]);
+  }, [data, keys, mesFiltro, displayValueKey]);
 
   const avgValue = useMemo(() => {
     if (!averageKey || !data || data.length === 0) return null;
