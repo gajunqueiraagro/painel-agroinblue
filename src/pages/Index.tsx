@@ -34,7 +34,7 @@ import { VisaoAnualZootecnicaTab } from './VisaoAnualZootecnicaTab';
 import { FechamentoExecutivoTab } from './FechamentoExecutivoTab';
 import { AnaliseConsultorTab } from './AnaliseConsultorTab';
 import { PrecoMercadoTab } from './PrecoMercadoTab';
-import { FazendaSelector } from '@/components/FazendaSelector';
+import { GraficosAnaliseTab } from './GraficosAnaliseTab';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { SyncStatus } from '@/components/SyncStatus';
 import { useLancamentos } from '@/hooks/useLancamentos';
