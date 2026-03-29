@@ -387,10 +387,6 @@ export function ModoRapidoGrid({ fazendaId, contas, classificacoes, onSaveBatch,
           </tbody>
         </table>
 
-        {/* Datalist for subcentro autocomplete */}
-        <datalist id="subcentro-options">
-          {subcentroOptions.map(s => <option key={s} value={s} />)}
-        </datalist>
       </div>
 
       {/* Classification preview */}
