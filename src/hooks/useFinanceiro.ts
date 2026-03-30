@@ -632,7 +632,7 @@ export function useFinanceiro() {
       let duplicados = 0;
       for (const l of linhas) {
         const hash = buildHashImportacao(
-          clienteId, l.fazendaId || '',
+          cid, l.fazendaId || '',
           l.dataPagamento || l.anoMes + '-01', l.valor,
           l.tipoOperacao, l.contaOrigem, l.contaDestino,
           l.produto, l.fornecedor,
