@@ -17,6 +17,16 @@ interface Fornecedor {
   cpf_cnpj: string | null;
   fazenda_id: string;
   ativo: boolean;
+  tipo_recebimento?: string | null;
+  pix_tipo_chave?: string | null;
+  pix_chave?: string | null;
+  banco?: string | null;
+  agencia?: string | null;
+  conta?: string | null;
+  tipo_conta?: string | null;
+  cpf_cnpj_pagamento?: string | null;
+  nome_favorecido?: string | null;
+  observacao_pagamento?: string | null;
 }
 
 interface Fazenda {
@@ -80,6 +90,18 @@ export function FornecedorFormDialog({
   const [lancamentoCount, setLancamentoCount] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Payment fields
+  const [tipoRecebimento, setTipoRecebimento] = useState('');
+  const [pixTipoChave, setPixTipoChave] = useState('');
+  const [pixChave, setPixChave] = useState('');
+  const [banco, setBanco] = useState('');
+  const [agencia, setAgencia] = useState('');
+  const [conta, setConta] = useState('');
+  const [tipoConta, setTipoConta] = useState('');
+  const [cpfCnpjPagamento, setCpfCnpjPagamento] = useState('');
+  const [nomeFavorecido, setNomeFavorecido] = useState('');
+  const [observacaoPagamento, setObservacaoPagamento] = useState('');
+
   useEffect(() => {
     if (open) {
       if (editing) {
@@ -87,7 +109,16 @@ export function FornecedorFormDialog({
         setCpfCnpj(editing.cpf_cnpj || '');
         setFazendaId(editing.fazenda_id);
         setAtivo(editing.ativo);
-        // Check linked lancamentos
+        setTipoRecebimento(editing.tipo_recebimento || '');
+        setPixTipoChave(editing.pix_tipo_chave || '');
+        setPixChave(editing.pix_chave || '');
+        setBanco(editing.banco || '');
+        setAgencia(editing.agencia || '');
+        setConta(editing.conta || '');
+        setTipoConta(editing.tipo_conta || '');
+        setCpfCnpjPagamento(editing.cpf_cnpj_pagamento || '');
+        setNomeFavorecido(editing.nome_favorecido || '');
+        setObservacaoPagamento(editing.observacao_pagamento || '');
         supabase.from('financeiro_lancamentos_v2')
           .select('id', { count: 'exact', head: true })
           .eq('favorecido_id', editing.id)
@@ -98,6 +129,16 @@ export function FornecedorFormDialog({
         setFazendaId(fazendas[0]?.id || '');
         setAtivo(true);
         setLancamentoCount(null);
+        setTipoRecebimento('');
+        setPixTipoChave('');
+        setPixChave('');
+        setBanco('');
+        setAgencia('');
+        setConta('');
+        setTipoConta('');
+        setCpfCnpjPagamento('');
+        setNomeFavorecido('');
+        setObservacaoPagamento('');
       }
       setReviewId(null);
       setDeleting(false);
@@ -120,12 +161,22 @@ export function FornecedorFormDialog({
       return;
     }
     setSaving(true);
-    const payload = {
+    const payload: any = {
       cliente_id: clienteId,
       fazenda_id: fazendaId,
       nome: nome.trim(),
       cpf_cnpj: cpfCnpj.trim() || null,
       ativo,
+      tipo_recebimento: tipoRecebimento || null,
+      pix_tipo_chave: pixTipoChave || null,
+      pix_chave: pixChave.trim() || null,
+      banco: banco.trim() || null,
+      agencia: agencia.trim() || null,
+      conta: conta.trim() || null,
+      tipo_conta: tipoConta || null,
+      cpf_cnpj_pagamento: cpfCnpjPagamento.trim() || null,
+      nome_favorecido: nomeFavorecido.trim() || null,
+      observacao_pagamento: observacaoPagamento.trim() || null,
     };
 
     if (editing) {
@@ -140,7 +191,7 @@ export function FornecedorFormDialog({
     setSaving(false);
     onClose();
     onSaved();
-  }, [clienteId, nome, cpfCnpj, fazendaId, ativo, editing, onClose, onSaved]);
+  }, [clienteId, nome, cpfCnpj, fazendaId, ativo, editing, onClose, onSaved, tipoRecebimento, pixTipoChave, pixChave, banco, agencia, conta, tipoConta, cpfCnpjPagamento, nomeFavorecido, observacaoPagamento]);
 
   const handleMerge = useCallback(async (target: Fornecedor) => {
     if (!editing) return;
@@ -285,6 +336,90 @@ export function FornecedorFormDialog({
           <div className="flex items-center gap-2">
             <Switch checked={ativo} onCheckedChange={setAtivo} />
             <Label className="text-xs">Ativo</Label>
+          </div>
+
+          {/* ── DADOS DE PAGAMENTO ── */}
+          <div className="border-t border-border/30 pt-3 mt-1">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Dados de Pagamento</p>
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-[11px]">Tipo de Recebimento</Label>
+                  <Select value={tipoRecebimento || '__none_tipo__'} onValueChange={v => setTipoRecebimento(v === '__none_tipo__' ? '' : v)}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none_tipo__">Nenhum</SelectItem>
+                      <SelectItem value="PIX">PIX</SelectItem>
+                      <SelectItem value="Transferência Bancária">Transferência Bancária</SelectItem>
+                      <SelectItem value="Boleto">Boleto</SelectItem>
+                      <SelectItem value="Cartão">Cartão</SelectItem>
+                      <SelectItem value="Débito Automático">Débito Automático</SelectItem>
+                      <SelectItem value="Débito">Débito</SelectItem>
+                      <SelectItem value="Outro">Outro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-[11px]">Tipo de Chave PIX</Label>
+                  <Select value={pixTipoChave || '__none_pix__'} onValueChange={v => setPixTipoChave(v === '__none_pix__' ? '' : v)}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none_pix__">Nenhum</SelectItem>
+                      <SelectItem value="CPF">CPF</SelectItem>
+                      <SelectItem value="CNPJ">CNPJ</SelectItem>
+                      <SelectItem value="Telefone">Telefone</SelectItem>
+                      <SelectItem value="E-mail">E-mail</SelectItem>
+                      <SelectItem value="Aleatória">Aleatória</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <Label className="text-[11px]">Chave PIX</Label>
+                <Input value={pixChave} onChange={e => setPixChave(e.target.value)} className="h-8 text-xs" placeholder="CPF, CNPJ, telefone, email ou chave aleatória" />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <Label className="text-[11px]">Banco</Label>
+                  <Input value={banco} onChange={e => setBanco(e.target.value)} className="h-8 text-xs" placeholder="Ex: Sicredi" />
+                </div>
+                <div>
+                  <Label className="text-[11px]">Agência</Label>
+                  <Input value={agencia} onChange={e => setAgencia(e.target.value)} className="h-8 text-xs" placeholder="0000" />
+                </div>
+                <div>
+                  <Label className="text-[11px]">Conta</Label>
+                  <Input value={conta} onChange={e => setConta(e.target.value)} className="h-8 text-xs" placeholder="00000-0" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-[11px]">Tipo de Conta</Label>
+                  <Select value={tipoConta || '__none_tc__'} onValueChange={v => setTipoConta(v === '__none_tc__' ? '' : v)}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none_tc__">Nenhum</SelectItem>
+                      <SelectItem value="Corrente">Corrente</SelectItem>
+                      <SelectItem value="Poupança">Poupança</SelectItem>
+                      <SelectItem value="Pagamento">Pagamento</SelectItem>
+                      <SelectItem value="Outro">Outro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-[11px]">CPF/CNPJ Favorecido</Label>
+                  <Input value={cpfCnpjPagamento} onChange={e => setCpfCnpjPagamento(e.target.value)} className="h-8 text-xs" placeholder="000.000.000-00" />
+                </div>
+              </div>
+              <div>
+                <Label className="text-[11px]">Nome do Favorecido</Label>
+                <Input value={nomeFavorecido} onChange={e => setNomeFavorecido(e.target.value)} className="h-8 text-xs" placeholder="Nome para pagamento" />
+              </div>
+              <div>
+                <Label className="text-[11px]">Observação para Pagamento</Label>
+                <Input value={observacaoPagamento} onChange={e => setObservacaoPagamento(e.target.value)} className="h-8 text-xs" placeholder="Informações adicionais" />
+              </div>
+            </div>
           </div>
         </div>
 

@@ -30,6 +30,8 @@ export interface LancamentoV2 {
   nota_fiscal: string | null;
   favorecido_id: string | null;
   origem_lancamento: string;
+  forma_pagamento: string | null;
+  dados_pagamento: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -37,7 +39,7 @@ export interface LancamentoV2 {
 export interface LancamentoV2Form {
   fazenda_id: string;
   conta_bancaria_id?: string | null;
-  conta_destino_id?: string | null; // For transfers
+  conta_destino_id?: string | null;
   data_competencia: string;
   data_pagamento?: string | null;
   valor: number;
@@ -51,6 +53,8 @@ export interface LancamentoV2Form {
   observacao?: string;
   nota_fiscal?: string | null;
   favorecido_id?: string | null;
+  forma_pagamento?: string | null;
+  dados_pagamento?: string | null;
 }
 
 export interface ContaBancariaV2 {
@@ -69,6 +73,16 @@ export interface FornecedorV2 {
   cpf_cnpj: string | null;
   fazenda_id: string;
   ativo: boolean;
+  tipo_recebimento: string | null;
+  pix_tipo_chave: string | null;
+  pix_chave: string | null;
+  banco: string | null;
+  agencia: string | null;
+  conta: string | null;
+  tipo_conta: string | null;
+  cpf_cnpj_pagamento: string | null;
+  nome_favorecido: string | null;
+  observacao_pagamento: string | null;
 }
 
 export interface FiltrosV2 {
@@ -121,7 +135,7 @@ export function useFinanceiroV2() {
     if (!clienteId) return;
     const { data } = await supabase
       .from('financeiro_fornecedores')
-      .select('id, nome, cpf_cnpj, fazenda_id')
+      .select('id, nome, cpf_cnpj, fazenda_id, tipo_recebimento, pix_tipo_chave, pix_chave, banco, agencia, conta, tipo_conta, cpf_cnpj_pagamento, nome_favorecido, observacao_pagamento')
       .eq('cliente_id', clienteId)
       .eq('ativo', true)
       .order('nome');
@@ -249,6 +263,8 @@ export function useFinanceiroV2() {
       observacao: form.observacao || null,
       nota_fiscal: form.nota_fiscal || null,
       favorecido_id: form.favorecido_id || null,
+      forma_pagamento: form.forma_pagamento || null,
+      dados_pagamento: form.dados_pagamento || null,
       ano_mes: anoMes,
       origem_lancamento: 'manual',
       created_by: userId,
@@ -295,6 +311,8 @@ export function useFinanceiroV2() {
       observacao: form.observacao || null,
       nota_fiscal: form.nota_fiscal || null,
       favorecido_id: form.favorecido_id || null,
+      forma_pagamento: form.forma_pagamento || null,
+      dados_pagamento: form.dados_pagamento || null,
       ano_mes: anoMes,
       updated_by: user.id,
     }).eq('id', id);

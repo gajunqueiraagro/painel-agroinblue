@@ -109,7 +109,7 @@ export function LancamentoV2Dialog({
   const fornecedorInputRef = useRef<HTMLInputElement>(null);
 
   // Installment state
-  const [formaPagamento, setFormaPagamento] = useState<'avista' | 'parcelada'>('avista');
+  const [formaPagamentoParc, setFormaPagamentoParc] = useState<'avista' | 'parcelada'>('avista');
   const [numParcelas, setNumParcelas] = useState(2);
   const [parcelaRows, setParcelaRows] = useState<ParcelaRow[]>([]);
 
@@ -128,6 +128,10 @@ export function LancamentoV2Dialog({
   const [contaDestinoId, setContaDestinoId] = useState('');
   const [notaFiscal, setNotaFiscal] = useState('');
   const [observacao, setObservacao] = useState('');
+
+  // Payment method fields
+  const [formaPgto, setFormaPgto] = useState('');
+  const [dadosPagamento, setDadosPagamento] = useState('');
 
   // Subcentro search
   const [subcentroOpen, setSubcentroOpen] = useState(false);
@@ -174,6 +178,8 @@ export function LancamentoV2Dialog({
       setContaDestinoId('');
       setNotaFiscal(lancamento.nota_fiscal || '');
       setObservacao(lancamento.observacao || '');
+      setFormaPgto(lancamento.forma_pagamento || '');
+      setDadosPagamento(lancamento.dados_pagamento || '');
     } else {
       const today = new Date().toISOString().slice(0, 10);
       setFazendaId(defaultFazendaId || '');
@@ -192,9 +198,11 @@ export function LancamentoV2Dialog({
       setContaDestinoId('');
       setNotaFiscal('');
       setObservacao('');
-      setFormaPagamento('avista');
+      setFormaPagamentoParc('avista');
       setNumParcelas(2);
       setParcelaRows([]);
+      setFormaPgto('');
+      setDadosPagamento('');
     }
     setSubcentroSearch('');
   }, [lancamento, defaultFazendaId]);
@@ -203,20 +211,61 @@ export function LancamentoV2Dialog({
   const valorNum = parseBRL(valorDisplay);
 
   const regenerateParcelas = useCallback(() => {
-    if (formaPagamento === 'parcelada' && numParcelas >= 2 && valorNum > 0) {
+    if (formaPagamentoParc === 'parcelada' && numParcelas >= 2 && valorNum > 0) {
       setParcelaRows(generateParcelas(valorNum, numParcelas, dataPagamento));
     }
-  }, [formaPagamento, numParcelas, valorNum, dataPagamento]);
+  }, [formaPagamentoParc, numParcelas, valorNum, dataPagamento]);
 
   // Auto-regenerate when switching to parcelada or changing num parcelas / valor / data
   useEffect(() => {
-    if (formaPagamento === 'parcelada' && numParcelas >= 2) {
+    if (formaPagamentoParc === 'parcelada' && numParcelas >= 2) {
       regenerateParcelas();
     } else {
       setParcelaRows([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formaPagamento, numParcelas, valorNum, dataPagamento]);
+  }, [formaPagamentoParc, numParcelas, valorNum, dataPagamento]);
+
+  /** Build payment text from supplier data */
+  const buildDadosPagamento = useCallback((f: FornecedorV2, metodo?: string): string => {
+    const tipo = metodo || f.tipo_recebimento || '';
+    const lines: string[] = [];
+    if (tipo === 'PIX' && f.pix_chave) {
+      lines.push(`PIX | Tipo: ${f.pix_tipo_chave || '-'}`);
+      lines.push(`Chave: ${f.pix_chave}`);
+      if (f.nome_favorecido) lines.push(`Favorecido: ${f.nome_favorecido}`);
+    } else if (tipo === 'Transferência' || tipo === 'Transferência Bancária') {
+      if (f.banco) lines.push(`Banco: ${f.banco}`);
+      if (f.agencia) lines.push(`Agência: ${f.agencia}`);
+      if (f.conta) lines.push(`Conta: ${f.conta}`);
+      if (f.tipo_conta) lines.push(`Tipo: ${f.tipo_conta}`);
+      if (f.cpf_cnpj_pagamento) lines.push(`CPF/CNPJ: ${f.cpf_cnpj_pagamento}`);
+      if (f.nome_favorecido) lines.push(`Favorecido: ${f.nome_favorecido}`);
+    }
+    if (f.observacao_pagamento) lines.push(f.observacao_pagamento);
+    return lines.join('\n');
+  }, []);
+
+  /** Auto-fill payment data when supplier changes */
+  const handleFornecedorSelect = useCallback((fId: string) => {
+    setFavorecidoId(fId);
+    setFornecedorOpen(false);
+    setFornecedorSearch('');
+    const f = fornecedores.find(x => x.id === fId);
+    if (f && f.tipo_recebimento) {
+      setFormaPgto(f.tipo_recebimento);
+      setDadosPagamento(buildDadosPagamento(f, f.tipo_recebimento));
+    }
+  }, [fornecedores, buildDadosPagamento]);
+
+  /** Re-fill payment data when payment method changes */
+  const handleFormaPgtoChange = useCallback((metodo: string) => {
+    setFormaPgto(metodo === '__none_fp__' ? '' : metodo);
+    const f = fornecedores.find(x => x.id === favorecidoId);
+    if (f && metodo && metodo !== '__none_fp__') {
+      setDadosPagamento(buildDadosPagamento(f, metodo));
+    }
+  }, [fornecedores, favorecidoId, buildDadosPagamento]);
 
   const handleSubcentroSelect = (value: string) => {
     setSubcentro(value);
@@ -298,7 +347,7 @@ export function LancamentoV2Dialog({
     ? (isEntrada ? contaDestinoValid : contaOrigemValid)
     : (contaOrigemValid && contaDestinoValid);
 
-  const parceladaValid = formaPagamento === 'avista' || (numParcelas >= 2 && numParcelas <= 24 && parcelaRows.length === numParcelas);
+  const parceladaValid = formaPagamentoParc === 'avista' || (numParcelas >= 2 && numParcelas <= 24 && parcelaRows.length === numParcelas);
   const canSave = !!fazendaId && !!dataCompetencia && !!dataPagamento && !!descricao && !!favorecidoId && favorecidoId !== '__none_forn__'
     && !!subcentro && !!tipoOperacao && !!statusTransacao && valorNum > 0
     && contaSimpleValid && parceladaValid;
@@ -317,7 +366,7 @@ export function LancamentoV2Dialog({
     }
 
     // --- Installment logic (only for new, not edit) ---
-    if (!isEdit && formaPagamento === 'parcelada' && numParcelas >= 2 && parcelaRows.length === numParcelas) {
+    if (!isEdit && formaPagamentoParc === 'parcelada' && numParcelas >= 2 && parcelaRows.length === numParcelas) {
       let allOk = true;
       for (let i = 0; i < numParcelas; i++) {
         const row = parcelaRows[i];
@@ -339,6 +388,8 @@ export function LancamentoV2Dialog({
           observacao,
           nota_fiscal: notaFiscal || null,
           favorecido_id: favorecidoId && favorecidoId !== '__none_forn__' ? favorecidoId : null,
+          forma_pagamento: formaPgto || null,
+          dados_pagamento: dadosPagamento || null,
         };
 
         const ok = await onSave(form);
@@ -366,6 +417,8 @@ export function LancamentoV2Dialog({
       observacao,
       nota_fiscal: notaFiscal || null,
       favorecido_id: favorecidoId && favorecidoId !== '__none_forn__' ? favorecidoId : null,
+      forma_pagamento: formaPgto || null,
+      dados_pagamento: dadosPagamento || null,
     };
 
     const ok = await onSave(form, lancamento?.id);
@@ -461,7 +514,7 @@ export function LancamentoV2Dialog({
                             </div>
                           )}
                           {filteredFornecedores.map(f => (
-                            <button key={f.id} className={cn("relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground", favorecidoId === f.id && "bg-accent")} onClick={() => { setFavorecidoId(f.id); setFornecedorOpen(false); setFornecedorSearch(''); }}>
+                            <button key={f.id} className={cn("relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground", favorecidoId === f.id && "bg-accent")} onClick={() => handleFornecedorSelect(f.id)}>
                               <Check className={cn("mr-2 h-4 w-4", favorecidoId === f.id ? "opacity-100" : "opacity-0")} />
                               <span className="truncate">{f.nome}</span>
                             </button>
@@ -479,7 +532,41 @@ export function LancamentoV2Dialog({
 
             <hr className="border-border/30" />
 
-            {/* ── FINANCEIRO ── */}
+            {/* ── PAGAMENTO ── */}
+            <section>
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Pagamento</p>
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs">Forma de Pagamento</Label>
+                  <Select value={formaPgto || '__none_fp__'} onValueChange={handleFormaPgtoChange}>
+                    <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none_fp__">Nenhuma</SelectItem>
+                      <SelectItem value="PIX">PIX</SelectItem>
+                      <SelectItem value="Cartão">Cartão</SelectItem>
+                      <SelectItem value="Boleto">Boleto</SelectItem>
+                      <SelectItem value="Débito Automático">Débito Automático</SelectItem>
+                      <SelectItem value="Débito">Débito</SelectItem>
+                      <SelectItem value="Transferência">Transferência</SelectItem>
+                      <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                      <SelectItem value="Outro">Outro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Dados para Pagamento</Label>
+                  <Textarea
+                    value={dadosPagamento}
+                    onChange={e => setDadosPagamento(e.target.value)}
+                    rows={3}
+                    placeholder="Chave PIX, dados bancários, código de boleto..."
+                    className="bg-[#f5f6f8] dark:bg-muted border-border/50 text-xs"
+                  />
+                </div>
+              </div>
+            </section>
+
+            <hr className="border-border/30" />
             <section>
               <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Financeiro</p>
               <div className="space-y-3">
@@ -505,7 +592,7 @@ export function LancamentoV2Dialog({
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label className="text-xs">Forma de Pagamento</Label>
-                        <Select value={formaPagamento} onValueChange={(v: 'avista' | 'parcelada') => setFormaPagamento(v)}>
+                        <Select value={formaPagamentoParc} onValueChange={(v: 'avista' | 'parcelada') => setFormaPagamentoParc(v)}>
                           <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="avista">À vista</SelectItem>
@@ -513,7 +600,7 @@ export function LancamentoV2Dialog({
                           </SelectContent>
                         </Select>
                       </div>
-                      {formaPagamento === 'parcelada' && (
+                      {formaPagamentoParc === 'parcelada' && (
                         <div>
                           <Label className="text-xs">Nº de Parcelas *</Label>
                           <Input
@@ -529,7 +616,7 @@ export function LancamentoV2Dialog({
                     </div>
 
                     {/* ── EDITABLE PARCELA GRID ── */}
-                    {formaPagamento === 'parcelada' && parcelaRows.length > 0 && (
+                    {formaPagamentoParc === 'parcelada' && parcelaRows.length > 0 && (
                       <div className="rounded-lg border border-border/50 bg-muted/30 overflow-hidden">
                         {/* Grid header */}
                         <div className="grid grid-cols-[48px_1fr_1fr] gap-1 px-3 py-1.5 bg-muted/60 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
@@ -724,7 +811,7 @@ export function LancamentoV2Dialog({
           <div className="px-5 py-3 border-t border-border/40 bg-white dark:bg-card flex items-center gap-2">
             <Button variant="outline" onClick={onClose} className="px-4">Cancelar</Button>
             <Button onClick={handleSubmit} disabled={saving || !canSave} className="flex-1">
-              {saving ? 'Salvando...' : isEdit ? 'Salvar Alterações' : formaPagamento === 'parcelada' ? `Criar ${numParcelas} Parcelas` : 'Criar Lançamento'}
+              {saving ? 'Salvando...' : isEdit ? 'Salvar Alterações' : formaPagamentoParc === 'parcelada' ? `Criar ${numParcelas} Parcelas` : 'Criar Lançamento'}
             </Button>
             {isEdit && onDelete && (
               <Button
