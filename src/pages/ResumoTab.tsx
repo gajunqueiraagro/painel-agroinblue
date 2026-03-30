@@ -561,6 +561,22 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
         </section>
       </div>
 
+      {/* ── Card Operação ── */}
+      <button
+        onClick={() => onTabChange('analise' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
+        className="w-full rounded-lg border border-primary/30 bg-primary/5 p-4 flex items-center gap-3 transition-colors hover:bg-primary/10 active:bg-primary/15"
+      >
+        <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center flex-shrink-0">
+          <TrendingUp className="h-5 w-5 text-primary" />
+        </div>
+        <div className="flex-1 text-left">
+          <span className="text-sm font-bold text-foreground">Operação</span>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            Visão analítica: gráficos, desempenho e composição do rebanho
+          </p>
+        </div>
+        <ChevronRight className="h-4 w-4 text-primary flex-shrink-0" />
+      </button>
 
       {/* ── Pendências ── */}
       {alertas.length > 0 && (

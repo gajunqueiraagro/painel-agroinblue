@@ -73,7 +73,7 @@ const TITLES: Record<TabId, string> = {
   evolucao_categoria: 'Evolução por Categoria',
   fluxo_anual: 'Evolução Rebanho',
   acessos: 'Acessos',
-  analise: 'Análise Gráfica',
+  analise: 'Operação',
   analise_entradas: 'Análise de Entradas',
   analise_saidas: 'Análise de Saídas',
   analise_economica: 'Econômico',
@@ -224,27 +224,45 @@ const Index = () => {
     setActiveTab('lancamentos');
   }, []);
 
-  // Sub-screens that need a back button
   const subScreenBackMap: Partial<Record<TabId, () => void>> = {
-    zootecnico: goToVisaoZooHub,
-    indicadores: goToVisaoZooHub,
-    valor_rebanho: () => setActiveTab('fluxo_anual'),
-    conciliacao_categoria: goToZootecnico,
-    visao_anual_zoo: goToVisaoZooHub,
-    analise_economica: goToVisaoFinHub,
-    preco_mercado: goToVisaoZooHub,
-    fin_caixa: goToLancarFinHub,
+    // Resumo sub-screens
+    analise: goToResumo,
+    analise_entradas: () => setActiveTab('analise'),
+    analise_saidas: () => setActiveTab('analise'),
+    desfrute: () => setActiveTab('analise'),
+    // Lanç. Zoo sub-screens
+    lancamentos: goToLancarZooHub,
+    fechamento: goToLancarZooHub,
+    chuvas: goToLancarZooHub,
+    mapa_pastos: goToLancarZooHub,
+    resumo_pastos: goToLancarZooHub,
+    // Lanç. Fin (V2) sub-screens
     financeiro_v2: () => setActiveTab('financeiro_v2_hub'),
-    financeiro_v2_hub: goToLancarFinHub,
     fin_v2_contas: () => setActiveTab('financeiro_v2_hub'),
     fin_v2_fornecedores: () => setActiveTab('financeiro_v2_hub'),
     fin_v2_plano: () => setActiveTab('financeiro_v2_hub'),
     fin_v2_saldos: () => setActiveTab('financeiro_v2_hub'),
     contratos: () => setActiveTab('financeiro_v2_hub'),
     conciliacao_bancaria: () => setActiveTab('financeiro_v2_hub'),
-    fechamento: goToZootecnico,
-    evolucao_rebanho_hub: goToLancarZooHub,
-    fluxo_anual: () => setActiveTab('movimentacao'),
+    // Zootécnico (analysis) sub-screens
+    zootecnico: goToVisaoZooHub,
+    indicadores: goToVisaoZooHub,
+    visao_anual_zoo: goToVisaoZooHub,
+    conciliacao_categoria: goToVisaoZooHub,
+    preco_mercado: goToVisaoZooHub,
+    graficos_analise: goToVisaoZooHub,
+    movimentacao: goToVisaoZooHub,
+    fluxo_anual: goToVisaoZooHub,
+    evolucao_rebanho_hub: goToVisaoZooHub,
+    valor_rebanho: () => setActiveTab('fluxo_anual'),
+    analise_operacional: goToVisaoZooHub,
+    fechamento_executivo: goToVisaoZooHub,
+    analise_consultor: goToVisaoZooHub,
+    // Financeiro (analysis) sub-screens
+    fin_caixa: () => setActiveTab('lancar_fin_hub'),
+    analise_economica: () => setActiveTab('lancar_fin_hub'),
+    visao_fin_hub: () => setActiveTab('lancar_fin_hub'),
+    financeiro: () => setActiveTab('lancar_fin_hub'),
   };
 
   const clienteNomeHeader = clientes.length > 1 ? (clienteAtual?.nome || '') : '';
@@ -267,17 +285,8 @@ const Index = () => {
         }
       />
 
-      {/* Botão fixo de acesso ao Financeiro v2 */}
-      {!['financeiro_v2', 'financeiro_v2_hub', 'fin_v2_contas', 'fin_v2_fornecedores', 'fin_v2_plano', 'fin_v2_saldos', 'contratos', 'conciliacao_bancaria'].includes(activeTab) && (
-        <div className="px-2 py-1">
-          <button
-            onClick={() => handleTabChange('financeiro_v2_hub')}
-            className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-xs font-bold hover:bg-primary/90 transition-colors"
-          >
-            ⚡ ABRIR FINANCEIRO V2
-          </button>
-        </div>
-      )}
+
+
 
       <div className="flex-1 overflow-y-auto">
       {activeTab === 'resumo' && (
