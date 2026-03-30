@@ -749,11 +749,12 @@ export function useFinanceiro() {
         .eq('id', importacaoId);
       if (cancelErr) throw cancelErr;
 
-      // 5. Marcar lançamentos como inativos (soft delete via origem_dado)
+      // 5. Marcar lançamentos como inativos (soft delete via cancelado flag, preserva origem_dado)
       const { error: lancErr } = await supabase
         .from('financeiro_lancamentos')
-        .update({ origem_dado: 'importacao_cancelada' })
-        .eq('importacao_id', importacaoId);
+        .update({ cancelado: true } as any)
+        .eq('importacao_id', importacaoId)
+        .eq('editado_manual', false);
       if (lancErr) throw lancErr;
 
       toast.success('Importação cancelada. Lançamentos marcados como inativos.');
