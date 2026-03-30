@@ -514,7 +514,7 @@ export function LancamentoV2Dialog({
                       <div className="max-h-48 overflow-y-auto p-1">
                         {filteredSubcentros.length === 0 && <p className="p-2 text-center text-sm text-muted-foreground">Nenhum subcentro encontrado</p>}
                         {filteredSubcentros.map((sc, idx) => (
-                          <button key={sc.id} className={cn("relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground", subcentro === sc.subcentro && "bg-accent")} onClick={() => { setSubcentro(sc.subcentro || ''); setMacroCusto(sc.macro_custo || ''); setCentroCusto(sc.centro_custo || ''); setSubcentroOpen(false); setSubcentroSearch(''); }}>
+                          <button key={sc.subcentro || idx} className={cn("relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground", subcentro === sc.subcentro && "bg-accent")} onClick={() => { setSubcentro(sc.subcentro || ''); setMacroCusto(sc.macro_custo || ''); setCentroCusto(sc.centro_custo || ''); setSubcentroOpen(false); setSubcentroSearch(''); }}>
                             <Check className={cn("mr-2 h-4 w-4", subcentro === sc.subcentro ? "opacity-100" : "opacity-0")} />
                             <span className="truncate">{sc.subcentro}</span>
                           </button>
