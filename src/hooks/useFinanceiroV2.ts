@@ -30,6 +30,8 @@ export interface LancamentoV2 {
   nota_fiscal: string | null;
   favorecido_id: string | null;
   origem_lancamento: string;
+  forma_pagamento: string | null;
+  dados_pagamento: string | null;
   created_at: string;
   updated_at: string;
 }
