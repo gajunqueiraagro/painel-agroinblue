@@ -215,37 +215,37 @@ function buildZooRows(
   rows.push(lotCabHaRow, uaRow, lotUaHaRow, lotKgHaRow, arrobasProdRow);
 
   // ─ MOVIMENTAÇÕES ─
-  const tiposMov = [
-    { tipo: 'nascimento', label: 'Nascimentos' },
-    { tipo: 'compra', label: 'Compras' },
-    { tipo: 'transferencia_entrada', label: 'Transf. entrada' },
-    { tipo: 'transferencia_saida', label: 'Transf. saída' },
-    { tipo: 'abate', label: 'Abates' },
-    { tipo: 'venda', label: 'Vendas' },
-    { tipo: 'consumo', label: 'Consumo' },
-    { tipo: 'morte', label: 'Mortes' },
+  const tiposMov: { tipo: string; labelQtd: string; labelKg: string; labelArroba: string; labelValor: string }[] = [
+    { tipo: 'nascimento', labelQtd: 'Nascimentos\n(cab)', labelKg: 'Peso de nascimentos\n(kg)', labelArroba: 'Peso de nascimentos\n(@)', labelValor: 'Valor de nascimentos\n(R$)' },
+    { tipo: 'compra', labelQtd: 'Compras de animais\n(cab)', labelKg: 'Peso de compras\n(kg)', labelArroba: 'Peso de compras\n(@)', labelValor: 'Valor de compras\n(R$)' },
+    { tipo: 'transferencia_entrada', labelQtd: 'Transferências recebidas\n(cab)', labelKg: 'Peso recebido por transferência\n(kg)', labelArroba: 'Peso recebido por transferência\n(@)', labelValor: 'Valor recebido por transferência\n(R$)' },
+    { tipo: 'transferencia_saida', labelQtd: 'Transferências enviadas\n(cab)', labelKg: 'Peso enviado por transferência\n(kg)', labelArroba: 'Peso enviado por transferência\n(@)', labelValor: 'Valor enviado por transferência\n(R$)' },
+    { tipo: 'abate', labelQtd: 'Abates\n(cab)', labelKg: 'Peso abatido\n(kg)', labelArroba: 'Peso abatido\n(@)', labelValor: 'Receita com abates\n(R$)' },
+    { tipo: 'venda', labelQtd: 'Vendas em pé\n(cab)', labelKg: 'Peso vendido\n(kg)', labelArroba: 'Peso vendido\n(@)', labelValor: 'Receita com vendas\n(R$)' },
+    { tipo: 'consumo', labelQtd: 'Consumo interno\n(cab)', labelKg: 'Consumo interno\n(kg)', labelArroba: 'Consumo interno\n(@)', labelValor: 'Consumo interno\n(R$)' },
+    { tipo: 'morte', labelQtd: 'Mortes\n(cab)', labelKg: 'Mortes\n(kg)', labelArroba: 'Mortes\n(@)', labelValor: 'Mortes\n(R$)' },
   ];
 
-  tiposMov.forEach(({ tipo, label }) => {
-    const qtdRow = mkRow('Movimentações', `${label} — qtd`, m => {
+  tiposMov.forEach(({ tipo, labelQtd, labelKg, labelArroba, labelValor }) => {
+    const qtdRow = mkRow('Movimentações', labelQtd, m => {
       return lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade, 0);
     });
 
-    const qtdAcumRow = mkRow('Movimentações', `${label} — acum`, m => {
+    const qtdAcumRow = mkRow('Movimentações', `${labelQtd.split('\n')[0]}\n(acum)`, m => {
       let acum = 0;
       for (let i = 1; i <= m; i++) acum += qtdRow.valores[i - 1];
       return acum;
     });
 
-    const pesoRow = mkRow('Movimentações', `${label} — kg`, m => {
+    const pesoRow = mkRow('Movimentações', labelKg, m => {
       return lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
     }, 'kg');
 
-    const arrobasRow = mkRow('Movimentações', `${label} — @`, m => {
+    const arrobasRow = mkRow('Movimentações', labelArroba, m => {
       return lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + calcArrobasSafe(l), 0);
     }, 'dec1');
 
-    const valorRow = mkRow('Movimentações', `${label} — R$`, m => {
+    const valorRow = mkRow('Movimentações', labelValor, m => {
       return lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + calcValorTotal(l), 0);
     }, 'money');
 
