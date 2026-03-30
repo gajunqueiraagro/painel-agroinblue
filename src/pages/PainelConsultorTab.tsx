@@ -23,9 +23,9 @@ import {
   calcUA,
   calcUAHa,
   calcAreaProdutivaPecuaria,
+  calcSaldoPorCategoriaLegado,
 } from '@/lib/calculos/zootecnicos';
 import { calcArrobasSafe, calcValorTotal, calcGMD } from '@/lib/calculos/economicos';
-import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
 import { isConciliado as isLancConciliado } from '@/lib/statusOperacional';
 import { loadPesosPastosPorCategoria, resolverPesoOficial } from '@/hooks/useFechamentoCategoria';
 import {
