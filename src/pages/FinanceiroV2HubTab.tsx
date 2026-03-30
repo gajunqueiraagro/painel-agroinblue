@@ -1,7 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { TabId } from '@/components/BottomNav';
 import {
-  ListChecks, Building2, Users, BookOpen, Wallet, ChevronRight,
+  ListChecks, Building2, Users, BookOpen, Wallet, ChevronRight, FileText,
 } from 'lucide-react';
 
 interface Props {
@@ -17,6 +17,7 @@ interface HubItem {
 
 const ITEMS: HubItem[] = [
   { label: 'Lançamentos', tab: 'financeiro_v2', icon: ListChecks, description: 'Lançamentos financeiros manuais e em lote' },
+  { label: 'Contratos / Recorrências', tab: 'contratos', icon: FileText, description: 'Compromissos recorrentes com geração automática' },
   { label: 'Contas Bancárias', tab: 'fin_v2_contas' as TabId, icon: Building2, description: 'Cadastro e manutenção de contas' },
   { label: 'Fornecedores', tab: 'fin_v2_fornecedores' as TabId, icon: Users, description: 'Cadastro de fornecedores e favorecidos' },
   { label: 'Plano de Contas', tab: 'fin_v2_plano' as TabId, icon: BookOpen, description: 'Subcentros, centros e macro custos' },

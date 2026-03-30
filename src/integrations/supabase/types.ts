@@ -1066,6 +1066,107 @@ export type Database = {
           },
         ]
       }
+      financeiro_contratos: {
+        Row: {
+          centro_custo: string | null
+          cliente_id: string
+          conta_bancaria_id: string | null
+          created_at: string
+          created_by: string | null
+          dados_pagamento: string | null
+          data_fim: string | null
+          data_inicio: string
+          dia_pagamento: number
+          fazenda_id: string
+          forma_pagamento: string | null
+          fornecedor_id: string | null
+          frequencia: string
+          id: string
+          macro_custo: string | null
+          observacao: string | null
+          produto: string | null
+          status: string
+          subcentro: string | null
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          centro_custo?: string | null
+          cliente_id: string
+          conta_bancaria_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          dados_pagamento?: string | null
+          data_fim?: string | null
+          data_inicio: string
+          dia_pagamento?: number
+          fazenda_id: string
+          forma_pagamento?: string | null
+          fornecedor_id?: string | null
+          frequencia?: string
+          id?: string
+          macro_custo?: string | null
+          observacao?: string | null
+          produto?: string | null
+          status?: string
+          subcentro?: string | null
+          updated_at?: string
+          valor?: number
+        }
+        Update: {
+          centro_custo?: string | null
+          cliente_id?: string
+          conta_bancaria_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          dados_pagamento?: string | null
+          data_fim?: string | null
+          data_inicio?: string
+          dia_pagamento?: number
+          fazenda_id?: string
+          forma_pagamento?: string | null
+          fornecedor_id?: string | null
+          frequencia?: string
+          id?: string
+          macro_custo?: string | null
+          observacao?: string | null
+          produto?: string | null
+          status?: string
+          subcentro?: string | null
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_contratos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_contratos_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_contas_bancarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_contratos_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_contratos_fornecedor_id_fkey"
+            columns: ["fornecedor_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_fornecedores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financeiro_extrato_bancario: {
         Row: {
           cliente_id: string
@@ -1533,6 +1634,7 @@ export type Database = {
           cliente_id: string
           conciliado_em: string | null
           conta_bancaria_id: string | null
+          contrato_id: string | null
           created_at: string
           created_by: string | null
           dados_pagamento: string | null
@@ -1567,6 +1669,7 @@ export type Database = {
           cliente_id: string
           conciliado_em?: string | null
           conta_bancaria_id?: string | null
+          contrato_id?: string | null
           created_at?: string
           created_by?: string | null
           dados_pagamento?: string | null
@@ -1601,6 +1704,7 @@ export type Database = {
           cliente_id?: string
           conciliado_em?: string | null
           conta_bancaria_id?: string | null
+          contrato_id?: string | null
           created_at?: string
           created_by?: string | null
           dados_pagamento?: string | null
@@ -1642,6 +1746,13 @@ export type Database = {
             columns: ["conta_bancaria_id"]
             isOneToOne: false
             referencedRelation: "financeiro_contas_bancarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_lancamentos_v2_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_contratos"
             referencedColumns: ["id"]
           },
           {

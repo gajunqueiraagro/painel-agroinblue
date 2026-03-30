@@ -41,6 +41,7 @@ import { FinV2ContasTab } from './FinV2ContasTab';
 import { FinV2FornecedoresTab } from './FinV2FornecedoresTab';
 import { FinV2PlanoContasTab } from './FinV2PlanoContasTab';
 import { FinV2SaldosTab } from './FinV2SaldosTab';
+import { ContratosTab } from './ContratosTab';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { SyncStatus } from '@/components/SyncStatus';
@@ -100,6 +101,7 @@ const TITLES: Record<TabId, string> = {
   fin_v2_fornecedores: 'Fornecedores',
   fin_v2_plano: 'Plano de Contas',
   fin_v2_saldos: 'Saldos Mensais',
+  contratos: 'Contratos / Recorrências',
 };
 
 const Index = () => {
@@ -236,6 +238,7 @@ const Index = () => {
     fin_v2_fornecedores: () => setActiveTab('financeiro_v2_hub'),
     fin_v2_plano: () => setActiveTab('financeiro_v2_hub'),
     fin_v2_saldos: () => setActiveTab('financeiro_v2_hub'),
+    contratos: () => setActiveTab('financeiro_v2_hub'),
     fechamento: goToZootecnico,
     evolucao_rebanho_hub: goToLancarZooHub,
     fluxo_anual: () => setActiveTab('movimentacao'),
@@ -262,7 +265,7 @@ const Index = () => {
       />
 
       {/* Botão fixo de acesso ao Financeiro v2 */}
-      {!['financeiro_v2', 'financeiro_v2_hub', 'fin_v2_contas', 'fin_v2_fornecedores', 'fin_v2_plano', 'fin_v2_saldos'].includes(activeTab) && (
+      {!['financeiro_v2', 'financeiro_v2_hub', 'fin_v2_contas', 'fin_v2_fornecedores', 'fin_v2_plano', 'fin_v2_saldos', 'contratos'].includes(activeTab) && (
         <div className="px-2 py-1">
           <button
             onClick={() => handleTabChange('financeiro_v2_hub')}
@@ -477,6 +480,7 @@ const Index = () => {
       {activeTab === 'fin_v2_fornecedores' && <FinV2FornecedoresTab />}
       {activeTab === 'fin_v2_plano' && <FinV2PlanoContasTab />}
       {activeTab === 'fin_v2_saldos' && <FinV2SaldosTab />}
+      {activeTab === 'contratos' && <ContratosTab />}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
