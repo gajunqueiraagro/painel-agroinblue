@@ -155,9 +155,6 @@ function calcResumo(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], a
 
 // ── EXCEL EXPORT ──
 export function exportToExcel(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: string) {
-  const wb = XLSX.utils.book_new();
-
-  // 1. Resumo
   const resumo = calcResumo(lancamentos, saldosIniciais, ano, 'todos');
   const resumoData = [
     ['Resumo - ' + ano],
@@ -167,12 +164,10 @@ export function exportToExcel(lancamentos: Lancamento[], saldosIniciais: SaldoIn
     ['Saídas', resumo.totalSaidas],
     ['Saldo Final', resumo.saldoFinal],
   ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumoData), 'Resumo');
 
-  // 2. Fluxo Anual
   const fluxo = calcFluxoAnual(lancamentos, saldosIniciais, ano);
   const fluxoHeader = ['Movimentação', ...MESES_COLS.map(m => m.label), 'Total'];
-  const fluxoRows: any[][] = [fluxoHeader];
+  const fluxoRows: (string | number)[][] = [fluxoHeader];
   fluxoRows.push(['Saldo Início', ...MESES_COLS.map(m => fluxo.saldoInicioMes[m.key]), fluxo.saldoInicialAno]);
   LINHAS_FLUXO.forEach(li => {
     const total = MESES_COLS.reduce((s, m) => s + fluxo.porMesTipo[m.key][li.tipo], 0);
@@ -183,13 +178,16 @@ export function exportToExcel(lancamentos: Lancamento[], saldosIniciais: SaldoIn
     return fluxo.saldoFinalAno;
   });
   fluxoRows.push(['Saldo Final', ...saldosFinal, fluxo.saldoFinalAno]);
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(fluxoRows), 'Fluxo Anual');
 
-  // 3. Evolução por Categoria (todos os 12 meses)
+  const sheets: Array<{ name: string; mode: 'aoa'; rows: (string | number)[][] }> = [
+    { name: 'Resumo', mode: 'aoa', rows: resumoData },
+    { name: 'Fluxo Anual', mode: 'aoa', rows: fluxoRows },
+  ];
+
   MESES_COLS.forEach(mes => {
     const dados = calcEvolucaoCategoria(lancamentos, saldosIniciais, ano, mes.key);
     const header = ['Categoria', 'Saldo Ini.', ...COLUNAS_EVOL.map(c => c.label), 'Saldo Fin.'];
-    const rows: any[][] = [header];
+    const rows: (string | number)[][] = [header];
     dados.forEach(d => rows.push([d.label, d.saldoInicioMes, ...d.movs, d.saldoFinal]));
     const totais = {
       saldoIni: dados.reduce((s, d) => s + d.saldoInicioMes, 0),
@@ -197,36 +195,36 @@ export function exportToExcel(lancamentos: Lancamento[], saldosIniciais: SaldoIn
       saldoFin: dados.reduce((s, d) => s + d.saldoFinal, 0),
     };
     rows.push(['TOTAL', totais.saldoIni, ...totais.movs, totais.saldoFin]);
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), `Evol ${mes.label}`);
+    sheets.push({ name: `Evol ${mes.label}`, mode: 'aoa', rows });
   });
 
-  // 4. Cat/Mês
   const catMes = calcCategoriasMes(lancamentos, saldosIniciais);
   if (catMes.meses.length > 0) {
     const header = ['Categoria', 'Saldo Ini.', ...catMes.meses.map(m => format(parseISO(m + '-01'), 'MMM/yy', { locale: ptBR }))];
-    const rows: any[][] = [header];
+    const rows: (string | number)[][] = [header];
     CATEGORIAS.forEach(c => {
       rows.push([c.label, catMes.dados[c.value]?.saldoInicial || 0, ...catMes.meses.map(m => catMes.dados[c.value]?.meses[m] || 0)]);
     });
     const totalIni = CATEGORIAS.reduce((s, c) => s + (catMes.dados[c.value]?.saldoInicial || 0), 0);
     rows.push(['TOTAL', totalIni, ...catMes.meses.map(m => CATEGORIAS.reduce((s, c) => s + (catMes.dados[c.value]?.meses[m] || 0), 0))]);
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Cat por Mês');
+    sheets.push({ name: 'Cat por Mês', mode: 'aoa', rows });
   }
 
-  // 5. Lançamentos
   const lancAno = lancamentos.filter(l => { try { return format(parseISO(l.data), 'yyyy') === ano; } catch { return false; } });
   const lancHeader = ['Data', 'Tipo', 'Categoria', 'Quantidade', 'Cat. Destino', 'Observação'];
-  const lancRows: any[][] = [lancHeader];
+  const lancRows: (string | number)[][] = [lancHeader];
   lancAno.sort((a, b) => a.data.localeCompare(b.data)).forEach(l => {
     const tipoLabel = TODOS_TIPOS.find(t => t.value === l.tipo)?.label || l.tipo;
     const catLabel = CATEGORIAS.find(c => c.value === l.categoria)?.label || l.categoria;
     const catDest = l.categoriaDestino ? CATEGORIAS.find(c => c.value === l.categoriaDestino)?.label || '' : '';
     lancRows.push([format(parseISO(l.data), 'dd/MM/yyyy'), tipoLabel, catLabel, l.quantidade, catDest, l.observacao || '']);
   });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(lancRows), 'Lançamentos');
+  sheets.push({ name: 'Lançamentos', mode: 'aoa', rows: lancRows });
 
-  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  downloadBlob(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `rebanho_${ano}.xlsx`);
+  triggerXlsxDownload({
+    filename: `rebanho_${ano}.xlsx`,
+    sheets,
+  });
 }
 
 // ── PDF EXPORT ──
