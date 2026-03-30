@@ -196,7 +196,7 @@ export function LancamentoV2Dialog({
       setContaDestinoId('');
       setNotaFiscal('');
       setObservacao('');
-      setFormaPagamento('avista');
+      setFormaPagamentoParc('avista');
       setNumParcelas(2);
       setParcelaRows([]);
     }
@@ -207,20 +207,20 @@ export function LancamentoV2Dialog({
   const valorNum = parseBRL(valorDisplay);
 
   const regenerateParcelas = useCallback(() => {
-    if (formaPagamento === 'parcelada' && numParcelas >= 2 && valorNum > 0) {
+    if (formaPagamentoParc === 'parcelada' && numParcelas >= 2 && valorNum > 0) {
       setParcelaRows(generateParcelas(valorNum, numParcelas, dataPagamento));
     }
-  }, [formaPagamento, numParcelas, valorNum, dataPagamento]);
+  }, [formaPagamentoParc, numParcelas, valorNum, dataPagamento]);
 
   // Auto-regenerate when switching to parcelada or changing num parcelas / valor / data
   useEffect(() => {
-    if (formaPagamento === 'parcelada' && numParcelas >= 2) {
+    if (formaPagamentoParc === 'parcelada' && numParcelas >= 2) {
       regenerateParcelas();
     } else {
       setParcelaRows([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formaPagamento, numParcelas, valorNum, dataPagamento]);
+  }, [formaPagamentoParc, numParcelas, valorNum, dataPagamento]);
 
   const handleSubcentroSelect = (value: string) => {
     setSubcentro(value);
@@ -302,7 +302,7 @@ export function LancamentoV2Dialog({
     ? (isEntrada ? contaDestinoValid : contaOrigemValid)
     : (contaOrigemValid && contaDestinoValid);
 
-  const parceladaValid = formaPagamento === 'avista' || (numParcelas >= 2 && numParcelas <= 24 && parcelaRows.length === numParcelas);
+  const parceladaValid = formaPagamentoParc === 'avista' || (numParcelas >= 2 && numParcelas <= 24 && parcelaRows.length === numParcelas);
   const canSave = !!fazendaId && !!dataCompetencia && !!dataPagamento && !!descricao && !!favorecidoId && favorecidoId !== '__none_forn__'
     && !!subcentro && !!tipoOperacao && !!statusTransacao && valorNum > 0
     && contaSimpleValid && parceladaValid;
@@ -321,7 +321,7 @@ export function LancamentoV2Dialog({
     }
 
     // --- Installment logic (only for new, not edit) ---
-    if (!isEdit && formaPagamento === 'parcelada' && numParcelas >= 2 && parcelaRows.length === numParcelas) {
+    if (!isEdit && formaPagamentoParc === 'parcelada' && numParcelas >= 2 && parcelaRows.length === numParcelas) {
       let allOk = true;
       for (let i = 0; i < numParcelas; i++) {
         const row = parcelaRows[i];
@@ -509,7 +509,7 @@ export function LancamentoV2Dialog({
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label className="text-xs">Forma de Pagamento</Label>
-                        <Select value={formaPagamento} onValueChange={(v: 'avista' | 'parcelada') => setFormaPagamento(v)}>
+                        <Select value={formaPagamentoParc} onValueChange={(v: 'avista' | 'parcelada') => setFormaPagamentoParc(v)}>
                           <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="avista">À vista</SelectItem>
@@ -517,7 +517,7 @@ export function LancamentoV2Dialog({
                           </SelectContent>
                         </Select>
                       </div>
-                      {formaPagamento === 'parcelada' && (
+                      {formaPagamentoParc === 'parcelada' && (
                         <div>
                           <Label className="text-xs">Nº de Parcelas *</Label>
                           <Input
@@ -533,7 +533,7 @@ export function LancamentoV2Dialog({
                     </div>
 
                     {/* ── EDITABLE PARCELA GRID ── */}
-                    {formaPagamento === 'parcelada' && parcelaRows.length > 0 && (
+                    {formaPagamentoParc === 'parcelada' && parcelaRows.length > 0 && (
                       <div className="rounded-lg border border-border/50 bg-muted/30 overflow-hidden">
                         {/* Grid header */}
                         <div className="grid grid-cols-[48px_1fr_1fr] gap-1 px-3 py-1.5 bg-muted/60 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
@@ -728,7 +728,7 @@ export function LancamentoV2Dialog({
           <div className="px-5 py-3 border-t border-border/40 bg-white dark:bg-card flex items-center gap-2">
             <Button variant="outline" onClick={onClose} className="px-4">Cancelar</Button>
             <Button onClick={handleSubmit} disabled={saving || !canSave} className="flex-1">
-              {saving ? 'Salvando...' : isEdit ? 'Salvar Alterações' : formaPagamento === 'parcelada' ? `Criar ${numParcelas} Parcelas` : 'Criar Lançamento'}
+              {saving ? 'Salvando...' : isEdit ? 'Salvar Alterações' : formaPagamentoParc === 'parcelada' ? `Criar ${numParcelas} Parcelas` : 'Criar Lançamento'}
             </Button>
             {isEdit && onDelete && (
               <Button
