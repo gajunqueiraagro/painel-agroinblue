@@ -16,9 +16,14 @@ export interface XlsxDownloadPayload {
 const EXPORT_XLSX_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-xlsx`;
 
 export function triggerXlsxDownload(payload: XlsxDownloadPayload) {
+  console.log('[XLSX-DIAG] triggerXlsxDownload CHAMADO', { filename: payload.filename, sheetsCount: payload.sheets.length });
+
   if (!payload.sheets.length) {
+    console.error('[XLSX-DIAG] ERRO: Nenhuma aba informada');
     throw new Error('Nenhuma aba informada para exportação.');
   }
+
+  console.log('[XLSX-DIAG] URL do endpoint:', EXPORT_XLSX_URL);
 
   const form = document.createElement('form');
   form.method = 'POST';
@@ -31,9 +36,20 @@ export function triggerXlsxDownload(payload: XlsxDownloadPayload) {
   input.value = JSON.stringify(payload);
   form.appendChild(input);
 
+  console.log('[XLSX-DIAG] Form criado, payload size:', input.value.length, 'bytes');
+  console.log('[XLSX-DIAG] Inserindo form no DOM...');
   document.body.appendChild(form);
-  form.submit();
+  console.log('[XLSX-DIAG] Form inserido. Chamando form.submit()...');
+
+  try {
+    form.submit();
+    console.log('[XLSX-DIAG] form.submit() executado com sucesso');
+  } catch (err) {
+    console.error('[XLSX-DIAG] ERRO no form.submit():', err);
+  }
+
   requestAnimationFrame(() => {
     form.remove();
+    console.log('[XLSX-DIAG] Form removido do DOM');
   });
 }
