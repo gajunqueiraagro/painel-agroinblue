@@ -715,7 +715,7 @@ export function LancamentoV2Dialog({
                 <div>
                   <Label className="text-xs">Forma de Pagamento</Label>
                   <Select value={formaPgto || '__none_fp__'} onValueChange={handleFormaPgtoChange}>
-                    <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectTrigger tabIndex={5} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none_fp__">Nenhuma</SelectItem>
                       <SelectItem value="PIX">PIX</SelectItem>
