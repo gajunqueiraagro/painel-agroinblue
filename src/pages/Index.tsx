@@ -75,6 +75,7 @@ const TITLES: Record<TabId, string> = {
   fluxo_anual: 'Evolução Rebanho',
   acessos: 'Acessos',
   analise: 'Operação',
+  operacao_hub: 'Operação',
   analise_entradas: 'Análise de Entradas',
   analise_saidas: 'Análise de Saídas',
   analise_economica: 'Econômico',
