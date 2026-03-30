@@ -132,7 +132,7 @@ export function ConciliacaoBancariaTab() {
   const [saldos, setSaldos] = useState<SaldoRow[]>([]);
   const [lancamentos, setLancamentos] = useState<LancamentoResumo[]>([]);
   const [loading, setLoading] = useState(false);
-  const [expandedMes, setExpandedMes] = useState<string | null>(null);
+  const [selectedMes, setSelectedMes] = useState<string>(String(currentMonth).padStart(2, '0'));
   const [editingSaldo, setEditingSaldo] = useState<{ anoMes: string; contaId: string; current: number } | null>(null);
   const [editValue, setEditValue] = useState('');
 
