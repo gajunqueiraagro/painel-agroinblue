@@ -66,6 +66,7 @@ function buildZooRows(
   ano: number,
   ateMes: number,
   areaProdutiva: number,
+  pesosPorMes: Record<string, Record<string, number>>,
 ): ZooRow[] {
   const rows: ZooRow[] = [];
 
