@@ -27,6 +27,7 @@ interface Props {
   importacoes: ImportacaoRecord[];
   centrosCusto: CentroCustoOficial[];
   fazendas: FazendaMap[];
+  mesFechado?: boolean;
   onConfirmar: (
     nomeArquivo: string,
     linhas: LinhaImportada[],
