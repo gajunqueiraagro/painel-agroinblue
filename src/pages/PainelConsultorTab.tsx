@@ -2,7 +2,7 @@
  * Painel do Consultor — tabela analítica mensal (Zootécnico + Financeiro).
  * Leitura rápida, foco em conferência e fechamento.
  */
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -23,9 +23,11 @@ import {
   calcUA,
   calcUAHa,
   calcAreaProdutivaPecuaria,
+  calcSaldoPorCategoriaLegado,
 } from '@/lib/calculos/zootecnicos';
 import { calcArrobasSafe, calcValorTotal, calcGMD } from '@/lib/calculos/economicos';
 import { isConciliado as isLancConciliado } from '@/lib/statusOperacional';
+import { loadPesosPastosPorCategoria, resolverPesoOficial } from '@/hooks/useFechamentoCategoria';
 import {
   isConciliado as isFinConciliado,
   isEntrada as isFinEntrada,
@@ -64,6 +66,7 @@ function buildZooRows(
   ano: number,
   ateMes: number,
   areaProdutiva: number,
+  pesosPorMes: Record<string, Record<string, number>>,
 ): ZooRow[] {
   const rows: ZooRow[] = [];
 
@@ -95,14 +98,27 @@ function buildZooRows(
     return m === 1 ? saldoInicialAno : (saldoInicioMes[k] ?? 0);
   });
 
+  // Pre-compute peso final per month using official source (fechamento_pastos → lancamentos → saldo_inicial)
+  const pesoFinKgRow_valores = Array.from({ length: 12 }, (_, i) => {
+    const m = i + 1;
+    if (m > ateMes) return 0;
+    const anoMes = `${ano}-${String(m).padStart(2, '0')}`;
+    const pesosMap = pesosPorMes[anoMes] || {};
+    const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, m);
+    let total = 0;
+    saldoMap.forEach((qtd, cat) => {
+      const { valor: pesoMedio } = resolverPesoOficial(cat, pesosMap, saldosIniciais, lancamentos, ano, m);
+      total += qtd * (pesoMedio || 0);
+    });
+    return total;
+  });
+
   const pesoIniRow = mkRow('Base Mensal', 'Peso inicial kg', m => {
-    const cabIni = cabIniRow.valores[m - 1];
-    // Approximate from saldos for month 1, else use previous month final
     if (m === 1) {
-      const totalPeso = saldosIniciais.filter(s => s.ano === ano).reduce((s, si) => s + si.quantidade * (si.pesoMedioKg || 0), 0);
-      return totalPeso;
+      return saldosIniciais.filter(s => s.ano === ano).reduce((s, si) => s + si.quantidade * (si.pesoMedioKg || 0), 0);
     }
-    return cabIni * 450; // fallback estimate
+    // Use previous month's final peso
+    return pesoFinKgRow_valores[m - 2] ?? 0;
   }, 'kg');
 
   const pesoIniArrobasRow = mkRow('Base Mensal', 'Peso inicial @', m => pesoIniRow.valores[m - 1] / 30, 'dec1');
@@ -142,13 +158,18 @@ function buildZooRows(
   const cabFinRow = mkRow('Base Mensal', 'Cabeças finais', m => saldoFimMes(m));
 
   const pesoFinKgRow = mkRow('Base Mensal', 'Peso final kg', m => {
-    // Estimate: cab final * avg weight
-    return cabFinRow.valores[m - 1] * 450;
+    return pesoFinKgRow_valores[m - 1] ?? 0;
   }, 'kg');
 
   const pesoFinArrobasRow = mkRow('Base Mensal', 'Peso final @', m => pesoFinKgRow.valores[m - 1] / 30, 'dec1');
 
-  rows.push(cabIniRow, pesoIniRow, pesoIniArrobasRow, entradasCabRow, entradasKgRow, entradasArrobasRow, saidasCabRow, saidasKgRow, saidasArrobasRow, cabFinRow, pesoFinKgRow, pesoFinArrobasRow);
+  const pesoMedioFinRow = mkRow('Base Mensal', 'Peso médio final', m => {
+    const cab = cabFinRow.valores[m - 1];
+    const pesoKg = pesoFinKgRow.valores[m - 1];
+    return cab > 0 ? pesoKg / cab : 0;
+  }, 'dec2');
+
+  rows.push(cabIniRow, pesoIniRow, pesoIniArrobasRow, entradasCabRow, entradasKgRow, entradasArrobasRow, saidasCabRow, saidasKgRow, saidasArrobasRow, cabFinRow, pesoFinKgRow, pesoFinArrobasRow, pesoMedioFinRow);
 
   // ─ ACUMULADOS ─
   const entAcumRow = mkRow('Acumulados', 'Entradas acumuladas', m => {
@@ -361,13 +382,14 @@ function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes
 
 export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
-  const { pastos } = usePastos();
+  const { pastos, categorias } = usePastos();
   const { lancamentos: lancPec, saldosIniciais } = useLancamentos();
   const { lancamentos: lancFin } = useFinanceiro();
 
   const [ano, setAno] = useState(filtroGlobal?.ano || String(new Date().getFullYear()));
   const [ateMes, setAteMes] = useState(filtroGlobal?.mes || new Date().getMonth() + 1);
   const [tab, setTab] = useState<'zoo' | 'fin'>('zoo');
+  const [pesosPorMes, setPesosPorMes] = useState<Record<string, Record<string, number>>>({});
 
   const anoNum = Number(ano);
   const anosDisponiveis = useMemo(() => {
@@ -378,11 +400,29 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
     return Array.from(s).sort().reverse();
   }, [saldosIniciais]);
 
+  const fazendaId = fazendaAtual?.id;
+
+  // Load peso data from fechamento_pastos for each month
+  useEffect(() => {
+    if (!fazendaId || fazendaId === '__global__' || categorias.length === 0) {
+      setPesosPorMes({});
+      return;
+    }
+    (async () => {
+      const result: Record<string, Record<string, number>> = {};
+      for (let m = 1; m <= 12; m++) {
+        const anoMes = `${anoNum}-${String(m).padStart(2, '0')}`;
+        result[anoMes] = await loadPesosPastosPorCategoria(fazendaId, anoMes, categorias);
+      }
+      setPesosPorMes(result);
+    })();
+  }, [fazendaId, anoNum, categorias]);
+
   const areaProdutiva = useMemo(() => calcAreaProdutivaPecuaria(pastos), [pastos]);
 
   const zooRows = useMemo(
-    () => buildZooRows(lancPec, saldosIniciais, anoNum, ateMes, areaProdutiva),
-    [lancPec, saldosIniciais, anoNum, ateMes, areaProdutiva],
+    () => buildZooRows(lancPec, saldosIniciais, anoNum, ateMes, areaProdutiva, pesosPorMes),
+    [lancPec, saldosIniciais, anoNum, ateMes, areaProdutiva, pesosPorMes],
   );
 
   const finRows = useMemo(
