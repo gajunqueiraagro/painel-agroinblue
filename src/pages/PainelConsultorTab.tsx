@@ -316,6 +316,85 @@ function fmtVal(v: number, format: string): string {
 
 // ─── Export ───
 
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+function isSafariPreviewIframe() {
+  const ua = navigator.userAgent.toLowerCase();
+  const isSafari = ua.includes('safari') && !ua.includes('chrome') && !ua.includes('android');
+  return isSafari && window.self !== window.top;
+}
+
+function openWorkbookDownloadWindow(wb: XLSX.WorkBook, filename: string) {
+  const popup = window.open('', '_blank');
+  if (!popup) return false;
+
+  const workbookBase64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+  const safeFilename = JSON.stringify(filename);
+  const safeMime = JSON.stringify(XLSX_MIME);
+  const safeBase64 = JSON.stringify(workbookBase64);
+
+  popup.document.write(`
+    <!doctype html>
+    <html lang="pt-BR">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Baixando Excel...</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
+          a { display: inline-block; margin-top: 12px; color: #1d4ed8; font-weight: 600; }
+        </style>
+      </head>
+      <body>
+        <h1>Preparando download...</h1>
+        <p>Se o Excel não baixar automaticamente, clique no link abaixo.</p>
+        <a id="download-link" href="#">Baixar arquivo Excel</a>
+        <script>
+          const filename = ${safeFilename};
+          const mime = ${safeMime};
+          const base64 = ${safeBase64};
+          const binary = atob(base64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+          const blob = new Blob([bytes], { type: mime });
+          const url = URL.createObjectURL(blob);
+          const link = document.getElementById('download-link');
+          link.href = url;
+          link.download = filename;
+          setTimeout(() => link.click(), 60);
+          setTimeout(() => URL.revokeObjectURL(url), 30000);
+        <\/script>
+      </body>
+    </html>
+  `);
+  popup.document.close();
+  return true;
+}
+
+function downloadWorkbook(wb: XLSX.WorkBook, filename: string) {
+  if (isSafariPreviewIframe() && openWorkbookDownloadWindow(wb, filename)) {
+    return filename;
+  }
+
+  try {
+    XLSX.writeFile(wb, filename, { compression: true });
+    return filename;
+  } catch {
+    const workbookArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([workbookArray], { type: XLSX_MIME });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return filename;
+  }
+}
+
 function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes: number, fazendaNome: string) {
   const wb = XLSX.utils.book_new();
   const mesesHeaders = MESES_LABELS.slice(0, ateMes);
@@ -352,21 +431,7 @@ function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes
   XLSX.utils.book_append_sheet(wb, wsMov, 'Movimentacoes');
 
   const filename = `Painel_Consultor_${fazendaNome.replace(/\s+/g, '_')}_${ano}.xlsx`;
-  const workbookArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  const blob = new Blob([workbookArray], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.style.display = 'none';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-
-  return filename;
+  return downloadWorkbook(wb, filename);
 }
 
 // ─── Component ───
