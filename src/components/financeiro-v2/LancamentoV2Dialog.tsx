@@ -510,7 +510,7 @@ export function LancamentoV2Dialog({
                             </div>
                           )}
                           {filteredFornecedores.map(f => (
-                            <button key={f.id} className={cn("relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground", favorecidoId === f.id && "bg-accent")} onClick={() => { setFavorecidoId(f.id); setFornecedorOpen(false); setFornecedorSearch(''); }}>
+                            <button key={f.id} className={cn("relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground", favorecidoId === f.id && "bg-accent")} onClick={() => handleFornecedorSelect(f.id)}>
                               <Check className={cn("mr-2 h-4 w-4", favorecidoId === f.id ? "opacity-100" : "opacity-0")} />
                               <span className="truncate">{f.nome}</span>
                             </button>
