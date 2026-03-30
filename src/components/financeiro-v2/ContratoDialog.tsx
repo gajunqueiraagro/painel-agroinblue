@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Search, Check, ChevronsUpDown, Plus, AlertCircle } from 'lucide-react';
+import { Search, Check, ChevronsUpDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { Contrato, ContratoForm } from '@/hooks/useContratos';
@@ -32,6 +32,8 @@ function parseBRL(s: string): number {
   const n = parseFloat(s.replace(/\./g, '').replace(',', '.'));
   return isNaN(n) ? 0 : n;
 }
+
+const TIPO_CONTA_ORDER: Record<string, number> = { cc: 0, inv: 1, cartao: 2 };
 
 export function ContratoDialog({
   open, onClose, onSave, contrato, fazendas, contas, classificacoes, fornecedores, defaultFazendaId,
@@ -61,13 +63,16 @@ export function ContratoDialog({
   const [fornecedorSearch, setFornecedorSearch] = useState('');
   const [fornecedorHighlight, setFornecedorHighlight] = useState(0);
   const fornecedorItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const fornecedorInputRef = useRef<HTMLInputElement>(null);
 
   // Subcentro popover
   const [subcentroOpen, setSubcentroOpen] = useState(false);
   const [subcentroSearch, setSubcentroSearch] = useState('');
   const [subcentroHighlight, setSubcentroHighlight] = useState(0);
   const subcentroItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const subcentroInputRef = useRef<HTMLInputElement>(null);
 
+  // Build subcentro map — NO filter by tipo_operacao (show ALL subcentros)
   const classMap = useMemo(() => {
     const m = new Map<string, ClassificacaoItem>();
     for (const c of classificacoes) {
@@ -77,10 +82,10 @@ export function ContratoDialog({
   }, [classificacoes]);
 
   const filteredSubcentros = useMemo(() => {
-    const unique = Array.from(classMap.values()).filter(c => c.tipo_operacao === '2-Saídas');
+    const unique = Array.from(classMap.values());
     if (!subcentroSearch.trim()) return unique;
-    const term = subcentroSearch.toLowerCase();
-    return unique.filter(c => c.subcentro.toLowerCase().includes(term));
+    const term = subcentroSearch.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    return unique.filter(c => (c.subcentro || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(term));
   }, [classMap, subcentroSearch]);
 
   const fornecedoresList = useMemo(() => fornecedores.filter(f => f.ativo !== false), [fornecedores]);
@@ -89,6 +94,16 @@ export function ContratoDialog({
     const q = fornecedorSearch.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     return fornecedoresList.filter(f => f.nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(q));
   }, [fornecedoresList, fornecedorSearch]);
+
+  // Sort contas: cc < inv < cartao, then by codigo_conta asc
+  const sortedContas = useMemo(() => {
+    return [...contas].sort((a, b) => {
+      const oa = TIPO_CONTA_ORDER[a.tipo_conta || ''] ?? 99;
+      const ob = TIPO_CONTA_ORDER[b.tipo_conta || ''] ?? 99;
+      if (oa !== ob) return oa - ob;
+      return (a.codigo_conta || '').localeCompare(b.codigo_conta || '');
+    });
+  }, [contas]);
 
   const selectedFornecedorNome = useMemo(() => {
     if (!fornecedorId) return '';
@@ -151,6 +166,12 @@ export function ContratoDialog({
     if (cls) { setMacroCusto(cls.macro_custo); setCentroCusto(cls.centro_custo); }
   };
 
+  const handleSubcentroClear = () => {
+    setSubcentro('');
+    setMacroCusto('');
+    setCentroCusto('');
+  };
+
   const handleFornecedorSelect = (fId: string) => {
     setFornecedorId(fId);
     setFornecedorOpen(false);
@@ -168,6 +189,42 @@ export function ContratoDialog({
         if (f.conta) lines.push(`Conta: ${f.conta}`);
       }
       setDadosPagamento(lines.join('\n'));
+    }
+  };
+
+  // Keyboard navigation for fornecedor
+  const handleFornecedorKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setFornecedorHighlight(h => Math.min(h + 1, filteredFornecedores.length - 1));
+      fornecedorItemRefs.current[Math.min(fornecedorHighlight + 1, filteredFornecedores.length - 1)]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setFornecedorHighlight(h => Math.max(h - 1, 0));
+      fornecedorItemRefs.current[Math.max(fornecedorHighlight - 1, 0)]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (filteredFornecedores[fornecedorHighlight]) handleFornecedorSelect(filteredFornecedores[fornecedorHighlight].id);
+    } else if (e.key === 'Escape') {
+      setFornecedorOpen(false);
+    }
+  };
+
+  // Keyboard navigation for subcentro
+  const handleSubcentroKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSubcentroHighlight(h => Math.min(h + 1, filteredSubcentros.length - 1));
+      subcentroItemRefs.current[Math.min(subcentroHighlight + 1, filteredSubcentros.length - 1)]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSubcentroHighlight(h => Math.max(h - 1, 0));
+      subcentroItemRefs.current[Math.max(subcentroHighlight - 1, 0)]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (filteredSubcentros[subcentroHighlight]) handleSubcentroSelect(filteredSubcentros[subcentroHighlight].subcentro || '');
+    } else if (e.key === 'Escape') {
+      setSubcentroOpen(false);
     }
   };
 
@@ -209,6 +266,10 @@ export function ContratoDialog({
     if (ok) onClose();
   };
 
+  // Debug data
+  const debugSubcentro = `DEBUG Subcentro: ${classMap.size} carregados | primeiros: ${Array.from(classMap.keys()).slice(0, 5).join(' | ') || 'nenhum'}`;
+  const debugContas = `DEBUG Contas: ${contas.length} carregadas | primeiros: ${sortedContas.slice(0, 5).map(c => c.nome_exibicao || c.nome_conta).join(' | ') || 'nenhuma'}`;
+
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
       <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 bg-white dark:bg-card rounded-2xl shadow-2xl border-0 overflow-hidden">
@@ -223,15 +284,15 @@ export function ContratoDialog({
             <div className="space-y-3">
               <div>
                 <Label className="text-xs">Produto *</Label>
-                <Input value={produto} onChange={e => setProduto(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" placeholder="Ex: Aluguel de pasto, Energia..." />
+                <Input value={produto} onChange={e => setProduto(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" placeholder="Ex: Aluguel de pasto, Energia..." tabIndex={1} />
               </div>
 
               {/* Fornecedor */}
               <div>
                 <Label className="text-xs">Fornecedor</Label>
-                <Popover open={fornecedorOpen} onOpenChange={v => { setFornecedorOpen(v); if (!v) setFornecedorSearch(''); }}>
+                <Popover open={fornecedorOpen} onOpenChange={v => { setFornecedorOpen(v); if (!v) { setFornecedorSearch(''); setFornecedorHighlight(0); } }}>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" role="combobox" className="w-full h-9 justify-between font-normal text-sm bg-[#f5f6f8] dark:bg-muted border-border/50">
+                    <Button variant="outline" role="combobox" className="w-full h-9 justify-between font-normal text-sm bg-[#f5f6f8] dark:bg-muted border-border/50" tabIndex={2}>
                       <span className="truncate">{selectedFornecedorNome || 'Selecione o fornecedor...'}</span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -239,7 +300,15 @@ export function ContratoDialog({
                   <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                     <div className="flex items-center border-b px-3 py-2">
                       <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                      <input className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" placeholder="Buscar fornecedor..." value={fornecedorSearch} onChange={e => setFornecedorSearch(e.target.value)} autoFocus />
+                      <input
+                        ref={fornecedorInputRef}
+                        className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                        placeholder="Buscar fornecedor..."
+                        value={fornecedorSearch}
+                        onChange={e => { setFornecedorSearch(e.target.value); setFornecedorHighlight(0); }}
+                        onKeyDown={handleFornecedorKeyDown}
+                        autoFocus
+                      />
                     </div>
                     <div className="max-h-48 overflow-y-auto p-1">
                       {filteredFornecedores.map((f, idx) => (
@@ -265,12 +334,12 @@ export function ContratoDialog({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">Valor (R$) *</Label>
-                  <Input value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" inputMode="numeric" />
+                  <Input value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" inputMode="numeric" tabIndex={3} />
                 </div>
                 <div>
                   <Label className="text-xs">Frequência</Label>
                   <Select value={frequencia} onValueChange={setFrequencia}>
-                    <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" tabIndex={4}><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="mensal">Mensal</SelectItem>
                     </SelectContent>
@@ -281,15 +350,15 @@ export function ContratoDialog({
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <Label className="text-xs">Início *</Label>
-                  <Input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" />
+                  <Input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" tabIndex={5} />
                 </div>
                 <div>
                   <Label className="text-xs">Fim (opc.)</Label>
-                  <Input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" />
+                  <Input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" tabIndex={6} />
                 </div>
                 <div>
                   <Label className="text-xs">Dia Pgto</Label>
-                  <Input type="number" min={1} max={31} value={diaPagamento} onChange={e => setDiaPagamento(Math.max(1, Math.min(31, parseInt(e.target.value) || 1)))} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" />
+                  <Input type="number" min={1} max={31} value={diaPagamento} onChange={e => setDiaPagamento(Math.max(1, Math.min(31, parseInt(e.target.value) || 1)))} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" tabIndex={7} />
                 </div>
               </div>
             </div>
@@ -304,30 +373,33 @@ export function ContratoDialog({
               <div>
                 <Label className="text-xs">Forma de Pagamento</Label>
                 <Select value={formaPgto || '__none__'} onValueChange={v => setFormaPgto(v === '__none__' ? '' : v)}>
-                  <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" tabIndex={8}><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">Nenhuma</SelectItem>
                     <SelectItem value="PIX">PIX</SelectItem>
                     <SelectItem value="Boleto">Boleto</SelectItem>
                     <SelectItem value="Transferência">Transferência</SelectItem>
                     <SelectItem value="Débito Automático">Débito Automático</SelectItem>
+                    <SelectItem value="Cartão">Cartão</SelectItem>
                     <SelectItem value="Outro">Outro</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label className="text-xs">Dados para Pagamento</Label>
-                <Textarea value={dadosPagamento} onChange={e => setDadosPagamento(e.target.value)} rows={2} placeholder="Chave PIX, dados bancários..." className="bg-[#f5f6f8] dark:bg-muted border-border/50 text-xs" />
+                <Textarea value={dadosPagamento} onChange={e => setDadosPagamento(e.target.value)} rows={2} placeholder="Chave PIX, dados bancários..." className="bg-[#f5f6f8] dark:bg-muted border-border/50 text-xs" tabIndex={9} />
               </div>
               <div>
                 <Label className="text-xs">Conta Bancária</Label>
                 <Select value={contaBancariaId || '__none__'} onValueChange={v => setContaBancariaId(v === '__none__' ? '' : v)}>
-                  <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" tabIndex={10}><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">Nenhuma</SelectItem>
-                    {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
+                    {sortedContas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {/* DEBUG */}
+                <p className="text-[9px] text-orange-600 dark:text-orange-400 mt-1 font-mono break-all">{debugContas}</p>
               </div>
             </div>
           </section>
@@ -341,7 +413,7 @@ export function ContratoDialog({
               <div>
                 <Label className="text-xs">Fazenda *</Label>
                 <Select value={fazendaId} onValueChange={setFazendaId}>
-                  <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" tabIndex={11}><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
                   </SelectContent>
@@ -351,7 +423,7 @@ export function ContratoDialog({
                 <Label className="text-xs">Subcentro</Label>
                 <Popover open={subcentroOpen} onOpenChange={v => { setSubcentroOpen(v); if (!v) { setSubcentroSearch(''); setSubcentroHighlight(0); } }}>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" role="combobox" className="w-full h-9 justify-between font-normal text-sm bg-[#f5f6f8] dark:bg-muted border-border/50">
+                    <Button variant="outline" role="combobox" className="w-full h-9 justify-between font-normal text-sm bg-[#f5f6f8] dark:bg-muted border-border/50" tabIndex={12}>
                       <span className="truncate">{subcentro || 'Selecione...'}</span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -359,9 +431,22 @@ export function ContratoDialog({
                   <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                     <div className="flex items-center border-b px-3 py-2">
                       <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                      <input className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" placeholder="Buscar subcentro..." value={subcentroSearch} onChange={e => { setSubcentroSearch(e.target.value); setSubcentroHighlight(0); }} autoFocus />
+                      <input
+                        ref={subcentroInputRef}
+                        className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                        placeholder="Buscar subcentro..."
+                        value={subcentroSearch}
+                        onChange={e => { setSubcentroSearch(e.target.value); setSubcentroHighlight(0); }}
+                        onKeyDown={handleSubcentroKeyDown}
+                        autoFocus
+                      />
                     </div>
                     <div className="max-h-48 overflow-y-auto p-1">
+                      {subcentro && (
+                        <button className="flex w-full items-center rounded-sm px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10" onClick={handleSubcentroClear}>
+                          ✕ Limpar seleção
+                        </button>
+                      )}
                       {filteredSubcentros.map((sc, idx) => (
                         <button key={sc.subcentro || idx} ref={el => { subcentroItemRefs.current[idx] = el; }} className={cn("relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none", idx === subcentroHighlight ? "bg-accent text-accent-foreground" : "hover:bg-accent/50")} onClick={() => handleSubcentroSelect(sc.subcentro || '')} onMouseEnter={() => setSubcentroHighlight(idx)}>
                           <Check className={cn("mr-2 h-4 w-4", subcentro === sc.subcentro ? "opacity-100" : "opacity-0")} />
@@ -372,6 +457,8 @@ export function ContratoDialog({
                     </div>
                   </PopoverContent>
                 </Popover>
+                {/* DEBUG */}
+                <p className="text-[9px] text-orange-600 dark:text-orange-400 mt-1 font-mono break-all">{debugSubcentro}</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -388,9 +475,24 @@ export function ContratoDialog({
 
           <hr className="border-border/30" />
 
+          {/* Status */}
+          {isEdit && (
+            <section>
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Status</p>
+              <Select value={status} onValueChange={setStatus}>
+                <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ativo">Ativo</SelectItem>
+                  <SelectItem value="pausado">Pausado</SelectItem>
+                  <SelectItem value="encerrado">Encerrado</SelectItem>
+                </SelectContent>
+              </Select>
+            </section>
+          )}
+
           <section>
             <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Complemento</p>
-            <Textarea value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Observações" className="bg-[#f5f6f8] dark:bg-muted border-border/50" />
+            <Textarea value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Observações" className="bg-[#f5f6f8] dark:bg-muted border-border/50" tabIndex={13} />
           </section>
         </div>
 
