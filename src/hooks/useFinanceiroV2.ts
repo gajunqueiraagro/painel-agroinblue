@@ -30,6 +30,7 @@ export interface LancamentoV2 {
   nota_fiscal: string | null;
   favorecido_id: string | null;
   origem_lancamento: string;
+  lote_importacao_id: string | null;
   forma_pagamento: string | null;
   dados_pagamento: string | null;
   cancelado: boolean;

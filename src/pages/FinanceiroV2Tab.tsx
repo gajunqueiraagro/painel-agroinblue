@@ -698,7 +698,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                     const isHistoricoReadOnly = l.origem_lancamento === 'importacao_historica';
                     const isImported = !!l.lote_importacao_id;
                     const canEditRow = !isHistoricoReadOnly;
-                    const canDeleteRow = !isImported;
 
                     return (
                       <tr key={l.id} className="border-b italic !h-auto hover:bg-muted/50 transition-colors">
