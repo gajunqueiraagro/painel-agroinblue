@@ -11,9 +11,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Plus, Pencil, Copy, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download } from 'lucide-react';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, type LancamentoV2, type FiltrosV2 } from '@/hooks/useFinanceiroV2';
+import { useFechamentoMensal } from '@/hooks/useFechamentoMensal';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
 import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2ExportMenu';
+import { FechamentoMensalBanner } from '@/components/financeiro/FechamentoMensalBanner';
 import { format, parseISO } from 'date-fns';
 
 // ── Sorting helpers ──
@@ -129,6 +131,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [pageSize] = useState(getInitialPageSize);
   const [currentPage, setCurrentPage] = useState(0);
   const hook = useFinanceiroV2(pageSize);
+  const fechamentoHook = useFechamentoMensal();
 
   const currentYear = new Date().getFullYear();
   const anos = useMemo(() => {
@@ -243,6 +246,39 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       setFazendaId(fazendaAtual.id);
     }
   }, [fazendaAtual]);
+
+  // Load fechamentos when fazenda changes
+  useEffect(() => {
+    const fId = fazendaId !== '__all__' ? fazendaId : undefined;
+    fechamentoHook.loadFechamentos(fId);
+  }, [fazendaId, fechamentoHook.loadFechamentos]);
+
+  // Determine which months are currently selected and if any are closed
+  const mesesAtivos = useMemo(() => {
+    if (mesesSelecionados.length > 0) return mesesSelecionados.map(m => `${ano}-${m}`);
+    return [];
+  }, [ano, mesesSelecionados]);
+
+  const mesFechadoAtivo = useMemo(() => {
+    if (fazendaId === '__all__' || !fazendaId) return false;
+    if (mesesAtivos.length === 1) return fechamentoHook.isMesFechado(fazendaId, mesesAtivos[0]);
+    // If multiple months or "todos", check all - show banner if ANY is closed
+    if (mesesAtivos.length === 0) {
+      // "Todos" - check all 12 months
+      for (let m = 1; m <= 12; m++) {
+        const am = `${ano}-${String(m).padStart(2, '0')}`;
+        if (fechamentoHook.isMesFechado(fazendaId, am)) return true;
+      }
+      return false;
+    }
+    return mesesAtivos.some(am => fechamentoHook.isMesFechado(fazendaId, am));
+  }, [fazendaId, mesesAtivos, ano, fechamentoHook.isMesFechado]);
+
+  // Single month selected -> show precise banner
+  const singleMonthSelected = mesesSelecionados.length === 1 ? `${ano}-${mesesSelecionados[0]}` : null;
+  const singleMonthStatus = singleMonthSelected && fazendaId !== '__all__'
+    ? fechamentoHook.getStatus(fazendaId, singleMonthSelected)
+    : 'aberto';
 
   const filtros: FiltrosV2 = useMemo(() => ({
     fazenda_id: fazendaId !== '__all__' ? fazendaId : undefined,
@@ -633,10 +669,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 onClick={() => setMode(mode === 'rapido' ? 'list' : 'rapido')}
                 className="h-6 text-[10px] gap-0.5 px-2"
               >
-                {mode === 'rapido' ? <List className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
+              {mode === 'rapido' ? <List className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
                 {mode === 'rapido' ? 'Lista' : 'Rápido'}
               </Button>
-              {mode === 'list' && (
+              {mode === 'list' && !mesFechadoAtivo && (
                 <Button size="sm" onClick={openNew} className="h-6 text-[10px] gap-0.5 px-2">
                   <Plus className="h-3 w-3" /> Novo
                 </Button>
@@ -645,6 +681,18 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           </div>
         </CardContent>
       </Card>
+
+      {/* Fechamento mensal banner */}
+      {singleMonthSelected && fazendaId !== '__all__' && (
+        <FechamentoMensalBanner
+          anoMes={singleMonthSelected}
+          status={singleMonthStatus as 'aberto' | 'fechado'}
+          podFechar={fechamentoHook.podFechar}
+          podReabrir={fechamentoHook.podReabrir}
+          onFechar={() => fechamentoHook.fecharMes(fazendaId, singleMonthSelected)}
+          onReabrir={() => fechamentoHook.reabrirMes(fazendaId, singleMonthSelected)}
+        />
+      )}
 
       {(!queryFazendaId && fazendaId !== '__all__') && (
         <div className="text-center text-muted-foreground py-6 text-[10px]">
@@ -656,7 +704,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         <div className="text-center text-muted-foreground py-4 text-[10px] animate-pulse">Carregando...</div>
       )}
 
-      {mode === 'rapido' && (fazendaId === '__all__' || fazendaId) && (
+      {mode === 'rapido' && !mesFechadoAtivo && (fazendaId === '__all__' || fazendaId) && (
         <ModoRapidoGrid
           fazendaId={fazendaId !== '__all__' ? fazendaId : fazOperacionais[0]?.id || ''}
           contas={hook.contasBancarias}
@@ -697,7 +745,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                     const stColor = STATUS_TEXT_COLORS[stKey] || 'text-muted-foreground';
                     const isHistoricoReadOnly = l.origem_lancamento === 'importacao_historica';
                     const isImported = !!l.lote_importacao_id;
-                    const canEditRow = !isHistoricoReadOnly;
+                    const rowMesFechado = fazendaId !== '__all__' && fechamentoHook.isMesFechado(l.fazenda_id, l.ano_mes);
+                    const canEditRow = !isHistoricoReadOnly && !rowMesFechado;
 
                     return (
                       <tr key={l.id} className="border-b italic !h-auto hover:bg-muted/50 transition-colors">
@@ -714,10 +763,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                         <td className={`text-center w-[68px] px-1 py-1 align-middle text-[12px] leading-tight ${stColor}`}>{stLabel}</td>
                         <td className="!py-0 px-0 w-[40px] align-middle">
                           <div className="flex items-center justify-center gap-0.5">
-                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => openEdit(l)} disabled={!canEditRow} title={isHistoricoReadOnly ? 'Histórico antigo: somente leitura' : 'Editar'}>
+                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => openEdit(l)} disabled={!canEditRow} title={rowMesFechado ? 'Mês fechado' : isHistoricoReadOnly ? 'Histórico antigo: somente leitura' : 'Editar'}>
                               <Pencil className="h-2.5 w-2.5" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => handleDuplicate(l)}>
+                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => handleDuplicate(l)} disabled={rowMesFechado} title={rowMesFechado ? 'Mês fechado' : 'Duplicar'}>
                               <Copy className="h-2.5 w-2.5" />
                             </Button>
                           </div>

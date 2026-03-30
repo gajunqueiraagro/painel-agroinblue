@@ -1260,6 +1260,8 @@ export type Database = {
           fechado_por: string | null
           id: string
           observacao: string | null
+          reaberto_em: string | null
+          reaberto_por: string | null
           status_fechamento: string
           updated_at: string
         }
@@ -1272,6 +1274,8 @@ export type Database = {
           fechado_por?: string | null
           id?: string
           observacao?: string | null
+          reaberto_em?: string | null
+          reaberto_por?: string | null
           status_fechamento?: string
           updated_at?: string
         }
@@ -1284,6 +1288,8 @@ export type Database = {
           fechado_por?: string | null
           id?: string
           observacao?: string | null
+          reaberto_em?: string | null
+          reaberto_por?: string | null
           status_fechamento?: string
           updated_at?: string
         }
