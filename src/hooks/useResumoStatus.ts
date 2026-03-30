@@ -98,6 +98,7 @@ export function useResumoStatus(
   mesAte: number, // 1-12
 ) {
   const { fazendaAtual, fazendas } = useFazenda();
+  const { clienteAtual } = useCliente();
   const fazendaId = fazendaAtual?.id;
   const isGlobal = fazendaId === '__global__';
   const fazendaNaoPecuaria = !isGlobal && fazendaAtual?.tem_pecuaria === false;
