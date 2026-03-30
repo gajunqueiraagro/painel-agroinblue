@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, FileSpreadsheet, FileText } from 'lucide-react';
+import { Download, FileSpreadsheet, FileText, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
@@ -7,7 +7,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format, parseISO } from 'date-fns';
-import type { LancamentoV2 } from '@/hooks/useFinanceiroV2';
+import type { LancamentoV2, FiltrosV2 } from '@/hooks/useFinanceiroV2';
 
 interface FornecedorMap {
   id: string;
@@ -15,10 +15,12 @@ interface FornecedorMap {
 }
 
 interface Props {
-  lancamentos: LancamentoV2[];
+  filtros: FiltrosV2;
+  loadAllForExport: (filtros: FiltrosV2) => Promise<LancamentoV2[]>;
   fornecedores: FornecedorMap[];
   ano: string;
   fazendaNome?: string;
+  totalCount: number;
 }
 
 function fmtDate(d: string | null) {
@@ -123,31 +125,44 @@ function exportPDF(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], a
   doc.save(`financeiro_v2_${ano}${faz}.pdf`);
 }
 
-export function FinanceiroV2ExportMenu({ lancamentos, fornecedores, ano, fazendaNome }: Props) {
+export function FinanceiroV2ExportMenu({ filtros, loadAllForExport, fornecedores, ano, fazendaNome, totalCount }: Props) {
   const [open, setOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
-  if (lancamentos.length === 0) return null;
+  if (totalCount === 0) return null;
+
+  const handleExport = async (type: 'excel' | 'pdf') => {
+    setExporting(true);
+    try {
+      const allData = await loadAllForExport(filtros);
+      if (type === 'excel') {
+        exportExcel(allData, fornecedores, ano, fazendaNome);
+        toast.success(`Excel exportado! (${allData.length} lançamentos)`);
+      } else {
+        exportPDF(allData, fornecedores, ano, fazendaNome);
+        toast.success(`PDF exportado! (${allData.length} lançamentos)`);
+      }
+    } catch {
+      toast.error('Erro ao exportar');
+    } finally {
+      setExporting(false);
+      setOpen(false);
+    }
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button size="sm" variant="outline" className="h-6 text-[10px] gap-0.5 px-2">
-          <Download className="h-3 w-3" /> Exportar
+        <Button size="sm" variant="outline" className="h-6 text-[10px] gap-0.5 px-2" disabled={exporting}>
+          {exporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />} Exportar
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-36 p-1" align="end">
-        <Button variant="ghost" className="w-full justify-start gap-2 h-7 text-[10px]" onClick={() => {
-          exportExcel(lancamentos, fornecedores, ano, fazendaNome);
-          setOpen(false);
-          toast.success('Excel exportado!');
-        }}>
+        <p className="text-[9px] text-muted-foreground px-2 py-0.5">{totalCount} lançamentos</p>
+        <Button variant="ghost" className="w-full justify-start gap-2 h-7 text-[10px]" onClick={() => handleExport('excel')} disabled={exporting}>
           <FileSpreadsheet className="h-3.5 w-3.5 text-green-600" /> Excel
         </Button>
-        <Button variant="ghost" className="w-full justify-start gap-2 h-7 text-[10px]" onClick={() => {
-          exportPDF(lancamentos, fornecedores, ano, fazendaNome);
-          setOpen(false);
-          toast.success('PDF exportado!');
-        }}>
+        <Button variant="ghost" className="w-full justify-start gap-2 h-7 text-[10px]" onClick={() => handleExport('pdf')} disabled={exporting}>
           <FileText className="h-3.5 w-3.5 text-destructive" /> PDF
         </Button>
       </PopoverContent>
