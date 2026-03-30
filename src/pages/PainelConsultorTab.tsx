@@ -2,7 +2,7 @@
  * Painel do Consultor — tabela analítica mensal (Zootécnico + Financeiro).
  * Leitura rápida, foco em conferência e fechamento.
  */
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
