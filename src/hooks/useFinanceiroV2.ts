@@ -73,6 +73,16 @@ export interface FornecedorV2 {
   cpf_cnpj: string | null;
   fazenda_id: string;
   ativo: boolean;
+  tipo_recebimento: string | null;
+  pix_tipo_chave: string | null;
+  pix_chave: string | null;
+  banco: string | null;
+  agencia: string | null;
+  conta: string | null;
+  tipo_conta: string | null;
+  cpf_cnpj_pagamento: string | null;
+  nome_favorecido: string | null;
+  observacao_pagamento: string | null;
 }
 
 export interface FiltrosV2 {
