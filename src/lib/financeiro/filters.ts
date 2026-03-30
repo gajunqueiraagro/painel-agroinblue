@@ -106,7 +106,7 @@ export function calcFinanceiroFromLancamentos(
     qtdSaidas,
     // Auditoria
     audit: {
-      base: 'financeiro_lancamentos',
+      base: 'financeiro_lancamentos_v2',
       filtroStatus: 'conciliado',
       filtroData: 'data_pagamento',
       classificacao: 'tipo_operacao: 1*=entrada, 2*=saída, 3*=transferência (resgate=entrada, aplicação=saída)',
