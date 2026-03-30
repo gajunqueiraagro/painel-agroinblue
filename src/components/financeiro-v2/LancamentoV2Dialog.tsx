@@ -447,10 +447,10 @@ export function LancamentoV2Dialog({
                 <Label className="text-xs">Nota Fiscal</Label>
                 <Input
                   value={notaFiscalDisplay}
-                  onChange={e => handleNotaFiscalChange(e.target.value)}
+                  onChange={handleNotaFiscalChange}
+                  inputMode="numeric"
                   className="h-9 font-mono"
                   placeholder="000.000.000"
-                  maxLength={11}
                 />
               </div>
             </div>

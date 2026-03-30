@@ -377,7 +377,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   return (
     <div className="space-y-1 pb-20">
       {/* FILTERS */}
-      <Card>
+      <Card className="bg-muted/50 border-border/60">
         <CardContent className="p-1.5 space-y-1">
           {/* LINE 1: Ano | Mês | Status | Fazenda | Atividade */}
           <div className="grid grid-cols-5 gap-1">
