@@ -55,8 +55,8 @@ export function calcArrobas(l: Lancamento): number | null {
     return null; // Sem base de peso
   }
 
-  // Compra: peso vivo / 30 (para cálculo de indicadores, não desfrute)
-  if (l.tipo === 'compra') {
+  // Compra e Transferência entrada: peso vivo / 30
+  if (l.tipo === 'compra' || l.tipo === 'transferencia_entrada') {
     if (l.pesoMedioKg && l.pesoMedioKg > 0) {
       return (l.pesoMedioKg / 30) * l.quantidade;
     }
@@ -66,7 +66,7 @@ export function calcArrobas(l: Lancamento): number | null {
     return null;
   }
 
-  // Demais tipos (nascimento, morte, reclassificação, transferencia_entrada)
+  // Demais tipos (nascimento, morte, reclassificação)
   return null;
 }
 
