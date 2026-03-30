@@ -161,7 +161,7 @@ export function FinanceiroV2ExportMenu({ lancamentos, fornecedores, ano, fazenda
       <PopoverContent className="w-36 p-1" align="end">
         <p className="text-[9px] text-muted-foreground px-2 py-0.5">{totalCount} lançamentos</p>
         <Button variant="ghost" className="w-full justify-start gap-2 h-7 text-[10px]" onClick={() => handleExport('excel')} disabled={exporting}>
-          <FileSpreadsheet className="h-3.5 w-3.5 text-green-600" /> Excel
+          <FileSpreadsheet className="h-3.5 w-3.5 text-primary" /> Excel
         </Button>
         <Button variant="ghost" className="w-full justify-start gap-2 h-7 text-[10px]" onClick={() => handleExport('pdf')} disabled={exporting}>
           <FileText className="h-3.5 w-3.5 text-destructive" /> PDF
