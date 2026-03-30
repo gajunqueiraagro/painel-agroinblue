@@ -330,30 +330,30 @@ function buildExcelSheet(rows: (ZooRow | FinRow)[], mesesHeaders: string[], incl
     return base;
   });
 
-  const ws = XLSX.utils.json_to_sheet(data);
-  ws['!cols'] = includeGrupo
+  const cols = includeGrupo
     ? [{ wch: 18 }, { wch: 26 }, ...mesesHeaders.map(() => ({ wch: 14 })), { wch: 14 }]
     : [{ wch: 26 }, ...mesesHeaders.map(() => ({ wch: 14 })), { wch: 14 }];
 
-  return ws;
+  return { rows: data, cols };
 }
 
 function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes: number, fazendaNome: string) {
   const mesesHeaders = MESES_LABELS.slice(0, Math.max(1, Math.min(12, ateMes)));
   const filename = `Painel_Consultor_${fazendaNome.replace(/\s+/g, '_')}_${ano}.xlsx`;
-  const wb = XLSX.utils.book_new();
 
-  const wsZoo = buildExcelSheet(zooRows, mesesHeaders, true);
-  XLSX.utils.book_append_sheet(wb, wsZoo, 'Zootecnico');
+  const zooSheet = buildExcelSheet(zooRows, mesesHeaders, true);
+  const finSheet = buildExcelSheet(finRows, mesesHeaders, true);
+  const movSheet = buildExcelSheet(zooRows.filter((row) => row.grupo === 'Movimentações'), mesesHeaders, false);
 
-  const wsFin = buildExcelSheet(finRows, mesesHeaders, true);
-  XLSX.utils.book_append_sheet(wb, wsFin, 'Financeiro');
+  triggerXlsxDownload({
+    filename,
+    sheets: [
+      { name: 'Zootecnico', rows: zooSheet.rows, cols: zooSheet.cols },
+      { name: 'Financeiro', rows: finSheet.rows, cols: finSheet.cols },
+      { name: 'Movimentacoes', rows: movSheet.rows, cols: movSheet.cols },
+    ],
+  });
 
-  const movRows = zooRows.filter((row) => row.grupo === 'Movimentações');
-  const wsMov = buildExcelSheet(movRows, mesesHeaders, false);
-  XLSX.utils.book_append_sheet(wb, wsMov, 'Movimentacoes');
-
-  XLSX.writeFile(wb, filename, { compression: true });
   return filename;
 }
 

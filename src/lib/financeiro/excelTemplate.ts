@@ -1,7 +1,7 @@
 /**
  * Modelo Excel com aba única EXPORT_APP_UNICO.
  */
-import * as XLSX from 'xlsx';
+import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 
 const COLS = [
   'Tipo_Registro', 'AnoMes', 'Data_Ref', 'Conta', 'Fazenda',
@@ -58,15 +58,21 @@ const INSTRUCOES: unknown[][] = [
 ];
 
 export function downloadModeloExcel() {
-  const wb = XLSX.utils.book_new();
-
-  const ws = XLSX.utils.aoa_to_sheet([COLS, ...EXAMPLES]);
-  ws['!cols'] = COLS.map(c => ({ wch: Math.max(c.length + 2, 18) }));
-  XLSX.utils.book_append_sheet(wb, ws, 'EXPORT_APP_UNICO');
-
-  const wsInst = XLSX.utils.aoa_to_sheet(INSTRUCOES);
-  wsInst['!cols'] = [{ wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 60 }];
-  XLSX.utils.book_append_sheet(wb, wsInst, 'INSTRUCOES');
-
-  XLSX.writeFile(wb, 'modelo_financeiro.xlsx');
+  triggerXlsxDownload({
+    filename: 'modelo_financeiro.xlsx',
+    sheets: [
+      {
+        name: 'EXPORT_APP_UNICO',
+        mode: 'aoa',
+        rows: [COLS, ...EXAMPLES],
+        cols: COLS.map(c => ({ wch: Math.max(c.length + 2, 18) })),
+      },
+      {
+        name: 'INSTRUCOES',
+        mode: 'aoa',
+        rows: INSTRUCOES,
+        cols: [{ wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 60 }],
+      },
+    ],
+  });
 }
