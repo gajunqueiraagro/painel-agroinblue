@@ -308,7 +308,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     const dir = sortDir === 'asc' ? 1 : -1;
     items.sort((a, b) => {
       switch (sortField) {
-        case 'data': return dir * ((a.data_pagamento || a.data_competencia).localeCompare(b.data_pagamento || b.data_competencia));
+        case 'data': return dir * (a.data_competencia.localeCompare(b.data_competencia));
+        case 'pgto': return dir * ((a.data_pagamento || '').localeCompare(b.data_pagamento || ''));
         case 'valor': return dir * (a.valor * a.sinal - b.valor * b.sinal);
         case 'produto': return dir * ((a.descricao || '').localeCompare(b.descricao || '', 'pt-BR'));
         case 'fornecedor': {
