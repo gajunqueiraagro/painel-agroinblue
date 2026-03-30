@@ -300,7 +300,7 @@ export function LancamentoV2Dialog({
             <DialogTitle className="text-base">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             {/* 1. DATAS */}
             <div>
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Datas</p>
