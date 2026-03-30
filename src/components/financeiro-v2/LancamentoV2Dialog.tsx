@@ -183,6 +183,8 @@ export function LancamentoV2Dialog({
       setContaDestinoId('');
       setNotaFiscal('');
       setObservacao('');
+      setFormaPagamento('avista');
+      setNumParcelas(2);
     }
     setSubcentroSearch('');
   }, [lancamento, defaultFazendaId]);
