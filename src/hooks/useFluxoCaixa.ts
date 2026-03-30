@@ -131,6 +131,7 @@ export function useFluxoCaixa(
           .from('financeiro_lancamentos_v2')
           .select('status_transacao, data_pagamento, valor, tipo_operacao, macro_custo, descricao, escopo_negocio, centro_custo, subcentro')
           .eq('cliente_id', clienteId)
+          .eq('cancelado', false)
           .gte('data_pagamento', `${ano}-01-01`)
           .lte('data_pagamento', `${ano}-12-31`)
           .range(from, from + PAGE_SIZE - 1);

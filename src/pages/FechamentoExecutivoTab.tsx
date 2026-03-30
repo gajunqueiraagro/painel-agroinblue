@@ -81,6 +81,7 @@ export function FechamentoExecutivoTab({ onBack, filtroAnoInicial, filtroMesInic
       .from('financeiro_lancamentos_v2')
       .select('*')
       .eq('cliente_id', clienteId)
+      .eq('cancelado', false)
       .eq('ano_mes', anoMes);
     if (fazendaId) finQuery = finQuery.eq('fazenda_id', fazendaId);
     

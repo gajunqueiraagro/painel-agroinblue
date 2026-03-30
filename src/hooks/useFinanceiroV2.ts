@@ -32,6 +32,8 @@ export interface LancamentoV2 {
   origem_lancamento: string;
   forma_pagamento: string | null;
   dados_pagamento: string | null;
+  cancelado: boolean;
+  editado_manual: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -198,7 +200,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     let query = supabase
       .from('financeiro_lancamentos_v2')
       .select('*')
-      .eq('cliente_id', clienteId!);
+      .eq('cliente_id', clienteId!)
+      .eq('cancelado', false);
 
     if (filtros.fazenda_id) {
       query = query.eq('fazenda_id', filtros.fazenda_id);
@@ -368,6 +371,22 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   }, [clienteId, user]);
 
   const excluirLancamento = useCallback(async (id: string) => {
+    const { data: row, error: loadError } = await supabase
+      .from('financeiro_lancamentos_v2')
+      .select('id, lote_importacao_id, origem_lancamento')
+      .eq('id', id)
+      .single();
+
+    if (loadError) {
+      toast.error('Erro ao validar lançamento');
+      return false;
+    }
+
+    if (row?.lote_importacao_id) {
+      toast.error('Lançamentos importados no V2 não podem ser apagados fisicamente.');
+      return false;
+    }
+
     const { error } = await supabase.from('financeiro_lancamentos_v2').delete().eq('id', id);
     if (error) {
       toast.error('Erro ao excluir lançamento');

@@ -695,6 +695,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                     const stKey = (l.status_transacao || '').toLowerCase();
                     const stLabel = STATUS_LABELS[stKey] || l.status_transacao || '-';
                     const stColor = STATUS_TEXT_COLORS[stKey] || 'text-muted-foreground';
+                    const isHistoricoReadOnly = l.origem_lancamento === 'importacao_historica';
+                    const isImported = !!l.lote_importacao_id;
+                    const canEditRow = !isHistoricoReadOnly;
+                    const canDeleteRow = !isImported;
 
                     return (
                       <tr key={l.id} className="border-b italic !h-auto hover:bg-muted/50 transition-colors">
@@ -711,7 +715,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                         <td className={`text-center w-[68px] px-1 py-1 align-middle text-[12px] leading-tight ${stColor}`}>{stLabel}</td>
                         <td className="!py-0 px-0 w-[40px] align-middle">
                           <div className="flex items-center justify-center gap-0.5">
-                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => openEdit(l)}>
+                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => openEdit(l)} disabled={!canEditRow} title={isHistoricoReadOnly ? 'Histórico antigo: somente leitura' : 'Editar'}>
                               <Pencil className="h-2.5 w-2.5" />
                             </Button>
                             <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => handleDuplicate(l)}>
@@ -753,7 +757,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         open={dialogOpen}
         onClose={() => { setDialogOpen(false); setEditingLanc(null); }}
         onSave={handleSave}
-        onDelete={handleDelete}
+        onDelete={editingLanc?.lote_importacao_id ? undefined : handleDelete}
         lancamento={editingLanc}
         fazendas={fazendas}
         contas={hook.contasBancarias}
