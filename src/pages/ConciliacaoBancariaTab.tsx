@@ -46,6 +46,11 @@ interface LancamentoResumo {
   nota_fiscal: string | null;
 }
 
+interface FornecedorRef {
+  id: string;
+  nome: string;
+}
+
 interface MesCard {
   mes: string; // '01'..'12'
   label: string;
