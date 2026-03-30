@@ -592,7 +592,7 @@ export function useFinanceiro() {
         return false;
       }
 
-      const clienteId = fazendas.find(f => f.id === primaryFazendaId)?.cliente_id || fazendaAtual?.cliente_id || '';
+      const cid = fazendas.find(f => f.id === primaryFazendaId)?.cliente_id || fazendaAtual?.cliente_id || '';
 
       // ── Determinar origem_dado baseado no tipo de importação ──
       const origemDado = tipoImportacao || 'importacao_incremental';
