@@ -561,22 +561,59 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
         </section>
       </div>
 
-      {/* ── Card Operação ── */}
-      <button
-        onClick={() => onTabChange('operacao_hub' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
-        className="w-full rounded-lg border border-primary/30 bg-primary/5 p-4 flex items-center gap-3 transition-colors hover:bg-primary/10 active:bg-primary/15"
-      >
-        <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center flex-shrink-0">
-          <TrendingUp className="h-5 w-5 text-primary" />
-        </div>
-        <div className="flex-1 text-left">
-          <span className="text-sm font-bold text-foreground">Operação</span>
-          <p className="text-[10px] text-muted-foreground mt-0.5">
-            Visão analítica: gráficos, desempenho e composição do rebanho
-          </p>
-        </div>
-        <ChevronRight className="h-4 w-4 text-primary flex-shrink-0" />
-      </button>
+      {/* ── Cards de navegação ── */}
+      <div className="space-y-2">
+        {/* Operação */}
+        <button
+          onClick={() => onTabChange('visao_zoo_hub' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
+          className="w-full rounded-lg border border-primary/30 bg-primary/5 p-4 flex items-center gap-3 transition-colors hover:bg-primary/10 active:bg-primary/15"
+        >
+          <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center flex-shrink-0">
+            <TrendingUp className="h-5 w-5 text-primary" />
+          </div>
+          <div className="flex-1 text-left">
+            <span className="text-sm font-bold text-foreground">Operação</span>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              Indicadores, gráficos, DRE e desempenho consolidado
+            </p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-primary flex-shrink-0" />
+        </button>
+
+        {/* Zootécnico */}
+        <button
+          onClick={() => onTabChange('movimentacao' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
+          className="w-full rounded-lg border border-primary/30 bg-primary/5 p-4 flex items-center gap-3 transition-colors hover:bg-primary/10 active:bg-primary/15"
+        >
+          <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center flex-shrink-0">
+            <BarChart3 className="h-5 w-5 text-primary" />
+          </div>
+          <div className="flex-1 text-left">
+            <span className="text-sm font-bold text-foreground">Zootécnico</span>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              Movimentações do rebanho: entradas, saídas e transferências
+            </p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-primary flex-shrink-0" />
+        </button>
+
+        {/* Financeiro */}
+        <button
+          onClick={() => onTabChange('fin_caixa' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
+          className="w-full rounded-lg border border-primary/30 bg-primary/5 p-4 flex items-center gap-3 transition-colors hover:bg-primary/10 active:bg-primary/15"
+        >
+          <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center flex-shrink-0">
+            <Wallet className="h-5 w-5 text-primary" />
+          </div>
+          <div className="flex-1 text-left">
+            <span className="text-sm font-bold text-foreground">Financeiro</span>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              Dashboard financeiro: entradas, saídas e macro custos
+            </p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-primary flex-shrink-0" />
+        </button>
+      </div>
 
       {/* ── Pendências ── */}
       {alertas.length > 0 && (
