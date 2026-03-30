@@ -108,23 +108,23 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
 
   return (
     <div>
-      <table className="w-full text-xs border-collapse">
+      <table className="w-full text-[10px] border-collapse">
          <thead className="sticky top-0 z-10">
           <tr className="border-b border-border">
-            <th className="p-1.5 text-left font-bold bg-background">Data</th>
-            {showTipo && <th className="p-1.5 text-left font-bold bg-background">Tipo</th>}
-            <th className="p-1.5 text-right font-bold bg-background">Qtd</th>
-            <th className="p-1.5 text-left font-bold bg-background">Categoria</th>
-            {showDestino && <th className="p-1.5 text-left font-bold bg-background">{isMorte ? 'Motivo' : 'Destino'}</th>}
-            {isGlobal && <th className="p-1.5 text-left font-bold bg-background">{showTipo ? 'Fazenda' : globalColHeader}</th>}
-            <th className="p-1.5 text-right font-bold bg-background">P.Vivo</th>
-            <th className="p-1.5 text-right font-bold bg-background">P.@</th>
-            <th className="p-1.5 text-right font-bold text-primary bg-background">Total</th>
-            <th className="p-1.5 text-right font-bold bg-background">R$/líq @</th>
-            {showLiqKg && <th className="p-1.5 text-right font-bold bg-background">R$/Kg Líq</th>}
-            <th className="p-1.5 text-right font-bold bg-background">Líq/Cab</th>
-            <th className="p-1.5 text-center font-bold bg-background">Status</th>
-            <th className="p-1.5 w-8 bg-background"></th>
+            <th className="px-1 py-0.5 text-left font-bold text-[9px] uppercase tracking-wide bg-background">Data</th>
+            {showTipo && <th className="px-1 py-0.5 text-left font-bold text-[9px] uppercase tracking-wide bg-background">Tipo</th>}
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">Qtd</th>
+            <th className="px-1 py-0.5 text-left font-bold text-[9px] uppercase tracking-wide bg-background">Categoria</th>
+            {showDestino && <th className="px-1 py-0.5 text-left font-bold text-[9px] uppercase tracking-wide bg-background">{isMorte ? 'Motivo' : 'Destino'}</th>}
+            {isGlobal && <th className="px-1 py-0.5 text-left font-bold text-[9px] uppercase tracking-wide bg-background">{showTipo ? 'Fazenda' : globalColHeader}</th>}
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">P.Vivo</th>
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">P.@</th>
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide text-primary bg-background">Total</th>
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">R$/líq @</th>
+            {showLiqKg && <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">R$/Kg Líq</th>}
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">Líq/Cab</th>
+            <th className="px-1 py-0.5 text-center font-bold text-[9px] uppercase tracking-wide bg-background">Status</th>
+            <th className="px-1 py-0.5 w-6 bg-background"></th>
           </tr>
         </thead>
         <tbody>
@@ -133,28 +133,28 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
             const c = calcIndicadoresLancamento(l);
             const tipoInfo = SUB_ABA_LABELS[l.tipo as SubAba];
             return (
-              <tr key={l.id} className="border-b hover:bg-muted/30">
-                <td className="p-1.5 whitespace-nowrap">{format(parseISO(l.data), 'dd/MM/yy')}</td>
-                {showTipo && <td className="p-1.5 text-xs">{tipoInfo?.icon} {tipoInfo?.label || l.tipo}</td>}
-                <td className="p-1.5 text-right font-bold">{l.quantidade}</td>
-                <td className="p-1.5">{cat}</td>
-                {showDestino && <td className="p-1.5 truncate max-w-[80px]">{(l.tipo === 'morte' ? l.fazendaDestino : (l.fazendaDestino || l.fazendaOrigem)) || '-'}</td>}
-                {isGlobal && <td className="p-1.5 truncate max-w-[100px]">{showTipo ? (fMap.get(l.fazendaId || '') || '-') : getFazendaCellValue(l, fMap)}</td>}
-                <td className="p-1.5 text-right">{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
-                <td className="p-1.5 text-right text-muted-foreground">{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
-                <td className="p-1.5 text-right font-bold text-primary">{fmtValor(c.valorFinal)}</td>
-                <td className="p-1.5 text-right">{fmtValor(c.liqArroba)}</td>
-                {showLiqKg && <td className="p-1.5 text-right">{fmtValor(c.liqKg)}</td>}
-                <td className="p-1.5 text-right">{fmtValor(c.liqCabeca)}</td>
-                <td className="p-1.5 text-center">
+              <tr key={l.id} className="border-b hover:bg-muted/30 leading-none">
+                <td className="px-1 py-[3px] whitespace-nowrap">{format(parseISO(l.data), 'dd/MM/yy')}</td>
+                {showTipo && <td className="px-1 py-[3px] text-[10px]">{tipoInfo?.icon} {tipoInfo?.label || l.tipo}</td>}
+                <td className="px-1 py-[3px] text-right font-bold">{l.quantidade}</td>
+                <td className="px-1 py-[3px]">{cat}</td>
+                {showDestino && <td className="px-1 py-[3px] truncate max-w-[80px]">{(l.tipo === 'morte' ? l.fazendaDestino : (l.fazendaDestino || l.fazendaOrigem)) || '-'}</td>}
+                {isGlobal && <td className="px-1 py-[3px] truncate max-w-[100px]">{showTipo ? (fMap.get(l.fazendaId || '') || '-') : getFazendaCellValue(l, fMap)}</td>}
+                <td className="px-1 py-[3px] text-right">{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
+                <td className="px-1 py-[3px] text-right text-muted-foreground">{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
+                <td className="px-1 py-[3px] text-right font-bold text-primary">{fmtValor(c.valorFinal)}</td>
+                <td className="px-1 py-[3px] text-right">{fmtValor(c.liqArroba)}</td>
+                {showLiqKg && <td className="px-1 py-[3px] text-right">{fmtValor(c.liqKg)}</td>}
+                <td className="px-1 py-[3px] text-right">{fmtValor(c.liqCabeca)}</td>
+                <td className="px-1 py-[3px] text-center">
                   {(() => {
                     const cfg = getStatusBadge(l);
-                    return <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${cfg.cls}`}>{cfg.label}</span>;
+                    return <span className={`text-[8px] font-bold px-1 py-px rounded ${cfg.cls}`}>{cfg.label}</span>;
                   })()}
                 </td>
-                <td className="p-1.5">
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(l)}>
-                    <Info className="h-3 w-3" />
+                <td className="px-1 py-[3px]">
+                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => onEdit(l)}>
+                    <Info className="h-2.5 w-2.5" />
                   </Button>
                 </td>
               </tr>
@@ -177,21 +177,21 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
           const liqKgTotal = totals.pesoVivoTotal > 0 ? totals.valorTotal / totals.pesoVivoTotal : 0;
           return (
             <tfoot>
-              <tr className="border-t-2 border-primary/40 bg-muted/30 font-bold">
-                <td className="p-1.5">TOTAL</td>
-                {showTipo && <td className="p-1.5"></td>}
-                <td className="p-1.5 text-right">{totals.qtd}</td>
-                <td className="p-1.5"></td>
-                {showDestino && <td className="p-1.5"></td>}
-                {isGlobal && <td className="p-1.5"></td>}
-                <td className="p-1.5 text-right">{fmtValor(pesoVivoMedio)}</td>
-                <td className="p-1.5 text-right text-muted-foreground">{fmtValor(arrobaMedio)}</td>
-                <td className="p-1.5 text-right text-primary">{fmtValor(totals.valorTotal)}</td>
-                <td className="p-1.5 text-right">{fmtValor(liqArroba)}</td>
-                {showLiqKg && <td className="p-1.5 text-right">{fmtValor(liqKgTotal)}</td>}
-                <td className="p-1.5 text-right">{fmtValor(liqCabeca)}</td>
-                <td className="p-1.5"></td>
-                <td className="p-1.5"></td>
+              <tr className="border-t-2 border-primary/40 bg-muted/30 font-bold text-[10px]">
+                <td className="px-1 py-[3px]">TOTAL</td>
+                {showTipo && <td className="px-1 py-[3px]"></td>}
+                <td className="px-1 py-[3px] text-right">{totals.qtd}</td>
+                <td className="px-1 py-[3px]"></td>
+                {showDestino && <td className="px-1 py-[3px]"></td>}
+                {isGlobal && <td className="px-1 py-[3px]"></td>}
+                <td className="px-1 py-[3px] text-right">{fmtValor(pesoVivoMedio)}</td>
+                <td className="px-1 py-[3px] text-right text-muted-foreground">{fmtValor(arrobaMedio)}</td>
+                <td className="px-1 py-[3px] text-right text-primary">{fmtValor(totals.valorTotal)}</td>
+                <td className="px-1 py-[3px] text-right">{fmtValor(liqArroba)}</td>
+                {showLiqKg && <td className="px-1 py-[3px] text-right">{fmtValor(liqKgTotal)}</td>}
+                <td className="px-1 py-[3px] text-right">{fmtValor(liqCabeca)}</td>
+                <td className="px-1 py-[3px]"></td>
+                <td className="px-1 py-[3px]"></td>
               </tr>
             </tfoot>
           );
@@ -207,22 +207,22 @@ function AbateTable({ lancamentos, onEdit, isGlobal, fazendaMap }: { lancamentos
 
   return (
     <div>
-      <table className="w-full text-xs border-collapse">
+      <table className="w-full text-[10px] border-collapse">
          <thead className="sticky top-0 z-10">
           <tr className="border-b border-border">
-            <th className="p-1.5 text-left font-bold bg-background">Data</th>
-            <th className="p-1.5 text-right font-bold bg-background">Qtd</th>
-            <th className="p-1.5 text-left font-bold bg-background">Categoria</th>
-            <th className="p-1.5 text-left font-bold bg-background">Destino</th>
-            {isGlobal && <th className="p-1.5 text-left font-bold bg-background">Origem</th>}
-            <th className="p-1.5 text-right font-bold bg-background">P.Vivo</th>
-            <th className="p-1.5 text-right font-bold bg-background">Rend.</th>
-            <th className="p-1.5 text-right font-bold bg-background">P.@</th>
-            <th className="p-1.5 text-right font-bold text-primary bg-background">Total</th>
-            <th className="p-1.5 text-right font-bold bg-background">R$/líq @</th>
-            <th className="p-1.5 text-right font-bold bg-background">Líq/Cab</th>
-            <th className="p-1.5 text-center font-bold bg-background">Status</th>
-            <th className="p-1.5 w-8 bg-background"></th>
+            <th className="px-1 py-0.5 text-left font-bold text-[9px] uppercase tracking-wide bg-background">Data</th>
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">Qtd</th>
+            <th className="px-1 py-0.5 text-left font-bold text-[9px] uppercase tracking-wide bg-background">Categoria</th>
+            <th className="px-1 py-0.5 text-left font-bold text-[9px] uppercase tracking-wide bg-background">Destino</th>
+            {isGlobal && <th className="px-1 py-0.5 text-left font-bold text-[9px] uppercase tracking-wide bg-background">Origem</th>}
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">P.Vivo</th>
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">Rend.</th>
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">P.@</th>
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide text-primary bg-background">Total</th>
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">R$/líq @</th>
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">Líq/Cab</th>
+            <th className="px-1 py-0.5 text-center font-bold text-[9px] uppercase tracking-wide bg-background">Status</th>
+            <th className="px-1 py-0.5 w-6 bg-background"></th>
           </tr>
         </thead>
         <tbody>
@@ -230,27 +230,27 @@ function AbateTable({ lancamentos, onEdit, isGlobal, fazendaMap }: { lancamentos
             const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
             const c = calcIndicadoresLancamento(l);
             return (
-              <tr key={l.id} className="border-b hover:bg-muted/30">
-                <td className="p-1.5 whitespace-nowrap">{format(parseISO(l.data), 'dd/MM/yy')}</td>
-                <td className="p-1.5 text-right font-bold">{l.quantidade}</td>
-                <td className="p-1.5">{cat}</td>
-                <td className="p-1.5 truncate max-w-[80px]">{l.fazendaDestino || '-'}</td>
-                {isGlobal && <td className="p-1.5 truncate max-w-[100px]">{fMap.get(l.fazendaId || '') || '-'}</td>}
-                <td className="p-1.5 text-right">{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
-                <td className="p-1.5 text-right text-muted-foreground">{c.rendimento ? c.rendimento.toFixed(1) + '%' : '-'}</td>
-                <td className="p-1.5 text-right">{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
-                <td className="p-1.5 text-right font-bold text-primary">{fmtValor(c.valorFinal)}</td>
-                <td className="p-1.5 text-right">{fmtValor(c.liqArroba)}</td>
-                <td className="p-1.5 text-right">{fmtValor(c.liqCabeca)}</td>
-                <td className="p-1.5 text-center">
+              <tr key={l.id} className="border-b hover:bg-muted/30 leading-none">
+                <td className="px-1 py-[3px] whitespace-nowrap">{format(parseISO(l.data), 'dd/MM/yy')}</td>
+                <td className="px-1 py-[3px] text-right font-bold">{l.quantidade}</td>
+                <td className="px-1 py-[3px]">{cat}</td>
+                <td className="px-1 py-[3px] truncate max-w-[80px]">{l.fazendaDestino || '-'}</td>
+                {isGlobal && <td className="px-1 py-[3px] truncate max-w-[100px]">{fMap.get(l.fazendaId || '') || '-'}</td>}
+                <td className="px-1 py-[3px] text-right">{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
+                <td className="px-1 py-[3px] text-right text-muted-foreground">{c.rendimento ? c.rendimento.toFixed(1) + '%' : '-'}</td>
+                <td className="px-1 py-[3px] text-right">{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
+                <td className="px-1 py-[3px] text-right font-bold text-primary">{fmtValor(c.valorFinal)}</td>
+                <td className="px-1 py-[3px] text-right">{fmtValor(c.liqArroba)}</td>
+                <td className="px-1 py-[3px] text-right">{fmtValor(c.liqCabeca)}</td>
+                <td className="px-1 py-[3px] text-center">
                   {(() => {
                     const cfg = getStatusBadge(l);
-                    return <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${cfg.cls}`}>{cfg.label}</span>;
+                    return <span className={`text-[8px] font-bold px-1 py-px rounded ${cfg.cls}`}>{cfg.label}</span>;
                   })()}
                 </td>
-                <td className="p-1.5">
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(l)}>
-                    <Info className="h-3 w-3" />
+                <td className="px-1 py-[3px]">
+                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => onEdit(l)}>
+                    <Info className="h-2.5 w-2.5" />
                   </Button>
                 </td>
               </tr>
@@ -274,20 +274,20 @@ function AbateTable({ lancamentos, onEdit, isGlobal, fazendaMap }: { lancamentos
           const liqCabeca = totals.qtd > 0 ? totals.valorTotal / totals.qtd : 0;
           return (
             <tfoot>
-              <tr className="border-t-2 border-primary/40 bg-muted/30 font-bold">
-                <td className="p-1.5">TOTAL</td>
-                <td className="p-1.5 text-right">{totals.qtd}</td>
-                <td className="p-1.5"></td>
-                <td className="p-1.5"></td>
-                {isGlobal && <td className="p-1.5"></td>}
-                <td className="p-1.5 text-right">{fmtValor(pesoVivoMedio)}</td>
-                <td className="p-1.5 text-right text-muted-foreground">{rendMedio ? rendMedio.toFixed(1) + '%' : '-'}</td>
-                <td className="p-1.5 text-right">{fmtValor(arrobaMedio)}</td>
-                <td className="p-1.5 text-right text-primary">{fmtValor(totals.valorTotal)}</td>
-                <td className="p-1.5 text-right">{fmtValor(liqArroba)}</td>
-                <td className="p-1.5 text-right">{fmtValor(liqCabeca)}</td>
-                <td className="p-1.5"></td>
-                <td className="p-1.5"></td>
+              <tr className="border-t-2 border-primary/40 bg-muted/30 font-bold text-[10px]">
+                <td className="px-1 py-[3px]">TOTAL</td>
+                <td className="px-1 py-[3px] text-right">{totals.qtd}</td>
+                <td className="px-1 py-[3px]"></td>
+                <td className="px-1 py-[3px]"></td>
+                {isGlobal && <td className="px-1 py-[3px]"></td>}
+                <td className="px-1 py-[3px] text-right">{fmtValor(pesoVivoMedio)}</td>
+                <td className="px-1 py-[3px] text-right text-muted-foreground">{rendMedio ? rendMedio.toFixed(1) + '%' : '-'}</td>
+                <td className="px-1 py-[3px] text-right">{fmtValor(arrobaMedio)}</td>
+                <td className="px-1 py-[3px] text-right text-primary">{fmtValor(totals.valorTotal)}</td>
+                <td className="px-1 py-[3px] text-right">{fmtValor(liqArroba)}</td>
+                <td className="px-1 py-[3px] text-right">{fmtValor(liqCabeca)}</td>
+                <td className="px-1 py-[3px]"></td>
+                <td className="px-1 py-[3px]"></td>
               </tr>
             </tfoot>
           );
@@ -387,7 +387,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       <div className="animate-fade-in pb-20">
         {/* Top tabs */}
         <div className="p-4 pb-0">
-          <div className={`grid gap-0.5 bg-muted rounded-md p-0.5 grid-cols-${topTabs.length}`}>
+          <div className={`grid gap-0.5 bg-muted rounded-md p-0.5 max-w-md grid-cols-${topTabs.length}`}>
             {topTabs.map(t => (
               <button
                 key={t.id}
@@ -431,7 +431,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       {/* Sticky filter bar */}
       <div className={`sticky ${onBack || drillDownLabel ? 'top-[60px]' : 'top-0'} z-20 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 space-y-1`}>
       {/* Top tabs */}
-      <div className={`grid gap-0.5 bg-muted rounded-md p-0.5 ${modoMovimentacao ? 'grid-cols-2' : `grid-cols-${topTabs.length}`}`}>
+      <div className={`grid gap-0.5 bg-muted rounded-md p-0.5 max-w-md ${modoMovimentacao ? 'grid-cols-2' : `grid-cols-${topTabs.length}`}`}>
         {topTabs.map(t => (
           <button
             key={t.id}
