@@ -207,22 +207,22 @@ function AbateTable({ lancamentos, onEdit, isGlobal, fazendaMap }: { lancamentos
 
   return (
     <div>
-      <table className="w-full text-xs border-collapse">
+      <table className="w-full text-[10px] border-collapse">
          <thead className="sticky top-0 z-10">
           <tr className="border-b border-border">
-            <th className="p-1.5 text-left font-bold bg-background">Data</th>
-            <th className="p-1.5 text-right font-bold bg-background">Qtd</th>
-            <th className="p-1.5 text-left font-bold bg-background">Categoria</th>
-            <th className="p-1.5 text-left font-bold bg-background">Destino</th>
-            {isGlobal && <th className="p-1.5 text-left font-bold bg-background">Origem</th>}
-            <th className="p-1.5 text-right font-bold bg-background">P.Vivo</th>
-            <th className="p-1.5 text-right font-bold bg-background">Rend.</th>
-            <th className="p-1.5 text-right font-bold bg-background">P.@</th>
-            <th className="p-1.5 text-right font-bold text-primary bg-background">Total</th>
-            <th className="p-1.5 text-right font-bold bg-background">R$/líq @</th>
-            <th className="p-1.5 text-right font-bold bg-background">Líq/Cab</th>
-            <th className="p-1.5 text-center font-bold bg-background">Status</th>
-            <th className="p-1.5 w-8 bg-background"></th>
+            <th className="px-1 py-0.5 text-left font-bold text-[9px] uppercase tracking-wide bg-background">Data</th>
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">Qtd</th>
+            <th className="px-1 py-0.5 text-left font-bold text-[9px] uppercase tracking-wide bg-background">Categoria</th>
+            <th className="px-1 py-0.5 text-left font-bold text-[9px] uppercase tracking-wide bg-background">Destino</th>
+            {isGlobal && <th className="px-1 py-0.5 text-left font-bold text-[9px] uppercase tracking-wide bg-background">Origem</th>}
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">P.Vivo</th>
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">Rend.</th>
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">P.@</th>
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide text-primary bg-background">Total</th>
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">R$/líq @</th>
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">Líq/Cab</th>
+            <th className="px-1 py-0.5 text-center font-bold text-[9px] uppercase tracking-wide bg-background">Status</th>
+            <th className="px-1 py-0.5 w-6 bg-background"></th>
           </tr>
         </thead>
         <tbody>
@@ -230,27 +230,27 @@ function AbateTable({ lancamentos, onEdit, isGlobal, fazendaMap }: { lancamentos
             const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
             const c = calcIndicadoresLancamento(l);
             return (
-              <tr key={l.id} className="border-b hover:bg-muted/30">
-                <td className="p-1.5 whitespace-nowrap">{format(parseISO(l.data), 'dd/MM/yy')}</td>
-                <td className="p-1.5 text-right font-bold">{l.quantidade}</td>
-                <td className="p-1.5">{cat}</td>
-                <td className="p-1.5 truncate max-w-[80px]">{l.fazendaDestino || '-'}</td>
-                {isGlobal && <td className="p-1.5 truncate max-w-[100px]">{fMap.get(l.fazendaId || '') || '-'}</td>}
-                <td className="p-1.5 text-right">{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
-                <td className="p-1.5 text-right text-muted-foreground">{c.rendimento ? c.rendimento.toFixed(1) + '%' : '-'}</td>
-                <td className="p-1.5 text-right">{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
-                <td className="p-1.5 text-right font-bold text-primary">{fmtValor(c.valorFinal)}</td>
-                <td className="p-1.5 text-right">{fmtValor(c.liqArroba)}</td>
-                <td className="p-1.5 text-right">{fmtValor(c.liqCabeca)}</td>
-                <td className="p-1.5 text-center">
+              <tr key={l.id} className="border-b hover:bg-muted/30 leading-none">
+                <td className="px-1 py-[3px] whitespace-nowrap">{format(parseISO(l.data), 'dd/MM/yy')}</td>
+                <td className="px-1 py-[3px] text-right font-bold">{l.quantidade}</td>
+                <td className="px-1 py-[3px]">{cat}</td>
+                <td className="px-1 py-[3px] truncate max-w-[80px]">{l.fazendaDestino || '-'}</td>
+                {isGlobal && <td className="px-1 py-[3px] truncate max-w-[100px]">{fMap.get(l.fazendaId || '') || '-'}</td>}
+                <td className="px-1 py-[3px] text-right">{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
+                <td className="px-1 py-[3px] text-right text-muted-foreground">{c.rendimento ? c.rendimento.toFixed(1) + '%' : '-'}</td>
+                <td className="px-1 py-[3px] text-right">{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
+                <td className="px-1 py-[3px] text-right font-bold text-primary">{fmtValor(c.valorFinal)}</td>
+                <td className="px-1 py-[3px] text-right">{fmtValor(c.liqArroba)}</td>
+                <td className="px-1 py-[3px] text-right">{fmtValor(c.liqCabeca)}</td>
+                <td className="px-1 py-[3px] text-center">
                   {(() => {
                     const cfg = getStatusBadge(l);
-                    return <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${cfg.cls}`}>{cfg.label}</span>;
+                    return <span className={`text-[8px] font-bold px-1 py-px rounded ${cfg.cls}`}>{cfg.label}</span>;
                   })()}
                 </td>
-                <td className="p-1.5">
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(l)}>
-                    <Info className="h-3 w-3" />
+                <td className="px-1 py-[3px]">
+                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => onEdit(l)}>
+                    <Info className="h-2.5 w-2.5" />
                   </Button>
                 </td>
               </tr>
