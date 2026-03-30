@@ -132,6 +132,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
       preview.saldosBancarios,
       [],
       resumoComFazenda,
+      tipoImportacao,
     );
     if (ok) setPreview(null);
     setImportando(false);
