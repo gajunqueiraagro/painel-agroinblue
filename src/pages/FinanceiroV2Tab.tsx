@@ -168,7 +168,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [editingLanc, setEditingLanc] = useState<LancamentoV2 | null>(null);
 
   // Sorting state
-  type SortField = 'data' | 'valor' | 'produto' | 'fornecedor';
+  type SortField = 'data' | 'pgto' | 'valor' | 'produto' | 'fornecedor';
   type SortDir = 'asc' | 'desc';
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('desc');
