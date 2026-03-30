@@ -1039,8 +1039,8 @@ export function LancamentoV2Dialog({
 
           {/* Sticky footer */}
           <div className="px-5 py-3 border-t border-border/40 bg-white dark:bg-card flex items-center gap-2">
-            <Button variant="outline" onClick={onClose} className="px-4">Cancelar</Button>
-            <Button onClick={handleSubmit} disabled={saving || !canSave} className="flex-1">
+            <Button variant="outline" onClick={onClose} className="px-4" tabIndex={16}>Cancelar</Button>
+            <Button tabIndex={17} onClick={handleSubmit} disabled={saving || !canSave} className="flex-1">
               {saving ? 'Salvando...' : isEdit ? 'Salvar Alterações' : formaPagamentoParc === 'parcelada' ? `Criar ${numParcelas} Parcelas` : 'Criar Lançamento'}
             </Button>
             {isEdit && onDelete && (
