@@ -152,10 +152,9 @@ export function useResumoStatus(
         // Financeiro — ALL farms (including ADM)
         idsFin.length > 0
           ? supabase
-              .from('financeiro_lancamentos')
-              .select('status_transacao, data_pagamento, valor, tipo_operacao, produto')
-              .in('fazenda_id', idsFin)
-              .eq('cancelado', false)
+              .from('financeiro_lancamentos_v2')
+              .select('status_transacao, data_pagamento, valor, tipo_operacao, descricao')
+              .eq('cliente_id', clienteAtual?.id || '')
               .gte('data_pagamento', `${anoStr}-01-01`)
               .lte('data_pagamento', `${anoStr}-12-31`)
               .limit(10000)
