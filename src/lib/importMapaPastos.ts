@@ -231,7 +231,6 @@ export function gerarModeloMapaPastos(
   categorias: CategoriaRebanho[],
   fazendaNome: string,
 ) {
-  const wb = XLSX.utils.book_new();
   const headers = ['Ano_Mes', 'Pasto', 'Atividade', 'Lote', 'Qualidade', 'Categoria', 'Quantidade', 'Peso Médio (kg)'];
 
   const dataRows: (string | number)[][] = [];
@@ -262,23 +261,33 @@ export function gerarModeloMapaPastos(
     }
   }
 
-  const wsData = [headers, ...dataRows];
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
-  ws['!cols'] = [
-    { wch: 12 }, { wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 10 }, { wch: 18 }, { wch: 12 }, { wch: 16 },
-  ];
+  const wsData: (string | number)[][] = [headers, ...dataRows];
+  const pastosRef: string[][] = [['Pastos Disponíveis'], ...pastosAtivos.map(p => [p.nome])];
+  const catRef: string[][] = [['Categorias Disponíveis'], ...categorias.map(c => [c.nome])];
 
-  const pastosRef = [['Pastos Disponíveis'], ...pastosAtivos.map(p => [p.nome])];
-  const wsPastos = XLSX.utils.aoa_to_sheet(pastosRef);
-  wsPastos['!cols'] = [{ wch: 25 }];
-
-  const catRef = [['Categorias Disponíveis'], ...categorias.map(c => [c.nome])];
-  const wsCat = XLSX.utils.aoa_to_sheet(catRef);
-  wsCat['!cols'] = [{ wch: 25 }];
-
-  XLSX.utils.book_append_sheet(wb, ws, 'Mapa Rebanho');
-  XLSX.utils.book_append_sheet(wb, wsPastos, 'Pastos');
-  XLSX.utils.book_append_sheet(wb, wsCat, 'Categorias');
-
-  XLSX.writeFile(wb, `Modelo_Mapa_Rebanho_${fazendaNome.replace(/\s+/g, '_')}.xlsx`);
+  triggerXlsxDownload({
+    filename: `Modelo_Mapa_Rebanho_${fazendaNome.replace(/\s+/g, '_')}.xlsx`,
+    sheets: [
+      {
+        name: 'Mapa Rebanho',
+        mode: 'aoa',
+        rows: wsData,
+        cols: [
+          { wch: 12 }, { wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 10 }, { wch: 18 }, { wch: 12 }, { wch: 16 },
+        ],
+      },
+      {
+        name: 'Pastos',
+        mode: 'aoa',
+        rows: pastosRef,
+        cols: [{ wch: 25 }],
+      },
+      {
+        name: 'Categorias',
+        mode: 'aoa',
+        rows: catRef,
+        cols: [{ wch: 25 }],
+      },
+    ],
+  });
 }

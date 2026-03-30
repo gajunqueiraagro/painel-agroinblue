@@ -1,25 +1,25 @@
 /**
  * Modelo Excel com aba única EXPORT_APP_UNICO.
  */
-import { triggerXlsxDownload } from '@/lib/xlsxDownload';
+import { triggerXlsxDownload, type XlsxCellValue } from '@/lib/xlsxDownload';
 
-const COLS = [
+const COLS: XlsxCellValue[] = [
   'Tipo_Registro', 'AnoMes', 'Data_Ref', 'Conta', 'Fazenda',
   'Tipo', 'Grupo', 'Valor', 'Status', 'Produto',
   'Fornecedor', 'Macro_Custo', 'Grupo_Custo', 'Centro_Custo', 'Subcentro', 'Obs',
 ];
 
-const EXAMPLES: unknown[][] = [
+const EXAMPLES: XlsxCellValue[][] = [
   ['LANCAMENTO', '2026-01', '2026-01-15', 'Banco do Brasil', '3M', '2-Saídas', 'Nutrição', 4500.00, 'Pago', 'Sal mineral', 'Agro Nutrição Ltda', 'Custeio Produtivo', 'Nutrição', 'Sal mineral', 'Proteinado', 'Entrega mensal'],
-  ['LANCAMENTO', '2026-02', '2026-02-10', 'Sicredi', 'BG', '2-Saídas', 'Sanidade', 2800.00, 'Conciliado', 'Vacina aftosa', 'Vet Saúde Animal', 'Custeio Produtivo', 'Sanidade', 'Vacinação', '', 'Campanha mai/2026'],
-  ['SALDO', '2026-01', '', 'Banco do Brasil', '', 'Saldo_Final', '', 125000.00, '', '', '', '', '', '', '', ''],
-  ['SALDO', '2026-01', '', 'Sicredi', '', 'Saldo_Final', '', 43200.50, '', '', '', '', '', '', '', ''],
-  ['RESUMO', '2026-01', '', '', '', 'Entradas', '', 85000.00, '', '', '', '', '', '', '', ''],
-  ['RESUMO', '2026-01', '', '', '', 'Saidas', '', 62000.00, '', '', '', '', '', '', '', ''],
-  ['RESUMO', '2026-01', '', '', '', 'Saldo_Final_Total', '', 168200.50, '', '', '', '', '', '', '', ''],
+  ['LANCAMENTO', '2026-02', '2026-02-10', 'Sicredi', 'BG', '2-Saídas', 'Sanidade', 2800.00, 'Conciliado', 'Vacina aftosa', 'Vet Saúde Animal', 'Custeio Produtivo', 'Sanidade', 'Vacinação', null, 'Campanha mai/2026'],
+  ['SALDO', '2026-01', null, 'Banco do Brasil', null, 'Saldo_Final', null, 125000.00, null, null, null, null, null, null, null, null],
+  ['SALDO', '2026-01', null, 'Sicredi', null, 'Saldo_Final', null, 43200.50, null, null, null, null, null, null, null, null],
+  ['RESUMO', '2026-01', null, null, null, 'Entradas', null, 85000.00, null, null, null, null, null, null, null, null],
+  ['RESUMO', '2026-01', null, null, null, 'Saidas', null, 62000.00, null, null, null, null, null, null, null, null],
+  ['RESUMO', '2026-01', null, null, null, 'Saldo_Final_Total', null, 168200.50, null, null, null, null, null, null, null, null],
 ];
 
-const INSTRUCOES: unknown[][] = [
+const INSTRUCOES: XlsxCellValue[][] = [
   ['INSTRUÇÕES — MODELO FINANCEIRO UNIFICADO'],
   [],
   ['Este modelo possui 1 aba obrigatória: EXPORT_APP_UNICO'],
@@ -65,7 +65,7 @@ export function downloadModeloExcel() {
         name: 'EXPORT_APP_UNICO',
         mode: 'aoa',
         rows: [COLS, ...EXAMPLES],
-        cols: COLS.map(c => ({ wch: Math.max(c.length + 2, 18) })),
+        cols: COLS.map(c => ({ wch: Math.max(String(c ?? '').length + 2, 18) })),
       },
       {
         name: 'INSTRUCOES',
