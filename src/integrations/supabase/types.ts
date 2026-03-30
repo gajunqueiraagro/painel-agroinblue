@@ -2051,6 +2051,57 @@ export type Database = {
           },
         ]
       }
+      financeiro_saldos_audit: {
+        Row: {
+          acao: string
+          campo_alterado: string | null
+          cliente_id: string
+          created_at: string
+          id: string
+          saldo_id: string
+          usuario_id: string | null
+          valor_anterior: string | null
+          valor_novo: string | null
+        }
+        Insert: {
+          acao: string
+          campo_alterado?: string | null
+          cliente_id: string
+          created_at?: string
+          id?: string
+          saldo_id: string
+          usuario_id?: string | null
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Update: {
+          acao?: string
+          campo_alterado?: string | null
+          cliente_id?: string
+          created_at?: string
+          id?: string
+          saldo_id?: string
+          usuario_id?: string | null
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_saldos_audit_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_saldos_audit_saldo_id_fkey"
+            columns: ["saldo_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_saldos_bancarios_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financeiro_saldos_bancarios: {
         Row: {
           ano_mes: string
@@ -2118,9 +2169,12 @@ export type Database = {
           id: string
           observacao: string | null
           origem_saldo: string | null
+          origem_saldo_inicial: string
           saldo_final: number
           saldo_inicial: number
+          status_mes: string
           updated_at: string
+          updated_by: string | null
         }
         Insert: {
           ano_mes: string
@@ -2133,9 +2187,12 @@ export type Database = {
           id?: string
           observacao?: string | null
           origem_saldo?: string | null
+          origem_saldo_inicial?: string
           saldo_final?: number
           saldo_inicial?: number
+          status_mes?: string
           updated_at?: string
+          updated_by?: string | null
         }
         Update: {
           ano_mes?: string
@@ -2148,9 +2205,12 @@ export type Database = {
           id?: string
           observacao?: string | null
           origem_saldo?: string | null
+          origem_saldo_inicial?: string
           saldo_final?: number
           saldo_inicial?: number
+          status_mes?: string
           updated_at?: string
+          updated_by?: string | null
         }
         Relationships: [
           {

@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,11 +12,19 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Plus, Pencil, AlertTriangle, Link2, PenLine } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Plus, Pencil, AlertTriangle, Link2, PenLine, Lock, Unlock, ShieldCheck,
+  LockKeyhole, ShieldAlert,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
+/* ── types ── */
 interface SaldoBancario {
   id: string;
   ano_mes: string;
@@ -23,7 +33,9 @@ interface SaldoBancario {
   saldo_inicial: number;
   saldo_final: number;
   fechado: boolean;
+  status_mes: string;          // aberto | fechado | travado
   origem_saldo: string | null;
+  origem_saldo_inicial: string; // automatico | manual
   observacao: string | null;
 }
 
@@ -35,6 +47,7 @@ interface ContaRef {
   codigo_conta: string | null;
 }
 
+/* ── helpers ── */
 function fmtBRL(v: number): string {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -51,7 +64,12 @@ function nextAnoMes(am: string): string {
   return `${y}-${String(m + 1).padStart(2, '0')}`;
 }
 
-const ANOS = ['2023', '2024', '2025', '2026'];
+function currentAnoMes(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+const ANOS = ['2023', '2024', '2025', '2026', '2027'];
 const MESES = [
   { v: '__all__', l: 'Todos' },
   { v: '01', l: 'Jan' }, { v: '02', l: 'Fev' }, { v: '03', l: 'Mar' },
@@ -63,9 +81,23 @@ const MESES = [
 const TIPO_ORDER: Record<string, number> = { cc: 0, inv: 1, cartao: 2 };
 const TIPO_LABELS: Record<string, string> = { cc: 'Conta Corrente', inv: 'Conta Investimento', cartao: 'Cartão de Crédito' };
 
+const STATUS_LABELS: Record<string, string> = { aberto: 'Aberto', fechado: 'Fechado', travado: 'Travado' };
+const STATUS_COLORS: Record<string, string> = {
+  aberto: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+  fechado: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+  travado: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+};
+
+/* ── component ── */
 export function FinV2SaldosTab() {
   const { clienteAtual } = useCliente();
   const { fazendas, fazendaAtual } = useFazenda();
+  const { user } = useAuth();
+  const { perfil, isManager } = usePermissions();
+  const isAdmin = perfil === 'admin_agroinblue' || perfil === 'gestor_cliente';
+  const isFinanceiro = perfil === 'financeiro';
+  const curAM = currentAnoMes();
+
   const [saldos, setSaldos] = useState<SaldoBancario[]>([]);
   const [allSaldos, setAllSaldos] = useState<SaldoBancario[]>([]);
   const [contas, setContas] = useState<ContaRef[]>([]);
@@ -85,9 +117,18 @@ export function FinV2SaldosTab() {
   const [overrideInicial, setOverrideInicial] = useState(false);
   const [autoSaldoInicial, setAutoSaldoInicial] = useState<number | null>(null);
 
-  // Movimentações summary per conta/mes
+  // Status management
+  const [statusAction, setStatusAction] = useState<{ saldo: SaldoBancario; newStatus: string } | null>(null);
+
+  // Propagation confirm
+  const [propagateConfirm, setPropagateConfirm] = useState<{
+    nextSaldo: SaldoBancario;
+    newValue: number;
+  } | null>(null);
+
   const [movSummary, setMovSummary] = useState<Record<string, { entradas: number; saidas: number }>>({});
 
+  /* ── data loading ── */
   const load = useCallback(async () => {
     if (!clienteAtual?.id) return;
     setLoading(true);
@@ -104,7 +145,6 @@ export function FinV2SaldosTab() {
       sQuery = sQuery.eq('ano_mes', `${filtroAno}-${filtroMes}`);
     }
 
-    // Also load ALL saldos for auto-initial lookups (previous months)
     const [{ data: sData }, { data: cData }, { data: allData }] = await Promise.all([
       sQuery,
       supabase
@@ -122,7 +162,6 @@ export function FinV2SaldosTab() {
     setContas((cData as ContaRef[]) || []);
     setAllSaldos((allData as SaldoBancario[]) || []);
 
-    // Load movement summary for consistency check
     const { data: movData } = await supabase
       .from('financeiro_lancamentos_v2')
       .select('conta_bancaria_id, ano_mes, valor, sinal')
@@ -139,7 +178,6 @@ export function FinV2SaldosTab() {
       }
       setMovSummary(summary);
     }
-
     setLoading(false);
   }, [clienteAtual?.id, filtroAno, filtroMes]);
 
@@ -155,17 +193,14 @@ export function FinV2SaldosTab() {
     const c = contaMap.get(id);
     return c?.nome_exibicao || c?.nome_conta || '-';
   };
-
   const contaTipo = (id: string): string => contaMap.get(id)?.tipo_conta || 'cc';
 
-  // Find previous month saldo_final for a given conta+anoMes
   const findPrevSaldoFinal = useCallback((cId: string, am: string): number | null => {
     const prev = prevAnoMes(am);
     const found = allSaldos.find(s => s.conta_bancaria_id === cId && s.ano_mes === prev);
     return found ? found.saldo_final : null;
   }, [allSaldos]);
 
-  // Consistency check: saldo_inicial + entradas - saidas vs saldo_final
   const getInconsistency = useCallback((s: SaldoBancario): number | null => {
     const key = `${s.conta_bancaria_id}|${s.ano_mes}`;
     const mov = movSummary[key];
@@ -175,17 +210,38 @@ export function FinV2SaldosTab() {
     return diff > 0.01 ? diff : null;
   }, [movSummary]);
 
-  // Group saldos by conta type
+  /* ── permission helpers ── */
+  const canEditSaldoFinal = (s: SaldoBancario): boolean => {
+    if (s.status_mes === 'travado') return isAdmin;
+    if (s.status_mes === 'fechado') return isAdmin;
+    if (s.ano_mes < curAM) return isAdmin;
+    // Current month, aberto
+    return isAdmin || isFinanceiro;
+  };
+
+  const canEditSaldoInicial = (s: SaldoBancario): boolean => {
+    if (s.origem_saldo_inicial === 'automatico') return false; // never editable when auto
+    if (s.status_mes === 'travado') return isAdmin;
+    if (s.status_mes === 'fechado') return isAdmin;
+    return isAdmin || isFinanceiro;
+  };
+
+  const getEditBlockReason = (s: SaldoBancario): string | null => {
+    if (s.status_mes === 'travado') return 'Mês travado — somente administrador';
+    if (s.status_mes === 'fechado') return 'Mês fechado — somente administrador';
+    if (s.ano_mes < curAM && !isAdmin) return 'Edição bloqueada para meses anteriores';
+    return null;
+  };
+
+  /* ── grouping ── */
   const grouped = useMemo(() => {
     const groups: { tipo: string; label: string; items: SaldoBancario[]; totalFinal: number }[] = [];
     const byTipo: Record<string, SaldoBancario[]> = {};
-
     for (const s of saldos) {
       const tipo = contaTipo(s.conta_bancaria_id);
       if (!byTipo[tipo]) byTipo[tipo] = [];
       byTipo[tipo].push(s);
     }
-
     const orderedTypes = Object.keys(byTipo).sort((a, b) => (TIPO_ORDER[a] ?? 99) - (TIPO_ORDER[b] ?? 99));
     for (const tipo of orderedTypes) {
       const items = byTipo[tipo].sort((a, b) => {
@@ -208,7 +264,7 @@ export function FinV2SaldosTab() {
   const parseBRL = (s: string) => parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
   const toBRL = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  // When conta or anoMes changes in dialog, auto-fill saldo inicial
+  /* ── dialog auto-fill ── */
   useEffect(() => {
     if (!dialogOpen || !contaId || !anoMes) return;
     const prevFinal = findPrevSaldoFinal(contaId, anoMes);
@@ -233,6 +289,15 @@ export function FinV2SaldosTab() {
   };
 
   const openEdit = (s: SaldoBancario) => {
+    const blockReason = getEditBlockReason(s);
+    const canFinal = canEditSaldoFinal(s);
+    const canInicial = canEditSaldoInicial(s);
+
+    if (!canFinal && !canInicial) {
+      toast.error(blockReason || 'Sem permissão para editar');
+      return;
+    }
+
     setEditing(s);
     setAnoMes(s.ano_mes);
     setContaId(s.conta_bancaria_id);
@@ -242,10 +307,25 @@ export function FinV2SaldosTab() {
     setOrigem(s.origem_saldo || 'manual');
     const prevFinal = findPrevSaldoFinal(s.conta_bancaria_id, s.ano_mes);
     setAutoSaldoInicial(prevFinal);
-    setOverrideInicial(prevFinal !== null && Math.abs(prevFinal - s.saldo_inicial) > 0.01);
+    setOverrideInicial(s.origem_saldo_inicial === 'manual' && prevFinal !== null);
     setDialogOpen(true);
   };
 
+  /* ── audit helper ── */
+  const logAudit = async (saldoId: string, acao: string, campo?: string, anterior?: string, novo?: string) => {
+    if (!clienteAtual?.id) return;
+    await supabase.from('financeiro_saldos_audit').insert({
+      saldo_id: saldoId,
+      cliente_id: clienteAtual.id,
+      acao,
+      campo_alterado: campo || null,
+      valor_anterior: anterior || null,
+      valor_novo: novo || null,
+      usuario_id: user?.id || null,
+    });
+  };
+
+  /* ── save ── */
   const save = async () => {
     if (!clienteAtual?.id || !anoMes || !contaId || !fazendaId) {
       toast.error('Preencha todos os campos');
@@ -254,38 +334,100 @@ export function FinV2SaldosTab() {
 
     const saldoInicialVal = parseBRL(saldoInicial);
     const saldoFinalVal = parseBRL(saldoFinal);
-    const origemFinal = autoSaldoInicial !== null && !overrideInicial ? 'automatico' : origem;
+    const origemInicialFinal = autoSaldoInicial !== null && !overrideInicial ? 'automatico' : 'manual';
 
-    const payload = {
+    const payload: any = {
       cliente_id: clienteAtual.id,
       fazenda_id: fazendaId,
       conta_bancaria_id: contaId,
       ano_mes: anoMes,
       saldo_inicial: saldoInicialVal,
       saldo_final: saldoFinalVal,
-      origem_saldo: origemFinal,
+      origem_saldo: origem,
+      origem_saldo_inicial: origemInicialFinal,
+      updated_by: user?.id || null,
     };
 
     if (editing) {
+      // Check permission
+      if (!canEditSaldoFinal(editing)) {
+        toast.error('Sem permissão para editar este mês');
+        return;
+      }
+
       const { error } = await supabase.from('financeiro_saldos_bancarios_v2').update(payload).eq('id', editing.id);
       if (error) { toast.error('Erro ao atualizar'); return; }
+
+      // Audit
+      if (editing.saldo_final !== saldoFinalVal) {
+        await logAudit(editing.id, 'alteracao', 'saldo_final', String(editing.saldo_final), String(saldoFinalVal));
+      }
+      if (editing.saldo_inicial !== saldoInicialVal) {
+        await logAudit(editing.id, 'alteracao', 'saldo_inicial', String(editing.saldo_inicial), String(saldoInicialVal));
+      }
+
       toast.success('Saldo atualizado');
 
-      // Propagate: update next month's saldo_inicial if it exists and is automatic
+      // Propagate to next month
       const nextAm = nextAnoMes(anoMes);
       const nextSaldo = allSaldos.find(s => s.conta_bancaria_id === contaId && s.ano_mes === nextAm);
-      if (nextSaldo && nextSaldo.origem_saldo === 'automatico') {
-        await supabase
-          .from('financeiro_saldos_bancarios_v2')
-          .update({ saldo_inicial: saldoFinalVal })
-          .eq('id', nextSaldo.id);
+      if (nextSaldo) {
+        if (nextSaldo.origem_saldo_inicial === 'automatico') {
+          await supabase
+            .from('financeiro_saldos_bancarios_v2')
+            .update({ saldo_inicial: saldoFinalVal })
+            .eq('id', nextSaldo.id);
+          await logAudit(nextSaldo.id, 'propagacao_automatica', 'saldo_inicial', String(nextSaldo.saldo_inicial), String(saldoFinalVal));
+        } else if (Math.abs(nextSaldo.saldo_inicial - saldoFinalVal) > 0.01) {
+          // Manual next month — ask user
+          setPropagateConfirm({ nextSaldo, newValue: saldoFinalVal });
+        }
       }
     } else {
-      const { error } = await supabase.from('financeiro_saldos_bancarios_v2').insert(payload);
+      payload.created_by = user?.id || null;
+      const { data: inserted, error } = await supabase
+        .from('financeiro_saldos_bancarios_v2')
+        .insert(payload)
+        .select('id')
+        .single();
       if (error) { toast.error('Erro ao criar'); console.error(error); return; }
+      if (inserted) {
+        await logAudit(inserted.id, 'criacao');
+      }
       toast.success('Saldo registrado');
     }
     setDialogOpen(false);
+    load();
+  };
+
+  /* ── propagation confirm ── */
+  const handlePropagate = async (update: boolean) => {
+    if (!propagateConfirm) return;
+    const { nextSaldo, newValue } = propagateConfirm;
+    if (update) {
+      await supabase
+        .from('financeiro_saldos_bancarios_v2')
+        .update({ saldo_inicial: newValue, origem_saldo_inicial: 'automatico' })
+        .eq('id', nextSaldo.id);
+      await logAudit(nextSaldo.id, 'propagacao_aceita', 'saldo_inicial', String(nextSaldo.saldo_inicial), String(newValue));
+      toast.success('Saldo inicial do próximo mês atualizado');
+      load();
+    }
+    setPropagateConfirm(null);
+  };
+
+  /* ── status change ── */
+  const handleStatusChange = async () => {
+    if (!statusAction || !clienteAtual?.id) return;
+    const { saldo, newStatus } = statusAction;
+    const { error } = await supabase
+      .from('financeiro_saldos_bancarios_v2')
+      .update({ status_mes: newStatus, updated_by: user?.id })
+      .eq('id', saldo.id);
+    if (error) { toast.error('Erro ao alterar status'); return; }
+    await logAudit(saldo.id, `status_${newStatus}`, 'status_mes', saldo.status_mes, newStatus);
+    toast.success(`Mês ${STATUS_LABELS[newStatus] || newStatus}`);
+    setStatusAction(null);
     load();
   };
 
@@ -296,6 +438,7 @@ export function FinV2SaldosTab() {
 
   const saldoInicialIsAuto = autoSaldoInicial !== null && !overrideInicial;
 
+  /* ── render ── */
   return (
     <TooltipProvider>
       <div className="max-w-4xl mx-auto p-4 pb-20 space-y-3 animate-fade-in">
@@ -350,13 +493,13 @@ export function FinV2SaldosTab() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Mês</TableHead>
-                  <TableHead>Conta</TableHead>
-                  <TableHead className="text-right">Saldo Inicial</TableHead>
-                  <TableHead className="text-right">Saldo Final</TableHead>
-                  <TableHead className="text-center">Orig.</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-8" />
+                  <TableHead className="text-[10px]">Mês</TableHead>
+                  <TableHead className="text-[10px]">Conta</TableHead>
+                  <TableHead className="text-right text-[10px]">Saldo Inicial</TableHead>
+                  <TableHead className="text-right text-[10px]">Saldo Final</TableHead>
+                  <TableHead className="text-center text-[10px]">Orig.</TableHead>
+                  <TableHead className="text-[10px]">Status</TableHead>
+                  <TableHead className="w-20 text-[10px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -367,26 +510,32 @@ export function FinV2SaldosTab() {
                   <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Nenhum saldo registrado</TableCell></TableRow>
                 )}
                 {!loading && grouped.map(g => (
-                  <>
+                  <>{/* group header */}
                     <TableRow key={`grp-${g.tipo}`} className="bg-muted/40 border-t">
-                      <TableCell colSpan={7} className="font-semibold text-[13px] py-1.5 text-foreground/80">
+                      <TableCell colSpan={7} className="font-semibold text-[12px] py-1.5 text-foreground/80">
                         {g.label}
                       </TableCell>
                     </TableRow>
                     {g.items.map(s => {
                       const inconsistency = getInconsistency(s);
-                      const isAuto = s.origem_saldo === 'automatico';
+                      const isAuto = s.origem_saldo_inicial === 'automatico';
+                      const editable = canEditSaldoFinal(s);
+                      const blockReason = getEditBlockReason(s);
+
                       return (
-                        <TableRow key={s.id} className={inconsistency ? 'bg-red-50/50 dark:bg-red-950/20' : ''}>
-                          <TableCell>{mesLabel(s.ano_mes)}</TableCell>
-                          <TableCell>{contaNome(s.conta_bancaria_id)}</TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            R$ {fmtBRL(s.saldo_inicial)}
+                        <TableRow key={s.id} className={`text-[11px] ${inconsistency ? 'bg-red-50/50 dark:bg-red-950/20' : ''}`}>
+                          <TableCell className="py-1">{mesLabel(s.ano_mes)}</TableCell>
+                          <TableCell className="py-1">{contaNome(s.conta_bancaria_id)}</TableCell>
+                          <TableCell className="text-right tabular-nums py-1">
+                            <div className="flex items-center justify-end gap-1">
+                              {isAuto && <Link2 className="h-3 w-3 text-emerald-500 shrink-0" />}
+                              R$ {fmtBRL(s.saldo_inicial)}
+                            </div>
                           </TableCell>
-                          <TableCell className="text-right tabular-nums font-semibold">
+                          <TableCell className="text-right tabular-nums font-semibold py-1">
                             R$ {fmtBRL(s.saldo_final)}
                           </TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className="text-center py-1">
                             <Tooltip>
                               <TooltipTrigger>
                                 {isAuto ? (
@@ -396,14 +545,16 @@ export function FinV2SaldosTab() {
                                 )}
                               </TooltipTrigger>
                               <TooltipContent className="text-[10px]">
-                                {isAuto ? 'Saldo inicial automático (mês anterior)' : 'Saldo inicial manual'}
+                                {isAuto ? 'Saldo inicial herdado automaticamente' : 'Saldo inicial definido manualmente'}
                               </TooltipContent>
                             </Tooltip>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="py-1">
                             <div className="flex items-center gap-1">
-                              <Badge variant={s.fechado ? 'default' : 'outline'} className="text-[10px] px-1 py-0">
-                                {s.fechado ? 'Fechado' : 'Aberto'}
+                              <Badge className={`text-[9px] px-1.5 py-0 font-medium border-0 ${STATUS_COLORS[s.status_mes] || ''}`}>
+                                {s.status_mes === 'travado' && <LockKeyhole className="h-2.5 w-2.5 mr-0.5" />}
+                                {s.status_mes === 'fechado' && <Lock className="h-2.5 w-2.5 mr-0.5" />}
+                                {STATUS_LABELS[s.status_mes] || s.status_mes}
                               </Badge>
                               {inconsistency && (
                                 <Tooltip>
@@ -417,10 +568,78 @@ export function FinV2SaldosTab() {
                               )}
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(s)}>
-                              <Pencil className="h-3 w-3" />
-                            </Button>
+                          <TableCell className="py-1">
+                            <div className="flex items-center gap-0.5">
+                              {/* Edit button */}
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={() => openEdit(s)}
+                                      disabled={!editable && !canEditSaldoInicial(s)}
+                                    >
+                                      <Pencil className="h-3 w-3" />
+                                    </Button>
+                                  </span>
+                                </TooltipTrigger>
+                                {blockReason && !editable && (
+                                  <TooltipContent className="text-[10px]">{blockReason}</TooltipContent>
+                                )}
+                              </Tooltip>
+
+                              {/* Admin status actions */}
+                              {isAdmin && (
+                                <>
+                                  {s.status_mes === 'aberto' && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6"
+                                          onClick={() => setStatusAction({ saldo: s, newStatus: 'fechado' })}>
+                                          <Lock className="h-3 w-3 text-amber-600" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-[10px]">Fechar mês</TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                  {s.status_mes === 'fechado' && (
+                                    <>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button variant="ghost" size="icon" className="h-6 w-6"
+                                            onClick={() => setStatusAction({ saldo: s, newStatus: 'aberto' })}>
+                                            <Unlock className="h-3 w-3 text-emerald-600" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="text-[10px]">Reabrir mês</TooltipContent>
+                                      </Tooltip>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button variant="ghost" size="icon" className="h-6 w-6"
+                                            onClick={() => setStatusAction({ saldo: s, newStatus: 'travado' })}>
+                                            <LockKeyhole className="h-3 w-3 text-red-600" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="text-[10px]">Travar mês</TooltipContent>
+                                      </Tooltip>
+                                    </>
+                                  )}
+                                  {s.status_mes === 'travado' && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6"
+                                          onClick={() => setStatusAction({ saldo: s, newStatus: 'fechado' })}>
+                                          <Unlock className="h-3 w-3 text-amber-600" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-[10px]">Destravar mês</TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                </>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -432,21 +651,37 @@ export function FinV2SaldosTab() {
           </CardContent>
         </Card>
 
-        {/* Dialog */}
+        {/* Edit/Create Dialog */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>{editing ? 'Editar Saldo' : 'Novo Saldo Mensal'}</DialogTitle>
+              {editing && (
+                <DialogDescription className="text-[11px]">
+                  {getEditBlockReason(editing) && (
+                    <span className="text-amber-600 flex items-center gap-1">
+                      <ShieldAlert className="h-3 w-3" />
+                      {getEditBlockReason(editing)}
+                    </span>
+                  )}
+                </DialogDescription>
+              )}
             </DialogHeader>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">Ano-Mês *</Label>
-                  <Input value={anoMes} onChange={e => setAnoMes(e.target.value)} placeholder="2025-01" className="h-9" />
+                  <Input
+                    value={anoMes}
+                    onChange={e => setAnoMes(e.target.value)}
+                    placeholder="2026-03"
+                    className="h-9"
+                    disabled={!!editing}
+                  />
                 </div>
                 <div>
                   <Label className="text-xs">Conta Bancária *</Label>
-                  <Select value={contaId} onValueChange={setContaId}>
+                  <Select value={contaId} onValueChange={setContaId} disabled={!!editing}>
                     <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       {contas.map(c => (
@@ -458,7 +693,7 @@ export function FinV2SaldosTab() {
               </div>
               <div>
                 <Label className="text-xs">Fazenda *</Label>
-                <Select value={fazendaId} onValueChange={setFazendaId}>
+                <Select value={fazendaId} onValueChange={setFazendaId} disabled={!!editing}>
                   <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     {fazendas.map(f => (
@@ -472,7 +707,7 @@ export function FinV2SaldosTab() {
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs">Saldo Inicial</Label>
-                  {autoSaldoInicial !== null && (
+                  {autoSaldoInicial !== null && (editing ? canEditSaldoInicial(editing) || isAdmin : true) && (
                     <div className="flex items-center gap-1.5">
                       <span className="text-[10px] text-muted-foreground">Editar manual</span>
                       <Switch
@@ -497,7 +732,13 @@ export function FinV2SaldosTab() {
                 {autoSaldoInicial !== null && !overrideInicial && (
                   <p className="text-[10px] text-emerald-600 flex items-center gap-1">
                     <Link2 className="h-3 w-3" />
-                    Preenchido automaticamente a partir do mês anterior (R$ {fmtBRL(autoSaldoInicial)})
+                    Saldo inicial herdado automaticamente do mês anterior (R$ {fmtBRL(autoSaldoInicial)})
+                  </p>
+                )}
+                {autoSaldoInicial !== null && overrideInicial && (
+                  <p className="text-[10px] text-amber-600 flex items-center gap-1">
+                    <PenLine className="h-3 w-3" />
+                    Saldo inicial definido manualmente (override)
                   </p>
                 )}
                 {autoSaldoInicial === null && (
@@ -507,12 +748,25 @@ export function FinV2SaldosTab() {
                 )}
               </div>
 
-              <div>
+              {/* Saldo Final */}
+              <div className="space-y-1">
                 <Label className="text-xs">Saldo Final</Label>
-                <Input value={saldoFinal} onChange={e => setSaldoFinal(e.target.value)} className="h-9" />
+                <Input
+                  value={saldoFinal}
+                  onChange={e => setSaldoFinal(e.target.value)}
+                  className="h-9"
+                  disabled={editing ? !canEditSaldoFinal(editing) : false}
+                />
+                {editing && !canEditSaldoFinal(editing) && (
+                  <p className="text-[10px] text-red-500 flex items-center gap-1">
+                    <ShieldAlert className="h-3 w-3" />
+                    Edição bloqueada — {getEditBlockReason(editing) || 'sem permissão'}
+                  </p>
+                )}
               </div>
+
               <div>
-                <Label className="text-xs">Origem</Label>
+                <Label className="text-xs">Origem do saldo</Label>
                 <Select value={origem} onValueChange={setOrigem}>
                   <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -529,6 +783,50 @@ export function FinV2SaldosTab() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Status change confirmation */}
+        <AlertDialog open={!!statusAction} onOpenChange={() => setStatusAction(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-base">
+                {statusAction?.newStatus === 'fechado' && 'Fechar mês'}
+                {statusAction?.newStatus === 'travado' && 'Travar mês'}
+                {statusAction?.newStatus === 'aberto' && (statusAction.saldo.status_mes === 'travado' ? 'Destravar mês' : 'Reabrir mês')}
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm">
+                {statusAction?.newStatus === 'fechado' && (
+                  <>O mês <strong>{statusAction?.saldo && mesLabel(statusAction.saldo.ano_mes)}</strong> será fechado. O perfil financeiro não poderá mais editar os saldos deste mês.</>
+                )}
+                {statusAction?.newStatus === 'travado' && (
+                  <>O mês será <strong>travado</strong>. Nenhuma alteração será possível até que seja destravado pelo administrador.</>
+                )}
+                {statusAction?.newStatus === 'aberto' && (
+                  <>O mês será reaberto para edição.</>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleStatusChange}>Confirmar</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Propagation confirmation */}
+        <AlertDialog open={!!propagateConfirm} onOpenChange={() => setPropagateConfirm(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-base">Atualizar saldo inicial do próximo mês?</AlertDialogTitle>
+              <AlertDialogDescription className="text-sm">
+                Agora existe um saldo final diferente no mês anterior. Deseja atualizar o saldo inicial automaticamente com o valor de <strong>R$ {propagateConfirm ? fmtBRL(propagateConfirm.newValue) : ''}</strong>?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => handlePropagate(false)}>Manter valor manual</AlertDialogCancel>
+              <AlertDialogAction onClick={() => handlePropagate(true)}>Atualizar automaticamente</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </TooltipProvider>
   );
