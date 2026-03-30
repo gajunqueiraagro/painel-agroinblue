@@ -69,6 +69,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   const [pesosDb, setPesosDb] = useState<Record<string, number>>({});
   const [conciliacaoStatus, setConciliacaoStatus] = useState<'aberto' | 'fechado' | 'parcial' | null>(null);
   const [rebanhoStatus, setRebanhoStatus] = useState<'aberto' | 'fechado' | null>(null);
+  const [precosRebanho, setPrecosRebanho] = useState<Record<string, number>>({});
 
   // Fetch conciliação status for the selected month/fazenda
   useEffect(() => {
