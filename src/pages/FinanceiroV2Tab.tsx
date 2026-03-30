@@ -660,17 +660,25 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </table>
           </div>
 
-          {hook.totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2">
-              <Button variant="outline" size="sm" className="h-6" disabled={hook.page === 0} onClick={() => handlePageChange(hook.page - 1)}>
-                <ChevronLeft className="h-3 w-3" />
-              </Button>
-              <span className="text-[10px] text-muted-foreground">Pág {hook.page + 1}/{hook.totalPages}</span>
-              <Button variant="outline" size="sm" className="h-6" disabled={hook.page >= hook.totalPages - 1} onClick={() => handlePageChange(hook.page + 1)}>
-                <ChevronRight className="h-3 w-3" />
-              </Button>
-            </div>
-          )}
+          {/* Pagination */}
+          <div className="flex items-center justify-between px-1 py-1">
+            <span className="text-[10px] text-muted-foreground">
+              {hook.total} lançamento{hook.total !== 1 ? 's' : ''} encontrado{hook.total !== 1 ? 's' : ''}
+            </span>
+            {hook.totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" disabled={hook.page === 0} onClick={() => handlePageChange(hook.page - 1)}>
+                  <ChevronLeft className="h-3 w-3 mr-0.5" /> Anterior
+                </Button>
+                <span className="text-[10px] text-muted-foreground">
+                  Página {hook.page + 1} de {hook.totalPages}
+                </span>
+                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" disabled={hook.page >= hook.totalPages - 1} onClick={() => handlePageChange(hook.page + 1)}>
+                  Próxima <ChevronRight className="h-3 w-3 ml-0.5" />
+                </Button>
+              </div>
+            )}
+          </div>
         </>
       )}
 
