@@ -669,10 +669,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 onClick={() => setMode(mode === 'rapido' ? 'list' : 'rapido')}
                 className="h-6 text-[10px] gap-0.5 px-2"
               >
-                {mode === 'rapido' ? <List className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
+              {mode === 'rapido' ? <List className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
                 {mode === 'rapido' ? 'Lista' : 'Rápido'}
               </Button>
-              {mode === 'list' && (
+              {mode === 'list' && !mesFechadoAtivo && (
                 <Button size="sm" onClick={openNew} className="h-6 text-[10px] gap-0.5 px-2">
                   <Plus className="h-3 w-3" /> Novo
                 </Button>
