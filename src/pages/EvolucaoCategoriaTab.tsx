@@ -135,7 +135,30 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
     })();
   }, [fazendaId, anoFiltro, mesFiltro]);
 
-  // Fetch peso médio from fechamento_pasto_itens for the selected month
+  // Fetch preços do valor do rebanho para o mês
+  useEffect(() => {
+    const anoMes = `${anoFiltro}-${mesFiltro}`;
+    if (!fazendaId || fazendaId === '__global__') {
+      setPrecosRebanho({});
+      return;
+    }
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('valor_rebanho_mensal')
+          .select('categoria, preco_kg')
+          .eq('fazenda_id', fazendaId)
+          .eq('ano_mes', anoMes);
+        const map: Record<string, number> = {};
+        (data || []).forEach((r: any) => { if (r.preco_kg > 0) map[r.categoria] = r.preco_kg; });
+        setPrecosRebanho(map);
+      } catch {
+        setPrecosRebanho({});
+      }
+    })();
+  }, [fazendaId, anoFiltro, mesFiltro]);
+
+
   useEffect(() => {
     const anoMes = `${anoFiltro}-${mesFiltro}`;
     if (!fazendaId || fazendaId === '__global__') {
