@@ -245,8 +245,8 @@ export function useContratos() {
 
     if (lancamentos.length === 0) return 0;
 
-    const { error } = await supabase
-      .from('financeiro_lancamentos_v2')
+    const { error } = await (supabase
+      .from('financeiro_lancamentos_v2') as any)
       .insert(lancamentos);
 
     if (error) {
