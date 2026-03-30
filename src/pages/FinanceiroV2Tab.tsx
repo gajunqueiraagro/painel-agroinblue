@@ -615,7 +615,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredLancamentos.map(l => {
+                  sortedLancamentos.map(l => {
                     const fornNome = hook.fornecedores.find(f => f.id === l.favorecido_id)?.nome;
                     const stKey = (l.status_transacao || '').toLowerCase();
                     const stLabel = STATUS_LABELS[stKey] || l.status_transacao || '-';
@@ -623,13 +623,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
                     return (
                       <TableRow key={l.id} className="italic !h-auto">
-                        <TableCell className="font-mono w-[52px]">{fmtDate(l.data_competencia)}</TableCell>
-                        <TableCell className="font-mono w-[52px]">{fmtDate(l.data_pagamento)}</TableCell>
+                        <TableCell className="font-mono w-[40px] px-0.5">{fmtDate(l.data_competencia)}</TableCell>
+                        <TableCell className="font-mono w-[40px] px-0.5">{fmtDate(l.data_pagamento)}</TableCell>
                         <TableCell className="truncate max-w-0" title={l.descricao || ''}>{l.descricao || '-'}</TableCell>
                         <TableCell className="truncate max-w-0" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
                         </TableCell>
-                        <TableCell className={`text-right font-semibold w-[80px] ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
+                        <TableCell className={`text-right font-semibold w-[110px] whitespace-nowrap ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
                           {fmtValor(l.valor, l.sinal)}
                         </TableCell>
                         <TableCell className="font-mono text-muted-foreground text-center w-[72px]">{l.nota_fiscal || '-'}</TableCell>
