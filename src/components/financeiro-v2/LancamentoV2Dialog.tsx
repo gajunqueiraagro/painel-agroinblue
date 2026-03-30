@@ -628,6 +628,7 @@ export function LancamentoV2Dialog({
                   <Label className="text-xs">Produto *</Label>
                   <Input
                     tabIndex={3}
+                    value={descricao}
                     onChange={e => {
                       setDescricao(e.target.value);
                       setProdutoOpen(true);
