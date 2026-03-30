@@ -594,12 +594,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
       {mode === 'list' && !hook.loading && ano && (
         <>
-          <div className="rounded-lg border overflow-x-auto">
+          <div className="rounded-lg border overflow-x-auto relative" style={{ maxHeight: '70vh' }}>
             <Table className="table-financeiro">
               <TableHeader>
                 <TableRow className="!h-auto">
-                  <TableHead className="py-[2px] px-0.5 w-[40px] cursor-pointer select-none" onClick={() => toggleSort('data')}>Comp.{sortIcon('data')}</TableHead>
-                  <TableHead className="py-[2px] px-0.5 w-[40px]">Pgto</TableHead>
+                  <TableHead className="py-[2px] px-0.5 w-[40px] cursor-pointer select-none sticky left-0 z-20 bg-muted/95" onClick={() => toggleSort('data')}>Comp.{sortIcon('data')}</TableHead>
+                  <TableHead className="py-[2px] px-0.5 w-[40px] cursor-pointer select-none sticky left-[40px] z-20 bg-muted/95" onClick={() => toggleSort('pgto')}>Pgto{sortIcon('pgto')}</TableHead>
                   <TableHead className="py-[2px] px-1 cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto{sortIcon('produto')}</TableHead>
                   <TableHead className="py-[2px] px-1 cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor{sortIcon('fornecedor')}</TableHead>
                   <TableHead className="py-[2px] px-1 text-right w-[110px] cursor-pointer select-none" onClick={() => toggleSort('valor')}>Valor{sortIcon('valor')}</TableHead>
