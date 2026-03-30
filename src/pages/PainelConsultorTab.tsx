@@ -471,7 +471,7 @@ function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes
 
   const zooSheet = buildExcelSheet(zooRows, mesesHeaders, true);
   const finSheet = buildExcelSheet(finRows, mesesHeaders, true);
-  const movSheet = buildExcelSheet(zooRows.filter((row) => row.grupo === 'Movimentações'), mesesHeaders, false);
+  const movSheet = buildExcelSheet(zooRows.filter((row) => row.grupo.startsWith('Movimentações')), mesesHeaders, false);
 
   triggerXlsxDownload({
     filename,
