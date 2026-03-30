@@ -498,9 +498,26 @@ export function useFinanceiro() {
       .map(f => f.nome);
   }, [fazendasOperacionais, rebanhoMedioPorFazendaMes, fazendaADM]);
 
-  // --- Gerar chave de deduplicação ---
-  const dedupKey = (data: string | null, valor: number, conta: string | null, descricao: string | null): string => {
-    return `${(data || '').trim()}|${valor.toFixed(2)}|${(conta || '').trim().toLowerCase()}|${(descricao || '').trim().toLowerCase()}`;
+  // --- Gerar hash robusto de deduplicação ---
+  const buildHashImportacao = (
+    clienteId: string, fazendaId: string,
+    dataPagamento: string | null, valor: number,
+    tipoOperacao: string | null, contaOrigem: string | null,
+    contaDestino: string | null, produto: string | null,
+    fornecedor: string | null,
+  ): string => {
+    const parts = [
+      clienteId,
+      fazendaId,
+      (dataPagamento || '').trim(),
+      valor.toFixed(2),
+      (tipoOperacao || '').trim().toLowerCase(),
+      (contaOrigem || '').trim().toLowerCase(),
+      (contaDestino || '').trim().toLowerCase(),
+      (produto || '').trim().toLowerCase().replace(/\s+/g, ' '),
+      (fornecedor || '').trim().toLowerCase().replace(/\s+/g, ' '),
+    ];
+    return parts.join('|');
   };
 
   // --- Confirmar importação (incremental com dedup) ---
