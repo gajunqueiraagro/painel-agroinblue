@@ -248,7 +248,7 @@ export function LancamentoV2Dialog({
     ? (isEntrada ? contaDestinoValid : contaOrigemValid)
     : (contaOrigemValid && contaDestinoValid);
 
-  const canSave = !!fazendaId && !!dataCompetencia && !!descricao && !!favorecidoId && favorecidoId !== '__none_forn__'
+  const canSave = !!fazendaId && !!dataCompetencia && !!dataPagamento && !!descricao && !!favorecidoId && favorecidoId !== '__none_forn__'
     && !!subcentro && !!tipoOperacao && !!statusTransacao && valorNum > 0
     && contaSimpleValid;
 
