@@ -61,27 +61,42 @@
 
 /* Alta densidade – tabela de lançamentos financeiros */
 .table-financeiro th {
-  font-size: 10px !important;
+  font-size: 8px !important;
   padding-top: 2px !important;
   padding-bottom: 2px !important;
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
 .table-financeiro td {
-  font-size: 11px !important;
+  font-size: 9px !important;
   line-height: 1.1 !important;
   padding-top: 2px !important;
   padding-bottom: 2px !important;
 }
 .table-financeiro td * {
-  font-size: 11px !important;
+  font-size: 9px !important;
 }
+/* Datas (Comp. e Pgto) – extra compactas */
 .table-financeiro td:nth-child(1),
-.table-financeiro td:nth-child(2) {
-  font-size: 11px !important;
-  letter-spacing: -0.2px;
+.table-financeiro td:nth-child(2),
+.table-financeiro td:nth-child(1) *,
+.table-financeiro td:nth-child(2) * {
+  font-size: 9px !important;
+  line-height: 1 !important;
+  letter-spacing: -0.3px !important;
 }
+/* NF (coluna 6) */
+.table-financeiro td:nth-child(6),
+.table-financeiro td:nth-child(6) * {
+  font-size: 9px !important;
+}
+/* Valor – destaque leve */
 .table-financeiro td:nth-child(5) {
-  font-size: 11px !important;
+  font-size: 9px !important;
   font-weight: 500;
+}
+/* Forçar herança em elementos internos */
+.table-financeiro td span,
+.table-financeiro td div {
+  font-size: inherit !important;
 }
