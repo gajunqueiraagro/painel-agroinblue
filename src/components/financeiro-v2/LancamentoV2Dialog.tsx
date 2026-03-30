@@ -427,6 +427,8 @@ export function LancamentoV2Dialog({
               </div>
             </div>
 
+            <hr className="border-border/60" />
+
             {/* 5. FAZENDA + NOTA FISCAL */}
             <div className="grid grid-cols-2 gap-3">
               <div>
