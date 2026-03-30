@@ -884,7 +884,7 @@ export function LancamentoV2Dialog({
                   <div>
                     <Label className="text-xs">Fazenda *</Label>
                     <Select value={fazendaId} onValueChange={v => { setFazendaId(v); setContaOrigemId(''); setContaDestinoId(''); }}>
-                      <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectTrigger tabIndex={9} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
                         {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
                       </SelectContent>
