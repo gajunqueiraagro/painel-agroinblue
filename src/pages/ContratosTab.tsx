@@ -118,7 +118,7 @@ export function ContratosTab() {
                       </Button>
                     )}
                     {c.status === 'pausado' && (
-                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1 text-green-600" onClick={() => alterarStatus(c.id, 'ativo')}>
+                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1 text-primary" onClick={() => alterarStatus(c.id, 'ativo')}>
                         <Play className="h-3 w-3" /> Reativar
                       </Button>
                     )}

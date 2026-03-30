@@ -220,7 +220,6 @@ export function useContratos() {
       lancamentos.push({
         cliente_id: contrato.cliente_id,
         fazenda_id: contrato.fazenda_id,
-        contrato_id: contrato.id,
         data_competencia: comp,
         data_pagamento: dataPgto,
         ano_mes: anoMes,
