@@ -267,17 +267,8 @@ const Index = () => {
         }
       />
 
-      {/* Botão fixo de acesso ao Financeiro v2 */}
-      {!['financeiro_v2', 'financeiro_v2_hub', 'fin_v2_contas', 'fin_v2_fornecedores', 'fin_v2_plano', 'fin_v2_saldos', 'contratos', 'conciliacao_bancaria'].includes(activeTab) && (
-        <div className="px-2 py-1">
-          <button
-            onClick={() => handleTabChange('financeiro_v2_hub')}
-            className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-xs font-bold hover:bg-primary/90 transition-colors"
-          >
-            ⚡ ABRIR FINANCEIRO V2
-          </button>
-        </div>
-      )}
+
+
 
       <div className="flex-1 overflow-y-auto">
       {activeTab === 'resumo' && (
