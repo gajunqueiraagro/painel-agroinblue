@@ -175,9 +175,11 @@ export function LancamentoV2Dialog({
       setNotaFiscal(lancamento.nota_fiscal || '');
       setObservacao(lancamento.observacao || '');
     } else {
+      const today = new Date().toISOString().slice(0, 10);
       setFazendaId(defaultFazendaId || '');
-      setDataCompetencia('');
-      setDataPagamento('');
+      setDataCompetencia(today);
+      setDataPagamento(today);
+      setStatusTransacao(deriveStatus(today));
       setDescricao('');
       setFavorecidoId('');
       setSubcentro('');
@@ -242,8 +244,11 @@ export function LancamentoV2Dialog({
   };
 
   const handleNotaFiscalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/\D/g, '').slice(0, 9);
-    setNotaFiscal(digits);
+    // Right-to-left digit entry, same UX as valor field
+    const digits = e.target.value.replace(/\D/g, '');
+    // Remove leading zeros then cap at 9 digits
+    const trimmed = digits.replace(/^0+/, '').slice(0, 9);
+    setNotaFiscal(trimmed);
   };
 
   const handleParcelaValorChange = (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
