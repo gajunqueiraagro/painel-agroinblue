@@ -191,7 +191,7 @@ export function FornecedorFormDialog({
     setSaving(false);
     onClose();
     onSaved();
-  }, [clienteId, nome, cpfCnpj, fazendaId, ativo, editing, onClose, onSaved]);
+  }, [clienteId, nome, cpfCnpj, fazendaId, ativo, editing, onClose, onSaved, tipoRecebimento, pixTipoChave, pixChave, banco, agencia, conta, tipoConta, cpfCnpjPagamento, nomeFavorecido, observacaoPagamento]);
 
   const handleMerge = useCallback(async (target: Fornecedor) => {
     if (!editing) return;
