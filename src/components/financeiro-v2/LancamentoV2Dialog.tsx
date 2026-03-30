@@ -767,6 +767,7 @@ export function LancamentoV2Dialog({
                     </div>
                   </div>
                   <Textarea
+                    tabIndex={6}
                     value={dadosPagamento}
                     onChange={e => setDadosPagamento(e.target.value)}
                     rows={3}
