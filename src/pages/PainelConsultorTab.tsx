@@ -316,122 +316,31 @@ function fmtVal(v: number, format: string): string {
 
 // ─── Export ───
 
-const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-
-function isSafariPreviewIframe() {
-  const ua = navigator.userAgent.toLowerCase();
-  const isSafari = ua.includes('safari') && !ua.includes('chrome') && !ua.includes('android');
-  return isSafari && window.self !== window.top;
-}
-
-function openWorkbookDownloadWindow(wb: XLSX.WorkBook, filename: string) {
-  const popup = window.open('', '_blank');
-  if (!popup) return false;
-
-  const workbookBase64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
-  const safeFilename = JSON.stringify(filename);
-  const safeMime = JSON.stringify(XLSX_MIME);
-  const safeBase64 = JSON.stringify(workbookBase64);
-
-  popup.document.write(`
-    <!doctype html>
-    <html lang="pt-BR">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Baixando Excel...</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
-          a { display: inline-block; margin-top: 12px; color: #1d4ed8; font-weight: 600; }
-        </style>
-      </head>
-      <body>
-        <h1>Preparando download...</h1>
-        <p>Se o Excel não baixar automaticamente, clique no link abaixo.</p>
-        <a id="download-link" href="#">Baixar arquivo Excel</a>
-        <script>
-          const filename = ${safeFilename};
-          const mime = ${safeMime};
-          const base64 = ${safeBase64};
-          const binary = atob(base64);
-          const bytes = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-          const blob = new Blob([bytes], { type: mime });
-          const url = URL.createObjectURL(blob);
-          const link = document.getElementById('download-link');
-          link.href = url;
-          link.download = filename;
-          setTimeout(() => link.click(), 60);
-          setTimeout(() => URL.revokeObjectURL(url), 30000);
-        <\/script>
-      </body>
-    </html>
-  `);
-  popup.document.close();
-  return true;
-}
-
-function downloadWorkbook(wb: XLSX.WorkBook, filename: string) {
-  if (isSafariPreviewIframe() && openWorkbookDownloadWindow(wb, filename)) {
-    return filename;
-  }
-
-  try {
-    XLSX.writeFile(wb, filename, { compression: true });
-    return filename;
-  } catch {
-    const workbookArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([workbookArray], { type: XLSX_MIME });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    return filename;
-  }
-}
+const EXPORT_FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-painel-consultor-excel`;
 
 function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes: number, fazendaNome: string) {
-  const wb = XLSX.utils.book_new();
-  const mesesHeaders = MESES_LABELS.slice(0, ateMes);
-
-  const zooData = zooRows.map(r => {
-    const obj: Record<string, string | number> = { Grupo: r.grupo, Indicador: r.indicador };
-    mesesHeaders.forEach((m, i) => { obj[m] = r.valores[i]; });
-    obj.Total = r.total;
-    return obj;
-  });
-  const wsZoo = XLSX.utils.json_to_sheet(zooData);
-  wsZoo['!cols'] = [{ wch: 18 }, { wch: 24 }, ...mesesHeaders.map(() => ({ wch: 14 })), { wch: 14 }];
-  XLSX.utils.book_append_sheet(wb, wsZoo, 'Zootecnico');
-
-  const finData = finRows.map(r => {
-    const obj: Record<string, string | number> = { Grupo: r.grupo, Indicador: r.indicador };
-    mesesHeaders.forEach((m, i) => { obj[m] = r.valores[i]; });
-    obj.Total = r.total;
-    return obj;
-  });
-  const wsFin = XLSX.utils.json_to_sheet(finData);
-  wsFin['!cols'] = [{ wch: 18 }, { wch: 24 }, ...mesesHeaders.map(() => ({ wch: 14 })), { wch: 14 }];
-  XLSX.utils.book_append_sheet(wb, wsFin, 'Financeiro');
-
-  const movRows = zooRows.filter(r => r.grupo === 'Movimentações');
-  const movData = movRows.map(r => {
-    const obj: Record<string, string | number> = { Indicador: r.indicador };
-    mesesHeaders.forEach((m, i) => { obj[m] = r.valores[i]; });
-    obj.Total = r.total;
-    return obj;
-  });
-  const wsMov = XLSX.utils.json_to_sheet(movData);
-  wsMov['!cols'] = [{ wch: 24 }, ...mesesHeaders.map(() => ({ wch: 14 })), { wch: 14 }];
-  XLSX.utils.book_append_sheet(wb, wsMov, 'Movimentacoes');
-
   const filename = `Painel_Consultor_${fazendaNome.replace(/\s+/g, '_')}_${ano}.xlsx`;
-  return downloadWorkbook(wb, filename);
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = EXPORT_FUNCTION_URL;
+  form.target = '_blank';
+  form.style.display = 'none';
+
+  const payloadInput = document.createElement('input');
+  payloadInput.type = 'hidden';
+  payloadInput.name = 'payload';
+  payloadInput.value = JSON.stringify({ zooRows, finRows, ano, ateMes, fazendaNome, filename });
+  form.appendChild(payloadInput);
+
+  document.body.appendChild(form);
+  if (typeof form.requestSubmit === 'function') {
+    form.requestSubmit();
+  } else {
+    form.submit();
+  }
+  document.body.removeChild(form);
+
+  return filename;
 }
 
 // ─── Component ───
