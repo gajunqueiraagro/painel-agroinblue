@@ -158,13 +158,18 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
 
   return (
     <div className="space-y-4">
+      {mesFechado && (
+        <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs border bg-destructive/5 border-destructive/20">
+          <span className="text-destructive font-semibold">🔒 Mês fechado — importação bloqueada.</span>
+        </div>
+      )}
       {/* Ações */}
       <div className="flex gap-3">
         <Button variant="outline" onClick={downloadModeloExcel} className="flex-1">
           <Download className="h-4 w-4 mr-2" />
           Baixar Modelo
         </Button>
-        <Button onClick={() => fileRef.current?.click()} className="flex-1">
+        <Button onClick={() => fileRef.current?.click()} className="flex-1" disabled={!!mesFechado}>
           <Upload className="h-4 w-4 mr-2" />
           Importar Excel
         </Button>
