@@ -160,11 +160,11 @@ export function useResumoStatus(
               .limit(10000)
           : Promise.resolve({ data: [] }),
         // Saldo inicial — filtered by client's fazendas
-        idsFin.length > 0
+        idsFin.length > 0 && clienteAtual?.id
           ? supabase
-              .from('financeiro_saldos_bancarios')
-              .select('saldo_final, conta_banco')
-              .in('fazenda_id', idsFin)
+              .from('financeiro_saldos_bancarios_v2')
+              .select('saldo_final, conta_bancaria_id')
+              .eq('cliente_id', clienteAtual.id)
               .eq('ano_mes', `${ano - 1}-12`)
           : Promise.resolve({ data: [] }),
       ]);
