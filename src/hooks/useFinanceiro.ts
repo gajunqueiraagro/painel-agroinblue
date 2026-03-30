@@ -274,8 +274,10 @@ function calcRebanhoMedioFazenda(
 
 export function useFinanceiro() {
   const { fazendaAtual, fazendas } = useFazenda();
+  const { clienteAtual } = useCliente();
   const { user } = useAuth();
   const fazendaId = fazendaAtual?.id;
+  const clienteId = clienteAtual?.id;
   const isGlobal = fazendaId === '__global__';
 
   const [importacoes, setImportacoes] = useState<ImportacaoRecord[]>([]);
