@@ -220,7 +220,8 @@ export function LancamentoV2Dialog({
       setDadosPagamento('');
     }
     setSubcentroSearch('');
-  }, [lancamento, defaultFazendaId]);
+    setFornecedorSearch('');
+  }, [open, lancamento, defaultFazendaId]);
 
   // Fetch distinct product names for suggestions
   useEffect(() => {
