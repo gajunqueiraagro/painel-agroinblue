@@ -239,7 +239,7 @@ export function FornecedorFormDialog({
           <DialogTitle className="text-base">{editing ? 'Editar Fornecedor' : 'Novo Fornecedor'}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <div className="space-y-3 overflow-y-auto flex-1 pr-1">
           <div>
             <Label className="text-xs">Nome *</Label>
             <Input
