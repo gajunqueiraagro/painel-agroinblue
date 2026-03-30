@@ -161,12 +161,22 @@ export function FornecedorFormDialog({
       return;
     }
     setSaving(true);
-    const payload = {
+    const payload: any = {
       cliente_id: clienteId,
       fazenda_id: fazendaId,
       nome: nome.trim(),
       cpf_cnpj: cpfCnpj.trim() || null,
       ativo,
+      tipo_recebimento: tipoRecebimento || null,
+      pix_tipo_chave: pixTipoChave || null,
+      pix_chave: pixChave.trim() || null,
+      banco: banco.trim() || null,
+      agencia: agencia.trim() || null,
+      conta: conta.trim() || null,
+      tipo_conta: tipoConta || null,
+      cpf_cnpj_pagamento: cpfCnpjPagamento.trim() || null,
+      nome_favorecido: nomeFavorecido.trim() || null,
+      observacao_pagamento: observacaoPagamento.trim() || null,
     };
 
     if (editing) {
