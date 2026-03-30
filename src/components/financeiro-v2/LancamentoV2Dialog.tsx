@@ -720,7 +720,7 @@ export function LancamentoV2Dialog({
   return (
     <>
       <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 bg-white dark:bg-card rounded-2xl shadow-2xl border-0 overflow-hidden [&~[data-overlay]]:bg-black/60 [&~[data-overlay]]:backdrop-blur-sm" overlayClassName="bg-black/60 backdrop-blur-sm">
+        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 bg-white dark:bg-card rounded-2xl shadow-2xl border-0 overflow-hidden">
           {/* Header */}
           <DialogHeader className="px-5 pt-5 pb-3 border-b border-border/40">
             <DialogTitle className="text-base font-semibold">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
