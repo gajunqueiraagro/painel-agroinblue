@@ -320,34 +320,31 @@ function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes
   const wb = XLSX.utils.book_new();
   const mesesHeaders = MESES_LABELS.slice(0, ateMes);
 
-  // Zoo sheet
   const zooData = zooRows.map(r => {
     const obj: Record<string, string | number> = { Grupo: r.grupo, Indicador: r.indicador };
     mesesHeaders.forEach((m, i) => { obj[m] = r.valores[i]; });
-    obj['Total'] = r.total;
+    obj.Total = r.total;
     return obj;
   });
   const wsZoo = XLSX.utils.json_to_sheet(zooData);
   wsZoo['!cols'] = [{ wch: 18 }, { wch: 24 }, ...mesesHeaders.map(() => ({ wch: 14 })), { wch: 14 }];
   XLSX.utils.book_append_sheet(wb, wsZoo, 'Zootecnico');
 
-  // Financeiro sheet
   const finData = finRows.map(r => {
     const obj: Record<string, string | number> = { Grupo: r.grupo, Indicador: r.indicador };
     mesesHeaders.forEach((m, i) => { obj[m] = r.valores[i]; });
-    obj['Total'] = r.total;
+    obj.Total = r.total;
     return obj;
   });
   const wsFin = XLSX.utils.json_to_sheet(finData);
   wsFin['!cols'] = [{ wch: 18 }, { wch: 24 }, ...mesesHeaders.map(() => ({ wch: 14 })), { wch: 14 }];
   XLSX.utils.book_append_sheet(wb, wsFin, 'Financeiro');
 
-  // Movimentações sheet (subset of zoo)
   const movRows = zooRows.filter(r => r.grupo === 'Movimentações');
   const movData = movRows.map(r => {
     const obj: Record<string, string | number> = { Indicador: r.indicador };
     mesesHeaders.forEach((m, i) => { obj[m] = r.valores[i]; });
-    obj['Total'] = r.total;
+    obj.Total = r.total;
     return obj;
   });
   const wsMov = XLSX.utils.json_to_sheet(movData);
@@ -355,7 +352,20 @@ function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes
   XLSX.utils.book_append_sheet(wb, wsMov, 'Movimentacoes');
 
   const filename = `Painel_Consultor_${fazendaNome.replace(/\s+/g, '_')}_${ano}.xlsx`;
-  XLSX.writeFile(wb, filename);
+  const workbookArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([workbookArray], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+
   return filename;
 }
 
