@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -118,7 +119,15 @@ interface Props {
 
 export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: Props) {
   const { fazendas, fazendaAtual } = useFazenda();
-  const hook = useFinanceiroV2();
+  const isMobile = useIsMobile();
+  const pageSize = useMemo(() => {
+    if (typeof window === 'undefined') return 30;
+    const w = window.innerWidth;
+    if (w < 768) return 12;   // mobile
+    if (w < 1024) return 20;  // tablet
+    return 30;                // desktop
+  }, [isMobile]);
+  const hook = useFinanceiroV2(pageSize);
 
   const currentYear = new Date().getFullYear();
   const anos = useMemo(() => {
@@ -141,7 +150,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     centroFiltro: '__all__',
     subcentroFiltro: '__all__',
     produtoFiltro: '',
-    fornecedorFiltro: '',
+    fornecedorFiltro: '__all__',
     atividadeFiltro: '__all__',
   });
 
@@ -288,18 +297,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       const q = produtoFiltro.toLowerCase();
       items = items.filter(l => l.descricao?.toLowerCase().includes(q));
     }
-    if (fornecedorFiltro.trim()) {
-      const q = fornecedorFiltro.toLowerCase();
-      items = items.filter(l => {
-        const nome = hook.fornecedores.find(f => f.id === l.favorecido_id)?.nome || '';
-        return nome.toLowerCase().includes(q);
-      });
+    if (fornecedorFiltro !== '__all__') {
+      items = items.filter(l => l.favorecido_id === fornecedorFiltro);
     }
     if (atividadeFiltro !== '__all__') {
       items = items.filter(l => getAtividade(l.subcentro) === atividadeFiltro);
     }
     return items;
-  }, [hook.lancamentos, produtoFiltro, fornecedorFiltro, atividadeFiltro, hook.fornecedores]);
+  }, [hook.lancamentos, produtoFiltro, fornecedorFiltro, atividadeFiltro]);
 
   // Sorted lancamentos
   const sortedLancamentos = useMemo(() => {
@@ -361,7 +366,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     setCentroFiltro('__all__');
     setSubcentroFiltro('__all__');
     setProdutoFiltro('');
-    setFornecedorFiltro('');
+    setFornecedorFiltro('__all__');
     setAtividadeFiltro('__all__');
     setMacroLocked(false);
   };
@@ -527,11 +532,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </div>
             <div>
               <label className={lblCls}>Fornecedor</label>
-              <Input
+              <SearchableSelect
                 value={fornecedorFiltro}
-                onChange={e => setFornecedorFiltro(e.target.value)}
-                placeholder="Buscar..."
-                className="h-6 text-[10px] px-1.5"
+                onValueChange={setFornecedorFiltro}
+                options={hook.fornecedores.map(f => ({ value: f.id, label: f.nome }))}
+                placeholder="Buscar fornecedor..."
               />
             </div>
           </div>
@@ -548,10 +553,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 <FilterX className="h-3 w-3" /> Limpar
               </Button>
               <FinanceiroV2ExportMenu
-                lancamentos={sortedLancamentos}
+                filtros={filtros}
+                loadAllForExport={hook.loadAllForExport}
                 fornecedores={hook.fornecedores}
                 ano={ano}
                 fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
+                totalCount={hook.total}
               />
               <Button
                 size="sm"
@@ -653,17 +660,25 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </table>
           </div>
 
-          {hook.totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2">
-              <Button variant="outline" size="sm" className="h-6" disabled={hook.page === 0} onClick={() => handlePageChange(hook.page - 1)}>
-                <ChevronLeft className="h-3 w-3" />
-              </Button>
-              <span className="text-[10px] text-muted-foreground">Pág {hook.page + 1}/{hook.totalPages}</span>
-              <Button variant="outline" size="sm" className="h-6" disabled={hook.page >= hook.totalPages - 1} onClick={() => handlePageChange(hook.page + 1)}>
-                <ChevronRight className="h-3 w-3" />
-              </Button>
-            </div>
-          )}
+          {/* Pagination */}
+          <div className="flex items-center justify-between px-1 py-1">
+            <span className="text-[10px] text-muted-foreground">
+              {hook.total} lançamento{hook.total !== 1 ? 's' : ''} encontrado{hook.total !== 1 ? 's' : ''}
+            </span>
+            {hook.totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" disabled={hook.page === 0} onClick={() => handlePageChange(hook.page - 1)}>
+                  <ChevronLeft className="h-3 w-3 mr-0.5" /> Anterior
+                </Button>
+                <span className="text-[10px] text-muted-foreground">
+                  Página {hook.page + 1} de {hook.totalPages}
+                </span>
+                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" disabled={hook.page >= hook.totalPages - 1} onClick={() => handlePageChange(hook.page + 1)}>
+                  Próxima <ChevronRight className="h-3 w-3 ml-0.5" />
+                </Button>
+              </div>
+            )}
+          </div>
         </>
       )}
 
