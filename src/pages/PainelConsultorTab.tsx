@@ -328,7 +328,8 @@ function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes
     return obj;
   });
   const wsZoo = XLSX.utils.json_to_sheet(zooData);
-  XLSX.utils.book_append_sheet(wb, wsZoo, 'Zootécnico');
+  wsZoo['!cols'] = [{ wch: 18 }, { wch: 24 }, ...mesesHeaders.map(() => ({ wch: 14 })), { wch: 14 }];
+  XLSX.utils.book_append_sheet(wb, wsZoo, 'Zootecnico');
 
   // Financeiro sheet
   const finData = finRows.map(r => {
@@ -338,6 +339,7 @@ function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes
     return obj;
   });
   const wsFin = XLSX.utils.json_to_sheet(finData);
+  wsFin['!cols'] = [{ wch: 18 }, { wch: 24 }, ...mesesHeaders.map(() => ({ wch: 14 })), { wch: 14 }];
   XLSX.utils.book_append_sheet(wb, wsFin, 'Financeiro');
 
   // Movimentações sheet (subset of zoo)
@@ -349,9 +351,12 @@ function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes
     return obj;
   });
   const wsMov = XLSX.utils.json_to_sheet(movData);
-  XLSX.utils.book_append_sheet(wb, wsMov, 'Movimentações');
+  wsMov['!cols'] = [{ wch: 24 }, ...mesesHeaders.map(() => ({ wch: 14 })), { wch: 14 }];
+  XLSX.utils.book_append_sheet(wb, wsMov, 'Movimentacoes');
 
-  XLSX.writeFile(wb, `Painel_Consultor_${fazendaNome}_${ano}.xlsx`);
+  const filename = `Painel_Consultor_${fazendaNome.replace(/\s+/g, '_')}_${ano}.xlsx`;
+  XLSX.writeFile(wb, filename);
+  return filename;
 }
 
 // ─── Component ───
