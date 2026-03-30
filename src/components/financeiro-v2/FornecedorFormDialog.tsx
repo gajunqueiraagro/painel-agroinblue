@@ -378,7 +378,7 @@ export function FornecedorFormDialog({
                 <Label className="text-[11px]">Chave PIX</Label>
                 <Input value={pixChave} onChange={e => setPixChave(e.target.value)} className="h-8 text-xs" placeholder="CPF, CNPJ, telefone, email ou chave aleatória" />
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div>
                   <Label className="text-[11px]">Banco</Label>
                   <Input value={banco} onChange={e => setBanco(e.target.value)} className="h-8 text-xs" placeholder="Ex: Sicredi" />
