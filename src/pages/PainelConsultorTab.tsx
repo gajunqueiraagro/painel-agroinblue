@@ -342,10 +342,10 @@ function buildFinRows(
   lancamentos: FinanceiroLancamento[],
   ano: number,
   ateMes: number,
+  arrobasProdAcum?: number[],
 ): FinRow[] {
   const rows: FinRow[] = [];
 
-  // Filter conciliado + correct year (by data_pagamento)
   const conciliados = lancamentos.filter(l => isFinConciliado(l));
   const doAno = conciliados.filter(l => datePagtoAno(l) === ano);
   const doMes = (m: number) => doAno.filter(l => datePagtoMes(l) === m);
@@ -356,43 +356,77 @@ function buildFinRows(
     return { grupo, indicador, valores, total, format: 'money' };
   };
 
-  // ─ ENTRADAS ─
-  const totalEntRow = mkRow('Entradas', 'Total Entradas', m =>
-    doMes(m).filter(l => isFinEntrada(l)).reduce((s, l) => s + Math.abs(l.valor), 0));
+  // Helper values per month
+  const entMes = (m: number) => doMes(m).filter(l => isFinEntrada(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
+  const saiMes = (m: number) => doMes(m).filter(l => isFinSaida(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
+  const recPecMes = (m: number) => doMes(m).filter(l => isFinEntrada(l) && classificarEntrada(l) === 'Receitas Pecuárias').reduce((s, l) => s + Math.abs(l.valor), 0);
+  const deducMes = (m: number) => doMes(m).filter(l => isFinSaida(l) && classificarSaida(l) === 'Dedução de Receitas').reduce((s, l) => s + Math.abs(l.valor), 0);
+  const desembPecMes = (m: number) => doMes(m).filter(l => isFinSaida(l) && classificarSaida(l) === 'Desemb. Produtivo Pec.').reduce((s, l) => s + Math.abs(l.valor), 0);
+  const desembAgriMes = (m: number) => doMes(m).filter(l => isFinSaida(l) && classificarSaida(l) === 'Desemb. Produtivo Agri.').reduce((s, l) => s + Math.abs(l.valor), 0);
+  const reposMes = (m: number) => doMes(m).filter(l => isFinSaida(l) && classificarSaida(l) === 'Reposição Bovinos').reduce((s, l) => s + Math.abs(l.valor), 0);
 
+  // ═══════════════════════════════════════════════
+  // 4️⃣ FINANCEIRO — Entradas em Caixa
+  // ═══════════════════════════════════════════════
+  const totalEntRow = mkRow('Entradas em Caixa', 'Total Entradas', entMes);
   rows.push(totalEntRow);
 
   CATEGORIAS_ENTRADA.forEach(cat => {
-    rows.push(mkRow('Entradas', cat, m =>
+    rows.push(mkRow('Entradas em Caixa', cat, m =>
       doMes(m).filter(l => isFinEntrada(l) && classificarEntrada(l) === cat).reduce((s, l) => s + Math.abs(l.valor), 0)));
   });
 
-  // ─ SAÍDAS ─
-  const totalSaiRow = mkRow('Saídas', 'Total Saídas', m =>
-    doMes(m).filter(l => isFinSaida(l)).reduce((s, l) => s + Math.abs(l.valor), 0));
-
+  // ═══════════════════════════════════════════════
+  // 4️⃣ FINANCEIRO — Saídas em Caixa
+  // ═══════════════════════════════════════════════
+  const totalSaiRow = mkRow('Saídas em Caixa', 'Total Saídas', saiMes);
   rows.push(totalSaiRow);
 
   CATEGORIAS_SAIDA.forEach(cat => {
-    rows.push(mkRow('Saídas', cat, m =>
+    rows.push(mkRow('Saídas em Caixa', cat, m =>
       doMes(m).filter(l => isFinSaida(l) && classificarSaida(l) === cat).reduce((s, l) => s + Math.abs(l.valor), 0)));
   });
 
-  // ─ SALDO ─
-  rows.push(mkRow('Saldo', 'Saldo mensal', m => {
-    const ent = doMes(m).filter(l => isFinEntrada(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
-    const sai = doMes(m).filter(l => isFinSaida(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
-    return ent - sai;
+  // ═══════════════════════════════════════════════
+  // 4️⃣ FINANCEIRO — Indicadores Financeiros
+  // ═══════════════════════════════════════════════
+  rows.push(mkRow('Indicadores Financeiros', 'Saldo de caixa no mês\n(R$)', m => entMes(m) - saiMes(m)));
+
+  rows.push(mkRow('Indicadores Financeiros', 'Saldo acumulado\n(R$)', m => {
+    let acum = 0;
+    for (let i = 1; i <= m; i++) acum += entMes(i) - saiMes(i);
+    return acum;
   }));
 
-  rows.push(mkRow('Saldo', 'Saldo acumulado', m => {
-    let acum = 0;
-    for (let i = 1; i <= m; i++) {
-      const ent = doMes(i).filter(l => isFinEntrada(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
-      const sai = doMes(i).filter(l => isFinSaida(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
-      acum += ent - sai;
-    }
-    return acum;
+  rows.push(mkRow('Indicadores Financeiros', 'Geração operacional\n(R$)', m => {
+    return recPecMes(m) - deducMes(m) - desembPecMes(m);
+  }));
+
+  rows.push(mkRow('Indicadores Financeiros', 'Investimento (CAPEX)\n(R$)', m => {
+    return reposMes(m) + desembAgriMes(m);
+  }));
+
+  // Custo por arroba e Margem por arroba — require arrobas data from zootécnico
+  if (arrobasProdAcum) {
+    rows.push(mkRow('Indicadores Financeiros', 'Custo por arroba\n(R$/@)', m => {
+      const arrobas = arrobasProdAcum[m - 1] || 0;
+      if (arrobas <= 0) return 0;
+      let desembAcum = 0;
+      for (let i = 1; i <= m; i++) desembAcum += desembPecMes(i);
+      return desembAcum / arrobas;
+    }));
+
+    rows.push(mkRow('Indicadores Financeiros', 'Margem por arroba\n(R$/@)', m => {
+      const arrobas = arrobasProdAcum[m - 1] || 0;
+      if (arrobas <= 0) return 0;
+      let recAcum = 0, desAcum = 0;
+      for (let i = 1; i <= m; i++) { recAcum += recPecMes(i); desAcum += desembPecMes(i); }
+      return (recAcum - desAcum) / arrobas;
+    }));
+  }
+
+  rows.push(mkRow('Indicadores Financeiros', 'EBITDA\n(R$)', m => {
+    return recPecMes(m) - deducMes(m) - desembPecMes(m) - desembAgriMes(m);
   }));
 
   return rows;
