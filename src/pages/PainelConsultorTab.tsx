@@ -109,62 +109,61 @@ function buildZooRows(
     return total;
   });
 
-  const cabIniRow = mkRow('Base Mensal', 'Cabeças iniciais', m => {
+  const cabIniRow = mkRow('Base Mensal', 'Rebanho inicial\n(cab)', m => {
     const k = String(m).padStart(2, '0');
     return m === 1 ? saldoInicialAno : (saldoInicioMes[k] ?? 0);
   });
 
-  const pesoIniRow = mkRow('Base Mensal', 'Peso inicial kg', m => {
+  const pesoIniRow = mkRow('Base Mensal', 'Peso inicial do rebanho\n(kg)', m => {
     if (m === 1) {
       return saldosIniciais.filter(s => s.ano === ano).reduce((s, si) => s + si.quantidade * (si.pesoMedioKg || 0), 0);
     }
-    // Use previous month's final peso
     return pesoFinKgRow_valores[m - 2] ?? 0;
   }, 'kg');
 
-  const pesoIniArrobasRow = mkRow('Base Mensal', 'Peso inicial @', m => pesoIniRow.valores[m - 1] / 30, 'dec1');
+  const pesoIniArrobasRow = mkRow('Base Mensal', 'Peso inicial do rebanho\n(@)', m => pesoIniRow.valores[m - 1] / 30, 'dec1');
 
   // Entradas
-  const entradasCabRow = mkRow('Base Mensal', 'Entradas (cab)', m => {
+  const entradasCabRow = mkRow('Base Mensal', 'Entradas no rebanho\n(cab)', m => {
     const resumo = calcResumoMovimentacoes(lancamentos, `${ano}-${String(m).padStart(2, '0')}`);
     return resumo.totalEntradas;
   });
 
-  const entradasKgRow = mkRow('Base Mensal', 'Entradas (kg)', m => {
+  const entradasKgRow = mkRow('Base Mensal', 'Entradas no rebanho\n(kg)', m => {
     const lm = lancMes(m).filter(l => ['nascimento', 'compra', 'transferencia_entrada'].includes(l.tipo));
     return lm.reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
   }, 'kg');
 
-  const entradasArrobasRow = mkRow('Base Mensal', 'Entradas (@)', m => {
+  const entradasArrobasRow = mkRow('Base Mensal', 'Entradas no rebanho\n(@)', m => {
     const lm = lancMes(m).filter(l => ['nascimento', 'compra', 'transferencia_entrada'].includes(l.tipo));
     return lm.reduce((s, l) => s + calcArrobasSafe(l), 0);
   }, 'dec1');
 
   // Saídas
-  const saidasCabRow = mkRow('Base Mensal', 'Saídas (cab)', m => {
+  const saidasCabRow = mkRow('Base Mensal', 'Saídas do rebanho\n(cab)', m => {
     const resumo = calcResumoMovimentacoes(lancamentos, `${ano}-${String(m).padStart(2, '0')}`);
     return resumo.totalSaidas;
   });
 
-  const saidasKgRow = mkRow('Base Mensal', 'Saídas (kg)', m => {
+  const saidasKgRow = mkRow('Base Mensal', 'Saídas do rebanho\n(kg)', m => {
     const lm = lancMes(m).filter(l => ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'].includes(l.tipo));
     return lm.reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
   }, 'kg');
 
-  const saidasArrobasRow = mkRow('Base Mensal', 'Saídas (@)', m => {
+  const saidasArrobasRow = mkRow('Base Mensal', 'Saídas do rebanho\n(@)', m => {
     const lm = lancMes(m).filter(l => ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'].includes(l.tipo));
     return lm.reduce((s, l) => s + calcArrobasSafe(l), 0);
   }, 'dec1');
 
-  const cabFinRow = mkRow('Base Mensal', 'Cabeças finais', m => saldoFimMes(m));
+  const cabFinRow = mkRow('Base Mensal', 'Rebanho final\n(cab)', m => saldoFimMes(m));
 
-  const pesoFinKgRow = mkRow('Base Mensal', 'Peso final kg', m => {
+  const pesoFinKgRow = mkRow('Base Mensal', 'Peso final do rebanho\n(kg)', m => {
     return pesoFinKgRow_valores[m - 1] ?? 0;
   }, 'kg');
 
-  const pesoFinArrobasRow = mkRow('Base Mensal', 'Peso final @', m => pesoFinKgRow.valores[m - 1] / 30, 'dec1');
+  const pesoFinArrobasRow = mkRow('Base Mensal', 'Peso final do rebanho\n(@)', m => pesoFinKgRow.valores[m - 1] / 30, 'dec1');
 
-  const pesoMedioFinRow = mkRow('Base Mensal', 'Peso médio final', m => {
+  const pesoMedioFinRow = mkRow('Base Mensal', 'Peso médio do rebanho\n(kg/cab)', m => {
     const cab = cabFinRow.valores[m - 1];
     const pesoKg = pesoFinKgRow.valores[m - 1];
     return cab > 0 ? pesoKg / cab : 0;
