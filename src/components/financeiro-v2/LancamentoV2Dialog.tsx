@@ -784,7 +784,7 @@ export function LancamentoV2Dialog({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs">Valor (R$) *</Label>
-                    <Input value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" placeholder="0,00" inputMode="numeric" />
+                    <Input tabIndex={7} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" placeholder="0,00" inputMode="numeric" />
                   </div>
                   <div>
                     <Label className="text-xs">Status *</Label>
