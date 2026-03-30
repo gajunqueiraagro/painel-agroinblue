@@ -548,25 +548,30 @@ export function useFinanceiro() {
       // ── Determinar origem_dado baseado no tipo de importação ──
       const origemDado = tipoImportacao || 'importacao_incremental';
 
-      // ── DEDUPLICAÇÃO: buscar chaves existentes ──
-      // Buscar lançamentos existentes do mesmo cliente para comparar
+      // ── DEDUPLICAÇÃO ROBUSTA: buscar hashes existentes ──
       const fazendaIds = [...new Set(linhas.map(l => l.fazendaId).filter(Boolean))] as string[];
-      const existingKeys = new Set<string>();
+      const existingHashes = new Set<string>();
 
       for (const fid of fazendaIds) {
-        // Buscar em lotes para não estourar limite
         let from = 0;
         const batchSize = 1000;
         while (true) {
           const { data: existing } = await supabase
             .from('financeiro_lancamentos')
-            .select('data_realizacao, valor, conta_origem, produto')
+            .select('hash_importacao, data_pagamento, valor, tipo_operacao, conta_origem, conta_destino, produto, fornecedor')
             .eq('fazenda_id', fid)
             .eq('cliente_id', clienteId)
             .range(from, from + batchSize - 1);
           if (!existing || existing.length === 0) break;
           for (const e of existing) {
-            existingKeys.add(dedupKey(e.data_realizacao, e.valor, e.conta_origem, e.produto));
+            // Use persisted hash if available, otherwise rebuild
+            const hash = e.hash_importacao || buildHashImportacao(
+              clienteId, fid,
+              e.data_pagamento, e.valor,
+              e.tipo_operacao, e.conta_origem, e.conta_destino,
+              e.produto, e.fornecedor,
+            );
+            existingHashes.add(hash);
           }
           if (existing.length < batchSize) break;
           from += batchSize;
@@ -575,15 +580,21 @@ export function useFinanceiro() {
 
       // Filtrar duplicados
       const linhasNovas: LinhaImportada[] = [];
+      const hashesNovas: string[] = [];
       let duplicados = 0;
       for (const l of linhas) {
-        const key = dedupKey(l.dataPagamento || l.anoMes + '-01', l.valor, l.contaOrigem, l.produto);
-        if (existingKeys.has(key)) {
+        const hash = buildHashImportacao(
+          clienteId, l.fazendaId || '',
+          l.dataPagamento || l.anoMes + '-01', l.valor,
+          l.tipoOperacao, l.contaOrigem, l.contaDestino,
+          l.produto, l.fornecedor,
+        );
+        if (existingHashes.has(hash)) {
           duplicados++;
         } else {
           linhasNovas.push(l);
-          // Adicionar ao set para evitar duplicados dentro do próprio lote
-          existingKeys.add(key);
+          hashesNovas.push(hash);
+          existingHashes.add(hash);
         }
       }
 
@@ -613,9 +624,10 @@ export function useFinanceiro() {
       if (impErr) throw impErr;
 
       // ── Inserir lançamentos novos (nunca apaga existentes) ──
+      // Histórico = somente leitura (importacao_historica)
       const insertBatchSize = 50;
       for (let i = 0; i < linhasNovas.length; i += insertBatchSize) {
-        const batch = linhasNovas.slice(i, i + insertBatchSize).map(l => ({
+        const batch = linhasNovas.slice(i, i + insertBatchSize).map((l, j) => ({
           fazenda_id: l.fazendaId!,
           cliente_id: fazendas.find(f => f.id === l.fazendaId)?.cliente_id || clienteId,
           importacao_id: imp.id,
@@ -636,6 +648,8 @@ export function useFinanceiro() {
           subcentro: l.subcentro,
           obs: l.obs,
           escopo_negocio: l.escopoNegocio,
+          hash_importacao: hashesNovas[i + j],
+          editado_manual: false,
         }));
         const { error } = await supabase.from('financeiro_lancamentos').insert(batch);
         if (error) throw error;
