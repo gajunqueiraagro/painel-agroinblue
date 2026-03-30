@@ -10,8 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
-  CheckCircle2, AlertTriangle, XCircle, ChevronDown, ChevronUp,
-  ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Pencil,
+  CheckCircle2, AlertTriangle, XCircle, Pencil,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
@@ -132,7 +131,7 @@ export function ConciliacaoBancariaTab() {
   const [saldos, setSaldos] = useState<SaldoRow[]>([]);
   const [lancamentos, setLancamentos] = useState<LancamentoResumo[]>([]);
   const [loading, setLoading] = useState(false);
-  const [expandedMes, setExpandedMes] = useState<string | null>(null);
+  const [selectedMes, setSelectedMes] = useState<string>(String(currentMonth).padStart(2, '0'));
   const [editingSaldo, setEditingSaldo] = useState<{ anoMes: string; contaId: string; current: number } | null>(null);
   const [editValue, setEditValue] = useState('');
 
@@ -343,104 +342,40 @@ export function ConciliacaoBancariaTab() {
     return isCurrent && isFinanceiro;
   };
 
-  const toggleExpand = (mes: string) => {
-    setExpandedMes(prev => prev === mes ? null : mes);
-  };
-
-  const lblCls = 'text-[10px] font-medium text-muted-foreground mb-0.5';
+  const selectedCard = useMemo(() => mesCards.find(c => c.mes === selectedMes) || null, [mesCards, selectedMes]);
 
   return (
     <div className="animate-fade-in pb-20">
-      <div className="p-3 space-y-3">
-        <Card>
-          <CardContent className="p-3">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className={lblCls}>Ano</label>
-                <Select value={ano} onValueChange={setAno}>
-                  <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {anos.map(a => <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className={lblCls}>Conta Bancária</label>
-                <Select value={contaId} onValueChange={setContaId}>
-                  <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__" className="text-xs">Todas as contas</SelectItem>
-                    {contas.map(c => (
-                      <SelectItem key={c.id} value={c.id} className="text-xs">{contaLabel(c)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <Card>
-            <CardContent className="p-2.5">
-              <div className="flex items-center gap-1.5">
-                <ArrowUpRight className="h-3.5 w-3.5 text-green-600 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[9px] text-muted-foreground uppercase font-medium">Entradas</p>
-                  <p className="text-xs font-bold text-green-700 dark:text-green-400 truncate">R$ {fmtBRL(summary.totalEntradas)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-2.5">
-              <div className="flex items-center gap-1.5">
-                <ArrowDownRight className="h-3.5 w-3.5 text-red-600 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[9px] text-muted-foreground uppercase font-medium">Saídas</p>
-                  <p className="text-xs font-bold text-red-700 dark:text-red-400 truncate">R$ {fmtBRL(summary.totalSaidas)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-2.5">
-              <div className="flex items-center gap-1.5">
-                <Wallet className="h-3.5 w-3.5 text-primary shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[9px] text-muted-foreground uppercase font-medium">Saldo Ano</p>
-                  <p className={`text-xs font-bold truncate ${summary.saldo >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
-                    R$ {fmtBRL(summary.saldo)}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-2.5">
-              <div className="flex items-center gap-1.5">
-                <TrendingUp className="h-3.5 w-3.5 text-primary shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[9px] text-muted-foreground uppercase font-medium">Status</p>
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <span className="text-[9px] font-bold text-green-600">{summary.conciliados}✓</span>
-                    <span className="text-[9px] font-bold text-red-600">{summary.naoConc}✗</span>
-                    <span className="text-[9px] font-bold text-muted-foreground">{summary.pendentes}?</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="p-3 space-y-2">
+        {/* Filtros compactos inline */}
+        <div className="flex items-center gap-2">
+          <Select value={ano} onValueChange={setAno}>
+            <SelectTrigger className="h-7 text-xs w-[72px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {anos.map(a => <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={contaId} onValueChange={setContaId}>
+            <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__" className="text-xs">Todas as contas</SelectItem>
+              {contas.map(c => (
+                <SelectItem key={c.id} value={c.id} className="text-xs">{contaLabel(c)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
+        {/* Barra de meses com status */}
         <div className="flex gap-0.5 rounded-md overflow-hidden">
           {mesCards.map(c => {
             const cfg = STATUS_CONFIG[c.status];
+            const isSelected = selectedMes === c.mes;
             return (
               <button
                 key={c.mes}
-                onClick={() => toggleExpand(c.mes)}
-                className={`flex-1 py-1.5 text-center text-[9px] font-bold transition-all ${cfg.color} hover:opacity-80 ${expandedMes === c.mes ? 'ring-2 ring-primary' : ''}`}
+                onClick={() => setSelectedMes(c.mes)}
+                className={`flex-1 py-1.5 text-center text-[9px] font-bold transition-all ${cfg.color} hover:opacity-80 ${isSelected ? 'ring-2 ring-primary scale-105 z-10' : 'opacity-70'}`}
                 title={`${c.label}: ${cfg.label}`}
               >
                 {c.label}
@@ -451,172 +386,153 @@ export function ConciliacaoBancariaTab() {
 
         {loading ? (
           <div className="text-center text-xs text-muted-foreground py-8">Carregando...</div>
-        ) : (
-          <div className="space-y-2">
-            {mesCards.map(card => {
-              const isExpanded = expandedMes === card.mes;
-              const cfg = STATUS_CONFIG[card.status];
-              const StatusIcon = cfg.icon;
+        ) : selectedCard && (() => {
+          const card = selectedCard;
+          const cfg = STATUS_CONFIG[card.status];
+          const StatusIcon = cfg.icon;
+          return (
+            <div className="space-y-2">
+              {/* Header do mês */}
+              <div className="flex items-center gap-2">
+                <StatusIcon className={`h-4 w-4 ${cfg.iconColor}`} />
+                <span className="text-sm font-bold">{card.label}/{ano}</span>
+                <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${cfg.color}`}>
+                  {cfg.label}
+                </Badge>
+                <div className="ml-auto text-right">
+                  <p className="text-[9px] text-muted-foreground">Saldo Calculado</p>
+                  <p className={`text-xs font-bold ${card.saldoCalculado >= 0 ? 'text-foreground' : 'text-red-600'}`}>
+                    R$ {fmtBRL(card.saldoCalculado)}
+                  </p>
+                </div>
+              </div>
 
-              return (
-                <Card key={card.mes} className={`overflow-hidden transition-shadow ${isExpanded ? 'shadow-md ring-1 ring-primary/30' : ''}`}>
-                  <CardContent className="p-0">
-                    <button
-                      onClick={() => toggleExpand(card.mes)}
-                      className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/30 transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <StatusIcon className={`h-4 w-4 ${cfg.iconColor}`} />
-                        <span className="text-sm font-bold">{card.label}/{ano}</span>
-                        <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${cfg.color}`}>
-                          {cfg.label}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="text-right">
-                          <p className="text-[9px] text-muted-foreground">Saldo Calculado</p>
-                          <p className={`text-xs font-bold ${card.saldoCalculado >= 0 ? 'text-foreground' : 'text-red-600'}`}>
-                            R$ {fmtBRL(card.saldoCalculado)}
-                          </p>
-                        </div>
-                        {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                      </div>
-                    </button>
+              {/* Blocos de dados */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <div className="bg-background rounded-md p-2 border">
+                  <p className="text-[9px] text-muted-foreground uppercase font-medium">Saldo Inicial</p>
+                  <p className="text-xs font-bold">R$ {fmtBRL(card.saldoInicial)}</p>
+                </div>
 
-                    {isExpanded && (
-                      <div className="border-t px-3 py-2.5 space-y-3 bg-muted/10">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                          <div className="bg-background rounded-md p-2 border">
-                            <p className="text-[9px] text-muted-foreground uppercase font-medium">Saldo Inicial</p>
-                            <p className="text-xs font-bold">R$ {fmtBRL(card.saldoInicial)}</p>
-                          </div>
+                <div className="bg-background rounded-md p-2 border">
+                  <p className="text-[9px] text-muted-foreground uppercase font-medium">Entradas</p>
+                  <p className="text-xs font-bold text-green-700 dark:text-green-400">R$ {fmtBRL(card.totalEntradas)}</p>
+                  <div className="mt-1 space-y-0.5">
+                    <p className="text-[8px] text-muted-foreground flex justify-between">
+                      <span>Terceiros</span><span>R$ {fmtBRL(card.entradasTerceiros)}</span>
+                    </p>
+                    <p className="text-[8px] text-muted-foreground flex justify-between">
+                      <span>Transferências</span><span>R$ {fmtBRL(card.transferenciasRecebidas)}</span>
+                    </p>
+                  </div>
+                </div>
 
-                          <div className="bg-background rounded-md p-2 border">
-                            <p className="text-[9px] text-muted-foreground uppercase font-medium">Entradas</p>
-                            <p className="text-xs font-bold text-green-700 dark:text-green-400">R$ {fmtBRL(card.totalEntradas)}</p>
-                            <div className="mt-1 space-y-0.5">
-                              <p className="text-[8px] text-muted-foreground flex justify-between">
-                                <span>Terceiros</span>
-                                <span>R$ {fmtBRL(card.entradasTerceiros)}</span>
-                              </p>
-                              <p className="text-[8px] text-muted-foreground flex justify-between">
-                                <span>Transferências</span>
-                                <span>R$ {fmtBRL(card.transferenciasRecebidas)}</span>
-                              </p>
-                            </div>
-                          </div>
+                <div className="bg-background rounded-md p-2 border">
+                  <p className="text-[9px] text-muted-foreground uppercase font-medium">Saídas</p>
+                  <p className="text-xs font-bold text-red-700 dark:text-red-400">R$ {fmtBRL(card.totalSaidas)}</p>
+                  <div className="mt-1 space-y-0.5">
+                    <p className="text-[8px] text-muted-foreground flex justify-between">
+                      <span>Terceiros</span><span>R$ {fmtBRL(card.saidasTerceiros)}</span>
+                    </p>
+                    <p className="text-[8px] text-muted-foreground flex justify-between">
+                      <span>Transferências</span><span>R$ {fmtBRL(card.transferenciasEnviadas)}</span>
+                    </p>
+                  </div>
+                </div>
 
-                          <div className="bg-background rounded-md p-2 border">
-                            <p className="text-[9px] text-muted-foreground uppercase font-medium">Saídas</p>
-                            <p className="text-xs font-bold text-red-700 dark:text-red-400">R$ {fmtBRL(card.totalSaidas)}</p>
-                            <div className="mt-1 space-y-0.5">
-                              <p className="text-[8px] text-muted-foreground flex justify-between">
-                                <span>Terceiros</span>
-                                <span>R$ {fmtBRL(card.saidasTerceiros)}</span>
-                              </p>
-                              <p className="text-[8px] text-muted-foreground flex justify-between">
-                                <span>Transferências</span>
-                                <span>R$ {fmtBRL(card.transferenciasEnviadas)}</span>
-                              </p>
-                            </div>
-                          </div>
+                <div className="bg-background rounded-md p-2 border">
+                  <p className="text-[9px] text-muted-foreground uppercase font-medium">Saldo Final Calculado</p>
+                  <p className={`text-xs font-bold ${card.saldoCalculado >= 0 ? 'text-foreground' : 'text-red-600'}`}>
+                    R$ {fmtBRL(card.saldoCalculado)}
+                  </p>
+                </div>
+              </div>
 
-                          <div className="bg-background rounded-md p-2 border">
-                            <p className="text-[9px] text-muted-foreground uppercase font-medium">Saldo Final Calculado</p>
-                            <p className={`text-xs font-bold ${card.saldoCalculado >= 0 ? 'text-foreground' : 'text-red-600'}`}>
-                              R$ {fmtBRL(card.saldoCalculado)}
-                            </p>
-                          </div>
-                        </div>
+              {/* Conciliação */}
+              <div className="bg-background rounded-md p-2.5 border space-y-2">
+                <p className="text-[10px] font-bold text-foreground uppercase tracking-wider">Conciliação</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <p className="text-[9px] text-muted-foreground">Saldo Extrato</p>
+                    <div className="flex items-center gap-1">
+                      <p className="text-xs font-bold">
+                        {card.saldoExtrato !== null ? `R$ ${fmtBRL(card.saldoExtrato)}` : '—'}
+                      </p>
+                      {contaId !== '__all__' && canEditSaldoFinal(card.anoMes) && (
+                        <button
+                          onClick={() => handleEditSaldo(card.anoMes, contaId, card.saldoExtrato || 0)}
+                          className="p-0.5 hover:bg-muted rounded"
+                        >
+                          <Pencil className="h-3 w-3 text-muted-foreground" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-muted-foreground">Saldo Calculado</p>
+                    <p className="text-xs font-bold">R$ {fmtBRL(card.saldoCalculado)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-muted-foreground">Diferença</p>
+                    <p className={`text-xs font-bold ${Math.abs(card.diferenca) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
+                      R$ {fmtBRL(card.diferenca)}
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-                        <div className="bg-background rounded-md p-2.5 border space-y-2">
-                          <p className="text-[10px] font-bold text-foreground uppercase tracking-wider">Conciliação</p>
-                          <div className="grid grid-cols-3 gap-2">
-                            <div>
-                              <p className="text-[9px] text-muted-foreground">Saldo Extrato</p>
-                              <div className="flex items-center gap-1">
-                                <p className="text-xs font-bold">
-                                  {card.saldoExtrato !== null ? `R$ ${fmtBRL(card.saldoExtrato)}` : '—'}
-                                </p>
-                                {contaId !== '__all__' && canEditSaldoFinal(card.anoMes) && (
-                                  <button
-                                    onClick={() => handleEditSaldo(card.anoMes, contaId, card.saldoExtrato || 0)}
-                                    className="p-0.5 hover:bg-muted rounded"
-                                  >
-                                    <Pencil className="h-3 w-3 text-muted-foreground" />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                            <div>
-                              <p className="text-[9px] text-muted-foreground">Saldo Calculado</p>
-                              <p className="text-xs font-bold">R$ {fmtBRL(card.saldoCalculado)}</p>
-                            </div>
-                            <div>
-                              <p className="text-[9px] text-muted-foreground">Diferença</p>
-                              <p className={`text-xs font-bold ${Math.abs(card.diferenca) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
-                                R$ {fmtBRL(card.diferenca)}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-
-                        {card.lancamentos.length > 0 && (
-                          <div>
-                            <p className="text-[10px] font-bold text-foreground uppercase tracking-wider mb-1">
-                              Lançamentos ({card.lancamentos.length})
-                            </p>
-                            <div className="max-h-[240px] overflow-y-auto rounded border">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead className="text-[9px] w-[50px]">Data</TableHead>
-                                    <TableHead className="text-[9px]">Descrição</TableHead>
-                                    <TableHead className="text-[9px] w-[50px]">Tipo</TableHead>
-                                    <TableHead className="text-[9px] text-right w-[90px]">Valor</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {card.lancamentos.slice(0, 50).map((l, idx) => {
-                                    const tipo = (l.tipo_operacao || '').substring(0, 1);
-                                    const isEntrada = tipo === '1';
-                                    return (
-                                      <TableRow key={idx}>
-                                        <TableCell className="text-[9px] py-0.5">{fmtDate(l.data_pagamento || l.data_competencia)}</TableCell>
-                                        <TableCell className="text-[9px] py-0.5 truncate max-w-[120px]">{l.descricao || '-'}</TableCell>
-                                        <TableCell className="text-[9px] py-0.5 text-center">
-                                          <span className={isEntrada ? 'text-green-600' : 'text-red-600'}>
-                                            {tipo === '1' ? 'E' : tipo === '2' ? 'S' : 'T'}
-                                          </span>
-                                        </TableCell>
-                                        <TableCell className={`text-[9px] py-0.5 text-right font-medium tabular-nums ${isEntrada ? 'text-green-700' : 'text-red-700'}`}>
-                                          {isEntrada ? '' : '- '}R$ {fmtBRL(Math.abs(l.valor))}
-                                        </TableCell>
-                                      </TableRow>
-                                    );
-                                  })}
-                                </TableBody>
-                              </Table>
-                              {card.lancamentos.length > 50 && (
-                                <p className="text-[9px] text-center text-muted-foreground py-1">
-                                  +{card.lancamentos.length - 50} lançamentos
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {card.lancamentos.length === 0 && (
-                          <p className="text-[10px] text-muted-foreground text-center py-2">Nenhum lançamento neste mês</p>
-                        )}
-                      </div>
+              {/* Lançamentos */}
+              {card.lancamentos.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-foreground uppercase tracking-wider mb-1">
+                    Lançamentos ({card.lancamentos.length})
+                  </p>
+                  <div className="max-h-[300px] overflow-y-auto rounded border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-[9px] w-[50px]">Data</TableHead>
+                          <TableHead className="text-[9px]">Descrição</TableHead>
+                          <TableHead className="text-[9px] w-[50px]">Tipo</TableHead>
+                          <TableHead className="text-[9px] text-right w-[90px]">Valor</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {card.lancamentos.slice(0, 50).map((l, idx) => {
+                          const tipo = (l.tipo_operacao || '').substring(0, 1);
+                          const isEntrada = tipo === '1';
+                          return (
+                            <TableRow key={idx}>
+                              <TableCell className="text-[9px] py-0.5">{fmtDate(l.data_pagamento || l.data_competencia)}</TableCell>
+                              <TableCell className="text-[9px] py-0.5 truncate max-w-[120px]">{l.descricao || '-'}</TableCell>
+                              <TableCell className="text-[9px] py-0.5 text-center">
+                                <span className={isEntrada ? 'text-green-600' : 'text-red-600'}>
+                                  {tipo === '1' ? 'E' : tipo === '2' ? 'S' : 'T'}
+                                </span>
+                              </TableCell>
+                              <TableCell className={`text-[9px] py-0.5 text-right font-medium tabular-nums ${isEntrada ? 'text-green-700' : 'text-red-700'}`}>
+                                {isEntrada ? '' : '- '}R$ {fmtBRL(Math.abs(l.valor))}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                    {card.lancamentos.length > 50 && (
+                      <p className="text-[9px] text-center text-muted-foreground py-1">
+                        +{card.lancamentos.length - 50} lançamentos
+                      </p>
                     )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
+                  </div>
+                </div>
+              )}
+
+              {card.lancamentos.length === 0 && (
+                <p className="text-[10px] text-muted-foreground text-center py-2">Nenhum lançamento neste mês</p>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       <Dialog open={!!editingSaldo} onOpenChange={(open) => !open && setEditingSaldo(null)}>
