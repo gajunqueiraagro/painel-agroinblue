@@ -73,6 +73,24 @@ export interface FinanceiroLancamento {
   editado_manual?: boolean;
 }
 
+interface ContaBancariaImportacao {
+  id: string;
+  fazenda_id: string;
+  nome_conta: string;
+  nome_exibicao: string | null;
+  codigo_conta: string | null;
+  banco?: string | null;
+  numero_conta?: string | null;
+}
+
+interface LinhaImportadaResolvida extends LinhaImportada {
+  contaBancariaId: string | null;
+}
+
+interface SaldoImportadoResolvido extends SaldoBancarioImportado {
+  contaBancariaId: string | null;
+}
+
 /** Rateio calculado para a fazenda atual */
 export interface RateioADM {
   anoMes: string;
@@ -552,12 +570,37 @@ export function useFinanceiro() {
   }, [fazendasOperacionais, rebanhoMedioPorFazendaMes, fazendaADM]);
 
   // --- Gerar hash robusto de deduplicação ---
+  const normalizeImportText = (value: string | null | undefined) =>
+    (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+  const resolveContaBancariaId = (
+    contaLabel: string | null,
+    fazendaId: string | null,
+    contas: ContaBancariaImportacao[],
+  ): string | null => {
+    const normalized = normalizeImportText(contaLabel);
+    if (!normalized) return null;
+
+    const contasDaFazenda = contas.filter(conta => conta.fazenda_id === fazendaId);
+    const conta = contasDaFazenda.find((item) => {
+      const candidates = [
+        item.nome_exibicao,
+        item.nome_conta,
+        item.codigo_conta,
+        item.numero_conta,
+        [item.banco, item.nome_conta].filter(Boolean).join(' '),
+      ];
+
+      return candidates.some(candidate => normalizeImportText(candidate) === normalized);
+    });
+
+    return conta?.id || null;
+  };
+
   const buildHashImportacao = (
     clienteId: string, fazendaId: string,
     dataPagamento: string | null, valor: number,
-    tipoOperacao: string | null, contaOrigem: string | null,
-    contaDestino: string | null, produto: string | null,
-    fornecedor: string | null,
+    tipoOperacao: string | null, contaBancariaId: string | null,
   ): string => {
     const parts = [
       clienteId,
@@ -565,10 +608,7 @@ export function useFinanceiro() {
       (dataPagamento || '').trim(),
       valor.toFixed(2),
       (tipoOperacao || '').trim().toLowerCase(),
-      (contaOrigem || '').trim().toLowerCase(),
-      (contaDestino || '').trim().toLowerCase(),
-      (produto || '').trim().toLowerCase().replace(/\s+/g, ' '),
-      (fornecedor || '').trim().toLowerCase().replace(/\s+/g, ' '),
+      contaBancariaId || '',
     ];
     return parts.join('|');
   };
@@ -601,8 +641,26 @@ export function useFinanceiro() {
       // ── Determinar origem_dado baseado no tipo de importação ──
       const origemDado = tipoImportacao || 'importacao_incremental';
 
+      const { data: contasData, error: contasError } = await supabase
+        .from('financeiro_contas_bancarias')
+        .select('id, fazenda_id, nome_conta, nome_exibicao, codigo_conta, banco, numero_conta')
+        .eq('cliente_id', cid)
+        .eq('ativa', true);
+
+      if (contasError) throw contasError;
+
+      const contasBancarias = (contasData || []) as ContaBancariaImportacao[];
+      const linhasResolvidas: LinhaImportadaResolvida[] = linhas.map((linha) => ({
+        ...linha,
+        contaBancariaId: resolveContaBancariaId(linha.contaOrigem, linha.fazendaId, contasBancarias),
+      }));
+      const saldosResolvidos: SaldoImportadoResolvido[] = (saldosBancarios || []).map((saldo) => ({
+        ...saldo,
+        contaBancariaId: resolveContaBancariaId(saldo.contaBanco, saldo.fazendaId, contasBancarias),
+      }));
+
       // ── DEDUPLICAÇÃO ROBUSTA: buscar hashes existentes ──
-      const fazendaIds = [...new Set(linhas.map(l => l.fazendaId).filter(Boolean))] as string[];
+      const fazendaIds = [...new Set(linhasResolvidas.map(l => l.fazendaId).filter(Boolean))] as string[];
       const existingHashes = new Set<string>();
 
       for (const fid of fazendaIds) {
@@ -611,7 +669,7 @@ export function useFinanceiro() {
         while (true) {
           const { data: existing } = await supabase
             .from('financeiro_lancamentos_v2')
-            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, descricao')
+            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id')
             .eq('fazenda_id', fid)
             .eq('cliente_id', cid)
             .eq('cancelado', false)
@@ -621,8 +679,7 @@ export function useFinanceiro() {
             const hash = buildHashImportacao(
               cid, fid,
               e.data_pagamento, e.valor,
-              e.tipo_operacao, null, null,
-              e.descricao, null,
+              e.tipo_operacao, e.conta_bancaria_id,
             );
             existingHashes.add(hash);
           }
@@ -632,21 +689,18 @@ export function useFinanceiro() {
       }
 
       // Filtrar duplicados
-      const linhasNovas: LinhaImportada[] = [];
-      const hashesNovas: string[] = [];
+      const linhasNovas: LinhaImportadaResolvida[] = [];
       let duplicados = 0;
-      for (const l of linhas) {
+      for (const l of linhasResolvidas) {
         const hash = buildHashImportacao(
           cid, l.fazendaId || '',
           l.dataPagamento || l.anoMes + '-01', l.valor,
-          l.tipoOperacao, l.contaOrigem, l.contaDestino,
-          l.produto, l.fornecedor,
+          l.tipoOperacao, l.contaBancariaId,
         );
         if (existingHashes.has(hash)) {
           duplicados++;
         } else {
           linhasNovas.push(l);
-          hashesNovas.push(hash);
           existingHashes.add(hash);
         }
       }
@@ -655,8 +709,6 @@ export function useFinanceiro() {
         toast.info(`Todos os ${duplicados} lançamentos já existem na base. Nenhum registro inserido.`);
         return true;
       }
-
-      const totalValid = linhasNovas.length + (saldosBancarios?.length || 0) + (resumoCaixa?.length || 0);
 
       // ── Criar registro da importação (V2) ──
       const { data: imp, error: impErr } = await supabase
@@ -668,7 +720,7 @@ export function useFinanceiro() {
           created_by: user.id,
           status: 'processada',
           total_linhas: totalLinhas,
-          total_validas: totalValid,
+          total_validas: 0,
           total_com_erro: totalErros,
         })
         .select('id')
@@ -679,6 +731,8 @@ export function useFinanceiro() {
       // ── Inserir lançamentos novos no V2 ──
       const insertBatchSize = 50;
       const sinalFromTipo = (tipo: string | null) => (tipo || '').startsWith('1') ? 1 : -1;
+      let inseridos = 0;
+      let ignorados = duplicados;
       for (let i = 0; i < linhasNovas.length; i += insertBatchSize) {
         const batch = linhasNovas.slice(i, i + insertBatchSize).map((l) => ({
           fazenda_id: l.fazendaId!,
@@ -688,6 +742,7 @@ export function useFinanceiro() {
           data_competencia: l.dataPagamento || l.anoMes + '-01',
           data_pagamento: l.dataPagamento,
           ano_mes: l.anoMes,
+          conta_bancaria_id: l.contaBancariaId,
           descricao: l.produto,
           valor: l.valor,
           sinal: sinalFromTipo(l.tipoOperacao),
@@ -701,12 +756,37 @@ export function useFinanceiro() {
           created_by: user.id,
         }));
         const { error } = await supabase.from('financeiro_lancamentos_v2').insert(batch);
-        if (error) throw error;
+        if (!error) {
+          inseridos += batch.length;
+          continue;
+        }
+
+        if (error.code !== '23505') throw error;
+
+        for (const row of batch) {
+          const { error: rowError } = await supabase.from('financeiro_lancamentos_v2').insert(row);
+          if (!rowError) {
+            inseridos += 1;
+            continue;
+          }
+          if (rowError.code === '23505') {
+            ignorados += 1;
+            continue;
+          }
+          throw rowError;
+        }
       }
 
+      const totalValid = inseridos + saldosResolvidos.length + (resumoCaixa?.length || 0);
+      const { error: updateImportacaoError } = await supabase
+        .from('financeiro_importacoes_v2')
+        .update({ total_validas: totalValid })
+        .eq('id', imp.id);
+      if (updateImportacaoError) throw updateImportacaoError;
+
       // ── Saldos bancários (upsert, não apaga) ──
-      if (saldosBancarios && saldosBancarios.length > 0) {
-        const saldoBatch = saldosBancarios.map(s => ({
+      if (saldosResolvidos.length > 0) {
+        const saldoBatch = saldosResolvidos.map(s => ({
           fazenda_id: s.fazendaId || primaryFazendaId,
           cliente_id: fazendas.find(f => f.id === (s.fazendaId || primaryFazendaId))?.cliente_id || cid,
           importacao_id: imp.id,
@@ -737,9 +817,9 @@ export function useFinanceiro() {
         if (error) throw error;
       }
 
-      const msgs: string[] = [`${linhasNovas.length} lançamentos inseridos`];
-      if (duplicados > 0) msgs.push(`${duplicados} duplicados ignorados`);
-      if (saldosBancarios?.length) msgs.push(`${saldosBancarios.length} saldos`);
+      const msgs: string[] = [`${inseridos} lançamentos inseridos`];
+      if (ignorados > 0) msgs.push(`${ignorados} duplicados ignorados`);
+      if (saldosResolvidos.length) msgs.push(`${saldosResolvidos.length} saldos`);
       if (resumoCaixa?.length) msgs.push(`${resumoCaixa.length} resumos`);
       toast.success(`Importação concluída: ${msgs.join(' · ')}`);
 
