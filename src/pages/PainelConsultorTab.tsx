@@ -396,9 +396,11 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
 
   const handleExport = useCallback(() => {
     try {
-      exportToExcel(zooRows, finRows, anoNum, ateMes, fazendaNome);
+      const filename = exportToExcel(zooRows, finRows, anoNum, ateMes, fazendaNome);
+      toast.success(`Excel exportado: ${filename}`);
     } catch (err) {
       console.error('Erro ao exportar Excel:', err);
+      toast.error('Erro ao exportar Excel. Verifique o console.');
     }
   }, [zooRows, finRows, anoNum, ateMes, fazendaNome]);
 
