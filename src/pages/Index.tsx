@@ -307,6 +307,9 @@ const Index = () => {
       {activeTab === 'operacao_hub' && (
         <OperacaoHubTab onTabChange={handleTabChange} onBack={() => setActiveTab('resumo')} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
       )}
+      {activeTab === 'painel_consultor' && (
+        <PainelConsultorTab onBack={() => setActiveTab('resumo')} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
+      )}
 
       {/* Hubs */}
       {activeTab === 'lancar_zoo_hub' && (
