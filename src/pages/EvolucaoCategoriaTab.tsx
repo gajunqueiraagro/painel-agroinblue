@@ -311,6 +311,17 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
     return { saldoIni, movs, saldoFin, pesoMedio };
   }, [dados]);
 
+  const valorRebanhoTotal = useMemo(() => {
+    let total = 0;
+    dados.forEach(d => {
+      const preco = precosRebanho[d.value];
+      if (preco && d.pesoMedio && d.saldoFinal > 0) {
+        total += d.saldoFinal * d.pesoMedio * preco;
+      }
+    });
+    return total;
+  }, [dados, precosRebanho]);
+
   const formatPeso = (v: number | null) => {
     if (v === null || v === undefined || v <= 0) return '—';
     return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
