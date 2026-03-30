@@ -208,9 +208,11 @@ export function LancamentoV2Dialog({
     }
   };
 
-  const handleValorBlur = () => {
-    const num = parseBRL(valorDisplay);
-    setValorDisplay(toBRL(num));
+  const handleValorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/\D/g, '');
+    if (!digits) { setValorDisplay('0,00'); return; }
+    const num = parseInt(digits, 10) / 100;
+    setValorDisplay(num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   };
 
   const handleNotaFiscalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
