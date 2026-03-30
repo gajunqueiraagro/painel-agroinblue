@@ -498,10 +498,32 @@ export function ConciliacaoBancariaTab() {
 
               {/* Lançamentos */}
               {card.lancamentos.length > 0 && (() => {
-                const entradas = card.lancamentos.filter(l => (l.tipo_operacao || '').startsWith('1'));
-                const saidas = card.lancamentos.filter(l => (l.tipo_operacao || '').startsWith('2') || (l.tipo_operacao || '').startsWith('3'));
+                const classifyLanc = (l: LancamentoResumo) => {
+                  const tipo = (l.tipo_operacao || '').toLowerCase().replace(/[\s\-–—]/g, '');
+                  if (tipo.startsWith('1') || tipo.includes('entrada')) {
+                    return tipo.includes('transfer') ? 'transf_entrada' : 'entrada';
+                  } else if (tipo.startsWith('2') || tipo.includes('saida') || tipo.includes('saída')) {
+                    return tipo.includes('transfer') ? 'transf_saida' : 'saida';
+                  } else if (tipo.startsWith('3') || tipo.includes('transfer')) {
+                    return l.sinal >= 0 ? 'transf_entrada' : 'transf_saida';
+                  }
+                  return 'saida';
+                };
 
-                const lancFiltrados = (filtroTipoLanc === 'entradas' ? entradas : filtroTipoLanc === 'saidas' ? saidas : card.lancamentos)
+                const entradas = card.lancamentos.filter(l => classifyLanc(l) === 'entrada');
+                const saidas = card.lancamentos.filter(l => classifyLanc(l) === 'saida');
+                const transfEntrada = card.lancamentos.filter(l => classifyLanc(l) === 'transf_entrada');
+                const transfSaida = card.lancamentos.filter(l => classifyLanc(l) === 'transf_saida');
+
+                const lancFiltrados = (() => {
+                  switch (filtroTipoLanc) {
+                    case 'entradas': return entradas;
+                    case 'saidas': return saidas;
+                    case 'transf_entrada': return transfEntrada;
+                    case 'transf_saida': return transfSaida;
+                    default: return card.lancamentos;
+                  }
+                })()
                   .slice()
                   .sort((a, b) => {
                     const dA = a.data_pagamento || a.data_competencia || '';
@@ -509,9 +531,11 @@ export function ConciliacaoBancariaTab() {
                     return dA.localeCompare(dB);
                   });
 
+                const fornecedorMap = new Map(fornecedores.map(f => [f.id, f.nome]));
+
                 return (
                   <div>
-                    <div className="flex items-center gap-1.5 mb-1">
+                    <div className="flex items-center gap-1 mb-1 flex-wrap">
                       <button
                         onClick={() => setFiltroTipoLanc('todos')}
                         className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipoLanc === 'todos' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
@@ -530,6 +554,18 @@ export function ConciliacaoBancariaTab() {
                       >
                         Saídas ({saidas.length})
                       </button>
+                      <button
+                        onClick={() => setFiltroTipoLanc(filtroTipoLanc === 'transf_entrada' ? 'todos' : 'transf_entrada')}
+                        className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipoLanc === 'transf_entrada' ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 hover:opacity-80'}`}
+                      >
+                        Transf. Ent. ({transfEntrada.length})
+                      </button>
+                      <button
+                        onClick={() => setFiltroTipoLanc(filtroTipoLanc === 'transf_saida' ? 'todos' : 'transf_saida')}
+                        className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipoLanc === 'transf_saida' ? 'bg-orange-600 text-white' : 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300 hover:opacity-80'}`}
+                      >
+                        Transf. Saída ({transfSaida.length})
+                      </button>
                     </div>
                     <div className="max-h-[300px] overflow-y-auto rounded border">
                       <Table>
@@ -537,17 +573,21 @@ export function ConciliacaoBancariaTab() {
                           <TableRow>
                             <TableHead className="text-[9px] w-[50px]">Data</TableHead>
                             <TableHead className="text-[9px]">Descrição</TableHead>
-                            <TableHead className="text-[9px] text-right w-[90px]">Valor</TableHead>
+                            <TableHead className="text-[9px]">Fornecedor</TableHead>
+                            <TableHead className="text-[9px] text-right w-[130px]">Valor</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {lancFiltrados.slice(0, 50).map((l, idx) => {
-                            const isEntrada = (l.tipo_operacao || '').startsWith('1');
+                            const cls = classifyLanc(l);
+                            const isEntrada = cls === 'entrada' || cls === 'transf_entrada';
+                            const fornNome = l.favorecido_id ? fornecedorMap.get(l.favorecido_id) || '' : '';
                             return (
                               <TableRow key={idx}>
                                 <TableCell className="text-[9px] py-0.5">{fmtDate(l.data_pagamento || l.data_competencia)}</TableCell>
                                 <TableCell className="text-[9px] py-0.5 truncate max-w-[150px]">{l.descricao || '-'}</TableCell>
-                                <TableCell className={`text-[9px] py-0.5 text-right font-medium tabular-nums ${isEntrada ? 'text-green-700' : 'text-red-700'}`}>
+                                <TableCell className="text-[9px] py-0.5 truncate max-w-[120px]">{fornNome || <span className="italic text-muted-foreground">n/c</span>}</TableCell>
+                                <TableCell className={`text-[9px] py-0.5 text-right font-medium tabular-nums whitespace-nowrap ${isEntrada ? 'text-green-700' : 'text-red-700'}`}>
                                   {isEntrada ? '' : '- '}R$ {fmtBRL(Math.abs(l.valor))}
                                 </TableCell>
                               </TableRow>
