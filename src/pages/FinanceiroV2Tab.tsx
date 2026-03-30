@@ -366,7 +366,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     setCentroFiltro('__all__');
     setSubcentroFiltro('__all__');
     setProdutoFiltro('');
-    setFornecedorFiltro('');
+    setFornecedorFiltro('__all__');
     setAtividadeFiltro('__all__');
     setMacroLocked(false);
   };
