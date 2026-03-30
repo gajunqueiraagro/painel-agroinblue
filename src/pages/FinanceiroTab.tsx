@@ -274,20 +274,20 @@ function AbateTable({ lancamentos, onEdit, isGlobal, fazendaMap }: { lancamentos
           const liqCabeca = totals.qtd > 0 ? totals.valorTotal / totals.qtd : 0;
           return (
             <tfoot>
-              <tr className="border-t-2 border-primary/40 bg-muted/30 font-bold">
-                <td className="p-1.5">TOTAL</td>
-                <td className="p-1.5 text-right">{totals.qtd}</td>
-                <td className="p-1.5"></td>
-                <td className="p-1.5"></td>
-                {isGlobal && <td className="p-1.5"></td>}
-                <td className="p-1.5 text-right">{fmtValor(pesoVivoMedio)}</td>
-                <td className="p-1.5 text-right text-muted-foreground">{rendMedio ? rendMedio.toFixed(1) + '%' : '-'}</td>
-                <td className="p-1.5 text-right">{fmtValor(arrobaMedio)}</td>
-                <td className="p-1.5 text-right text-primary">{fmtValor(totals.valorTotal)}</td>
-                <td className="p-1.5 text-right">{fmtValor(liqArroba)}</td>
-                <td className="p-1.5 text-right">{fmtValor(liqCabeca)}</td>
-                <td className="p-1.5"></td>
-                <td className="p-1.5"></td>
+              <tr className="border-t-2 border-primary/40 bg-muted/30 font-bold text-[10px]">
+                <td className="px-1 py-[3px]">TOTAL</td>
+                <td className="px-1 py-[3px] text-right">{totals.qtd}</td>
+                <td className="px-1 py-[3px]"></td>
+                <td className="px-1 py-[3px]"></td>
+                {isGlobal && <td className="px-1 py-[3px]"></td>}
+                <td className="px-1 py-[3px] text-right">{fmtValor(pesoVivoMedio)}</td>
+                <td className="px-1 py-[3px] text-right text-muted-foreground">{rendMedio ? rendMedio.toFixed(1) + '%' : '-'}</td>
+                <td className="px-1 py-[3px] text-right">{fmtValor(arrobaMedio)}</td>
+                <td className="px-1 py-[3px] text-right text-primary">{fmtValor(totals.valorTotal)}</td>
+                <td className="px-1 py-[3px] text-right">{fmtValor(liqArroba)}</td>
+                <td className="px-1 py-[3px] text-right">{fmtValor(liqCabeca)}</td>
+                <td className="px-1 py-[3px]"></td>
+                <td className="px-1 py-[3px]"></td>
               </tr>
             </tfoot>
           );
