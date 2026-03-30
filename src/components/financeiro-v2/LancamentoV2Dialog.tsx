@@ -613,7 +613,7 @@ export function LancamentoV2Dialog({
                 </div>
                 <div>
                   <Label className="text-xs">Data Pagamento *</Label>
-                  <Input type="date" value={dataPagamento} onChange={e => handleDataPagamentoChange(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" />
+                  <Input tabIndex={2} type="date" value={dataPagamento} onChange={e => handleDataPagamentoChange(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" />
                 </div>
               </div>
             </section>
