@@ -147,10 +147,10 @@ export function useContratos() {
     if (atualizarFuturos) {
       // Delete future lancamentos linked to this contract
       const today = new Date().toISOString().slice(0, 10);
-      await supabase
-        .from('financeiro_lancamentos_v2')
+      await (supabase
+        .from('financeiro_lancamentos_v2') as any)
         .delete()
-        .eq('contrato_id' as any, id)
+        .eq('contrato_id', id)
         .gte('data_competencia', today);
 
       // Re-fetch contract and regenerate
