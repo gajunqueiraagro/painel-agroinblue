@@ -142,6 +142,43 @@ async function fetchAllPaginated<T>(
   return allData;
 }
 
+/** Map a V2 row to the FinanceiroLancamento interface for backward compatibility */
+function mapV2ToLancamento(r: any): FinanceiroLancamento {
+  return {
+    id: r.id,
+    fazenda_id: r.fazenda_id,
+    importacao_id: r.lote_importacao_id || null,
+    origem_dado: r.origem_lancamento || 'manual',
+    data_realizacao: r.data_competencia,
+    data_pagamento: r.data_pagamento,
+    ano_mes: r.ano_mes,
+    produto: r.descricao || null,
+    fornecedor: null, // V2 uses favorecido_id (UUID)
+    valor: r.valor,
+    status_transacao: r.status_transacao,
+    tipo_operacao: r.tipo_operacao,
+    conta_origem: null, // V2 uses conta_bancaria_id
+    conta_destino: null,
+    macro_custo: r.macro_custo,
+    grupo_custo: null, // Not in V2
+    centro_custo: r.centro_custo,
+    subcentro: r.subcentro,
+    nota_fiscal: r.nota_fiscal,
+    cpf_cnpj: null,
+    recorrencia: null,
+    forma_pagamento: r.forma_pagamento,
+    obs: r.observacao || null,
+    escopo_negocio: r.escopo_negocio,
+    sinal: r.sinal,
+    favorecido_id: r.favorecido_id,
+    conta_bancaria_id: r.conta_bancaria_id,
+    descricao: r.descricao,
+    observacao: r.observacao,
+    origem_lancamento: r.origem_lancamento,
+    lote_importacao_id: r.lote_importacao_id,
+  };
+}
+
 /**
  * Desembolso produtivo — re-exportado da classificação centralizada.
  * macro_custo "Custeio Produtivo" OU "Investimento na Fazenda" + tipo_operacao 2-Saídas.
