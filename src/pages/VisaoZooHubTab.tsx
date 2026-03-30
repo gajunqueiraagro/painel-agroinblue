@@ -329,59 +329,59 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
   return (
     <div className="w-full animate-fade-in pb-20">
       {/* Sticky filters */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 sm:px-6 lg:px-8 pt-2 pb-2 space-y-1.5">
-        {/* Linha 1: Ano + Mês + Realizado|Previsto */}
+      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 sm:px-6 lg:px-8 py-1.5 space-y-1">
+        {/* Linha 1: Ano + Mês + Mês|Acumulado + Realizado|Previsto */}
         <div className="flex gap-1.5 items-center">
           <Select value={anoFiltro} onValueChange={handleAnoChange}>
-            <SelectTrigger className="w-20 h-7 text-xs font-bold"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[68px] h-6 text-[11px] font-bold px-2"><SelectValue /></SelectTrigger>
             <SelectContent side="bottom">
-              {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+              {anosDisp.map(a => <SelectItem key={a} value={a} className="text-[11px]">{a}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
-            <SelectTrigger className="w-24 h-7 text-xs font-bold"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[80px] h-6 text-[11px] font-bold px-2"><SelectValue /></SelectTrigger>
             <SelectContent side="bottom">
               {mesesOpt.map(m => (
-                <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>
+                <SelectItem key={m.value} value={String(m.value)} className="text-[11px]">{m.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <div className="flex bg-muted rounded-md p-0.5 ml-auto">
+
+          {bloco === 'indicadores' && (
+            <div className="flex bg-muted rounded p-0.5">
+              <button
+                onClick={() => setVista('mes')}
+                className={`px-2 text-[10px] font-bold py-0.5 rounded transition-colors ${vista === 'mes' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
+              >
+                {mesLabel}
+              </button>
+              <button
+                onClick={() => setVista('acumulado')}
+                className={`px-2 text-[10px] font-bold py-0.5 rounded transition-colors ${vista === 'acumulado' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
+              >
+                Acumulado
+              </button>
+            </div>
+          )}
+
+          <div className="flex bg-muted rounded p-0.5 ml-auto">
             <button
               onClick={() => setCenario('realizado')}
-              className={`px-2.5 text-[11px] font-bold py-1 rounded transition-colors ${cenario === 'realizado' ? 'bg-green-700 text-white shadow-sm' : 'text-muted-foreground'}`}
+              className={`px-2 text-[10px] font-bold py-0.5 rounded transition-colors ${cenario === 'realizado' ? 'bg-green-700 text-white shadow-sm' : 'text-muted-foreground'}`}
             >
               Realizado
             </button>
             <button
               onClick={() => setCenario('previsto')}
-              className={`px-2.5 text-[11px] font-bold py-1 rounded transition-colors ${cenario === 'previsto' ? 'bg-orange-500 text-white shadow-sm' : 'text-muted-foreground'}`}
+              className={`px-2 text-[10px] font-bold py-0.5 rounded transition-colors ${cenario === 'previsto' ? 'bg-orange-500 text-white shadow-sm' : 'text-muted-foreground'}`}
             >
               Previsto
             </button>
           </div>
         </div>
 
-        {/* Linha 2: Mês | Acumulado (compact) */}
-        {bloco === 'indicadores' && (
-          <div className="flex bg-muted rounded-md p-0.5 max-w-[200px]">
-            <button
-              onClick={() => setVista('mes')}
-              className={`flex-1 text-[11px] font-bold py-1 rounded transition-colors ${vista === 'mes' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
-            >
-              {mesLabel}
-            </button>
-            <button
-              onClick={() => setVista('acumulado')}
-              className={`flex-1 text-[11px] font-bold py-1 rounded transition-colors ${vista === 'acumulado' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
-            >
-              Acumulado
-            </button>
-          </div>
-        )}
-
-        {/* Linha 3: Blocos */}
-        <div className="grid grid-cols-3 bg-muted rounded-md p-0.5">
+        {/* Linha 2: Blocos */}
+        <div className="grid grid-cols-3 bg-muted rounded p-0.5">
           {blocos.map(b => (
             <button
               key={b.id}
@@ -392,7 +392,7 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
                   setBloco(b.id);
                 }
               }}
-              className={`py-1.5 px-1 rounded text-[10px] sm:text-xs font-bold transition-colors ${
+              className={`py-1 px-1 rounded text-[10px] font-bold transition-colors ${
                 b.id !== 'graficos_nav' && bloco === b.id
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-muted-foreground'
