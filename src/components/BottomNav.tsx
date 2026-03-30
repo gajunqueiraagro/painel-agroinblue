@@ -14,7 +14,7 @@ const allTabs: { id: TabId; label: string; icon: React.ComponentType<{ className
   { id: 'lancar_zoo_hub', label: 'Lanç. Zoo.', icon: PenSquare },
   { id: 'financeiro_v2_hub', label: 'Lanç. Fin.', icon: DollarSign },
   { id: 'visao_zoo_hub', label: 'Zootécnico', icon: BarChart3 },
-  { id: 'lancar_fin_hub', label: 'Financeiro', icon: Wallet },
+  { id: 'fin_caixa', label: 'Financeiro', icon: Wallet },
   { id: 'cadastros', label: 'Cadastro', icon: Settings },
 ];
 
@@ -29,7 +29,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     // Zootécnico (analysis) sub-screens
     const zooTabs: TabId[] = ['visao_zoo_hub', 'zootecnico', 'zootecnico_hub', 'indicadores', 'visao_anual_zoo', 'conciliacao_categoria', 'conciliacao', 'preco_mercado', 'graficos_analise', 'movimentacao', 'fluxo_anual', 'evolucao_rebanho_hub', 'evolucao_categoria', 'evolucao', 'valor_rebanho', 'pastos', 'fechamento_executivo', 'analise_consultor', 'analise_operacional'];
     // Financeiro (analysis) sub-screens
-    const finTabs: TabId[] = ['lancar_fin_hub', 'visao_fin_hub', 'fin_caixa', 'analise_economica', 'financeiro'];
+    const finTabs: TabId[] = ['fin_caixa', 'lancar_fin_hub', 'visao_fin_hub', 'analise_economica', 'financeiro', 'analise_operacional'];
     // Resumo sub-screens
     const resumoTabs: TabId[] = ['resumo', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute'];
     // Cadastros
