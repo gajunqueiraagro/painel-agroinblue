@@ -301,19 +301,6 @@ export function LancamentoV2Dialog({
           </DialogHeader>
 
           <div className="space-y-4">
-            {/* Fazenda */}
-            <div>
-              <Label className="text-xs font-semibold">Fazenda *</Label>
-              <Select value={fazendaId} onValueChange={v => { setFazendaId(v); setContaOrigemId(''); setContaDestinoId(''); }}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  {fazOperacionais.map(f => (
-                    <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             {/* 1. DATAS */}
             <div>
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Datas</p>
@@ -339,7 +326,7 @@ export function LancamentoV2Dialog({
                   <Input type="date" value={dataCompetencia} onChange={e => setDataCompetencia(e.target.value)} className="h-9" />
                 </div>
                 <div>
-                  <Label className="text-xs">Data Pagamento</Label>
+                  <Label className="text-xs">Data Pagamento *</Label>
                   <Input type="date" value={dataPagamento} onChange={e => handleDataPagamentoChange(e.target.value)} className="h-9" />
                 </div>
               </div>
@@ -440,9 +427,19 @@ export function LancamentoV2Dialog({
               </div>
             </div>
 
-            {/* 5. DOCUMENTO */}
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Documento</p>
+            {/* 5. FAZENDA + NOTA FISCAL */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Fazenda *</Label>
+                <Select value={fazendaId} onValueChange={v => { setFazendaId(v); setContaOrigemId(''); setContaDestinoId(''); }}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    {fazOperacionais.map(f => (
+                      <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div>
                 <Label className="text-xs">Nota Fiscal</Label>
                 <Input
