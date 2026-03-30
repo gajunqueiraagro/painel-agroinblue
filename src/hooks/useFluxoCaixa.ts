@@ -1,16 +1,19 @@
 /**
  * Hook para o Fluxo de Caixa — 12 linhas, jan-dez.
  * Base: data_pagamento + status_transacao = 'Conciliado'.
- * Saldo Inicial Jan = soma dos registros SALDO (EXPORT_APP_UNICO) de Dez do ano anterior.
+ * Saldo Inicial Jan = soma dos registros de saldo_final Dez do ano anterior (financeiro_saldos_bancarios_v2).
  *
  * REGRA: O fluxo de caixa é SEMPRE GLOBAL (todas as fazendas),
  * independentemente da fazenda selecionada.
+ *
+ * BASE OFICIAL: financeiro_lancamentos_v2 (V2)
  *
  * CLASSIFICAÇÃO: usa src/lib/financeiro/classificacao.ts como fonte única.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useCliente } from '@/contexts/ClienteContext';
 import {
   isConciliado,
   isEntrada as isEntradaClass,
@@ -100,6 +103,8 @@ export function useFluxoCaixa(
   mesAte: number,
 ) {
   const { fazendas } = useFazenda();
+  const { clienteAtual } = useCliente();
+  const clienteId = clienteAtual?.id;
   const allFazendaIds = fazendas.filter(f => f.id !== '__global__').map(f => f.id);
 
   const [lancamentosGlobais, setLancamentosGlobais] = useState<FluxoLancamentoBase[]>([]);
@@ -110,7 +115,7 @@ export function useFluxoCaixa(
   const [loadingSaldo, setLoadingSaldo] = useState(true);
 
   const loadLancamentosGlobais = useCallback(async () => {
-    if (allFazendaIds.length === 0) {
+    if (!clienteId || allFazendaIds.length === 0) {
       setLancamentosGlobais([]);
       setLoadingLancamentos(false);
       return;
@@ -123,9 +128,9 @@ export function useFluxoCaixa(
 
       while (true) {
         const { data } = await supabase
-          .from('financeiro_lancamentos')
-          .select('status_transacao, data_pagamento, valor, tipo_operacao, macro_custo, produto, escopo_negocio, grupo_custo, centro_custo, subcentro')
-          .in('fazenda_id', allFazendaIds)
+          .from('financeiro_lancamentos_v2')
+          .select('status_transacao, data_pagamento, valor, tipo_operacao, macro_custo, descricao, escopo_negocio, centro_custo, subcentro')
+          .eq('cliente_id', clienteId)
           .gte('data_pagamento', `${ano}-01-01`)
           .lte('data_pagamento', `${ano}-12-31`)
           .range(from, from + PAGE_SIZE - 1);
@@ -143,9 +148,9 @@ export function useFluxoCaixa(
           valor: Number(r.valor) || 0,
           tipo_operacao: r.tipo_operacao,
           macro_custo: r.macro_custo,
-          produto: r.produto,
+          produto: r.descricao,
           escopo_negocio: r.escopo_negocio,
-          grupo_custo: r.grupo_custo,
+          grupo_custo: null,
           centro_custo: r.centro_custo,
           subcentro: r.subcentro,
         })),
@@ -155,11 +160,11 @@ export function useFluxoCaixa(
     } finally {
       setLoadingLancamentos(false);
     }
-  }, [ano, allFazendaIds.join(',')]);
+  }, [ano, clienteId, allFazendaIds.join(',')]);
 
-  // Fetch saldo inicial GLOBAL de Dez do ano anterior
+  // Fetch saldo inicial GLOBAL de Dez do ano anterior (V2)
   const loadSaldoInicial = useCallback(async () => {
-    if (allFazendaIds.length === 0) {
+    if (!clienteId || allFazendaIds.length === 0) {
       setSaldoInicialAno(0);
       setSaldoInicialAusente(true);
       setSaldoInicialAudit(null);
@@ -171,33 +176,54 @@ export function useFluxoCaixa(
       const anoAnterior = ano - 1;
       const anoMesDez = `${anoAnterior}-12`;
       const { data } = await supabase
-        .from('financeiro_saldos_bancarios')
-        .select('saldo_final, conta_banco')
-        .in('fazenda_id', allFazendaIds)
+        .from('financeiro_saldos_bancarios_v2')
+        .select('saldo_final, conta_bancaria_id')
+        .eq('cliente_id', clienteId)
         .eq('ano_mes', anoMesDez);
 
       if (data && data.length > 0) {
         const total = data.reduce((s, r) => s + (Number(r.saldo_final) || 0), 0);
-        const contas = data.map(r => r.conta_banco).filter(Boolean);
+        const contas = data.map(r => r.conta_bancaria_id).filter(Boolean);
         setSaldoInicialAno(total);
         setSaldoInicialAusente(false);
         setSaldoInicialAudit({
-          fonte: 'financeiro_saldos_bancarios (SALDO da EXPORT_APP_UNICO)',
+          fonte: 'financeiro_saldos_bancarios_v2',
           periodo: anoMesDez,
           qtdRegistros: data.length,
           contas,
           somaTotal: total,
         });
       } else {
-        setSaldoInicialAno(0);
-        setSaldoInicialAusente(true);
-        setSaldoInicialAudit({
-          fonte: 'financeiro_saldos_bancarios (SALDO da EXPORT_APP_UNICO)',
-          periodo: anoMesDez,
-          qtdRegistros: 0,
-          contas: [],
-          somaTotal: 0,
-        });
+        // Fallback: try legacy table
+        const { data: legacyData } = await supabase
+          .from('financeiro_saldos_bancarios')
+          .select('saldo_final, conta_banco')
+          .in('fazenda_id', allFazendaIds)
+          .eq('ano_mes', anoMesDez);
+
+        if (legacyData && legacyData.length > 0) {
+          const total = legacyData.reduce((s, r) => s + (Number(r.saldo_final) || 0), 0);
+          const contas = legacyData.map(r => r.conta_banco).filter(Boolean);
+          setSaldoInicialAno(total);
+          setSaldoInicialAusente(false);
+          setSaldoInicialAudit({
+            fonte: 'financeiro_saldos_bancarios (legado - fallback)',
+            periodo: anoMesDez,
+            qtdRegistros: legacyData.length,
+            contas,
+            somaTotal: total,
+          });
+        } else {
+          setSaldoInicialAno(0);
+          setSaldoInicialAusente(true);
+          setSaldoInicialAudit({
+            fonte: 'financeiro_saldos_bancarios_v2',
+            periodo: anoMesDez,
+            qtdRegistros: 0,
+            contas: [],
+            somaTotal: 0,
+          });
+        }
       }
     } catch {
       setSaldoInicialAno(0);
@@ -206,7 +232,7 @@ export function useFluxoCaixa(
     } finally {
       setLoadingSaldo(false);
     }
-  }, [ano, allFazendaIds.join(',')]);
+  }, [ano, clienteId, allFazendaIds.join(',')]);
 
   useEffect(() => {
     loadSaldoInicial();
@@ -276,12 +302,10 @@ export function useFluxoCaixa(
               desembolso += val;
               if (escopo === 'pec') desembolsoPec += val;
               else desembolsoAgri += val;
-              // Detail: custeio vs investimento
               if (macro === 'custeio produtivo') {
                 if (escopo === 'agri') custoioAgri += val;
                 else custeioPec += val;
               } else {
-                // investimento na fazenda (or fallback)
                 if (escopo === 'agri') investAgri += val;
                 else investPec += val;
               }

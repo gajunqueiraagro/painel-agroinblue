@@ -216,7 +216,7 @@ export function useResumoStatus(
       // Process saldo inicial global (mesma lógica do useFluxoCaixa)
       const saldoData = saldoResult.data || [];
       setSaldoInicialRegistros(saldoData.length);
-      setSaldoInicialContas(saldoData.map((r: any) => r.conta_banco).filter(Boolean));
+      setSaldoInicialContas(saldoData.map((r: any) => r.conta_bancaria_id || '').filter(Boolean));
       setSaldoInicialGlobal(saldoData.reduce((s: number, r: any) => s + (Number(r.saldo_final) || 0), 0));
     } catch (e) {
       console.error('useResumoStatus load error', e);
