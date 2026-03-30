@@ -406,21 +406,22 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
         </Card>
       )}
 
-      {/* Confirm delete dialog */}
+      {/* Confirm cancel dialog */}
       <AlertDialog open={!!confirmExcluir} onOpenChange={(open) => !open && setConfirmExcluir(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir importação?</AlertDialogTitle>
+            <AlertDialogTitle>Cancelar importação?</AlertDialogTitle>
             <AlertDialogDescription>
-              Isso removerá permanentemente <span className="font-bold">{confirmExcluir?.total_validas} registros</span> vinculados
-              ao arquivo <span className="font-bold">{confirmExcluir?.nome_arquivo}</span>.
-              <br /><br />Esta ação não pode ser desfeita.
+              Os <span className="font-bold">{confirmExcluir?.total_validas} registros</span> vinculados
+              ao arquivo <span className="font-bold">{confirmExcluir?.nome_arquivo}</span> serão marcados como inativos.
+              <br /><br />Nenhum dado será apagado fisicamente. O histórico será mantido para rastreabilidade.
+              <br /><br />Lançamentos conciliados ou editados manualmente não serão afetados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
             <AlertDialogAction onClick={handleExcluir} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Excluir
+              Cancelar Importação
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
