@@ -131,6 +131,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [pageSize] = useState(getInitialPageSize);
   const [currentPage, setCurrentPage] = useState(0);
   const hook = useFinanceiroV2(pageSize);
+  const fechamentoHook = useFechamentoMensal();
 
   const currentYear = new Date().getFullYear();
   const anos = useMemo(() => {
