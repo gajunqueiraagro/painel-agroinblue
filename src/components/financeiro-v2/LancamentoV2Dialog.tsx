@@ -74,6 +74,11 @@ export function LancamentoV2Dialog({
   const [saving, setSaving] = useState(false);
   const [fornecedorDialogOpen, setFornecedorDialogOpen] = useState(false);
 
+  // Fornecedor search state
+  const [fornecedorOpen, setFornecedorOpen] = useState(false);
+  const [fornecedorSearch, setFornecedorSearch] = useState('');
+  const fornecedorInputRef = useRef<HTMLInputElement>(null);
+
   const [fazendaId, setFazendaId] = useState('');
   const [dataCompetencia, setDataCompetencia] = useState('');
   const [dataPagamento, setDataPagamento] = useState('');
