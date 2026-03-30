@@ -254,9 +254,17 @@ export function LancamentoV2Dialog({
     ? (isEntrada ? contaDestinoValid : contaOrigemValid)
     : (contaOrigemValid && contaDestinoValid);
 
+  const parceladaValid = formaPagamento === 'avista' || (numParcelas >= 2 && numParcelas <= 24);
   const canSave = !!fazendaId && !!dataCompetencia && !!dataPagamento && !!descricao && !!favorecidoId && favorecidoId !== '__none_forn__'
     && !!subcentro && !!tipoOperacao && !!statusTransacao && valorNum > 0
-    && contaSimpleValid;
+    && contaSimpleValid && parceladaValid;
+
+  /** Add N days to a date string (YYYY-MM-DD) */
+  function addDays(dateStr: string, days: number): string {
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  }
 
   const handleSubmit = async () => {
     if (!canSave) return;
@@ -271,6 +279,46 @@ export function LancamentoV2Dialog({
       contaBancariaId = contaOrigemId && contaOrigemId !== '__none__' ? contaOrigemId : null;
     }
 
+    // --- Installment logic (only for new, not edit) ---
+    if (!isEdit && formaPagamento === 'parcelada' && numParcelas >= 2) {
+      const totalVal = Math.abs(valorNum);
+      const baseVal = Math.floor((totalVal / numParcelas) * 100) / 100;
+      const lastVal = Math.round((totalVal - baseVal * (numParcelas - 1)) * 100) / 100;
+
+      let allOk = true;
+      for (let i = 0; i < numParcelas; i++) {
+        const parcelaNum = i + 1;
+        const parcelaVal = parcelaNum === numParcelas ? lastVal : baseVal;
+        const parcelaPgto = addDays(dataPagamento, i * 30);
+        const parcelaDesc = `${descricao} - Parcela ${parcelaNum}/${numParcelas}`;
+
+        const form: LancamentoV2Form = {
+          fazenda_id: fazendaId,
+          conta_bancaria_id: contaBancariaId,
+          data_competencia: dataCompetencia,
+          data_pagamento: parcelaPgto,
+          valor: parcelaVal,
+          tipo_operacao: tipoOperacao,
+          status_transacao: 'confirmado',
+          descricao: parcelaDesc,
+          macro_custo: macroCusto,
+          centro_custo: centroCusto,
+          subcentro,
+          observacao,
+          nota_fiscal: notaFiscal || null,
+          favorecido_id: favorecidoId && favorecidoId !== '__none_forn__' ? favorecidoId : null,
+        };
+
+        const ok = await onSave(form);
+        if (!ok) { allOk = false; break; }
+      }
+
+      setSaving(false);
+      if (allOk) onClose();
+      return;
+    }
+
+    // --- Single (à vista) ---
     const form: LancamentoV2Form = {
       fazenda_id: fazendaId,
       conta_bancaria_id: contaBancariaId,
