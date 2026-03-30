@@ -229,7 +229,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
               <ShieldCheck className="h-4 w-4 text-primary mt-0.5 shrink-0" />
               <div className="text-xs space-y-0.5">
                 <p className="font-bold text-foreground">Importação incremental protegida</p>
-                <p className="text-muted-foreground">Duplicados serão ignorados automaticamente (data + valor + conta + produto). Lançamentos existentes nunca serão apagados ou sobrescritos.</p>
+                <p className="text-muted-foreground">Duplicados são ignorados automaticamente (hash robusto: cliente + fazenda + data + valor + tipo + conta + produto + fornecedor). Lançamentos existentes nunca serão apagados ou sobrescritos.</p>
               </div>
             </div>
 
@@ -406,21 +406,22 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
         </Card>
       )}
 
-      {/* Confirm delete dialog */}
+      {/* Confirm cancel dialog */}
       <AlertDialog open={!!confirmExcluir} onOpenChange={(open) => !open && setConfirmExcluir(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir importação?</AlertDialogTitle>
+            <AlertDialogTitle>Cancelar importação?</AlertDialogTitle>
             <AlertDialogDescription>
-              Isso removerá permanentemente <span className="font-bold">{confirmExcluir?.total_validas} registros</span> vinculados
-              ao arquivo <span className="font-bold">{confirmExcluir?.nome_arquivo}</span>.
-              <br /><br />Esta ação não pode ser desfeita.
+              Os <span className="font-bold">{confirmExcluir?.total_validas} registros</span> vinculados
+              ao arquivo <span className="font-bold">{confirmExcluir?.nome_arquivo}</span> serão marcados como inativos.
+              <br /><br />Nenhum dado será apagado fisicamente. O histórico será mantido para rastreabilidade.
+              <br /><br />Lançamentos conciliados ou editados manualmente não serão afetados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
             <AlertDialogAction onClick={handleExcluir} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Excluir
+              Cancelar Importação
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

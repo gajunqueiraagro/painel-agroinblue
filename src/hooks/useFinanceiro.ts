@@ -285,10 +285,10 @@ export function useFinanceiro() {
 
         const [allLancs, ccResult, impResult, saldoResult, lancPecResult] = await Promise.all([
           fetchAllPaginated<FinanceiroLancamento>((from, to) =>
-            (supabase.from('financeiro_lancamentos').select('*') as any).in('fazenda_id', allFazendaIds).order('data_realizacao', { ascending: false }).range(from, to),
+            (supabase.from('financeiro_lancamentos').select('*') as any).in('fazenda_id', allFazendaIds).neq('origem_dado', 'importacao_cancelada').order('data_realizacao', { ascending: false }).range(from, to),
           ),
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').in('fazenda_id', allFazendaIds).eq('ativo', true),
-          supabase.from('financeiro_importacoes').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').in('fazenda_id', allFazendaIds).order('data_importacao', { ascending: false }),
+          supabase.from('financeiro_importacoes').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').in('fazenda_id', allFazendaIds).neq('status', 'cancelada').order('data_importacao', { ascending: false }),
           opIds.length > 0 ? supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
           opIds.length > 0 ? supabase.from('lancamentos').select('fazenda_id, data, tipo, quantidade, categoria, categoria_destino').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
         ]);
@@ -309,19 +309,19 @@ export function useFinanceiro() {
         const needsRateio = fazendaADM && fazendaADM.id !== fazendaId;
 
         const lancPromise = fetchAllPaginated<FinanceiroLancamento>((from, to) =>
-          (supabase.from('financeiro_lancamentos').select('*') as any).eq('fazenda_id', fazendaId).order('data_realizacao', { ascending: false }).range(from, to),
+          (supabase.from('financeiro_lancamentos').select('*') as any).eq('fazenda_id', fazendaId).neq('origem_dado', 'importacao_cancelada').order('data_realizacao', { ascending: false }).range(from, to),
         );
 
         const admPromise = needsRateio
           ? fetchAllPaginated<FinanceiroLancamento>((from, to) =>
-              (supabase.from('financeiro_lancamentos').select('*') as any).eq('fazenda_id', fazendaADM.id).order('data_realizacao', { ascending: false }).range(from, to),
+              (supabase.from('financeiro_lancamentos').select('*') as any).eq('fazenda_id', fazendaADM.id).neq('origem_dado', 'importacao_cancelada').order('data_realizacao', { ascending: false }).range(from, to),
             )
           : Promise.resolve([] as FinanceiroLancamento[]);
 
         const [lancData, ccResult, impResult, admData, saldoResult, lancPecResult] = await Promise.all([
           lancPromise,
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').eq('fazenda_id', fazendaId).eq('ativo', true),
-          supabase.from('financeiro_importacoes').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').in('fazenda_id', allFazendaIds).order('data_importacao', { ascending: false }),
+          supabase.from('financeiro_importacoes').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').in('fazenda_id', allFazendaIds).neq('status', 'cancelada').order('data_importacao', { ascending: false }),
           admPromise,
           needsRateio && opIds.length > 0
             ? supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds)
@@ -498,9 +498,26 @@ export function useFinanceiro() {
       .map(f => f.nome);
   }, [fazendasOperacionais, rebanhoMedioPorFazendaMes, fazendaADM]);
 
-  // --- Gerar chave de deduplicação ---
-  const dedupKey = (data: string | null, valor: number, conta: string | null, descricao: string | null): string => {
-    return `${(data || '').trim()}|${valor.toFixed(2)}|${(conta || '').trim().toLowerCase()}|${(descricao || '').trim().toLowerCase()}`;
+  // --- Gerar hash robusto de deduplicação ---
+  const buildHashImportacao = (
+    clienteId: string, fazendaId: string,
+    dataPagamento: string | null, valor: number,
+    tipoOperacao: string | null, contaOrigem: string | null,
+    contaDestino: string | null, produto: string | null,
+    fornecedor: string | null,
+  ): string => {
+    const parts = [
+      clienteId,
+      fazendaId,
+      (dataPagamento || '').trim(),
+      valor.toFixed(2),
+      (tipoOperacao || '').trim().toLowerCase(),
+      (contaOrigem || '').trim().toLowerCase(),
+      (contaDestino || '').trim().toLowerCase(),
+      (produto || '').trim().toLowerCase().replace(/\s+/g, ' '),
+      (fornecedor || '').trim().toLowerCase().replace(/\s+/g, ' '),
+    ];
+    return parts.join('|');
   };
 
   // --- Confirmar importação (incremental com dedup) ---
@@ -531,25 +548,30 @@ export function useFinanceiro() {
       // ── Determinar origem_dado baseado no tipo de importação ──
       const origemDado = tipoImportacao || 'importacao_incremental';
 
-      // ── DEDUPLICAÇÃO: buscar chaves existentes ──
-      // Buscar lançamentos existentes do mesmo cliente para comparar
+      // ── DEDUPLICAÇÃO ROBUSTA: buscar hashes existentes ──
       const fazendaIds = [...new Set(linhas.map(l => l.fazendaId).filter(Boolean))] as string[];
-      const existingKeys = new Set<string>();
+      const existingHashes = new Set<string>();
 
       for (const fid of fazendaIds) {
-        // Buscar em lotes para não estourar limite
         let from = 0;
         const batchSize = 1000;
         while (true) {
           const { data: existing } = await supabase
             .from('financeiro_lancamentos')
-            .select('data_realizacao, valor, conta_origem, produto')
+            .select('hash_importacao, data_pagamento, valor, tipo_operacao, conta_origem, conta_destino, produto, fornecedor')
             .eq('fazenda_id', fid)
             .eq('cliente_id', clienteId)
             .range(from, from + batchSize - 1);
           if (!existing || existing.length === 0) break;
           for (const e of existing) {
-            existingKeys.add(dedupKey(e.data_realizacao, e.valor, e.conta_origem, e.produto));
+            // Use persisted hash if available, otherwise rebuild
+            const hash = e.hash_importacao || buildHashImportacao(
+              clienteId, fid,
+              e.data_pagamento, e.valor,
+              e.tipo_operacao, e.conta_origem, e.conta_destino,
+              e.produto, e.fornecedor,
+            );
+            existingHashes.add(hash);
           }
           if (existing.length < batchSize) break;
           from += batchSize;
@@ -558,15 +580,21 @@ export function useFinanceiro() {
 
       // Filtrar duplicados
       const linhasNovas: LinhaImportada[] = [];
+      const hashesNovas: string[] = [];
       let duplicados = 0;
       for (const l of linhas) {
-        const key = dedupKey(l.dataPagamento || l.anoMes + '-01', l.valor, l.contaOrigem, l.produto);
-        if (existingKeys.has(key)) {
+        const hash = buildHashImportacao(
+          clienteId, l.fazendaId || '',
+          l.dataPagamento || l.anoMes + '-01', l.valor,
+          l.tipoOperacao, l.contaOrigem, l.contaDestino,
+          l.produto, l.fornecedor,
+        );
+        if (existingHashes.has(hash)) {
           duplicados++;
         } else {
           linhasNovas.push(l);
-          // Adicionar ao set para evitar duplicados dentro do próprio lote
-          existingKeys.add(key);
+          hashesNovas.push(hash);
+          existingHashes.add(hash);
         }
       }
 
@@ -596,9 +624,10 @@ export function useFinanceiro() {
       if (impErr) throw impErr;
 
       // ── Inserir lançamentos novos (nunca apaga existentes) ──
+      // Histórico = somente leitura (importacao_historica)
       const insertBatchSize = 50;
       for (let i = 0; i < linhasNovas.length; i += insertBatchSize) {
-        const batch = linhasNovas.slice(i, i + insertBatchSize).map(l => ({
+        const batch = linhasNovas.slice(i, i + insertBatchSize).map((l, j) => ({
           fazenda_id: l.fazendaId!,
           cliente_id: fazendas.find(f => f.id === l.fazendaId)?.cliente_id || clienteId,
           importacao_id: imp.id,
@@ -619,6 +648,8 @@ export function useFinanceiro() {
           subcentro: l.subcentro,
           obs: l.obs,
           escopo_negocio: l.escopoNegocio,
+          hash_importacao: hashesNovas[i + j],
+          editado_manual: false,
         }));
         const { error } = await supabase.from('financeiro_lancamentos').insert(batch);
         if (error) throw error;
@@ -671,10 +702,10 @@ export function useFinanceiro() {
     }
   }, [user, loadData, fazendas]);
 
-  // --- Excluir importação (protege conciliados e editados manualmente) ---
+  // --- Cancelar importação (soft delete — nunca apaga base principal) ---
   const excluirImportacao = useCallback(async (importacaoId: string) => {
     try {
-      // Verificar se há lançamentos conciliados nesta importação
+      // 1. Verificar se há lançamentos conciliados
       const { data: conciliados } = await supabase
         .from('financeiro_lancamentos')
         .select('id')
@@ -683,44 +714,56 @@ export function useFinanceiro() {
         .limit(1);
 
       if (conciliados && conciliados.length > 0) {
-        toast.error('Esta importação contém lançamentos conciliados e não pode ser excluída. Remova a conciliação antes.');
+        toast.error('Esta importação contém lançamentos conciliados e não pode ser cancelada.');
         return false;
       }
 
-      // Verificar se há lançamentos com origem manual (editados depois)
+      // 2. Verificar se há lançamentos editados manualmente (campo real)
       const { data: editados } = await supabase
         .from('financeiro_lancamentos')
         .select('id')
         .eq('importacao_id', importacaoId)
-        .eq('origem_dado', 'manual')
+        .eq('editado_manual', true)
         .limit(1);
 
       if (editados && editados.length > 0) {
-        toast.error('Esta importação contém lançamentos editados manualmente e não pode ser excluída.');
+        toast.error('Esta importação contém lançamentos editados manualmente e não pode ser cancelada.');
         return false;
       }
 
-      const deletes = await Promise.all([
-        supabase.from('financeiro_lancamentos').delete().eq('importacao_id', importacaoId),
-        supabase.from('financeiro_saldos_bancarios').delete().eq('importacao_id', importacaoId),
-        supabase.from('financeiro_resumo_caixa').delete().eq('importacao_id', importacaoId),
-      ]);
-      for (const { error } of deletes) { if (error) throw error; }
-
-      const { error: delImp } = await supabase
+      // 3. Verificar se é importação histórica (somente leitura)
+      const { data: impRecord } = await supabase
         .from('financeiro_importacoes')
-        .delete()
-        .eq('id', importacaoId);
-      if (delImp) throw delImp;
+        .select('status')
+        .eq('id', importacaoId)
+        .single();
 
-      toast.success('Importação excluída com sucesso');
+      // 4. Soft delete: marcar importação como cancelada
+      const { error: cancelErr } = await supabase
+        .from('financeiro_importacoes')
+        .update({
+          status: 'cancelada',
+          cancelada_em: new Date().toISOString(),
+          cancelada_por: user?.id || null,
+        })
+        .eq('id', importacaoId);
+      if (cancelErr) throw cancelErr;
+
+      // 5. Marcar lançamentos como inativos (soft delete via origem_dado)
+      const { error: lancErr } = await supabase
+        .from('financeiro_lancamentos')
+        .update({ origem_dado: 'importacao_cancelada' })
+        .eq('importacao_id', importacaoId);
+      if (lancErr) throw lancErr;
+
+      toast.success('Importação cancelada. Lançamentos marcados como inativos.');
       await loadData();
       return true;
     } catch (err: any) {
-      toast.error('Erro ao excluir: ' + (err.message || err));
+      toast.error('Erro ao cancelar: ' + (err.message || err));
       return false;
     }
-  }, [loadData]);
+  }, [loadData, user]);
 
   // --- Indicadores ---
   const indicadores = useMemo(() => {

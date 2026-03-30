@@ -1387,6 +1387,8 @@ export type Database = {
       }
       financeiro_importacoes: {
         Row: {
+          cancelada_em: string | null
+          cancelada_por: string | null
           cliente_id: string
           created_at: string
           data_importacao: string
@@ -1400,6 +1402,8 @@ export type Database = {
           usuario_id: string
         }
         Insert: {
+          cancelada_em?: string | null
+          cancelada_por?: string | null
           cliente_id: string
           created_at?: string
           data_importacao?: string
@@ -1413,6 +1417,8 @@ export type Database = {
           usuario_id: string
         }
         Update: {
+          cancelada_em?: string | null
+          cancelada_por?: string | null
           cliente_id?: string
           created_at?: string
           data_importacao?: string
@@ -1526,11 +1532,13 @@ export type Database = {
           created_at: string
           data_pagamento: string | null
           data_realizacao: string
+          editado_manual: boolean
           escopo_negocio: string | null
           fazenda_id: string
           forma_pagamento: string | null
           fornecedor: string | null
           grupo_custo: string | null
+          hash_importacao: string | null
           id: string
           importacao_id: string | null
           macro_custo: string | null
@@ -1555,11 +1563,13 @@ export type Database = {
           created_at?: string
           data_pagamento?: string | null
           data_realizacao: string
+          editado_manual?: boolean
           escopo_negocio?: string | null
           fazenda_id: string
           forma_pagamento?: string | null
           fornecedor?: string | null
           grupo_custo?: string | null
+          hash_importacao?: string | null
           id?: string
           importacao_id?: string | null
           macro_custo?: string | null
@@ -1584,11 +1594,13 @@ export type Database = {
           created_at?: string
           data_pagamento?: string | null
           data_realizacao?: string
+          editado_manual?: boolean
           escopo_negocio?: string | null
           fazenda_id?: string
           forma_pagamento?: string | null
           fornecedor?: string | null
           grupo_custo?: string | null
+          hash_importacao?: string | null
           id?: string
           importacao_id?: string | null
           macro_custo?: string | null
