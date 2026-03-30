@@ -238,6 +238,7 @@ const Index = () => {
     fin_v2_fornecedores: () => setActiveTab('financeiro_v2_hub'),
     fin_v2_plano: () => setActiveTab('financeiro_v2_hub'),
     fin_v2_saldos: () => setActiveTab('financeiro_v2_hub'),
+    contratos: () => setActiveTab('financeiro_v2_hub'),
     fechamento: goToZootecnico,
     evolucao_rebanho_hub: goToLancarZooHub,
     fluxo_anual: () => setActiveTab('movimentacao'),
