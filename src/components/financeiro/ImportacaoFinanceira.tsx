@@ -52,7 +52,7 @@ interface PreviewState {
   erroEstrutura?: ValidacaoEstrutura;
 }
 
-export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onConfirmar, onExcluir }: Props) {
+export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesFechado, onConfirmar, onExcluir }: Props) {
   const { perfil } = usePermissions();
   const podeCancelar = ['admin_agroinblue', 'gestor_cliente', 'financeiro'].includes(perfil || '');
   const fileRef = useRef<HTMLInputElement>(null);
