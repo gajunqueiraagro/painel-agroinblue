@@ -392,7 +392,7 @@ export function FornecedorFormDialog({
                   <Input value={conta} onChange={e => setConta(e.target.value)} className="h-8 text-xs" placeholder="00000-0" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <Label className="text-[11px]">Tipo de Conta</Label>
                   <Select value={tipoConta || '__none_tc__'} onValueChange={v => setTipoConta(v === '__none_tc__' ? '' : v)}>
