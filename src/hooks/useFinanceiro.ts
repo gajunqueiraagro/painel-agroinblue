@@ -746,14 +746,14 @@ export function useFinanceiro() {
     }
   }, [user, loadData, fazendas]);
 
-  // --- Cancelar importação (soft delete — nunca apaga base principal) ---
+  // --- Cancelar importação (soft delete V2) ---
   const excluirImportacao = useCallback(async (importacaoId: string) => {
     try {
       // 1. Verificar se há lançamentos conciliados
       const { data: conciliados } = await supabase
-        .from('financeiro_lancamentos')
+        .from('financeiro_lancamentos_v2')
         .select('id')
-        .eq('importacao_id', importacaoId)
+        .eq('lote_importacao_id', importacaoId)
         .eq('status_transacao', 'conciliado')
         .limit(1);
 
@@ -762,46 +762,23 @@ export function useFinanceiro() {
         return false;
       }
 
-      // 2. Verificar se há lançamentos editados manualmente (campo real)
-      const { data: editados } = await supabase
-        .from('financeiro_lancamentos')
-        .select('id')
-        .eq('importacao_id', importacaoId)
-        .eq('editado_manual', true)
-        .limit(1);
-
-      if (editados && editados.length > 0) {
-        toast.error('Esta importação contém lançamentos editados manualmente e não pode ser cancelada.');
-        return false;
-      }
-
-      // 3. Verificar se é importação histórica (somente leitura)
-      const { data: impRecord } = await supabase
-        .from('financeiro_importacoes')
-        .select('status')
-        .eq('id', importacaoId)
-        .single();
-
-      // 4. Soft delete: marcar importação como cancelada
+      // 2. Marcar importação como cancelada
       const { error: cancelErr } = await supabase
-        .from('financeiro_importacoes')
+        .from('financeiro_importacoes_v2')
         .update({
           status: 'cancelada',
-          cancelada_em: new Date().toISOString(),
-          cancelada_por: user?.id || null,
         })
         .eq('id', importacaoId);
       if (cancelErr) throw cancelErr;
 
-      // 5. Marcar lançamentos como inativos (soft delete via cancelado flag, preserva origem_dado)
+      // 3. Deletar lançamentos vinculados (V2 usa delete real)
       const { error: lancErr } = await supabase
-        .from('financeiro_lancamentos')
-        .update({ cancelado: true } as any)
-        .eq('importacao_id', importacaoId)
-        .eq('editado_manual', false);
+        .from('financeiro_lancamentos_v2')
+        .delete()
+        .eq('lote_importacao_id', importacaoId);
       if (lancErr) throw lancErr;
 
-      toast.success('Importação cancelada. Lançamentos marcados como inativos.');
+      toast.success('Importação cancelada e lançamentos removidos.');
       await loadData();
       return true;
     } catch (err: any) {
