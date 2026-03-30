@@ -109,62 +109,61 @@ function buildZooRows(
     return total;
   });
 
-  const cabIniRow = mkRow('Base Mensal', 'Cabeças iniciais', m => {
+  const cabIniRow = mkRow('Base Mensal', 'Rebanho inicial\n(cab)', m => {
     const k = String(m).padStart(2, '0');
     return m === 1 ? saldoInicialAno : (saldoInicioMes[k] ?? 0);
   });
 
-  const pesoIniRow = mkRow('Base Mensal', 'Peso inicial kg', m => {
+  const pesoIniRow = mkRow('Base Mensal', 'Peso inicial do rebanho\n(kg)', m => {
     if (m === 1) {
       return saldosIniciais.filter(s => s.ano === ano).reduce((s, si) => s + si.quantidade * (si.pesoMedioKg || 0), 0);
     }
-    // Use previous month's final peso
     return pesoFinKgRow_valores[m - 2] ?? 0;
   }, 'kg');
 
-  const pesoIniArrobasRow = mkRow('Base Mensal', 'Peso inicial @', m => pesoIniRow.valores[m - 1] / 30, 'dec1');
+  const pesoIniArrobasRow = mkRow('Base Mensal', 'Peso inicial do rebanho\n(@)', m => pesoIniRow.valores[m - 1] / 30, 'dec1');
 
   // Entradas
-  const entradasCabRow = mkRow('Base Mensal', 'Entradas (cab)', m => {
+  const entradasCabRow = mkRow('Base Mensal', 'Entradas no rebanho\n(cab)', m => {
     const resumo = calcResumoMovimentacoes(lancamentos, `${ano}-${String(m).padStart(2, '0')}`);
     return resumo.totalEntradas;
   });
 
-  const entradasKgRow = mkRow('Base Mensal', 'Entradas (kg)', m => {
+  const entradasKgRow = mkRow('Base Mensal', 'Entradas no rebanho\n(kg)', m => {
     const lm = lancMes(m).filter(l => ['nascimento', 'compra', 'transferencia_entrada'].includes(l.tipo));
     return lm.reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
   }, 'kg');
 
-  const entradasArrobasRow = mkRow('Base Mensal', 'Entradas (@)', m => {
+  const entradasArrobasRow = mkRow('Base Mensal', 'Entradas no rebanho\n(@)', m => {
     const lm = lancMes(m).filter(l => ['nascimento', 'compra', 'transferencia_entrada'].includes(l.tipo));
     return lm.reduce((s, l) => s + calcArrobasSafe(l), 0);
   }, 'dec1');
 
   // Saídas
-  const saidasCabRow = mkRow('Base Mensal', 'Saídas (cab)', m => {
+  const saidasCabRow = mkRow('Base Mensal', 'Saídas do rebanho\n(cab)', m => {
     const resumo = calcResumoMovimentacoes(lancamentos, `${ano}-${String(m).padStart(2, '0')}`);
     return resumo.totalSaidas;
   });
 
-  const saidasKgRow = mkRow('Base Mensal', 'Saídas (kg)', m => {
+  const saidasKgRow = mkRow('Base Mensal', 'Saídas do rebanho\n(kg)', m => {
     const lm = lancMes(m).filter(l => ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'].includes(l.tipo));
     return lm.reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
   }, 'kg');
 
-  const saidasArrobasRow = mkRow('Base Mensal', 'Saídas (@)', m => {
+  const saidasArrobasRow = mkRow('Base Mensal', 'Saídas do rebanho\n(@)', m => {
     const lm = lancMes(m).filter(l => ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'].includes(l.tipo));
     return lm.reduce((s, l) => s + calcArrobasSafe(l), 0);
   }, 'dec1');
 
-  const cabFinRow = mkRow('Base Mensal', 'Cabeças finais', m => saldoFimMes(m));
+  const cabFinRow = mkRow('Base Mensal', 'Rebanho final\n(cab)', m => saldoFimMes(m));
 
-  const pesoFinKgRow = mkRow('Base Mensal', 'Peso final kg', m => {
+  const pesoFinKgRow = mkRow('Base Mensal', 'Peso final do rebanho\n(kg)', m => {
     return pesoFinKgRow_valores[m - 1] ?? 0;
   }, 'kg');
 
-  const pesoFinArrobasRow = mkRow('Base Mensal', 'Peso final @', m => pesoFinKgRow.valores[m - 1] / 30, 'dec1');
+  const pesoFinArrobasRow = mkRow('Base Mensal', 'Peso final do rebanho\n(@)', m => pesoFinKgRow.valores[m - 1] / 30, 'dec1');
 
-  const pesoMedioFinRow = mkRow('Base Mensal', 'Peso médio final', m => {
+  const pesoMedioFinRow = mkRow('Base Mensal', 'Peso médio do rebanho\n(kg/cab)', m => {
     const cab = cabFinRow.valores[m - 1];
     const pesoKg = pesoFinKgRow.valores[m - 1];
     return cab > 0 ? pesoKg / cab : 0;
@@ -173,80 +172,80 @@ function buildZooRows(
   rows.push(cabIniRow, pesoIniRow, pesoIniArrobasRow, entradasCabRow, entradasKgRow, entradasArrobasRow, saidasCabRow, saidasKgRow, saidasArrobasRow, cabFinRow, pesoFinKgRow, pesoFinArrobasRow, pesoMedioFinRow);
 
   // ─ ACUMULADOS ─
-  const entAcumRow = mkRow('Acumulados', 'Entradas acumuladas', m => {
+  const entAcumRow = mkRow('Acumulados', 'Entradas acumuladas no período\n(cab)', m => {
     let acum = 0;
     for (let i = 1; i <= m; i++) acum += entradasCabRow.valores[i - 1];
     return acum;
   });
 
-  const saiAcumRow = mkRow('Acumulados', 'Saídas acumuladas', m => {
+  const saiAcumRow = mkRow('Acumulados', 'Saídas acumuladas no período\n(cab)', m => {
     let acum = 0;
     for (let i = 1; i <= m; i++) acum += saidasCabRow.valores[i - 1];
     return acum;
   });
 
-  const cabMediaRow = mkRow('Acumulados', 'Cabeças médias', m => {
+  const cabMediaRow = mkRow('Acumulados', 'Rebanho médio do período\n(cab)', m => {
     return (cabIniRow.valores[m - 1] + cabFinRow.valores[m - 1]) / 2;
   }, 'dec1');
 
   rows.push(entAcumRow, saiAcumRow, cabMediaRow);
 
   // ─ INDICADORES ─
-  const lotCabHaRow = mkRow('Indicadores', 'Lotação cab/ha', m => {
+  const lotCabHaRow = mkRow('Indicadores', 'Lotação\n(cab/ha)', m => {
     if (areaProdutiva <= 0) return 0;
     return cabFinRow.valores[m - 1] / areaProdutiva;
   }, 'dec2');
 
-  const uaRow = mkRow('Indicadores', 'UA', m => calcUA(cabFinRow.valores[m - 1], 450), 'dec1');
+  const uaRow = mkRow('Indicadores', 'Unidade Animal\n(UA)', m => calcUA(cabFinRow.valores[m - 1], 450), 'dec1');
 
-  const lotUaHaRow = mkRow('Indicadores', 'Lotação UA/ha', m => {
+  const lotUaHaRow = mkRow('Indicadores', 'Lotação\n(UA/ha)', m => {
     if (areaProdutiva <= 0) return 0;
     return uaRow.valores[m - 1] / areaProdutiva;
   }, 'dec2');
 
-  const lotKgHaRow = mkRow('Indicadores', 'Lotação kg/ha', m => {
+  const lotKgHaRow = mkRow('Indicadores', 'Lotação\n(kg/ha)', m => {
     if (areaProdutiva <= 0) return 0;
     return (cabFinRow.valores[m - 1] * 450) / areaProdutiva;
   }, 'dec1');
 
-  const arrobasProdRow = mkRow('Indicadores', 'Arrobas produzidas', m => {
+  const arrobasProdRow = mkRow('Indicadores', 'Arrobas produzidas no período\n(@)', m => {
     return saidasArrobasRow.valores[m - 1];
   }, 'dec1');
 
   rows.push(lotCabHaRow, uaRow, lotUaHaRow, lotKgHaRow, arrobasProdRow);
 
   // ─ MOVIMENTAÇÕES ─
-  const tiposMov = [
-    { tipo: 'nascimento', label: 'Nascimentos' },
-    { tipo: 'compra', label: 'Compras' },
-    { tipo: 'transferencia_entrada', label: 'Transf. entrada' },
-    { tipo: 'transferencia_saida', label: 'Transf. saída' },
-    { tipo: 'abate', label: 'Abates' },
-    { tipo: 'venda', label: 'Vendas' },
-    { tipo: 'consumo', label: 'Consumo' },
-    { tipo: 'morte', label: 'Mortes' },
+  const tiposMov: { tipo: string; labelQtd: string; labelKg: string; labelArroba: string; labelValor: string }[] = [
+    { tipo: 'nascimento', labelQtd: 'Nascimentos\n(cab)', labelKg: 'Peso de nascimentos\n(kg)', labelArroba: 'Peso de nascimentos\n(@)', labelValor: 'Valor de nascimentos\n(R$)' },
+    { tipo: 'compra', labelQtd: 'Compras de animais\n(cab)', labelKg: 'Peso de compras\n(kg)', labelArroba: 'Peso de compras\n(@)', labelValor: 'Valor de compras\n(R$)' },
+    { tipo: 'transferencia_entrada', labelQtd: 'Transferências recebidas\n(cab)', labelKg: 'Peso recebido por transferência\n(kg)', labelArroba: 'Peso recebido por transferência\n(@)', labelValor: 'Valor recebido por transferência\n(R$)' },
+    { tipo: 'transferencia_saida', labelQtd: 'Transferências enviadas\n(cab)', labelKg: 'Peso enviado por transferência\n(kg)', labelArroba: 'Peso enviado por transferência\n(@)', labelValor: 'Valor enviado por transferência\n(R$)' },
+    { tipo: 'abate', labelQtd: 'Abates\n(cab)', labelKg: 'Peso abatido\n(kg)', labelArroba: 'Peso abatido\n(@)', labelValor: 'Receita com abates\n(R$)' },
+    { tipo: 'venda', labelQtd: 'Vendas em pé\n(cab)', labelKg: 'Peso vendido\n(kg)', labelArroba: 'Peso vendido\n(@)', labelValor: 'Receita com vendas\n(R$)' },
+    { tipo: 'consumo', labelQtd: 'Consumo interno\n(cab)', labelKg: 'Consumo interno\n(kg)', labelArroba: 'Consumo interno\n(@)', labelValor: 'Consumo interno\n(R$)' },
+    { tipo: 'morte', labelQtd: 'Mortes\n(cab)', labelKg: 'Mortes\n(kg)', labelArroba: 'Mortes\n(@)', labelValor: 'Mortes\n(R$)' },
   ];
 
-  tiposMov.forEach(({ tipo, label }) => {
-    const qtdRow = mkRow('Movimentações', `${label} — qtd`, m => {
+  tiposMov.forEach(({ tipo, labelQtd, labelKg, labelArroba, labelValor }) => {
+    const qtdRow = mkRow('Movimentações', labelQtd, m => {
       return lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade, 0);
     });
 
-    const qtdAcumRow = mkRow('Movimentações', `${label} — acum`, m => {
+    const qtdAcumRow = mkRow('Movimentações', `${labelQtd.split('\n')[0]}\n(acum)`, m => {
       let acum = 0;
       for (let i = 1; i <= m; i++) acum += qtdRow.valores[i - 1];
       return acum;
     });
 
-    const pesoRow = mkRow('Movimentações', `${label} — kg`, m => {
+    const pesoRow = mkRow('Movimentações', labelKg, m => {
       return lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
     }, 'kg');
 
-    const arrobasRow = mkRow('Movimentações', `${label} — @`, m => {
+    const arrobasRow = mkRow('Movimentações', labelArroba, m => {
       return lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + calcArrobasSafe(l), 0);
     }, 'dec1');
 
-    const valorRow = mkRow('Movimentações', `${label} — R$`, m => {
+    const valorRow = mkRow('Movimentações', labelValor, m => {
       return lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + calcValorTotal(l), 0);
     }, 'money');
 
@@ -454,17 +453,18 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="sticky left-0 z-10 bg-muted text-[10px] font-bold min-w-[180px]">Indicador</TableHead>
+              <TableHead className="sticky left-0 z-10 bg-muted text-[10px] font-bold w-[220px] min-w-[220px] max-w-[220px]">Indicador</TableHead>
               {mesesVisiveis.map(m => (
-                <TableHead key={m} className="text-[10px] font-bold text-center min-w-[70px]">{m}</TableHead>
+                <TableHead key={m} className="text-[10px] font-bold text-center w-[88px] min-w-[80px] max-w-[100px]">{m}</TableHead>
               ))}
-              <TableHead className="text-[10px] font-bold text-center min-w-[80px] bg-muted">Total</TableHead>
+              <TableHead className="text-[10px] font-bold text-center w-[88px] min-w-[80px] max-w-[100px] bg-muted">Total</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((row, idx) => {
               const showGrupo = row.grupo !== lastGrupo;
               lastGrupo = row.grupo;
+              const indicadorLines = row.indicador.split('\n');
               return (
                 <>
                   {showGrupo && (
@@ -478,15 +478,20 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
                     </TableRow>
                   )}
                   <TableRow key={`row-${idx}`} className="hover:bg-muted/30">
-                    <TableCell className="sticky left-0 z-10 bg-card text-[10px] font-medium py-1 px-2 whitespace-nowrap">
-                      {row.indicador}
+                    <TableCell className="sticky left-0 z-10 bg-card text-[10px] font-medium py-1 px-2 w-[220px] min-w-[220px] max-w-[220px]">
+                      {indicadorLines.length > 1 ? (
+                        <span className="leading-tight">
+                          {indicadorLines[0]}<br />
+                          <span className="text-muted-foreground">{indicadorLines[1]}</span>
+                        </span>
+                      ) : row.indicador}
                     </TableCell>
                     {row.valores.slice(0, ateMes).map((v, i) => (
-                      <TableCell key={i} className="text-[10px] text-right py-1 px-1.5 tabular-nums whitespace-nowrap">
+                      <TableCell key={i} className="text-[10px] text-right py-1 px-1.5 tabular-nums whitespace-nowrap w-[88px]">
                         {fmtVal(v, row.format)}
                       </TableCell>
                     ))}
-                    <TableCell className="text-[10px] text-right py-1 px-1.5 tabular-nums whitespace-nowrap font-bold bg-muted/30">
+                    <TableCell className="text-[10px] text-right py-1 px-1.5 tabular-nums whitespace-nowrap font-bold bg-muted/30 w-[88px]">
                       {fmtVal(row.total, row.format)}
                     </TableCell>
                   </TableRow>
