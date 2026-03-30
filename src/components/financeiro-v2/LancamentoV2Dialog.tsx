@@ -109,7 +109,7 @@ export function LancamentoV2Dialog({
   const fornecedorInputRef = useRef<HTMLInputElement>(null);
 
   // Installment state
-  const [formaPagamento, setFormaPagamento] = useState<'avista' | 'parcelada'>('avista');
+  const [formaPagamentoParc, setFormaPagamentoParc] = useState<'avista' | 'parcelada'>('avista');
   const [numParcelas, setNumParcelas] = useState(2);
   const [parcelaRows, setParcelaRows] = useState<ParcelaRow[]>([]);
 
@@ -128,6 +128,10 @@ export function LancamentoV2Dialog({
   const [contaDestinoId, setContaDestinoId] = useState('');
   const [notaFiscal, setNotaFiscal] = useState('');
   const [observacao, setObservacao] = useState('');
+
+  // Payment method fields
+  const [formaPgto, setFormaPgto] = useState('');
+  const [dadosPagamento, setDadosPagamento] = useState('');
 
   // Subcentro search
   const [subcentroOpen, setSubcentroOpen] = useState(false);
