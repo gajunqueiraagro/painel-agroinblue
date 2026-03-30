@@ -606,19 +606,18 @@ export function useFinanceiro() {
         const batchSize = 1000;
         while (true) {
           const { data: existing } = await supabase
-            .from('financeiro_lancamentos')
-            .select('hash_importacao, data_pagamento, valor, tipo_operacao, conta_origem, conta_destino, produto, fornecedor')
+            .from('financeiro_lancamentos_v2')
+            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, descricao')
             .eq('fazenda_id', fid)
-            .eq('cliente_id', clienteId)
+            .eq('cliente_id', cid)
             .range(from, from + batchSize - 1);
           if (!existing || existing.length === 0) break;
           for (const e of existing) {
-            // Use persisted hash if available, otherwise rebuild
-            const hash = e.hash_importacao || buildHashImportacao(
-              clienteId, fid,
+            const hash = buildHashImportacao(
+              cid, fid,
               e.data_pagamento, e.valor,
-              e.tipo_operacao, e.conta_origem, e.conta_destino,
-              e.produto, e.fornecedor,
+              e.tipo_operacao, null, null,
+              e.descricao, null,
             );
             existingHashes.add(hash);
           }
