@@ -594,27 +594,27 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
       {mode === 'list' && !hook.loading && ano && (
         <>
-          <div className="rounded-lg border overflow-x-auto relative" style={{ maxHeight: '70vh' }}>
-            <Table className="table-financeiro">
-              <TableHeader>
-                <TableRow className="!h-auto">
-                  <TableHead className="py-[2px] px-0.5 w-[40px] cursor-pointer select-none sticky left-0 z-20 bg-muted/95" onClick={() => toggleSort('data')}>Comp.{sortIcon('data')}</TableHead>
-                  <TableHead className="py-[2px] px-0.5 w-[40px] cursor-pointer select-none sticky left-[40px] z-20 bg-muted/95" onClick={() => toggleSort('pgto')}>Pgto{sortIcon('pgto')}</TableHead>
-                  <TableHead className="py-[2px] px-1 cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto{sortIcon('produto')}</TableHead>
-                  <TableHead className="py-[2px] px-1 cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor{sortIcon('fornecedor')}</TableHead>
-                  <TableHead className="py-[2px] px-1 text-right w-[110px] cursor-pointer select-none" onClick={() => toggleSort('valor')}>Valor{sortIcon('valor')}</TableHead>
-                  <TableHead className="py-[2px] px-1 text-center w-[72px]">NF</TableHead>
-                  <TableHead className="py-[2px] px-1 text-center w-[68px]">Status</TableHead>
-                  <TableHead className="py-[2px] px-1 text-center w-[40px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+          <div className="rounded-lg border overflow-auto relative" style={{ maxHeight: 'calc(100vh - 280px)' }}>
+            <table className="table-financeiro w-full caption-bottom text-sm border-collapse">
+              <thead className="[&_tr]:border-b sticky top-0 z-20 bg-muted">
+                <tr className="border-b !h-auto">
+                  <th className="px-0.5 py-[2px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground cursor-pointer select-none sticky left-0 z-30 bg-muted w-[40px]" onClick={() => toggleSort('data')}>Comp.{sortIcon('data')}</th>
+                  <th className="px-0.5 py-[2px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground cursor-pointer select-none sticky left-[40px] z-30 bg-muted w-[40px]" onClick={() => toggleSort('pgto')}>Pgto{sortIcon('pgto')}</th>
+                  <th className="px-1 py-[2px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto{sortIcon('produto')}</th>
+                  <th className="px-1 py-[2px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor{sortIcon('fornecedor')}</th>
+                  <th className="px-1 py-[2px] text-right align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground cursor-pointer select-none w-[110px]" onClick={() => toggleSort('valor')}>Valor{sortIcon('valor')}</th>
+                  <th className="px-1 py-[2px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground w-[72px]">NF</th>
+                  <th className="px-1 py-[2px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground w-[68px]">Status</th>
+                  <th className="px-1 py-[2px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground w-[40px]"></th>
+                </tr>
+              </thead>
+              <tbody className="[&_tr:last-child]:border-0">
                 {filteredLancamentos.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-4 text-[10px]">
+                  <tr className="border-b">
+                    <td colSpan={8} className="text-center text-muted-foreground py-4 text-[10px]">
                       Nenhum lançamento encontrado.
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 ) : (
                   sortedLancamentos.map(l => {
                     const fornNome = hook.fornecedores.find(f => f.id === l.favorecido_id)?.nome;
@@ -623,19 +623,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                     const stColor = STATUS_TEXT_COLORS[stKey] || 'text-muted-foreground';
 
                     return (
-                      <TableRow key={l.id} className="italic !h-auto">
-                        <TableCell className="font-mono w-[40px] px-0.5 sticky left-0 z-10 bg-background">{fmtDate(l.data_competencia)}</TableCell>
-                        <TableCell className="font-mono w-[40px] px-0.5 sticky left-[40px] z-10 bg-background">{fmtDate(l.data_pagamento)}</TableCell>
-                        <TableCell className="truncate max-w-0" title={l.descricao || ''}>{l.descricao || '-'}</TableCell>
-                        <TableCell className="truncate max-w-0" title={fornNome || ''}>
+                      <tr key={l.id} className="border-b italic !h-auto hover:bg-muted/50 transition-colors">
+                        <td className="font-mono w-[40px] px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-0 z-10 bg-background">{fmtDate(l.data_competencia)}</td>
+                        <td className="font-mono w-[40px] px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[40px] z-10 bg-background">{fmtDate(l.data_pagamento)}</td>
+                        <td className="truncate max-w-0 px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={l.descricao || ''}>{l.descricao || '-'}</td>
+                        <td className="truncate max-w-0 px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
-                        </TableCell>
-                        <TableCell className={`text-right font-semibold w-[110px] whitespace-nowrap ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
+                        </td>
+                        <td className={`text-right font-semibold w-[110px] whitespace-nowrap px-2 py-1 align-middle text-[12px] leading-tight ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
                           {fmtValor(l.valor, l.sinal)}
-                        </TableCell>
-                        <TableCell className="font-mono text-muted-foreground text-center w-[72px]">{l.nota_fiscal || '-'}</TableCell>
-                        <TableCell className={`text-center w-[68px] ${stColor}`}>{stLabel}</TableCell>
-                        <TableCell className="!py-0 px-0 w-[40px]">
+                        </td>
+                        <td className="font-mono text-muted-foreground text-center w-[72px] px-1 py-1 align-middle text-[12px] leading-tight">{l.nota_fiscal || '-'}</td>
+                        <td className={`text-center w-[68px] px-1 py-1 align-middle text-[12px] leading-tight ${stColor}`}>{stLabel}</td>
+                        <td className="!py-0 px-0 w-[40px] align-middle">
                           <div className="flex items-center justify-center gap-0.5">
                             <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => openEdit(l)}>
                               <Pencil className="h-2.5 w-2.5" />
@@ -644,13 +644,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                               <Copy className="h-2.5 w-2.5" />
                             </Button>
                           </div>
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     );
                   })
                 )}
-              </TableBody>
-            </Table>
+              </tbody>
+            </table>
           </div>
 
           {hook.totalPages > 1 && (
