@@ -609,11 +609,11 @@ export function LancamentoV2Dialog({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">Data Competência *</Label>
-                  <Input type="date" value={dataCompetencia} onChange={e => setDataCompetencia(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" />
+                  <Input tabIndex={1} type="date" value={dataCompetencia} onChange={e => setDataCompetencia(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" />
                 </div>
                 <div>
                   <Label className="text-xs">Data Pagamento *</Label>
-                  <Input type="date" value={dataPagamento} onChange={e => handleDataPagamentoChange(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" />
+                  <Input tabIndex={2} type="date" value={dataPagamento} onChange={e => handleDataPagamentoChange(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" />
                 </div>
               </div>
             </section>
@@ -627,6 +627,7 @@ export function LancamentoV2Dialog({
                 <div ref={produtoWrapperRef} className="relative">
                   <Label className="text-xs">Produto *</Label>
                   <Input
+                    tabIndex={3}
                     value={descricao}
                     onChange={e => {
                       setDescricao(e.target.value);
@@ -667,7 +668,7 @@ export function LancamentoV2Dialog({
                   <div className="flex gap-1.5">
                     <Popover open={fornecedorOpen} onOpenChange={v => { setFornecedorOpen(v); if (!v) setFornecedorSearch(''); }}>
                       <PopoverTrigger asChild>
-                        <Button variant="outline" role="combobox" aria-expanded={fornecedorOpen} className="flex-1 h-9 justify-between font-normal text-sm bg-[#f5f6f8] dark:bg-muted border-border/50">
+                        <Button tabIndex={4} variant="outline" role="combobox" aria-expanded={fornecedorOpen} className="flex-1 h-9 justify-between font-normal text-sm bg-[#f5f6f8] dark:bg-muted border-border/50">
                           <span className="truncate">{selectedFornecedorNome || 'Selecione o fornecedor...'}</span>
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
@@ -698,7 +699,7 @@ export function LancamentoV2Dialog({
                         </div>
                       </PopoverContent>
                     </Popover>
-                    <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setFornecedorDialogOpen(true)} title="Novo fornecedor">
+                    <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setFornecedorDialogOpen(true)} title="Novo fornecedor" tabIndex={-1}>
                       <Plus className="h-4 w-4" />
                     </Button>
                   </div>
@@ -715,7 +716,7 @@ export function LancamentoV2Dialog({
                 <div>
                   <Label className="text-xs">Forma de Pagamento</Label>
                   <Select value={formaPgto || '__none_fp__'} onValueChange={handleFormaPgtoChange}>
-                    <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectTrigger tabIndex={5} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none_fp__">Nenhuma</SelectItem>
                       <SelectItem value="PIX">PIX</SelectItem>
@@ -767,6 +768,7 @@ export function LancamentoV2Dialog({
                     </div>
                   </div>
                   <Textarea
+                    tabIndex={6}
                     value={dadosPagamento}
                     onChange={e => setDadosPagamento(e.target.value)}
                     rows={3}
@@ -784,12 +786,12 @@ export function LancamentoV2Dialog({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs">Valor (R$) *</Label>
-                    <Input value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" placeholder="0,00" inputMode="numeric" />
+                    <Input tabIndex={7} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" placeholder="0,00" inputMode="numeric" />
                   </div>
                   <div>
                     <Label className="text-xs">Status *</Label>
                     <Select value={statusTransacao} onValueChange={setStatusTransacao}>
-                      <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
+                      <SelectTrigger tabIndex={8} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
                       </SelectContent>
@@ -883,7 +885,7 @@ export function LancamentoV2Dialog({
                   <div>
                     <Label className="text-xs">Fazenda *</Label>
                     <Select value={fazendaId} onValueChange={v => { setFazendaId(v); setContaOrigemId(''); setContaDestinoId(''); }}>
-                      <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectTrigger tabIndex={9} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
                         {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
                       </SelectContent>
@@ -891,7 +893,7 @@ export function LancamentoV2Dialog({
                   </div>
                   <div>
                     <Label className="text-xs">Nota Fiscal</Label>
-                    <Input value={notaFiscalDisplay} onChange={handleNotaFiscalChange} inputMode="numeric" className="h-9 font-mono bg-[#f5f6f8] dark:bg-muted border-border/50" placeholder="000.000.000" />
+                    <Input tabIndex={10} value={notaFiscalDisplay} onChange={handleNotaFiscalChange} inputMode="numeric" className="h-9 font-mono bg-[#f5f6f8] dark:bg-muted border-border/50" placeholder="000.000.000" />
                   </div>
                 </div>
               </div>
@@ -906,7 +908,7 @@ export function LancamentoV2Dialog({
                 <div>
                   <Label className="text-xs">Tipo Operação *</Label>
                   <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigemId(''); setContaDestinoId(''); setSubcentro(''); setMacroCusto(''); setCentroCusto(''); setSubcentroSearch(''); }}>
-                    <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
+                    <SelectTrigger tabIndex={11} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {TIPOS_OPERACAO.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                     </SelectContent>
@@ -917,7 +919,7 @@ export function LancamentoV2Dialog({
                     <div>
                       <Label className="text-xs">Conta Origem *</Label>
                       <Select value={contaOrigemId} onValueChange={setContaOrigemId}>
-                        <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectTrigger tabIndex={12} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__">Nenhuma</SelectItem>
                           {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
@@ -927,7 +929,7 @@ export function LancamentoV2Dialog({
                     <div>
                       <Label className="text-xs">Conta Destino *</Label>
                       <Select value={contaDestinoId} onValueChange={setContaDestinoId}>
-                        <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectTrigger tabIndex={13} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__">Nenhuma</SelectItem>
                           {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
@@ -939,7 +941,7 @@ export function LancamentoV2Dialog({
                   <div>
                     <Label className="text-xs">Conta Destino *</Label>
                     <Select value={contaDestinoId} onValueChange={setContaDestinoId}>
-                      <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectTrigger tabIndex={12} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">Nenhuma</SelectItem>
                         {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
@@ -950,7 +952,7 @@ export function LancamentoV2Dialog({
                   <div>
                     <Label className="text-xs">Conta Origem *</Label>
                     <Select value={contaOrigemId} onValueChange={setContaOrigemId}>
-                      <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectTrigger tabIndex={12} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">Nenhuma</SelectItem>
                         {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
@@ -971,7 +973,7 @@ export function LancamentoV2Dialog({
                   <Label className="text-xs">Subcentro *</Label>
                   <Popover open={subcentroOpen} onOpenChange={v => { setSubcentroOpen(v); if (!v) { setSubcentroSearch(''); setSubcentroHighlight(0); } }}>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" role="combobox" aria-expanded={subcentroOpen} className="w-full h-9 justify-between font-normal text-sm bg-[#f5f6f8] dark:bg-muted border-border/50">
+                      <Button tabIndex={14} variant="outline" role="combobox" aria-expanded={subcentroOpen} className="w-full h-9 justify-between font-normal text-sm bg-[#f5f6f8] dark:bg-muted border-border/50">
                         <span className="truncate">{subcentro || 'Selecione o subcentro...'}</span>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
@@ -1031,15 +1033,15 @@ export function LancamentoV2Dialog({
               <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Complemento</p>
               <div>
                 <Label className="text-xs">Observação</Label>
-                <Textarea value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Observações adicionais" className="bg-[#f5f6f8] dark:bg-muted border-border/50" />
+                <Textarea tabIndex={15} value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Observações adicionais" className="bg-[#f5f6f8] dark:bg-muted border-border/50" />
               </div>
             </section>
           </div>
 
           {/* Sticky footer */}
           <div className="px-5 py-3 border-t border-border/40 bg-white dark:bg-card flex items-center gap-2">
-            <Button variant="outline" onClick={onClose} className="px-4">Cancelar</Button>
-            <Button onClick={handleSubmit} disabled={saving || !canSave} className="flex-1">
+            <Button variant="outline" onClick={onClose} className="px-4" tabIndex={16}>Cancelar</Button>
+            <Button tabIndex={17} onClick={handleSubmit} disabled={saving || !canSave} className="flex-1">
               {saving ? 'Salvando...' : isEdit ? 'Salvar Alterações' : formaPagamentoParc === 'parcelada' ? `Criar ${numParcelas} Parcelas` : 'Criar Lançamento'}
             </Button>
             {isEdit && onDelete && (
