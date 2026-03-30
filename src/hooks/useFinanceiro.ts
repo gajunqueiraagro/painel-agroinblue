@@ -309,19 +309,19 @@ export function useFinanceiro() {
         const needsRateio = fazendaADM && fazendaADM.id !== fazendaId;
 
         const lancPromise = fetchAllPaginated<FinanceiroLancamento>((from, to) =>
-          (supabase.from('financeiro_lancamentos').select('*') as any).eq('fazenda_id', fazendaId).order('data_realizacao', { ascending: false }).range(from, to),
+          (supabase.from('financeiro_lancamentos').select('*') as any).eq('fazenda_id', fazendaId).neq('origem_dado', 'importacao_cancelada').order('data_realizacao', { ascending: false }).range(from, to),
         );
 
         const admPromise = needsRateio
           ? fetchAllPaginated<FinanceiroLancamento>((from, to) =>
-              (supabase.from('financeiro_lancamentos').select('*') as any).eq('fazenda_id', fazendaADM.id).order('data_realizacao', { ascending: false }).range(from, to),
+              (supabase.from('financeiro_lancamentos').select('*') as any).eq('fazenda_id', fazendaADM.id).neq('origem_dado', 'importacao_cancelada').order('data_realizacao', { ascending: false }).range(from, to),
             )
           : Promise.resolve([] as FinanceiroLancamento[]);
 
         const [lancData, ccResult, impResult, admData, saldoResult, lancPecResult] = await Promise.all([
           lancPromise,
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').eq('fazenda_id', fazendaId).eq('ativo', true),
-          supabase.from('financeiro_importacoes').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').in('fazenda_id', allFazendaIds).order('data_importacao', { ascending: false }),
+          supabase.from('financeiro_importacoes').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').in('fazenda_id', allFazendaIds).neq('status', 'cancelada').order('data_importacao', { ascending: false }),
           admPromise,
           needsRateio && opIds.length > 0
             ? supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds)
