@@ -10,8 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
-  CheckCircle2, AlertTriangle, XCircle, ChevronDown, ChevronUp,
-  ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Pencil,
+  CheckCircle2, AlertTriangle, XCircle, Pencil,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
