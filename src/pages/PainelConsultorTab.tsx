@@ -93,12 +93,8 @@ function buildZooRows(
   };
 
   // ─ BASE MENSAL ─
-  const cabIniRow = mkRow('Base Mensal', 'Cabeças iniciais', m => {
-    const k = String(m).padStart(2, '0');
-    return m === 1 ? saldoInicialAno : (saldoInicioMes[k] ?? 0);
-  });
 
-  // Pre-compute peso final per month using official source (fechamento_pastos → lancamentos → saldo_inicial)
+  // Pre-compute peso final per month (must be before pesoIniRow which references it)
   const pesoFinKgRow_valores = Array.from({ length: 12 }, (_, i) => {
     const m = i + 1;
     if (m > ateMes) return 0;
@@ -111,6 +107,11 @@ function buildZooRows(
       total += qtd * (pesoMedio || 0);
     });
     return total;
+  });
+
+  const cabIniRow = mkRow('Base Mensal', 'Cabeças iniciais', m => {
+    const k = String(m).padStart(2, '0');
+    return m === 1 ? saldoInicialAno : (saldoInicioMes[k] ?? 0);
   });
 
   const pesoIniRow = mkRow('Base Mensal', 'Peso inicial kg', m => {
