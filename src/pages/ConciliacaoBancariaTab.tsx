@@ -154,6 +154,14 @@ export function ConciliacaoBancariaTab() {
         const sorted = sortContas((data as ContaRef[]) || []);
         setContas(sorted);
       });
+    supabase
+      .from('financeiro_fornecedores')
+      .select('id, nome')
+      .eq('cliente_id', clienteId)
+      .eq('ativo', true)
+      .then(({ data }) => {
+        setFornecedores((data as FornecedorRef[]) || []);
+      });
   }, [clienteId]);
 
   const loadData = useCallback(async () => {
