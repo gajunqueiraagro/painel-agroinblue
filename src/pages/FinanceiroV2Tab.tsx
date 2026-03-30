@@ -597,11 +597,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <Table className="table-financeiro">
               <TableHeader>
                 <TableRow className="!h-auto">
-                  <TableHead className="py-[2px] px-1 w-[52px]">Comp.</TableHead>
-                  <TableHead className="py-[2px] px-1 w-[52px]">Pgto</TableHead>
-                  <TableHead className="py-[2px] px-1">Produto</TableHead>
-                  <TableHead className="py-[2px] px-1">Fornecedor</TableHead>
-                  <TableHead className="py-[2px] px-1 text-right w-[80px]">Valor</TableHead>
+                  <TableHead className="py-[2px] px-0.5 w-[40px] cursor-pointer select-none" onClick={() => toggleSort('data')}>Comp.{sortIcon('data')}</TableHead>
+                  <TableHead className="py-[2px] px-0.5 w-[40px]">Pgto</TableHead>
+                  <TableHead className="py-[2px] px-1 cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto{sortIcon('produto')}</TableHead>
+                  <TableHead className="py-[2px] px-1 cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor{sortIcon('fornecedor')}</TableHead>
+                  <TableHead className="py-[2px] px-1 text-right w-[110px] cursor-pointer select-none" onClick={() => toggleSort('valor')}>Valor{sortIcon('valor')}</TableHead>
                   <TableHead className="py-[2px] px-1 text-center w-[72px]">NF</TableHead>
                   <TableHead className="py-[2px] px-1 text-center w-[68px]">Status</TableHead>
                   <TableHead className="py-[2px] px-1 text-center w-[40px]"></TableHead>
