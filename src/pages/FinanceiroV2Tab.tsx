@@ -167,6 +167,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLanc, setEditingLanc] = useState<LancamentoV2 | null>(null);
 
+  // Sorting state
+  type SortField = 'data' | 'valor' | 'produto' | 'fornecedor';
+  type SortDir = 'asc' | 'desc';
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+
   const fazOperacionais = useMemo(() => sortFazendas(fazendas.filter(f => f.id !== '__global__')), [fazendas]);
 
   const sortedContas = useMemo(() => sortContas(hook.contasBancarias), [hook.contasBancarias]);
@@ -295,8 +301,39 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     return items;
   }, [hook.lancamentos, produtoFiltro, fornecedorFiltro, atividadeFiltro, hook.fornecedores]);
 
-  const totalEntradas = filteredLancamentos.filter(l => l.sinal > 0).reduce((s, l) => s + l.valor, 0);
-  const totalSaidas = filteredLancamentos.filter(l => l.sinal < 0).reduce((s, l) => s + l.valor, 0);
+  // Sorted lancamentos
+  const sortedLancamentos = useMemo(() => {
+    if (!sortField) return filteredLancamentos;
+    const items = [...filteredLancamentos];
+    const dir = sortDir === 'asc' ? 1 : -1;
+    items.sort((a, b) => {
+      switch (sortField) {
+        case 'data': return dir * ((a.data_pagamento || a.data_competencia).localeCompare(b.data_pagamento || b.data_competencia));
+        case 'valor': return dir * (a.valor * a.sinal - b.valor * b.sinal);
+        case 'produto': return dir * ((a.descricao || '').localeCompare(b.descricao || '', 'pt-BR'));
+        case 'fornecedor': {
+          const nA = hook.fornecedores.find(f => f.id === a.favorecido_id)?.nome || '';
+          const nB = hook.fornecedores.find(f => f.id === b.favorecido_id)?.nome || '';
+          return dir * nA.localeCompare(nB, 'pt-BR');
+        }
+        default: return 0;
+      }
+    });
+    return items;
+  }, [filteredLancamentos, sortField, sortDir, hook.fornecedores]);
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDir(field === 'valor' || field === 'data' ? 'desc' : 'asc');
+    }
+  };
+  const sortIcon = (field: SortField) => sortField === field ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+
+  const totalEntradas = sortedLancamentos.filter(l => l.sinal > 0).reduce((s, l) => s + l.valor, 0);
+  const totalSaidas = sortedLancamentos.filter(l => l.sinal < 0).reduce((s, l) => s + l.valor, 0);
 
   const toggleMes = (val: string) => {
     setMesesSelecionados(prev =>
@@ -510,7 +547,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 <FilterX className="h-3 w-3" /> Limpar
               </Button>
               <FinanceiroV2ExportMenu
-                lancamentos={filteredLancamentos}
+                lancamentos={sortedLancamentos}
                 fornecedores={hook.fornecedores}
                 ano={ano}
                 fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
@@ -560,11 +597,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <Table className="table-financeiro">
               <TableHeader>
                 <TableRow className="!h-auto">
-                  <TableHead className="py-[2px] px-1 w-[52px]">Comp.</TableHead>
-                  <TableHead className="py-[2px] px-1 w-[52px]">Pgto</TableHead>
-                  <TableHead className="py-[2px] px-1">Produto</TableHead>
-                  <TableHead className="py-[2px] px-1">Fornecedor</TableHead>
-                  <TableHead className="py-[2px] px-1 text-right w-[80px]">Valor</TableHead>
+                  <TableHead className="py-[2px] px-0.5 w-[40px] cursor-pointer select-none" onClick={() => toggleSort('data')}>Comp.{sortIcon('data')}</TableHead>
+                  <TableHead className="py-[2px] px-0.5 w-[40px]">Pgto</TableHead>
+                  <TableHead className="py-[2px] px-1 cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto{sortIcon('produto')}</TableHead>
+                  <TableHead className="py-[2px] px-1 cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor{sortIcon('fornecedor')}</TableHead>
+                  <TableHead className="py-[2px] px-1 text-right w-[110px] cursor-pointer select-none" onClick={() => toggleSort('valor')}>Valor{sortIcon('valor')}</TableHead>
                   <TableHead className="py-[2px] px-1 text-center w-[72px]">NF</TableHead>
                   <TableHead className="py-[2px] px-1 text-center w-[68px]">Status</TableHead>
                   <TableHead className="py-[2px] px-1 text-center w-[40px]"></TableHead>
@@ -578,7 +615,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredLancamentos.map(l => {
+                  sortedLancamentos.map(l => {
                     const fornNome = hook.fornecedores.find(f => f.id === l.favorecido_id)?.nome;
                     const stKey = (l.status_transacao || '').toLowerCase();
                     const stLabel = STATUS_LABELS[stKey] || l.status_transacao || '-';
@@ -586,13 +623,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
                     return (
                       <TableRow key={l.id} className="italic !h-auto">
-                        <TableCell className="font-mono w-[52px]">{fmtDate(l.data_competencia)}</TableCell>
-                        <TableCell className="font-mono w-[52px]">{fmtDate(l.data_pagamento)}</TableCell>
+                        <TableCell className="font-mono w-[40px] px-0.5">{fmtDate(l.data_competencia)}</TableCell>
+                        <TableCell className="font-mono w-[40px] px-0.5">{fmtDate(l.data_pagamento)}</TableCell>
                         <TableCell className="truncate max-w-0" title={l.descricao || ''}>{l.descricao || '-'}</TableCell>
                         <TableCell className="truncate max-w-0" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
                         </TableCell>
-                        <TableCell className={`text-right font-semibold w-[80px] ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
+                        <TableCell className={`text-right font-semibold w-[110px] whitespace-nowrap ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
                           {fmtValor(l.valor, l.sinal)}
                         </TableCell>
                         <TableCell className="font-mono text-muted-foreground text-center w-[72px]">{l.nota_fiscal || '-'}</TableCell>
