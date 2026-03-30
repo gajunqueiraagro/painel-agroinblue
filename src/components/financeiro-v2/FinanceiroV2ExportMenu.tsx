@@ -3,11 +3,11 @@ import { Download, FileSpreadsheet, FileText, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
-import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format, parseISO } from 'date-fns';
 import type { LancamentoV2 } from '@/hooks/useFinanceiroV2';
+import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 
 interface FornecedorMap {
   id: string;
@@ -67,17 +67,21 @@ function exportExcel(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[],
     'Subcentro': r.subcentro,
   }));
 
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(data);
-  ws['!cols'] = [
-    { wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 25 },
-    { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 20 },
-    { wch: 18 }, { wch: 18 },
-  ];
-  XLSX.utils.book_append_sheet(wb, ws, 'Lançamentos');
-
   const faz = fazendaNome ? `_${fazendaNome.replace(/\s+/g, '_')}` : '';
-  XLSX.writeFile(wb, `financeiro_v2_${ano}${faz}.xlsx`);
+  triggerXlsxDownload({
+    filename: `financeiro_v2_${ano}${faz}.xlsx`,
+    sheets: [
+      {
+        name: 'Lançamentos',
+        rows: data,
+        cols: [
+          { wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 25 },
+          { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 20 },
+          { wch: 18 }, { wch: 18 },
+        ],
+      },
+    ],
+  });
 }
 
 function exportPDF(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], ano: string, fazendaNome?: string) {
@@ -135,7 +139,6 @@ export function FinanceiroV2ExportMenu({ lancamentos, fornecedores, ano, fazenda
     try {
       if (type === 'excel') {
         exportExcel(lancamentos, fornecedores, ano, fazendaNome);
-        toast.success(`Excel exportado! (${lancamentos.length} lançamentos)`);
       } else {
         exportPDF(lancamentos, fornecedores, ano, fazendaNome);
         toast.success(`PDF exportado! (${lancamentos.length} lançamentos)`);
@@ -158,7 +161,7 @@ export function FinanceiroV2ExportMenu({ lancamentos, fornecedores, ano, fazenda
       <PopoverContent className="w-36 p-1" align="end">
         <p className="text-[9px] text-muted-foreground px-2 py-0.5">{totalCount} lançamentos</p>
         <Button variant="ghost" className="w-full justify-start gap-2 h-7 text-[10px]" onClick={() => handleExport('excel')} disabled={exporting}>
-          <FileSpreadsheet className="h-3.5 w-3.5 text-green-600" /> Excel
+          <FileSpreadsheet className="h-3.5 w-3.5 text-primary" /> Excel
         </Button>
         <Button variant="ghost" className="w-full justify-start gap-2 h-7 text-[10px]" onClick={() => handleExport('pdf')} disabled={exporting}>
           <FileText className="h-3.5 w-3.5 text-destructive" /> PDF
