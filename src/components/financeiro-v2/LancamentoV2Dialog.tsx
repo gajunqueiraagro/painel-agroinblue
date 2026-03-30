@@ -790,7 +790,7 @@ export function LancamentoV2Dialog({
                   <div>
                     <Label className="text-xs">Status *</Label>
                     <Select value={statusTransacao} onValueChange={setStatusTransacao}>
-                      <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
+                      <SelectTrigger tabIndex={8} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
                       </SelectContent>
