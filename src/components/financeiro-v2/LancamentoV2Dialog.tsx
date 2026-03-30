@@ -149,7 +149,9 @@ export function LancamentoV2Dialog({
   // Subcentro search
   const [subcentroOpen, setSubcentroOpen] = useState(false);
   const [subcentroSearch, setSubcentroSearch] = useState('');
+  const [subcentroHighlight, setSubcentroHighlight] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const subcentroItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const isTransferencia = tipoOperacao === '3-Transferência';
   const isEntrada = tipoOperacao === '1-Entradas';
