@@ -207,9 +207,10 @@ export function LancamentoV2Dialog({
     setValorDisplay(toBRL(num));
   };
 
-  const handleNotaFiscalChange = (raw: string) => {
-    const digits = raw.replace(/\D/g, '');
-    if (digits.length <= 9) setNotaFiscal(digits);
+  const handleNotaFiscalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Extract only digits from whatever was typed/pasted
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 9);
+    setNotaFiscal(digits);
   };
 
   const notaFiscalDisplay = notaFiscal ? formatNotaFiscal(notaFiscal) : '';
