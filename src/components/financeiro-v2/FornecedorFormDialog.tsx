@@ -342,7 +342,7 @@ export function FornecedorFormDialog({
           <div className="border-t border-border/30 pt-3 mt-1">
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Dados de Pagamento</p>
             <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <Label className="text-[11px]">Tipo de Recebimento</Label>
                   <Select value={tipoRecebimento || '__none_tipo__'} onValueChange={v => setTipoRecebimento(v === '__none_tipo__' ? '' : v)}>
