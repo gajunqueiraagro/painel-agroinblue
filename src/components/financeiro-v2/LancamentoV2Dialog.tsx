@@ -142,7 +142,7 @@ export function LancamentoV2Dialog({
   // Product suggestions state
   const [produtoSugestoes, setProdutoSugestoes] = useState<string[]>([]);
   const [produtoOpen, setProdutoOpen] = useState(false);
-  const [produtoHighlight, setProdutoHighlight] = useState(0);
+  const [produtoHighlight, setProdutoHighlight] = useState(-1);
   const produtoItemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const produtoWrapperRef = useRef<HTMLDivElement>(null);
 
