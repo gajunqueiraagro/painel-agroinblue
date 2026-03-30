@@ -667,7 +667,7 @@ export function LancamentoV2Dialog({
                   <div className="flex gap-1.5">
                     <Popover open={fornecedorOpen} onOpenChange={v => { setFornecedorOpen(v); if (!v) setFornecedorSearch(''); }}>
                       <PopoverTrigger asChild>
-                        <Button variant="outline" role="combobox" aria-expanded={fornecedorOpen} className="flex-1 h-9 justify-between font-normal text-sm bg-[#f5f6f8] dark:bg-muted border-border/50">
+                        <Button tabIndex={4} variant="outline" role="combobox" aria-expanded={fornecedorOpen} className="flex-1 h-9 justify-between font-normal text-sm bg-[#f5f6f8] dark:bg-muted border-border/50">
                           <span className="truncate">{selectedFornecedorNome || 'Selecione o fornecedor...'}</span>
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
