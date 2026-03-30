@@ -389,7 +389,11 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
   const fazendaNome = isGlobal ? 'Global' : (fazendaAtual?.nome || 'Fazenda');
 
   const handleExport = useCallback(() => {
-    exportToExcel(zooRows, finRows, anoNum, ateMes, fazendaNome);
+    try {
+      exportToExcel(zooRows, finRows, anoNum, ateMes, fazendaNome);
+    } catch (err) {
+      console.error('Erro ao exportar Excel:', err);
+    }
   }, [zooRows, finRows, anoNum, ateMes, fazendaNome]);
 
   const mesesVisiveis = MESES_LABELS.slice(0, ateMes);
