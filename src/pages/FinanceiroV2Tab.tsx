@@ -547,7 +547,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 <FilterX className="h-3 w-3" /> Limpar
               </Button>
               <FinanceiroV2ExportMenu
-                lancamentos={filteredLancamentos}
+                lancamentos={sortedLancamentos}
                 fornecedores={hook.fornecedores}
                 ano={ano}
                 fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}

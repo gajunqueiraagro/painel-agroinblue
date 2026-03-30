@@ -537,16 +537,6 @@ export function LancamentoV2Dialog({
                       </div>
                     </PopoverContent>
                   </Popover>
-                  {/* DEBUG subcentro */}
-                  <div className="mt-1 p-1.5 bg-yellow-50 border border-yellow-200 rounded text-[10px] text-yellow-800">
-                    <strong>🔍 DEBUG Subcentro:</strong> {classMap.size} total | {filteredSubcentros.length} p/ tipo "{tipoOperacao}"
-                    {filteredSubcentros.length > 0 && (
-                      <span> · {filteredSubcentros.slice(0, 3).map(c => shortLabel(c.subcentro)).join(' | ')}</span>
-                    )}
-                    {filteredSubcentros.length === 0 && (
-                      <span className="text-red-600"> · NENHUM p/ este tipo</span>
-                    )}
-                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
