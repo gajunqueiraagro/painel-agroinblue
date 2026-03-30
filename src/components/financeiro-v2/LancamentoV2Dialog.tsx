@@ -962,7 +962,7 @@ export function LancamentoV2Dialog({
               <div className="space-y-2">
                 <div>
                   <Label className="text-xs">Subcentro *</Label>
-                  <Popover open={subcentroOpen} onOpenChange={v => { setSubcentroOpen(v); if (!v) setSubcentroSearch(''); }}>
+                  <Popover open={subcentroOpen} onOpenChange={v => { setSubcentroOpen(v); if (!v) { setSubcentroSearch(''); setSubcentroHighlight(0); } }}>
                     <PopoverTrigger asChild>
                       <Button variant="outline" role="combobox" aria-expanded={subcentroOpen} className="w-full h-9 justify-between font-normal text-sm bg-[#f5f6f8] dark:bg-muted border-border/50">
                         <span className="truncate">{subcentro || 'Selecione o subcentro...'}</span>
@@ -972,12 +972,30 @@ export function LancamentoV2Dialog({
                     <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                       <div className="flex items-center border-b px-3 py-2">
                         <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                        <input ref={searchInputRef} className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" placeholder="Buscar subcentro..." value={subcentroSearch} onChange={e => setSubcentroSearch(e.target.value)} autoFocus />
+                        <input
+                          ref={searchInputRef}
+                          className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                          placeholder="Buscar subcentro..."
+                          value={subcentroSearch}
+                          onChange={e => { setSubcentroSearch(e.target.value); setSubcentroHighlight(0); }}
+                          onKeyDown={handleSubcentroKeyDown}
+                          autoFocus
+                        />
                       </div>
                       <div className="max-h-48 overflow-y-auto p-1">
                         {filteredSubcentros.length === 0 && <p className="p-2 text-center text-sm text-muted-foreground">Nenhum subcentro encontrado</p>}
                         {filteredSubcentros.map((sc, idx) => (
-                          <button key={sc.subcentro || idx} className={cn("relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground", subcentro === sc.subcentro && "bg-accent")} onClick={() => { setSubcentro(sc.subcentro || ''); setMacroCusto(sc.macro_custo || ''); setCentroCusto(sc.centro_custo || ''); setSubcentroOpen(false); setSubcentroSearch(''); }}>
+                          <button
+                            key={sc.subcentro || idx}
+                            ref={el => { subcentroItemRefs.current[idx] = el; }}
+                            className={cn(
+                              "relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
+                              idx === subcentroHighlight ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
+                              subcentro === sc.subcentro && idx !== subcentroHighlight && "bg-accent/30"
+                            )}
+                            onClick={() => handleSubcentroSelect(sc.subcentro || '')}
+                            onMouseEnter={() => setSubcentroHighlight(idx)}
+                          >
                             <Check className={cn("mr-2 h-4 w-4", subcentro === sc.subcentro ? "opacity-100" : "opacity-0")} />
                             <span className="truncate">{sc.subcentro}</span>
                           </button>
