@@ -431,7 +431,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       {/* Sticky filter bar */}
       <div className={`sticky ${onBack || drillDownLabel ? 'top-[60px]' : 'top-0'} z-20 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 space-y-1`}>
       {/* Top tabs */}
-      <div className={`grid gap-0.5 bg-muted rounded-md p-0.5 ${modoMovimentacao ? 'grid-cols-2' : `grid-cols-${topTabs.length}`}`}>
+      <div className={`grid gap-0.5 bg-muted rounded-md p-0.5 max-w-md ${modoMovimentacao ? 'grid-cols-2' : `grid-cols-${topTabs.length}`}`}>
         {topTabs.map(t => (
           <button
             key={t.id}
