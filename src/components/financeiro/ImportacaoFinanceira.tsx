@@ -391,14 +391,17 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
                         <span className="text-muted-foreground capitalize">{imp.status}</span>
                       </div>
                     </div>
-                    <Button
-                      variant="ghost" size="icon"
-                      className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => setConfirmExcluir(imp)}
-                      disabled={excluindo === imp.id}
-                    >
-                      {excluindo === imp.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                    </Button>
+                    {imp.status !== 'cancelada' && (
+                      <Button
+                        variant="ghost" size="icon"
+                        className="h-7 w-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                        onClick={() => setConfirmExcluir(imp)}
+                        disabled={excluindo === imp.id}
+                        title="Cancelar importação"
+                      >
+                        {excluindo === imp.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
