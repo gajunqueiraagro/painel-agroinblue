@@ -7,7 +7,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format, parseISO } from 'date-fns';
-import type { LancamentoV2, FiltrosV2 } from '@/hooks/useFinanceiroV2';
+import type { LancamentoV2 } from '@/hooks/useFinanceiroV2';
 
 interface FornecedorMap {
   id: string;
@@ -15,8 +15,7 @@ interface FornecedorMap {
 }
 
 interface Props {
-  filtros: FiltrosV2;
-  loadAllForExport: (filtros: FiltrosV2) => Promise<LancamentoV2[]>;
+  lancamentos: LancamentoV2[];
   fornecedores: FornecedorMap[];
   ano: string;
   fazendaNome?: string;
@@ -125,7 +124,7 @@ function exportPDF(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], a
   doc.save(`financeiro_v2_${ano}${faz}.pdf`);
 }
 
-export function FinanceiroV2ExportMenu({ filtros, loadAllForExport, fornecedores, ano, fazendaNome, totalCount }: Props) {
+export function FinanceiroV2ExportMenu({ lancamentos, fornecedores, ano, fazendaNome, totalCount }: Props) {
   const [open, setOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -134,13 +133,12 @@ export function FinanceiroV2ExportMenu({ filtros, loadAllForExport, fornecedores
   const handleExport = async (type: 'excel' | 'pdf') => {
     setExporting(true);
     try {
-      const allData = await loadAllForExport(filtros);
       if (type === 'excel') {
-        exportExcel(allData, fornecedores, ano, fazendaNome);
-        toast.success(`Excel exportado! (${allData.length} lançamentos)`);
+        exportExcel(lancamentos, fornecedores, ano, fazendaNome);
+        toast.success(`Excel exportado! (${lancamentos.length} lançamentos)`);
       } else {
-        exportPDF(allData, fornecedores, ano, fazendaNome);
-        toast.success(`PDF exportado! (${allData.length} lançamentos)`);
+        exportPDF(lancamentos, fornecedores, ano, fazendaNome);
+        toast.success(`PDF exportado! (${lancamentos.length} lançamentos)`);
       }
     } catch {
       toast.error('Erro ao exportar');
