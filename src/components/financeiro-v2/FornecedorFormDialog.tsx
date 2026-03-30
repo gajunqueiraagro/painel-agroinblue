@@ -234,12 +234,12 @@ export function FornecedorFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="text-base">{editing ? 'Editar Fornecedor' : 'Novo Fornecedor'}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <div className="space-y-3 overflow-y-auto flex-1 pr-1">
           <div>
             <Label className="text-xs">Nome *</Label>
             <Input
@@ -342,7 +342,7 @@ export function FornecedorFormDialog({
           <div className="border-t border-border/30 pt-3 mt-1">
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Dados de Pagamento</p>
             <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <Label className="text-[11px]">Tipo de Recebimento</Label>
                   <Select value={tipoRecebimento || '__none_tipo__'} onValueChange={v => setTipoRecebimento(v === '__none_tipo__' ? '' : v)}>
@@ -378,7 +378,7 @@ export function FornecedorFormDialog({
                 <Label className="text-[11px]">Chave PIX</Label>
                 <Input value={pixChave} onChange={e => setPixChave(e.target.value)} className="h-8 text-xs" placeholder="CPF, CNPJ, telefone, email ou chave aleatória" />
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div>
                   <Label className="text-[11px]">Banco</Label>
                   <Input value={banco} onChange={e => setBanco(e.target.value)} className="h-8 text-xs" placeholder="Ex: Sicredi" />
@@ -392,7 +392,7 @@ export function FornecedorFormDialog({
                   <Input value={conta} onChange={e => setConta(e.target.value)} className="h-8 text-xs" placeholder="00000-0" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <Label className="text-[11px]">Tipo de Conta</Label>
                   <Select value={tipoConta || '__none_tc__'} onValueChange={v => setTipoConta(v === '__none_tc__' ? '' : v)}>
