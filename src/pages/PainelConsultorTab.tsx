@@ -393,10 +393,13 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
   const fazendaNome = isGlobal ? 'Global' : (fazendaAtual?.nome || 'Fazenda');
 
   const handleExport = useCallback(() => {
+    console.log('[EXPORT-DIAG] handleExport CLICADO');
+    console.log('[EXPORT-DIAG] zooRows:', zooRows.length, 'finRows:', finRows.length, 'ano:', anoNum, 'ateMes:', ateMes);
     try {
       exportToExcel(zooRows, finRows, anoNum, ateMes, fazendaNome);
+      console.log('[EXPORT-DIAG] exportToExcel retornou sem erro');
     } catch (err) {
-      console.error('Erro ao exportar Excel:', err);
+      console.error('[EXPORT-DIAG] ERRO no exportToExcel:', err);
       toast.error('Não foi possível iniciar o download do Excel.');
     }
   }, [zooRows, finRows, anoNum, ateMes, fazendaNome]);
