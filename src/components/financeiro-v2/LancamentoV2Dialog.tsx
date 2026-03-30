@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Plus, Search, Check, ChevronsUpDown, AlertCircle, Copy, KeyRound } from 'lucide-react';
+import { Plus, Search, Check, ChevronsUpDown, AlertCircle, Copy, KeyRound, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
@@ -76,7 +76,31 @@ function addDays(dateStr: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Add N months to a date string, clamping to valid day */
+function addMonths(dateStr: string, months: number): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  const targetMonth = d.getMonth() + months;
+  const day = d.getDate();
+  d.setMonth(targetMonth, 1);
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, lastDay));
+  return d.toISOString().slice(0, 10);
+}
+
+/** Get month label in pt-BR */
+function getMonthLabel(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+}
+
 interface ParcelaRow {
+  dataPagamento: string;
+  valorDisplay: string;
+}
+
+interface RecorrenciaRow {
+  mesLabel: string;
+  dataCompetencia: string;
   dataPagamento: string;
   valorDisplay: string;
 }
@@ -93,6 +117,28 @@ function generateParcelas(totalVal: number, numParcelas: number, dataPgtoInicial
     rows.push({
       dataPagamento: dataPgtoInicial ? addDays(dataPgtoInicial, i * 30) : '',
       valorDisplay: toBRL(val),
+    });
+  }
+  return rows;
+}
+
+/** Generate recurrence rows from competencia until December of the same year */
+function generateRecorrencias(dataComp: string, dataPgto: string, valor: number): RecorrenciaRow[] {
+  if (!dataComp) return [];
+  const d = new Date(dataComp + 'T00:00:00');
+  const year = d.getFullYear();
+  const startMonth = d.getMonth(); // 0-based
+  const rows: RecorrenciaRow[] = [];
+  const abs = Math.abs(valor);
+  for (let m = startMonth; m <= 11; m++) {
+    const offset = m - startMonth;
+    const comp = addMonths(dataComp, offset);
+    const pgto = dataPgto ? addMonths(dataPgto, offset) : comp;
+    rows.push({
+      mesLabel: getMonthLabel(comp),
+      dataCompetencia: comp,
+      dataPagamento: pgto,
+      valorDisplay: toBRL(abs),
     });
   }
   return rows;
@@ -118,6 +164,11 @@ export function LancamentoV2Dialog({
   const [formaPagamentoParc, setFormaPagamentoParc] = useState<'avista' | 'parcelada'>('avista');
   const [numParcelas, setNumParcelas] = useState(2);
   const [parcelaRows, setParcelaRows] = useState<ParcelaRow[]>([]);
+
+  // Frequency state
+  const [frequencia, setFrequencia] = useState<'pontual' | 'recorrente'>('pontual');
+  const [recorrenciaRows, setRecorrenciaRows] = useState<RecorrenciaRow[]>([]);
+  const [recorrenciaEditada, setRecorrenciaEditada] = useState(false);
 
   const [fazendaId, setFazendaId] = useState('');
   const [dataCompetencia, setDataCompetencia] = useState('');
@@ -195,6 +246,9 @@ export function LancamentoV2Dialog({
       setObservacao(lancamento.observacao || '');
       setFormaPgto(lancamento.forma_pagamento || '');
       setDadosPagamento(lancamento.dados_pagamento || '');
+      setFrequencia('pontual');
+      setRecorrenciaRows([]);
+      setRecorrenciaEditada(false);
     } else {
       const today = new Date().toISOString().slice(0, 10);
       setFazendaId(defaultFazendaId || '');
@@ -218,6 +272,9 @@ export function LancamentoV2Dialog({
       setParcelaRows([]);
       setFormaPgto('');
       setDadosPagamento('');
+      setFrequencia('pontual');
+      setRecorrenciaRows([]);
+      setRecorrenciaEditada(false);
     }
     setSubcentroSearch('');
     setFornecedorSearch('');
@@ -315,6 +372,48 @@ export function LancamentoV2Dialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formaPagamentoParc, numParcelas, valorNum, dataPagamento]);
 
+  // Auto-generate recurrence rows
+  useEffect(() => {
+    if (frequencia === 'recorrente' && !recorrenciaEditada) {
+      setRecorrenciaRows(generateRecorrencias(dataCompetencia, dataPagamento, valorNum));
+    } else if (frequencia === 'pontual') {
+      setRecorrenciaRows([]);
+      setRecorrenciaEditada(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frequencia, dataCompetencia, dataPagamento, valorNum]);
+
+  const handleRecalcularRecorrencia = () => {
+    if (recorrenciaEditada) {
+      if (!confirm('Deseja recalcular as recorrências? As edições serão perdidas.')) return;
+    }
+    setRecorrenciaRows(generateRecorrencias(dataCompetencia, dataPagamento, valorNum));
+    setRecorrenciaEditada(false);
+  };
+
+  const handleRecorrenciaCompChange = (idx: number, val: string) => {
+    setRecorrenciaRows(prev => prev.map((r, i) => i === idx ? { ...r, dataCompetencia: val } : r));
+    setRecorrenciaEditada(true);
+  };
+
+  const handleRecorrenciaPgtoChange = (idx: number, val: string) => {
+    setRecorrenciaRows(prev => prev.map((r, i) => i === idx ? { ...r, dataPagamento: val } : r));
+    setRecorrenciaEditada(true);
+  };
+
+  const handleRecorrenciaValorChange = (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/\D/g, '');
+    if (!digits) {
+      setRecorrenciaRows(prev => prev.map((r, i) => i === idx ? { ...r, valorDisplay: '0,00' } : r));
+      setRecorrenciaEditada(true);
+      return;
+    }
+    const num = parseInt(digits, 10) / 100;
+    const display = num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    setRecorrenciaRows(prev => prev.map((r, i) => i === idx ? { ...r, valorDisplay: display } : r));
+    setRecorrenciaEditada(true);
+  };
+
   /** Build payment text from supplier data */
   const buildDadosPagamento = useCallback((f: FornecedorV2, metodo?: string): string => {
     const tipo = metodo || f.tipo_recebimento || '';
@@ -410,9 +509,7 @@ export function LancamentoV2Dialog({
   };
 
   const handleNotaFiscalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Right-to-left digit entry, same UX as valor field
     const digits = e.target.value.replace(/\D/g, '');
-    // Remove leading zeros then cap at 9 digits
     const trimmed = digits.replace(/^0+/, '').slice(0, 9);
     setNotaFiscal(trimmed);
   };
@@ -491,9 +588,10 @@ export function LancamentoV2Dialog({
     : (contaOrigemValid && contaDestinoValid);
 
   const parceladaValid = formaPagamentoParc === 'avista' || (numParcelas >= 2 && numParcelas <= 24 && parcelaRows.length === numParcelas);
+  const recorrenteValid = frequencia === 'pontual' || recorrenciaRows.length > 0;
   const canSave = !!fazendaId && !!dataCompetencia && !!dataPagamento && !!descricao && !!favorecidoId && favorecidoId !== '__none_forn__'
     && !!subcentro && !!tipoOperacao && !!statusTransacao && valorNum > 0
-    && contaSimpleValid && parceladaValid;
+    && contaSimpleValid && parceladaValid && recorrenteValid;
 
   const handleSubmit = async () => {
     if (!canSave) return;
@@ -506,6 +604,38 @@ export function LancamentoV2Dialog({
       contaBancariaId = contaDestinoId && contaDestinoId !== '__none__' ? contaDestinoId : null;
     } else {
       contaBancariaId = contaOrigemId && contaOrigemId !== '__none__' ? contaOrigemId : null;
+    }
+
+    // --- Recurrence logic (only for new, not edit) ---
+    if (!isEdit && frequencia === 'recorrente' && recorrenciaRows.length > 0) {
+      let allOk = true;
+      for (let i = 0; i < recorrenciaRows.length; i++) {
+        const row = recorrenciaRows[i];
+        const recVal = parseBRL(row.valorDisplay);
+        const form: LancamentoV2Form = {
+          fazenda_id: fazendaId,
+          conta_bancaria_id: contaBancariaId,
+          data_competencia: row.dataCompetencia,
+          data_pagamento: row.dataPagamento || null,
+          valor: recVal,
+          tipo_operacao: tipoOperacao,
+          status_transacao: deriveStatus(row.dataPagamento),
+          descricao,
+          macro_custo: macroCusto,
+          centro_custo: centroCusto,
+          subcentro,
+          observacao,
+          nota_fiscal: notaFiscal || null,
+          favorecido_id: favorecidoId && favorecidoId !== '__none_forn__' ? favorecidoId : null,
+          forma_pagamento: formaPgto || null,
+          dados_pagamento: dadosPagamento || null,
+        };
+        const ok = await onSave(form);
+        if (!ok) { allOk = false; break; }
+      }
+      setSaving(false);
+      if (allOk) onClose();
+      return;
     }
 
     // --- Installment logic (only for new, not edit) ---
@@ -576,6 +706,16 @@ export function LancamentoV2Dialog({
 
   // Sum of parcelas for display
   const parcelasTotal = parcelaRows.reduce((acc, r) => acc + parseBRL(r.valorDisplay), 0);
+  const recorrenciaTotal = recorrenciaRows.reduce((acc, r) => acc + parseBRL(r.valorDisplay), 0);
+
+  // Determine button label
+  const getSubmitLabel = () => {
+    if (saving) return 'Salvando...';
+    if (isEdit) return 'Salvar Alterações';
+    if (frequencia === 'recorrente' && recorrenciaRows.length > 0) return `Criar ${recorrenciaRows.length} Lançamentos`;
+    if (formaPagamentoParc === 'parcelada') return `Criar ${numParcelas} Parcelas`;
+    return 'Criar Lançamento';
+  };
 
   return (
     <>
@@ -800,21 +940,33 @@ export function LancamentoV2Dialog({
                   </div>
                 </div>
 
-                {/* Forma de Pagamento — only for new */}
+                {/* Frequency + Installment — only for new */}
                 {!isEdit && (
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <Label className="text-xs">Forma de Pagamento</Label>
-                        <Select value={formaPagamentoParc} onValueChange={(v: 'avista' | 'parcelada') => setFormaPagamentoParc(v)}>
+                        <Label className="text-xs">Frequência</Label>
+                        <Select value={frequencia} onValueChange={(v: 'pontual' | 'recorrente') => setFrequencia(v)}>
                           <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="avista">À vista</SelectItem>
-                            <SelectItem value="parcelada">Parcelada</SelectItem>
+                            <SelectItem value="pontual">Pontual</SelectItem>
+                            <SelectItem value="recorrente">Recorrente</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
-                      {formaPagamentoParc === 'parcelada' && (
+                      {frequencia === 'pontual' && (
+                        <div>
+                          <Label className="text-xs">Modalidade</Label>
+                          <Select value={formaPagamentoParc} onValueChange={(v: 'avista' | 'parcelada') => setFormaPagamentoParc(v)}>
+                            <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="avista">À vista</SelectItem>
+                              <SelectItem value="parcelada">Parcelada</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      {frequencia === 'pontual' && formaPagamentoParc === 'parcelada' && (
                         <div>
                           <Label className="text-xs">Nº de Parcelas *</Label>
                           <Input
@@ -830,15 +982,13 @@ export function LancamentoV2Dialog({
                     </div>
 
                     {/* ── EDITABLE PARCELA GRID ── */}
-                    {formaPagamentoParc === 'parcelada' && parcelaRows.length > 0 && (
+                    {frequencia === 'pontual' && formaPagamentoParc === 'parcelada' && parcelaRows.length > 0 && (
                       <div className="rounded-lg border border-border/50 bg-muted/30 overflow-hidden">
-                        {/* Grid header */}
                         <div className="grid grid-cols-[48px_1fr_1fr] gap-1 px-3 py-1.5 bg-muted/60 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                           <span>Parc.</span>
                           <span>Vencimento</span>
                           <span>Valor (R$)</span>
                         </div>
-                        {/* Grid rows */}
                         <div className="divide-y divide-border/30">
                           {parcelaRows.map((row, idx) => (
                             <div key={idx} className="grid grid-cols-[48px_1fr_1fr] gap-1 px-3 py-1.5 items-center">
@@ -859,7 +1009,6 @@ export function LancamentoV2Dialog({
                             </div>
                           ))}
                         </div>
-                        {/* Footer with total */}
                         <div className="px-3 py-1.5 bg-muted/60 flex justify-between items-center text-xs">
                           <span className="text-muted-foreground font-medium">Total parcelas:</span>
                           <span className={cn(
@@ -877,6 +1026,55 @@ export function LancamentoV2Dialog({
                             A soma das parcelas difere do valor total (R$ {toBRL(Math.abs(valorNum))})
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {/* ── RECURRENCE GRID ── */}
+                    {frequencia === 'recorrente' && recorrenciaRows.length > 0 && (
+                      <div className="rounded-lg border border-border/50 bg-muted/30 overflow-hidden">
+                        <div className="grid grid-cols-[60px_1fr_1fr_100px] gap-1 px-3 py-1.5 bg-muted/60 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                          <span>Mês</span>
+                          <span>Competência</span>
+                          <span>Pagamento</span>
+                          <span className="text-right">Valor (R$)</span>
+                        </div>
+                        <div className="divide-y divide-border/30 max-h-52 overflow-y-auto">
+                          {recorrenciaRows.map((row, idx) => (
+                            <div key={idx} className="grid grid-cols-[60px_1fr_1fr_100px] gap-1 px-3 py-1.5 items-center">
+                              <span className="text-[10px] font-semibold text-muted-foreground capitalize">{row.mesLabel}</span>
+                              <Input
+                                type="date"
+                                value={row.dataCompetencia}
+                                onChange={e => handleRecorrenciaCompChange(idx, e.target.value)}
+                                className="h-7 text-xs bg-white dark:bg-card border-border/40"
+                              />
+                              <Input
+                                type="date"
+                                value={row.dataPagamento}
+                                onChange={e => handleRecorrenciaPgtoChange(idx, e.target.value)}
+                                className="h-7 text-xs bg-white dark:bg-card border-border/40"
+                              />
+                              <Input
+                                value={row.valorDisplay}
+                                onChange={e => handleRecorrenciaValorChange(idx, e)}
+                                onFocus={e => e.target.select()}
+                                inputMode="numeric"
+                                className="h-7 text-xs bg-white dark:bg-card border-border/40 text-right font-mono"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        <div className="px-3 py-1.5 bg-muted/60 flex justify-between items-center text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground font-medium">Total ({recorrenciaRows.length}x):</span>
+                            <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-[10px] gap-1" onClick={handleRecalcularRecorrencia}>
+                              <RefreshCw className="h-3 w-3" /> Recalcular
+                            </Button>
+                          </div>
+                          <span className="font-bold font-mono text-foreground">
+                            R$ {toBRL(recorrenciaTotal)}
+                          </span>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1043,7 +1241,7 @@ export function LancamentoV2Dialog({
           <div className="px-5 py-3 border-t border-border/40 bg-white dark:bg-card flex items-center gap-2">
             <Button variant="outline" onClick={onClose} className="px-4" tabIndex={16}>Cancelar</Button>
             <Button tabIndex={17} onClick={handleSubmit} disabled={saving || !canSave} className="flex-1">
-              {saving ? 'Salvando...' : isEdit ? 'Salvar Alterações' : formaPagamentoParc === 'parcelada' ? `Criar ${numParcelas} Parcelas` : 'Criar Lançamento'}
+              {getSubmitLabel()}
             </Button>
             {isEdit && onDelete && (
               <Button
