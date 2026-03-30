@@ -482,50 +482,75 @@ export function ConciliacaoBancariaTab() {
               </div>
 
               {/* Lançamentos */}
-              {card.lancamentos.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-bold text-foreground uppercase tracking-wider mb-1">
-                    Lançamentos ({card.lancamentos.length})
-                  </p>
-                  <div className="max-h-[300px] overflow-y-auto rounded border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-[9px] w-[50px]">Data</TableHead>
-                          <TableHead className="text-[9px]">Descrição</TableHead>
-                          <TableHead className="text-[9px] w-[50px]">Tipo</TableHead>
-                          <TableHead className="text-[9px] text-right w-[90px]">Valor</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {card.lancamentos.slice(0, 50).map((l, idx) => {
-                          const tipo = (l.tipo_operacao || '').substring(0, 1);
-                          const isEntrada = tipo === '1';
-                          return (
-                            <TableRow key={idx}>
-                              <TableCell className="text-[9px] py-0.5">{fmtDate(l.data_pagamento || l.data_competencia)}</TableCell>
-                              <TableCell className="text-[9px] py-0.5 truncate max-w-[120px]">{l.descricao || '-'}</TableCell>
-                              <TableCell className="text-[9px] py-0.5 text-center">
-                                <span className={isEntrada ? 'text-green-600' : 'text-red-600'}>
-                                  {tipo === '1' ? 'E' : tipo === '2' ? 'S' : 'T'}
-                                </span>
-                              </TableCell>
-                              <TableCell className={`text-[9px] py-0.5 text-right font-medium tabular-nums ${isEntrada ? 'text-green-700' : 'text-red-700'}`}>
-                                {isEntrada ? '' : '- '}R$ {fmtBRL(Math.abs(l.valor))}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                    {card.lancamentos.length > 50 && (
-                      <p className="text-[9px] text-center text-muted-foreground py-1">
-                        +{card.lancamentos.length - 50} lançamentos
-                      </p>
-                    )}
+              {card.lancamentos.length > 0 && (() => {
+                const entradas = card.lancamentos.filter(l => (l.tipo_operacao || '').startsWith('1'));
+                const saidas = card.lancamentos.filter(l => (l.tipo_operacao || '').startsWith('2') || (l.tipo_operacao || '').startsWith('3'));
+
+                const [filtroTipo, setFiltroTipo] = [filtroTipoLanc, setFiltroTipoLanc];
+
+                const lancFiltrados = (filtroTipo === 'entradas' ? entradas : filtroTipo === 'saidas' ? saidas : card.lancamentos)
+                  .slice()
+                  .sort((a, b) => {
+                    const dA = a.data_pagamento || a.data_competencia || '';
+                    const dB = b.data_pagamento || b.data_competencia || '';
+                    return dA.localeCompare(dB);
+                  });
+
+                return (
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <button
+                        onClick={() => setFiltroTipoLanc(filtroTipo === 'todos' ? 'todos' : 'todos')}
+                        className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipo === 'todos' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+                      >
+                        Lançamentos ({card.lancamentos.length})
+                      </button>
+                      <button
+                        onClick={() => setFiltroTipoLanc(filtroTipo === 'entradas' ? 'todos' : 'entradas')}
+                        className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipo === 'entradas' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 hover:opacity-80'}`}
+                      >
+                        Entradas ({entradas.length})
+                      </button>
+                      <button
+                        onClick={() => setFiltroTipoLanc(filtroTipo === 'saidas' ? 'todos' : 'saidas')}
+                        className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipo === 'saidas' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 hover:opacity-80'}`}
+                      >
+                        Saídas ({saidas.length})
+                      </button>
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto rounded border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-[9px] w-[50px]">Data</TableHead>
+                            <TableHead className="text-[9px]">Descrição</TableHead>
+                            <TableHead className="text-[9px] text-right w-[90px]">Valor</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {lancFiltrados.slice(0, 50).map((l, idx) => {
+                            const isEntrada = (l.tipo_operacao || '').startsWith('1');
+                            return (
+                              <TableRow key={idx}>
+                                <TableCell className="text-[9px] py-0.5">{fmtDate(l.data_pagamento || l.data_competencia)}</TableCell>
+                                <TableCell className="text-[9px] py-0.5 truncate max-w-[150px]">{l.descricao || '-'}</TableCell>
+                                <TableCell className={`text-[9px] py-0.5 text-right font-medium tabular-nums ${isEntrada ? 'text-green-700' : 'text-red-700'}`}>
+                                  {isEntrada ? '' : '- '}R$ {fmtBRL(Math.abs(l.valor))}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                      {lancFiltrados.length > 50 && (
+                        <p className="text-[9px] text-center text-muted-foreground py-1">
+                          +{lancFiltrados.length - 50} lançamentos
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {card.lancamentos.length === 0 && (
                 <p className="text-[10px] text-muted-foreground text-center py-2">Nenhum lançamento neste mês</p>
