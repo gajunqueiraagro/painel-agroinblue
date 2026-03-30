@@ -331,15 +331,16 @@ export function useFinanceiro() {
           return;
         }
 
-        const [allLancs, ccResult, impResult, saldoResult, lancPecResult] = await Promise.all([
-          fetchAllPaginated<FinanceiroLancamento>((from, to) =>
-            (supabase.from('financeiro_lancamentos').select('*') as any).in('fazenda_id', allFazendaIds).eq('cancelado', false).order('data_realizacao', { ascending: false }).range(from, to),
+        const [allLancsRaw, ccResult, impResult, saldoResult, lancPecResult] = await Promise.all([
+          fetchAllPaginated<any>((from, to) =>
+            (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('cliente_id', clienteId).order('data_competencia', { ascending: false }).range(from, to),
           ),
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').in('fazenda_id', allFazendaIds).eq('ativo', true),
-          supabase.from('financeiro_importacoes').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').in('fazenda_id', allFazendaIds).neq('status', 'cancelada').order('data_importacao', { ascending: false }),
+          supabase.from('financeiro_importacoes_v2').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').eq('cliente_id', clienteId!).neq('status', 'cancelada').order('data_importacao', { ascending: false }),
           opIds.length > 0 ? supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
           opIds.length > 0 ? supabase.from('lancamentos').select('fazenda_id, data, tipo, quantidade, categoria, categoria_destino').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
         ]);
+        const allLancs = allLancsRaw.map(mapV2ToLancamento);
 
         setLancamentos(allLancs);
         setCentrosCusto((ccResult.data as CentroCustoOficial[]) || []);
