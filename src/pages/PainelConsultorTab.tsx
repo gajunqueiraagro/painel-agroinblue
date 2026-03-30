@@ -382,13 +382,14 @@ function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes
 
 export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
-  const { pastos } = usePastos();
+  const { pastos, categorias } = usePastos();
   const { lancamentos: lancPec, saldosIniciais } = useLancamentos();
   const { lancamentos: lancFin } = useFinanceiro();
 
   const [ano, setAno] = useState(filtroGlobal?.ano || String(new Date().getFullYear()));
   const [ateMes, setAteMes] = useState(filtroGlobal?.mes || new Date().getMonth() + 1);
   const [tab, setTab] = useState<'zoo' | 'fin'>('zoo');
+  const [pesosPorMes, setPesosPorMes] = useState<Record<string, Record<string, number>>>({});
 
   const anoNum = Number(ano);
   const anosDisponiveis = useMemo(() => {
@@ -399,11 +400,29 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
     return Array.from(s).sort().reverse();
   }, [saldosIniciais]);
 
+  const fazendaId = fazendaAtual?.id;
+
+  // Load peso data from fechamento_pastos for each month
+  useEffect(() => {
+    if (!fazendaId || fazendaId === '__global__' || categorias.length === 0) {
+      setPesosPorMes({});
+      return;
+    }
+    (async () => {
+      const result: Record<string, Record<string, number>> = {};
+      for (let m = 1; m <= 12; m++) {
+        const anoMes = `${anoNum}-${String(m).padStart(2, '0')}`;
+        result[anoMes] = await loadPesosPastosPorCategoria(fazendaId, anoMes, categorias);
+      }
+      setPesosPorMes(result);
+    })();
+  }, [fazendaId, anoNum, categorias]);
+
   const areaProdutiva = useMemo(() => calcAreaProdutivaPecuaria(pastos), [pastos]);
 
   const zooRows = useMemo(
-    () => buildZooRows(lancPec, saldosIniciais, anoNum, ateMes, areaProdutiva),
-    [lancPec, saldosIniciais, anoNum, ateMes, areaProdutiva],
+    () => buildZooRows(lancPec, saldosIniciais, anoNum, ateMes, areaProdutiva, pesosPorMes),
+    [lancPec, saldosIniciais, anoNum, ateMes, areaProdutiva, pesosPorMes],
   );
 
   const finRows = useMemo(
