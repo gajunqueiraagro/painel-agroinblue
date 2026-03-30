@@ -295,16 +295,18 @@ export function LancamentoV2Dialog({
   return (
     <>
       <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto bg-white dark:bg-card rounded-xl shadow-2xl border-0 [&_input]:bg-[#f5f6f8] [&_input]:dark:bg-muted [&_select]:bg-[#f5f6f8] [&_.select-trigger]:bg-[#f5f6f8] [&_textarea]:bg-[#f5f6f8] [&_textarea]:dark:bg-muted [&_button[role=combobox]]:bg-[#f5f6f8]">
-          <DialogHeader>
-            <DialogTitle className="text-base">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
+        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 bg-white dark:bg-card rounded-2xl shadow-2xl border-0 overflow-hidden">
+          {/* Header */}
+          <DialogHeader className="px-5 pt-5 pb-3 border-b border-border/40">
+            <DialogTitle className="text-base font-semibold">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-3">
-            {/* 1. DATAS */}
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Datas</p>
-              {/* Status Atual — colored text, centered */}
+          {/* Scrollable body */}
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+
+            {/* ── DATAS ── */}
+            <section>
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Datas</p>
               {isEdit && lancamento?.status_transacao && (() => {
                 const stKey = lancamento.status_transacao.toLowerCase();
                 const stLabel = STATUS_OPTIONS.find(s => s.value === stKey)?.label || lancamento.status_transacao;
@@ -315,7 +317,7 @@ export function LancamentoV2Dialog({
                   conciliado: 'text-green-700 dark:text-green-400',
                 };
                 return (
-                  <p className={`text-center text-sm font-semibold mb-2 ${colorMap[stKey] || 'text-muted-foreground'}`}>
+                  <p className={`text-center text-sm font-bold mb-2 ${colorMap[stKey] || 'text-muted-foreground'}`}>
                     {stLabel}
                   </p>
                 );
@@ -323,230 +325,198 @@ export function LancamentoV2Dialog({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">Data Competência *</Label>
-                  <Input type="date" value={dataCompetencia} onChange={e => setDataCompetencia(e.target.value)} className="h-9" />
+                  <Input type="date" value={dataCompetencia} onChange={e => setDataCompetencia(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" />
                 </div>
                 <div>
                   <Label className="text-xs">Data Pagamento *</Label>
-                  <Input type="date" value={dataPagamento} onChange={e => handleDataPagamentoChange(e.target.value)} className="h-9" />
+                  <Input type="date" value={dataPagamento} onChange={e => handleDataPagamentoChange(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" />
                 </div>
               </div>
-            </div>
+            </section>
 
-            {/* 2. PRODUTO */}
-            <div>
-              <Label className="text-xs">Produto *</Label>
-              <Input value={descricao} onChange={e => setDescricao(e.target.value)} className="h-9" placeholder="Descrição do produto" />
-            </div>
+            <hr className="border-border/30" />
 
-            {/* 3. FORNECEDOR */}
-            <div>
-              <Label className="text-xs">Fornecedor *</Label>
-              <div className="flex gap-1.5">
-                <Popover open={fornecedorOpen} onOpenChange={v => { setFornecedorOpen(v); if (!v) setFornecedorSearch(''); }}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={fornecedorOpen}
-                      className="flex-1 h-9 justify-between font-normal text-sm"
-                    >
-                      <span className="truncate">{selectedFornecedorNome || 'Selecione o fornecedor...'}</span>
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                    <div className="flex items-center border-b px-3 py-2">
-                      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                      <input
-                        ref={fornecedorInputRef}
-                        className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                        placeholder="Buscar fornecedor..."
-                        value={fornecedorSearch}
-                        onChange={e => setFornecedorSearch(e.target.value)}
-                        autoFocus
-                      />
-                    </div>
-                    <div className="max-h-48 overflow-y-auto p-1">
-                      {filteredFornecedores.length === 0 && (
-                        <div className="p-2 text-center space-y-1">
-                          <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground">
-                            <AlertCircle className="h-3.5 w-3.5" />
-                            <span>Fornecedor não encontrado na base</span>
-                          </div>
-                          <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => { setFornecedorOpen(false); setFornecedorDialogOpen(true); }}>
-                            <Plus className="h-3 w-3 mr-1" />Cadastrar novo
-                          </Button>
+            {/* ── IDENTIFICAÇÃO ── */}
+            <section>
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Identificação</p>
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs">Produto *</Label>
+                  <Input value={descricao} onChange={e => setDescricao(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" placeholder="Descrição do produto" />
+                </div>
+                <div>
+                  <Label className="text-xs">Fornecedor *</Label>
+                  <div className="flex gap-1.5">
+                    <Popover open={fornecedorOpen} onOpenChange={v => { setFornecedorOpen(v); if (!v) setFornecedorSearch(''); }}>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" role="combobox" aria-expanded={fornecedorOpen} className="flex-1 h-9 justify-between font-normal text-sm bg-[#f5f6f8] dark:bg-muted border-border/50">
+                          <span className="truncate">{selectedFornecedorNome || 'Selecione o fornecedor...'}</span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                        <div className="flex items-center border-b px-3 py-2">
+                          <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                          <input ref={fornecedorInputRef} className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" placeholder="Buscar fornecedor..." value={fornecedorSearch} onChange={e => setFornecedorSearch(e.target.value)} autoFocus />
                         </div>
-                      )}
-                      {filteredFornecedores.map(f => (
-                        <button
-                          key={f.id}
-                          className={cn(
-                            "relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
-                            favorecidoId === f.id && "bg-accent"
+                        <div className="max-h-48 overflow-y-auto p-1">
+                          {filteredFornecedores.length === 0 && (
+                            <div className="p-2 text-center space-y-1">
+                              <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground">
+                                <AlertCircle className="h-3.5 w-3.5" />
+                                <span>Fornecedor não encontrado na base</span>
+                              </div>
+                              <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => { setFornecedorOpen(false); setFornecedorDialogOpen(true); }}>
+                                <Plus className="h-3 w-3 mr-1" />Cadastrar novo
+                              </Button>
+                            </div>
                           )}
-                          onClick={() => { setFavorecidoId(f.id); setFornecedorOpen(false); setFornecedorSearch(''); }}
-                        >
-                          <Check className={cn("mr-2 h-4 w-4", favorecidoId === f.id ? "opacity-100" : "opacity-0")} />
-                          <span className="truncate">{f.nome}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-                <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setFornecedorDialogOpen(true)} title="Novo fornecedor">
-                  <Plus className="h-4 w-4" />
-                </Button>
+                          {filteredFornecedores.map(f => (
+                            <button key={f.id} className={cn("relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground", favorecidoId === f.id && "bg-accent")} onClick={() => { setFavorecidoId(f.id); setFornecedorOpen(false); setFornecedorSearch(''); }}>
+                              <Check className={cn("mr-2 h-4 w-4", favorecidoId === f.id ? "opacity-100" : "opacity-0")} />
+                              <span className="truncate">{f.nome}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                    <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setFornecedorDialogOpen(true)} title="Novo fornecedor">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
               </div>
-            </div>
+            </section>
 
-            {/* 4. VALOR + STATUS */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Valor (R$) *</Label>
-                <Input
-                  value={valorDisplay}
-                  onChange={e => setValorDisplay(e.target.value)}
-                  onBlur={handleValorBlur}
-                  onFocus={e => e.target.select()}
-                  className="h-9"
-                  placeholder="0,00"
-                  inputMode="decimal"
-                />
+            <hr className="border-border/30" />
+
+            {/* ── FINANCEIRO ── */}
+            <section>
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Financeiro</p>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Valor (R$) *</Label>
+                    <Input value={valorDisplay} onChange={e => setValorDisplay(e.target.value)} onBlur={handleValorBlur} onFocus={e => e.target.select()} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" placeholder="0,00" inputMode="decimal" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Status *</Label>
+                    <Select value={statusTransacao} onValueChange={setStatusTransacao}>
+                      <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Fazenda *</Label>
+                    <Select value={fazendaId} onValueChange={v => { setFazendaId(v); setContaOrigemId(''); setContaDestinoId(''); }}>
+                      <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Nota Fiscal</Label>
+                    <Input value={notaFiscalDisplay} onChange={handleNotaFiscalChange} inputMode="numeric" className="h-9 font-mono bg-[#f5f6f8] dark:bg-muted border-border/50" placeholder="000.000.000" />
+                  </div>
+                </div>
               </div>
-              <div>
-                <Label className="text-xs">Status *</Label>
-                <Select value={statusTransacao} onValueChange={setStatusTransacao}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {STATUS_OPTIONS.map(s => (
-                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            </section>
 
-            <hr className="border-border/60" />
+            <hr className="border-border/30" />
 
-            {/* 5. FAZENDA + NOTA FISCAL */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Fazenda *</Label>
-                <Select value={fazendaId} onValueChange={v => { setFazendaId(v); setContaOrigemId(''); setContaDestinoId(''); }}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    {fazOperacionais.map(f => (
-                      <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs">Nota Fiscal</Label>
-                <Input
-                  value={notaFiscalDisplay}
-                  onChange={handleNotaFiscalChange}
-                  inputMode="numeric"
-                  className="h-9 font-mono"
-                  placeholder="000.000.000"
-                />
-              </div>
-            </div>
-
-            <hr className="border-border/60" />
-
-            {/* 6. CONTA BANCÁRIA */}
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Conta Bancária</p>
+            {/* ── CONTA BANCÁRIA ── */}
+            <section>
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Conta Bancária</p>
               <div className="space-y-2">
                 <div>
                   <Label className="text-xs">Tipo Operação *</Label>
                   <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigemId(''); setContaDestinoId(''); setSubcentro(''); setMacroCusto(''); setCentroCusto(''); setSubcentroSearch(''); }}>
-                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {TIPOS_OPERACAO.map(t => (
-                        <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                      ))}
+                      {TIPOS_OPERACAO.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
-                {(!isEntrada || isTransferencia) && (
+                {isTransferencia ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Conta Origem</Label>
+                      <Select value={contaOrigemId} onValueChange={setContaOrigemId}>
+                        <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Nenhuma</SelectItem>
+                          {sortedContas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Conta Destino</Label>
+                      <Select value={contaDestinoId} onValueChange={setContaDestinoId}>
+                        <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Nenhuma</SelectItem>
+                          {sortedContas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                ) : isEntrada ? (
                   <div>
-                    <Label className="text-xs">Conta de Origem *</Label>
-                    <Select value={contaOrigemId || '__none__'} onValueChange={setContaOrigemId}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent className="max-h-60">
-                        <SelectItem value="__none__">Selecione...</SelectItem>
-                        {contasDisponiveis.map(c => (
-                          <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}{c.banco ? ` (${c.banco})` : ''}</SelectItem>
-                        ))}
+                    <Label className="text-xs">Conta Destino</Label>
+                    <Select value={contaDestinoId} onValueChange={setContaDestinoId}>
+                      <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Nenhuma</SelectItem>
+                        {sortedContas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
-                )}
-                {(isEntrada || isTransferencia) && (
+                ) : (
                   <div>
-                    <Label className="text-xs">Conta de Destino *</Label>
-                    <Select value={contaDestinoId || '__none__'} onValueChange={setContaDestinoId}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent className="max-h-60">
-                        <SelectItem value="__none__">Selecione...</SelectItem>
-                        {contasDisponiveis.map(c => (
-                          <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}{c.banco ? ` (${c.banco})` : ''}</SelectItem>
-                        ))}
+                    <Label className="text-xs">Conta Origem</Label>
+                    <Select value={contaOrigemId} onValueChange={setContaOrigemId}>
+                      <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Nenhuma</SelectItem>
+                        {sortedContas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                 )}
               </div>
-            </div>
+            </section>
 
-            {/* 7. CLASSIFICAÇÃO */}
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Classificação</p>
+            <hr className="border-border/30" />
+
+            {/* ── CLASSIFICAÇÃO ── */}
+            <section>
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Classificação</p>
               <div className="space-y-2">
                 <div>
                   <Label className="text-xs">Subcentro *</Label>
-                  <Popover open={subcentroOpen} onOpenChange={setSubcentroOpen}>
+                  <Popover open={subcentroOpen} onOpenChange={v => { setSubcentroOpen(v); if (!v) setSubcentroSearch(''); }}>
                     <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={subcentroOpen}
-                        className="w-full h-9 justify-between font-normal text-sm"
-                      >
-                        {subcentro ? shortLabel(subcentro) : 'Selecione o subcentro...'}
+                      <Button variant="outline" role="combobox" aria-expanded={subcentroOpen} className="w-full h-9 justify-between font-normal text-sm bg-[#f5f6f8] dark:bg-muted border-border/50">
+                        <span className="truncate">{subcentro || 'Selecione o subcentro...'}</span>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                       <div className="flex items-center border-b px-3 py-2">
                         <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                        <input
-                          ref={searchInputRef}
-                          className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                          placeholder="Buscar subcentro..."
-                          value={subcentroSearch}
-                          onChange={e => setSubcentroSearch(e.target.value)}
-                          autoFocus
-                        />
+                        <input ref={subcentroInputRef} className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" placeholder="Buscar subcentro..." value={subcentroSearch} onChange={e => setSubcentroSearch(e.target.value)} autoFocus />
                       </div>
                       <div className="max-h-48 overflow-y-auto p-1">
-                        {filteredSubcentros.length === 0 && (
-                          <p className="text-sm text-muted-foreground p-2 text-center">Nenhum resultado</p>
-                        )}
-                        {filteredSubcentros.map((c, i) => (
-                          <button
-                            key={`${c.subcentro}-${i}`}
-                            className={cn(
-                              "relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
-                              subcentro === c.subcentro && "bg-accent"
-                            )}
-                            onClick={() => handleSubcentroSelect(c.subcentro)}
-                          >
-                            <Check className={cn("mr-2 h-4 w-4", subcentro === c.subcentro ? "opacity-100" : "opacity-0")} />
-                            <span className="truncate">{shortLabel(c.subcentro)}</span>
+                        {filteredSubcentros.length === 0 && <p className="p-2 text-center text-sm text-muted-foreground">Nenhum subcentro encontrado</p>}
+                        {filteredSubcentros.map(sc => (
+                          <button key={sc.id} className={cn("relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground", subcentro === sc.subcentro && "bg-accent")} onClick={() => { setSubcentro(sc.subcentro || ''); setMacroCusto(sc.macro_custo || ''); setCentroCusto(sc.centro_custo || ''); setSubcentroOpen(false); setSubcentroSearch(''); }}>
+                            <Check className={cn("mr-2 h-4 w-4", subcentro === sc.subcentro ? "opacity-100" : "opacity-0")} />
+                            <span className="truncate">{sc.subcentro}</span>
                           </button>
                         ))}
                       </div>
@@ -556,43 +526,47 @@ export function LancamentoV2Dialog({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs text-muted-foreground">Macro Custo (auto)</Label>
-                    <Input value={macroCusto} readOnly disabled className="h-9 bg-muted/50" />
+                    <Input value={macroCusto} readOnly disabled className="h-9 bg-muted/80 dark:bg-muted border-border/30 text-muted-foreground cursor-default" />
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Centro Custo (auto)</Label>
-                    <Input value={centroCusto} readOnly disabled className="h-9 bg-muted/50" />
+                    <Input value={centroCusto} readOnly disabled className="h-9 bg-muted/80 dark:bg-muted border-border/30 text-muted-foreground cursor-default" />
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
 
-            {/* 8. COMPLEMENTO */}
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Complemento</p>
+            <hr className="border-border/30" />
+
+            {/* ── COMPLEMENTO ── */}
+            <section>
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Complemento</p>
               <div>
                 <Label className="text-xs">Observação</Label>
-                <Textarea value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Observações adicionais" />
+                <Textarea value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Observações adicionais" className="bg-[#f5f6f8] dark:bg-muted border-border/50" />
               </div>
-            </div>
+            </section>
+          </div>
 
-            <div className="flex gap-2">
-              <Button onClick={handleSubmit} disabled={saving || !canSave} className="flex-1">
-                {saving ? 'Salvando...' : isEdit ? 'Salvar Alterações' : 'Criar Lançamento'}
+          {/* Sticky footer */}
+          <div className="px-5 py-3 border-t border-border/40 bg-white dark:bg-card flex items-center gap-2">
+            <Button variant="outline" onClick={onClose} className="px-4">Cancelar</Button>
+            <Button onClick={handleSubmit} disabled={saving || !canSave} className="flex-1">
+              {saving ? 'Salvando...' : isEdit ? 'Salvar Alterações' : 'Criar Lançamento'}
+            </Button>
+            {isEdit && onDelete && (
+              <Button
+                variant="destructive"
+                onClick={async () => {
+                  if (!confirm('Tem certeza que deseja excluir este lançamento?')) return;
+                  const ok = await onDelete(lancamento!.id);
+                  if (ok) onClose();
+                }}
+                className="px-4"
+              >
+                Excluir
               </Button>
-              {isEdit && onDelete && (
-                <Button
-                  variant="destructive"
-                  onClick={async () => {
-                    if (!confirm('Tem certeza que deseja excluir este lançamento?')) return;
-                    const ok = await onDelete(lancamento!.id);
-                    if (ok) onClose();
-                  }}
-                  className="px-4"
-                >
-                  Excluir
-                </Button>
-              )}
-            </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
