@@ -194,54 +194,73 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     setClassificacoes(items);
   }, [clienteId]);
 
+  const buildLancamentosQuery = useCallback((filtros: FiltrosV2) => {
+    let query = supabase
+      .from('financeiro_lancamentos_v2')
+      .select('*')
+      .eq('cliente_id', clienteId!);
+
+    if (filtros.fazenda_id) {
+      query = query.eq('fazenda_id', filtros.fazenda_id);
+    }
+
+    if (filtros.meses && filtros.meses.length > 0 && !filtros.meses.includes('todos')) {
+      const anoMeses = filtros.meses.map(m => `${filtros.ano}-${m.padStart(2, '0')}`);
+      query = query.in('ano_mes', anoMeses);
+    } else if (filtros.mes && filtros.mes !== 'todos') {
+      query = query.eq('ano_mes', `${filtros.ano}-${filtros.mes.padStart(2, '0')}`);
+    } else {
+      query = query.gte('ano_mes', `${filtros.ano}-01`).lte('ano_mes', `${filtros.ano}-12`);
+    }
+
+    if (filtros.conta_bancaria_id) query = query.eq('conta_bancaria_id', filtros.conta_bancaria_id);
+    if (filtros.tipo_operacao) query = query.eq('tipo_operacao', filtros.tipo_operacao);
+    if (filtros.status_transacao) query = query.eq('status_transacao', filtros.status_transacao);
+    if (filtros.macro_custo) query = query.eq('macro_custo', filtros.macro_custo);
+    if (filtros.centro_custo) query = query.eq('centro_custo', filtros.centro_custo);
+    if (filtros.subcentro) query = query.eq('subcentro', filtros.subcentro);
+
+    return query;
+  }, [clienteId]);
+
+  const fetchAllLancamentos = useCallback(async (filtros: FiltrosV2): Promise<LancamentoV2[]> => {
+    if (!clienteId || !filtros.ano) return [];
+
+    const all: LancamentoV2[] = [];
+    let from = 0;
+    const batchSize = 1000;
+
+    while (true) {
+      const { data, error } = await buildLancamentosQuery(filtros)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, from + batchSize - 1);
+
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+
+      all.push(...(data as LancamentoV2[]));
+      if (data.length < batchSize) break;
+      from += batchSize;
+    }
+
+    return all;
+  }, [buildLancamentosQuery, clienteId]);
+
   const loadLancamentos = useCallback(async (filtros: FiltrosV2, pageNum: number = 0) => {
     if (!clienteId) return;
     if (!filtros.ano) {
       setLancamentos([]);
       setTotal(0);
+      setPage(0);
       return;
     }
 
     setLoading(true);
     try {
-      let query = supabase
-        .from('financeiro_lancamentos_v2')
-        .select('*', { count: 'exact' })
-        .eq('cliente_id', clienteId);
-
-      if (filtros.fazenda_id) {
-        query = query.eq('fazenda_id', filtros.fazenda_id);
-      }
-
-      // Multi-month support
-      if (filtros.meses && filtros.meses.length > 0 && !filtros.meses.includes('todos')) {
-        const anoMeses = filtros.meses.map(m => `${filtros.ano}-${m.padStart(2, '0')}`);
-        query = query.in('ano_mes', anoMeses);
-      } else if (filtros.mes && filtros.mes !== 'todos') {
-        query = query.eq('ano_mes', `${filtros.ano}-${filtros.mes.padStart(2, '0')}`);
-      } else {
-        query = query.gte('ano_mes', `${filtros.ano}-01`).lte('ano_mes', `${filtros.ano}-12`);
-      }
-
-      if (filtros.conta_bancaria_id) query = query.eq('conta_bancaria_id', filtros.conta_bancaria_id);
-      if (filtros.tipo_operacao) query = query.eq('tipo_operacao', filtros.tipo_operacao);
-      if (filtros.status_transacao) query = query.eq('status_transacao', filtros.status_transacao);
-      if (filtros.macro_custo) query = query.eq('macro_custo', filtros.macro_custo);
-      if (filtros.centro_custo) query = query.eq('centro_custo', filtros.centro_custo);
-      if (filtros.subcentro) query = query.eq('subcentro', filtros.subcentro);
-
-      const from = pageNum * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
-
-      const { data, count, error } = await query
-        .order('data_pagamento', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false })
-        .range(from, to);
-
-      if (error) throw error;
-
-      setLancamentos((data as LancamentoV2[]) || []);
-      setTotal(count || 0);
+      const data = await fetchAllLancamentos(filtros);
+      setLancamentos(data);
+      setTotal(data.length);
       setPage(pageNum);
     } catch (err: any) {
       toast.error('Erro ao carregar lançamentos v2');
@@ -253,48 +272,13 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
   /** Fetch ALL lancamentos matching filters (no pagination) — used for export */
   const loadAllForExport = useCallback(async (filtros: FiltrosV2): Promise<LancamentoV2[]> => {
-    if (!clienteId || !filtros.ano) return [];
-
-    const all: LancamentoV2[] = [];
-    let from = 0;
-    const batchSize = 1000;
-
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      let query = supabase
-        .from('financeiro_lancamentos_v2')
-        .select('*')
-        .eq('cliente_id', clienteId);
-
-      if (filtros.fazenda_id) query = query.eq('fazenda_id', filtros.fazenda_id);
-      if (filtros.meses && filtros.meses.length > 0 && !filtros.meses.includes('todos')) {
-        const anoMeses = filtros.meses.map(m => `${filtros.ano}-${m.padStart(2, '0')}`);
-        query = query.in('ano_mes', anoMeses);
-      } else if (filtros.mes && filtros.mes !== 'todos') {
-        query = query.eq('ano_mes', `${filtros.ano}-${filtros.mes.padStart(2, '0')}`);
-      } else {
-        query = query.gte('ano_mes', `${filtros.ano}-01`).lte('ano_mes', `${filtros.ano}-12`);
-      }
-      if (filtros.conta_bancaria_id) query = query.eq('conta_bancaria_id', filtros.conta_bancaria_id);
-      if (filtros.tipo_operacao) query = query.eq('tipo_operacao', filtros.tipo_operacao);
-      if (filtros.status_transacao) query = query.eq('status_transacao', filtros.status_transacao);
-      if (filtros.macro_custo) query = query.eq('macro_custo', filtros.macro_custo);
-      if (filtros.centro_custo) query = query.eq('centro_custo', filtros.centro_custo);
-      if (filtros.subcentro) query = query.eq('subcentro', filtros.subcentro);
-
-      const { data, error } = await query
-        .order('data_pagamento', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false })
-        .range(from, from + batchSize - 1);
-
-      if (error) { console.error(error); break; }
-      if (!data || data.length === 0) break;
-      all.push(...(data as LancamentoV2[]));
-      if (data.length < batchSize) break;
-      from += batchSize;
+    try {
+      return await fetchAllLancamentos(filtros);
+    } catch (error) {
+      console.error(error);
+      return [];
     }
-    return all;
-  }, [clienteId]);
+  }, [fetchAllLancamentos]);
 
   const buildInsertRow = (form: LancamentoV2Form, userId: string) => {
     const anoMes = form.data_pagamento

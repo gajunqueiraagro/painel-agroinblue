@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -117,16 +116,18 @@ interface Props {
   filtroMesInicial?: number;
 }
 
+function getInitialPageSize() {
+  if (typeof window === 'undefined') return 30;
+  const width = window.innerWidth;
+  if (width < 768) return 12;
+  if (width < 1024) return 20;
+  return 30;
+}
+
 export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: Props) {
   const { fazendas, fazendaAtual } = useFazenda();
-  const isMobile = useIsMobile();
-  const pageSize = useMemo(() => {
-    if (typeof window === 'undefined') return 30;
-    const w = window.innerWidth;
-    if (w < 768) return 12;   // mobile
-    if (w < 1024) return 20;  // tablet
-    return 30;                // desktop
-  }, [isMobile]);
+  const [pageSize] = useState(getInitialPageSize);
+  const [currentPage, setCurrentPage] = useState(0);
   const hook = useFinanceiroV2(pageSize);
 
   const currentYear = new Date().getFullYear();
@@ -177,10 +178,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [editingLanc, setEditingLanc] = useState<LancamentoV2 | null>(null);
 
   // Sorting state
-  type SortField = 'data' | 'pgto' | 'valor' | 'produto' | 'fornecedor';
+   type SortField = 'default' | 'data' | 'pgto' | 'valor' | 'produto' | 'fornecedor';
   type SortDir = 'asc' | 'desc';
-  const [sortField, setSortField] = useState<SortField | null>(null);
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
+   const [sortField, setSortField] = useState<SortField>('default');
+   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   const fazOperacionais = useMemo(() => sortFazendas(fazendas.filter(f => f.id !== '__global__')), [fazendas]);
 
@@ -260,7 +261,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     hook.loadLancamentos(filtros, 0);
   }, [filtros]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handlePageChange = (p: number) => hook.loadLancamentos(filtros, p);
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [filtros, produtoFiltro, fornecedorFiltro, atividadeFiltro]);
+
+  const handlePageChange = (p: number) => setCurrentPage(p);
 
   const handleSave = async (form: any, id?: string) => {
     let ok: boolean;
@@ -281,6 +286,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
   const openNew = () => { setEditingLanc(null); setDialogOpen(true); };
   const openEdit = (l: LancamentoV2) => { setEditingLanc(l); setDialogOpen(true); };
+
+  const fornecedoresMap = useMemo(
+    () => new Map(hook.fornecedores.map(f => [f.id, f.nome])),
+    [hook.fornecedores],
+  );
 
   // Derive atividade from subcentro
   const getAtividade = (subcentro: string | null): string => {
@@ -306,37 +316,92 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     return items;
   }, [hook.lancamentos, produtoFiltro, fornecedorFiltro, atividadeFiltro]);
 
+  const compareDefaultOrder = useCallback((a: LancamentoV2, b: LancamentoV2) => {
+    const pagamentoA = a.data_pagamento || '9999-12-31';
+    const pagamentoB = b.data_pagamento || '9999-12-31';
+    const pagamentoCmp = pagamentoA.localeCompare(pagamentoB);
+    if (pagamentoCmp !== 0) return pagamentoCmp;
+
+    const fornecedorA = fornecedoresMap.get(a.favorecido_id || '') || '';
+    const fornecedorB = fornecedoresMap.get(b.favorecido_id || '') || '';
+    const fornecedorCmp = fornecedorA.localeCompare(fornecedorB, 'pt-BR');
+    if (fornecedorCmp !== 0) return fornecedorCmp;
+
+    const produtoCmp = (a.descricao || '').localeCompare(b.descricao || '', 'pt-BR');
+    if (produtoCmp !== 0) return produtoCmp;
+
+    const valorCmp = (b.valor * b.sinal) - (a.valor * a.sinal);
+    if (valorCmp !== 0) return valorCmp;
+
+    return a.id.localeCompare(b.id);
+  }, [fornecedoresMap]);
+
   // Sorted lancamentos
   const sortedLancamentos = useMemo(() => {
-    if (!sortField) return filteredLancamentos;
     const items = [...filteredLancamentos];
-    const dir = sortDir === 'asc' ? 1 : -1;
     items.sort((a, b) => {
-      switch (sortField) {
-        case 'data': return dir * (a.data_competencia.localeCompare(b.data_competencia));
-        case 'pgto': return dir * ((a.data_pagamento || '').localeCompare(b.data_pagamento || ''));
-        case 'valor': return dir * (a.valor * a.sinal - b.valor * b.sinal);
-        case 'produto': return dir * ((a.descricao || '').localeCompare(b.descricao || '', 'pt-BR'));
-        case 'fornecedor': {
-          const nA = hook.fornecedores.find(f => f.id === a.favorecido_id)?.nome || '';
-          const nB = hook.fornecedores.find(f => f.id === b.favorecido_id)?.nome || '';
-          return dir * nA.localeCompare(nB, 'pt-BR');
-        }
-        default: return 0;
+      if (sortField === 'default') {
+        return compareDefaultOrder(a, b);
       }
+
+      const dir = sortDir === 'asc' ? 1 : -1;
+      let primary = 0;
+
+      switch (sortField) {
+        case 'data':
+          primary = dir * a.data_competencia.localeCompare(b.data_competencia);
+          break;
+        case 'pgto':
+          primary = dir * ((a.data_pagamento || '').localeCompare(b.data_pagamento || ''));
+          break;
+        case 'valor':
+          primary = dir * ((a.valor * a.sinal) - (b.valor * b.sinal));
+          break;
+        case 'produto':
+          primary = dir * (a.descricao || '').localeCompare(b.descricao || '', 'pt-BR');
+          break;
+        case 'fornecedor': {
+          const nA = fornecedoresMap.get(a.favorecido_id || '') || '';
+          const nB = fornecedoresMap.get(b.favorecido_id || '') || '';
+          primary = dir * nA.localeCompare(nB, 'pt-BR');
+          break;
+        }
+        default:
+          primary = 0;
+      }
+
+      if (primary !== 0) return primary;
+      return compareDefaultOrder(a, b);
     });
     return items;
-  }, [filteredLancamentos, sortField, sortDir, hook.fornecedores]);
+  }, [filteredLancamentos, sortField, sortDir, compareDefaultOrder, fornecedoresMap]);
+
+  const totalLancamentosFiltrados = sortedLancamentos.length;
+  const totalPages = Math.max(1, Math.ceil(totalLancamentosFiltrados / pageSize));
+
+  useEffect(() => {
+    if (currentPage > totalPages - 1) {
+      setCurrentPage(Math.max(0, totalPages - 1));
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedLancamentos = useMemo(() => {
+    const start = currentPage * pageSize;
+    return sortedLancamentos.slice(start, start + pageSize);
+  }, [sortedLancamentos, currentPage, pageSize]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     } else {
       setSortField(field);
-      setSortDir(field === 'valor' || field === 'data' || field === 'pgto' ? 'desc' : 'asc');
+      setSortDir(field === 'valor' ? 'desc' : 'asc');
     }
   };
-  const sortIcon = (field: SortField) => sortField === field ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+  const sortIcon = (field: Exclude<SortField, 'default'>) => {
+    if (sortField === 'default') return field === 'pgto' ? ' ↑' : '';
+    return sortField === field ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+  };
 
   const totalEntradas = sortedLancamentos.filter(l => l.sinal > 0).reduce((s, l) => s + l.valor, 0);
   const totalSaidas = sortedLancamentos.filter(l => l.sinal < 0).reduce((s, l) => s + l.valor, 0);
@@ -369,6 +434,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     setFornecedorFiltro('__all__');
     setAtividadeFiltro('__all__');
     setMacroLocked(false);
+    setSortField('default');
+    setSortDir('asc');
+    setCurrentPage(0);
   };
 
   // Determine which fazenda_id to pass to loadLancamentos
@@ -546,19 +614,18 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div className="flex gap-2 text-[10px]">
               <span className="text-success font-bold">Ent: R$ {fmtBRL(totalEntradas)}</span>
               <span className="text-destructive font-bold">Saí: R$ {fmtBRL(totalSaidas)}</span>
-              <span className="text-muted-foreground">{hook.total} lanç.</span>
+              <span className="text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
             </div>
             <div className="flex gap-1">
               <Button size="sm" variant="ghost" onClick={handleLimparFiltros} className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground">
                 <FilterX className="h-3 w-3" /> Limpar
               </Button>
               <FinanceiroV2ExportMenu
-                filtros={filtros}
-                loadAllForExport={hook.loadAllForExport}
+                lancamentos={sortedLancamentos}
                 fornecedores={hook.fornecedores}
                 ano={ano}
                 fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
-                totalCount={hook.total}
+                totalCount={totalLancamentosFiltrados}
               />
               <Button
                 size="sm"
@@ -616,15 +683,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 </tr>
               </thead>
               <tbody className="[&_tr:last-child]:border-0">
-                {filteredLancamentos.length === 0 ? (
+                {totalLancamentosFiltrados === 0 ? (
                   <tr className="border-b">
                     <td colSpan={8} className="text-center text-muted-foreground py-4 text-[10px]">
                       Nenhum lançamento encontrado.
                     </td>
                   </tr>
                 ) : (
-                  sortedLancamentos.map(l => {
-                    const fornNome = hook.fornecedores.find(f => f.id === l.favorecido_id)?.nome;
+                  paginatedLancamentos.map(l => {
+                    const fornNome = fornecedoresMap.get(l.favorecido_id || '');
                     const stKey = (l.status_transacao || '').toLowerCase();
                     const stLabel = STATUS_LABELS[stKey] || l.status_transacao || '-';
                     const stColor = STATUS_TEXT_COLORS[stKey] || 'text-muted-foreground';
@@ -663,17 +730,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           {/* Pagination */}
           <div className="flex items-center justify-between px-1 py-1">
             <span className="text-[10px] text-muted-foreground">
-              {hook.total} lançamento{hook.total !== 1 ? 's' : ''} encontrado{hook.total !== 1 ? 's' : ''}
+              {totalLancamentosFiltrados} lançamento{totalLancamentosFiltrados !== 1 ? 's' : ''} encontrado{totalLancamentosFiltrados !== 1 ? 's' : ''}
             </span>
-            {hook.totalPages > 1 && (
+            {totalPages > 1 && (
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" disabled={hook.page === 0} onClick={() => handlePageChange(hook.page - 1)}>
+                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" disabled={currentPage === 0} onClick={() => handlePageChange(currentPage - 1)}>
                   <ChevronLeft className="h-3 w-3 mr-0.5" /> Anterior
                 </Button>
                 <span className="text-[10px] text-muted-foreground">
-                  Página {hook.page + 1} de {hook.totalPages}
+                  Página {currentPage + 1} de {totalPages}
                 </span>
-                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" disabled={hook.page >= hook.totalPages - 1} onClick={() => handlePageChange(hook.page + 1)}>
+                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" disabled={currentPage >= totalPages - 1} onClick={() => handlePageChange(currentPage + 1)}>
                   Próxima <ChevronRight className="h-3 w-3 ml-0.5" />
                 </Button>
               </div>
