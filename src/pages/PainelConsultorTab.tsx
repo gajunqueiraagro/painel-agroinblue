@@ -158,8 +158,7 @@ function buildZooRows(
   const cabFinRow = mkRow('Base Mensal', 'Cabeças finais', m => saldoFimMes(m));
 
   const pesoFinKgRow = mkRow('Base Mensal', 'Peso final kg', m => {
-    // Estimate: cab final * avg weight
-    return cabFinRow.valores[m - 1] * 450;
+    return pesoFinKgRow_valores[m - 1] ?? 0;
   }, 'kg');
 
   const pesoFinArrobasRow = mkRow('Base Mensal', 'Peso final @', m => pesoFinKgRow.valores[m - 1] / 30, 'dec1');
