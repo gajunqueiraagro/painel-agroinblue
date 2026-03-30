@@ -206,11 +206,31 @@ function buildZooRows(
     return cabMediaMesRow.valores[m - 1] / areaProdutiva;
   }, 'dec2');
 
-  const uaRow = mkRow('Indicadores', 'Unidade Animal — Rebanho médio do mês\n(UA)', m => calcUA(cabMediaMesRow.valores[m - 1], 450), 'dec1');
+  const lotCabHaAcumRow = mkRow('Indicadores', 'Lotação — Rebanho médio acumulado\n(cab/ha)', m => {
+    if (areaProdutiva <= 0) return 0;
+    let soma = 0; let n = 0;
+    for (let i = 1; i <= m; i++) { const v = lotCabHaRow.valores[i - 1]; if (v > 0) { soma += v; n++; } }
+    return n > 0 ? soma / n : 0;
+  }, 'dec2');
+
+  const uaRow = mkRow('Indicadores', 'UA — Rebanho médio do mês\n(UA)', m => calcUA(cabMediaMesRow.valores[m - 1], 450), 'dec1');
+
+  const uaAcumRow = mkRow('Indicadores', 'UA — Rebanho médio no período\n(UA)', m => {
+    let soma = 0; let n = 0;
+    for (let i = 1; i <= m; i++) { const v = uaRow.valores[i - 1]; if (v > 0) { soma += v; n++; } }
+    return n > 0 ? soma / n : 0;
+  }, 'dec1');
 
   const lotUaHaRow = mkRow('Indicadores', 'Lotação — Rebanho médio do mês\n(UA/ha)', m => {
     if (areaProdutiva <= 0) return 0;
     return uaRow.valores[m - 1] / areaProdutiva;
+  }, 'dec2');
+
+  const lotUaHaAcumRow = mkRow('Indicadores', 'Lotação — Rebanho médio no período\n(UA/ha)', m => {
+    if (areaProdutiva <= 0) return 0;
+    let soma = 0; let n = 0;
+    for (let i = 1; i <= m; i++) { const v = lotUaHaRow.valores[i - 1]; if (v > 0) { soma += v; n++; } }
+    return n > 0 ? soma / n : 0;
   }, 'dec2');
 
   const lotKgHaRow = mkRow('Indicadores', 'Lotação — Peso médio do mês\n(kg/ha)', m => {
@@ -218,11 +238,38 @@ function buildZooRows(
     return pesoFinKgRow.valores[m - 1] / areaProdutiva;
   }, 'dec1');
 
-  const arrobasProdRow = mkRow('Indicadores', 'Produção de arrobas — Saídas do período\n(@)', m => {
+  const lotKgHaAcumRow = mkRow('Indicadores', 'Lotação — Peso médio no período\n(kg/ha)', m => {
+    if (areaProdutiva <= 0) return 0;
+    let soma = 0; let n = 0;
+    for (let i = 1; i <= m; i++) { const v = lotKgHaRow.valores[i - 1]; if (v > 0) { soma += v; n++; } }
+    return n > 0 ? soma / n : 0;
+  }, 'dec1');
+
+  const arrobasProdRow = mkRow('Indicadores', 'Produção de arrobas — no período\n(@)', m => {
     return saidasArrobasRow.valores[m - 1];
   }, 'dec1');
 
-  rows.push(lotCabHaRow, uaRow, lotUaHaRow, lotKgHaRow, arrobasProdRow);
+  // ─ GMD ─
+  const diasNoMes = (m: number): number => new Date(ano as unknown as number, m, 0).getDate();
+
+  const gmdMesRow = mkRow('Indicadores', 'GMD — Variação real do rebanho no mês\n(kg/cab/dia)', m => {
+    const pesoFin = pesoFinKgRow.valores[m - 1];
+    const pesoIni = pesoIniRow.valores[m - 1];
+    const pesoEnt = entradasKgRow.valores[m - 1];
+    const pesoSai = saidasKgRow.valores[m - 1];
+    const rebMedio = cabMediaMesRow.valores[m - 1];
+    const dias = diasNoMes(m);
+    if (rebMedio <= 0 || dias <= 0) return 0;
+    return (pesoFin - pesoIni - pesoEnt + pesoSai) / rebMedio / dias;
+  }, 'dec2');
+
+  const gmdPeriodoRow = mkRow('Indicadores', 'GMD — Variação real do rebanho no período\n(kg/cab/dia)', m => {
+    let soma = 0; let n = 0;
+    for (let i = 1; i <= m; i++) { const v = gmdMesRow.valores[i - 1]; if (v !== 0 || cabMediaMesRow.valores[i - 1] > 0) { soma += v; n++; } }
+    return n > 0 ? soma / n : 0;
+  }, 'dec2');
+
+  rows.push(lotCabHaRow, lotCabHaAcumRow, uaRow, uaAcumRow, lotUaHaRow, lotUaHaAcumRow, lotKgHaRow, lotKgHaAcumRow, arrobasProdRow, gmdMesRow, gmdPeriodoRow);
 
   // ─ MOVIMENTAÇÕES ─
   const tiposMov: { tipo: string; labelQtd: string; labelKg: string; labelArroba: string; labelValor: string }[] = [
