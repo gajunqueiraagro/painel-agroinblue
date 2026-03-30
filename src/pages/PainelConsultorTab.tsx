@@ -3,6 +3,7 @@
  * Leitura rápida, foco em conferência e fechamento.
  */
 import { useState, useMemo, useCallback } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
