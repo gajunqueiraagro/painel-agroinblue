@@ -4,7 +4,8 @@
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Download, Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, Loader2, Trash2, ShieldCheck } from 'lucide-react';
+import { Download, Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, Loader2, Ban, ShieldCheck } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { downloadModeloExcel } from '@/lib/financeiro/excelTemplate';
 import {
@@ -51,6 +52,8 @@ interface PreviewState {
 }
 
 export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onConfirmar, onExcluir }: Props) {
+  const { perfil } = usePermissions();
+  const podeCancelar = ['admin_agroinblue', 'gestor_cliente', 'financeiro'].includes(perfil || '');
   const fileRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [importando, setImportando] = useState(false);
@@ -390,14 +393,17 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
                         <span className="text-muted-foreground capitalize">{imp.status}</span>
                       </div>
                     </div>
-                    <Button
-                      variant="ghost" size="icon"
-                      className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => setConfirmExcluir(imp)}
-                      disabled={excluindo === imp.id}
-                    >
-                      {excluindo === imp.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                    </Button>
+                    {imp.status !== 'cancelada' && podeCancelar && (
+                      <Button
+                        variant="ghost" size="icon"
+                        className="h-7 w-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                        onClick={() => setConfirmExcluir(imp)}
+                        disabled={excluindo === imp.id}
+                        title="Cancelar importação"
+                      >
+                        {excluindo === imp.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -412,10 +418,9 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
           <AlertDialogHeader>
             <AlertDialogTitle>Cancelar importação?</AlertDialogTitle>
             <AlertDialogDescription>
-              Os <span className="font-bold">{confirmExcluir?.total_validas} registros</span> vinculados
-              ao arquivo <span className="font-bold">{confirmExcluir?.nome_arquivo}</span> serão marcados como inativos.
-              <br /><br />Nenhum dado será apagado fisicamente. O histórico será mantido para rastreabilidade.
-              <br /><br />Lançamentos conciliados ou editados manualmente não serão afetados.
+              Você está prestes a inativar todos os <span className="font-bold">{confirmExcluir?.total_validas} lançamentos</span> do arquivo <span className="font-bold">{confirmExcluir?.nome_arquivo}</span>.
+              <br /><br />Os dados não serão apagados, mas deixarão de aparecer nas análises.
+              <br /><br />Lançamentos conciliados ou editados manualmente bloqueiam o cancelamento.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
