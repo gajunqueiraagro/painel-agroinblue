@@ -393,7 +393,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
                         <span className="text-muted-foreground capitalize">{imp.status}</span>
                       </div>
                     </div>
-                    {imp.status !== 'cancelada' && (
+                    {imp.status !== 'cancelada' && podeCancelar && (
                       <Button
                         variant="ghost" size="icon"
                         className="h-7 w-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
