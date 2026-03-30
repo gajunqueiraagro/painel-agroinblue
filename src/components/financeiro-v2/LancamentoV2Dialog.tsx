@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useCliente } from '@/contexts/ClienteContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -100,6 +102,7 @@ export function LancamentoV2Dialog({
   open, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
   fornecedores, defaultFazendaId, onCriarFornecedor,
 }: Props) {
+  const { clienteAtual } = useCliente();
   const isEdit = !!lancamento;
   const [saving, setSaving] = useState(false);
   const [fornecedorDialogOpen, setFornecedorDialogOpen] = useState(false);
@@ -135,6 +138,13 @@ export function LancamentoV2Dialog({
   // Payment method fields
   const [formaPgto, setFormaPgto] = useState('');
   const [dadosPagamento, setDadosPagamento] = useState('');
+
+  // Product suggestions state
+  const [produtoSugestoes, setProdutoSugestoes] = useState<string[]>([]);
+  const [produtoOpen, setProdutoOpen] = useState(false);
+  const [produtoHighlight, setProdutoHighlight] = useState(0);
+  const produtoItemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const produtoWrapperRef = useRef<HTMLDivElement>(null);
 
   // Subcentro search
   const [subcentroOpen, setSubcentroOpen] = useState(false);
@@ -209,6 +219,72 @@ export function LancamentoV2Dialog({
     }
     setSubcentroSearch('');
   }, [lancamento, defaultFazendaId]);
+
+  // Fetch distinct product names for suggestions
+  useEffect(() => {
+    if (!open || !clienteAtual?.id) return;
+    (async () => {
+      const { data } = await supabase
+        .from('financeiro_lancamentos_v2')
+        .select('descricao')
+        .eq('cliente_id', clienteAtual.id)
+        .not('descricao', 'is', null)
+        .order('descricao');
+      if (data) {
+        const unique = [...new Set(data.map(r => r.descricao).filter(Boolean) as string[])];
+        setProdutoSugestoes(unique);
+      }
+    })();
+  }, [open, clienteAtual?.id]);
+
+  // Filter product suggestions by current input
+  const filteredProdutos = useMemo(() => {
+    if (!descricao.trim() || descricao.trim().length < 2) return [];
+    const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const term = norm(descricao);
+    return produtoSugestoes
+      .filter(p => norm(p).includes(term) && p !== descricao)
+      .slice(0, 8);
+  }, [descricao, produtoSugestoes]);
+
+  // Close product suggestions on click outside
+  useEffect(() => {
+    if (!produtoOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (produtoWrapperRef.current && !produtoWrapperRef.current.contains(e.target as Node)) {
+        setProdutoOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [produtoOpen]);
+
+  const handleProdutoKeyDown = (e: React.KeyboardEvent) => {
+    if (!produtoOpen || filteredProdutos.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setProdutoHighlight(prev => {
+        const next = Math.min(prev + 1, filteredProdutos.length - 1);
+        produtoItemRefs.current[next]?.scrollIntoView({ block: 'nearest' });
+        return next;
+      });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setProdutoHighlight(prev => {
+        const next = Math.max(prev - 1, 0);
+        produtoItemRefs.current[next]?.scrollIntoView({ block: 'nearest' });
+        return next;
+      });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (filteredProdutos[produtoHighlight]) {
+        setDescricao(filteredProdutos[produtoHighlight]);
+        setProdutoOpen(false);
+      }
+    } else if (e.key === 'Escape') {
+      setProdutoOpen(false);
+    }
+  };
 
   // Regenerate parcela rows when key inputs change
   const valorNum = parseBRL(valorDisplay);
@@ -511,9 +587,43 @@ export function LancamentoV2Dialog({
             <section>
               <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Identificação</p>
               <div className="space-y-3">
-                <div>
+                <div ref={produtoWrapperRef} className="relative">
                   <Label className="text-xs">Produto *</Label>
-                  <Input value={descricao} onChange={e => setDescricao(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" placeholder="Descrição do produto" />
+                  <Input
+                    value={descricao}
+                    onChange={e => {
+                      setDescricao(e.target.value);
+                      setProdutoOpen(true);
+                      setProdutoHighlight(0);
+                    }}
+                    onFocus={() => { if (descricao.trim().length >= 2) setProdutoOpen(true); }}
+                    onKeyDown={handleProdutoKeyDown}
+                    className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"
+                    placeholder="Descrição do produto"
+                    autoComplete="off"
+                  />
+                  {produtoOpen && filteredProdutos.length > 0 && (
+                    <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-md border border-border bg-popover shadow-md max-h-48 overflow-y-auto">
+                      {filteredProdutos.map((p, i) => (
+                        <div
+                          key={p}
+                          ref={el => { produtoItemRefs.current[i] = el; }}
+                          className={cn(
+                            'px-3 py-1.5 text-sm cursor-pointer',
+                            i === produtoHighlight ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+                          )}
+                          onMouseDown={e => {
+                            e.preventDefault();
+                            setDescricao(p);
+                            setProdutoOpen(false);
+                          }}
+                          onMouseEnter={() => setProdutoHighlight(i)}
+                        >
+                          {p}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label className="text-xs">Fornecedor *</Label>
