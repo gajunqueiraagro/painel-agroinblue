@@ -613,6 +613,23 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
           </div>
           <ChevronRight className="h-4 w-4 text-primary flex-shrink-0" />
         </button>
+
+        {/* Painel do Consultor */}
+        <button
+          onClick={() => onTabChange('painel_consultor' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
+          className="w-full rounded-lg border border-primary/30 bg-primary/5 p-4 flex items-center gap-3 transition-colors hover:bg-primary/10 active:bg-primary/15"
+        >
+          <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center flex-shrink-0">
+            <Landmark className="h-5 w-5 text-primary" />
+          </div>
+          <div className="flex-1 text-left">
+            <span className="text-sm font-bold text-foreground">Painel do Consultor</span>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              Tabela analítica mensal: conferência, conciliação e fechamento
+            </p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-primary flex-shrink-0" />
+        </button>
       </div>
 
       {/* ── Pendências ── */}
