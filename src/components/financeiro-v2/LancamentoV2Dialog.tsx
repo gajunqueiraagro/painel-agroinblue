@@ -107,7 +107,9 @@ export function LancamentoV2Dialog({
   // Fornecedor search state
   const [fornecedorOpen, setFornecedorOpen] = useState(false);
   const [fornecedorSearch, setFornecedorSearch] = useState('');
+  const [fornecedorHighlight, setFornecedorHighlight] = useState(0);
   const fornecedorInputRef = useRef<HTMLInputElement>(null);
+  const fornecedorItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   // Installment state
   const [formaPagamentoParc, setFormaPagamentoParc] = useState<'avista' | 'parcelada'>('avista');
