@@ -313,7 +313,7 @@ export function LancamentoV2Dialog({
               </Select>
             </div>
 
-            {/* BLOCO 1 — Datas */}
+            {/* 1. DATAS */}
             <div>
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Datas</p>
               {/* Status Atual — colored text, centered */}
@@ -344,108 +344,123 @@ export function LancamentoV2Dialog({
               </div>
             </div>
 
-            {/* BLOCO 2 — Identificação */}
+            {/* 2. PRODUTO */}
             <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Identificação</p>
-              <div className="space-y-2">
-                <div>
-                  <Label className="text-xs">Produto *</Label>
-                  <Input value={descricao} onChange={e => setDescricao(e.target.value)} className="h-9" placeholder="Descrição do produto" />
-                </div>
-                <div>
-                  <Label className="text-xs">Fornecedor *</Label>
-                  <div className="flex gap-1.5">
-                    <Popover open={fornecedorOpen} onOpenChange={v => { setFornecedorOpen(v); if (!v) setFornecedorSearch(''); }}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          aria-expanded={fornecedorOpen}
-                          className="flex-1 h-9 justify-between font-normal text-sm"
-                        >
-                          <span className="truncate">{selectedFornecedorNome || 'Selecione o fornecedor...'}</span>
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                        <div className="flex items-center border-b px-3 py-2">
-                          <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                          <input
-                            ref={fornecedorInputRef}
-                            className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                            placeholder="Buscar fornecedor..."
-                            value={fornecedorSearch}
-                            onChange={e => setFornecedorSearch(e.target.value)}
-                            autoFocus
-                          />
-                        </div>
-                        <div className="max-h-48 overflow-y-auto p-1">
-                          {filteredFornecedores.length === 0 && (
-                            <div className="p-2 text-center space-y-1">
-                              <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground">
-                                <AlertCircle className="h-3.5 w-3.5" />
-                                <span>Fornecedor não encontrado na base</span>
-                              </div>
-                              <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => { setFornecedorOpen(false); setFornecedorDialogOpen(true); }}>
-                                <Plus className="h-3 w-3 mr-1" />Cadastrar novo
-                              </Button>
-                            </div>
-                          )}
-                          {filteredFornecedores.map(f => (
-                            <button
-                              key={f.id}
-                              className={cn(
-                                "relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
-                                favorecidoId === f.id && "bg-accent"
-                              )}
-                              onClick={() => { setFavorecidoId(f.id); setFornecedorOpen(false); setFornecedorSearch(''); }}
-                            >
-                              <Check className={cn("mr-2 h-4 w-4", favorecidoId === f.id ? "opacity-100" : "opacity-0")} />
-                              <span className="truncate">{f.nome}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                    <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setFornecedorDialogOpen(true)} title="Novo fornecedor">
-                      <Plus className="h-4 w-4" />
+              <Label className="text-xs">Produto *</Label>
+              <Input value={descricao} onChange={e => setDescricao(e.target.value)} className="h-9" placeholder="Descrição do produto" />
+            </div>
+
+            {/* 3. FORNECEDOR */}
+            <div>
+              <Label className="text-xs">Fornecedor *</Label>
+              <div className="flex gap-1.5">
+                <Popover open={fornecedorOpen} onOpenChange={v => { setFornecedorOpen(v); if (!v) setFornecedorSearch(''); }}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={fornecedorOpen}
+                      className="flex-1 h-9 justify-between font-normal text-sm"
+                    >
+                      <span className="truncate">{selectedFornecedorNome || 'Selecione o fornecedor...'}</span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
-                  </div>
-                </div>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <div className="flex items-center border-b px-3 py-2">
+                      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                      <input
+                        ref={fornecedorInputRef}
+                        className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                        placeholder="Buscar fornecedor..."
+                        value={fornecedorSearch}
+                        onChange={e => setFornecedorSearch(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                    <div className="max-h-48 overflow-y-auto p-1">
+                      {filteredFornecedores.length === 0 && (
+                        <div className="p-2 text-center space-y-1">
+                          <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground">
+                            <AlertCircle className="h-3.5 w-3.5" />
+                            <span>Fornecedor não encontrado na base</span>
+                          </div>
+                          <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => { setFornecedorOpen(false); setFornecedorDialogOpen(true); }}>
+                            <Plus className="h-3 w-3 mr-1" />Cadastrar novo
+                          </Button>
+                        </div>
+                      )}
+                      {filteredFornecedores.map(f => (
+                        <button
+                          key={f.id}
+                          className={cn(
+                            "relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                            favorecidoId === f.id && "bg-accent"
+                          )}
+                          onClick={() => { setFavorecidoId(f.id); setFornecedorOpen(false); setFornecedorSearch(''); }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", favorecidoId === f.id ? "opacity-100" : "opacity-0")} />
+                          <span className="truncate">{f.nome}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setFornecedorDialogOpen(true)} title="Novo fornecedor">
+                  <Plus className="h-4 w-4" />
+                </Button>
               </div>
             </div>
 
-            {/* BLOCO 3 — Financeiro básico */}
+            {/* 4. VALOR + STATUS */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Valor (R$) *</Label>
+                <Input
+                  value={valorDisplay}
+                  onChange={e => setValorDisplay(e.target.value)}
+                  onBlur={handleValorBlur}
+                  onFocus={e => e.target.select()}
+                  className="h-9"
+                  placeholder="0,00"
+                  inputMode="decimal"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Status *</Label>
+                <Select value={statusTransacao} onValueChange={setStatusTransacao}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map(s => (
+                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* 5. DOCUMENTO */}
             <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Financeiro</p>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Documento</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs">Valor (R$) *</Label>
-                  <Input
-                    value={valorDisplay}
-                    onChange={e => setValorDisplay(e.target.value)}
-                    onBlur={handleValorBlur}
-                    onFocus={e => e.target.select()}
-                    className="h-9"
-                    placeholder="0,00"
-                    inputMode="decimal"
-                  />
+                  <Label className="text-xs">Documento</Label>
+                  <Input value={observacao} onChange={e => setObservacao(e.target.value)} className="h-9" placeholder="Nº documento" />
                 </div>
                 <div>
-                  <Label className="text-xs">Status *</Label>
-                  <Select value={statusTransacao} onValueChange={setStatusTransacao}>
-                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {STATUS_OPTIONS.map(s => (
-                        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label className="text-xs">Nota Fiscal</Label>
+                  <Input
+                    value={notaFiscalDisplay}
+                    onChange={e => handleNotaFiscalChange(e.target.value)}
+                    className="h-9 font-mono"
+                    placeholder="000.000.000"
+                    maxLength={11}
+                  />
                 </div>
               </div>
             </div>
 
-            {/* BLOCO 4 — Conta bancária */}
+            {/* 6. CONTA BANCÁRIA */}
             <div>
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Conta Bancária</p>
               <div className="space-y-2">
@@ -460,7 +475,6 @@ export function LancamentoV2Dialog({
                     </SelectContent>
                   </Select>
                 </div>
-
                 {(!isEntrada || isTransferencia) && (
                   <div>
                     <Label className="text-xs">Conta de Origem *</Label>
@@ -475,7 +489,6 @@ export function LancamentoV2Dialog({
                     </Select>
                   </div>
                 )}
-
                 {(isEntrada || isTransferencia) && (
                   <div>
                     <Label className="text-xs">Conta de Destino *</Label>
@@ -490,11 +503,10 @@ export function LancamentoV2Dialog({
                     </Select>
                   </div>
                 )}
-
               </div>
             </div>
 
-            {/* BLOCO 5 — Classificação */}
+            {/* 7. CLASSIFICAÇÃO */}
             <div>
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Classificação</p>
               <div className="space-y-2">
@@ -558,22 +570,7 @@ export function LancamentoV2Dialog({
               </div>
             </div>
 
-            {/* BLOCO 6 — Documento */}
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Documento</p>
-              <div>
-                <Label className="text-xs">Nota Fiscal</Label>
-                <Input
-                  value={notaFiscalDisplay}
-                  onChange={e => handleNotaFiscalChange(e.target.value)}
-                  className="h-9 font-mono"
-                  placeholder="000.000.000"
-                  maxLength={11}
-                />
-              </div>
-            </div>
-
-            {/* BLOCO 7 — Complemento */}
+            {/* 8. COMPLEMENTO */}
             <div>
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Complemento</p>
               <div>
