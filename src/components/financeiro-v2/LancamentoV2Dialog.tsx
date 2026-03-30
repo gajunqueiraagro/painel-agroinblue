@@ -699,7 +699,7 @@ export function LancamentoV2Dialog({
                         </div>
                       </PopoverContent>
                     </Popover>
-                    <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setFornecedorDialogOpen(true)} title="Novo fornecedor">
+                    <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setFornecedorDialogOpen(true)} title="Novo fornecedor" tabIndex={-1}>
                       <Plus className="h-4 w-4" />
                     </Button>
                   </div>
