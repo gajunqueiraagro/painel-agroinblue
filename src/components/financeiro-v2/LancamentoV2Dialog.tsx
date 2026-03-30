@@ -555,7 +555,42 @@ export function LancamentoV2Dialog({
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs">Dados para Pagamento</Label>
+                  <div className="flex items-center justify-between mb-1">
+                    <Label className="text-xs">Dados para Pagamento</Label>
+                    <div className="flex gap-1">
+                      {formaPgto === 'PIX' && dadosPagamento && (() => {
+                        const chaveMatch = dadosPagamento.match(/Chave:\s*(.+)/i);
+                        return chaveMatch ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-[10px] gap-1 text-primary hover:text-primary"
+                            onClick={() => {
+                              navigator.clipboard.writeText(chaveMatch[1].trim());
+                              toast.success('Chave PIX copiada');
+                            }}
+                          >
+                            <KeyRound className="h-3 w-3" /> Copiar PIX
+                          </Button>
+                        ) : null;
+                      })()}
+                      {dadosPagamento && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[10px] gap-1 text-muted-foreground hover:text-foreground"
+                          onClick={() => {
+                            navigator.clipboard.writeText(dadosPagamento);
+                            toast.success('Dados copiados');
+                          }}
+                        >
+                          <Copy className="h-3 w-3" /> Copiar dados
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                   <Textarea
                     value={dadosPagamento}
                     onChange={e => setDadosPagamento(e.target.value)}
