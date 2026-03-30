@@ -201,24 +201,24 @@ function buildZooRows(
   rows.push(entAcumRow, saiAcumRow, cabMediaMesRow, cabMediaPeriodoRow);
 
   // ─ INDICADORES ─
-  const lotCabHaRow = mkRow('Indicadores', 'Lotação\n(cab/ha)', m => {
+  const lotCabHaRow = mkRow('Indicadores', 'Lotação — Rebanho médio do mês\n(cab/ha)', m => {
     if (areaProdutiva <= 0) return 0;
-    return cabFinRow.valores[m - 1] / areaProdutiva;
+    return cabMediaMesRow.valores[m - 1] / areaProdutiva;
   }, 'dec2');
 
-  const uaRow = mkRow('Indicadores', 'Unidade Animal\n(UA)', m => calcUA(cabFinRow.valores[m - 1], 450), 'dec1');
+  const uaRow = mkRow('Indicadores', 'Unidade Animal — Rebanho médio do mês\n(UA)', m => calcUA(cabMediaMesRow.valores[m - 1], 450), 'dec1');
 
-  const lotUaHaRow = mkRow('Indicadores', 'Lotação\n(UA/ha)', m => {
+  const lotUaHaRow = mkRow('Indicadores', 'Lotação — Rebanho médio do mês\n(UA/ha)', m => {
     if (areaProdutiva <= 0) return 0;
     return uaRow.valores[m - 1] / areaProdutiva;
   }, 'dec2');
 
-  const lotKgHaRow = mkRow('Indicadores', 'Lotação\n(kg/ha)', m => {
+  const lotKgHaRow = mkRow('Indicadores', 'Lotação — Peso médio do mês\n(kg/ha)', m => {
     if (areaProdutiva <= 0) return 0;
-    return (cabFinRow.valores[m - 1] * 450) / areaProdutiva;
+    return pesoFinKgRow.valores[m - 1] / areaProdutiva;
   }, 'dec1');
 
-  const arrobasProdRow = mkRow('Indicadores', 'Arrobas produzidas no período\n(@)', m => {
+  const arrobasProdRow = mkRow('Indicadores', 'Produção de arrobas — Saídas do período\n(@)', m => {
     return saidasArrobasRow.valores[m - 1];
   }, 'dec1');
 
