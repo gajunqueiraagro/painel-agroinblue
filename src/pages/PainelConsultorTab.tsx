@@ -532,9 +532,15 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
     [lancPec, saldosIniciais, anoNum, ateMes, areaProdutiva, pesosPorMes],
   );
 
+  // Extract arrobas acumuladas from zooRows for financial indicators
+  const arrobasProdAcum = useMemo(() => {
+    const prodRow = zooRows.find(r => r.indicador.startsWith('Produção de arrobas — no período'));
+    return prodRow ? prodRow.valores : undefined;
+  }, [zooRows]);
+
   const finRows = useMemo(
-    () => buildFinRows(lancFin, anoNum, ateMes),
-    [lancFin, anoNum, ateMes],
+    () => buildFinRows(lancFin, anoNum, ateMes, arrobasProdAcum),
+    [lancFin, anoNum, ateMes, arrobasProdAcum],
   );
 
   const fazendaNome = isGlobal ? 'Global' : (fazendaAtual?.nome || 'Fazenda');
