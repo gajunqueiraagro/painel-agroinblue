@@ -18,6 +18,7 @@ import { FinanceiroCaixaTab } from './FinanceiroCaixaTab';
 import { AnaliseEconomicaTab } from './AnaliseEconomicaTab';
 import { AcessosTab } from './AcessosTab';
 import { AnaliseTab } from './AnaliseTab';
+import { OperacaoHubTab } from './OperacaoHubTab';
 import { AnaliseEntradasTab } from './AnaliseEntradasTab';
 import { AnaliseSaidasTab } from './AnaliseSaidasTab';
 import { DesfrunteTab } from './DesfrunteTab';
@@ -74,6 +75,7 @@ const TITLES: Record<TabId, string> = {
   fluxo_anual: 'Evolução Rebanho',
   acessos: 'Acessos',
   analise: 'Operação',
+  operacao_hub: 'Operação',
   analise_entradas: 'Análise de Entradas',
   analise_saidas: 'Análise de Saídas',
   analise_economica: 'Econômico',
@@ -226,7 +228,8 @@ const Index = () => {
 
   const subScreenBackMap: Partial<Record<TabId, () => void>> = {
     // Resumo sub-screens
-    analise: goToResumo,
+    operacao_hub: goToResumo,
+    analise: () => setActiveTab('operacao_hub'),
     analise_entradas: () => setActiveTab('analise'),
     analise_saidas: () => setActiveTab('analise'),
     desfrute: () => setActiveTab('analise'),
@@ -298,6 +301,9 @@ const Index = () => {
           onFiltroChange={handleFiltroChange}
           onSetSaldo={canEditZoo ? setSaldoInicial : undefined}
         />
+      )}
+      {activeTab === 'operacao_hub' && (
+        <OperacaoHubTab onTabChange={handleTabChange} onBack={() => setActiveTab('resumo')} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
       )}
 
       {/* Hubs */}
