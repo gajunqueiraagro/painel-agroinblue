@@ -23,7 +23,6 @@ export function triggerXlsxDownload(payload: XlsxDownloadPayload) {
   const form = document.createElement('form');
   form.method = 'POST';
   form.action = EXPORT_XLSX_URL;
-  form.target = '_top';
   form.style.display = 'none';
 
   const input = document.createElement('input');

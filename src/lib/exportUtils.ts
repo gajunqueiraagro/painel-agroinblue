@@ -304,13 +304,3 @@ export function exportToPDF(lancamentos: Lancamento[], saldosIniciais: SaldoInic
   doc.save(`rebanho_${ano}.pdf`);
 }
 
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
