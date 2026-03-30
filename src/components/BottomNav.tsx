@@ -13,7 +13,7 @@ const allTabs: { id: TabId; label: string; icon: React.ComponentType<{ className
   { id: 'resumo', label: 'Resumo', icon: LayoutDashboard },
   { id: 'lancar_zoo_hub', label: 'Lanç. Zoo.', icon: PenSquare },
   { id: 'financeiro_v2_hub', label: 'Lanç. Fin.', icon: DollarSign },
-  { id: 'visao_zoo_hub', label: 'Zootécnico', icon: BarChart3 },
+  { id: 'movimentacao', label: 'Zootécnico', icon: BarChart3 },
   { id: 'fin_caixa', label: 'Financeiro', icon: Wallet },
   { id: 'cadastros', label: 'Cadastro', icon: Settings },
 ];
