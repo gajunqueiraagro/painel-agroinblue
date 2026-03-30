@@ -73,7 +73,7 @@ const TITLES: Record<TabId, string> = {
   evolucao_categoria: 'Evolução por Categoria',
   fluxo_anual: 'Evolução Rebanho',
   acessos: 'Acessos',
-  analise: 'Análise Gráfica',
+  analise: 'Operação',
   analise_entradas: 'Análise de Entradas',
   analise_saidas: 'Análise de Saídas',
   analise_economica: 'Econômico',
