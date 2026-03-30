@@ -388,6 +388,8 @@ export function LancamentoV2Dialog({
           observacao,
           nota_fiscal: notaFiscal || null,
           favorecido_id: favorecidoId && favorecidoId !== '__none_forn__' ? favorecidoId : null,
+          forma_pagamento: formaPgto || null,
+          dados_pagamento: dadosPagamento || null,
         };
 
         const ok = await onSave(form);
