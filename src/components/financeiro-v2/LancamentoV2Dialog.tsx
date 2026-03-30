@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -66,6 +66,35 @@ function parseBRL(s: string): number {
   return isNaN(n) ? 0 : n;
 }
 
+/** Add N days to a date string (YYYY-MM-DD) */
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+interface ParcelaRow {
+  dataPagamento: string;
+  valorDisplay: string;
+}
+
+/** Generate initial parcela rows from total value and start date */
+function generateParcelas(totalVal: number, numParcelas: number, dataPgtoInicial: string): ParcelaRow[] {
+  const abs = Math.abs(totalVal);
+  const baseVal = Math.floor((abs / numParcelas) * 100) / 100;
+  const lastVal = Math.round((abs - baseVal * (numParcelas - 1)) * 100) / 100;
+
+  const rows: ParcelaRow[] = [];
+  for (let i = 0; i < numParcelas; i++) {
+    const val = i === numParcelas - 1 ? lastVal : baseVal;
+    rows.push({
+      dataPagamento: dataPgtoInicial ? addDays(dataPgtoInicial, i * 30) : '',
+      valorDisplay: toBRL(val),
+    });
+  }
+  return rows;
+}
+
 export function LancamentoV2Dialog({
   open, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
   fornecedores, defaultFazendaId, onCriarFornecedor,
@@ -82,6 +111,7 @@ export function LancamentoV2Dialog({
   // Installment state
   const [formaPagamento, setFormaPagamento] = useState<'avista' | 'parcelada'>('avista');
   const [numParcelas, setNumParcelas] = useState(2);
+  const [parcelaRows, setParcelaRows] = useState<ParcelaRow[]>([]);
 
   const [fazendaId, setFazendaId] = useState('');
   const [dataCompetencia, setDataCompetencia] = useState('');
@@ -107,22 +137,6 @@ export function LancamentoV2Dialog({
   const isTransferencia = tipoOperacao === '3-Transferência';
   const isEntrada = tipoOperacao === '1-Entradas';
 
-  /** Build a short friendly label from the raw subcentro name */
-  function shortLabel(raw: string): string {
-    // Remove long prefix paths, keep last meaningful segment
-    const parts = raw.split('/').map(p => p.trim()).filter(Boolean);
-    if (parts.length <= 1) return raw;
-    // For PEC/ADM/CONTABILIDADE/JURIDICO/CONSULTORIA → ADM / Contab./Jurídico
-    // Keep first as scope abbreviation, last as name
-    const scope = parts[0]; // PEC, AGRI, etc.
-    const name = parts.slice(1).join(' / ');
-    // Capitalize nicely
-    const formatted = name.split(' / ').map(p =>
-      p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()
-    ).join(' / ');
-    return `${scope} / ${formatted}`;
-  }
-
   const classMap = useMemo(() => {
     const m = new Map<string, ClassificacaoItem>();
     for (const c of classificacoes) {
@@ -134,14 +148,10 @@ export function LancamentoV2Dialog({
   /** Subcentros filtered by tipo_operacao then by search text */
   const filteredSubcentros = useMemo(() => {
     const unique = Array.from(classMap.values());
-    // 1. Filter by tipo_operacao match
     const byTipo = unique.filter(c => {
       if (!tipoOperacao) return true;
-      // Match prefix: '1-Entradas' matches '1-Entradas', '2-Saídas' matches '2-Saídas'
-      // For transfers, show transfer-specific subcentros
       return c.tipo_operacao === tipoOperacao;
     });
-    // 2. Apply text search
     if (!subcentroSearch.trim()) return byTipo;
     const term = subcentroSearch.toLowerCase();
     return byTipo.filter(c => c.subcentro.toLowerCase().includes(term));
@@ -174,9 +184,6 @@ export function LancamentoV2Dialog({
       setMacroCusto('');
       setCentroCusto('');
       setTipoOperacao('2-Saídas');
-      setSubcentro('');
-      setMacroCusto('');
-      setCentroCusto('');
       setStatusTransacao('previsto');
       setValorDisplay('0,00');
       setContaOrigemId('');
@@ -185,9 +192,29 @@ export function LancamentoV2Dialog({
       setObservacao('');
       setFormaPagamento('avista');
       setNumParcelas(2);
+      setParcelaRows([]);
     }
     setSubcentroSearch('');
   }, [lancamento, defaultFazendaId]);
+
+  // Regenerate parcela rows when key inputs change
+  const valorNum = parseBRL(valorDisplay);
+
+  const regenerateParcelas = useCallback(() => {
+    if (formaPagamento === 'parcelada' && numParcelas >= 2 && valorNum > 0) {
+      setParcelaRows(generateParcelas(valorNum, numParcelas, dataPagamento));
+    }
+  }, [formaPagamento, numParcelas, valorNum, dataPagamento]);
+
+  // Auto-regenerate when switching to parcelada or changing num parcelas / valor / data
+  useEffect(() => {
+    if (formaPagamento === 'parcelada' && numParcelas >= 2) {
+      regenerateParcelas();
+    } else {
+      setParcelaRows([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formaPagamento, numParcelas, valorNum, dataPagamento]);
 
   const handleSubcentroSelect = (value: string) => {
     setSubcentro(value);
@@ -197,7 +224,6 @@ export function LancamentoV2Dialog({
     if (cls) {
       setMacroCusto(cls.macro_custo);
       setCentroCusto(cls.centro_custo);
-      // Don't override tipoOperacao — subcentro is already filtered by it
     }
   };
 
@@ -216,21 +242,33 @@ export function LancamentoV2Dialog({
   };
 
   const handleNotaFiscalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Extract only digits from whatever was typed/pasted
     const digits = e.target.value.replace(/\D/g, '').slice(0, 9);
     setNotaFiscal(digits);
   };
 
+  const handleParcelaValorChange = (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/\D/g, '');
+    if (!digits) {
+      setParcelaRows(prev => prev.map((r, i) => i === idx ? { ...r, valorDisplay: '0,00' } : r));
+      return;
+    }
+    const num = parseInt(digits, 10) / 100;
+    const display = num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    setParcelaRows(prev => prev.map((r, i) => i === idx ? { ...r, valorDisplay: display } : r));
+  };
+
+  const handleParcelaDateChange = (idx: number, val: string) => {
+    setParcelaRows(prev => prev.map((r, i) => i === idx ? { ...r, dataPagamento: val } : r));
+  };
+
   const notaFiscalDisplay = notaFiscal ? formatNotaFiscal(notaFiscal) : '';
 
-  // Contas are GLOBAL (not per-fazenda) — show all active client accounts
   const contasDisponiveis = contas;
 
   const fornecedoresList = useMemo(() =>
     fornecedores.filter(f => f.ativo !== false && (f.fazenda_id === fazendaId || !f.fazenda_id)),
   [fornecedores, fazendaId]);
 
-  /** Normalize text for accent-insensitive search */
   function normalizeSearch(s: string): string {
     return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   }
@@ -249,24 +287,16 @@ export function LancamentoV2Dialog({
   const fazOperacionais = fazendas.filter(f => f.id !== '__global__');
 
   // Validation
-  const valorNum = parseBRL(valorDisplay);
   const contaOrigemValid = isTransferencia || !isEntrada ? !!contaOrigemId && contaOrigemId !== '__none__' : true;
   const contaDestinoValid = isTransferencia || isEntrada ? !!contaDestinoId && contaDestinoId !== '__none__' : true;
   const contaSimpleValid = !isTransferencia
     ? (isEntrada ? contaDestinoValid : contaOrigemValid)
     : (contaOrigemValid && contaDestinoValid);
 
-  const parceladaValid = formaPagamento === 'avista' || (numParcelas >= 2 && numParcelas <= 24);
+  const parceladaValid = formaPagamento === 'avista' || (numParcelas >= 2 && numParcelas <= 24 && parcelaRows.length === numParcelas);
   const canSave = !!fazendaId && !!dataCompetencia && !!dataPagamento && !!descricao && !!favorecidoId && favorecidoId !== '__none_forn__'
     && !!subcentro && !!tipoOperacao && !!statusTransacao && valorNum > 0
     && contaSimpleValid && parceladaValid;
-
-  /** Add N days to a date string (YYYY-MM-DD) */
-  function addDays(dateStr: string, days: number): string {
-    const d = new Date(dateStr + 'T00:00:00');
-    d.setDate(d.getDate() + days);
-    return d.toISOString().slice(0, 10);
-  }
 
   const handleSubmit = async () => {
     if (!canSave) return;
@@ -282,23 +312,18 @@ export function LancamentoV2Dialog({
     }
 
     // --- Installment logic (only for new, not edit) ---
-    if (!isEdit && formaPagamento === 'parcelada' && numParcelas >= 2) {
-      const totalVal = Math.abs(valorNum);
-      const baseVal = Math.floor((totalVal / numParcelas) * 100) / 100;
-      const lastVal = Math.round((totalVal - baseVal * (numParcelas - 1)) * 100) / 100;
-
+    if (!isEdit && formaPagamento === 'parcelada' && numParcelas >= 2 && parcelaRows.length === numParcelas) {
       let allOk = true;
       for (let i = 0; i < numParcelas; i++) {
-        const parcelaNum = i + 1;
-        const parcelaVal = parcelaNum === numParcelas ? lastVal : baseVal;
-        const parcelaPgto = addDays(dataPagamento, i * 30);
-        const parcelaDesc = `${descricao} - Parcela ${parcelaNum}/${numParcelas}`;
+        const row = parcelaRows[i];
+        const parcelaVal = parseBRL(row.valorDisplay);
+        const parcelaDesc = `${descricao} - Parcela ${i + 1}/${numParcelas}`;
 
         const form: LancamentoV2Form = {
           fazenda_id: fazendaId,
           conta_bancaria_id: contaBancariaId,
           data_competencia: dataCompetencia,
-          data_pagamento: parcelaPgto,
+          data_pagamento: row.dataPagamento || dataPagamento,
           valor: parcelaVal,
           tipo_operacao: tipoOperacao,
           status_transacao: 'confirmado',
@@ -347,6 +372,9 @@ export function LancamentoV2Dialog({
     setFavorecidoId(f.id);
     setFornecedorDialogOpen(false);
   };
+
+  // Sum of parcelas for display
+  const parcelasTotal = parcelaRows.reduce((acc, r) => acc + parseBRL(r.valorDisplay), 0);
 
   return (
     <>
@@ -468,7 +496,7 @@ export function LancamentoV2Dialog({
 
                 {/* Forma de Pagamento — only for new */}
                 {!isEdit && (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label className="text-xs">Forma de Pagamento</Label>
@@ -494,14 +522,55 @@ export function LancamentoV2Dialog({
                         </div>
                       )}
                     </div>
-                    {formaPagamento === 'parcelada' && valorNum > 0 && (
-                      <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-2.5 text-xs text-blue-700 dark:text-blue-300 space-y-1">
-                        <p className="font-semibold">Resumo do parcelamento:</p>
-                        <p>{numParcelas}x de R$ {toBRL(Math.floor((Math.abs(valorNum) / numParcelas) * 100) / 100)}</p>
-                        {Math.round((Math.abs(valorNum) - Math.floor((Math.abs(valorNum) / numParcelas) * 100) / 100 * (numParcelas - 1)) * 100) / 100 !== Math.floor((Math.abs(valorNum) / numParcelas) * 100) / 100 && (
-                          <p className="text-[10px] opacity-75">Última parcela ajustada: R$ {toBRL(Math.round((Math.abs(valorNum) - Math.floor((Math.abs(valorNum) / numParcelas) * 100) / 100 * (numParcelas - 1)) * 100) / 100)}</p>
+
+                    {/* ── EDITABLE PARCELA GRID ── */}
+                    {formaPagamento === 'parcelada' && parcelaRows.length > 0 && (
+                      <div className="rounded-lg border border-border/50 bg-muted/30 overflow-hidden">
+                        {/* Grid header */}
+                        <div className="grid grid-cols-[48px_1fr_1fr] gap-1 px-3 py-1.5 bg-muted/60 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                          <span>Parc.</span>
+                          <span>Vencimento</span>
+                          <span>Valor (R$)</span>
+                        </div>
+                        {/* Grid rows */}
+                        <div className="divide-y divide-border/30">
+                          {parcelaRows.map((row, idx) => (
+                            <div key={idx} className="grid grid-cols-[48px_1fr_1fr] gap-1 px-3 py-1.5 items-center">
+                              <span className="text-xs font-semibold text-muted-foreground">{idx + 1}/{numParcelas}</span>
+                              <Input
+                                type="date"
+                                value={row.dataPagamento}
+                                onChange={e => handleParcelaDateChange(idx, e.target.value)}
+                                className="h-7 text-xs bg-white dark:bg-card border-border/40"
+                              />
+                              <Input
+                                value={row.valorDisplay}
+                                onChange={e => handleParcelaValorChange(idx, e)}
+                                onFocus={e => e.target.select()}
+                                inputMode="numeric"
+                                className="h-7 text-xs bg-white dark:bg-card border-border/40 text-right font-mono"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        {/* Footer with total */}
+                        <div className="px-3 py-1.5 bg-muted/60 flex justify-between items-center text-xs">
+                          <span className="text-muted-foreground font-medium">Total parcelas:</span>
+                          <span className={cn(
+                            "font-bold font-mono",
+                            Math.abs(parcelasTotal - Math.abs(valorNum)) < 0.01
+                              ? "text-green-600 dark:text-green-400"
+                              : "text-destructive"
+                          )}>
+                            R$ {toBRL(parcelasTotal)}
+                          </span>
+                        </div>
+                        {Math.abs(parcelasTotal - Math.abs(valorNum)) >= 0.01 && (
+                          <div className="px-3 py-1 bg-destructive/10 text-destructive text-[10px] flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            A soma das parcelas difere do valor total (R$ {toBRL(Math.abs(valorNum))})
+                          </div>
                         )}
-                        <p className="text-[10px] opacity-75">Intervalo: 30 dias entre parcelas • Status: Confirmado</p>
                       </div>
                     )}
                   </div>
@@ -543,7 +612,7 @@ export function LancamentoV2Dialog({
                 {isTransferencia ? (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label className="text-xs">Conta Origem</Label>
+                      <Label className="text-xs">Conta Origem *</Label>
                       <Select value={contaOrigemId} onValueChange={setContaOrigemId}>
                         <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
                         <SelectContent>
@@ -553,7 +622,7 @@ export function LancamentoV2Dialog({
                       </Select>
                     </div>
                     <div>
-                      <Label className="text-xs">Conta Destino</Label>
+                      <Label className="text-xs">Conta Destino *</Label>
                       <Select value={contaDestinoId} onValueChange={setContaDestinoId}>
                         <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
                         <SelectContent>
@@ -565,7 +634,7 @@ export function LancamentoV2Dialog({
                   </div>
                 ) : isEntrada ? (
                   <div>
-                    <Label className="text-xs">Conta Destino</Label>
+                    <Label className="text-xs">Conta Destino *</Label>
                     <Select value={contaDestinoId} onValueChange={setContaDestinoId}>
                       <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
@@ -576,7 +645,7 @@ export function LancamentoV2Dialog({
                   </div>
                 ) : (
                   <div>
-                    <Label className="text-xs">Conta Origem</Label>
+                    <Label className="text-xs">Conta Origem *</Label>
                     <Select value={contaOrigemId} onValueChange={setContaOrigemId}>
                       <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
@@ -650,7 +719,7 @@ export function LancamentoV2Dialog({
           <div className="px-5 py-3 border-t border-border/40 bg-white dark:bg-card flex items-center gap-2">
             <Button variant="outline" onClick={onClose} className="px-4">Cancelar</Button>
             <Button onClick={handleSubmit} disabled={saving || !canSave} className="flex-1">
-              {saving ? 'Salvando...' : isEdit ? 'Salvar Alterações' : 'Criar Lançamento'}
+              {saving ? 'Salvando...' : isEdit ? 'Salvar Alterações' : formaPagamento === 'parcelada' ? `Criar ${numParcelas} Parcelas` : 'Criar Lançamento'}
             </Button>
             {isEdit && onDelete && (
               <Button
