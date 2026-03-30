@@ -463,6 +463,48 @@ export function LancamentoV2Dialog({
                     </Select>
                   </div>
                 </div>
+
+                {/* Forma de Pagamento — only for new */}
+                {!isEdit && (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs">Forma de Pagamento</Label>
+                        <Select value={formaPagamento} onValueChange={(v: 'avista' | 'parcelada') => setFormaPagamento(v)}>
+                          <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="avista">À vista</SelectItem>
+                            <SelectItem value="parcelada">Parcelada</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {formaPagamento === 'parcelada' && (
+                        <div>
+                          <Label className="text-xs">Nº de Parcelas *</Label>
+                          <Input
+                            type="number"
+                            min={2}
+                            max={24}
+                            value={numParcelas}
+                            onChange={e => setNumParcelas(Math.max(2, Math.min(24, parseInt(e.target.value) || 2)))}
+                            className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"
+                          />
+                        </div>
+                      )}
+                    </div>
+                    {formaPagamento === 'parcelada' && valorNum > 0 && (
+                      <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-2.5 text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                        <p className="font-semibold">Resumo do parcelamento:</p>
+                        <p>{numParcelas}x de R$ {toBRL(Math.floor((Math.abs(valorNum) / numParcelas) * 100) / 100)}</p>
+                        {Math.round((Math.abs(valorNum) - Math.floor((Math.abs(valorNum) / numParcelas) * 100) / 100 * (numParcelas - 1)) * 100) / 100 !== Math.floor((Math.abs(valorNum) / numParcelas) * 100) / 100 && (
+                          <p className="text-[10px] opacity-75">Última parcela ajustada: R$ {toBRL(Math.round((Math.abs(valorNum) - Math.floor((Math.abs(valorNum) / numParcelas) * 100) / 100 * (numParcelas - 1)) * 100) / 100)}</p>
+                        )}
+                        <p className="text-[10px] opacity-75">Intervalo: 30 dias entre parcelas • Status: Confirmado</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs">Fazenda *</Label>
