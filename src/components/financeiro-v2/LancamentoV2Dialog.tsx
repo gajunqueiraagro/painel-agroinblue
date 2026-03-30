@@ -262,6 +262,14 @@ export function LancamentoV2Dialog({
   }, [produtoOpen]);
 
   const handleProdutoKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      setProdutoOpen(false);
+      return;
+    }
+    if (e.key === 'Tab') {
+      setProdutoOpen(false);
+      return; // let Tab proceed naturally
+    }
     if (!produtoOpen || filteredProdutos.length === 0) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -278,13 +286,12 @@ export function LancamentoV2Dialog({
         return next;
       });
     } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (filteredProdutos[produtoHighlight]) {
+      if (produtoHighlight >= 0 && filteredProdutos[produtoHighlight]) {
+        e.preventDefault();
         setDescricao(filteredProdutos[produtoHighlight]);
         setProdutoOpen(false);
       }
-    } else if (e.key === 'Escape') {
-      setProdutoOpen(false);
+      // If no highlight (-1), let Enter pass through naturally
     }
   };
 
