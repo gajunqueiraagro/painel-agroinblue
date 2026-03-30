@@ -671,9 +671,35 @@ export function useFinanceiro() {
     }
   }, [user, loadData, fazendas]);
 
-  // --- Excluir importação ---
+  // --- Excluir importação (protege conciliados e editados manualmente) ---
   const excluirImportacao = useCallback(async (importacaoId: string) => {
     try {
+      // Verificar se há lançamentos conciliados nesta importação
+      const { data: conciliados } = await supabase
+        .from('financeiro_lancamentos')
+        .select('id')
+        .eq('importacao_id', importacaoId)
+        .eq('status_transacao', 'conciliado')
+        .limit(1);
+
+      if (conciliados && conciliados.length > 0) {
+        toast.error('Esta importação contém lançamentos conciliados e não pode ser excluída. Remova a conciliação antes.');
+        return false;
+      }
+
+      // Verificar se há lançamentos com origem manual (editados depois)
+      const { data: editados } = await supabase
+        .from('financeiro_lancamentos')
+        .select('id')
+        .eq('importacao_id', importacaoId)
+        .eq('origem_dado', 'manual')
+        .limit(1);
+
+      if (editados && editados.length > 0) {
+        toast.error('Esta importação contém lançamentos editados manualmente e não pode ser excluída.');
+        return false;
+      }
+
       const deletes = await Promise.all([
         supabase.from('financeiro_lancamentos').delete().eq('importacao_id', importacaoId),
         supabase.from('financeiro_saldos_bancarios').delete().eq('importacao_id', importacaoId),
