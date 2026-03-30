@@ -243,8 +243,11 @@ export function LancamentoV2Dialog({
   };
 
   const handleNotaFiscalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/\D/g, '').slice(0, 9);
-    setNotaFiscal(digits);
+    // Right-to-left digit entry, same UX as valor field
+    const digits = e.target.value.replace(/\D/g, '');
+    // Remove leading zeros then cap at 9 digits
+    const trimmed = digits.replace(/^0+/, '').slice(0, 9);
+    setNotaFiscal(trimmed);
   };
 
   const handleParcelaValorChange = (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
