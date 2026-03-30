@@ -189,6 +189,7 @@ export function ConciliacaoBancariaTab() {
         .from('financeiro_lancamentos_v2')
         .select('tipo_operacao, valor, sinal, data_competencia, data_pagamento, descricao, status_transacao, favorecido_id, nota_fiscal')
         .eq('cliente_id', clienteId)
+        .eq('cancelado', false)
         .gte('ano_mes', anoMesMin)
         .lte('ano_mes', anoMesMax);
       if (contaId !== '__all__') lQuery = lQuery.eq('conta_bancaria_id', contaId);

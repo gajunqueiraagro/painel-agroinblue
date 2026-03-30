@@ -157,6 +157,7 @@ export function useResumoStatus(
               .from('financeiro_lancamentos_v2')
               .select('status_transacao, data_pagamento, valor, tipo_operacao, descricao')
               .eq('cliente_id', clienteAtual?.id || '')
+              .eq('cancelado', false)
               .gte('data_pagamento', `${anoStr}-01-01`)
               .lte('data_pagamento', `${anoStr}-12-31`)
               .limit(10000)

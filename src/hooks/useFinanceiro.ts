@@ -69,6 +69,8 @@ export interface FinanceiroLancamento {
   observacao?: string | null;
   origem_lancamento?: string;
   lote_importacao_id?: string | null;
+  cancelado?: boolean;
+  editado_manual?: boolean;
 }
 
 /** Rateio calculado para a fazenda atual */
@@ -177,6 +179,8 @@ function mapV2ToLancamento(r: any): FinanceiroLancamento {
     observacao: r.observacao,
     origem_lancamento: r.origem_lancamento,
     lote_importacao_id: r.lote_importacao_id,
+    cancelado: r.cancelado,
+    editado_manual: r.editado_manual,
   };
 }
 
@@ -333,7 +337,7 @@ export function useFinanceiro() {
 
         const [allLancsRaw, ccResult, impResult, saldoResult, lancPecResult] = await Promise.all([
           fetchAllPaginated<any>((from, to) =>
-            (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('cliente_id', clienteId).order('data_competencia', { ascending: false }).range(from, to),
+            (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('cliente_id', clienteId).eq('cancelado', false).order('data_competencia', { ascending: false }).range(from, to),
           ),
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').in('fazenda_id', allFazendaIds).eq('ativo', true),
           supabase.from('financeiro_importacoes_v2').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').eq('cliente_id', clienteId!).neq('status', 'cancelada').order('data_importacao', { ascending: false }),
@@ -358,12 +362,12 @@ export function useFinanceiro() {
         const needsRateio = fazendaADM && fazendaADM.id !== fazendaId;
 
         const lancPromise = fetchAllPaginated<any>((from, to) =>
-          (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaId).order('data_competencia', { ascending: false }).range(from, to),
+          (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaId).eq('cancelado', false).order('data_competencia', { ascending: false }).range(from, to),
         ).then(rows => rows.map(mapV2ToLancamento));
 
         const admPromise = needsRateio
           ? fetchAllPaginated<any>((from, to) =>
-              (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaADM.id).order('data_competencia', { ascending: false }).range(from, to),
+              (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaADM.id).eq('cancelado', false).order('data_competencia', { ascending: false }).range(from, to),
             ).then(rows => rows.map(mapV2ToLancamento))
           : Promise.resolve([] as FinanceiroLancamento[]);
 
@@ -610,6 +614,7 @@ export function useFinanceiro() {
             .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, descricao')
             .eq('fazenda_id', fid)
             .eq('cliente_id', cid)
+            .eq('cancelado', false)
             .range(from, from + batchSize - 1);
           if (!existing || existing.length === 0) break;
           for (const e of existing) {
@@ -749,36 +754,13 @@ export function useFinanceiro() {
   // --- Cancelar importação (soft delete V2) ---
   const excluirImportacao = useCallback(async (importacaoId: string) => {
     try {
-      // 1. Verificar se há lançamentos conciliados
-      const { data: conciliados } = await supabase
-        .from('financeiro_lancamentos_v2')
-        .select('id')
-        .eq('lote_importacao_id', importacaoId)
-        .eq('status_transacao', 'conciliado')
-        .limit(1);
+      const { data, error } = await supabase.rpc('cancel_financeiro_importacao_v2', {
+        _importacao_id: importacaoId,
+      });
+      if (error) throw error;
 
-      if (conciliados && conciliados.length > 0) {
-        toast.error('Esta importação contém lançamentos conciliados e não pode ser cancelada.');
-        return false;
-      }
-
-      // 2. Marcar importação como cancelada
-      const { error: cancelErr } = await supabase
-        .from('financeiro_importacoes_v2')
-        .update({
-          status: 'cancelada',
-        })
-        .eq('id', importacaoId);
-      if (cancelErr) throw cancelErr;
-
-      // 3. Deletar lançamentos vinculados (V2 usa delete real)
-      const { error: lancErr } = await supabase
-        .from('financeiro_lancamentos_v2')
-        .delete()
-        .eq('lote_importacao_id', importacaoId);
-      if (lancErr) throw lancErr;
-
-      toast.success('Importação cancelada e lançamentos removidos.');
+      const cancelados = Number((data as { cancelled_rows?: number } | null)?.cancelled_rows || 0);
+      toast.success(`Importação cancelada com ${cancelados} lançamento(s) inativado(s).`);
       await loadData();
       return true;
     } catch (err: any) {

@@ -166,6 +166,7 @@ export function FinV2SaldosTab() {
       .from('financeiro_lancamentos_v2')
       .select('conta_bancaria_id, ano_mes, valor, sinal')
       .eq('cliente_id', clienteAtual.id)
+      .eq('cancelado', false)
       .not('conta_bancaria_id', 'is', null);
 
     if (movData) {

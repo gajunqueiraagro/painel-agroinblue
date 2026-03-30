@@ -1450,6 +1450,8 @@ export type Database = {
       }
       financeiro_importacoes_v2: {
         Row: {
+          cancelada_em: string | null
+          cancelada_por: string | null
           cliente_id: string
           conta_bancaria_id: string | null
           created_at: string
@@ -1466,6 +1468,8 @@ export type Database = {
           total_validas: number
         }
         Insert: {
+          cancelada_em?: string | null
+          cancelada_por?: string | null
           cliente_id: string
           conta_bancaria_id?: string | null
           created_at?: string
@@ -1482,6 +1486,8 @@ export type Database = {
           total_validas?: number
         }
         Update: {
+          cancelada_em?: string | null
+          cancelada_por?: string | null
           cliente_id?: string
           conta_bancaria_id?: string | null
           created_at?: string
@@ -1645,6 +1651,9 @@ export type Database = {
       financeiro_lancamentos_v2: {
         Row: {
           ano_mes: string
+          cancelado: boolean
+          cancelado_em: string | null
+          cancelado_por: string | null
           centro_custo: string | null
           cliente_id: string
           conciliado_em: string | null
@@ -1657,10 +1666,12 @@ export type Database = {
           data_pagamento: string | null
           descricao: string | null
           documento: string | null
+          editado_manual: boolean
           escopo_negocio: string | null
           favorecido_id: string | null
           fazenda_id: string
           forma_pagamento: string | null
+          hash_importacao: string | null
           historico: string | null
           id: string
           lote_importacao_id: string | null
@@ -1680,6 +1691,9 @@ export type Database = {
         }
         Insert: {
           ano_mes: string
+          cancelado?: boolean
+          cancelado_em?: string | null
+          cancelado_por?: string | null
           centro_custo?: string | null
           cliente_id: string
           conciliado_em?: string | null
@@ -1692,10 +1706,12 @@ export type Database = {
           data_pagamento?: string | null
           descricao?: string | null
           documento?: string | null
+          editado_manual?: boolean
           escopo_negocio?: string | null
           favorecido_id?: string | null
           fazenda_id: string
           forma_pagamento?: string | null
+          hash_importacao?: string | null
           historico?: string | null
           id?: string
           lote_importacao_id?: string | null
@@ -1715,6 +1731,9 @@ export type Database = {
         }
         Update: {
           ano_mes?: string
+          cancelado?: boolean
+          cancelado_em?: string | null
+          cancelado_por?: string | null
           centro_custo?: string | null
           cliente_id?: string
           conciliado_em?: string | null
@@ -1727,10 +1746,12 @@ export type Database = {
           data_pagamento?: string | null
           descricao?: string | null
           documento?: string | null
+          editado_manual?: boolean
           escopo_negocio?: string | null
           favorecido_id?: string | null
           fazenda_id?: string
           forma_pagamento?: string | null
+          hash_importacao?: string | null
           historico?: string | null
           id?: string
           lote_importacao_id?: string | null
@@ -2855,6 +2876,34 @@ export type Database = {
       }
     }
     Functions: {
+      can_manage_financeiro_importacao_v2: {
+        Args: { _cliente_id: string }
+        Returns: boolean
+      }
+      can_manage_financeiro_lancamento_v2: {
+        Args: { _cliente_id: string; _origem_lancamento: string }
+        Returns: boolean
+      }
+      cancel_financeiro_importacao_v2: {
+        Args: { _importacao_id: string }
+        Returns: Json
+      }
+      compute_financeiro_lancamento_v2_hash: {
+        Args: {
+          _cliente_id: string
+          _conta_bancaria_id: string
+          _data_competencia: string
+          _data_pagamento: string
+          _descricao: string
+          _documento: string
+          _favorecido_id: string
+          _fazenda_id: string
+          _nota_fiscal: string
+          _tipo_operacao: string
+          _valor: number
+        }
+        Returns: string
+      }
       get_user_cliente_id: { Args: { _user_id?: string }; Returns: string }
       get_user_cliente_ids: { Args: { _user_id?: string }; Returns: string[] }
       get_user_perfil: {
