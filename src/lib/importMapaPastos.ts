@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import type { Pasto, CategoriaRebanho } from '@/hooks/usePastos';
+import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 
 export interface MapaImportRow {
   linha: number;
