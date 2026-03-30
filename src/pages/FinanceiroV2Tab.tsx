@@ -150,7 +150,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     centroFiltro: '__all__',
     subcentroFiltro: '__all__',
     produtoFiltro: '',
-    fornecedorFiltro: '',
+    fornecedorFiltro: '__all__',
     atividadeFiltro: '__all__',
   });
 
