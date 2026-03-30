@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { ChevronsUpDown, X } from 'lucide-react';
 
@@ -26,8 +26,11 @@ export function SearchableSelect({
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [highlightIdx, setHighlightIdx] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const selectedLabel = value === allValue
     ? allLabel
@@ -38,6 +41,24 @@ export function SearchableSelect({
     const q = search.toLowerCase();
     return options.filter(o => o.label.toLowerCase().includes(q));
   }, [options, search]);
+
+  // Build full selectable list: [allValue, ...filtered]
+  const selectableItems = useMemo(() => {
+    return [{ value: allValue, label: allLabel }, ...filtered];
+  }, [filtered, allValue, allLabel]);
+
+  // Reset highlight when filtered list changes
+  useEffect(() => {
+    setHighlightIdx(filtered.length > 0 ? 1 : 0); // default to first real item
+  }, [filtered]);
+
+  // Scroll highlighted item into view
+  useEffect(() => {
+    const el = itemRefs.current[highlightIdx];
+    if (el) {
+      el.scrollIntoView({ block: 'nearest' });
+    }
+  }, [highlightIdx]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -50,15 +71,16 @@ export function SearchableSelect({
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const handleSelect = (val: string) => {
+  const handleSelect = useCallback((val: string) => {
     onValueChange(val);
     setOpen(false);
     setSearch('');
-  };
+  }, [onValueChange]);
 
   const handleTriggerClick = () => {
     if (disabled) return;
     setOpen(true);
+    setHighlightIdx(filtered.length > 0 ? 1 : 0);
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
@@ -68,9 +90,41 @@ export function SearchableSelect({
     setSearch('');
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      setOpen(false);
+      setSearch('');
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightIdx(prev => Math.min(prev + 1, selectableItems.length - 1));
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightIdx(prev => Math.max(prev - 1, 0));
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (selectableItems[highlightIdx]) {
+        handleSelect(selectableItems[highlightIdx].value);
+      }
+      return;
+    }
+    if (e.key === 'Tab') {
+      if (selectableItems[highlightIdx]) {
+        handleSelect(selectableItems[highlightIdx].value);
+      }
+    }
+  };
+
+  // Reset refs array size
+  itemRefs.current = [];
+
   return (
     <div ref={containerRef} className={cn('relative', className)}>
-      {/* Trigger */}
       <button
         type="button"
         onClick={handleTriggerClick}
@@ -94,7 +148,6 @@ export function SearchableSelect({
         </span>
       </button>
 
-      {/* Dropdown */}
       {open && (
         <div className="absolute z-50 mt-0.5 w-full min-w-[160px] rounded-md border bg-popover shadow-md">
           <div className="p-1">
@@ -104,33 +157,22 @@ export function SearchableSelect({
               onChange={e => setSearch(e.target.value)}
               placeholder={placeholder}
               className="w-full h-5 text-[10px] px-1.5 rounded border border-input bg-background outline-none focus:ring-1 focus:ring-ring"
-              onKeyDown={e => {
-                if (e.key === 'Escape') { setOpen(false); setSearch(''); }
-                if (e.key === 'Enter' && filtered.length === 1) {
-                  handleSelect(filtered[0].value);
-                }
-              }}
+              onKeyDown={handleKeyDown}
             />
           </div>
-          <div className="max-h-[180px] overflow-y-auto px-0.5 pb-0.5">
-            <button
-              type="button"
-              onClick={() => handleSelect(allValue)}
-              className={cn(
-                'w-full text-left px-1.5 py-[3px] text-[10px] rounded-sm hover:bg-accent cursor-pointer',
-                value === allValue && 'bg-accent font-semibold',
-              )}
-            >
-              {allLabel}
-            </button>
-            {filtered.map(o => (
+          <div ref={listRef} className="max-h-[180px] overflow-y-auto px-0.5 pb-0.5">
+            {selectableItems.map((o, idx) => (
               <button
                 key={o.value}
                 type="button"
+                ref={el => { itemRefs.current[idx] = el; }}
                 onClick={() => handleSelect(o.value)}
+                onMouseEnter={() => setHighlightIdx(idx)}
                 className={cn(
-                  'w-full text-left px-1.5 py-[3px] text-[10px] rounded-sm hover:bg-accent cursor-pointer truncate',
-                  value === o.value && 'bg-accent font-semibold',
+                  'w-full text-left px-1.5 py-[3px] text-[10px] rounded-sm cursor-pointer truncate',
+                  idx === highlightIdx && 'bg-accent text-accent-foreground',
+                  idx !== highlightIdx && 'hover:bg-accent/50',
+                  value === o.value && 'font-semibold',
                 )}
               >
                 {o.label}
