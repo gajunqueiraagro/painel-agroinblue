@@ -102,6 +102,7 @@ export function LancamentoV2Dialog({
   open, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
   fornecedores, defaultFazendaId, onCriarFornecedor,
 }: Props) {
+  const { clienteAtual } = useCliente();
   const isEdit = !!lancamento;
   const [saving, setSaving] = useState(false);
   const [fornecedorDialogOpen, setFornecedorDialogOpen] = useState(false);
