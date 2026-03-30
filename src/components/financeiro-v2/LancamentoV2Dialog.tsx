@@ -220,6 +220,72 @@ export function LancamentoV2Dialog({
     setSubcentroSearch('');
   }, [lancamento, defaultFazendaId]);
 
+  // Fetch distinct product names for suggestions
+  useEffect(() => {
+    if (!open || !clienteAtual?.id) return;
+    (async () => {
+      const { data } = await supabase
+        .from('financeiro_lancamentos_v2')
+        .select('descricao')
+        .eq('cliente_id', clienteAtual.id)
+        .not('descricao', 'is', null)
+        .order('descricao');
+      if (data) {
+        const unique = [...new Set(data.map(r => r.descricao).filter(Boolean) as string[])];
+        setProdutoSugestoes(unique);
+      }
+    })();
+  }, [open, clienteAtual?.id]);
+
+  // Filter product suggestions by current input
+  const filteredProdutos = useMemo(() => {
+    if (!descricao.trim() || descricao.trim().length < 2) return [];
+    const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const term = norm(descricao);
+    return produtoSugestoes
+      .filter(p => norm(p).includes(term) && p !== descricao)
+      .slice(0, 8);
+  }, [descricao, produtoSugestoes]);
+
+  // Close product suggestions on click outside
+  useEffect(() => {
+    if (!produtoOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (produtoWrapperRef.current && !produtoWrapperRef.current.contains(e.target as Node)) {
+        setProdutoOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [produtoOpen]);
+
+  const handleProdutoKeyDown = (e: React.KeyboardEvent) => {
+    if (!produtoOpen || filteredProdutos.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setProdutoHighlight(prev => {
+        const next = Math.min(prev + 1, filteredProdutos.length - 1);
+        produtoItemRefs.current[next]?.scrollIntoView({ block: 'nearest' });
+        return next;
+      });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setProdutoHighlight(prev => {
+        const next = Math.max(prev - 1, 0);
+        produtoItemRefs.current[next]?.scrollIntoView({ block: 'nearest' });
+        return next;
+      });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (filteredProdutos[produtoHighlight]) {
+        setDescricao(filteredProdutos[produtoHighlight]);
+        setProdutoOpen(false);
+      }
+    } else if (e.key === 'Escape') {
+      setProdutoOpen(false);
+    }
+  };
+
   // Regenerate parcela rows when key inputs change
   const valorNum = parseBRL(valorDisplay);
 
