@@ -653,14 +653,14 @@ export function useFinanceiro() {
 
       const totalValid = linhasNovas.length + (saldosBancarios?.length || 0) + (resumoCaixa?.length || 0);
 
-      // ── Criar registro da importação ──
+      // ── Criar registro da importação (V2) ──
       const { data: imp, error: impErr } = await supabase
-        .from('financeiro_importacoes')
+        .from('financeiro_importacoes_v2')
         .insert({
           fazenda_id: primaryFazendaId,
-          cliente_id: clienteId,
+          cliente_id: cid,
           nome_arquivo: nomeArquivo,
-          usuario_id: user.id,
+          created_by: user.id,
           status: 'processada',
           total_linhas: totalLinhas,
           total_validas: totalValid,
@@ -671,35 +671,31 @@ export function useFinanceiro() {
 
       if (impErr) throw impErr;
 
-      // ── Inserir lançamentos novos (nunca apaga existentes) ──
-      // Histórico = somente leitura (importacao_historica)
+      // ── Inserir lançamentos novos no V2 ──
       const insertBatchSize = 50;
+      const sinalFromTipo = (tipo: string | null) => (tipo || '').startsWith('1') ? 1 : -1;
       for (let i = 0; i < linhasNovas.length; i += insertBatchSize) {
-        const batch = linhasNovas.slice(i, i + insertBatchSize).map((l, j) => ({
+        const batch = linhasNovas.slice(i, i + insertBatchSize).map((l) => ({
           fazenda_id: l.fazendaId!,
-          cliente_id: fazendas.find(f => f.id === l.fazendaId)?.cliente_id || clienteId,
-          importacao_id: imp.id,
-          origem_dado: origemDado,
-          data_realizacao: l.dataPagamento || l.anoMes + '-01',
+          cliente_id: fazendas.find(f => f.id === l.fazendaId)?.cliente_id || cid,
+          lote_importacao_id: imp.id,
+          origem_lancamento: origemDado,
+          data_competencia: l.dataPagamento || l.anoMes + '-01',
           data_pagamento: l.dataPagamento,
           ano_mes: l.anoMes,
-          produto: l.produto,
-          fornecedor: l.fornecedor,
+          descricao: l.produto,
           valor: l.valor,
+          sinal: sinalFromTipo(l.tipoOperacao),
           status_transacao: l.statusTransacao,
-          tipo_operacao: l.tipoOperacao,
-          conta_origem: l.contaOrigem,
-          conta_destino: l.contaDestino,
+          tipo_operacao: l.tipoOperacao || '2 - Saídas',
           macro_custo: l.macroCusto,
-          grupo_custo: l.grupoCusto,
           centro_custo: l.centroCusto,
           subcentro: l.subcentro,
-          obs: l.obs,
+          observacao: l.obs,
           escopo_negocio: l.escopoNegocio,
-          hash_importacao: hashesNovas[i + j],
-          editado_manual: false,
+          created_by: user.id,
         }));
-        const { error } = await supabase.from('financeiro_lancamentos').insert(batch);
+        const { error } = await supabase.from('financeiro_lancamentos_v2').insert(batch);
         if (error) throw error;
       }
 
