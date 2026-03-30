@@ -50,6 +50,7 @@ export function FinV2FornecedoresTab() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Fornecedor | null>(null);
   const [searchText, setSearchText] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'todos' | 'ativos' | 'inativos'>('ativos');
   const [activeTab, setActiveTab] = useState('cadastro');
 
   // Pending items
@@ -115,10 +116,13 @@ export function FinV2FornecedoresTab() {
   useEffect(() => { if (activeTab === 'pendentes') loadPending(); }, [activeTab, loadPending]);
 
   const filteredItems = useMemo(() => {
-    if (!searchText.trim()) return items;
+    let list = items;
+    if (statusFilter === 'ativos') list = list.filter(f => f.ativo);
+    else if (statusFilter === 'inativos') list = list.filter(f => !f.ativo);
+    if (!searchText.trim()) return list;
     const q = searchText.toLowerCase();
-    return items.filter(f => f.nome.toLowerCase().includes(q) || f.cpf_cnpj?.toLowerCase().includes(q));
-  }, [items, searchText]);
+    return list.filter(f => f.nome.toLowerCase().includes(q) || f.cpf_cnpj?.toLowerCase().includes(q));
+  }, [items, searchText, statusFilter]);
 
   const openNew = () => {
     setEditing(null);
@@ -183,14 +187,26 @@ export function FinV2FornecedoresTab() {
         </TabsList>
 
         <TabsContent value="cadastro" className="space-y-2 mt-2">
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              value={searchText}
-              onChange={e => setSearchText(e.target.value)}
-              placeholder="Buscar fornecedor..."
-              className="h-8 text-xs pl-7"
-            />
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={searchText}
+                onChange={e => setSearchText(e.target.value)}
+                placeholder="Buscar fornecedor..."
+                className="h-8 text-xs pl-7"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={v => setStatusFilter(v as any)}>
+              <SelectTrigger className="h-8 w-28 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos" className="text-xs">Todos</SelectItem>
+                <SelectItem value="ativos" className="text-xs">Ativos</SelectItem>
+                <SelectItem value="inativos" className="text-xs">Inativos</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <Card>
             <CardContent className="p-0">

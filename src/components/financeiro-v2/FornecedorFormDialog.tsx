@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertTriangle, Eye, Merge, CheckCircle } from 'lucide-react';
+import { AlertTriangle, Eye, Merge, CheckCircle, Trash2, Ban } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 interface Fornecedor {
   id: string;
@@ -76,6 +77,8 @@ export function FornecedorFormDialog({
   const [ativo, setAtivo] = useState(true);
   const [saving, setSaving] = useState(false);
   const [reviewId, setReviewId] = useState<string | null>(null);
+  const [lancamentoCount, setLancamentoCount] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -84,13 +87,20 @@ export function FornecedorFormDialog({
         setCpfCnpj(editing.cpf_cnpj || '');
         setFazendaId(editing.fazenda_id);
         setAtivo(editing.ativo);
+        // Check linked lancamentos
+        supabase.from('financeiro_lancamentos_v2')
+          .select('id', { count: 'exact', head: true })
+          .eq('favorecido_id', editing.id)
+          .then(({ count }) => setLancamentoCount(count ?? 0));
       } else {
         setNome('');
         setCpfCnpj('');
         setFazendaId(fazendas[0]?.id || '');
         setAtivo(true);
+        setLancamentoCount(null);
       }
       setReviewId(null);
+      setDeleting(false);
     }
   }, [open, editing, fazendas]);
 
@@ -278,7 +288,63 @@ export function FornecedorFormDialog({
           </div>
         </div>
 
-        <DialogFooter className="gap-1">
+        <DialogFooter className="gap-1 flex-wrap">
+          {editing && lancamentoCount !== null && (
+            lancamentoCount > 0 ? (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="text-amber-600 border-amber-300 hover:bg-amber-50 mr-auto gap-1">
+                    <Ban className="h-3.5 w-3.5" />Inativar
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Inativar fornecedor</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Este fornecedor possui <strong>{lancamentoCount}</strong> lançamento(s) vinculado(s). Ele não será apagado da base, apenas inativado. Os lançamentos serão preservados.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={async () => {
+                      await supabase.from('financeiro_fornecedores').update({ ativo: false }).eq('id', editing.id);
+                      toast.success('Fornecedor inativado');
+                      onClose();
+                      onSaved();
+                    }}>Confirmar Inativação</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10 mr-auto gap-1">
+                    <Trash2 className="h-3.5 w-3.5" />Excluir
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Excluir fornecedor</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Este fornecedor não possui vínculos e pode ser excluído permanentemente. Essa ação não pode ser desfeita.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={async () => {
+                      setDeleting(true);
+                      const { error } = await supabase.from('financeiro_fornecedores').delete().eq('id', editing.id);
+                      setDeleting(false);
+                      if (error) { toast.error('Erro ao excluir'); return; }
+                      toast.success('Fornecedor excluído');
+                      onClose();
+                      onSaved();
+                    }}>Excluir Permanentemente</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )
+          )}
           <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
           <Button size="sm" onClick={save} disabled={saving || !nome.trim()}>
             {saving ? 'Salvando...' : editing ? 'Salvar' : 'Criar'}

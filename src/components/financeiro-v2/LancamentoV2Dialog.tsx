@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Plus, Search, Check, ChevronsUpDown } from 'lucide-react';
+import { Plus, Search, Check, ChevronsUpDown, AlertCircle } from 'lucide-react';
 import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { NovoFornecedorDialog } from './NovoFornecedorDialog';
@@ -73,6 +73,11 @@ export function LancamentoV2Dialog({
   const isEdit = !!lancamento;
   const [saving, setSaving] = useState(false);
   const [fornecedorDialogOpen, setFornecedorDialogOpen] = useState(false);
+
+  // Fornecedor search state
+  const [fornecedorOpen, setFornecedorOpen] = useState(false);
+  const [fornecedorSearch, setFornecedorSearch] = useState('');
+  const fornecedorInputRef = useRef<HTMLInputElement>(null);
 
   const [fazendaId, setFazendaId] = useState('');
   const [dataCompetencia, setDataCompetencia] = useState('');
@@ -213,8 +218,24 @@ export function LancamentoV2Dialog({
   const contasDisponiveis = contas;
 
   const fornecedoresList = useMemo(() =>
-    fornecedores.filter(f => f.fazenda_id === fazendaId || !f.fazenda_id),
+    fornecedores.filter(f => f.ativo !== false && (f.fazenda_id === fazendaId || !f.fazenda_id)),
   [fornecedores, fazendaId]);
+
+  /** Normalize text for accent-insensitive search */
+  function normalizeSearch(s: string): string {
+    return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
+
+  const filteredFornecedores = useMemo(() => {
+    if (!fornecedorSearch.trim()) return fornecedoresList;
+    const q = normalizeSearch(fornecedorSearch);
+    return fornecedoresList.filter(f => normalizeSearch(f.nome).includes(q));
+  }, [fornecedoresList, fornecedorSearch]);
+
+  const selectedFornecedorNome = useMemo(() => {
+    if (!favorecidoId) return '';
+    return fornecedores.find(f => f.id === favorecidoId)?.nome || '';
+  }, [favorecidoId, fornecedores]);
 
   const fazOperacionais = fazendas.filter(f => f.id !== '__global__');
 
@@ -318,15 +339,58 @@ export function LancamentoV2Dialog({
                 <div>
                   <Label className="text-xs">Fornecedor *</Label>
                   <div className="flex gap-1.5">
-                    <Select value={favorecidoId || '__none_forn__'} onValueChange={v => setFavorecidoId(v === '__none_forn__' ? '' : v)}>
-                      <SelectTrigger className="h-9 flex-1"><SelectValue placeholder="Selecione o fornecedor" /></SelectTrigger>
-                      <SelectContent className="max-h-60">
-                        <SelectItem value="__none_forn__">Selecione...</SelectItem>
-                        {fornecedoresList.map(f => (
-                          <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={fornecedorOpen} onOpenChange={v => { setFornecedorOpen(v); if (!v) setFornecedorSearch(''); }}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={fornecedorOpen}
+                          className="flex-1 h-9 justify-between font-normal text-sm"
+                        >
+                          <span className="truncate">{selectedFornecedorNome || 'Selecione o fornecedor...'}</span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                        <div className="flex items-center border-b px-3 py-2">
+                          <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                          <input
+                            ref={fornecedorInputRef}
+                            className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                            placeholder="Buscar fornecedor..."
+                            value={fornecedorSearch}
+                            onChange={e => setFornecedorSearch(e.target.value)}
+                            autoFocus
+                          />
+                        </div>
+                        <div className="max-h-48 overflow-y-auto p-1">
+                          {filteredFornecedores.length === 0 && (
+                            <div className="p-2 text-center space-y-1">
+                              <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground">
+                                <AlertCircle className="h-3.5 w-3.5" />
+                                <span>Fornecedor não encontrado na base</span>
+                              </div>
+                              <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => { setFornecedorOpen(false); setFornecedorDialogOpen(true); }}>
+                                <Plus className="h-3 w-3 mr-1" />Cadastrar novo
+                              </Button>
+                            </div>
+                          )}
+                          {filteredFornecedores.map(f => (
+                            <button
+                              key={f.id}
+                              className={cn(
+                                "relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                                favorecidoId === f.id && "bg-accent"
+                              )}
+                              onClick={() => { setFavorecidoId(f.id); setFornecedorOpen(false); setFornecedorSearch(''); }}
+                            >
+                              <Check className={cn("mr-2 h-4 w-4", favorecidoId === f.id ? "opacity-100" : "opacity-0")} />
+                              <span className="truncate">{f.nome}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                     <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setFornecedorDialogOpen(true)} title="Novo fornecedor">
                       <Plus className="h-4 w-4" />
                     </Button>
