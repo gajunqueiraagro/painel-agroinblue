@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,7 +18,6 @@ function proxVencimento(c: Contrato): string {
   const day = c.dia_pagamento;
   let m = today.getMonth();
   let y = today.getFullYear();
-  // Find next payment date
   const lastDay = new Date(y, m + 1, 0).getDate();
   const payDay = Math.min(day, lastDay);
   let candidate = new Date(y, m, payDay);
@@ -39,8 +38,15 @@ const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'secondar
 
 export function ContratosTab() {
   const { contratos, loading, criarContrato, editarContrato, alterarStatus } = useContratos();
-  const { contasBancarias: contas, classificacoes, fornecedores } = useFinanceiroV2();
+  const { contasBancarias: contas, classificacoes, fornecedores, loadContas, loadFornecedores, loadClassificacoes } = useFinanceiroV2();
   const { fazendas, fazendaAtual } = useFazenda();
+
+  // Load auxiliary data on mount
+  useEffect(() => {
+    loadContas();
+    loadFornecedores();
+    loadClassificacoes();
+  }, [loadContas, loadFornecedores, loadClassificacoes]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editContrato, setEditContrato] = useState<Contrato | null>(null);
