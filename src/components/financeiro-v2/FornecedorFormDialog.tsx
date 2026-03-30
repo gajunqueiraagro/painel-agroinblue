@@ -77,6 +77,8 @@ export function FornecedorFormDialog({
   const [ativo, setAtivo] = useState(true);
   const [saving, setSaving] = useState(false);
   const [reviewId, setReviewId] = useState<string | null>(null);
+  const [lancamentoCount, setLancamentoCount] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (open) {
