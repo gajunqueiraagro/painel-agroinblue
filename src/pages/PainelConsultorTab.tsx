@@ -78,23 +78,19 @@ function buildZooRows(
     return saldoInicioMes[next] ?? 0;
   };
 
-  // Per-month lancamentos (conciliado)
   const lancAno = lancamentos.filter(l => l.data.substring(0, 4) === String(ano) && isLancConciliado(l));
   const lancMes = (m: number) => {
     const prefix = `${ano}-${String(m).padStart(2, '0')}`;
     return lancAno.filter(l => l.data.startsWith(prefix));
   };
 
-  // Helper: create row from monthly values
   const mkRow = (grupo: string, indicador: string, fn: (m: number) => number, format: ZooRow['format'] = 'int'): ZooRow => {
     const valores = Array.from({ length: 12 }, (_, i) => i + 1 <= ateMes ? fn(i + 1) : 0);
     const total = valores.reduce((a, b) => a + b, 0);
     return { grupo, indicador, valores, total, format };
   };
 
-  // ─ BASE MENSAL ─
-
-  // Pre-compute peso final per month (must be before pesoIniRow which references it)
+  // Pre-compute peso final per month
   const pesoFinKgRow_valores = Array.from({ length: 12 }, (_, i) => {
     const m = i + 1;
     if (m > ateMes) return 0;
@@ -109,228 +105,225 @@ function buildZooRows(
     return total;
   });
 
-  const cabIniRow = mkRow('Base Mensal', 'Rebanho inicial\n(cab)', m => {
-    const k = String(m).padStart(2, '0');
-    return m === 1 ? saldoInicialAno : (saldoInicioMes[k] ?? 0);
-  });
+  // Helper: entradas/saídas kg/@ por mês (reusável)
+  const tiposEntrada = ['nascimento', 'compra', 'transferencia_entrada'];
+  const tiposSaida = ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'];
 
-  const pesoIniRow = mkRow('Base Mensal', 'Peso inicial do rebanho\n(kg)', m => {
-    if (m === 1) {
-      return saldosIniciais.filter(s => s.ano === ano).reduce((s, si) => s + si.quantidade * (si.pesoMedioKg || 0), 0);
-    }
-    return pesoFinKgRow_valores[m - 2] ?? 0;
-  }, 'kg');
-
-  const pesoIniArrobasRow = mkRow('Base Mensal', 'Peso inicial do rebanho\n(@)', m => pesoIniRow.valores[m - 1] / 30, 'dec1');
-
-  // Entradas
-  const entradasCabRow = mkRow('Base Mensal', 'Entradas no rebanho\n(cab)', m => {
+  const entradasKgMes = (m: number) => lancMes(m).filter(l => tiposEntrada.includes(l.tipo)).reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
+  const saidasKgMes = (m: number) => lancMes(m).filter(l => tiposSaida.includes(l.tipo)).reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
+  const entradasArrobasMes = (m: number) => lancMes(m).filter(l => tiposEntrada.includes(l.tipo)).reduce((s, l) => s + calcArrobasSafe(l), 0);
+  const saidasArrobasMes = (m: number) => lancMes(m).filter(l => tiposSaida.includes(l.tipo)).reduce((s, l) => s + calcArrobasSafe(l), 0);
+  const entradasCabMes = (m: number) => {
     const resumo = calcResumoMovimentacoes(lancamentos, `${ano}-${String(m).padStart(2, '0')}`);
     return resumo.totalEntradas;
-  });
-
-  const entradasKgRow = mkRow('Base Mensal', 'Entradas no rebanho\n(kg)', m => {
-    const lm = lancMes(m).filter(l => ['nascimento', 'compra', 'transferencia_entrada'].includes(l.tipo));
-    return lm.reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
-  }, 'kg');
-
-  const entradasArrobasRow = mkRow('Base Mensal', 'Entradas no rebanho\n(@)', m => {
-    const lm = lancMes(m).filter(l => ['nascimento', 'compra', 'transferencia_entrada'].includes(l.tipo));
-    return lm.reduce((s, l) => s + calcArrobasSafe(l), 0);
-  }, 'dec1');
-
-  // Saídas
-  const saidasCabRow = mkRow('Base Mensal', 'Saídas do rebanho\n(cab)', m => {
+  };
+  const saidasCabMes = (m: number) => {
     const resumo = calcResumoMovimentacoes(lancamentos, `${ano}-${String(m).padStart(2, '0')}`);
     return resumo.totalSaidas;
-  });
+  };
 
-  const saidasKgRow = mkRow('Base Mensal', 'Saídas do rebanho\n(kg)', m => {
-    const lm = lancMes(m).filter(l => ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'].includes(l.tipo));
-    return lm.reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
-  }, 'kg');
+  const cabIniMes = (m: number) => {
+    const k = String(m).padStart(2, '0');
+    return m === 1 ? saldoInicialAno : (saldoInicioMes[k] ?? 0);
+  };
+  const cabFinMes = (m: number) => saldoFimMes(m);
+  const pesoIniMes = (m: number) => {
+    if (m === 1) return saldosIniciais.filter(s => s.ano === ano).reduce((s, si) => s + si.quantidade * (si.pesoMedioKg || 0), 0);
+    return pesoFinKgRow_valores[m - 2] ?? 0;
+  };
+  const pesoFinMes = (m: number) => pesoFinKgRow_valores[m - 1] ?? 0;
+  const cabMediaMes = (m: number) => (cabIniMes(m) + cabFinMes(m)) / 2;
+  const pesoMedioMes = (m: number) => { const c = cabFinMes(m); return c > 0 ? pesoFinMes(m) / c : 0; };
+  const diasNoMes = (m: number): number => new Date(ano, m, 0).getDate();
 
-  const saidasArrobasRow = mkRow('Base Mensal', 'Saídas do rebanho\n(@)', m => {
-    const lm = lancMes(m).filter(l => ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'].includes(l.tipo));
-    return lm.reduce((s, l) => s + calcArrobasSafe(l), 0);
-  }, 'dec1');
+  // ═══════════════════════════════════════════════
+  // 1️⃣ BASES (ESTRUTURA)
+  // ═══════════════════════════════════════════════
 
-  const cabFinRow = mkRow('Base Mensal', 'Rebanho final\n(cab)', m => saldoFimMes(m));
-
-  const pesoFinKgRow = mkRow('Base Mensal', 'Peso final do rebanho\n(kg)', m => {
-    return pesoFinKgRow_valores[m - 1] ?? 0;
-  }, 'kg');
-
-  const pesoFinArrobasRow = mkRow('Base Mensal', 'Peso final do rebanho\n(@)', m => pesoFinKgRow.valores[m - 1] / 30, 'dec1');
-
-  const pesoMedioFinRow = mkRow('Base Mensal', 'Peso médio do rebanho\n(kg/cab)', m => {
-    const cab = cabFinRow.valores[m - 1];
-    const pesoKg = pesoFinKgRow.valores[m - 1];
-    return cab > 0 ? pesoKg / cab : 0;
+  // ── Base Início do Mês ──
+  const cabIniRow = mkRow('Base — Início do Mês', 'Cabeças iniciais\n(cab)', cabIniMes);
+  const pesoIniKgRow = mkRow('Base — Início do Mês', 'Peso total inicial\n(kg)', pesoIniMes, 'kg');
+  const pesoIniArrobasRow = mkRow('Base — Início do Mês', 'Peso total inicial\n(@)', m => pesoIniMes(m) / 30, 'dec1');
+  const pesoMedioIniRow = mkRow('Base — Início do Mês', 'Peso médio inicial\n(kg/cab)', m => {
+    const c = cabIniMes(m); return c > 0 ? pesoIniMes(m) / c : 0;
   }, 'dec2');
 
-  rows.push(cabIniRow, pesoIniRow, pesoIniArrobasRow, entradasCabRow, entradasKgRow, entradasArrobasRow, saidasCabRow, saidasKgRow, saidasArrobasRow, cabFinRow, pesoFinKgRow, pesoFinArrobasRow, pesoMedioFinRow);
+  rows.push(cabIniRow, pesoIniKgRow, pesoIniArrobasRow, pesoMedioIniRow);
 
-  // ─ ACUMULADOS ─
-  const entAcumRow = mkRow('Acumulados', 'Entradas acumuladas no período\n(cab)', m => {
-    let acum = 0;
-    for (let i = 1; i <= m; i++) acum += entradasCabRow.valores[i - 1];
-    return acum;
-  });
+  // ── Base Final do Mês ──
+  const cabFinRow = mkRow('Base — Final do Mês', 'Cabeças finais\n(cab)', cabFinMes);
+  const pesoFinKgRow = mkRow('Base — Final do Mês', 'Peso total final\n(kg)', pesoFinMes, 'kg');
+  const pesoFinArrobasRow = mkRow('Base — Final do Mês', 'Peso total final\n(@)', m => pesoFinMes(m) / 30, 'dec1');
+  const pesoMedioFinRow = mkRow('Base — Final do Mês', 'Peso médio final\n(kg/cab)', pesoMedioMes, 'dec2');
 
-  const saiAcumRow = mkRow('Acumulados', 'Saídas acumuladas no período\n(cab)', m => {
-    let acum = 0;
-    for (let i = 1; i <= m; i++) acum += saidasCabRow.valores[i - 1];
-    return acum;
-  });
+  rows.push(cabFinRow, pesoFinKgRow, pesoFinArrobasRow, pesoMedioFinRow);
 
-  const cabMediaMesRow = mkRow('Acumulados', 'Rebanho médio no mês\n(cab)', m => {
-    return (cabIniRow.valores[m - 1] + cabFinRow.valores[m - 1]) / 2;
+  // ── Base Média do Mês ──
+  const cabMediaMesRow = mkRow('Base — Média do Mês', 'Rebanho médio do mês\n(cab)', cabMediaMes, 'dec1');
+  const pesoMedioRebMesRow = mkRow('Base — Média do Mês', 'Peso médio do rebanho — no mês\n(kg/cab)', pesoMedioMes, 'dec2');
+  const areaMesRow = mkRow('Base — Média do Mês', 'Área produtiva — no mês\n(ha)', _m => areaProdutiva, 'dec1');
+
+  rows.push(cabMediaMesRow, pesoMedioRebMesRow, areaMesRow);
+
+  // ── Base Média do Período ──
+  const cabMediaPeriodoRow = mkRow('Base — Média do Período', 'Rebanho médio no período\n(cab)', m => {
+    let soma = 0, n = 0;
+    for (let i = 1; i <= m; i++) { const v = cabMediaMes(i); if (v > 0) { soma += v; n++; } }
+    return n > 0 ? soma / n : 0;
   }, 'dec1');
 
-  const cabMediaPeriodoRow = mkRow('Acumulados', 'Rebanho médio do período\n(cab)', m => {
-    let soma = 0;
-    let qtdMeses = 0;
-    for (let i = 1; i <= m; i++) {
-      const media = (cabIniRow.valores[i - 1] + cabFinRow.valores[i - 1]) / 2;
-      if (media > 0) { soma += media; qtdMeses++; }
-    }
-    return qtdMeses > 0 ? soma / qtdMeses : 0;
-  }, 'dec1');
+  const pesoMedioPeriodoRow = mkRow('Base — Média do Período', 'Peso médio no período\n(kg/cab)', m => {
+    let soma = 0, n = 0;
+    for (let i = 1; i <= m; i++) { const v = pesoMedioMes(i); if (v > 0) { soma += v; n++; } }
+    return n > 0 ? soma / n : 0;
+  }, 'dec2');
 
-  rows.push(entAcumRow, saiAcumRow, cabMediaMesRow, cabMediaPeriodoRow);
-
-  // ─ INDICADORES ─
-
-  // Área produtiva
-  const areaMesRow = mkRow('Indicadores', 'Área produtiva — média no mês\n(ha)', _m => areaProdutiva, 'dec1');
-
-  const areaPeriodoRow = mkRow('Indicadores', 'Área produtiva — média no período\n(ha)', m => {
-    let soma = 0; let n = 0;
+  const areaPeriodoRow = mkRow('Base — Média do Período', 'Área produtiva — média no período\n(ha)', m => {
+    let soma = 0, n = 0;
     for (let i = 1; i <= m; i++) { const v = areaMesRow.valores[i - 1]; if (v > 0) { soma += v; n++; } }
     return n > 0 ? soma / n : 0;
   }, 'dec1');
 
-  // Peso médio do rebanho
-  const pesoMedioRebMesRow = mkRow('Indicadores', 'Peso médio do rebanho — no mês\n(kg/cab)', m => {
-    const cab = cabFinRow.valores[m - 1];
-    const pesoKg = pesoFinKgRow.valores[m - 1];
-    return cab > 0 ? pesoKg / cab : 0;
-  }, 'dec2');
+  rows.push(cabMediaPeriodoRow, pesoMedioPeriodoRow, areaPeriodoRow);
 
-  const pesoMedioRebPeriodoRow = mkRow('Indicadores', 'Peso médio do rebanho — no período\n(kg/cab)', m => {
-    let soma = 0; let n = 0;
-    for (let i = 1; i <= m; i++) { const v = pesoMedioRebMesRow.valores[i - 1]; if (v > 0) { soma += v; n++; } }
+  // ═══════════════════════════════════════════════
+  // 2️⃣ MOVIMENTAÇÕES (FLUXO)
+  // ═══════════════════════════════════════════════
+
+  // ── Entradas ──
+  const tiposEntradaMov: { tipo: string; label: string; temValor: boolean }[] = [
+    { tipo: 'nascimento', label: 'Nascimentos', temValor: false },
+    { tipo: 'compra', label: 'Compras', temValor: true },
+    { tipo: 'transferencia_entrada', label: 'Transferências entrada', temValor: true },
+  ];
+
+  tiposEntradaMov.forEach(({ tipo, label, temValor }) => {
+    rows.push(mkRow('Movimentações — Entradas', `${label}\n(cab)`, m =>
+      lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade, 0)));
+    rows.push(mkRow('Movimentações — Entradas', `${label}\n(kg)`, m =>
+      lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0), 'kg'));
+    rows.push(mkRow('Movimentações — Entradas', `${label}\n(@)`, m =>
+      lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + calcArrobasSafe(l), 0), 'dec1'));
+    if (temValor) {
+      rows.push(mkRow('Movimentações — Entradas', `${label}\n(R$)`, m =>
+        lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + calcValorTotal(l), 0), 'money'));
+    }
+  });
+
+  // ── Saídas ──
+  const tiposSaidaMov: { tipo: string; label: string; temValor: boolean; temArroba: boolean }[] = [
+    { tipo: 'abate', label: 'Abates', temValor: true, temArroba: true },
+    { tipo: 'venda', label: 'Vendas', temValor: true, temArroba: true },
+    { tipo: 'transferencia_saida', label: 'Transferências saída', temValor: true, temArroba: true },
+    { tipo: 'consumo', label: 'Consumo', temValor: false, temArroba: true },
+    { tipo: 'morte', label: 'Mortes', temValor: false, temArroba: false },
+  ];
+
+  tiposSaidaMov.forEach(({ tipo, label, temValor, temArroba }) => {
+    rows.push(mkRow('Movimentações — Saídas', `${label}\n(cab)`, m =>
+      lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade, 0)));
+    rows.push(mkRow('Movimentações — Saídas', `${label}\n(kg)`, m =>
+      lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0), 'kg'));
+    if (temArroba) {
+      rows.push(mkRow('Movimentações — Saídas', `${label}\n(@)`, m =>
+        lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + calcArrobasSafe(l), 0), 'dec1'));
+    }
+    if (temValor) {
+      rows.push(mkRow('Movimentações — Saídas', `${label}\n(R$)`, m =>
+        lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + calcValorTotal(l), 0), 'money'));
+    }
+  });
+
+  // ── Acumulados ──
+  const entradasCabRow = mkRow('Movimentações — Acumulados', 'Entradas acumuladas\n(cab)', m => {
+    let acum = 0; for (let i = 1; i <= m; i++) acum += entradasCabMes(i); return acum;
+  });
+  const saidasCabAcumRow = mkRow('Movimentações — Acumulados', 'Saídas acumuladas\n(cab)', m => {
+    let acum = 0; for (let i = 1; i <= m; i++) acum += saidasCabMes(i); return acum;
+  });
+
+  rows.push(entradasCabRow, saidasCabAcumRow);
+
+  // ═══════════════════════════════════════════════
+  // 3️⃣ INDICADORES (RESULTADO)
+  // ═══════════════════════════════════════════════
+
+  // ── Área e Peso ──
+  const indAreaMesRow = mkRow('Indicadores — Área e Peso', 'Área produtiva — média no mês\n(ha)', _m => areaProdutiva, 'dec1');
+  const indAreaPeriodoRow = mkRow('Indicadores — Área e Peso', 'Área produtiva — média no período\n(ha)', m => {
+    let soma = 0, n = 0;
+    for (let i = 1; i <= m; i++) { const v = indAreaMesRow.valores[i - 1]; if (v > 0) { soma += v; n++; } }
+    return n > 0 ? soma / n : 0;
+  }, 'dec1');
+  const indPesoMesRow = mkRow('Indicadores — Área e Peso', 'Peso médio do rebanho — no mês\n(kg/cab)', pesoMedioMes, 'dec2');
+  const indPesoPeriodoRow = mkRow('Indicadores — Área e Peso', 'Peso médio do rebanho — no período\n(kg/cab)', m => {
+    let soma = 0, n = 0;
+    for (let i = 1; i <= m; i++) { const v = pesoMedioMes(i); if (v > 0) { soma += v; n++; } }
     return n > 0 ? soma / n : 0;
   }, 'dec2');
 
-  const lotCabHaRow = mkRow('Indicadores', 'Lotação — Rebanho médio do mês\n(cab/ha)', m => {
-    if (areaProdutiva <= 0) return 0;
-    return cabMediaMesRow.valores[m - 1] / areaProdutiva;
-  }, 'dec2');
+  rows.push(indAreaMesRow, indAreaPeriodoRow, indPesoMesRow, indPesoPeriodoRow);
 
-  const lotCabHaAcumRow = mkRow('Indicadores', 'Lotação — Rebanho médio acumulado\n(cab/ha)', m => {
-    if (areaProdutiva <= 0) return 0;
-    let soma = 0; let n = 0;
+  // ── Lotação ──
+  const lotCabHaRow = mkRow('Indicadores — Lotação', 'Lotação — rebanho médio do mês\n(cab/ha)', m => {
+    return areaProdutiva > 0 ? cabMediaMes(m) / areaProdutiva : 0;
+  }, 'dec2');
+  const lotCabHaAcumRow = mkRow('Indicadores — Lotação', 'Lotação — rebanho médio no período\n(cab/ha)', m => {
+    let soma = 0, n = 0;
     for (let i = 1; i <= m; i++) { const v = lotCabHaRow.valores[i - 1]; if (v > 0) { soma += v; n++; } }
     return n > 0 ? soma / n : 0;
   }, 'dec2');
 
-  const uaRow = mkRow('Indicadores', 'UA — Rebanho médio do mês\n(UA)', m => calcUA(cabMediaMesRow.valores[m - 1], 450), 'dec1');
-
-  const uaAcumRow = mkRow('Indicadores', 'UA — Rebanho médio no período\n(UA)', m => {
-    let soma = 0; let n = 0;
+  const uaRow = mkRow('Indicadores — Lotação', 'UA — rebanho médio do mês\n(UA)', m => calcUA(cabMediaMes(m), 450), 'dec1');
+  const uaAcumRow = mkRow('Indicadores — Lotação', 'UA — rebanho médio no período\n(UA)', m => {
+    let soma = 0, n = 0;
     for (let i = 1; i <= m; i++) { const v = uaRow.valores[i - 1]; if (v > 0) { soma += v; n++; } }
     return n > 0 ? soma / n : 0;
   }, 'dec1');
 
-  const lotUaHaRow = mkRow('Indicadores', 'Lotação — Rebanho médio do mês\n(UA/ha)', m => {
-    if (areaProdutiva <= 0) return 0;
-    return uaRow.valores[m - 1] / areaProdutiva;
+  const lotUaHaRow = mkRow('Indicadores — Lotação', 'Lotação — rebanho médio do mês\n(UA/ha)', m => {
+    return areaProdutiva > 0 ? uaRow.valores[m - 1] / areaProdutiva : 0;
   }, 'dec2');
-
-  const lotUaHaAcumRow = mkRow('Indicadores', 'Lotação — Rebanho médio no período\n(UA/ha)', m => {
-    if (areaProdutiva <= 0) return 0;
-    let soma = 0; let n = 0;
+  const lotUaHaAcumRow = mkRow('Indicadores — Lotação', 'Lotação — rebanho médio no período\n(UA/ha)', m => {
+    let soma = 0, n = 0;
     for (let i = 1; i <= m; i++) { const v = lotUaHaRow.valores[i - 1]; if (v > 0) { soma += v; n++; } }
     return n > 0 ? soma / n : 0;
   }, 'dec2');
 
-  const lotKgHaRow = mkRow('Indicadores', 'Lotação — Peso médio do mês\n(kg/ha)', m => {
-    if (areaProdutiva <= 0) return 0;
-    return pesoFinKgRow.valores[m - 1] / areaProdutiva;
+  const lotKgHaRow = mkRow('Indicadores — Lotação', 'Lotação — peso médio do mês\n(kg/ha)', m => {
+    return areaProdutiva > 0 ? pesoFinMes(m) / areaProdutiva : 0;
   }, 'dec1');
-
-  const lotKgHaAcumRow = mkRow('Indicadores', 'Lotação — Peso médio no período\n(kg/ha)', m => {
-    if (areaProdutiva <= 0) return 0;
-    let soma = 0; let n = 0;
+  const lotKgHaAcumRow = mkRow('Indicadores — Lotação', 'Lotação — peso médio no período\n(kg/ha)', m => {
+    let soma = 0, n = 0;
     for (let i = 1; i <= m; i++) { const v = lotKgHaRow.valores[i - 1]; if (v > 0) { soma += v; n++; } }
     return n > 0 ? soma / n : 0;
   }, 'dec1');
 
-  const arrobasProdRow = mkRow('Indicadores', 'Produção de arrobas — no período\n(@)', m => {
-    return saidasArrobasRow.valores[m - 1];
+  rows.push(lotCabHaRow, lotCabHaAcumRow, uaRow, uaAcumRow, lotUaHaRow, lotUaHaAcumRow, lotKgHaRow, lotKgHaAcumRow);
+
+  // ── Produção ──
+  const arrobasMesRow = mkRow('Indicadores — Produção', 'Produção de arrobas — no mês\n(@)', saidasArrobasMes, 'dec1');
+  const arrobasPeriodoRow = mkRow('Indicadores — Produção', 'Produção de arrobas — no período\n(@)', m => {
+    let acum = 0; for (let i = 1; i <= m; i++) acum += saidasArrobasMes(i); return acum;
   }, 'dec1');
 
-  // ─ GMD ─
-  const diasNoMes = (m: number): number => new Date(ano as unknown as number, m, 0).getDate();
+  rows.push(arrobasMesRow, arrobasPeriodoRow);
 
-  const gmdMesRow = mkRow('Indicadores', 'GMD — Variação real do rebanho no mês\n(kg/cab/dia)', m => {
-    const pesoFin = pesoFinKgRow.valores[m - 1];
-    const pesoIni = pesoIniRow.valores[m - 1];
-    const pesoEnt = entradasKgRow.valores[m - 1];
-    const pesoSai = saidasKgRow.valores[m - 1];
-    const rebMedio = cabMediaMesRow.valores[m - 1];
+  // ── Desempenho (GMD) ──
+  const gmdMesRow = mkRow('Indicadores — Desempenho', 'GMD — no mês\n(kg/cab/dia)', m => {
+    const rebMedio = cabMediaMes(m);
     const dias = diasNoMes(m);
     if (rebMedio <= 0 || dias <= 0) return 0;
-    return (pesoFin - pesoIni - pesoEnt + pesoSai) / rebMedio / dias;
+    return (pesoFinMes(m) - pesoIniMes(m) - entradasKgMes(m) + saidasKgMes(m)) / rebMedio / dias;
   }, 'dec2');
 
-  const gmdPeriodoRow = mkRow('Indicadores', 'GMD — Variação real do rebanho no período\n(kg/cab/dia)', m => {
-    let soma = 0; let n = 0;
-    for (let i = 1; i <= m; i++) { const v = gmdMesRow.valores[i - 1]; if (v !== 0 || cabMediaMesRow.valores[i - 1] > 0) { soma += v; n++; } }
+  const gmdPeriodoRow = mkRow('Indicadores — Desempenho', 'GMD — no período\n(kg/cab/dia)', m => {
+    let soma = 0, n = 0;
+    for (let i = 1; i <= m; i++) { const v = gmdMesRow.valores[i - 1]; if (v !== 0 || cabMediaMes(i) > 0) { soma += v; n++; } }
     return n > 0 ? soma / n : 0;
   }, 'dec2');
 
-  rows.push(areaMesRow, areaPeriodoRow, pesoMedioRebMesRow, pesoMedioRebPeriodoRow, lotCabHaRow, lotCabHaAcumRow, uaRow, uaAcumRow, lotUaHaRow, lotUaHaAcumRow, lotKgHaRow, lotKgHaAcumRow, arrobasProdRow, gmdMesRow, gmdPeriodoRow);
-
-  // ─ MOVIMENTAÇÕES ─
-  const tiposMov: { tipo: string; labelQtd: string; labelKg: string; labelArroba: string; labelValor: string }[] = [
-    { tipo: 'nascimento', labelQtd: 'Nascimentos\n(cab)', labelKg: 'Peso de nascimentos\n(kg)', labelArroba: 'Peso de nascimentos\n(@)', labelValor: 'Valor de nascimentos\n(R$)' },
-    { tipo: 'compra', labelQtd: 'Compras de animais\n(cab)', labelKg: 'Peso de compras\n(kg)', labelArroba: 'Peso de compras\n(@)', labelValor: 'Valor de compras\n(R$)' },
-    { tipo: 'transferencia_entrada', labelQtd: 'Transferências recebidas\n(cab)', labelKg: 'Peso recebido por transferência\n(kg)', labelArroba: 'Peso recebido por transferência\n(@)', labelValor: 'Valor recebido por transferência\n(R$)' },
-    { tipo: 'transferencia_saida', labelQtd: 'Transferências enviadas\n(cab)', labelKg: 'Peso enviado por transferência\n(kg)', labelArroba: 'Peso enviado por transferência\n(@)', labelValor: 'Valor enviado por transferência\n(R$)' },
-    { tipo: 'abate', labelQtd: 'Abates\n(cab)', labelKg: 'Peso abatido\n(kg)', labelArroba: 'Peso abatido\n(@)', labelValor: 'Receita com abates\n(R$)' },
-    { tipo: 'venda', labelQtd: 'Vendas em pé\n(cab)', labelKg: 'Peso vendido\n(kg)', labelArroba: 'Peso vendido\n(@)', labelValor: 'Receita com vendas\n(R$)' },
-    { tipo: 'consumo', labelQtd: 'Consumo interno\n(cab)', labelKg: 'Consumo interno\n(kg)', labelArroba: 'Consumo interno\n(@)', labelValor: 'Consumo interno\n(R$)' },
-    { tipo: 'morte', labelQtd: 'Mortes\n(cab)', labelKg: 'Mortes\n(kg)', labelArroba: 'Mortes\n(@)', labelValor: 'Mortes\n(R$)' },
-  ];
-
-  tiposMov.forEach(({ tipo, labelQtd, labelKg, labelArroba, labelValor }) => {
-    const qtdRow = mkRow('Movimentações', labelQtd, m => {
-      return lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade, 0);
-    });
-
-    const qtdAcumRow = mkRow('Movimentações', `${labelQtd.split('\n')[0]}\n(acum)`, m => {
-      let acum = 0;
-      for (let i = 1; i <= m; i++) acum += qtdRow.valores[i - 1];
-      return acum;
-    });
-
-    const pesoRow = mkRow('Movimentações', labelKg, m => {
-      return lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
-    }, 'kg');
-
-    const arrobasRow = mkRow('Movimentações', labelArroba, m => {
-      return lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + calcArrobasSafe(l), 0);
-    }, 'dec1');
-
-    const valorRow = mkRow('Movimentações', labelValor, m => {
-      return lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + calcValorTotal(l), 0);
-    }, 'money');
-
-    rows.push(qtdRow, qtdAcumRow, pesoRow, arrobasRow, valorRow);
-  });
+  rows.push(gmdMesRow, gmdPeriodoRow);
 
   return rows;
 }
