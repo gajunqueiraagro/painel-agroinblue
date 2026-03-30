@@ -39,7 +39,7 @@ export interface LancamentoV2 {
 export interface LancamentoV2Form {
   fazenda_id: string;
   conta_bancaria_id?: string | null;
-  conta_destino_id?: string | null; // For transfers
+  conta_destino_id?: string | null;
   data_competencia: string;
   data_pagamento?: string | null;
   valor: number;
@@ -53,6 +53,8 @@ export interface LancamentoV2Form {
   observacao?: string;
   nota_fiscal?: string | null;
   favorecido_id?: string | null;
+  forma_pagamento?: string | null;
+  dados_pagamento?: string | null;
 }
 
 export interface ContaBancariaV2 {
