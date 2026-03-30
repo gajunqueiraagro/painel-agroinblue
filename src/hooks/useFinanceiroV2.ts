@@ -105,7 +105,7 @@ export interface ClassificacaoItem {
   tipo_operacao: string;
 }
 
-const PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = 30;
 
 export function useFinanceiroV2() {
   const { clienteAtual } = useCliente();
