@@ -499,20 +499,20 @@ export function ConciliacaoBancariaTab() {
                   <div>
                     <div className="flex items-center gap-1.5 mb-1">
                       <button
-                        onClick={() => setFiltroTipoLanc(filtroTipo === 'todos' ? 'todos' : 'todos')}
-                        className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipo === 'todos' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+                        onClick={() => setFiltroTipoLanc('todos')}
+                        className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipoLanc === 'todos' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
                       >
-                        Lançamentos ({card.lancamentos.length})
+                        Todos ({card.lancamentos.length})
                       </button>
                       <button
-                        onClick={() => setFiltroTipoLanc(filtroTipo === 'entradas' ? 'todos' : 'entradas')}
-                        className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipo === 'entradas' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 hover:opacity-80'}`}
+                        onClick={() => setFiltroTipoLanc(filtroTipoLanc === 'entradas' ? 'todos' : 'entradas')}
+                        className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipoLanc === 'entradas' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 hover:opacity-80'}`}
                       >
                         Entradas ({entradas.length})
                       </button>
                       <button
-                        onClick={() => setFiltroTipoLanc(filtroTipo === 'saidas' ? 'todos' : 'saidas')}
-                        className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipo === 'saidas' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 hover:opacity-80'}`}
+                        onClick={() => setFiltroTipoLanc(filtroTipoLanc === 'saidas' ? 'todos' : 'saidas')}
+                        className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipoLanc === 'saidas' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 hover:opacity-80'}`}
                       >
                         Saídas ({saidas.length})
                       </button>
