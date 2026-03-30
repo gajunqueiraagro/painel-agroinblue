@@ -50,6 +50,7 @@ export function FinV2FornecedoresTab() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Fornecedor | null>(null);
   const [searchText, setSearchText] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'todos' | 'ativos' | 'inativos'>('ativos');
   const [activeTab, setActiveTab] = useState('cadastro');
 
   // Pending items
