@@ -265,7 +265,7 @@ const Index = () => {
       />
 
       {/* Botão fixo de acesso ao Financeiro v2 */}
-      {!['financeiro_v2', 'financeiro_v2_hub', 'fin_v2_contas', 'fin_v2_fornecedores', 'fin_v2_plano', 'fin_v2_saldos'].includes(activeTab) && (
+      {!['financeiro_v2', 'financeiro_v2_hub', 'fin_v2_contas', 'fin_v2_fornecedores', 'fin_v2_plano', 'fin_v2_saldos', 'contratos'].includes(activeTab) && (
         <div className="px-2 py-1">
           <button
             onClick={() => handleTabChange('financeiro_v2_hub')}
