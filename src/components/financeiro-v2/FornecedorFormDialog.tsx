@@ -90,6 +90,18 @@ export function FornecedorFormDialog({
   const [lancamentoCount, setLancamentoCount] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Payment fields
+  const [tipoRecebimento, setTipoRecebimento] = useState('');
+  const [pixTipoChave, setPixTipoChave] = useState('');
+  const [pixChave, setPixChave] = useState('');
+  const [banco, setBanco] = useState('');
+  const [agencia, setAgencia] = useState('');
+  const [conta, setConta] = useState('');
+  const [tipoConta, setTipoConta] = useState('');
+  const [cpfCnpjPagamento, setCpfCnpjPagamento] = useState('');
+  const [nomeFavorecido, setNomeFavorecido] = useState('');
+  const [observacaoPagamento, setObservacaoPagamento] = useState('');
+
   useEffect(() => {
     if (open) {
       if (editing) {
@@ -97,7 +109,16 @@ export function FornecedorFormDialog({
         setCpfCnpj(editing.cpf_cnpj || '');
         setFazendaId(editing.fazenda_id);
         setAtivo(editing.ativo);
-        // Check linked lancamentos
+        setTipoRecebimento(editing.tipo_recebimento || '');
+        setPixTipoChave(editing.pix_tipo_chave || '');
+        setPixChave(editing.pix_chave || '');
+        setBanco(editing.banco || '');
+        setAgencia(editing.agencia || '');
+        setConta(editing.conta || '');
+        setTipoConta(editing.tipo_conta || '');
+        setCpfCnpjPagamento(editing.cpf_cnpj_pagamento || '');
+        setNomeFavorecido(editing.nome_favorecido || '');
+        setObservacaoPagamento(editing.observacao_pagamento || '');
         supabase.from('financeiro_lancamentos_v2')
           .select('id', { count: 'exact', head: true })
           .eq('favorecido_id', editing.id)
@@ -108,6 +129,16 @@ export function FornecedorFormDialog({
         setFazendaId(fazendas[0]?.id || '');
         setAtivo(true);
         setLancamentoCount(null);
+        setTipoRecebimento('');
+        setPixTipoChave('');
+        setPixChave('');
+        setBanco('');
+        setAgencia('');
+        setConta('');
+        setTipoConta('');
+        setCpfCnpjPagamento('');
+        setNomeFavorecido('');
+        setObservacaoPagamento('');
       }
       setReviewId(null);
       setDeleting(false);
