@@ -532,11 +532,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </div>
             <div>
               <label className={lblCls}>Fornecedor</label>
-              <Input
+              <SearchableSelect
                 value={fornecedorFiltro}
-                onChange={e => setFornecedorFiltro(e.target.value)}
-                placeholder="Buscar..."
-                className="h-6 text-[10px] px-1.5"
+                onValueChange={setFornecedorFiltro}
+                options={hook.fornecedores.map(f => ({ value: f.id, label: f.nome }))}
+                placeholder="Buscar fornecedor..."
               />
             </div>
           </div>
@@ -553,10 +553,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 <FilterX className="h-3 w-3" /> Limpar
               </Button>
               <FinanceiroV2ExportMenu
-                lancamentos={sortedLancamentos}
+                filtros={filtros}
+                loadAllForExport={hook.loadAllForExport}
                 fornecedores={hook.fornecedores}
                 ano={ano}
                 fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
+                totalCount={hook.total}
               />
               <Button
                 size="sm"
