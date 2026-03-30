@@ -68,6 +68,7 @@ export interface FornecedorV2 {
   nome: string;
   cpf_cnpj: string | null;
   fazenda_id: string;
+  ativo: boolean;
 }
 
 export interface FiltrosV2 {
