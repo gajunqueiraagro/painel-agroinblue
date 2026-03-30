@@ -311,6 +311,8 @@ export function useFinanceiroV2() {
       observacao: form.observacao || null,
       nota_fiscal: form.nota_fiscal || null,
       favorecido_id: form.favorecido_id || null,
+      forma_pagamento: form.forma_pagamento || null,
+      dados_pagamento: form.dados_pagamento || null,
       ano_mes: anoMes,
       updated_by: user.id,
     }).eq('id', id);
