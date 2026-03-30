@@ -108,23 +108,23 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
 
   return (
     <div>
-      <table className="w-full text-xs border-collapse">
+      <table className="w-full text-[10px] border-collapse">
          <thead className="sticky top-0 z-10">
           <tr className="border-b border-border">
-            <th className="p-1.5 text-left font-bold bg-background">Data</th>
-            {showTipo && <th className="p-1.5 text-left font-bold bg-background">Tipo</th>}
-            <th className="p-1.5 text-right font-bold bg-background">Qtd</th>
-            <th className="p-1.5 text-left font-bold bg-background">Categoria</th>
-            {showDestino && <th className="p-1.5 text-left font-bold bg-background">{isMorte ? 'Motivo' : 'Destino'}</th>}
-            {isGlobal && <th className="p-1.5 text-left font-bold bg-background">{showTipo ? 'Fazenda' : globalColHeader}</th>}
-            <th className="p-1.5 text-right font-bold bg-background">P.Vivo</th>
-            <th className="p-1.5 text-right font-bold bg-background">P.@</th>
-            <th className="p-1.5 text-right font-bold text-primary bg-background">Total</th>
-            <th className="p-1.5 text-right font-bold bg-background">R$/líq @</th>
-            {showLiqKg && <th className="p-1.5 text-right font-bold bg-background">R$/Kg Líq</th>}
-            <th className="p-1.5 text-right font-bold bg-background">Líq/Cab</th>
-            <th className="p-1.5 text-center font-bold bg-background">Status</th>
-            <th className="p-1.5 w-8 bg-background"></th>
+            <th className="px-1 py-0.5 text-left font-bold text-[9px] uppercase tracking-wide bg-background">Data</th>
+            {showTipo && <th className="px-1 py-0.5 text-left font-bold text-[9px] uppercase tracking-wide bg-background">Tipo</th>}
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">Qtd</th>
+            <th className="px-1 py-0.5 text-left font-bold text-[9px] uppercase tracking-wide bg-background">Categoria</th>
+            {showDestino && <th className="px-1 py-0.5 text-left font-bold text-[9px] uppercase tracking-wide bg-background">{isMorte ? 'Motivo' : 'Destino'}</th>}
+            {isGlobal && <th className="px-1 py-0.5 text-left font-bold text-[9px] uppercase tracking-wide bg-background">{showTipo ? 'Fazenda' : globalColHeader}</th>}
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">P.Vivo</th>
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">P.@</th>
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide text-primary bg-background">Total</th>
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">R$/líq @</th>
+            {showLiqKg && <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">R$/Kg Líq</th>}
+            <th className="px-1 py-0.5 text-right font-bold text-[9px] uppercase tracking-wide bg-background">Líq/Cab</th>
+            <th className="px-1 py-0.5 text-center font-bold text-[9px] uppercase tracking-wide bg-background">Status</th>
+            <th className="px-1 py-0.5 w-6 bg-background"></th>
           </tr>
         </thead>
         <tbody>
