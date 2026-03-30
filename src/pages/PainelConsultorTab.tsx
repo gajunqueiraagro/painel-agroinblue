@@ -3,6 +3,7 @@
  * Leitura rápida, foco em conferência e fechamento.
  */
 import { useState, useMemo, useCallback } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -327,7 +328,8 @@ function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes
     return obj;
   });
   const wsZoo = XLSX.utils.json_to_sheet(zooData);
-  XLSX.utils.book_append_sheet(wb, wsZoo, 'Zootécnico');
+  wsZoo['!cols'] = [{ wch: 18 }, { wch: 24 }, ...mesesHeaders.map(() => ({ wch: 14 })), { wch: 14 }];
+  XLSX.utils.book_append_sheet(wb, wsZoo, 'Zootecnico');
 
   // Financeiro sheet
   const finData = finRows.map(r => {
@@ -337,6 +339,7 @@ function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes
     return obj;
   });
   const wsFin = XLSX.utils.json_to_sheet(finData);
+  wsFin['!cols'] = [{ wch: 18 }, { wch: 24 }, ...mesesHeaders.map(() => ({ wch: 14 })), { wch: 14 }];
   XLSX.utils.book_append_sheet(wb, wsFin, 'Financeiro');
 
   // Movimentações sheet (subset of zoo)
@@ -348,9 +351,12 @@ function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes
     return obj;
   });
   const wsMov = XLSX.utils.json_to_sheet(movData);
-  XLSX.utils.book_append_sheet(wb, wsMov, 'Movimentações');
+  wsMov['!cols'] = [{ wch: 24 }, ...mesesHeaders.map(() => ({ wch: 14 })), { wch: 14 }];
+  XLSX.utils.book_append_sheet(wb, wsMov, 'Movimentacoes');
 
-  XLSX.writeFile(wb, `Painel_Consultor_${fazendaNome}_${ano}.xlsx`);
+  const filename = `Painel_Consultor_${fazendaNome.replace(/\s+/g, '_')}_${ano}.xlsx`;
+  XLSX.writeFile(wb, filename);
+  return filename;
 }
 
 // ─── Component ───
@@ -389,7 +395,13 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
   const fazendaNome = isGlobal ? 'Global' : (fazendaAtual?.nome || 'Fazenda');
 
   const handleExport = useCallback(() => {
-    exportToExcel(zooRows, finRows, anoNum, ateMes, fazendaNome);
+    try {
+      const filename = exportToExcel(zooRows, finRows, anoNum, ateMes, fazendaNome);
+      toast.success(`Excel exportado: ${filename}`);
+    } catch (err) {
+      console.error('Erro ao exportar Excel:', err);
+      toast.error('Erro ao exportar Excel. Verifique o console.');
+    }
   }, [zooRows, finRows, anoNum, ateMes, fazendaNome]);
 
   const mesesVisiveis = MESES_LABELS.slice(0, ateMes);
