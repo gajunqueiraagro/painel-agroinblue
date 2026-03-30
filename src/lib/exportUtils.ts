@@ -1,9 +1,9 @@
 import { Lancamento, SaldoInicial, CATEGORIAS, isEntrada, isReclassificacao, TODOS_TIPOS } from '@/types/cattle';
 import { parseISO, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 
 const MESES_COLS = [
   { key: '01', label: 'Jan' }, { key: '02', label: 'Fev' }, { key: '03', label: 'Mar' },
