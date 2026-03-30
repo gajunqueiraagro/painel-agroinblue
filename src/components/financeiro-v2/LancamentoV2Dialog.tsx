@@ -218,8 +218,24 @@ export function LancamentoV2Dialog({
   const contasDisponiveis = contas;
 
   const fornecedoresList = useMemo(() =>
-    fornecedores.filter(f => f.fazenda_id === fazendaId || !f.fazenda_id),
+    fornecedores.filter(f => f.ativo !== false && (f.fazenda_id === fazendaId || !f.fazenda_id)),
   [fornecedores, fazendaId]);
+
+  /** Normalize text for accent-insensitive search */
+  function normalizeSearch(s: string): string {
+    return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
+
+  const filteredFornecedores = useMemo(() => {
+    if (!fornecedorSearch.trim()) return fornecedoresList;
+    const q = normalizeSearch(fornecedorSearch);
+    return fornecedoresList.filter(f => normalizeSearch(f.nome).includes(q));
+  }, [fornecedoresList, fornecedorSearch]);
+
+  const selectedFornecedorNome = useMemo(() => {
+    if (!favorecidoId) return '';
+    return fornecedores.find(f => f.id === favorecidoId)?.nome || '';
+  }, [favorecidoId, fornecedores]);
 
   const fazOperacionais = fazendas.filter(f => f.id !== '__global__');
 
