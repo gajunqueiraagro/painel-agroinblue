@@ -301,8 +301,39 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     return items;
   }, [hook.lancamentos, produtoFiltro, fornecedorFiltro, atividadeFiltro, hook.fornecedores]);
 
-  const totalEntradas = filteredLancamentos.filter(l => l.sinal > 0).reduce((s, l) => s + l.valor, 0);
-  const totalSaidas = filteredLancamentos.filter(l => l.sinal < 0).reduce((s, l) => s + l.valor, 0);
+  // Sorted lancamentos
+  const sortedLancamentos = useMemo(() => {
+    if (!sortField) return filteredLancamentos;
+    const items = [...filteredLancamentos];
+    const dir = sortDir === 'asc' ? 1 : -1;
+    items.sort((a, b) => {
+      switch (sortField) {
+        case 'data': return dir * ((a.data_pagamento || a.data_competencia).localeCompare(b.data_pagamento || b.data_competencia));
+        case 'valor': return dir * (a.valor * a.sinal - b.valor * b.sinal);
+        case 'produto': return dir * ((a.descricao || '').localeCompare(b.descricao || '', 'pt-BR'));
+        case 'fornecedor': {
+          const nA = hook.fornecedores.find(f => f.id === a.favorecido_id)?.nome || '';
+          const nB = hook.fornecedores.find(f => f.id === b.favorecido_id)?.nome || '';
+          return dir * nA.localeCompare(nB, 'pt-BR');
+        }
+        default: return 0;
+      }
+    });
+    return items;
+  }, [filteredLancamentos, sortField, sortDir, hook.fornecedores]);
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDir(field === 'valor' || field === 'data' ? 'desc' : 'asc');
+    }
+  };
+  const sortIcon = (field: SortField) => sortField === field ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+
+  const totalEntradas = sortedLancamentos.filter(l => l.sinal > 0).reduce((s, l) => s + l.valor, 0);
+  const totalSaidas = sortedLancamentos.filter(l => l.sinal < 0).reduce((s, l) => s + l.valor, 0);
 
   const toggleMes = (val: string) => {
     setMesesSelecionados(prev =>
