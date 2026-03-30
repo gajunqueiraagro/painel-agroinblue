@@ -323,7 +323,6 @@ function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes
   const form = document.createElement('form');
   form.method = 'POST';
   form.action = EXPORT_FUNCTION_URL;
-  form.target = '_blank';
   form.style.display = 'none';
 
   const payloadInput = document.createElement('input');
@@ -333,11 +332,7 @@ function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes
   form.appendChild(payloadInput);
 
   document.body.appendChild(form);
-  if (typeof form.requestSubmit === 'function') {
-    form.requestSubmit();
-  } else {
-    form.submit();
-  }
+  form.submit();
   document.body.removeChild(form);
 
   return filename;
