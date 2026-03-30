@@ -79,6 +79,10 @@ export function LancamentoV2Dialog({
   const [fornecedorSearch, setFornecedorSearch] = useState('');
   const fornecedorInputRef = useRef<HTMLInputElement>(null);
 
+  // Installment state
+  const [formaPagamento, setFormaPagamento] = useState<'avista' | 'parcelada'>('avista');
+  const [numParcelas, setNumParcelas] = useState(2);
+
   const [fazendaId, setFazendaId] = useState('');
   const [dataCompetencia, setDataCompetencia] = useState('');
   const [dataPagamento, setDataPagamento] = useState('');
@@ -179,6 +183,8 @@ export function LancamentoV2Dialog({
       setContaDestinoId('');
       setNotaFiscal('');
       setObservacao('');
+      setFormaPagamento('avista');
+      setNumParcelas(2);
     }
     setSubcentroSearch('');
   }, [lancamento, defaultFazendaId]);
@@ -248,9 +254,17 @@ export function LancamentoV2Dialog({
     ? (isEntrada ? contaDestinoValid : contaOrigemValid)
     : (contaOrigemValid && contaDestinoValid);
 
+  const parceladaValid = formaPagamento === 'avista' || (numParcelas >= 2 && numParcelas <= 24);
   const canSave = !!fazendaId && !!dataCompetencia && !!dataPagamento && !!descricao && !!favorecidoId && favorecidoId !== '__none_forn__'
     && !!subcentro && !!tipoOperacao && !!statusTransacao && valorNum > 0
-    && contaSimpleValid;
+    && contaSimpleValid && parceladaValid;
+
+  /** Add N days to a date string (YYYY-MM-DD) */
+  function addDays(dateStr: string, days: number): string {
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  }
 
   const handleSubmit = async () => {
     if (!canSave) return;
@@ -265,6 +279,46 @@ export function LancamentoV2Dialog({
       contaBancariaId = contaOrigemId && contaOrigemId !== '__none__' ? contaOrigemId : null;
     }
 
+    // --- Installment logic (only for new, not edit) ---
+    if (!isEdit && formaPagamento === 'parcelada' && numParcelas >= 2) {
+      const totalVal = Math.abs(valorNum);
+      const baseVal = Math.floor((totalVal / numParcelas) * 100) / 100;
+      const lastVal = Math.round((totalVal - baseVal * (numParcelas - 1)) * 100) / 100;
+
+      let allOk = true;
+      for (let i = 0; i < numParcelas; i++) {
+        const parcelaNum = i + 1;
+        const parcelaVal = parcelaNum === numParcelas ? lastVal : baseVal;
+        const parcelaPgto = addDays(dataPagamento, i * 30);
+        const parcelaDesc = `${descricao} - Parcela ${parcelaNum}/${numParcelas}`;
+
+        const form: LancamentoV2Form = {
+          fazenda_id: fazendaId,
+          conta_bancaria_id: contaBancariaId,
+          data_competencia: dataCompetencia,
+          data_pagamento: parcelaPgto,
+          valor: parcelaVal,
+          tipo_operacao: tipoOperacao,
+          status_transacao: 'confirmado',
+          descricao: parcelaDesc,
+          macro_custo: macroCusto,
+          centro_custo: centroCusto,
+          subcentro,
+          observacao,
+          nota_fiscal: notaFiscal || null,
+          favorecido_id: favorecidoId && favorecidoId !== '__none_forn__' ? favorecidoId : null,
+        };
+
+        const ok = await onSave(form);
+        if (!ok) { allOk = false; break; }
+      }
+
+      setSaving(false);
+      if (allOk) onClose();
+      return;
+    }
+
+    // --- Single (à vista) ---
     const form: LancamentoV2Form = {
       fazenda_id: fazendaId,
       conta_bancaria_id: contaBancariaId,
@@ -409,6 +463,48 @@ export function LancamentoV2Dialog({
                     </Select>
                   </div>
                 </div>
+
+                {/* Forma de Pagamento — only for new */}
+                {!isEdit && (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs">Forma de Pagamento</Label>
+                        <Select value={formaPagamento} onValueChange={(v: 'avista' | 'parcelada') => setFormaPagamento(v)}>
+                          <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="avista">À vista</SelectItem>
+                            <SelectItem value="parcelada">Parcelada</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {formaPagamento === 'parcelada' && (
+                        <div>
+                          <Label className="text-xs">Nº de Parcelas *</Label>
+                          <Input
+                            type="number"
+                            min={2}
+                            max={24}
+                            value={numParcelas}
+                            onChange={e => setNumParcelas(Math.max(2, Math.min(24, parseInt(e.target.value) || 2)))}
+                            className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"
+                          />
+                        </div>
+                      )}
+                    </div>
+                    {formaPagamento === 'parcelada' && valorNum > 0 && (
+                      <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-2.5 text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                        <p className="font-semibold">Resumo do parcelamento:</p>
+                        <p>{numParcelas}x de R$ {toBRL(Math.floor((Math.abs(valorNum) / numParcelas) * 100) / 100)}</p>
+                        {Math.round((Math.abs(valorNum) - Math.floor((Math.abs(valorNum) / numParcelas) * 100) / 100 * (numParcelas - 1)) * 100) / 100 !== Math.floor((Math.abs(valorNum) / numParcelas) * 100) / 100 && (
+                          <p className="text-[10px] opacity-75">Última parcela ajustada: R$ {toBRL(Math.round((Math.abs(valorNum) - Math.floor((Math.abs(valorNum) / numParcelas) * 100) / 100 * (numParcelas - 1)) * 100) / 100)}</p>
+                        )}
+                        <p className="text-[10px] opacity-75">Intervalo: 30 dias entre parcelas • Status: Confirmado</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs">Fazenda *</Label>
