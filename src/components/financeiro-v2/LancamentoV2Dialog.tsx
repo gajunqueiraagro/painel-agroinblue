@@ -323,8 +323,8 @@ export function LancamentoV2Dialog({
   const contasDisponiveis = contas;
 
   const fornecedoresList = useMemo(() =>
-    fornecedores.filter(f => f.ativo !== false && (f.fazenda_id === fazendaId || !f.fazenda_id)),
-  [fornecedores, fazendaId]);
+    fornecedores.filter(f => f.ativo !== false),
+  [fornecedores]);
 
   function normalizeSearch(s: string): string {
     return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -335,6 +335,32 @@ export function LancamentoV2Dialog({
     const q = normalizeSearch(fornecedorSearch);
     return fornecedoresList.filter(f => normalizeSearch(f.nome).includes(q));
   }, [fornecedoresList, fornecedorSearch]);
+
+  useEffect(() => {
+    setFornecedorHighlight(0);
+  }, [fornecedorSearch]);
+
+  useEffect(() => {
+    const el = fornecedorItemRefs.current[fornecedorHighlight];
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [fornecedorHighlight]);
+
+  const handleFornecedorKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setFornecedorHighlight(prev => Math.min(prev + 1, filteredFornecedores.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setFornecedorHighlight(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      if (filteredFornecedores[fornecedorHighlight]) {
+        e.preventDefault();
+        handleFornecedorSelect(filteredFornecedores[fornecedorHighlight].id);
+      }
+    } else if (e.key === 'Escape') {
+      setFornecedorOpen(false);
+    }
+  };
 
   const selectedFornecedorNome = useMemo(() => {
     if (!favorecidoId) return '';
