@@ -418,10 +418,9 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
           <AlertDialogHeader>
             <AlertDialogTitle>Cancelar importação?</AlertDialogTitle>
             <AlertDialogDescription>
-              Os <span className="font-bold">{confirmExcluir?.total_validas} registros</span> vinculados
-              ao arquivo <span className="font-bold">{confirmExcluir?.nome_arquivo}</span> serão marcados como inativos.
-              <br /><br />Nenhum dado será apagado fisicamente. O histórico será mantido para rastreabilidade.
-              <br /><br />Lançamentos conciliados ou editados manualmente não serão afetados.
+              Você está prestes a inativar todos os <span className="font-bold">{confirmExcluir?.total_validas} lançamentos</span> do arquivo <span className="font-bold">{confirmExcluir?.nome_arquivo}</span>.
+              <br /><br />Os dados não serão apagados, mas deixarão de aparecer nas análises.
+              <br /><br />Lançamentos conciliados ou editados manualmente bloqueiam o cancelamento.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
