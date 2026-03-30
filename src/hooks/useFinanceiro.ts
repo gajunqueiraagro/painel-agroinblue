@@ -17,6 +17,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda, type Fazenda } from '@/contexts/FazendaContext';
+import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import type { LinhaImportada, SaldoBancarioImportado, ResumoCaixaImportado, CentroCustoOficial } from '@/lib/financeiro/importParser';
