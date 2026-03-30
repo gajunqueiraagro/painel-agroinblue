@@ -179,6 +179,7 @@ export function LancamentoV2Dialog({
       setFazendaId(defaultFazendaId || '');
       setDataCompetencia(today);
       setDataPagamento(today);
+      setStatusTransacao(deriveStatus(today));
       setDescricao('');
       setFavorecidoId('');
       setSubcentro('');
