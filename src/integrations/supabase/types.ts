@@ -1205,37 +1205,67 @@ export type Database = {
       }
       financeiro_fornecedores: {
         Row: {
+          agencia: string | null
           aliases: string[] | null
           ativo: boolean
+          banco: string | null
           cliente_id: string
+          conta: string | null
           cpf_cnpj: string | null
+          cpf_cnpj_pagamento: string | null
           created_at: string
           fazenda_id: string
           id: string
           nome: string
+          nome_favorecido: string | null
           nome_normalizado: string | null
+          observacao_pagamento: string | null
+          pix_chave: string | null
+          pix_tipo_chave: string | null
+          tipo_conta: string | null
+          tipo_recebimento: string | null
         }
         Insert: {
+          agencia?: string | null
           aliases?: string[] | null
           ativo?: boolean
+          banco?: string | null
           cliente_id: string
+          conta?: string | null
           cpf_cnpj?: string | null
+          cpf_cnpj_pagamento?: string | null
           created_at?: string
           fazenda_id: string
           id?: string
           nome: string
+          nome_favorecido?: string | null
           nome_normalizado?: string | null
+          observacao_pagamento?: string | null
+          pix_chave?: string | null
+          pix_tipo_chave?: string | null
+          tipo_conta?: string | null
+          tipo_recebimento?: string | null
         }
         Update: {
+          agencia?: string | null
           aliases?: string[] | null
           ativo?: boolean
+          banco?: string | null
           cliente_id?: string
+          conta?: string | null
           cpf_cnpj?: string | null
+          cpf_cnpj_pagamento?: string | null
           created_at?: string
           fazenda_id?: string
           id?: string
           nome?: string
+          nome_favorecido?: string | null
           nome_normalizado?: string | null
+          observacao_pagamento?: string | null
+          pix_chave?: string | null
+          pix_tipo_chave?: string | null
+          tipo_conta?: string | null
+          tipo_recebimento?: string | null
         }
         Relationships: [
           {
@@ -1505,6 +1535,7 @@ export type Database = {
           conta_bancaria_id: string | null
           created_at: string
           created_by: string | null
+          dados_pagamento: string | null
           data_competencia: string
           data_pagamento: string | null
           descricao: string | null
@@ -1512,6 +1543,7 @@ export type Database = {
           escopo_negocio: string | null
           favorecido_id: string | null
           fazenda_id: string
+          forma_pagamento: string | null
           historico: string | null
           id: string
           lote_importacao_id: string | null
@@ -1537,6 +1569,7 @@ export type Database = {
           conta_bancaria_id?: string | null
           created_at?: string
           created_by?: string | null
+          dados_pagamento?: string | null
           data_competencia: string
           data_pagamento?: string | null
           descricao?: string | null
@@ -1544,6 +1577,7 @@ export type Database = {
           escopo_negocio?: string | null
           favorecido_id?: string | null
           fazenda_id: string
+          forma_pagamento?: string | null
           historico?: string | null
           id?: string
           lote_importacao_id?: string | null
@@ -1569,6 +1603,7 @@ export type Database = {
           conta_bancaria_id?: string | null
           created_at?: string
           created_by?: string | null
+          dados_pagamento?: string | null
           data_competencia?: string
           data_pagamento?: string | null
           descricao?: string | null
@@ -1576,6 +1611,7 @@ export type Database = {
           escopo_negocio?: string | null
           favorecido_id?: string | null
           fazenda_id?: string
+          forma_pagamento?: string | null
           historico?: string | null
           id?: string
           lote_importacao_id?: string | null
