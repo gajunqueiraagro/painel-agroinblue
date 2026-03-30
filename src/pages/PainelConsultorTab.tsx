@@ -316,25 +316,44 @@ function fmtVal(v: number, format: string): string {
 
 // ─── Export ───
 
-const EXPORT_FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-painel-consultor-excel`;
+function buildExcelSheet(rows: (ZooRow | FinRow)[], mesesHeaders: string[], includeGrupo = true) {
+  const data = rows.map((row) => {
+    const base: Record<string, string | number> = includeGrupo
+      ? { Grupo: row.grupo, Indicador: row.indicador }
+      : { Indicador: row.indicador };
+
+    mesesHeaders.forEach((mes, index) => {
+      base[mes] = row.valores[index] ?? 0;
+    });
+
+    base.Total = row.total ?? 0;
+    return base;
+  });
+
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws['!cols'] = includeGrupo
+    ? [{ wch: 18 }, { wch: 26 }, ...mesesHeaders.map(() => ({ wch: 14 })), { wch: 14 }]
+    : [{ wch: 26 }, ...mesesHeaders.map(() => ({ wch: 14 })), { wch: 14 }];
+
+  return ws;
+}
 
 function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes: number, fazendaNome: string) {
+  const mesesHeaders = MESES_LABELS.slice(0, Math.max(1, Math.min(12, ateMes)));
   const filename = `Painel_Consultor_${fazendaNome.replace(/\s+/g, '_')}_${ano}.xlsx`;
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.action = EXPORT_FUNCTION_URL;
-  form.style.display = 'none';
+  const wb = XLSX.utils.book_new();
 
-  const payloadInput = document.createElement('input');
-  payloadInput.type = 'hidden';
-  payloadInput.name = 'payload';
-  payloadInput.value = JSON.stringify({ zooRows, finRows, ano, ateMes, fazendaNome, filename });
-  form.appendChild(payloadInput);
+  const wsZoo = buildExcelSheet(zooRows, mesesHeaders, true);
+  XLSX.utils.book_append_sheet(wb, wsZoo, 'Zootecnico');
 
-  document.body.appendChild(form);
-  form.submit();
-  document.body.removeChild(form);
+  const wsFin = buildExcelSheet(finRows, mesesHeaders, true);
+  XLSX.utils.book_append_sheet(wb, wsFin, 'Financeiro');
 
+  const movRows = zooRows.filter((row) => row.grupo === 'Movimentações');
+  const wsMov = buildExcelSheet(movRows, mesesHeaders, false);
+  XLSX.utils.book_append_sheet(wb, wsMov, 'Movimentacoes');
+
+  XLSX.writeFile(wb, filename, { compression: true });
   return filename;
 }
 
@@ -375,11 +394,10 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
 
   const handleExport = useCallback(() => {
     try {
-      const filename = exportToExcel(zooRows, finRows, anoNum, ateMes, fazendaNome);
-      toast.success(`Excel exportado: ${filename}`);
+      exportToExcel(zooRows, finRows, anoNum, ateMes, fazendaNome);
     } catch (err) {
       console.error('Erro ao exportar Excel:', err);
-      toast.error('Erro ao exportar Excel. Verifique o console.');
+      toast.error('Não foi possível iniciar o download do Excel.');
     }
   }, [zooRows, finRows, anoNum, ateMes, fazendaNome]);
 
