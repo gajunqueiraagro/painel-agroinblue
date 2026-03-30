@@ -58,3 +58,30 @@
     @apply min-h-[48px] min-w-[48px];
   }
 }
+
+/* Alta densidade – tabela de lançamentos financeiros */
+.table-financeiro th {
+  font-size: 10px !important;
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.table-financeiro td {
+  font-size: 11px !important;
+  line-height: 1.1 !important;
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+}
+.table-financeiro td * {
+  font-size: 11px !important;
+}
+.table-financeiro td:nth-child(1),
+.table-financeiro td:nth-child(2) {
+  font-size: 11px !important;
+  letter-spacing: -0.2px;
+}
+.table-financeiro td:nth-child(5) {
+  font-size: 11px !important;
+  font-weight: 500;
+}
