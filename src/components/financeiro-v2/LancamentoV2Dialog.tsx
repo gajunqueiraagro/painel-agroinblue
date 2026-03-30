@@ -175,9 +175,10 @@ export function LancamentoV2Dialog({
       setNotaFiscal(lancamento.nota_fiscal || '');
       setObservacao(lancamento.observacao || '');
     } else {
+      const today = new Date().toISOString().slice(0, 10);
       setFazendaId(defaultFazendaId || '');
-      setDataCompetencia('');
-      setDataPagamento('');
+      setDataCompetencia(today);
+      setDataPagamento(today);
       setDescricao('');
       setFavorecidoId('');
       setSubcentro('');
