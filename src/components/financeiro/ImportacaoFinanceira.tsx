@@ -33,6 +33,7 @@ interface Props {
     saldosBancarios?: SaldoBancarioImportado[],
     contas?: never[],
     resumoCaixa?: ResumoCaixaImportado[],
+    tipoImportacao?: string,
   ) => Promise<boolean>;
   onExcluir: (importacaoId: string) => Promise<boolean>;
 }
