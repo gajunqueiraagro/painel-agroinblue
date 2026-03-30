@@ -295,7 +295,7 @@ export function LancamentoV2Dialog({
   return (
     <>
       <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto bg-white dark:bg-card rounded-xl shadow-2xl border-0 [&_input]:bg-[#f5f6f8] [&_input]:dark:bg-muted [&_select]:bg-[#f5f6f8] [&_.select-trigger]:bg-[#f5f6f8] [&_textarea]:bg-[#f5f6f8] [&_textarea]:dark:bg-muted [&_button[role=combobox]]:bg-[#f5f6f8]">
           <DialogHeader>
             <DialogTitle className="text-base">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
           </DialogHeader>
