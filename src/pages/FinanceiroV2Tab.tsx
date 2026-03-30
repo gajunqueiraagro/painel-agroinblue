@@ -682,6 +682,18 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         </CardContent>
       </Card>
 
+      {/* Fechamento mensal banner */}
+      {singleMonthSelected && fazendaId !== '__all__' && (
+        <FechamentoMensalBanner
+          anoMes={singleMonthSelected}
+          status={singleMonthStatus as 'aberto' | 'fechado'}
+          podFechar={fechamentoHook.podFechar}
+          podReabrir={fechamentoHook.podReabrir}
+          onFechar={() => fechamentoHook.fecharMes(fazendaId, singleMonthSelected)}
+          onReabrir={() => fechamentoHook.reabrirMes(fazendaId, singleMonthSelected)}
+        />
+      )}
+
       {(!queryFazendaId && fazendaId !== '__all__') && (
         <div className="text-center text-muted-foreground py-6 text-[10px]">
           Selecione uma fazenda e um ano para carregar os lançamentos.
