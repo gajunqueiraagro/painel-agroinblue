@@ -624,8 +624,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
                     return (
                       <TableRow key={l.id} className="italic !h-auto">
-                        <TableCell className="font-mono w-[40px] px-0.5">{fmtDate(l.data_competencia)}</TableCell>
-                        <TableCell className="font-mono w-[40px] px-0.5">{fmtDate(l.data_pagamento)}</TableCell>
+                        <TableCell className="font-mono w-[40px] px-0.5 sticky left-0 z-10 bg-background">{fmtDate(l.data_competencia)}</TableCell>
+                        <TableCell className="font-mono w-[40px] px-0.5 sticky left-[40px] z-10 bg-background">{fmtDate(l.data_pagamento)}</TableCell>
                         <TableCell className="truncate max-w-0" title={l.descricao || ''}>{l.descricao || '-'}</TableCell>
                         <TableCell className="truncate max-w-0" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}

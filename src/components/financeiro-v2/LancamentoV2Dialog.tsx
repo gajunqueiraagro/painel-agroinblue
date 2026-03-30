@@ -316,15 +316,22 @@ export function LancamentoV2Dialog({
             {/* BLOCO 1 — Datas */}
             <div>
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Datas</p>
-              {/* Status Atual (read-only) — only in edit mode */}
-              {isEdit && lancamento?.status_transacao && (
-                <div className="mb-2">
-                  <Label className="text-xs text-muted-foreground">Status Atual do Lançamento</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md border bg-muted/50 text-sm font-medium">
-                    {STATUS_OPTIONS.find(s => s.value === lancamento.status_transacao)?.label || lancamento.status_transacao}
-                  </div>
-                </div>
-              )}
+              {/* Status Atual — colored text, centered */}
+              {isEdit && lancamento?.status_transacao && (() => {
+                const stKey = lancamento.status_transacao.toLowerCase();
+                const stLabel = STATUS_OPTIONS.find(s => s.value === stKey)?.label || lancamento.status_transacao;
+                const colorMap: Record<string, string> = {
+                  previsto: 'text-orange-500',
+                  agendado: 'text-emerald-400',
+                  confirmado: 'text-sky-500',
+                  conciliado: 'text-green-700 dark:text-green-400',
+                };
+                return (
+                  <p className={`text-center text-sm font-semibold mb-2 ${colorMap[stKey] || 'text-muted-foreground'}`}>
+                    {stLabel}
+                  </p>
+                );
+              })()}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">Data Competência *</Label>
