@@ -5,7 +5,7 @@ import { filtrarPorCenario } from '@/lib/statusOperacional';
 import { parseISO, format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { CheckCircle, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Clock, RefreshCw, DollarSign } from 'lucide-react';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -69,6 +69,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   const [pesosDb, setPesosDb] = useState<Record<string, number>>({});
   const [conciliacaoStatus, setConciliacaoStatus] = useState<'aberto' | 'fechado' | 'parcial' | null>(null);
   const [rebanhoStatus, setRebanhoStatus] = useState<'aberto' | 'fechado' | null>(null);
+  const [precosRebanho, setPrecosRebanho] = useState<Record<string, number>>({});
 
   // Fetch conciliação status for the selected month/fazenda
   useEffect(() => {
@@ -134,7 +135,30 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
     })();
   }, [fazendaId, anoFiltro, mesFiltro]);
 
-  // Fetch peso médio from fechamento_pasto_itens for the selected month
+  // Fetch preços do valor do rebanho para o mês
+  useEffect(() => {
+    const anoMes = `${anoFiltro}-${mesFiltro}`;
+    if (!fazendaId || fazendaId === '__global__') {
+      setPrecosRebanho({});
+      return;
+    }
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('valor_rebanho_mensal')
+          .select('categoria, preco_kg')
+          .eq('fazenda_id', fazendaId)
+          .eq('ano_mes', anoMes);
+        const map: Record<string, number> = {};
+        (data || []).forEach((r: any) => { if (r.preco_kg > 0) map[r.categoria] = r.preco_kg; });
+        setPrecosRebanho(map);
+      } catch {
+        setPrecosRebanho({});
+      }
+    })();
+  }, [fazendaId, anoFiltro, mesFiltro]);
+
+
   useEffect(() => {
     const anoMes = `${anoFiltro}-${mesFiltro}`;
     if (!fazendaId || fazendaId === '__global__') {
@@ -287,6 +311,17 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
     return { saldoIni, movs, saldoFin, pesoMedio };
   }, [dados]);
 
+  const valorRebanhoTotal = useMemo(() => {
+    let total = 0;
+    dados.forEach(d => {
+      const preco = precosRebanho[d.value];
+      if (preco && d.pesoMedio && d.saldoFinal > 0) {
+        total += d.saldoFinal * d.pesoMedio * preco;
+      }
+    });
+    return total;
+  }, [dados, precosRebanho]);
+
   const formatPeso = (v: number | null) => {
     if (v === null || v === undefined || v <= 0) return '—';
     return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -372,6 +407,12 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
               <Clock className="h-3.5 w-3.5" />
             )}
             Rebanho: {rebanhoStatus === 'fechado' ? 'Fechado' : 'Aberto'}
+           </div>
+        )}
+        {valorRebanhoTotal > 0 && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-blue-50 border-blue-300 text-blue-800">
+            <DollarSign className="h-3.5 w-3.5" />
+            Valor Rebanho: {valorRebanhoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
           </div>
         )}
         {onNavigateToReclass && (
