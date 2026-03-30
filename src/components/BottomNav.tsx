@@ -1,4 +1,4 @@
-import { LayoutDashboard, ArrowLeftRight, PenSquare, BarChart3, DollarSign, Settings } from 'lucide-react';
+import { LayoutDashboard, PenSquare, BarChart3, DollarSign, Settings, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 
