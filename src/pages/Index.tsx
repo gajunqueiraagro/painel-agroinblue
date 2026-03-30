@@ -480,6 +480,7 @@ const Index = () => {
       {activeTab === 'fin_v2_fornecedores' && <FinV2FornecedoresTab />}
       {activeTab === 'fin_v2_plano' && <FinV2PlanoContasTab />}
       {activeTab === 'fin_v2_saldos' && <FinV2SaldosTab />}
+      {activeTab === 'contratos' && <ContratosTab />}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
