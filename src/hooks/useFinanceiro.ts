@@ -702,10 +702,10 @@ export function useFinanceiro() {
     }
   }, [user, loadData, fazendas]);
 
-  // --- Excluir importação (protege conciliados e editados manualmente) ---
+  // --- Cancelar importação (soft delete — nunca apaga base principal) ---
   const excluirImportacao = useCallback(async (importacaoId: string) => {
     try {
-      // Verificar se há lançamentos conciliados nesta importação
+      // 1. Verificar se há lançamentos conciliados
       const { data: conciliados } = await supabase
         .from('financeiro_lancamentos')
         .select('id')
@@ -714,44 +714,56 @@ export function useFinanceiro() {
         .limit(1);
 
       if (conciliados && conciliados.length > 0) {
-        toast.error('Esta importação contém lançamentos conciliados e não pode ser excluída. Remova a conciliação antes.');
+        toast.error('Esta importação contém lançamentos conciliados e não pode ser cancelada.');
         return false;
       }
 
-      // Verificar se há lançamentos com origem manual (editados depois)
+      // 2. Verificar se há lançamentos editados manualmente (campo real)
       const { data: editados } = await supabase
         .from('financeiro_lancamentos')
         .select('id')
         .eq('importacao_id', importacaoId)
-        .eq('origem_dado', 'manual')
+        .eq('editado_manual', true)
         .limit(1);
 
       if (editados && editados.length > 0) {
-        toast.error('Esta importação contém lançamentos editados manualmente e não pode ser excluída.');
+        toast.error('Esta importação contém lançamentos editados manualmente e não pode ser cancelada.');
         return false;
       }
 
-      const deletes = await Promise.all([
-        supabase.from('financeiro_lancamentos').delete().eq('importacao_id', importacaoId),
-        supabase.from('financeiro_saldos_bancarios').delete().eq('importacao_id', importacaoId),
-        supabase.from('financeiro_resumo_caixa').delete().eq('importacao_id', importacaoId),
-      ]);
-      for (const { error } of deletes) { if (error) throw error; }
-
-      const { error: delImp } = await supabase
+      // 3. Verificar se é importação histórica (somente leitura)
+      const { data: impRecord } = await supabase
         .from('financeiro_importacoes')
-        .delete()
-        .eq('id', importacaoId);
-      if (delImp) throw delImp;
+        .select('status')
+        .eq('id', importacaoId)
+        .single();
 
-      toast.success('Importação excluída com sucesso');
+      // 4. Soft delete: marcar importação como cancelada
+      const { error: cancelErr } = await supabase
+        .from('financeiro_importacoes')
+        .update({
+          status: 'cancelada',
+          cancelada_em: new Date().toISOString(),
+          cancelada_por: user?.id || null,
+        })
+        .eq('id', importacaoId);
+      if (cancelErr) throw cancelErr;
+
+      // 5. Marcar lançamentos como inativos (soft delete via origem_dado)
+      const { error: lancErr } = await supabase
+        .from('financeiro_lancamentos')
+        .update({ origem_dado: 'importacao_cancelada' })
+        .eq('importacao_id', importacaoId);
+      if (lancErr) throw lancErr;
+
+      toast.success('Importação cancelada. Lançamentos marcados como inativos.');
       await loadData();
       return true;
     } catch (err: any) {
-      toast.error('Erro ao excluir: ' + (err.message || err));
+      toast.error('Erro ao cancelar: ' + (err.message || err));
       return false;
     }
-  }, [loadData]);
+  }, [loadData, user]);
 
   // --- Indicadores ---
   const indicadores = useMemo(() => {
