@@ -87,13 +87,20 @@ export function FornecedorFormDialog({
         setCpfCnpj(editing.cpf_cnpj || '');
         setFazendaId(editing.fazenda_id);
         setAtivo(editing.ativo);
+        // Check linked lancamentos
+        supabase.from('financeiro_lancamentos_v2')
+          .select('id', { count: 'exact', head: true })
+          .eq('favorecido_id', editing.id)
+          .then(({ count }) => setLancamentoCount(count ?? 0));
       } else {
         setNome('');
         setCpfCnpj('');
         setFazendaId(fazendas[0]?.id || '');
         setAtivo(true);
+        setLancamentoCount(null);
       }
       setReviewId(null);
+      setDeleting(false);
     }
   }, [open, editing, fazendas]);
 
