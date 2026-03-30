@@ -19,6 +19,7 @@ import { AnaliseEconomicaTab } from './AnaliseEconomicaTab';
 import { AcessosTab } from './AcessosTab';
 import { AnaliseTab } from './AnaliseTab';
 import { OperacaoHubTab } from './OperacaoHubTab';
+import { PainelConsultorTab } from './PainelConsultorTab';
 import { AnaliseEntradasTab } from './AnaliseEntradasTab';
 import { AnaliseSaidasTab } from './AnaliseSaidasTab';
 import { DesfrunteTab } from './DesfrunteTab';
@@ -106,6 +107,7 @@ const TITLES: Record<TabId, string> = {
   fin_v2_saldos: 'Saldos Mensais',
   contratos: 'Contratos / Recorrências',
   conciliacao_bancaria: 'Conciliação Bancária',
+  painel_consultor: 'Painel do Consultor',
 };
 
 const Index = () => {
@@ -229,6 +231,7 @@ const Index = () => {
   const subScreenBackMap: Partial<Record<TabId, () => void>> = {
     // Resumo sub-screens
     operacao_hub: goToResumo,
+    painel_consultor: goToResumo,
     analise: () => setActiveTab('operacao_hub'),
     analise_entradas: () => setActiveTab('analise'),
     analise_saidas: () => setActiveTab('analise'),
@@ -304,6 +307,9 @@ const Index = () => {
       )}
       {activeTab === 'operacao_hub' && (
         <OperacaoHubTab onTabChange={handleTabChange} onBack={() => setActiveTab('resumo')} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
+      )}
+      {activeTab === 'painel_consultor' && (
+        <PainelConsultorTab onBack={() => setActiveTab('resumo')} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
       )}
 
       {/* Hubs */}
