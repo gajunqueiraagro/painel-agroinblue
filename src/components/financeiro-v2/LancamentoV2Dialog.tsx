@@ -201,6 +201,8 @@ export function LancamentoV2Dialog({
       setFormaPagamentoParc('avista');
       setNumParcelas(2);
       setParcelaRows([]);
+      setFormaPgto('');
+      setDadosPagamento('');
     }
     setSubcentroSearch('');
   }, [lancamento, defaultFazendaId]);
