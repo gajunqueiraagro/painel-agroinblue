@@ -745,7 +745,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                     const stColor = STATUS_TEXT_COLORS[stKey] || 'text-muted-foreground';
                     const isHistoricoReadOnly = l.origem_lancamento === 'importacao_historica';
                     const isImported = !!l.lote_importacao_id;
-                    const canEditRow = !isHistoricoReadOnly;
+                    const rowMesFechado = fazendaId !== '__all__' && fechamentoHook.isMesFechado(l.fazenda_id, l.ano_mes);
+                    const canEditRow = !isHistoricoReadOnly && !rowMesFechado;
 
                     return (
                       <tr key={l.id} className="border-b italic !h-auto hover:bg-muted/50 transition-colors">
