@@ -168,7 +168,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [editingLanc, setEditingLanc] = useState<LancamentoV2 | null>(null);
 
   // Sorting state
-  type SortField = 'data' | 'valor' | 'produto' | 'fornecedor';
+  type SortField = 'data' | 'pgto' | 'valor' | 'produto' | 'fornecedor';
   type SortDir = 'asc' | 'desc';
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -308,7 +308,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     const dir = sortDir === 'asc' ? 1 : -1;
     items.sort((a, b) => {
       switch (sortField) {
-        case 'data': return dir * ((a.data_pagamento || a.data_competencia).localeCompare(b.data_pagamento || b.data_competencia));
+        case 'data': return dir * (a.data_competencia.localeCompare(b.data_competencia));
+        case 'pgto': return dir * ((a.data_pagamento || '').localeCompare(b.data_pagamento || ''));
         case 'valor': return dir * (a.valor * a.sinal - b.valor * b.sinal);
         case 'produto': return dir * ((a.descricao || '').localeCompare(b.descricao || '', 'pt-BR'));
         case 'fornecedor': {
@@ -327,7 +328,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     } else {
       setSortField(field);
-      setSortDir(field === 'valor' || field === 'data' ? 'desc' : 'asc');
+      setSortDir(field === 'valor' || field === 'data' || field === 'pgto' ? 'desc' : 'asc');
     }
   };
   const sortIcon = (field: SortField) => sortField === field ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
@@ -593,12 +594,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
       {mode === 'list' && !hook.loading && ano && (
         <>
-          <div className="rounded-lg border overflow-x-auto">
+          <div className="rounded-lg border overflow-x-auto relative" style={{ maxHeight: '70vh' }}>
             <Table className="table-financeiro">
               <TableHeader>
                 <TableRow className="!h-auto">
-                  <TableHead className="py-[2px] px-0.5 w-[40px] cursor-pointer select-none" onClick={() => toggleSort('data')}>Comp.{sortIcon('data')}</TableHead>
-                  <TableHead className="py-[2px] px-0.5 w-[40px]">Pgto</TableHead>
+                  <TableHead className="py-[2px] px-0.5 w-[40px] cursor-pointer select-none sticky left-0 z-20 bg-muted/95" onClick={() => toggleSort('data')}>Comp.{sortIcon('data')}</TableHead>
+                  <TableHead className="py-[2px] px-0.5 w-[40px] cursor-pointer select-none sticky left-[40px] z-20 bg-muted/95" onClick={() => toggleSort('pgto')}>Pgto{sortIcon('pgto')}</TableHead>
                   <TableHead className="py-[2px] px-1 cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto{sortIcon('produto')}</TableHead>
                   <TableHead className="py-[2px] px-1 cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor{sortIcon('fornecedor')}</TableHead>
                   <TableHead className="py-[2px] px-1 text-right w-[110px] cursor-pointer select-none" onClick={() => toggleSort('valor')}>Valor{sortIcon('valor')}</TableHead>
@@ -623,8 +624,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
                     return (
                       <TableRow key={l.id} className="italic !h-auto">
-                        <TableCell className="font-mono w-[40px] px-0.5">{fmtDate(l.data_competencia)}</TableCell>
-                        <TableCell className="font-mono w-[40px] px-0.5">{fmtDate(l.data_pagamento)}</TableCell>
+                        <TableCell className="font-mono w-[40px] px-0.5 sticky left-0 z-10 bg-background">{fmtDate(l.data_competencia)}</TableCell>
+                        <TableCell className="font-mono w-[40px] px-0.5 sticky left-[40px] z-10 bg-background">{fmtDate(l.data_pagamento)}</TableCell>
                         <TableCell className="truncate max-w-0" title={l.descricao || ''}>{l.descricao || '-'}</TableCell>
                         <TableCell className="truncate max-w-0" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
