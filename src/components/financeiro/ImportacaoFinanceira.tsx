@@ -4,7 +4,8 @@
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Download, Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, Loader2, Trash2 } from 'lucide-react';
+import { Download, Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, Loader2, Trash2, ShieldCheck } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { downloadModeloExcel } from '@/lib/financeiro/excelTemplate';
 import {
   parseExcel, resolverFazendas, resolverFazendasExtras, validarCentrosCusto, validarEstruturaExcel,
@@ -33,6 +34,7 @@ interface Props {
     saldosBancarios?: SaldoBancarioImportado[],
     contas?: never[],
     resumoCaixa?: ResumoCaixaImportado[],
+    tipoImportacao?: string,
   ) => Promise<boolean>;
   onExcluir: (importacaoId: string) => Promise<boolean>;
 }
@@ -54,6 +56,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
   const [importando, setImportando] = useState(false);
   const [excluindo, setExcluindo] = useState<string | null>(null);
   const [confirmExcluir, setConfirmExcluir] = useState<ImportacaoRecord | null>(null);
+  const [tipoImportacao, setTipoImportacao] = useState<string>('importacao_incremental');
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -129,6 +132,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
       preview.saldosBancarios,
       [],
       resumoComFazenda,
+      tipoImportacao,
     );
     if (ok) setPreview(null);
     setImportando(false);
@@ -207,6 +211,28 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
 
             {/* Conteúdo normal */}
             {(!preview.erroEstrutura || preview.erroEstrutura.valido) && <>
+            {/* Tipo de importação */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Tipo de importação</label>
+              <Select value={tipoImportacao} onValueChange={setTipoImportacao}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="importacao_inicial" className="text-xs">📦 Importação Inicial (primeira carga)</SelectItem>
+                  <SelectItem value="importacao_historica" className="text-xs">📚 Histórico (2020–2024, somente leitura)</SelectItem>
+                  <SelectItem value="importacao_incremental" className="text-xs">➕ Incremental (novos dados)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Proteção de deduplicação */}
+            <div className="bg-primary/5 border border-primary/20 rounded-lg p-2.5 flex items-start gap-2">
+              <ShieldCheck className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+              <div className="text-xs space-y-0.5">
+                <p className="font-bold text-foreground">Importação incremental protegida</p>
+                <p className="text-muted-foreground">Duplicados serão ignorados automaticamente (data + valor + conta + produto). Lançamentos existentes nunca serão apagados ou sobrescritos.</p>
+              </div>
+            </div>
+
             {/* Resumo por tipo de registro */}
             <div className="grid grid-cols-3 gap-2 text-sm">
               <div className="bg-muted rounded-lg p-2 text-center">

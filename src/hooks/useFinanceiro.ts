@@ -498,7 +498,12 @@ export function useFinanceiro() {
       .map(f => f.nome);
   }, [fazendasOperacionais, rebanhoMedioPorFazendaMes, fazendaADM]);
 
-  // --- Confirmar importação ---
+  // --- Gerar chave de deduplicação ---
+  const dedupKey = (data: string | null, valor: number, conta: string | null, descricao: string | null): string => {
+    return `${(data || '').trim()}|${valor.toFixed(2)}|${(conta || '').trim().toLowerCase()}|${(descricao || '').trim().toLowerCase()}`;
+  };
+
+  // --- Confirmar importação (incremental com dedup) ---
   const confirmarImportacao = useCallback(async (
     nomeArquivo: string,
     linhas: LinhaImportada[],
@@ -507,6 +512,7 @@ export function useFinanceiro() {
     saldosBancarios?: SaldoBancarioImportado[],
     _contas?: unknown[],
     resumoCaixa?: ResumoCaixaImportado[],
+    tipoImportacao?: string,
   ) => {
     if (!user) return false;
 
@@ -520,10 +526,58 @@ export function useFinanceiro() {
         return false;
       }
 
-      const totalValid = linhas.length + (saldosBancarios?.length || 0) + (resumoCaixa?.length || 0);
-
       const clienteId = fazendas.find(f => f.id === primaryFazendaId)?.cliente_id || fazendaAtual?.cliente_id || '';
 
+      // ── Determinar origem_dado baseado no tipo de importação ──
+      const origemDado = tipoImportacao || 'importacao_incremental';
+
+      // ── DEDUPLICAÇÃO: buscar chaves existentes ──
+      // Buscar lançamentos existentes do mesmo cliente para comparar
+      const fazendaIds = [...new Set(linhas.map(l => l.fazendaId).filter(Boolean))] as string[];
+      const existingKeys = new Set<string>();
+
+      for (const fid of fazendaIds) {
+        // Buscar em lotes para não estourar limite
+        let from = 0;
+        const batchSize = 1000;
+        while (true) {
+          const { data: existing } = await supabase
+            .from('financeiro_lancamentos')
+            .select('data_realizacao, valor, conta_origem, produto')
+            .eq('fazenda_id', fid)
+            .eq('cliente_id', clienteId)
+            .range(from, from + batchSize - 1);
+          if (!existing || existing.length === 0) break;
+          for (const e of existing) {
+            existingKeys.add(dedupKey(e.data_realizacao, e.valor, e.conta_origem, e.produto));
+          }
+          if (existing.length < batchSize) break;
+          from += batchSize;
+        }
+      }
+
+      // Filtrar duplicados
+      const linhasNovas: LinhaImportada[] = [];
+      let duplicados = 0;
+      for (const l of linhas) {
+        const key = dedupKey(l.dataPagamento || l.anoMes + '-01', l.valor, l.contaOrigem, l.produto);
+        if (existingKeys.has(key)) {
+          duplicados++;
+        } else {
+          linhasNovas.push(l);
+          // Adicionar ao set para evitar duplicados dentro do próprio lote
+          existingKeys.add(key);
+        }
+      }
+
+      if (linhasNovas.length === 0 && duplicados > 0) {
+        toast.info(`Todos os ${duplicados} lançamentos já existem na base. Nenhum registro inserido.`);
+        return true;
+      }
+
+      const totalValid = linhasNovas.length + (saldosBancarios?.length || 0) + (resumoCaixa?.length || 0);
+
+      // ── Criar registro da importação ──
       const { data: imp, error: impErr } = await supabase
         .from('financeiro_importacoes')
         .insert({
@@ -541,13 +595,14 @@ export function useFinanceiro() {
 
       if (impErr) throw impErr;
 
-      const batchSize = 50;
-      for (let i = 0; i < linhas.length; i += batchSize) {
-        const batch = linhas.slice(i, i + batchSize).map(l => ({
+      // ── Inserir lançamentos novos (nunca apaga existentes) ──
+      const insertBatchSize = 50;
+      for (let i = 0; i < linhasNovas.length; i += insertBatchSize) {
+        const batch = linhasNovas.slice(i, i + insertBatchSize).map(l => ({
           fazenda_id: l.fazendaId!,
           cliente_id: fazendas.find(f => f.id === l.fazendaId)?.cliente_id || clienteId,
           importacao_id: imp.id,
-          origem_dado: 'import_excel',
+          origem_dado: origemDado,
           data_realizacao: l.dataPagamento || l.anoMes + '-01',
           data_pagamento: l.dataPagamento,
           ano_mes: l.anoMes,
@@ -569,6 +624,7 @@ export function useFinanceiro() {
         if (error) throw error;
       }
 
+      // ── Saldos bancários (upsert, não apaga) ──
       if (saldosBancarios && saldosBancarios.length > 0) {
         const saldoBatch = saldosBancarios.map(s => ({
           fazenda_id: s.fazendaId || primaryFazendaId,
@@ -584,6 +640,7 @@ export function useFinanceiro() {
         if (error) throw error;
       }
 
+      // ── Resumo caixa (upsert, não apaga) ──
       if (resumoCaixa && resumoCaixa.length > 0) {
         const resumoBatch = resumoCaixa.map(r => ({
           fazenda_id: r.fazendaId || primaryFazendaId,
@@ -600,7 +657,12 @@ export function useFinanceiro() {
         if (error) throw error;
       }
 
-      toast.success(`Importação concluída: ${linhas.length} lançamentos + ${(saldosBancarios?.length || 0)} saldos + ${(resumoCaixa?.length || 0)} resumos`);
+      const msgs: string[] = [`${linhasNovas.length} lançamentos inseridos`];
+      if (duplicados > 0) msgs.push(`${duplicados} duplicados ignorados`);
+      if (saldosBancarios?.length) msgs.push(`${saldosBancarios.length} saldos`);
+      if (resumoCaixa?.length) msgs.push(`${resumoCaixa.length} resumos`);
+      toast.success(`Importação concluída: ${msgs.join(' · ')}`);
+
       await loadData();
       return true;
     } catch (err: any) {
@@ -609,9 +671,35 @@ export function useFinanceiro() {
     }
   }, [user, loadData, fazendas]);
 
-  // --- Excluir importação ---
+  // --- Excluir importação (protege conciliados e editados manualmente) ---
   const excluirImportacao = useCallback(async (importacaoId: string) => {
     try {
+      // Verificar se há lançamentos conciliados nesta importação
+      const { data: conciliados } = await supabase
+        .from('financeiro_lancamentos')
+        .select('id')
+        .eq('importacao_id', importacaoId)
+        .eq('status_transacao', 'conciliado')
+        .limit(1);
+
+      if (conciliados && conciliados.length > 0) {
+        toast.error('Esta importação contém lançamentos conciliados e não pode ser excluída. Remova a conciliação antes.');
+        return false;
+      }
+
+      // Verificar se há lançamentos com origem manual (editados depois)
+      const { data: editados } = await supabase
+        .from('financeiro_lancamentos')
+        .select('id')
+        .eq('importacao_id', importacaoId)
+        .eq('origem_dado', 'manual')
+        .limit(1);
+
+      if (editados && editados.length > 0) {
+        toast.error('Esta importação contém lançamentos editados manualmente e não pode ser excluída.');
+        return false;
+      }
+
       const deletes = await Promise.all([
         supabase.from('financeiro_lancamentos').delete().eq('importacao_id', importacaoId),
         supabase.from('financeiro_saldos_bancarios').delete().eq('importacao_id', importacaoId),
