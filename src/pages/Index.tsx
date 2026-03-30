@@ -106,6 +106,7 @@ const TITLES: Record<TabId, string> = {
   fin_v2_saldos: 'Saldos Mensais',
   contratos: 'Contratos / Recorrências',
   conciliacao_bancaria: 'Conciliação Bancária',
+  painel_consultor: 'Painel do Consultor',
 };
 
 const Index = () => {
