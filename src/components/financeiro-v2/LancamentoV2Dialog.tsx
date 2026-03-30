@@ -972,7 +972,7 @@ export function LancamentoV2Dialog({
                   <Label className="text-xs">Subcentro *</Label>
                   <Popover open={subcentroOpen} onOpenChange={v => { setSubcentroOpen(v); if (!v) { setSubcentroSearch(''); setSubcentroHighlight(0); } }}>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" role="combobox" aria-expanded={subcentroOpen} className="w-full h-9 justify-between font-normal text-sm bg-[#f5f6f8] dark:bg-muted border-border/50">
+                      <Button tabIndex={14} variant="outline" role="combobox" aria-expanded={subcentroOpen} className="w-full h-9 justify-between font-normal text-sm bg-[#f5f6f8] dark:bg-muted border-border/50">
                         <span className="truncate">{subcentro || 'Selecione o subcentro...'}</span>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
