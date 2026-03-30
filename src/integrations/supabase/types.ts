@@ -1524,6 +1524,7 @@ export type Database = {
       financeiro_lancamentos: {
         Row: {
           ano_mes: string
+          cancelado: boolean
           centro_custo: string | null
           cliente_id: string
           conta_destino: string | null
@@ -1555,6 +1556,7 @@ export type Database = {
         }
         Insert: {
           ano_mes: string
+          cancelado?: boolean
           centro_custo?: string | null
           cliente_id: string
           conta_destino?: string | null
@@ -1586,6 +1588,7 @@ export type Database = {
         }
         Update: {
           ano_mes?: string
+          cancelado?: boolean
           centro_custo?: string | null
           cliente_id?: string
           conta_destino?: string | null

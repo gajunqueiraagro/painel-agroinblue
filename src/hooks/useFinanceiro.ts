@@ -285,7 +285,7 @@ export function useFinanceiro() {
 
         const [allLancs, ccResult, impResult, saldoResult, lancPecResult] = await Promise.all([
           fetchAllPaginated<FinanceiroLancamento>((from, to) =>
-            (supabase.from('financeiro_lancamentos').select('*') as any).in('fazenda_id', allFazendaIds).neq('origem_dado', 'importacao_cancelada').order('data_realizacao', { ascending: false }).range(from, to),
+            (supabase.from('financeiro_lancamentos').select('*') as any).in('fazenda_id', allFazendaIds).eq('cancelado', false).order('data_realizacao', { ascending: false }).range(from, to),
           ),
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').in('fazenda_id', allFazendaIds).eq('ativo', true),
           supabase.from('financeiro_importacoes').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').in('fazenda_id', allFazendaIds).neq('status', 'cancelada').order('data_importacao', { ascending: false }),
@@ -309,12 +309,12 @@ export function useFinanceiro() {
         const needsRateio = fazendaADM && fazendaADM.id !== fazendaId;
 
         const lancPromise = fetchAllPaginated<FinanceiroLancamento>((from, to) =>
-          (supabase.from('financeiro_lancamentos').select('*') as any).eq('fazenda_id', fazendaId).neq('origem_dado', 'importacao_cancelada').order('data_realizacao', { ascending: false }).range(from, to),
+          (supabase.from('financeiro_lancamentos').select('*') as any).eq('fazenda_id', fazendaId).eq('cancelado', false).order('data_realizacao', { ascending: false }).range(from, to),
         );
 
         const admPromise = needsRateio
           ? fetchAllPaginated<FinanceiroLancamento>((from, to) =>
-              (supabase.from('financeiro_lancamentos').select('*') as any).eq('fazenda_id', fazendaADM.id).neq('origem_dado', 'importacao_cancelada').order('data_realizacao', { ascending: false }).range(from, to),
+              (supabase.from('financeiro_lancamentos').select('*') as any).eq('fazenda_id', fazendaADM.id).eq('cancelado', false).order('data_realizacao', { ascending: false }).range(from, to),
             )
           : Promise.resolve([] as FinanceiroLancamento[]);
 
@@ -749,11 +749,12 @@ export function useFinanceiro() {
         .eq('id', importacaoId);
       if (cancelErr) throw cancelErr;
 
-      // 5. Marcar lançamentos como inativos (soft delete via origem_dado)
+      // 5. Marcar lançamentos como inativos (soft delete via cancelado flag, preserva origem_dado)
       const { error: lancErr } = await supabase
         .from('financeiro_lancamentos')
-        .update({ origem_dado: 'importacao_cancelada' })
-        .eq('importacao_id', importacaoId);
+        .update({ cancelado: true } as any)
+        .eq('importacao_id', importacaoId)
+        .eq('editado_manual', false);
       if (lancErr) throw lancErr;
 
       toast.success('Importação cancelada. Lançamentos marcados como inativos.');
