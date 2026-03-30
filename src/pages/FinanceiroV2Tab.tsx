@@ -247,6 +247,39 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     }
   }, [fazendaAtual]);
 
+  // Load fechamentos when fazenda changes
+  useEffect(() => {
+    const fId = fazendaId !== '__all__' ? fazendaId : undefined;
+    fechamentoHook.loadFechamentos(fId);
+  }, [fazendaId, fechamentoHook.loadFechamentos]);
+
+  // Determine which months are currently selected and if any are closed
+  const mesesAtivos = useMemo(() => {
+    if (mesesSelecionados.length > 0) return mesesSelecionados.map(m => `${ano}-${m}`);
+    return [];
+  }, [ano, mesesSelecionados]);
+
+  const mesFechadoAtivo = useMemo(() => {
+    if (fazendaId === '__all__' || !fazendaId) return false;
+    if (mesesAtivos.length === 1) return fechamentoHook.isMesFechado(fazendaId, mesesAtivos[0]);
+    // If multiple months or "todos", check all - show banner if ANY is closed
+    if (mesesAtivos.length === 0) {
+      // "Todos" - check all 12 months
+      for (let m = 1; m <= 12; m++) {
+        const am = `${ano}-${String(m).padStart(2, '0')}`;
+        if (fechamentoHook.isMesFechado(fazendaId, am)) return true;
+      }
+      return false;
+    }
+    return mesesAtivos.some(am => fechamentoHook.isMesFechado(fazendaId, am));
+  }, [fazendaId, mesesAtivos, ano, fechamentoHook.isMesFechado]);
+
+  // Single month selected -> show precise banner
+  const singleMonthSelected = mesesSelecionados.length === 1 ? `${ano}-${mesesSelecionados[0]}` : null;
+  const singleMonthStatus = singleMonthSelected && fazendaId !== '__all__'
+    ? fechamentoHook.getStatus(fazendaId, singleMonthSelected)
+    : 'aberto';
+
   const filtros: FiltrosV2 = useMemo(() => ({
     fazenda_id: fazendaId !== '__all__' ? fazendaId : undefined,
     ano,
