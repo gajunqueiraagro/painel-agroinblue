@@ -210,7 +210,7 @@ export function useResumoStatus(
         data_pagamento: r.data_pagamento ? String(r.data_pagamento) : null,
         valor: Number(r.valor) || 0,
         tipo_operacao: r.tipo_operacao,
-        produto: r.produto,
+        produto: r.descricao || null,
       })));
 
       // Process saldo inicial global (mesma lógica do useFluxoCaixa)
