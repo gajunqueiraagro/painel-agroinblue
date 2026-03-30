@@ -704,7 +704,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         <div className="text-center text-muted-foreground py-4 text-[10px] animate-pulse">Carregando...</div>
       )}
 
-      {mode === 'rapido' && (fazendaId === '__all__' || fazendaId) && (
+      {mode === 'rapido' && !mesFechadoAtivo && (fazendaId === '__all__' || fazendaId) && (
         <ModoRapidoGrid
           fazendaId={fazendaId !== '__all__' ? fazendaId : fazOperacionais[0]?.id || ''}
           contas={hook.contasBancarias}
