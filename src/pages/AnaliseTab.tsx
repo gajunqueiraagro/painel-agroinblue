@@ -62,7 +62,7 @@ export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange, isGlobal 
         <Button variant="ghost" size="icon" onClick={() => onTabChange('resumo')}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="text-lg font-bold text-foreground">Análise Gráfica</h1>
+        <h1 className="text-lg font-bold text-foreground">Operação</h1>
       </div>
 
       <Select value={anoFiltro} onValueChange={setAnoFiltro}>
