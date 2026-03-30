@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Plus, Search, Check, ChevronsUpDown, AlertCircle } from 'lucide-react';
+import { Plus, Search, Check, ChevronsUpDown, AlertCircle, Copy, KeyRound } from 'lucide-react';
+import { toast } from 'sonner';
 import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { NovoFornecedorDialog } from './NovoFornecedorDialog';
@@ -554,7 +555,42 @@ export function LancamentoV2Dialog({
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs">Dados para Pagamento</Label>
+                  <div className="flex items-center justify-between mb-1">
+                    <Label className="text-xs">Dados para Pagamento</Label>
+                    <div className="flex gap-1">
+                      {formaPgto === 'PIX' && dadosPagamento && (() => {
+                        const chaveMatch = dadosPagamento.match(/Chave:\s*(.+)/i);
+                        return chaveMatch ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-[10px] gap-1 text-primary hover:text-primary"
+                            onClick={() => {
+                              navigator.clipboard.writeText(chaveMatch[1].trim());
+                              toast.success('Chave PIX copiada');
+                            }}
+                          >
+                            <KeyRound className="h-3 w-3" /> Copiar PIX
+                          </Button>
+                        ) : null;
+                      })()}
+                      {dadosPagamento && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[10px] gap-1 text-muted-foreground hover:text-foreground"
+                          onClick={() => {
+                            navigator.clipboard.writeText(dadosPagamento);
+                            toast.success('Dados copiados');
+                          }}
+                        >
+                          <Copy className="h-3 w-3" /> Copiar dados
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                   <Textarea
                     value={dadosPagamento}
                     onChange={e => setDadosPagamento(e.target.value)}
