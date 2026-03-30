@@ -297,18 +297,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       const q = produtoFiltro.toLowerCase();
       items = items.filter(l => l.descricao?.toLowerCase().includes(q));
     }
-    if (fornecedorFiltro.trim()) {
-      const q = fornecedorFiltro.toLowerCase();
-      items = items.filter(l => {
-        const nome = hook.fornecedores.find(f => f.id === l.favorecido_id)?.nome || '';
-        return nome.toLowerCase().includes(q);
-      });
+    if (fornecedorFiltro !== '__all__') {
+      items = items.filter(l => l.favorecido_id === fornecedorFiltro);
     }
     if (atividadeFiltro !== '__all__') {
       items = items.filter(l => getAtividade(l.subcentro) === atividadeFiltro);
     }
     return items;
-  }, [hook.lancamentos, produtoFiltro, fornecedorFiltro, atividadeFiltro, hook.fornecedores]);
+  }, [hook.lancamentos, produtoFiltro, fornecedorFiltro, atividadeFiltro]);
 
   // Sorted lancamentos
   const sortedLancamentos = useMemo(() => {
