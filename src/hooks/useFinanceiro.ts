@@ -285,10 +285,10 @@ export function useFinanceiro() {
 
         const [allLancs, ccResult, impResult, saldoResult, lancPecResult] = await Promise.all([
           fetchAllPaginated<FinanceiroLancamento>((from, to) =>
-            (supabase.from('financeiro_lancamentos').select('*') as any).in('fazenda_id', allFazendaIds).order('data_realizacao', { ascending: false }).range(from, to),
+            (supabase.from('financeiro_lancamentos').select('*') as any).in('fazenda_id', allFazendaIds).neq('origem_dado', 'importacao_cancelada').order('data_realizacao', { ascending: false }).range(from, to),
           ),
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').in('fazenda_id', allFazendaIds).eq('ativo', true),
-          supabase.from('financeiro_importacoes').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').in('fazenda_id', allFazendaIds).order('data_importacao', { ascending: false }),
+          supabase.from('financeiro_importacoes').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').in('fazenda_id', allFazendaIds).neq('status', 'cancelada').order('data_importacao', { ascending: false }),
           opIds.length > 0 ? supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
           opIds.length > 0 ? supabase.from('lancamentos').select('fazenda_id, data, tipo, quantidade, categoria, categoria_destino').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
         ]);
