@@ -56,6 +56,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
   const [importando, setImportando] = useState(false);
   const [excluindo, setExcluindo] = useState<string | null>(null);
   const [confirmExcluir, setConfirmExcluir] = useState<ImportacaoRecord | null>(null);
+  const [tipoImportacao, setTipoImportacao] = useState<string>('importacao_incremental');
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
