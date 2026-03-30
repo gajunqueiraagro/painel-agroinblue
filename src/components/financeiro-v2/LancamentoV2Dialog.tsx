@@ -359,6 +359,34 @@ export function LancamentoV2Dialog({
     }
   };
 
+  const handleSubcentroKeyDown = (e: React.KeyboardEvent) => {
+    if (filteredSubcentros.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSubcentroHighlight(prev => {
+        const next = Math.min(prev + 1, filteredSubcentros.length - 1);
+        subcentroItemRefs.current[next]?.scrollIntoView({ block: 'nearest' });
+        return next;
+      });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSubcentroHighlight(prev => {
+        const next = Math.max(prev - 1, 0);
+        subcentroItemRefs.current[next]?.scrollIntoView({ block: 'nearest' });
+        return next;
+      });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const sc = filteredSubcentros[subcentroHighlight];
+      if (sc) handleSubcentroSelect(sc.subcentro || '');
+    } else if (e.key === 'Tab') {
+      const sc = filteredSubcentros[subcentroHighlight];
+      if (sc) handleSubcentroSelect(sc.subcentro || '');
+    } else if (e.key === 'Escape') {
+      setSubcentroOpen(false);
+    }
+  };
+
   const handleDataPagamentoChange = (val: string) => {
     setDataPagamento(val);
     if (statusTransacao !== 'conciliado') {
