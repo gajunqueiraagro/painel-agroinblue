@@ -891,7 +891,7 @@ export function LancamentoV2Dialog({
                   </div>
                   <div>
                     <Label className="text-xs">Nota Fiscal</Label>
-                    <Input value={notaFiscalDisplay} onChange={handleNotaFiscalChange} inputMode="numeric" className="h-9 font-mono bg-[#f5f6f8] dark:bg-muted border-border/50" placeholder="000.000.000" />
+                    <Input tabIndex={10} value={notaFiscalDisplay} onChange={handleNotaFiscalChange} inputMode="numeric" className="h-9 font-mono bg-[#f5f6f8] dark:bg-muted border-border/50" placeholder="000.000.000" />
                   </div>
                 </div>
               </div>
