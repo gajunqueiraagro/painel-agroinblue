@@ -226,6 +226,47 @@ export function LancamentoV2Dialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formaPagamentoParc, numParcelas, valorNum, dataPagamento]);
 
+  /** Build payment text from supplier data */
+  const buildDadosPagamento = useCallback((f: FornecedorV2, metodo?: string): string => {
+    const tipo = metodo || f.tipo_recebimento || '';
+    const lines: string[] = [];
+    if (tipo === 'PIX' && f.pix_chave) {
+      lines.push(`PIX | Tipo: ${f.pix_tipo_chave || '-'}`);
+      lines.push(`Chave: ${f.pix_chave}`);
+      if (f.nome_favorecido) lines.push(`Favorecido: ${f.nome_favorecido}`);
+    } else if (tipo === 'Transferência' || tipo === 'Transferência Bancária') {
+      if (f.banco) lines.push(`Banco: ${f.banco}`);
+      if (f.agencia) lines.push(`Agência: ${f.agencia}`);
+      if (f.conta) lines.push(`Conta: ${f.conta}`);
+      if (f.tipo_conta) lines.push(`Tipo: ${f.tipo_conta}`);
+      if (f.cpf_cnpj_pagamento) lines.push(`CPF/CNPJ: ${f.cpf_cnpj_pagamento}`);
+      if (f.nome_favorecido) lines.push(`Favorecido: ${f.nome_favorecido}`);
+    }
+    if (f.observacao_pagamento) lines.push(f.observacao_pagamento);
+    return lines.join('\n');
+  }, []);
+
+  /** Auto-fill payment data when supplier changes */
+  const handleFornecedorSelect = useCallback((fId: string) => {
+    setFavorecidoId(fId);
+    setFornecedorOpen(false);
+    setFornecedorSearch('');
+    const f = fornecedores.find(x => x.id === fId);
+    if (f && f.tipo_recebimento) {
+      setFormaPgto(f.tipo_recebimento);
+      setDadosPagamento(buildDadosPagamento(f, f.tipo_recebimento));
+    }
+  }, [fornecedores, buildDadosPagamento]);
+
+  /** Re-fill payment data when payment method changes */
+  const handleFormaPgtoChange = useCallback((metodo: string) => {
+    setFormaPgto(metodo === '__none_fp__' ? '' : metodo);
+    const f = fornecedores.find(x => x.id === favorecidoId);
+    if (f && metodo && metodo !== '__none_fp__') {
+      setDadosPagamento(buildDadosPagamento(f, metodo));
+    }
+  }, [fornecedores, favorecidoId, buildDadosPagamento]);
+
   const handleSubcentroSelect = (value: string) => {
     setSubcentro(value);
     setSubcentroOpen(false);
