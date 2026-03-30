@@ -631,7 +631,7 @@ export function LancamentoV2Dialog({
                     onChange={e => {
                       setDescricao(e.target.value);
                       setProdutoOpen(true);
-                      setProdutoHighlight(0);
+                      setProdutoHighlight(-1);
                     }}
                     onFocus={() => { if (descricao.trim().length >= 2) setProdutoOpen(true); }}
                     onKeyDown={handleProdutoKeyDown}
