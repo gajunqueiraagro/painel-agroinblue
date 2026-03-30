@@ -99,14 +99,27 @@ function buildZooRows(
   });
 
   const pesoIniRow = mkRow('Base Mensal', 'Peso inicial kg', m => {
-    const cabIni = cabIniRow.valores[m - 1];
-    // Approximate from saldos for month 1, else use previous month final
     if (m === 1) {
-      const totalPeso = saldosIniciais.filter(s => s.ano === ano).reduce((s, si) => s + si.quantidade * (si.pesoMedioKg || 0), 0);
-      return totalPeso;
+      return saldosIniciais.filter(s => s.ano === ano).reduce((s, si) => s + si.quantidade * (si.pesoMedioKg || 0), 0);
     }
-    return cabIni * 450; // fallback estimate
+    // Use previous month's final peso
+    return pesoFinKgRow_valores[m - 2] ?? 0;
   }, 'kg');
+
+  // Pre-compute peso final per month for reference by pesoIniRow
+  const pesoFinKgRow_valores = Array.from({ length: 12 }, (_, i) => {
+    const m = i + 1;
+    if (m > ateMes) return 0;
+    const anoMes = `${ano}-${String(m).padStart(2, '0')}`;
+    const pesosMap = pesosPorMes[anoMes] || {};
+    const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, m);
+    let total = 0;
+    saldoMap.forEach((qtd, cat) => {
+      const { valor: pesoMedio } = resolverPesoOficial(cat, pesosMap, saldosIniciais, lancamentos, ano, m);
+      total += qtd * (pesoMedio || 0);
+    });
+    return total;
+  });
 
   const pesoIniArrobasRow = mkRow('Base Mensal', 'Peso inicial @', m => pesoIniRow.valores[m - 1] / 30, 'dec1');
 
