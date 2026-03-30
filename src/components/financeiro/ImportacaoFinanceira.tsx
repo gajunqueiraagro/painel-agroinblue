@@ -229,7 +229,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onCo
               <ShieldCheck className="h-4 w-4 text-primary mt-0.5 shrink-0" />
               <div className="text-xs space-y-0.5">
                 <p className="font-bold text-foreground">Importação incremental protegida</p>
-                <p className="text-muted-foreground">Duplicados são ignorados automaticamente (hash robusto: cliente + fazenda + data + valor + tipo + conta + produto + fornecedor). Lançamentos existentes nunca serão apagados ou sobrescritos.</p>
+                <p className="text-muted-foreground">Duplicados são ignorados automaticamente pela chave estável cliente + fazenda + data_pagamento + valor + tipo + conta bancária, com trava adicional no banco.</p>
               </div>
             </div>
 
