@@ -184,11 +184,21 @@ function buildZooRows(
     return acum;
   });
 
-  const cabMediaRow = mkRow('Acumulados', 'Rebanho médio do período\n(cab)', m => {
+  const cabMediaMesRow = mkRow('Acumulados', 'Rebanho médio no mês\n(cab)', m => {
     return (cabIniRow.valores[m - 1] + cabFinRow.valores[m - 1]) / 2;
   }, 'dec1');
 
-  rows.push(entAcumRow, saiAcumRow, cabMediaRow);
+  const cabMediaPeriodoRow = mkRow('Acumulados', 'Rebanho médio do período\n(cab)', m => {
+    let soma = 0;
+    let qtdMeses = 0;
+    for (let i = 1; i <= m; i++) {
+      const media = (cabIniRow.valores[i - 1] + cabFinRow.valores[i - 1]) / 2;
+      if (media > 0) { soma += media; qtdMeses++; }
+    }
+    return qtdMeses > 0 ? soma / qtdMeses : 0;
+  }, 'dec1');
+
+  rows.push(entAcumRow, saiAcumRow, cabMediaMesRow, cabMediaPeriodoRow);
 
   // ─ INDICADORES ─
   const lotCabHaRow = mkRow('Indicadores', 'Lotação\n(cab/ha)', m => {
