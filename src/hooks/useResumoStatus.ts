@@ -11,6 +11,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useCliente } from '@/contexts/ClienteContext';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { calcSaldoMensalAcumulado, isEntrada, isSaida } from '@/lib/calculos';
 import { isConciliado as isLancConciliado } from '@/lib/statusOperacional';
