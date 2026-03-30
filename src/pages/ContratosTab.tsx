@@ -39,7 +39,7 @@ const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'secondar
 
 export function ContratosTab() {
   const { contratos, loading, criarContrato, editarContrato, alterarStatus } = useContratos();
-  const { contas, classificacoes, fornecedores } = useFinanceiroV2();
+  const { contasBancarias: contas, classificacoes, fornecedores } = useFinanceiroV2();
   const { fazendas, fazendaAtual } = useFazenda();
 
   const [dialogOpen, setDialogOpen] = useState(false);
