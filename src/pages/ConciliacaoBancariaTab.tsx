@@ -487,9 +487,7 @@ export function ConciliacaoBancariaTab() {
                 const entradas = card.lancamentos.filter(l => (l.tipo_operacao || '').startsWith('1'));
                 const saidas = card.lancamentos.filter(l => (l.tipo_operacao || '').startsWith('2') || (l.tipo_operacao || '').startsWith('3'));
 
-                const [filtroTipo, setFiltroTipo] = [filtroTipoLanc, setFiltroTipoLanc];
-
-                const lancFiltrados = (filtroTipo === 'entradas' ? entradas : filtroTipo === 'saidas' ? saidas : card.lancamentos)
+                const lancFiltrados = (filtroTipoLanc === 'entradas' ? entradas : filtroTipoLanc === 'saidas' ? saidas : card.lancamentos)
                   .slice()
                   .sort((a, b) => {
                     const dA = a.data_pagamento || a.data_competencia || '';
