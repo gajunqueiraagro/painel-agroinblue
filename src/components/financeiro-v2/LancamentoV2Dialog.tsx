@@ -587,9 +587,43 @@ export function LancamentoV2Dialog({
             <section>
               <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Identificação</p>
               <div className="space-y-3">
-                <div>
+                <div ref={produtoWrapperRef} className="relative">
                   <Label className="text-xs">Produto *</Label>
-                  <Input value={descricao} onChange={e => setDescricao(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" placeholder="Descrição do produto" />
+                  <Input
+                    value={descricao}
+                    onChange={e => {
+                      setDescricao(e.target.value);
+                      setProdutoOpen(true);
+                      setProdutoHighlight(0);
+                    }}
+                    onFocus={() => { if (descricao.trim().length >= 2) setProdutoOpen(true); }}
+                    onKeyDown={handleProdutoKeyDown}
+                    className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"
+                    placeholder="Descrição do produto"
+                    autoComplete="off"
+                  />
+                  {produtoOpen && filteredProdutos.length > 0 && (
+                    <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-md border border-border bg-popover shadow-md max-h-48 overflow-y-auto">
+                      {filteredProdutos.map((p, i) => (
+                        <div
+                          key={p}
+                          ref={el => { produtoItemRefs.current[i] = el; }}
+                          className={cn(
+                            'px-3 py-1.5 text-sm cursor-pointer',
+                            i === produtoHighlight ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+                          )}
+                          onMouseDown={e => {
+                            e.preventDefault();
+                            setDescricao(p);
+                            setProdutoOpen(false);
+                          }}
+                          onMouseEnter={() => setProdutoHighlight(i)}
+                        >
+                          {p}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label className="text-xs">Fornecedor *</Label>
