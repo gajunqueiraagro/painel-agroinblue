@@ -557,7 +557,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       {mode === 'list' && !hook.loading && ano && (
         <>
           <div className="rounded-lg border overflow-x-auto">
-            <Table>
+            <Table className="table-financeiro">
               <TableHeader>
                 <TableRow className="!h-auto">
                   <TableHead className="py-[2px] px-1 w-[52px]">Comp.</TableHead>
