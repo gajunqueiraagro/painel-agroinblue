@@ -450,7 +450,7 @@ export function LancamentoV2Dialog({
                         <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__">Nenhuma</SelectItem>
-                          {sortedContas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
+                          {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -460,7 +460,7 @@ export function LancamentoV2Dialog({
                         <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__">Nenhuma</SelectItem>
-                          {sortedContas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
+                          {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -472,7 +472,7 @@ export function LancamentoV2Dialog({
                       <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">Nenhuma</SelectItem>
-                        {sortedContas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
+                        {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -483,7 +483,7 @@ export function LancamentoV2Dialog({
                       <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">Nenhuma</SelectItem>
-                        {sortedContas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
+                        {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -509,7 +509,7 @@ export function LancamentoV2Dialog({
                     <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                       <div className="flex items-center border-b px-3 py-2">
                         <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                        <input ref={subcentroInputRef} className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" placeholder="Buscar subcentro..." value={subcentroSearch} onChange={e => setSubcentroSearch(e.target.value)} autoFocus />
+                        <input ref={searchInputRef} className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" placeholder="Buscar subcentro..." value={subcentroSearch} onChange={e => setSubcentroSearch(e.target.value)} autoFocus />
                       </div>
                       <div className="max-h-48 overflow-y-auto p-1">
                         {filteredSubcentros.length === 0 && <p className="p-2 text-center text-sm text-muted-foreground">Nenhum subcentro encontrado</p>}
