@@ -41,6 +41,7 @@ import { FinV2ContasTab } from './FinV2ContasTab';
 import { FinV2FornecedoresTab } from './FinV2FornecedoresTab';
 import { FinV2PlanoContasTab } from './FinV2PlanoContasTab';
 import { FinV2SaldosTab } from './FinV2SaldosTab';
+import { ContratosTab } from './ContratosTab';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { SyncStatus } from '@/components/SyncStatus';
