@@ -60,6 +60,14 @@ export interface FinanceiroLancamento {
   forma_pagamento: string | null;
   obs: string | null;
   escopo_negocio: string | null;
+  // V2 fields mapped
+  sinal?: number;
+  favorecido_id?: string | null;
+  conta_bancaria_id?: string | null;
+  descricao?: string | null;
+  observacao?: string | null;
+  origem_lancamento?: string;
+  lote_importacao_id?: string | null;
 }
 
 /** Rateio calculado para a fazenda atual */
