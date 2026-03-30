@@ -532,7 +532,41 @@ export function LancamentoV2Dialog({
 
             <hr className="border-border/30" />
 
-            {/* ── FINANCEIRO ── */}
+            {/* ── PAGAMENTO ── */}
+            <section>
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Pagamento</p>
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs">Forma de Pagamento</Label>
+                  <Select value={formaPgto || '__none_fp__'} onValueChange={handleFormaPgtoChange}>
+                    <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none_fp__">Nenhuma</SelectItem>
+                      <SelectItem value="PIX">PIX</SelectItem>
+                      <SelectItem value="Cartão">Cartão</SelectItem>
+                      <SelectItem value="Boleto">Boleto</SelectItem>
+                      <SelectItem value="Débito Automático">Débito Automático</SelectItem>
+                      <SelectItem value="Débito">Débito</SelectItem>
+                      <SelectItem value="Transferência">Transferência</SelectItem>
+                      <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                      <SelectItem value="Outro">Outro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Dados para Pagamento</Label>
+                  <Textarea
+                    value={dadosPagamento}
+                    onChange={e => setDadosPagamento(e.target.value)}
+                    rows={3}
+                    placeholder="Chave PIX, dados bancários, código de boleto..."
+                    className="bg-[#f5f6f8] dark:bg-muted border-border/50 text-xs"
+                  />
+                </div>
+              </div>
+            </section>
+
+            <hr className="border-border/30" />
             <section>
               <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Financeiro</p>
               <div className="space-y-3">
