@@ -119,7 +119,15 @@ interface Props {
 
 export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: Props) {
   const { fazendas, fazendaAtual } = useFazenda();
-  const hook = useFinanceiroV2();
+  const isMobile = useIsMobile();
+  const pageSize = useMemo(() => {
+    if (typeof window === 'undefined') return 30;
+    const w = window.innerWidth;
+    if (w < 768) return 12;   // mobile
+    if (w < 1024) return 20;  // tablet
+    return 30;                // desktop
+  }, [isMobile]);
+  const hook = useFinanceiroV2(pageSize);
 
   const currentYear = new Date().getFullYear();
   const anos = useMemo(() => {
