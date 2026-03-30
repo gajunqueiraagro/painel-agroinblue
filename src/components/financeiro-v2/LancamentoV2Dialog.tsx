@@ -208,9 +208,11 @@ export function LancamentoV2Dialog({
     }
   };
 
-  const handleValorBlur = () => {
-    const num = parseBRL(valorDisplay);
-    setValorDisplay(toBRL(num));
+  const handleValorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/\D/g, '');
+    if (!digits) { setValorDisplay('0,00'); return; }
+    const num = parseInt(digits, 10) / 100;
+    setValorDisplay(num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   };
 
   const handleNotaFiscalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -451,7 +453,7 @@ export function LancamentoV2Dialog({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs">Valor (R$) *</Label>
-                    <Input value={valorDisplay} onChange={e => setValorDisplay(e.target.value)} onBlur={handleValorBlur} onFocus={e => e.target.select()} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" placeholder="0,00" inputMode="decimal" />
+                    <Input value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" placeholder="0,00" inputMode="numeric" />
                   </div>
                   <div>
                     <Label className="text-xs">Status *</Label>
