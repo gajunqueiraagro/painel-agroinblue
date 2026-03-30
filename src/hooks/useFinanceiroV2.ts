@@ -134,13 +134,24 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
   const loadFornecedores = useCallback(async () => {
     if (!clienteId) return;
-    const { data } = await supabase
-      .from('financeiro_fornecedores')
-      .select('id, nome, cpf_cnpj, fazenda_id, tipo_recebimento, pix_tipo_chave, pix_chave, banco, agencia, conta, tipo_conta, cpf_cnpj_pagamento, nome_favorecido, observacao_pagamento')
-      .eq('cliente_id', clienteId)
-      .eq('ativo', true)
-      .order('nome');
-    setFornecedores((data as FornecedorV2[]) || []);
+    // Fetch all fornecedores using pagination to bypass the 1000-row limit
+    const all: FornecedorV2[] = [];
+    const batchSize = 1000;
+    let from = 0;
+    while (true) {
+      const { data } = await supabase
+        .from('financeiro_fornecedores')
+        .select('id, nome, cpf_cnpj, fazenda_id, tipo_recebimento, pix_tipo_chave, pix_chave, banco, agencia, conta, tipo_conta, cpf_cnpj_pagamento, nome_favorecido, observacao_pagamento')
+        .eq('cliente_id', clienteId)
+        .eq('ativo', true)
+        .order('nome')
+        .range(from, from + batchSize - 1);
+      if (!data || data.length === 0) break;
+      all.push(...(data as FornecedorV2[]));
+      if (data.length < batchSize) break;
+      from += batchSize;
+    }
+    setFornecedores(all);
   }, [clienteId]);
 
   const criarFornecedor = useCallback(async (nome: string, fazendaId: string, cpfCnpj?: string) => {
