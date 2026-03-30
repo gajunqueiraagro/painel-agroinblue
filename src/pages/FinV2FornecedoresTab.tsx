@@ -116,10 +116,13 @@ export function FinV2FornecedoresTab() {
   useEffect(() => { if (activeTab === 'pendentes') loadPending(); }, [activeTab, loadPending]);
 
   const filteredItems = useMemo(() => {
-    if (!searchText.trim()) return items;
+    let list = items;
+    if (statusFilter === 'ativos') list = list.filter(f => f.ativo);
+    else if (statusFilter === 'inativos') list = list.filter(f => !f.ativo);
+    if (!searchText.trim()) return list;
     const q = searchText.toLowerCase();
-    return items.filter(f => f.nome.toLowerCase().includes(q) || f.cpf_cnpj?.toLowerCase().includes(q));
-  }, [items, searchText]);
+    return list.filter(f => f.nome.toLowerCase().includes(q) || f.cpf_cnpj?.toLowerCase().includes(q));
+  }, [items, searchText, statusFilter]);
 
   const openNew = () => {
     setEditing(null);
