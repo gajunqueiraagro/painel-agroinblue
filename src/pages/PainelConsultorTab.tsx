@@ -453,17 +453,18 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="sticky left-0 z-10 bg-muted text-[10px] font-bold min-w-[180px]">Indicador</TableHead>
+              <TableHead className="sticky left-0 z-10 bg-muted text-[10px] font-bold w-[220px] min-w-[220px] max-w-[220px]">Indicador</TableHead>
               {mesesVisiveis.map(m => (
-                <TableHead key={m} className="text-[10px] font-bold text-center min-w-[70px]">{m}</TableHead>
+                <TableHead key={m} className="text-[10px] font-bold text-center w-[88px] min-w-[80px] max-w-[100px]">{m}</TableHead>
               ))}
-              <TableHead className="text-[10px] font-bold text-center min-w-[80px] bg-muted">Total</TableHead>
+              <TableHead className="text-[10px] font-bold text-center w-[88px] min-w-[80px] max-w-[100px] bg-muted">Total</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((row, idx) => {
               const showGrupo = row.grupo !== lastGrupo;
               lastGrupo = row.grupo;
+              const indicadorLines = row.indicador.split('\n');
               return (
                 <>
                   {showGrupo && (
@@ -477,15 +478,20 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
                     </TableRow>
                   )}
                   <TableRow key={`row-${idx}`} className="hover:bg-muted/30">
-                    <TableCell className="sticky left-0 z-10 bg-card text-[10px] font-medium py-1 px-2 whitespace-nowrap">
-                      {row.indicador}
+                    <TableCell className="sticky left-0 z-10 bg-card text-[10px] font-medium py-1 px-2 w-[220px] min-w-[220px] max-w-[220px]">
+                      {indicadorLines.length > 1 ? (
+                        <span className="leading-tight">
+                          {indicadorLines[0]}<br />
+                          <span className="text-muted-foreground">{indicadorLines[1]}</span>
+                        </span>
+                      ) : row.indicador}
                     </TableCell>
                     {row.valores.slice(0, ateMes).map((v, i) => (
-                      <TableCell key={i} className="text-[10px] text-right py-1 px-1.5 tabular-nums whitespace-nowrap">
+                      <TableCell key={i} className="text-[10px] text-right py-1 px-1.5 tabular-nums whitespace-nowrap w-[88px]">
                         {fmtVal(v, row.format)}
                       </TableCell>
                     ))}
-                    <TableCell className="text-[10px] text-right py-1 px-1.5 tabular-nums whitespace-nowrap font-bold bg-muted/30">
+                    <TableCell className="text-[10px] text-right py-1 px-1.5 tabular-nums whitespace-nowrap font-bold bg-muted/30 w-[88px]">
                       {fmtVal(row.total, row.format)}
                     </TableCell>
                   </TableRow>
