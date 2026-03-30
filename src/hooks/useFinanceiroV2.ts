@@ -238,6 +238,51 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     } finally {
       setLoading(false);
     }
+  }, [clienteId, PAGE_SIZE]);
+
+  /** Fetch ALL lancamentos matching filters (no pagination) — used for export */
+  const loadAllForExport = useCallback(async (filtros: FiltrosV2): Promise<LancamentoV2[]> => {
+    if (!clienteId || !filtros.ano) return [];
+
+    const all: LancamentoV2[] = [];
+    let from = 0;
+    const batchSize = 1000;
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      let query = supabase
+        .from('financeiro_lancamentos_v2')
+        .select('*')
+        .eq('cliente_id', clienteId);
+
+      if (filtros.fazenda_id) query = query.eq('fazenda_id', filtros.fazenda_id);
+      if (filtros.meses && filtros.meses.length > 0 && !filtros.meses.includes('todos')) {
+        const anoMeses = filtros.meses.map(m => `${filtros.ano}-${m.padStart(2, '0')}`);
+        query = query.in('ano_mes', anoMeses);
+      } else if (filtros.mes && filtros.mes !== 'todos') {
+        query = query.eq('ano_mes', `${filtros.ano}-${filtros.mes.padStart(2, '0')}`);
+      } else {
+        query = query.gte('ano_mes', `${filtros.ano}-01`).lte('ano_mes', `${filtros.ano}-12`);
+      }
+      if (filtros.conta_bancaria_id) query = query.eq('conta_bancaria_id', filtros.conta_bancaria_id);
+      if (filtros.tipo_operacao) query = query.eq('tipo_operacao', filtros.tipo_operacao);
+      if (filtros.status_transacao) query = query.eq('status_transacao', filtros.status_transacao);
+      if (filtros.macro_custo) query = query.eq('macro_custo', filtros.macro_custo);
+      if (filtros.centro_custo) query = query.eq('centro_custo', filtros.centro_custo);
+      if (filtros.subcentro) query = query.eq('subcentro', filtros.subcentro);
+
+      const { data, error } = await query
+        .order('data_pagamento', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
+        .range(from, from + batchSize - 1);
+
+      if (error) { console.error(error); break; }
+      if (!data || data.length === 0) break;
+      all.push(...(data as LancamentoV2[]));
+      if (data.length < batchSize) break;
+      from += batchSize;
+    }
+    return all;
   }, [clienteId]);
 
   const buildInsertRow = (form: LancamentoV2Form, userId: string) => {
