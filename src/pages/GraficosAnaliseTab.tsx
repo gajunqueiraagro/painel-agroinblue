@@ -94,34 +94,34 @@ export function GraficosAnaliseTab({ lancamentos, saldosIniciais, onBack, filtro
   return (
     <div className="w-full animate-fade-in pb-20">
       {/* Sticky header */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 sm:px-6 lg:px-8 pt-2 pb-2 space-y-1.5">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={onBack} className="gap-1 text-xs h-7 px-2">
-            <ArrowLeft className="h-3.5 w-3.5" /> Voltar para Análises
+      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 sm:px-6 lg:px-8 py-1.5 space-y-1">
+        {/* Linha 1: Voltar + Ano + Mês */}
+        <div className="flex items-center gap-1.5">
+          <Button variant="ghost" size="sm" onClick={onBack} className="gap-1 text-[11px] h-6 px-1.5">
+            <ArrowLeft className="h-3 w-3" /> Voltar
           </Button>
-        </div>
-        <div className="flex gap-1.5 items-center">
           <Select value={anoFiltro} onValueChange={handleAnoChange}>
-            <SelectTrigger className="w-20 h-7 text-xs font-bold"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[68px] h-6 text-[11px] font-bold px-2"><SelectValue /></SelectTrigger>
             <SelectContent side="bottom">
-              {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+              {anosDisp.map(a => <SelectItem key={a} value={a} className="text-[11px]">{a}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
-            <SelectTrigger className="w-24 h-7 text-xs font-bold"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[80px] h-6 text-[11px] font-bold px-2"><SelectValue /></SelectTrigger>
             <SelectContent side="bottom">
               {mesesOpt.map(m => (
-                <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>
+                <SelectItem key={m.value} value={String(m.value)} className="text-[11px]">{m.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
-        <div className="grid grid-cols-3 bg-muted rounded-md p-0.5">
+        {/* Linha 2: Sub-abas */}
+        <div className="grid grid-cols-3 bg-muted rounded p-0.5">
           {subAbas.map(b => (
             <button
               key={b.id}
               onClick={() => setSubAba(b.id)}
-              className={`py-1.5 px-1 rounded text-[10px] sm:text-xs font-bold transition-colors ${
+              className={`py-1 px-1 rounded text-[10px] font-bold transition-colors ${
                 subAba === b.id
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-muted-foreground'
