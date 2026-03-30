@@ -52,6 +52,8 @@ interface PreviewState {
 }
 
 export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, onConfirmar, onExcluir }: Props) {
+  const { perfil } = usePermissions();
+  const podeCancelar = ['admin_agroinblue', 'gestor_cliente', 'financeiro'].includes(perfil || '');
   const fileRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [importando, setImportando] = useState(false);
