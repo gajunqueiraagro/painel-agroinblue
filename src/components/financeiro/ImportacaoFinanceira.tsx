@@ -4,7 +4,8 @@
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Download, Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, Loader2, Trash2 } from 'lucide-react';
+import { Download, Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, Loader2, Trash2, ShieldCheck } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { downloadModeloExcel } from '@/lib/financeiro/excelTemplate';
 import {
   parseExcel, resolverFazendas, resolverFazendasExtras, validarCentrosCusto, validarEstruturaExcel,
