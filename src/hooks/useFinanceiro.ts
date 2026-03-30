@@ -17,6 +17,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda, type Fazenda } from '@/contexts/FazendaContext';
+import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import type { LinhaImportada, SaldoBancarioImportado, ResumoCaixaImportado, CentroCustoOficial } from '@/lib/financeiro/importParser';
@@ -60,6 +61,14 @@ export interface FinanceiroLancamento {
   forma_pagamento: string | null;
   obs: string | null;
   escopo_negocio: string | null;
+  // V2 fields mapped
+  sinal?: number;
+  favorecido_id?: string | null;
+  conta_bancaria_id?: string | null;
+  descricao?: string | null;
+  observacao?: string | null;
+  origem_lancamento?: string;
+  lote_importacao_id?: string | null;
 }
 
 /** Rateio calculado para a fazenda atual */
@@ -132,6 +141,43 @@ async function fetchAllPaginated<T>(
     from += PAGE_SIZE;
   }
   return allData;
+}
+
+/** Map a V2 row to the FinanceiroLancamento interface for backward compatibility */
+function mapV2ToLancamento(r: any): FinanceiroLancamento {
+  return {
+    id: r.id,
+    fazenda_id: r.fazenda_id,
+    importacao_id: r.lote_importacao_id || null,
+    origem_dado: r.origem_lancamento || 'manual',
+    data_realizacao: r.data_competencia,
+    data_pagamento: r.data_pagamento,
+    ano_mes: r.ano_mes,
+    produto: r.descricao || null,
+    fornecedor: null, // V2 uses favorecido_id (UUID)
+    valor: r.valor,
+    status_transacao: r.status_transacao,
+    tipo_operacao: r.tipo_operacao,
+    conta_origem: null, // V2 uses conta_bancaria_id
+    conta_destino: null,
+    macro_custo: r.macro_custo,
+    grupo_custo: null, // Not in V2
+    centro_custo: r.centro_custo,
+    subcentro: r.subcentro,
+    nota_fiscal: r.nota_fiscal,
+    cpf_cnpj: null,
+    recorrencia: null,
+    forma_pagamento: r.forma_pagamento,
+    obs: r.observacao || null,
+    escopo_negocio: r.escopo_negocio,
+    sinal: r.sinal,
+    favorecido_id: r.favorecido_id,
+    conta_bancaria_id: r.conta_bancaria_id,
+    descricao: r.descricao,
+    observacao: r.observacao,
+    origem_lancamento: r.origem_lancamento,
+    lote_importacao_id: r.lote_importacao_id,
+  };
 }
 
 /**
@@ -228,8 +274,10 @@ function calcRebanhoMedioFazenda(
 
 export function useFinanceiro() {
   const { fazendaAtual, fazendas } = useFazenda();
+  const { clienteAtual } = useCliente();
   const { user } = useAuth();
   const fazendaId = fazendaAtual?.id;
+  const clienteId = clienteAtual?.id;
   const isGlobal = fazendaId === '__global__';
 
   const [importacoes, setImportacoes] = useState<ImportacaoRecord[]>([]);
@@ -283,15 +331,16 @@ export function useFinanceiro() {
           return;
         }
 
-        const [allLancs, ccResult, impResult, saldoResult, lancPecResult] = await Promise.all([
-          fetchAllPaginated<FinanceiroLancamento>((from, to) =>
-            (supabase.from('financeiro_lancamentos').select('*') as any).in('fazenda_id', allFazendaIds).eq('cancelado', false).order('data_realizacao', { ascending: false }).range(from, to),
+        const [allLancsRaw, ccResult, impResult, saldoResult, lancPecResult] = await Promise.all([
+          fetchAllPaginated<any>((from, to) =>
+            (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('cliente_id', clienteId).order('data_competencia', { ascending: false }).range(from, to),
           ),
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').in('fazenda_id', allFazendaIds).eq('ativo', true),
-          supabase.from('financeiro_importacoes').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').in('fazenda_id', allFazendaIds).neq('status', 'cancelada').order('data_importacao', { ascending: false }),
+          supabase.from('financeiro_importacoes_v2').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').eq('cliente_id', clienteId!).neq('status', 'cancelada').order('data_importacao', { ascending: false }),
           opIds.length > 0 ? supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
           opIds.length > 0 ? supabase.from('lancamentos').select('fazenda_id, data, tipo, quantidade, categoria, categoria_destino').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
         ]);
+        const allLancs = allLancsRaw.map(mapV2ToLancamento);
 
         setLancamentos(allLancs);
         setCentrosCusto((ccResult.data as CentroCustoOficial[]) || []);
@@ -308,20 +357,20 @@ export function useFinanceiro() {
         // Per-fazenda — use paginated fetch for lancamentos
         const needsRateio = fazendaADM && fazendaADM.id !== fazendaId;
 
-        const lancPromise = fetchAllPaginated<FinanceiroLancamento>((from, to) =>
-          (supabase.from('financeiro_lancamentos').select('*') as any).eq('fazenda_id', fazendaId).eq('cancelado', false).order('data_realizacao', { ascending: false }).range(from, to),
-        );
+        const lancPromise = fetchAllPaginated<any>((from, to) =>
+          (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaId).order('data_competencia', { ascending: false }).range(from, to),
+        ).then(rows => rows.map(mapV2ToLancamento));
 
         const admPromise = needsRateio
-          ? fetchAllPaginated<FinanceiroLancamento>((from, to) =>
-              (supabase.from('financeiro_lancamentos').select('*') as any).eq('fazenda_id', fazendaADM.id).eq('cancelado', false).order('data_realizacao', { ascending: false }).range(from, to),
-            )
+          ? fetchAllPaginated<any>((from, to) =>
+              (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaADM.id).order('data_competencia', { ascending: false }).range(from, to),
+            ).then(rows => rows.map(mapV2ToLancamento))
           : Promise.resolve([] as FinanceiroLancamento[]);
 
         const [lancData, ccResult, impResult, admData, saldoResult, lancPecResult] = await Promise.all([
           lancPromise,
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').eq('fazenda_id', fazendaId).eq('ativo', true),
-          supabase.from('financeiro_importacoes').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').in('fazenda_id', allFazendaIds).neq('status', 'cancelada').order('data_importacao', { ascending: false }),
+          clienteId ? supabase.from('financeiro_importacoes_v2').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').eq('cliente_id', clienteId).neq('status', 'cancelada').order('data_importacao', { ascending: false }) : Promise.resolve({ data: [] }),
           admPromise,
           needsRateio && opIds.length > 0
             ? supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds)
@@ -543,7 +592,7 @@ export function useFinanceiro() {
         return false;
       }
 
-      const clienteId = fazendas.find(f => f.id === primaryFazendaId)?.cliente_id || fazendaAtual?.cliente_id || '';
+      const cid = fazendas.find(f => f.id === primaryFazendaId)?.cliente_id || fazendaAtual?.cliente_id || '';
 
       // ── Determinar origem_dado baseado no tipo de importação ──
       const origemDado = tipoImportacao || 'importacao_incremental';
@@ -557,19 +606,18 @@ export function useFinanceiro() {
         const batchSize = 1000;
         while (true) {
           const { data: existing } = await supabase
-            .from('financeiro_lancamentos')
-            .select('hash_importacao, data_pagamento, valor, tipo_operacao, conta_origem, conta_destino, produto, fornecedor')
+            .from('financeiro_lancamentos_v2')
+            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, descricao')
             .eq('fazenda_id', fid)
-            .eq('cliente_id', clienteId)
+            .eq('cliente_id', cid)
             .range(from, from + batchSize - 1);
           if (!existing || existing.length === 0) break;
           for (const e of existing) {
-            // Use persisted hash if available, otherwise rebuild
-            const hash = e.hash_importacao || buildHashImportacao(
-              clienteId, fid,
+            const hash = buildHashImportacao(
+              cid, fid,
               e.data_pagamento, e.valor,
-              e.tipo_operacao, e.conta_origem, e.conta_destino,
-              e.produto, e.fornecedor,
+              e.tipo_operacao, null, null,
+              e.descricao, null,
             );
             existingHashes.add(hash);
           }
@@ -584,7 +632,7 @@ export function useFinanceiro() {
       let duplicados = 0;
       for (const l of linhas) {
         const hash = buildHashImportacao(
-          clienteId, l.fazendaId || '',
+          cid, l.fazendaId || '',
           l.dataPagamento || l.anoMes + '-01', l.valor,
           l.tipoOperacao, l.contaOrigem, l.contaDestino,
           l.produto, l.fornecedor,
@@ -605,14 +653,14 @@ export function useFinanceiro() {
 
       const totalValid = linhasNovas.length + (saldosBancarios?.length || 0) + (resumoCaixa?.length || 0);
 
-      // ── Criar registro da importação ──
+      // ── Criar registro da importação (V2) ──
       const { data: imp, error: impErr } = await supabase
-        .from('financeiro_importacoes')
+        .from('financeiro_importacoes_v2')
         .insert({
           fazenda_id: primaryFazendaId,
-          cliente_id: clienteId,
+          cliente_id: cid,
           nome_arquivo: nomeArquivo,
-          usuario_id: user.id,
+          created_by: user.id,
           status: 'processada',
           total_linhas: totalLinhas,
           total_validas: totalValid,
@@ -623,35 +671,31 @@ export function useFinanceiro() {
 
       if (impErr) throw impErr;
 
-      // ── Inserir lançamentos novos (nunca apaga existentes) ──
-      // Histórico = somente leitura (importacao_historica)
+      // ── Inserir lançamentos novos no V2 ──
       const insertBatchSize = 50;
+      const sinalFromTipo = (tipo: string | null) => (tipo || '').startsWith('1') ? 1 : -1;
       for (let i = 0; i < linhasNovas.length; i += insertBatchSize) {
-        const batch = linhasNovas.slice(i, i + insertBatchSize).map((l, j) => ({
+        const batch = linhasNovas.slice(i, i + insertBatchSize).map((l) => ({
           fazenda_id: l.fazendaId!,
-          cliente_id: fazendas.find(f => f.id === l.fazendaId)?.cliente_id || clienteId,
-          importacao_id: imp.id,
-          origem_dado: origemDado,
-          data_realizacao: l.dataPagamento || l.anoMes + '-01',
+          cliente_id: fazendas.find(f => f.id === l.fazendaId)?.cliente_id || cid,
+          lote_importacao_id: imp.id,
+          origem_lancamento: origemDado,
+          data_competencia: l.dataPagamento || l.anoMes + '-01',
           data_pagamento: l.dataPagamento,
           ano_mes: l.anoMes,
-          produto: l.produto,
-          fornecedor: l.fornecedor,
+          descricao: l.produto,
           valor: l.valor,
+          sinal: sinalFromTipo(l.tipoOperacao),
           status_transacao: l.statusTransacao,
-          tipo_operacao: l.tipoOperacao,
-          conta_origem: l.contaOrigem,
-          conta_destino: l.contaDestino,
+          tipo_operacao: l.tipoOperacao || '2 - Saídas',
           macro_custo: l.macroCusto,
-          grupo_custo: l.grupoCusto,
           centro_custo: l.centroCusto,
           subcentro: l.subcentro,
-          obs: l.obs,
+          observacao: l.obs,
           escopo_negocio: l.escopoNegocio,
-          hash_importacao: hashesNovas[i + j],
-          editado_manual: false,
+          created_by: user.id,
         }));
-        const { error } = await supabase.from('financeiro_lancamentos').insert(batch);
+        const { error } = await supabase.from('financeiro_lancamentos_v2').insert(batch);
         if (error) throw error;
       }
 
@@ -659,7 +703,7 @@ export function useFinanceiro() {
       if (saldosBancarios && saldosBancarios.length > 0) {
         const saldoBatch = saldosBancarios.map(s => ({
           fazenda_id: s.fazendaId || primaryFazendaId,
-          cliente_id: fazendas.find(f => f.id === (s.fazendaId || primaryFazendaId))?.cliente_id || clienteId,
+          cliente_id: fazendas.find(f => f.id === (s.fazendaId || primaryFazendaId))?.cliente_id || cid,
           importacao_id: imp.id,
           conta_banco: s.contaBanco,
           ano_mes: s.anoMes,
@@ -675,7 +719,7 @@ export function useFinanceiro() {
       if (resumoCaixa && resumoCaixa.length > 0) {
         const resumoBatch = resumoCaixa.map(r => ({
           fazenda_id: r.fazendaId || primaryFazendaId,
-          cliente_id: fazendas.find(f => f.id === (r.fazendaId || primaryFazendaId))?.cliente_id || clienteId,
+          cliente_id: fazendas.find(f => f.id === (r.fazendaId || primaryFazendaId))?.cliente_id || cid,
           importacao_id: imp.id,
           ano_mes: r.anoMes,
           entradas: r.entradas,
@@ -702,14 +746,14 @@ export function useFinanceiro() {
     }
   }, [user, loadData, fazendas]);
 
-  // --- Cancelar importação (soft delete — nunca apaga base principal) ---
+  // --- Cancelar importação (soft delete V2) ---
   const excluirImportacao = useCallback(async (importacaoId: string) => {
     try {
       // 1. Verificar se há lançamentos conciliados
       const { data: conciliados } = await supabase
-        .from('financeiro_lancamentos')
+        .from('financeiro_lancamentos_v2')
         .select('id')
-        .eq('importacao_id', importacaoId)
+        .eq('lote_importacao_id', importacaoId)
         .eq('status_transacao', 'conciliado')
         .limit(1);
 
@@ -718,46 +762,23 @@ export function useFinanceiro() {
         return false;
       }
 
-      // 2. Verificar se há lançamentos editados manualmente (campo real)
-      const { data: editados } = await supabase
-        .from('financeiro_lancamentos')
-        .select('id')
-        .eq('importacao_id', importacaoId)
-        .eq('editado_manual', true)
-        .limit(1);
-
-      if (editados && editados.length > 0) {
-        toast.error('Esta importação contém lançamentos editados manualmente e não pode ser cancelada.');
-        return false;
-      }
-
-      // 3. Verificar se é importação histórica (somente leitura)
-      const { data: impRecord } = await supabase
-        .from('financeiro_importacoes')
-        .select('status')
-        .eq('id', importacaoId)
-        .single();
-
-      // 4. Soft delete: marcar importação como cancelada
+      // 2. Marcar importação como cancelada
       const { error: cancelErr } = await supabase
-        .from('financeiro_importacoes')
+        .from('financeiro_importacoes_v2')
         .update({
           status: 'cancelada',
-          cancelada_em: new Date().toISOString(),
-          cancelada_por: user?.id || null,
         })
         .eq('id', importacaoId);
       if (cancelErr) throw cancelErr;
 
-      // 5. Marcar lançamentos como inativos (soft delete via cancelado flag, preserva origem_dado)
+      // 3. Deletar lançamentos vinculados (V2 usa delete real)
       const { error: lancErr } = await supabase
-        .from('financeiro_lancamentos')
-        .update({ cancelado: true } as any)
-        .eq('importacao_id', importacaoId)
-        .eq('editado_manual', false);
+        .from('financeiro_lancamentos_v2')
+        .delete()
+        .eq('lote_importacao_id', importacaoId);
       if (lancErr) throw lancErr;
 
-      toast.success('Importação cancelada. Lançamentos marcados como inativos.');
+      toast.success('Importação cancelada e lançamentos removidos.');
       await loadData();
       return true;
     } catch (err: any) {

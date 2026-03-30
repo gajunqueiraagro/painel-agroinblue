@@ -11,6 +11,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useCliente } from '@/contexts/ClienteContext';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { calcSaldoMensalAcumulado, isEntrada, isSaida } from '@/lib/calculos';
 import { isConciliado as isLancConciliado } from '@/lib/statusOperacional';
@@ -97,6 +98,7 @@ export function useResumoStatus(
   mesAte: number, // 1-12
 ) {
   const { fazendaAtual, fazendas } = useFazenda();
+  const { clienteAtual } = useCliente();
   const fazendaId = fazendaAtual?.id;
   const isGlobal = fazendaId === '__global__';
   const fazendaNaoPecuaria = !isGlobal && fazendaAtual?.tem_pecuaria === false;
@@ -152,20 +154,19 @@ export function useResumoStatus(
         // Financeiro — ALL farms (including ADM)
         idsFin.length > 0
           ? supabase
-              .from('financeiro_lancamentos')
-              .select('status_transacao, data_pagamento, valor, tipo_operacao, produto')
-              .in('fazenda_id', idsFin)
-              .eq('cancelado', false)
+              .from('financeiro_lancamentos_v2')
+              .select('status_transacao, data_pagamento, valor, tipo_operacao, descricao')
+              .eq('cliente_id', clienteAtual?.id || '')
               .gte('data_pagamento', `${anoStr}-01-01`)
               .lte('data_pagamento', `${anoStr}-12-31`)
               .limit(10000)
           : Promise.resolve({ data: [] }),
         // Saldo inicial — filtered by client's fazendas
-        idsFin.length > 0
+        idsFin.length > 0 && clienteAtual?.id
           ? supabase
-              .from('financeiro_saldos_bancarios')
-              .select('saldo_final, conta_banco')
-              .in('fazenda_id', idsFin)
+              .from('financeiro_saldos_bancarios_v2')
+              .select('saldo_final, conta_bancaria_id')
+              .eq('cliente_id', clienteAtual.id)
               .eq('ano_mes', `${ano - 1}-12`)
           : Promise.resolve({ data: [] }),
       ]);
@@ -211,13 +212,13 @@ export function useResumoStatus(
         data_pagamento: r.data_pagamento ? String(r.data_pagamento) : null,
         valor: Number(r.valor) || 0,
         tipo_operacao: r.tipo_operacao,
-        produto: r.produto,
+        produto: r.descricao || null,
       })));
 
       // Process saldo inicial global (mesma lógica do useFluxoCaixa)
       const saldoData = saldoResult.data || [];
       setSaldoInicialRegistros(saldoData.length);
-      setSaldoInicialContas(saldoData.map((r: any) => r.conta_banco).filter(Boolean));
+      setSaldoInicialContas(saldoData.map((r: any) => r.conta_bancaria_id || '').filter(Boolean));
       setSaldoInicialGlobal(saldoData.reduce((s: number, r: any) => s + (Number(r.saldo_final) || 0), 0));
     } catch (e) {
       console.error('useResumoStatus load error', e);

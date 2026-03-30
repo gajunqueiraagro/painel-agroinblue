@@ -78,7 +78,7 @@ export function FechamentoExecutivoTab({ onBack, filtroAnoInicial, filtroMesInic
 
     // Fetch financial data for the period
     let finQuery = supabase
-      .from('financeiro_lancamentos')
+      .from('financeiro_lancamentos_v2')
       .select('*')
       .eq('cliente_id', clienteId)
       .eq('ano_mes', anoMes);
