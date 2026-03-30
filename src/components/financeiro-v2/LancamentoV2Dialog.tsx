@@ -454,6 +454,8 @@ export function LancamentoV2Dialog({
               </div>
             </div>
 
+            <hr className="border-border/60" />
+
             {/* 6. CONTA BANCÁRIA */}
             <div>
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Conta Bancária</p>
