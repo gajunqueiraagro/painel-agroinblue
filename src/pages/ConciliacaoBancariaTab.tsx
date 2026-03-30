@@ -113,7 +113,9 @@ const STATUS_CONFIG = {
 /* ── Component ── */
 export function ConciliacaoBancariaTab() {
   const { clienteAtual } = useCliente();
-  const { isAdmin, isFinanceiro } = usePermissions();
+  const perm = usePermissions();
+  const isAdmin = perm.perfil === 'admin_agroinblue' || perm.perfil === 'gestor_cliente';
+  const isFinanceiro = perm.perfil === 'financeiro';
   const clienteId = clienteAtual?.id;
 
   const currentYear = new Date().getFullYear();
