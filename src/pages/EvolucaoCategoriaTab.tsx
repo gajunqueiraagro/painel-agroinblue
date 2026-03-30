@@ -407,6 +407,12 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
               <Clock className="h-3.5 w-3.5" />
             )}
             Rebanho: {rebanhoStatus === 'fechado' ? 'Fechado' : 'Aberto'}
+           </div>
+        )}
+        {valorRebanhoTotal > 0 && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-blue-50 border-blue-300 text-blue-800">
+            <DollarSign className="h-3.5 w-3.5" />
+            Valor Rebanho: {valorRebanhoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
           </div>
         )}
         {onNavigateToReclass && (
