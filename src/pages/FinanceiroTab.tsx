@@ -387,7 +387,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       <div className="animate-fade-in pb-20">
         {/* Top tabs */}
         <div className="p-4 pb-0">
-          <div className={`grid gap-0.5 bg-muted rounded-md p-0.5 grid-cols-${topTabs.length}`}>
+          <div className={`grid gap-0.5 bg-muted rounded-md p-0.5 max-w-md grid-cols-${topTabs.length}`}>
             {topTabs.map(t => (
               <button
                 key={t.id}
