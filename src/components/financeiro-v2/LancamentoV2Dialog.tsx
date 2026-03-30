@@ -178,6 +178,8 @@ export function LancamentoV2Dialog({
       setContaDestinoId('');
       setNotaFiscal(lancamento.nota_fiscal || '');
       setObservacao(lancamento.observacao || '');
+      setFormaPgto(lancamento.forma_pagamento || '');
+      setDadosPagamento(lancamento.dados_pagamento || '');
     } else {
       const today = new Date().toISOString().slice(0, 10);
       setFazendaId(defaultFazendaId || '');
