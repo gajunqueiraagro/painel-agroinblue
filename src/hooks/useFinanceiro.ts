@@ -357,14 +357,14 @@ export function useFinanceiro() {
         // Per-fazenda — use paginated fetch for lancamentos
         const needsRateio = fazendaADM && fazendaADM.id !== fazendaId;
 
-        const lancPromise = fetchAllPaginated<FinanceiroLancamento>((from, to) =>
-          (supabase.from('financeiro_lancamentos').select('*') as any).eq('fazenda_id', fazendaId).eq('cancelado', false).order('data_realizacao', { ascending: false }).range(from, to),
-        );
+        const lancPromise = fetchAllPaginated<any>((from, to) =>
+          (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaId).order('data_competencia', { ascending: false }).range(from, to),
+        ).then(rows => rows.map(mapV2ToLancamento));
 
         const admPromise = needsRateio
-          ? fetchAllPaginated<FinanceiroLancamento>((from, to) =>
-              (supabase.from('financeiro_lancamentos').select('*') as any).eq('fazenda_id', fazendaADM.id).eq('cancelado', false).order('data_realizacao', { ascending: false }).range(from, to),
-            )
+          ? fetchAllPaginated<any>((from, to) =>
+              (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaADM.id).order('data_competencia', { ascending: false }).range(from, to),
+            ).then(rows => rows.map(mapV2ToLancamento))
           : Promise.resolve([] as FinanceiroLancamento[]);
 
         const [lancData, ccResult, impResult, admData, saldoResult, lancPecResult] = await Promise.all([
