@@ -22,20 +22,22 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const { canViewTab } = usePermissions();
   const tabs = allTabs.filter(t => canViewTab(t.id));
   const getActiveId = (tab: TabId): TabId => {
-    // Movimentações sub-screens
-    const movTabs: TabId[] = ['movimentacao', 'fluxo_anual', 'evolucao_rebanho_hub', 'evolucao_categoria'];
-    // Lançamentos sub-screens
-    const lancarTabs: TabId[] = ['lancar_zoo_hub', 'lancamentos', 'fechamento', 'chuvas', 'conciliacao', 'conciliacao_categoria', 'valor_rebanho', 'mapa_pastos', 'resumo_pastos', 'financeiro'];
-    // Análises sub-screens
-    const analiseTabs: TabId[] = ['visao_zoo_hub', 'zootecnico', 'zootecnico_hub', 'indicadores', 'visao_anual_zoo', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute', 'evolucao', 'analise_operacional', 'pastos', 'lancar_fin_hub', 'visao_fin_hub', 'analise_economica', 'fechamento_executivo', 'analise_consultor', 'preco_mercado', 'graficos_analise'];
-    const finV2Tabs: TabId[] = ['financeiro_v2', 'financeiro_v2_hub', 'fin_v2_contas', 'fin_v2_fornecedores', 'fin_v2_plano', 'fin_v2_saldos', 'contratos', 'conciliacao_bancaria'];
-    const finTabs: TabId[] = ['fin_caixa'];
+    // Lanç. Zoo sub-screens
+    const lancarZooTabs: TabId[] = ['lancar_zoo_hub', 'lancamentos', 'fechamento', 'chuvas', 'mapa_pastos', 'resumo_pastos'];
+    // Lanç. Fin sub-screens (V2 operational)
+    const lancarFinTabs: TabId[] = ['financeiro_v2_hub', 'financeiro_v2', 'fin_v2_contas', 'fin_v2_fornecedores', 'fin_v2_plano', 'fin_v2_saldos', 'contratos', 'conciliacao_bancaria'];
+    // Zootécnico (analysis) sub-screens
+    const zooTabs: TabId[] = ['visao_zoo_hub', 'zootecnico', 'zootecnico_hub', 'indicadores', 'visao_anual_zoo', 'conciliacao_categoria', 'conciliacao', 'preco_mercado', 'graficos_analise', 'movimentacao', 'fluxo_anual', 'evolucao_rebanho_hub', 'evolucao_categoria', 'evolucao', 'valor_rebanho', 'pastos', 'fechamento_executivo', 'analise_consultor', 'analise_operacional'];
+    // Financeiro (analysis) sub-screens
+    const finTabs: TabId[] = ['lancar_fin_hub', 'visao_fin_hub', 'fin_caixa', 'analise_economica', 'financeiro'];
+    // Resumo sub-screens
+    const resumoTabs: TabId[] = ['resumo', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute'];
+    // Cadastros
     const cadTabs: TabId[] = ['cadastros', 'acessos'];
-    if (movTabs.includes(tab)) return 'movimentacao';
-    if (lancarTabs.includes(tab)) return 'lancar_zoo_hub';
-    if (analiseTabs.includes(tab)) return 'visao_zoo_hub';
-    if (finV2Tabs.includes(tab)) return 'fin_caixa';
-    if (finTabs.includes(tab)) return 'fin_caixa';
+    if (lancarZooTabs.includes(tab)) return 'lancar_zoo_hub';
+    if (lancarFinTabs.includes(tab)) return 'financeiro_v2_hub';
+    if (zooTabs.includes(tab)) return 'visao_zoo_hub';
+    if (finTabs.includes(tab)) return 'lancar_fin_hub';
     if (cadTabs.includes(tab)) return 'cadastros';
     return 'resumo';
   };
