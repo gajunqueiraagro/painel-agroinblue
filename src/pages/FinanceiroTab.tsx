@@ -177,21 +177,21 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
           const liqKgTotal = totals.pesoVivoTotal > 0 ? totals.valorTotal / totals.pesoVivoTotal : 0;
           return (
             <tfoot>
-              <tr className="border-t-2 border-primary/40 bg-muted/30 font-bold">
-                <td className="p-1.5">TOTAL</td>
-                {showTipo && <td className="p-1.5"></td>}
-                <td className="p-1.5 text-right">{totals.qtd}</td>
-                <td className="p-1.5"></td>
-                {showDestino && <td className="p-1.5"></td>}
-                {isGlobal && <td className="p-1.5"></td>}
-                <td className="p-1.5 text-right">{fmtValor(pesoVivoMedio)}</td>
-                <td className="p-1.5 text-right text-muted-foreground">{fmtValor(arrobaMedio)}</td>
-                <td className="p-1.5 text-right text-primary">{fmtValor(totals.valorTotal)}</td>
-                <td className="p-1.5 text-right">{fmtValor(liqArroba)}</td>
-                {showLiqKg && <td className="p-1.5 text-right">{fmtValor(liqKgTotal)}</td>}
-                <td className="p-1.5 text-right">{fmtValor(liqCabeca)}</td>
-                <td className="p-1.5"></td>
-                <td className="p-1.5"></td>
+              <tr className="border-t-2 border-primary/40 bg-muted/30 font-bold text-[10px]">
+                <td className="px-1 py-[3px]">TOTAL</td>
+                {showTipo && <td className="px-1 py-[3px]"></td>}
+                <td className="px-1 py-[3px] text-right">{totals.qtd}</td>
+                <td className="px-1 py-[3px]"></td>
+                {showDestino && <td className="px-1 py-[3px]"></td>}
+                {isGlobal && <td className="px-1 py-[3px]"></td>}
+                <td className="px-1 py-[3px] text-right">{fmtValor(pesoVivoMedio)}</td>
+                <td className="px-1 py-[3px] text-right text-muted-foreground">{fmtValor(arrobaMedio)}</td>
+                <td className="px-1 py-[3px] text-right text-primary">{fmtValor(totals.valorTotal)}</td>
+                <td className="px-1 py-[3px] text-right">{fmtValor(liqArroba)}</td>
+                {showLiqKg && <td className="px-1 py-[3px] text-right">{fmtValor(liqKgTotal)}</td>}
+                <td className="px-1 py-[3px] text-right">{fmtValor(liqCabeca)}</td>
+                <td className="px-1 py-[3px]"></td>
+                <td className="px-1 py-[3px]"></td>
               </tr>
             </tfoot>
           );
