@@ -328,7 +328,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     } else {
       setSortField(field);
-      setSortDir(field === 'valor' || field === 'data' ? 'desc' : 'asc');
+      setSortDir(field === 'valor' || field === 'data' || field === 'pgto' ? 'desc' : 'asc');
     }
   };
   const sortIcon = (field: SortField) => sortField === field ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
