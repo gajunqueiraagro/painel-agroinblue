@@ -107,7 +107,7 @@ export interface ClassificacaoItem {
 
 const DEFAULT_PAGE_SIZE = 30;
 
-export function useFinanceiroV2() {
+export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   const { clienteAtual } = useCliente();
   const { user } = useAuth();
   const clienteId = clienteAtual?.id;
@@ -119,6 +119,7 @@ export function useFinanceiroV2() {
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
+  const PAGE_SIZE = pageSize;
 
   const loadContas = useCallback(async () => {
     if (!clienteId) return;
