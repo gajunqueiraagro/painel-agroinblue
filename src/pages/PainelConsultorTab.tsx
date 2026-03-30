@@ -38,7 +38,7 @@ import {
   datePagtoAno,
 } from '@/lib/financeiro/classificacao';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
-import * as XLSX from 'xlsx';
+import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 
 // ─── Constants ───
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
