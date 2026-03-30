@@ -19,6 +19,7 @@ import { AnaliseEconomicaTab } from './AnaliseEconomicaTab';
 import { AcessosTab } from './AcessosTab';
 import { AnaliseTab } from './AnaliseTab';
 import { OperacaoHubTab } from './OperacaoHubTab';
+import { PainelConsultorTab } from './PainelConsultorTab';
 import { AnaliseEntradasTab } from './AnaliseEntradasTab';
 import { AnaliseSaidasTab } from './AnaliseSaidasTab';
 import { DesfrunteTab } from './DesfrunteTab';
