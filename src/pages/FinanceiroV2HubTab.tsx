@@ -1,7 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { TabId } from '@/components/BottomNav';
 import {
-  ListChecks, Building2, Users, BookOpen, Wallet, ChevronRight, FileText,
+  ListChecks, Building2, Users, BookOpen, Wallet, ChevronRight, FileText, Scale,
 } from 'lucide-react';
 
 interface Props {
