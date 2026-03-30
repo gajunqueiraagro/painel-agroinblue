@@ -163,7 +163,13 @@ function buildZooRows(
 
   const pesoFinArrobasRow = mkRow('Base Mensal', 'Peso final @', m => pesoFinKgRow.valores[m - 1] / 30, 'dec1');
 
-  rows.push(cabIniRow, pesoIniRow, pesoIniArrobasRow, entradasCabRow, entradasKgRow, entradasArrobasRow, saidasCabRow, saidasKgRow, saidasArrobasRow, cabFinRow, pesoFinKgRow, pesoFinArrobasRow);
+  const pesoMedioFinRow = mkRow('Base Mensal', 'Peso médio final', m => {
+    const cab = cabFinRow.valores[m - 1];
+    const pesoKg = pesoFinKgRow.valores[m - 1];
+    return cab > 0 ? pesoKg / cab : 0;
+  }, 'dec2');
+
+  rows.push(cabIniRow, pesoIniRow, pesoIniArrobasRow, entradasCabRow, entradasKgRow, entradasArrobasRow, saidasCabRow, saidasKgRow, saidasArrobasRow, cabFinRow, pesoFinKgRow, pesoFinArrobasRow, pesoMedioFinRow);
 
   // ─ ACUMULADOS ─
   const entAcumRow = mkRow('Acumulados', 'Entradas acumuladas', m => {
