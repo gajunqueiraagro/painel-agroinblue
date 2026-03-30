@@ -135,7 +135,7 @@ export function useFinanceiroV2() {
     if (!clienteId) return;
     const { data } = await supabase
       .from('financeiro_fornecedores')
-      .select('id, nome, cpf_cnpj, fazenda_id')
+      .select('id, nome, cpf_cnpj, fazenda_id, tipo_recebimento, pix_tipo_chave, pix_chave, banco, agencia, conta, tipo_conta, cpf_cnpj_pagamento, nome_favorecido, observacao_pagamento')
       .eq('cliente_id', clienteId)
       .eq('ativo', true)
       .order('nome');
