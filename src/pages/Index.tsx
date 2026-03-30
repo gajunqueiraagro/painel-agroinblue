@@ -302,6 +302,9 @@ const Index = () => {
           onSetSaldo={canEditZoo ? setSaldoInicial : undefined}
         />
       )}
+      {activeTab === 'operacao_hub' && (
+        <OperacaoHubTab onTabChange={handleTabChange} onBack={() => setActiveTab('resumo')} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
+      )}
 
       {/* Hubs */}
       {activeTab === 'lancar_zoo_hub' && (

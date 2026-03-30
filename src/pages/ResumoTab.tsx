@@ -563,7 +563,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
 
       {/* ── Card Operação ── */}
       <button
-        onClick={() => onTabChange('analise' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
+        onClick={() => onTabChange('operacao_hub' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
         className="w-full rounded-lg border border-primary/30 bg-primary/5 p-4 flex items-center gap-3 transition-colors hover:bg-primary/10 active:bg-primary/15"
       >
         <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center flex-shrink-0">
