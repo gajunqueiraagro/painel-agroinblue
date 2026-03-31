@@ -370,14 +370,6 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
                 ))}
               </SelectContent>
             </Select>
-            <button
-              onClick={() => onTabChange('resumo' as TabId)}
-              className="ml-0.5 flex items-center gap-0.5 rounded border border-primary/30 bg-primary/5 px-1.5 py-0.5 text-[10px] font-semibold text-primary hover:bg-primary/10 transition-colors"
-              title="Voltar para Resumo"
-            >
-              <ChevronRight className="h-3 w-3 rotate-180" />
-              Resumo
-            </button>
           </div>
         </div>
       </div>
