@@ -412,7 +412,7 @@ const Index = () => {
         <FechamentoTab
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
-          onBackToConciliacao={fechamentoFromConciliacao ? goToConciliacaoCategoria : undefined}
+          onBackToConciliacao={fechamentoFromConciliacao ? goToVisaoZooHub : undefined}
           onNavigateToReclass={goToReclassFromFechamento}
         />
       )}
