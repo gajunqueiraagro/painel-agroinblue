@@ -70,7 +70,6 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
     labelLayerRef,
     status: mapStatus,
     debugInfo,
-    scheduleInvalidateSize,
     reportRenderedGeometries,
   } = useStableLeafletMap({ debugName: 'MapaOperacao' });
 
