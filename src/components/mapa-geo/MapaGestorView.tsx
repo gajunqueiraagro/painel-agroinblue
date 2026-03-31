@@ -87,6 +87,14 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
   const selectedOc = selected?.geo.pasto_id ? ocupacoes.get(selected.geo.pasto_id) : null;
   const selectedStatus = selectedOc?.status || 'sem_ocupacao';
 
+  /* ── Available pastos for linking (not already bound to a geometry) ── */
+  const availablePastos = useMemo(() => {
+    const boundIds = new Set(geometrias.filter(g => g.pasto_id && g.id !== selected?.geo.id).map(g => g.pasto_id!));
+    return pastos
+      .filter(p => p.ativo && !boundIds.has(p.id))
+      .map(p => ({ value: p.id, label: p.nome }));
+  }, [pastos, geometrias, selected?.geo.id]);
+
   /* ── Categories for selected pasto ── */
   const [selectedCategories, setSelectedCategories] = useState<{ nome: string; quantidade: number; peso_medio_kg: number | null }[]>([]);
   
