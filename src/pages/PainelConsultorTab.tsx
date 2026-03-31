@@ -216,7 +216,7 @@ function buildZooRows(
     { tipo: 'venda', label: 'Vendas', temValor: true, temArroba: true },
     { tipo: 'transferencia_saida', label: 'Transferências saída', temValor: true, temArroba: true },
     { tipo: 'consumo', label: 'Consumo', temValor: true, temArroba: true },
-    { tipo: 'morte', label: 'Mortes', temValor: false, temArroba: false },
+    { tipo: 'morte', label: 'Mortes', temValor: true, temArroba: true },
   ];
 
   tiposSaidaMov.forEach(({ tipo, label, temValor, temArroba }) => {
