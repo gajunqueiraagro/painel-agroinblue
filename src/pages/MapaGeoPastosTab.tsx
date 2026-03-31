@@ -390,7 +390,9 @@ export function MapaGeoPastosTab() {
         open={uploadOpen}
         onOpenChange={setUploadOpen}
         onUpload={handleKmlUpload}
+        onRemove={handleRemoveMap}
         pastos={pastos}
+        hasExistingMap={hasGeometries}
       />
 
       {/* Remove confirmation */}
