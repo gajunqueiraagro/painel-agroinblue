@@ -31,7 +31,7 @@ import { MapaGeoPastosTab } from './MapaGeoPastosTab';
 import { ResumoPastosTab } from './ResumoPastosTab';
 import { AnaliseOperacionalTab } from './AnaliseOperacionalTab';
 import { ValorRebanhoTab } from './ValorRebanhoTab';
-import { ConciliacaoCategoriaTab } from './ConciliacaoCategoriaTab';
+
 import { ChuvasTab } from './ChuvasTab';
 import { VisaoAnualZootecnicaTab } from './VisaoAnualZootecnicaTab';
 import { FechamentoExecutivoTab } from './FechamentoExecutivoTab';
