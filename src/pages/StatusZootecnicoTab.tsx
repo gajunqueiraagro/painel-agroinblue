@@ -13,6 +13,14 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { TabId } from '@/components/BottomNav';
 import { supabase } from '@/integrations/supabase/client';
 import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
+import { useCliente } from '@/contexts/ClienteContext';
+import {
+  statusFinanceiro as calcStatusFinanceiro,
+  statusCategorias as calcStatusCategorias,
+  statusPastos as calcStatusPastos,
+  statusValor as calcStatusValor,
+  type StatusCor,
+} from '@/lib/calculos/statusMensal';
 import { ChevronRight, ChevronDown, CheckCircle2, Building2 } from 'lucide-react';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
@@ -49,6 +57,7 @@ const STATUS_ORDER: Record<CellStatus, number> = { aberto: 0, parcial: 1, fechad
 
 export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTabChange, filtroAnoInicial, filtroMesInicial }: Props) {
   const { fazendaAtual, fazendas } = useFazenda();
+  const { clienteAtual } = useCliente();
   const fazendaId = fazendaAtual?.id;
   const isGlobal = fazendaId === '__global__';
   const isAdmin = !isGlobal && fazendaAtual?.tem_pecuaria === false;
@@ -100,13 +109,22 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
 
       const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
       const fIds = pecFazendas.map(f => f.id);
+      const allFazendas = fazendas.filter(f => f.id !== '__global__');
+      const allFIds = allFazendas.map(f => f.id);
 
-      // Fetch all data in bulk
-      const [pastosRes, fpRes, vrRes, catsRes] = await Promise.all([
+      // Fetch all data in bulk (including financeiro)
+      const [pastosRes, fpRes, vrRes, catsRes, finFechRes] = await Promise.all([
         supabase.from('pastos').select('id, fazenda_id').eq('ativo', true).eq('entra_conciliacao', true).in('fazenda_id', fIds),
         supabase.from('fechamento_pastos').select('id, status, pasto_id, fazenda_id').eq('ano_mes', anoMes).in('fazenda_id', fIds),
         supabase.from('valor_rebanho_mensal').select('categoria, fazenda_id').eq('ano_mes', anoMes).in('fazenda_id', fIds),
         supabase.from('categorias_rebanho').select('id, codigo'),
+        clienteAtual?.id
+          ? supabase.from('financeiro_fechamentos')
+              .select('status_fechamento, fazenda_id')
+              .eq('cliente_id', clienteAtual.id)
+              .eq('ano_mes', anoMes)
+              .in('fazenda_id', allFIds)
+          : Promise.resolve({ data: [] }),
       ]);
 
       const fpIds = (fpRes.data || []).map(f => f.id);
@@ -117,6 +135,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
         itensAll = data || [];
       }
       const idToCodigo = new Map((catsRes.data || []).map(c => [c.id, c.codigo]));
+      const finFechAll = (finFechRes as any).data || [];
 
       // Group by fazenda
       const pastosByFaz = new Map<string, number>();
@@ -139,7 +158,15 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
         itensByFech.set(i.fechamento_id, list);
       });
 
-      // Filter lancamentos per fazenda (Lancamento uses fazendaId)
+      // Financeiro by fazenda
+      const finByFaz = new Map<string, any[]>();
+      finFechAll.forEach((f: any) => {
+        const list = finByFaz.get(f.fazenda_id) || [];
+        list.push(f);
+        finByFaz.set(f.fazenda_id, list);
+      });
+
+      // Filter lancamentos per fazenda
       const lancByFaz = new Map<string, Lancamento[]>();
       lancamentos.forEach(l => {
         if (!l.fazendaId) return;
@@ -165,58 +192,44 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
         const fps = fpByFaz.get(faz.id) || [];
         const fechados = fps.filter(f => f.status === 'fechado').length;
 
-        // Pastos status
-        let stPastos: CellStatus = 'aberto';
-        if (totalPastos > 0) {
-          if (fechados >= totalPastos) stPastos = 'fechado';
-          else if (fechados > 0 || fps.length > 0) stPastos = 'parcial';
-        }
-
-        // Valor status
-        const precosCount = vrByFaz.get(faz.id) || 0;
         const fazLanc = lancByFaz.get(faz.id) || [];
         const fazSaldos = saldosByFaz.get(faz.id) || [];
         const saldoMap = calcSaldoPorCategoriaLegado(fazSaldos, fazLanc, anoNum, mesFiltro);
         const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
 
-        let stValor: CellStatus = 'aberto';
-        if (precosCount === 0) stValor = 'aberto';
-        else if (catsComSaldo.length > 0 && precosCount < catsComSaldo.length) stValor = 'parcial';
-        else stValor = 'fechado';
-
-        // Categorias status
+        // Build alocado nos pastos
         const fechIds = fps.map(f => f.id);
         const monthItens = fechIds.flatMap(id => itensByFech.get(id) || []);
-        let stCats: CellStatus = 'aberto';
-        if (monthItens.length === 0 && catsComSaldo.length > 0) {
-          stCats = 'aberto';
-        } else if (monthItens.length > 0) {
-          const pastosMap = new Map<string, number>();
-          monthItens.forEach(i => {
-            const codigo = idToCodigo.get(i.categoria_id);
-            if (codigo) pastosMap.set(codigo, (pastosMap.get(codigo) || 0) + i.quantidade);
-          });
-          let difTotal = 0;
-          const totalSist = catsComSaldo.reduce((s, [, q]) => s + q, 0);
-          catsComSaldo.forEach(([cat, qtdSist]) => {
-            difTotal += Math.abs((pastosMap.get(cat) || 0) - qtdSist);
-          });
-          pastosMap.forEach((qtdP, cat) => {
-            if (!saldoMap.has(cat) || (saldoMap.get(cat) || 0) <= 0) {
-              if (qtdP > 0) difTotal += qtdP;
-            }
-          });
-          if (difTotal === 0) stCats = 'fechado';
-          else stCats = totalSist > 0 && difTotal / totalSist > 0.05 ? 'aberto' : 'parcial';
-        } else if (catsComSaldo.length === 0) {
-          stCats = 'fechado';
-        }
+        const alocadoPastos = new Map<string, number>();
+        monthItens.forEach(i => {
+          const codigo = idToCodigo.get(i.categoria_id);
+          if (codigo) alocadoPastos.set(codigo, (alocadoPastos.get(codigo) || 0) + i.quantidade);
+        });
 
-        // Apply pastos correction: if all pastos fechados but categorias divergentes → parcial
-        const categoriasOk = stCats === 'fechado';
-        if (stPastos === 'fechado' && !categoriasOk) stPastos = 'parcial';
+        // 1. Financeiro
+        const finFaz = finByFaz.get(faz.id) || [];
+        const stFin = calcStatusFinanceiro({ fechamentos: finFaz, totalFazendasEsperadas: 1 });
 
-        return { fazendaId: faz.id, fazendaNome: faz.nome, financeiro: 'aberto' as CellStatus, pastos: stPastos, valor: stValor, categorias: stCats };
+        // 3. Categorias
+        const stCatsResult = calcStatusCategorias({
+          saldoOficial: new Map(catsComSaldo),
+          alocadoPastos,
+          temItensPastos: monthItens.length > 0,
+        });
+
+        // 2. Pastos
+        const stPastos = calcStatusPastos({
+          totalPastos,
+          pastosFechados: fechados,
+          pastosComRegistro: fps.length,
+          statusCategorias: stCatsResult.status,
+        });
+
+        // 4. Valor
+        const precosCount = vrByFaz.get(faz.id) || 0;
+        const stValor = calcStatusValor({ precosDefinidos: precosCount, categoriasComSaldo: catsComSaldo.length });
+
+        return { fazendaId: faz.id, fazendaNome: faz.nome, financeiro: stFin, pastos: stPastos, valor: stValor, categorias: stCatsResult.status };
       });
 
       // Sort: aberto → parcial → fechado (by worst indicator)
@@ -232,7 +245,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
     } finally {
       setLoadingPerFarm(false);
     }
-  }, [isGlobal, fazendas, anoFiltro, mesFiltro, lancamentos, saldosIniciais, anoNum]);
+  }, [isGlobal, fazendas, anoFiltro, mesFiltro, lancamentos, saldosIniciais, anoNum, clienteAtual]);
 
   useEffect(() => { loadPerFarm(); }, [loadPerFarm]);
 
@@ -246,38 +259,56 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
     if (!fazendaId || isAdmin) return;
     setLoadingYear(true);
     try {
+      const cli = clienteAtual;
       let fazendaIdsPec: string[] = [];
+      let fazendaIdsFin: string[] = [];
       if (isGlobal) {
         const { data } = await supabase.from('fazendas').select('id, tem_pecuaria');
-        fazendaIdsPec = (data || []).filter(f => f.tem_pecuaria !== false).map(f => f.id);
+        const all = data || [];
+        fazendaIdsPec = all.filter(f => f.tem_pecuaria !== false).map(f => f.id);
+        fazendaIdsFin = all.map(f => f.id);
+      } else {
+        fazendaIdsPec = [fazendaId!];
+        fazendaIdsFin = [fazendaId!];
       }
       const fq = (q: any) => isGlobal ? q.in('fazenda_id', fazendaIdsPec) : q.eq('fazenda_id', fazendaId);
 
-      const { data: pastosData } = await fq(supabase.from('pastos').select('id').eq('ativo', true).eq('entra_conciliacao', true));
-      const totalPastos = (pastosData || []).length;
-
       const anoStr = anoFiltro;
       const anoMeses = Array.from({ length: 12 }, (_, i) => `${anoStr}-${String(i + 1).padStart(2, '0')}`);
-      const { data: fpAll } = await fq(
-        supabase.from('fechamento_pastos').select('id, status, pasto_id, ano_mes')
-          .gte('ano_mes', anoMeses[0]).lte('ano_mes', anoMeses[11])
-      );
-      const { data: vrAll } = await fq(
-        supabase.from('valor_rebanho_mensal').select('categoria, ano_mes')
-          .gte('ano_mes', anoMeses[0]).lte('ano_mes', anoMeses[11])
-      );
-      const fpIds = (fpAll || []).map(f => f.id);
+
+      const [pastosRes, fpRes, vrRes, catsRes, finFechRes] = await Promise.all([
+        fq(supabase.from('pastos').select('id').eq('ativo', true).eq('entra_conciliacao', true)),
+        fq(supabase.from('fechamento_pastos').select('id, status, pasto_id, ano_mes')
+          .gte('ano_mes', anoMeses[0]).lte('ano_mes', anoMeses[11])),
+        fq(supabase.from('valor_rebanho_mensal').select('categoria, ano_mes')
+          .gte('ano_mes', anoMeses[0]).lte('ano_mes', anoMeses[11])),
+        supabase.from('categorias_rebanho').select('id, codigo'),
+        cli?.id
+          ? supabase.from('financeiro_fechamentos')
+              .select('status_fechamento, fazenda_id, ano_mes')
+              .eq('cliente_id', cli.id)
+              .in('fazenda_id', fazendaIdsFin)
+              .gte('ano_mes', anoMeses[0]).lte('ano_mes', anoMeses[11])
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const totalPastos = (pastosRes.data || []).length;
+      const fpAll = fpRes.data || [];
+      const vrAll = vrRes.data || [];
+      const idToCodigo = new Map((catsRes.data || []).map(c => [c.id, c.codigo]));
+      const finFechAll = (finFechRes as any).data || [];
+
+      const fpIds = fpAll.map(f => f.id);
       let itensAll: any[] = [];
       if (fpIds.length > 0) {
         const { data } = await supabase.from('fechamento_pasto_itens')
           .select('fechamento_id, quantidade, categoria_id').in('fechamento_id', fpIds).gt('quantidade', 0);
         itensAll = data || [];
       }
-      const { data: catsData } = await supabase.from('categorias_rebanho').select('id, codigo');
-      const idToCodigo = new Map((catsData || []).map(c => [c.id, c.codigo]));
 
+      // Group data by month
       const fpByMonth = new Map<string, typeof fpAll>();
-      (fpAll || []).forEach(fp => {
+      fpAll.forEach(fp => {
         const list = fpByMonth.get(fp.ano_mes) || [];
         list.push(fp);
         fpByMonth.set(fp.ano_mes, list);
@@ -288,57 +319,62 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
         list.push(i);
         itensByFech.set(i.fechamento_id, list);
       });
+      const finByMonth = new Map<string, any[]>();
+      finFechAll.forEach((f: any) => {
+        const list = finByMonth.get(f.ano_mes) || [];
+        list.push(f);
+        finByMonth.set(f.ano_mes, list);
+      });
 
       const result: MonthStatus[] = [];
       for (let m = 1; m <= 12; m++) {
         const am = anoMeses[m - 1];
         const fps = fpByMonth.get(am) || [];
         const fechados = fps.filter(f => f.status === 'fechado').length;
-        let statusPastos: CellStatus = 'aberto';
-        if (totalPastos > 0) {
-          if (fechados >= totalPastos) statusPastos = 'fechado';
-          else if (fechados > 0 || fps.length > 0) statusPastos = 'parcial';
-        }
 
-        const vrMonth = (vrAll || []).filter(v => v.ano_mes === am);
+        // Saldo oficial
         const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, Number(anoStr), m);
         const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
-        let statusValor: CellStatus = 'aberto';
-        if (vrMonth.length === 0) statusValor = 'aberto';
-        else if (catsComSaldo.length > 0 && vrMonth.length < catsComSaldo.length) statusValor = 'parcial';
-        else statusValor = 'fechado';
 
+        // Build alocado nos pastos
         const fechIdsMes = fps.map(f => f.id);
         const monthItens = fechIdsMes.flatMap(id => itensByFech.get(id) || []);
-        let statusCats: CellStatus = 'aberto';
-        if (monthItens.length === 0 && catsComSaldo.length > 0) {
-          statusCats = 'aberto';
-        } else if (monthItens.length > 0) {
-          const pastosMap = new Map<string, number>();
-          monthItens.forEach(i => {
-            const codigo = idToCodigo.get(i.categoria_id);
-            if (codigo) pastosMap.set(codigo, (pastosMap.get(codigo) || 0) + i.quantidade);
-          });
-          let difTotal = 0;
-          const totalSist = catsComSaldo.reduce((s, [, q]) => s + q, 0);
-          catsComSaldo.forEach(([cat, qtdSist]) => {
-            difTotal += Math.abs((pastosMap.get(cat) || 0) - qtdSist);
-          });
-          pastosMap.forEach((qtdP, cat) => {
-            if (!saldoMap.has(cat) || (saldoMap.get(cat) || 0) <= 0) {
-              if (qtdP > 0) difTotal += qtdP;
-            }
-          });
-          if (difTotal === 0) statusCats = 'fechado';
-          else statusCats = totalSist > 0 && difTotal / totalSist > 0.05 ? 'aberto' : 'parcial';
-        } else if (catsComSaldo.length === 0) {
-          statusCats = 'fechado';
-        }
-        // Apply pastos correction: need categorias conciliated
-        const categoriasOkYear = statusCats === 'fechado';
-        if (statusPastos === 'fechado' && !categoriasOkYear) statusPastos = 'parcial';
+        const alocadoPastos = new Map<string, number>();
+        monthItens.forEach(i => {
+          const codigo = idToCodigo.get(i.categoria_id);
+          if (codigo) alocadoPastos.set(codigo, (alocadoPastos.get(codigo) || 0) + i.quantidade);
+        });
 
-        result.push({ financeiro: 'aberto' as CellStatus, pastos: statusPastos, valor: statusValor, categorias: statusCats });
+        // 1. Financeiro
+        const finMonth = finByMonth.get(am) || [];
+        const stFin = calcStatusFinanceiro({
+          fechamentos: finMonth,
+          totalFazendasEsperadas: fazendaIdsFin.length,
+        });
+
+        // 3. Categorias (before pastos)
+        const stCatsResult = calcStatusCategorias({
+          saldoOficial: new Map(catsComSaldo),
+          alocadoPastos,
+          temItensPastos: monthItens.length > 0,
+        });
+
+        // 2. Pastos
+        const stPastos = calcStatusPastos({
+          totalPastos,
+          pastosFechados: fechados,
+          pastosComRegistro: fps.length,
+          statusCategorias: stCatsResult.status,
+        });
+
+        // 4. Valor
+        const vrMonth = vrAll.filter(v => v.ano_mes === am);
+        const stValor = calcStatusValor({
+          precosDefinidos: vrMonth.length,
+          categoriasComSaldo: catsComSaldo.length,
+        });
+
+        result.push({ financeiro: stFin, pastos: stPastos, categorias: stCatsResult.status, valor: stValor });
       }
       setMonthData(result);
     } catch (e) {
@@ -346,7 +382,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
     } finally {
       setLoadingYear(false);
     }
-  }, [fazendaId, anoFiltro, lancamentos, saldosIniciais, isGlobal, isAdmin]);
+  }, [fazendaId, anoFiltro, lancamentos, saldosIniciais, isGlobal, isAdmin, clienteAtual]);
 
   useEffect(() => { loadYear(); }, [loadYear]);
 
