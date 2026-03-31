@@ -370,8 +370,38 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
                 </>
               )}
 
-              {!selectedPasto && (
-                <p className="text-[8px] text-muted-foreground">Sem vínculo com pasto cadastrado.</p>
+              {!selectedPasto && selected && (
+                <div className="space-y-1.5">
+                  <p className="text-[8px] text-muted-foreground">Polígono sem vínculo.</p>
+                  {onLink && (
+                    <>
+                      <Separator className="my-1" />
+                      <p className="text-[7px] font-semibold text-muted-foreground uppercase tracking-wider">Vincular a um pasto</p>
+                      <Select value={linkPastoId} onValueChange={setLinkPastoId}>
+                        <SelectTrigger className="h-7 text-[9px]"><SelectValue placeholder="Selecione o pasto" /></SelectTrigger>
+                        <SelectContent className="max-h-48 overflow-y-auto">
+                          {pastos.filter(p => p.ativo && !geometrias.some(g => g.pasto_id === p.id)).map(p => (
+                            <SelectItem key={p.id} value={p.id} className="text-[9px]">{p.nome}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="sm"
+                        className="w-full h-6 text-[9px]"
+                        disabled={!linkPastoId || linking}
+                        onClick={async () => {
+                          setLinking(true);
+                          const ok = await onLink(selected.geo.id, linkPastoId);
+                          setLinking(false);
+                          if (ok) { setLinkPastoId(''); setSelected(null); }
+                        }}
+                      >
+                        <Link2 className="h-3 w-3 mr-1" />
+                        {linking ? 'Vinculando...' : 'Vincular'}
+                      </Button>
+                    </>
+                  )}
+                </div>
               )}
             </div>
           </Card>
