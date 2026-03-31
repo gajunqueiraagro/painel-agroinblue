@@ -5,6 +5,7 @@ import { filtrarPorCenario } from '@/lib/statusOperacional';
 import { parseISO, format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { CheckCircle, AlertTriangle, Clock, RefreshCw, DollarSign } from 'lucide-react';
 
 interface Props {
@@ -70,6 +71,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   const [conciliacaoStatus, setConciliacaoStatus] = useState<'aberto' | 'fechado' | 'parcial' | null>(null);
   const [rebanhoStatus, setRebanhoStatus] = useState<'aberto' | 'fechado' | null>(null);
   const [precosRebanho, setPrecosRebanho] = useState<Record<string, number>>({});
+  const [pastosQtdPorCat, setPastosQtdPorCat] = useState<Record<string, number>>({});
 
   // Fetch conciliação status for the selected month/fazenda
   useEffect(() => {
@@ -81,7 +83,6 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
 
     (async () => {
       try {
-        // Get all pastos for the fazenda
         const { data: pastos } = await supabase
           .from('pastos')
           .select('id')
@@ -95,7 +96,6 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
           return;
         }
 
-        // Get fechamento_pastos for this month
         const { data: fechamentos } = await supabase
           .from('fechamento_pastos')
           .select('pasto_id, status')
@@ -159,16 +159,17 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   }, [fazendaId, anoFiltro, mesFiltro]);
 
 
+  // Fetch pesos from fechamento_pastos + fechamento_pasto_itens AND aggregate qty per category
   useEffect(() => {
     const anoMes = `${anoFiltro}-${mesFiltro}`;
     if (!fazendaId || fazendaId === '__global__') {
       setPesosDb({});
+      setPastosQtdPorCat({});
       return;
     }
 
     (async () => {
       try {
-        // Get fechamento_pastos IDs for this month/fazenda
         const { data: fechamentos } = await supabase
           .from('fechamento_pastos')
           .select('id')
@@ -177,7 +178,6 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
 
         const fechIds = (fechamentos || []).map(f => f.id);
 
-        // Get categorias mapping
         const { data: catData } = await supabase
           .from('categorias_rebanho')
           .select('id, codigo');
@@ -185,6 +185,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
         (catData || []).forEach(c => { catMap[c.id] = c.codigo; });
 
         const pesosPorCat: Record<string, { somaQtdPeso: number; somaQtd: number }> = {};
+        const qtdPorCat: Record<string, number> = {};
 
         if (fechIds.length > 0) {
           const { data: itens } = await supabase
@@ -194,7 +195,13 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
 
           (itens || []).forEach((item) => {
             const codigo = catMap[item.categoria_id];
-            if (!codigo || !item.peso_medio_kg || item.peso_medio_kg <= 0) return;
+            if (!codigo) return;
+
+            // Aggregate quantity per category (for conciliation)
+            qtdPorCat[codigo] = (qtdPorCat[codigo] || 0) + item.quantidade;
+
+            // Aggregate peso
+            if (!item.peso_medio_kg || item.peso_medio_kg <= 0) return;
             if (!pesosPorCat[codigo]) pesosPorCat[codigo] = { somaQtdPeso: 0, somaQtd: 0 };
             pesosPorCat[codigo].somaQtdPeso += item.quantidade * item.peso_medio_kg;
             pesosPorCat[codigo].somaQtd += item.quantidade;
@@ -214,12 +221,14 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
         }
 
         setPesosDb(result);
+        setPastosQtdPorCat(qtdPorCat);
       } catch {
         const result: Record<string, number> = {};
         saldosIniciais
           .filter(s => s.ano === Number(anoFiltro) && s.pesoMedioKg && s.pesoMedioKg > 0)
           .forEach(s => { result[s.categoria] = s.pesoMedioKg!; });
         setPesosDb(result);
+        setPastosQtdPorCat({});
       }
     })();
   }, [fazendaId, anoFiltro, mesFiltro, saldosIniciais]);
@@ -293,22 +302,26 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
       const saldoFinal = saldoInicioMes + totalEntradas - totalSaidas;
 
       const pesoMedio = pesosDb[cat.value] || null;
+      const pastosQtd = pastosQtdPorCat[cat.value] || 0;
+      const delta = saldoFinal - pastosQtd;
 
-      return { ...cat, saldoInicioMes, movs, saldoFinal, pesoMedio };
+      return { ...cat, saldoInicioMes, movs, saldoFinal, pesoMedio, pastosQtd, delta };
     });
-  }, [lancFiltrados, saldosIniciais, anoFiltro, mesFiltro, pesosDb]);
+  }, [lancFiltrados, saldosIniciais, anoFiltro, mesFiltro, pesosDb, pastosQtdPorCat]);
 
   const totais = useMemo(() => {
     const saldoIni = dados.reduce((s, d) => s + d.saldoInicioMes, 0);
     const movs = COLUNAS_MOV.map((_, i) => dados.reduce((s, d) => s + d.movs[i], 0));
     const saldoFin = dados.reduce((s, d) => s + d.saldoFinal, 0);
+    const pastosTotal = dados.reduce((s, d) => s + d.pastosQtd, 0);
+    const deltaTotal = saldoFin - pastosTotal;
 
     // Weighted average peso
     const somaPeso = dados.reduce((s, d) => s + (d.pesoMedio && d.saldoFinal > 0 ? d.saldoFinal * d.pesoMedio : 0), 0);
     const somaQtd = dados.reduce((s, d) => s + (d.pesoMedio && d.saldoFinal > 0 ? d.saldoFinal : 0), 0);
     const pesoMedio = somaQtd > 0 ? somaPeso / somaQtd : null;
 
-    return { saldoIni, movs, saldoFin, pesoMedio };
+    return { saldoIni, movs, saldoFin, pesoMedio, pastosTotal, deltaTotal };
   }, [dados]);
 
   const valorRebanhoTotal = useMemo(() => {
@@ -322,9 +335,19 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
     return total;
   }, [dados, precosRebanho]);
 
+  const hasPastosData = Object.keys(pastosQtdPorCat).length > 0;
+
   const formatPeso = (v: number | null) => {
     if (v === null || v === undefined || v <= 0) return '—';
     return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const getDeltaStyle = (delta: number, saldoFinal: number) => {
+    if (saldoFinal === 0 && delta === 0) return { dot: 'bg-muted-foreground/30', text: 'text-transparent' };
+    if (delta === 0) return { dot: 'bg-green-500', text: 'text-green-700' };
+    const ratio = saldoFinal > 0 ? Math.abs(delta) / saldoFinal : 1;
+    if (ratio <= 0.05) return { dot: 'bg-yellow-500', text: 'text-yellow-700' };
+    return { dot: 'bg-red-500', text: 'text-red-700' };
   };
 
   return (
@@ -427,70 +450,144 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
       </div>
 
       {/* Tabela */}
-      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
-        <table className="w-full text-[10px]">
-          <thead>
-            <tr className="border-b bg-muted">
-              <th className="text-left px-1.5 py-1 font-bold text-foreground sticky left-0 bg-muted min-w-[80px]">
-                Categoria
-              </th>
-              <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-muted">
-                Saldo Ini.
-              </th>
-              {COLUNAS_MOV.map(col => (
-                <th key={col.tipo} className={`px-1.5 py-1 font-bold text-center min-w-[45px] ${col.entrada ? 'text-success' : 'text-destructive'}`}>
-                  {col.label}
+      <TooltipProvider delayDuration={200}>
+        <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
+          <table className="w-full text-[10px]">
+            <thead>
+              <tr className="border-b bg-muted">
+                <th className="text-left px-1.5 py-1 font-bold text-foreground sticky left-0 bg-muted min-w-[80px]">
+                  Categoria
                 </th>
-              ))}
-              <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-muted">
-                Saldo Fin.
-              </th>
-              <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[55px] bg-muted">
-                Peso (kg)
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {dados.map((cat, i) => {
-              const isSeparator = cat.value === 'mamotes_f';
-              return (
-                <tr key={cat.value} className={`${i % 2 === 0 ? '' : 'bg-muted/30'} ${isSeparator ? 'border-t-2 border-border' : ''}`}>
-                  <td className={`px-1.5 py-0.5 font-bold text-foreground sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
-                    {cat.label}
-                  </td>
-                  <td className={`px-1.5 py-0.5 text-center font-semibold bg-primary/5 ${cat.saldoInicioMes === 0 ? 'text-transparent' : 'text-foreground'}`}>
-                    {cat.saldoInicioMes}
-                  </td>
-                  {cat.movs.map((val, j) => (
-                    <td key={j} className={`px-1.5 py-0.5 text-center font-semibold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-transparent'}`}>
-                      {val || '–'}
+                <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-muted">
+                  Saldo Ini.
+                </th>
+                {COLUNAS_MOV.map(col => (
+                  <th key={col.tipo} className={`px-1.5 py-1 font-bold text-center min-w-[45px] ${col.entrada ? 'text-success' : 'text-destructive'}`}>
+                    {col.label}
+                  </th>
+                ))}
+                <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-muted">
+                  Saldo Fin.
+                </th>
+                {hasPastosData && (
+                  <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[30px] bg-muted" title="Divergência: Saldo Oficial − Alocado nos Pastos">
+                    Δ
+                  </th>
+                )}
+                <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[55px] bg-muted">
+                  Peso (kg)
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {dados.map((cat, i) => {
+                const isSeparator = cat.value === 'mamotes_f';
+                const deltaStyle = getDeltaStyle(cat.delta, cat.saldoFinal);
+                return (
+                  <tr key={cat.value} className={`${i % 2 === 0 ? '' : 'bg-muted/30'} ${isSeparator ? 'border-t-2 border-border' : ''}`}>
+                    <td className={`px-1.5 py-0.5 font-bold text-foreground sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
+                      {cat.label}
                     </td>
-                  ))}
-                  <td className={`px-1.5 py-0.5 text-center font-extrabold bg-primary/5 ${cat.saldoFinal === 0 ? 'text-transparent' : 'text-foreground'}`}>
-                    {cat.saldoFinal}
+                    <td className={`px-1.5 py-0.5 text-center font-semibold bg-primary/5 ${cat.saldoInicioMes === 0 ? 'text-transparent' : 'text-foreground'}`}>
+                      {cat.saldoInicioMes}
+                    </td>
+                    {cat.movs.map((val, j) => (
+                      <td key={j} className={`px-1.5 py-0.5 text-center font-semibold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-transparent'}`}>
+                        {val || '–'}
+                      </td>
+                    ))}
+                    <td className={`px-1.5 py-0.5 text-center font-extrabold bg-primary/5 ${cat.saldoFinal === 0 ? 'text-transparent' : 'text-foreground'}`}>
+                      {cat.saldoFinal}
+                    </td>
+                    {hasPastosData && (
+                      <td className="px-1.5 py-0.5 text-center">
+                        {cat.saldoFinal === 0 && cat.pastosQtd === 0 ? (
+                          <span className="text-transparent">–</span>
+                        ) : (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className={`inline-flex items-center justify-center cursor-default`}>
+                                <span className={`inline-block w-2 h-2 rounded-full ${deltaStyle.dot}`} />
+                                {cat.delta !== 0 && (
+                                  <span className={`ml-0.5 text-[8px] font-bold tabular-nums ${deltaStyle.text}`}>
+                                    {cat.delta > 0 ? `+${cat.delta}` : cat.delta}
+                                  </span>
+                                )}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-[10px] space-y-0.5 p-2">
+                              <p className="font-bold text-foreground">{cat.label}</p>
+                              <div className="flex justify-between gap-4">
+                                <span className="text-muted-foreground">Oficial:</span>
+                                <span className="font-semibold">{cat.saldoFinal}</span>
+                              </div>
+                              <div className="flex justify-between gap-4">
+                                <span className="text-muted-foreground">Pastos:</span>
+                                <span className="font-semibold">{cat.pastosQtd}</span>
+                              </div>
+                              <div className={`flex justify-between gap-4 font-bold ${deltaStyle.text}`}>
+                                <span>Diferença:</span>
+                                <span>{cat.delta > 0 ? `+${cat.delta}` : cat.delta}</span>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </td>
+                    )}
+                    <td className={`px-1.5 py-0.5 text-center italic text-[9px] bg-primary/5 ${!cat.pesoMedio || cat.pesoMedio <= 0 ? 'text-transparent' : 'text-foreground'}`}>
+                      {formatPeso(cat.pesoMedio)}
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr className="border-t-2 bg-muted">
+                <td className="px-1.5 py-1 font-extrabold text-foreground sticky left-0 bg-muted">TOTAL</td>
+                <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoIni}</td>
+                {totais.movs.map((val, j) => (
+                  <td key={j} className={`px-1.5 py-1 text-center font-extrabold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-transparent'}`}>
+                    {val || '–'}
                   </td>
-                  <td className={`px-1.5 py-0.5 text-center italic text-[9px] bg-primary/5 ${!cat.pesoMedio || cat.pesoMedio <= 0 ? 'text-transparent' : 'text-foreground'}`}>
-                    {formatPeso(cat.pesoMedio)}
+                ))}
+                <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoFin}</td>
+                {hasPastosData && (
+                  <td className="px-1.5 py-1 text-center">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex items-center justify-center cursor-default">
+                          <span className={`inline-block w-2 h-2 rounded-full ${getDeltaStyle(totais.deltaTotal, totais.saldoFin).dot}`} />
+                          {totais.deltaTotal !== 0 && (
+                            <span className={`ml-0.5 text-[8px] font-bold tabular-nums ${getDeltaStyle(totais.deltaTotal, totais.saldoFin).text}`}>
+                              {totais.deltaTotal > 0 ? `+${totais.deltaTotal}` : totais.deltaTotal}
+                            </span>
+                          )}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-[10px] space-y-0.5 p-2">
+                        <p className="font-bold text-foreground">TOTAL</p>
+                        <div className="flex justify-between gap-4">
+                          <span className="text-muted-foreground">Oficial:</span>
+                          <span className="font-semibold">{totais.saldoFin}</span>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <span className="text-muted-foreground">Pastos:</span>
+                          <span className="font-semibold">{totais.pastosTotal}</span>
+                        </div>
+                        <div className={`flex justify-between gap-4 font-bold ${getDeltaStyle(totais.deltaTotal, totais.saldoFin).text}`}>
+                          <span>Diferença:</span>
+                          <span>{totais.deltaTotal > 0 ? `+${totais.deltaTotal}` : totais.deltaTotal}</span>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
                   </td>
-                </tr>
-              );
-            })}
-            <tr className="border-t-2 bg-muted">
-              <td className="px-1.5 py-1 font-extrabold text-foreground sticky left-0 bg-muted">TOTAL</td>
-              <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoIni}</td>
-              {totais.movs.map((val, j) => (
-                <td key={j} className={`px-1.5 py-1 text-center font-extrabold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-transparent'}`}>
-                  {val || '–'}
+                )}
+                <td className={`px-1.5 py-1 text-center italic text-[9px] font-semibold ${!totais.pesoMedio || totais.pesoMedio <= 0 ? 'text-transparent' : 'text-foreground'}`}>
+                  {formatPeso(totais.pesoMedio)}
                 </td>
-              ))}
-              <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoFin}</td>
-              <td className={`px-1.5 py-1 text-center italic text-[9px] font-semibold ${!totais.pesoMedio || totais.pesoMedio <= 0 ? 'text-transparent' : 'text-foreground'}`}>
-                {formatPeso(totais.pesoMedio)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </TooltipProvider>
     </div>
   );
 }
