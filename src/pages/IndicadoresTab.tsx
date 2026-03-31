@@ -126,14 +126,6 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
           </div>
           <div className="grid grid-cols-3 gap-3">
             <KpiCard
-              label="Valor Rebanho"
-              valor={ind.valorRebanho !== null ? formatMoedaCompacto(ind.valorRebanho) : '—'}
-              compMensal={c.valorRebanho.mensal}
-              compAnual={c.valorRebanho.anual}
-              semBase={ind.valorRebanho === null}
-              info={`Valor total do rebanho em R$.\n\nFórmula: somatório de (cabeças × peso médio × preço da @/30) por categoria.\nBase: preço de mercado e dados de fechamento.`}
-            />
-            <KpiCard
               label="R$/cab"
               valor={ind.valorPorCabeca !== null ? formatMoeda(ind.valorPorCabeca) : '—'}
               small
@@ -211,6 +203,24 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               semBase={ind.arrobasHaAcumuladoAno === null}
               info={`Produtividade acumulada por hectare (biológico).\n\nFórmula: @ produzidas (biológico) ÷ Área Produtiva.\nMede a eficiência da terra no período.`}
             />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <KpiCard
+              label="Valor Rebanho"
+              valor={ind.valorRebanho !== null ? formatMoedaCompacto(ind.valorRebanho) : '—'}
+              compMensal={c.valorRebanho.mensal}
+              compAnual={c.valorRebanho.anual}
+              semBase={ind.valorRebanho === null}
+              info={`Valor total do rebanho (R$).\n\nFonte oficial: tabela Valor do Rebanho (fechamento mensal).\nNÃO é recalculado — é o valor auditado.\nGlobal = soma das fazendas.`}
+            />
+            <KpiCard
+              label="R$/@  estoque"
+              valor={ind.valorArrobaEstoqueFinal !== null ? formatMoeda(ind.valorArrobaEstoqueFinal) : '—'}
+              small
+              semBase={ind.valorArrobaEstoqueFinal === null}
+              info={`Valor da arroba do estoque final (R$/@).\n\nFórmula: Valor do Rebanho ÷ Arrobas do estoque final.\nOnde: Arrobas estoque = Peso total final ÷ 30.\nPreço médio ponderado de todo o rebanho.`}
+            />
+            <div />
           </div>
         </CardContent>
       </Card>

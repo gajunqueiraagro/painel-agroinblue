@@ -156,6 +156,7 @@ export interface IndicadoresZootecnicos {
   valorRebanho: number | null;
   valorPorCabeca: number | null;
   valorPorHa: number | null;
+  valorArrobaEstoqueFinal: number | null;
 
   // --- Comparações (dual: mensal + anual para cada indicador) ---
   comparacoes: {
@@ -728,6 +729,12 @@ export function useIndicadoresZootecnicos(
     const valorPorHa = valorRebanho !== null && areaProdutiva > 0 ? valorRebanho / areaProdutiva : null;
     const valorRebanhoFechado = valorRebanhoData?.fechado ?? false;
 
+    // Valor da arroba do estoque final = Valor Rebanho / (Peso Total Final / 30)
+    const arrobasEstoqueFinal = pesoFinalMes > 0 ? pesoFinalMes / 30 : 0;
+    const valorArrobaEstoqueFinal = valorRebanho !== null && arrobasEstoqueFinal > 0
+      ? valorRebanho / arrobasEstoqueFinal
+      : null;
+
     // ===== COMPARAÇÕES (dual: mensal + anual) =====
 
     // --- MoM: structural indicators (vs mês anterior) ---
@@ -1006,6 +1013,7 @@ export function useIndicadoresZootecnicos(
       valorRebanho,
       valorPorCabeca,
       valorPorHa,
+      valorArrobaEstoqueFinal,
       comparacoes: {
         saldoFinalMes: { mensal: compSaldoMoM, anual: compSaldo },
         pesoMedioRebanhoKg: { mensal: compPesoMedioMoM, anual: compPesoMedio },
