@@ -212,7 +212,11 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
           stCats = 'fechado';
         }
 
-        return { fazendaId: faz.id, fazendaNome: faz.nome, pastos: stPastos, valor: stValor, categorias: stCats };
+        // Apply pastos correction: if all pastos fechados but categorias divergentes → parcial
+        const categoriasOk = stCats === 'fechado';
+        if (stPastos === 'fechado' && !categoriasOk) stPastos = 'parcial';
+
+        return { fazendaId: faz.id, fazendaNome: faz.nome, financeiro: 'aberto' as CellStatus, pastos: stPastos, valor: stValor, categorias: stCats };
       });
 
       // Sort: aberto → parcial → fechado (by worst indicator)
