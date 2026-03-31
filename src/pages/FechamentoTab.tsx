@@ -151,7 +151,10 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     else setItensMap(new Map());
   }, [fechamentos, loadItens]);
 
-  const pastosAtivos = pastos.filter(p => p.ativo && p.entra_conciliacao);
+  const pastosAtivos = useMemo(
+    () => pastos.filter(p => p.ativo && p.entra_conciliacao),
+    [pastos]
+  );
   const getFechamento = useCallback((pastoId: string) => fechamentos.find(f => f.pasto_id === pastoId) || null, [fechamentos]);
 
   const getResumo = useCallback((fech: FechamentoPasto | null, pasto: Pasto): PastoResumo => {
@@ -224,11 +227,25 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     [dedupFechamentos]
   );
 
-  // ── Fonte OPERACIONAL: realidade dos pastos (sem dedup, todos os registros do mês) ──
+  // ── Fonte OPERACIONAL: mesma base visual dos pastos/cards/resumo (sem conciliação) ──
+  const operationalFechamentos = useMemo(
+    () => pastosAtivos
+      .map(pasto => getFechamento(pasto.id))
+      .filter((fech): fech is FechamentoPasto => Boolean(fech)),
+    [pastosAtivos, getFechamento]
+  );
+
+  const operationalFechIds = useMemo(
+    () => new Set(operationalFechamentos.map(f => f.id)),
+    [operationalFechamentos]
+  );
+
+  // ── Fonte OPERACIONAL: realidade dos pastos exibida nas telas operacionais ──
   const pastoDataByCat = useMemo(() => {
     const catIdToCodigo = new Map((categorias || []).map(c => [c.id, c.codigo]));
     const map = new Map<string, number>();
-    itensMap.forEach((items, _fechId) => {
+    itensMap.forEach((items, fechId) => {
+      if (!operationalFechIds.has(fechId)) return;
       items.forEach(i => {
         if (i.quantidade > 0) {
           const codigo = catIdToCodigo.get(i.categoria_id);
@@ -237,7 +254,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       });
     });
     return map;
-  }, [itensMap, categorias]);
+  }, [itensMap, categorias, operationalFechIds]);
 
   // ── Fonte de CONCILIAÇÃO: deduplicada para comparação com sistema ──
   const conciliacaoDataByCat = useMemo(() => {
@@ -416,7 +433,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     return (
       <ResumoAtividadesView
         pastos={pastos}
-        fechamentos={fechamentos}
+        fechamentos={operationalFechamentos}
         itensMap={itensMap}
         categorias={categorias}
         anoMes={anoMes}
