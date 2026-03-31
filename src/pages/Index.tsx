@@ -484,7 +484,7 @@ const Index = () => {
       )}
       {activeTab === 'financeiro_v2' && (
         <FinanceiroV2Tab
-          onBack={goToLancarFinHub}
+          onBack={() => setActiveTab('financeiro_v2_hub')}
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
         />
