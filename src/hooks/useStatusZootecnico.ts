@@ -67,13 +67,15 @@ export function useStatusZootecnico(
   const [pastosRascunho, setPastosRascunho] = useState(0);
   const [pastosNaoIniciados, setPastosNaoIniciados] = useState(0);
   const [pastosPorFazenda, setPastosPorFazenda] = useState<PastosFazendaStatus[]>([]);
-  const [itensTotais, setItensTotais] = useState(0);
   const [precosDefinidos, setPrecosDefinidos] = useState(0);
   const [categoriasComSaldo, setCategoriasComSaldo] = useState(0);
-  const [catsDivergentes, setCatsDivergentes] = useState(0);
-  const [difTotalCabecas, setDifTotalCabecas] = useState(0);
-  const [saldoTotalSistema, setSaldoTotalSistema] = useState(0);
   const [semPecuaria, setSemPecuaria] = useState(false);
+
+  // Categorias status — computed via calcStatusCategorias (single source of truth)
+  const [categoriasStatusResult, setCategoriasStatusResult] = useState<{
+    status: StatusCor; catsDivergentes: number; difTotalCabecas: number; difTotalLiquida: number;
+    saldoTotalOficial: number; totalAlocadoPastos: number; descricao: string;
+  }>({ status: 'aberto', catsDivergentes: 0, difTotalCabecas: 0, difTotalLiquida: 0, saldoTotalOficial: 0, totalAlocadoPastos: 0, descricao: '' });
 
   // Financeiro state
   const [finFechamentoStatus, setFinFechamentoStatus] = useState<string | null>(null); // 'fechado' | 'aberto' | null
