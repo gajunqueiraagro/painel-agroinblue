@@ -57,6 +57,7 @@ const STATUS_ORDER: Record<CellStatus, number> = { aberto: 0, parcial: 1, fechad
 
 export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTabChange, filtroAnoInicial, filtroMesInicial }: Props) {
   const { fazendaAtual, fazendas } = useFazenda();
+  const { clienteAtual } = useCliente();
   const fazendaId = fazendaAtual?.id;
   const isGlobal = fazendaId === '__global__';
   const isAdmin = !isGlobal && fazendaAtual?.tem_pecuaria === false;
