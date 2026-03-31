@@ -63,7 +63,7 @@ export function KmlUploadDialog({ open, onOpenChange, onUpload, pastos }: Props)
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto flex-1 min-h-0">
           <input
             ref={inputRef}
             type="file"
