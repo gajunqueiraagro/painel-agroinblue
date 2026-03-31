@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import L from 'leaflet';
+import { safeFitBounds } from '@/lib/leafletSafeFit';
 import 'leaflet/dist/leaflet.css';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -169,11 +170,7 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
       if (allBounds.length > 0 && fitKey !== lastFitKeyRef.current) {
         lastFitKeyRef.current = fitKey;
         const combinedBounds = allBounds.reduce((acc, bounds) => acc.extend(bounds));
-        try {
-          map.fitBounds(combinedBounds, { padding: [40, 40], maxZoom: 17 });
-        } catch (e) {
-          console.warn('[MapaGestor] fitBounds deferred – container not ready', e);
-        }
+        safeFitBounds(map, combinedBounds, { padding: [40, 40], maxZoom: 17 }, 'MapaGestor');
       }
     }, 220);
 
