@@ -238,7 +238,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
 
   // ---- Visão Anual data ----
   const [monthData, setMonthData] = useState<MonthStatus[]>(
-    Array.from({ length: 12 }, () => ({ pastos: 'aberto', valor: 'aberto', categorias: 'aberto' }))
+    Array.from({ length: 12 }, () => ({ financeiro: 'aberto' as CellStatus, pastos: 'aberto' as CellStatus, valor: 'aberto' as CellStatus, categorias: 'aberto' as CellStatus }))
   );
   const [loadingYear, setLoadingYear] = useState(true);
 
