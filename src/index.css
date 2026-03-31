@@ -177,6 +177,40 @@
   padding: 0px 3px;
   border-radius: 2px;
 }
+/* Transfer mode: origin label */
+.pasto-label-origin {
+  background: transparent !important;
+  border: none !important;
+  pointer-events: none !important;
+  white-space: nowrap;
+}
+.pasto-label-origin span {
+  font-size: 9px;
+  font-weight: 700;
+  color: hsl(25, 70%, 30%);
+  text-shadow: 0 0 3px white, 0 0 3px white;
+  background: hsl(25 80% 95% / 0.85);
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid hsl(25, 60%, 70%);
+}
+/* Transfer mode: destination label */
+.pasto-label-dest {
+  background: transparent !important;
+  border: none !important;
+  pointer-events: none !important;
+  white-space: nowrap;
+}
+.pasto-label-dest span {
+  font-size: 9px;
+  font-weight: 700;
+  color: hsl(145, 50%, 25%);
+  text-shadow: 0 0 3px white, 0 0 3px white;
+  background: hsl(145 50% 95% / 0.85);
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid hsl(145, 40%, 60%);
+}
 .pasto-tooltip {
   font-size: 10px !important;
   line-height: 1.3 !important;
