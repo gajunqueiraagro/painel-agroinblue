@@ -277,12 +277,12 @@ export function FechamentoPastoDialog({
                   placeholder="Qtde"
                 />
                 <Input
-                  type="number" inputMode="decimal" step="0.01"
+                  type="number" inputMode="decimal" step="0.1"
                   value={itens[idx]?.peso_medio_kg ?? ''}
                   onChange={e => updateItem(idx, 'peso_medio_kg', e.target.value ? Number(e.target.value) : null)}
                   onBlur={e => {
                     if (e.target.value) {
-                      updateItem(idx, 'peso_medio_kg', Math.round(Number(e.target.value) * 100) / 100);
+                      updateItem(idx, 'peso_medio_kg', Math.round(Number(e.target.value) * 10) / 10);
                     }
                   }}
                   disabled={isFechado}
