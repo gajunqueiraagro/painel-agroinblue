@@ -140,11 +140,13 @@ export function useContratos() {
   }, [clienteAtual?.id, fetchContratos]);
 
   const editarContrato = useCallback(async (id: string, form: Partial<ContratoForm>, atualizarFuturos: boolean): Promise<boolean> => {
-    const { data: contratoAtual, error: contratoAtualError } = await supabase
+    const { data: contratoAtualRaw, error: contratoAtualError } = await supabase
       .from('financeiro_contratos' as any)
       .select('*')
       .eq('id', id)
       .single();
+
+    const contratoAtual = contratoAtualRaw as Contrato | null;
 
     if (contratoAtualError || !contratoAtual) {
       toast.error('Erro ao localizar contrato atual');
@@ -214,11 +216,13 @@ export function useContratos() {
         return false;
       }
 
-      const { data: updated } = await supabase
+      const { data: updatedRaw } = await supabase
         .from('financeiro_contratos' as any)
         .select('*')
         .eq('id', id)
         .single();
+
+      const updated = updatedRaw as Contrato | null;
 
       if (updated) {
         const regenerated = await gerarLancamentos(updated as any as Contrato, today);
