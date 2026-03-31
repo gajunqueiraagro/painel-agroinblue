@@ -197,9 +197,11 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
         const totalPastos = pastosByFaz.get(faz.id) || 0;
         const fps = fpByFaz.get(faz.id) || [];
         
-        // Deduplicate: keep only the most recent fechamento per pasto
+        // Deduplicate: keep only the most recent fechamento per pasto ATIVO
+        const activePastoIds = activePastoIdsByFaz.get(faz.id) || new Set<string>();
         const dedupByPasto = new Map<string, any>();
         fps.forEach(f => {
+          if (!activePastoIds.has(f.pasto_id)) return; // Ignora pastos inativos
           const existing = dedupByPasto.get(f.pasto_id);
           if (!existing || (f.updated_at || '') >= (existing.updated_at || '')) {
             dedupByPasto.set(f.pasto_id, f);
