@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Upload, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { KmlUploadDialog } from '@/components/mapa-geo/KmlUploadDialog';
 import { usePastos } from '@/hooks/usePastos';
+import { usePastoOcupacao } from '@/hooks/usePastoOcupacao';
 import { MapaGestorView } from '@/components/mapa-geo/MapaGestorView';
 import { MapaOperacaoView } from '@/components/mapa-geo/MapaOperacaoView';
 import { ValidacaoPoligonosView } from '@/components/mapa-geo/ValidacaoPoligonosView';
