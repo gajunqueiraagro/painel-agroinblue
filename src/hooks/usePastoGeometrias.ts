@@ -61,5 +61,14 @@ export function usePastoGeometrias() {
     return true;
   }, [fazendaId, clienteId, loadGeometrias]);
 
-  return { geometrias, loading, loadGeometrias, salvarGeometrias };
+  const removerGeometrias = useCallback(async () => {
+    if (!fazendaId) return false;
+    const { error } = await supabase.from('pasto_geometrias').delete().eq('fazenda_id', fazendaId);
+    if (error) { toast.error('Erro ao remover geometrias'); console.error(error); return false; }
+    toast.success('Mapa removido com sucesso');
+    setGeometrias([]);
+    return true;
+  }, [fazendaId]);
+
+  return { geometrias, loading, loadGeometrias, salvarGeometrias, removerGeometrias };
 }

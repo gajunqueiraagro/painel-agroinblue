@@ -36,7 +36,8 @@ export function KmlUploadDialog({ open, onOpenChange, onUpload, pastos }: Props)
       setFileName(file.name);
       toast.success(`${parsed.length} polígonos encontrados`);
     } catch (err: any) {
-      toast.error(`Erro ao ler arquivo: ${err.message}`);
+      toast.error('Não foi possível carregar o mapa. Verifique se o arquivo é um KML, KMZ ou GeoJSON válido.');
+      console.error(err);
     }
   }, []);
 
@@ -56,9 +57,9 @@ export function KmlUploadDialog({ open, onOpenChange, onUpload, pastos }: Props)
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Importar Mapa KML/KMZ</DialogTitle>
+          <DialogTitle>Importar Mapa da Fazenda</DialogTitle>
           <DialogDescription>
-            Envie um arquivo KML ou KMZ com os polígonos dos pastos. Os nomes serão vinculados automaticamente.
+            Envie um arquivo KML, KMZ ou GeoJSON com os polígonos dos pastos. Os nomes serão vinculados automaticamente.
           </DialogDescription>
         </DialogHeader>
 
@@ -66,7 +67,7 @@ export function KmlUploadDialog({ open, onOpenChange, onUpload, pastos }: Props)
           <input
             ref={inputRef}
             type="file"
-            accept=".kml,.kmz"
+            accept=".kml,.kmz,.geojson,.json"
             className="hidden"
             onChange={handleFile}
           />
@@ -78,7 +79,7 @@ export function KmlUploadDialog({ open, onOpenChange, onUpload, pastos }: Props)
           >
             <div className="flex flex-col items-center gap-1">
               <Upload className="h-6 w-6 text-muted-foreground" />
-              <span className="text-sm">{fileName || 'Clique para selecionar arquivo KML/KMZ'}</span>
+              <span className="text-sm">{fileName || 'Clique para selecionar arquivo KML, KMZ ou GeoJSON'}</span>
             </div>
           </Button>
 
