@@ -502,9 +502,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               </Button>
             )}
             {canEdit && (
-              <Button onClick={handleSalvar} disabled={saving} className="gap-2">
+              <Button onClick={handleSalvar} disabled={saving || bloqueadoPorConciliacao} className="gap-2">
                 <Save className="h-4 w-4" />
-                {saving ? 'Salvando...' : 'Salvar e Fechar'}
+                {bloqueadoPorConciliacao ? 'Bloqueado' : saving ? 'Salvando...' : 'Salvar e Fechar'}
               </Button>
             )}
           </div>
