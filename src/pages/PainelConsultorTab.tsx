@@ -26,6 +26,7 @@ import {
   calcSaldoPorCategoriaLegado,
 } from '@/lib/calculos/zootecnicos';
 import { calcArrobasSafe, calcValorTotal, calcGMD } from '@/lib/calculos/economicos';
+import { supabase } from '@/integrations/supabase/client';
 import { isConciliado as isLancConciliado } from '@/lib/statusOperacional';
 import { loadPesosPastosPorCategoria, resolverPesoOficial } from '@/hooks/useFechamentoCategoria';
 import {
