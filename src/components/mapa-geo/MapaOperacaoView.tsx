@@ -50,7 +50,7 @@ interface Props {
 
 type QuickAction = 'entrada' | 'saida' | 'transferencia' | null;
 
-export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, geoLoading, onUpload, onRefresh }: Props) {
+export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, geoLoading, onUpload, onRefresh, onRenderedChange }: Props) {
   const { fazendaAtual } = useFazenda();
   const { registrarMovimentacao } = usePastoMovimentacoes();
 
