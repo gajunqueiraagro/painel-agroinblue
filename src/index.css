@@ -30,6 +30,9 @@
     --input: 220 13% 91%;
     --ring: 213 52% 24%;
     --radius: 0.5rem;
+    --bottom-nav-height: 64px;
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+    --bottom-nav-safe: calc(var(--bottom-nav-height) + var(--safe-area-bottom));
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 222 47% 11%;
     --sidebar-primary: 213 52% 24%;
