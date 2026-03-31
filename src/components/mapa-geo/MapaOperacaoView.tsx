@@ -75,7 +75,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
   const hasGeo = geometrias.length > 0;
   const selectedPasto = selectedGeo?.pasto_id ? pastos.find((p) => p.id === selectedGeo.pasto_id) : null;
   const selectedOc = selectedGeo?.pasto_id ? ocupacoes.get(selectedGeo.pasto_id) : null;
-  const geometrySignature = geometrias.map((geo) => `${geo.id}:${geo.pasto_id ?? 'sem-vinculo'}`).join('|');
+  const geoIdKey = geometrias.map(g => g.id).join(',');
 
   useEffect(() => {
     const map = mapInstanceRef.current;
