@@ -177,7 +177,6 @@ export function MapaGeoPastosTab() {
   // Normal mode
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {debugBanner}
       {topBar}
       {content}
       <KmlUploadDialog
