@@ -343,15 +343,15 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
   return (
     <div className="max-w-5xl mx-auto animate-fade-in pb-20">
       {/* ── Sticky filter bar ── */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 md:px-4 py-1">
+      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 md:px-4 py-0.5">
         <div className="flex items-center justify-between gap-2 max-w-5xl mx-auto">
-          <p className="text-[9px] text-muted-foreground font-medium">
+          <p className="text-[9px] text-muted-foreground font-medium truncate">
             {mesLabel} / {filtroGlobal.ano}
             {isGlobal ? ' · Consolidado' : ` · ${fazendaAtual?.nome || ''}`}
           </p>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             <Select value={filtroGlobal.ano} onValueChange={v => onFiltroChange({ ano: v })}>
-              <SelectTrigger className="w-[64px] h-5 text-[9px] font-medium border-border/60 bg-card">
+              <SelectTrigger className="w-[58px] h-6 text-[10px] font-medium border-border/60 bg-card px-1.5 [&>svg]:h-3 [&>svg]:w-3">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent side="bottom">
@@ -361,7 +361,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
               </SelectContent>
             </Select>
             <Select value={String(mesNum)} onValueChange={v => onFiltroChange({ mes: Number(v) })}>
-              <SelectTrigger className="w-[56px] h-5 text-[9px] font-medium border-border/60 bg-card">
+              <SelectTrigger className="w-[52px] h-6 text-[10px] font-medium border-border/60 bg-card px-1.5 [&>svg]:h-3 [&>svg]:w-3">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent side="bottom">
@@ -372,11 +372,11 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
             </Select>
             <button
               onClick={() => onTabChange('resumo' as TabId)}
-              className="ml-1 flex items-center gap-0.5 text-[9px] font-medium text-primary hover:text-primary/80 transition-colors"
+              className="ml-0.5 flex items-center gap-0.5 rounded border border-primary/30 bg-primary/5 px-1.5 py-0.5 text-[10px] font-semibold text-primary hover:bg-primary/10 transition-colors"
               title="Voltar para Resumo"
             >
               <ChevronRight className="h-3 w-3 rotate-180" />
-              <span className="hidden sm:inline">Resumo</span>
+              Resumo
             </button>
           </div>
         </div>
