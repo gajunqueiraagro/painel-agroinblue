@@ -163,7 +163,7 @@ const Index = () => {
   }, []);
 
   // Tabs operacionais bloqueadas no modo Global
-  const BLOCKED_TABS_GLOBAL: TabId[] = ['fechamento', 'conciliacao_categoria', 'conciliacao', 'lancamentos'];
+  const BLOCKED_TABS_GLOBAL: TabId[] = ['fechamento', 'conciliacao', 'lancamentos'];
 
   const handleTabChange = useCallback((tab: TabId, filtro?: { ano: string; mes: number }) => {
     if (isGlobal && BLOCKED_TABS_GLOBAL.includes(tab)) {
