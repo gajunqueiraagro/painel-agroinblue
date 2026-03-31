@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { type Pasto, type CategoriaRebanho } from '@/hooks/usePastos';
 import { type FechamentoPasto, useFechamento } from '@/hooks/useFechamento';
 import { Button } from '@/components/ui/button';
@@ -157,124 +157,109 @@ export function FechamentoPastoDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {pasto.nome}
-            {isFechado && <Badge variant="default"><Lock className="h-3 w-3 mr-1" />Fechado</Badge>}
-          </DialogTitle>
-          <div className="text-sm text-muted-foreground">
-            {pasto.area_produtiva_ha && `${pasto.area_produtiva_ha} ha`}
+      <DialogContent className="max-h-[90vh] flex flex-col max-w-lg p-0 gap-0">
+        {/* ── STICKY TOP: identification + monthly fields + current summary ── */}
+        <div className="sticky top-0 z-10 bg-background border-b px-3 pt-3 pb-2 space-y-1.5 shrink-0">
+          {/* Row 1: Name + status + area */}
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-base leading-none">{pasto.nome}</span>
+            {pasto.area_produtiva_ha && <span className="text-[11px] text-muted-foreground">{pasto.area_produtiva_ha} ha</span>}
+            {isFechado && <Badge variant="default" className="h-5 text-[10px] px-1.5"><Lock className="h-2.5 w-2.5 mr-0.5" />Fechado</Badge>}
           </div>
-        </DialogHeader>
 
-        <div className="space-y-3">
-          {/* Monthly variable fields */}
-          <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Dados do mês</div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs">Lote</Label>
-                <Input
-                  value={loteMes}
-                  onChange={e => setLoteMes(e.target.value)}
-                  disabled={isFechado}
-                  placeholder="Lote"
-                  className="h-10"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Qualidade (1-10)</Label>
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  max={10}
-                  value={qualidadeMes ?? ''}
-                  onChange={e => setQualidadeMes(e.target.value ? Number(e.target.value) : null)}
-                  disabled={isFechado}
-                  placeholder="1-10"
-                  className="h-10"
-                />
-              </div>
+          {/* Row 2: Lote + Qualidade + Tipo Uso — compact horizontal */}
+          <div className="flex gap-1.5 items-end">
+            <div className="flex-1 min-w-0">
+              <Label className="text-[10px] text-muted-foreground leading-none">Lote</Label>
+              <Input value={loteMes} onChange={e => setLoteMes(e.target.value)} disabled={isFechado} placeholder="Lote" className="h-7 text-xs px-2" />
             </div>
-            <div>
-              <Label className="text-xs">Tipo de Uso</Label>
+            <div className="w-16 shrink-0">
+              <Label className="text-[10px] text-muted-foreground leading-none">Qual.</Label>
+              <Input type="number" inputMode="numeric" min={1} max={10} value={qualidadeMes ?? ''} onChange={e => setQualidadeMes(e.target.value ? Number(e.target.value) : null)} disabled={isFechado} placeholder="1-10" className="h-7 text-xs px-2" />
+            </div>
+            <div className="w-28 shrink-0">
+              <Label className="text-[10px] text-muted-foreground leading-none">Tipo Uso</Label>
               <Select value={tipoUsoMes} onValueChange={setTipoUsoMes} disabled={isFechado}>
-                <SelectTrigger className="h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger className="h-7 text-xs px-2"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  {TIPOS_USO_OPTIONS.map(t => (
-                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                  ))}
+                  {TIPOS_USO_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label className="text-xs">Observação do mês</Label>
-              <Textarea
-                value={observacaoMes}
-                onChange={e => setObservacaoMes(e.target.value)}
-                disabled={isFechado}
-                placeholder="Observações deste mês..."
-                className="min-h-[60px] text-sm"
-              />
-            </div>
           </div>
 
-          {!isFechado && (
-            <Button variant="outline" size="sm" onClick={handleCopiar} className="w-full">
-              <Copy className="h-4 w-4 mr-1" />Copiar do mês anterior
-            </Button>
+          {/* Row 3: Obs — single line */}
+          <div>
+            <Label className="text-[10px] text-muted-foreground leading-none">Obs. mês</Label>
+            <Input value={observacaoMes} onChange={e => setObservacaoMes(e.target.value)} disabled={isFechado} placeholder="Observações..." className="h-7 text-xs px-2" />
+          </div>
+
+          {/* Row 4: Current summary table */}
+          {itensComQtd.length > 0 && (
+            <div className="border rounded bg-muted/40 px-2 py-1">
+              <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">Resumo atual</div>
+              <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 text-[11px]">
+                <span className="text-muted-foreground font-medium">Cat</span>
+                <span className="text-muted-foreground font-medium text-right">Qtde</span>
+                <span className="text-muted-foreground font-medium text-right">Peso</span>
+                {itensComQtd.map(i => (
+                  <React.Fragment key={i.categoria_id}>
+                    <span className="truncate">{i.cat?.nome}</span>
+                    <span className="text-right font-semibold tabular-nums">{i.quantidade}</span>
+                    <span className="text-right tabular-nums text-muted-foreground">{i.peso_medio_kg ? `${formatNum(i.peso_medio_kg, 0)}` : '—'}</span>
+                  </React.Fragment>
+                ))}
+                <span className="font-bold border-t border-border pt-0.5">Total</span>
+                <span className="text-right font-bold tabular-nums border-t border-border pt-0.5">{total}</span>
+                <span className="text-right tabular-nums text-muted-foreground border-t border-border pt-0.5">{pesoMedioPonderado > 0 ? formatNum(pesoMedioPonderado, 0) : '—'}</span>
+              </div>
+            </div>
           )}
 
+          {!isFechado && (
+            <Button variant="outline" size="sm" onClick={handleCopiar} className="w-full h-6 text-[11px]">
+              <Copy className="h-3 w-3 mr-1" />Copiar do mês anterior
+            </Button>
+          )}
+        </div>
+
+        {/* ── SCROLLABLE: category cards ── */}
+        <div className="overflow-y-auto flex-1 px-3 py-2 space-y-1.5">
           {categorias.map((cat, idx) => (
-            <div key={cat.id} className="rounded-lg border p-3">
-              <div className="font-medium text-sm mb-2">{cat.nome}</div>
-              <div className="grid grid-cols-2 gap-2">
+            <div key={cat.id} className="rounded border px-2.5 py-1.5">
+              <div className="font-medium text-xs mb-1">{cat.nome}</div>
+              <div className="grid grid-cols-2 gap-1.5">
                 <div>
-                  <Label className="text-xs">Quantidade</Label>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    value={itens[idx]?.quantidade || ''}
-                    onChange={e => updateItem(idx, 'quantidade', Number(e.target.value) || 0)}
-                    disabled={isFechado}
-                    className="h-12 text-lg font-bold"
-                    placeholder="0"
-                  />
+                  <Label className="text-[10px] text-muted-foreground leading-none">Qtde</Label>
+                  <Input type="number" inputMode="numeric" min={0} value={itens[idx]?.quantidade || ''} onChange={e => updateItem(idx, 'quantidade', Number(e.target.value) || 0)} disabled={isFechado} className="h-8 text-sm font-bold px-2" placeholder="0" />
                 </div>
                 <div>
-                  <Label className="text-xs">Peso Médio (kg)</Label>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    value={itens[idx]?.peso_medio_kg ?? ''}
-                    onChange={e => updateItem(idx, 'peso_medio_kg', e.target.value ? Number(e.target.value) : null)}
-                    disabled={isFechado}
-                    className="h-12"
-                    placeholder="0"
-                  />
+                  <Label className="text-[10px] text-muted-foreground leading-none">Peso (kg)</Label>
+                  <Input type="number" inputMode="decimal" value={itens[idx]?.peso_medio_kg ?? ''} onChange={e => updateItem(idx, 'peso_medio_kg', e.target.value ? Number(e.target.value) : null)} disabled={isFechado} className="h-8 text-sm px-2" placeholder="0" />
                 </div>
               </div>
               {itens[idx]?.origem_dado === 'copiado_mes_anterior' && (
-                <Badge variant="secondary" className="text-xs mt-1">Copiado do mês anterior</Badge>
+                <Badge variant="secondary" className="text-[9px] mt-0.5 h-4">Copiado</Badge>
               )}
             </div>
           ))}
 
-          <div className="rounded-lg bg-muted p-3 text-center">
-            <span className="text-sm text-muted-foreground">Total: </span>
-            <span className="text-xl font-bold">{total} cab</span>
+          {/* Total bar */}
+          <div className="rounded bg-muted px-3 py-1.5 text-center">
+            <span className="text-xs text-muted-foreground">Total: </span>
+            <span className="text-base font-bold">{total} cab</span>
           </div>
+        </div>
 
+        {/* ── STICKY BOTTOM: action buttons ── */}
+        <div className="sticky bottom-0 bg-background border-t px-3 py-2 shrink-0">
           {!isFechado ? (
             <div className="flex gap-2">
-              <Button onClick={handleSave} disabled={saving} className="flex-1 h-12">
-                <Save className="h-4 w-4 mr-1" />{saving ? 'Salvando...' : 'Salvar'}
+              <Button onClick={handleSave} disabled={saving} className="flex-1 h-9 text-sm">
+                <Save className="h-3.5 w-3.5 mr-1" />{saving ? 'Salvando...' : 'Salvar'}
               </Button>
-              <Button variant="default" className="h-12" onClick={() => setConfirmOpen(true)}>
-                <Lock className="h-4 w-4 mr-1" />Fechar
+              <Button variant="default" className="h-9 text-sm" onClick={() => setConfirmOpen(true)}>
+                <Lock className="h-3.5 w-3.5 mr-1" />Fechar
               </Button>
               <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
                 <AlertDialogContent className="max-h-[85vh] overflow-y-auto max-w-md">
@@ -282,16 +267,12 @@ export function FechamentoPastoDialog({
                     <AlertDialogTitle>Confirmar fechamento do pasto</AlertDialogTitle>
                     <AlertDialogDescription>Revise os dados antes de confirmar</AlertDialogDescription>
                   </AlertDialogHeader>
-
-                  {/* BLOCO 1 — Info do pasto */}
                   <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
                     <div className="font-semibold text-xs uppercase text-muted-foreground tracking-wide mb-1">Informações do pasto</div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Lote:</span><span className="font-medium">{loteMes || '—'}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Tipo de uso:</span><span className="font-medium">{tipoUsoLabel || '—'}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Qualidade:</span><span className="font-medium">{qualidadeMes ?? '—'}</span></div>
                   </div>
-
-                  {/* BLOCO 2 — Composição */}
                   {itensComQtd.length > 0 && (
                     <div className="rounded-lg border bg-muted/30 p-3 text-sm">
                       <div className="font-semibold text-xs uppercase text-muted-foreground tracking-wide mb-2">Composição do rebanho</div>
@@ -299,16 +280,12 @@ export function FechamentoPastoDialog({
                         {itensComQtd.map(i => (
                           <div key={i.categoria_id} className="flex justify-between">
                             <span>{i.cat?.nome}</span>
-                            <span className="font-medium tabular-nums">
-                              {i.quantidade} cab{i.peso_medio_kg ? ` / ${formatNum(i.peso_medio_kg, 1)} kg` : ''}
-                            </span>
+                            <span className="font-medium tabular-nums">{i.quantidade} cab{i.peso_medio_kg ? ` / ${formatNum(i.peso_medio_kg, 1)} kg` : ''}</span>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
-
-                  {/* BLOCO 3 — Totais */}
                   <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
                     <div className="font-semibold text-xs uppercase text-muted-foreground tracking-wide mb-1">Totais do pasto</div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Total de cabeças:</span><span className="font-bold">{total}</span></div>
@@ -316,8 +293,6 @@ export function FechamentoPastoDialog({
                     <div className="flex justify-between"><span className="text-muted-foreground">Peso total estimado:</span><span className="font-medium">{pesoTotalEstoque > 0 ? `${formatNum(pesoTotalEstoque, 0)} kg` : '—'}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Lotação (UA/ha):</span><span className="font-medium">{uaHa ? formatNum(uaHa, 2) : '—'}</span></div>
                   </div>
-
-                  {/* BLOCO 4 — Avisos */}
                   {avisos.length > 0 && (
                     <div className={`rounded-lg border p-3 text-sm space-y-1 ${exigeRebanho && (total === 0 || itensComQtd.some(i => !i.peso_medio_kg)) ? 'border-yellow-500/30 bg-yellow-500/10' : 'border-blue-500/30 bg-blue-500/10'}`}>
                       <div className={`flex items-center gap-1 font-semibold text-xs uppercase tracking-wide mb-1 ${exigeRebanho && (total === 0 || itensComQtd.some(i => !i.peso_medio_kg)) ? 'text-yellow-700 dark:text-yellow-400' : 'text-blue-700 dark:text-blue-400'}`}>
@@ -328,29 +303,19 @@ export function FechamentoPastoDialog({
                       ))}
                     </div>
                   )}
-
                   {!podeFechar && (
-                    <div className="text-sm text-destructive font-medium text-center">
-                      Não é possível fechar: informe ao menos 1 categoria com quantidade e peso.
-                    </div>
+                    <div className="text-sm text-destructive font-medium text-center">Não é possível fechar: informe ao menos 1 categoria com quantidade e peso.</div>
                   )}
-
                   <AlertDialogFooter>
                     <AlertDialogCancel>Voltar para edição</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleFechar}
-                      disabled={!podeFechar}
-                      className="bg-green-600 hover:bg-green-700 text-white"
-                    >
-                      Confirmar fechamento
-                    </AlertDialogAction>
+                    <AlertDialogAction onClick={handleFechar} disabled={!podeFechar} className="bg-green-600 hover:bg-green-700 text-white">Confirmar fechamento</AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
             </div>
           ) : (
-            <Button variant="outline" onClick={handleReabrir} className="w-full h-12">
-              <LockOpen className="h-4 w-4 mr-1" />Reabrir Pasto
+            <Button variant="outline" onClick={handleReabrir} className="w-full h-9 text-sm">
+              <LockOpen className="h-3.5 w-3.5 mr-1" />Reabrir Pasto
             </Button>
           )}
         </div>
