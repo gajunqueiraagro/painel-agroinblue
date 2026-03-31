@@ -378,7 +378,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
     } finally {
       setLoadingYear(false);
     }
-  }, [fazendaId, anoFiltro, lancamentos, saldosIniciais, isGlobal, isAdmin]);
+  }, [fazendaId, anoFiltro, lancamentos, saldosIniciais, isGlobal, isAdmin, clienteAtual]);
 
   useEffect(() => { loadYear(); }, [loadYear]);
 
