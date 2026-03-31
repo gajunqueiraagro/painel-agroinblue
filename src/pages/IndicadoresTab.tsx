@@ -270,7 +270,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               unidade="%"
               compAnual={c.desfruteArrobasAcumulado.anual}
               semBase={ind.desfruteArrobasAcumulado === null}
-              info={`Desfrute em arrobas acumulado no ano.\n\nFórmula: (@ saídas ÷ @ do rebanho médio) × 100.\nMede eficiência em peso, não apenas em cabeças.`}
+              info={`Desfrute em arrobas acumulado no ano.\n\nFórmula: (@ desfrutadas ÷ @ do saldo inicial) × 100.\nBase de realização (saídas), não produção biológica.`}
             />
             <KpiCard
               label="@ desfrutadas"
