@@ -39,6 +39,7 @@ interface MonthStatus {
   pastos: CellStatus;
   categorias: CellStatus;
   valor: CellStatus;
+  economico: CellStatus;
 }
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -48,9 +49,10 @@ const ROWS: { id: keyof MonthStatus; label: string; tab: TabId }[] = [
   { id: 'pastos', label: 'Fechamento de Pastos', tab: 'fechamento' },
   { id: 'categorias', label: 'Conciliação de Categorias', tab: 'conciliacao_categoria' },
   { id: 'valor', label: 'Valor do Rebanho', tab: 'valor_rebanho' },
+  { id: 'economico', label: 'Econômico', tab: 'visao_zoo_hub' },
 ];
 
-const EMPTY_MONTH: MonthStatus = { financeiro: 'aberto', pastos: 'aberto', categorias: 'aberto', valor: 'aberto' };
+const EMPTY_MONTH: MonthStatus = { financeiro: 'aberto', pastos: 'aberto', categorias: 'aberto', valor: 'aberto', economico: 'aberto' };
 
 export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, onTabChange, filtroAnoInicial }: Props) {
   const { fazendaAtual } = useFazenda();
