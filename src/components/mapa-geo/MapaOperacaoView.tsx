@@ -49,10 +49,17 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, geoLoading, o
   const hasGeo = geometrias.length > 0;
   const selectedPasto = selectedGeo?.pasto_id ? pastos.find(p => p.id === selectedGeo.pasto_id) : null;
 
-  // Init map
+  // Init map — always create on mount, destroy on unmount
   useEffect(() => {
     const el = mapRef.current;
-    if (!el || mapInstance.current) return;
+    if (!el) return;
+    // Destroy previous instance if exists
+    if (mapInstance.current) {
+      mapInstance.current.remove();
+      mapInstance.current = null;
+      layerRef.current = null;
+    }
+    console.log('[MapaOp] Initializing Leaflet map');
     const map = L.map(el, { center: [-15.8, -47.9], zoom: 5, zoomControl: false });
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -60,7 +67,19 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, geoLoading, o
     }).addTo(map);
     layerRef.current = L.layerGroup().addTo(map);
     mapInstance.current = map;
-    return () => { map.remove(); mapInstance.current = null; layerRef.current = null; };
+    // Ensure correct sizing after mount
+    requestAnimationFrame(() => {
+      map.invalidateSize();
+      console.log('[MapaOp] invalidateSize called');
+    });
+    const ro = new ResizeObserver(() => map.invalidateSize());
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      map.remove();
+      mapInstance.current = null;
+      layerRef.current = null;
+    };
   }, []);
 
   // Draw polygons — simple style
@@ -71,6 +90,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, geoLoading, o
     const timer = setTimeout(() => {
       map.invalidateSize();
       lg.clearLayers();
+      console.log(`[MapaOp] Drawing ${geometrias.length} polygons`);
       if (geometrias.length === 0) return;
       const allBounds: L.LatLngBounds[] = [];
       geometrias.forEach((geo) => {
@@ -158,8 +178,8 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, geoLoading, o
     <div className="flex flex-col h-full gap-2">
       {/* Map — takes most space */}
       <div className="flex-1 min-h-0 flex gap-2">
-        <Card className="flex-1 min-h-0 relative overflow-hidden">
-          <div ref={mapRef} className="absolute inset-0 rounded-lg" style={{ zIndex: 0 }} />
+        <Card className="flex-1 min-h-0 relative overflow-hidden" style={{ minHeight: '400px' }}>
+          <div ref={mapRef} className="absolute inset-0 rounded-lg" style={{ zIndex: 0, minHeight: '400px' }} />
           {geoLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/60 z-10 rounded-lg">
               <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
