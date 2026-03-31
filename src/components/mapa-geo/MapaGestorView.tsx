@@ -58,7 +58,6 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
   } = useStableLeafletMap({ debugName: 'MapaGestor' });
 
   const hasGeo = geometrias.length > 0;
-  );
 
   const kpis = useMemo(() => {
     const vinculados = geometrias.filter((g) => g.pasto_id);
