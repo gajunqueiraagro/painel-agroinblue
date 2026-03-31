@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Upload, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { KmlUploadDialog } from '@/components/mapa-geo/KmlUploadDialog';
 import { usePastos } from '@/hooks/usePastos';
+import { usePastoOcupacao } from '@/hooks/usePastoOcupacao';
 import { MapaGestorView } from '@/components/mapa-geo/MapaGestorView';
 import { MapaOperacaoView } from '@/components/mapa-geo/MapaOperacaoView';
 import { ValidacaoPoligonosView } from '@/components/mapa-geo/ValidacaoPoligonosView';
@@ -32,6 +33,7 @@ export function MapaGeoPastosTab() {
     geometrias, loading: geoLoading, salvarGeometrias, loadGeometrias,
     atualizarGeometria, excluirGeometrias, vincularPasto,
   } = usePastoGeometrias();
+  const { ocupacoes, reload: reloadOcupacao } = usePastoOcupacao(pastos);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('gestor');
   const [expanded, setExpanded] = useState(false);
@@ -113,6 +115,7 @@ export function MapaGeoPastosTab() {
         <MapaGestorView
           geometrias={geometrias}
           pastos={pastos}
+          ocupacoes={ocupacoes}
           geoLoading={geoLoading}
           onUpload={() => setUploadOpen(true)}
         />
@@ -122,9 +125,10 @@ export function MapaGeoPastosTab() {
           geometrias={geometrias}
           pastos={pastos}
           categorias={categorias}
+          ocupacoes={ocupacoes}
           geoLoading={geoLoading}
           onUpload={() => setUploadOpen(true)}
-          onRefresh={loadGeometrias}
+          onRefresh={() => { loadGeometrias(); reloadOcupacao(); }}
         />
       )}
       {viewMode === 'validacao' && (

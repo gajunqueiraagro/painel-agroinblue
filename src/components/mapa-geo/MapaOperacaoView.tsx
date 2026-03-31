@@ -15,12 +15,29 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import type { CategoriaRebanho } from '@/hooks/usePastos';
 import type { PastoGeometria } from '@/hooks/usePastoGeometrias';
 import type { Pasto } from '@/hooks/usePastos';
+import type { PastoOcupacao } from '@/hooks/usePastoOcupacao';
 import { toast } from 'sonner';
+
+const STATUS_STYLES: Record<string, { fillColor: string; color: string }> = {
+  adequado:    { fillColor: 'hsl(145, 40%, 68%)', color: 'hsl(145, 35%, 42%)' },
+  atencao:     { fillColor: 'hsl(45, 65%, 70%)',  color: 'hsl(45, 50%, 42%)' },
+  pressao:     { fillColor: 'hsl(0, 50%, 68%)',   color: 'hsl(0, 40%, 42%)' },
+  sem_ocupacao:{ fillColor: 'hsl(220, 8%, 78%)',   color: 'hsl(220, 8%, 55%)' },
+};
+
+function getOpStyle(status: string, isSelected: boolean) {
+  if (isSelected) {
+    return { color: 'hsl(213, 75%, 35%)', weight: 2.5, fillColor: 'hsl(213, 65%, 50%)', fillOpacity: 0.4 };
+  }
+  const s = STATUS_STYLES[status] || STATUS_STYLES.sem_ocupacao;
+  return { color: s.color, weight: 0.8, fillColor: s.fillColor, fillOpacity: 0.2 };
+}
 
 interface Props {
   geometrias: PastoGeometria[];
   pastos: Pasto[];
   categorias: CategoriaRebanho[];
+  ocupacoes: Map<string, PastoOcupacao>;
   geoLoading: boolean;
   onUpload: () => void;
   onRefresh?: () => void;
@@ -28,19 +45,7 @@ interface Props {
 
 type QuickAction = 'entrada' | 'saida' | 'transferencia' | null;
 
-// Soft status colors for operation view
-function getOpStyle(geo: PastoGeometria, isSelected: boolean) {
-  const linked = !!geo.pasto_id;
-  if (isSelected) {
-    return { color: 'hsl(213, 75%, 35%)', weight: 2.5, fillColor: 'hsl(213, 65%, 50%)', fillOpacity: 0.4 };
-  }
-  if (!linked) {
-    return { color: 'hsl(220, 8%, 55%)', weight: 0.6, fillColor: 'hsl(220, 8%, 78%)', fillOpacity: 0.12 };
-  }
-  return { color: 'hsl(145, 35%, 42%)', weight: 0.8, fillColor: 'hsl(145, 40%, 68%)', fillOpacity: 0.15 };
-}
-
-export function MapaOperacaoView({ geometrias, pastos, categorias, geoLoading, onUpload, onRefresh }: Props) {
+export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, geoLoading, onUpload, onRefresh }: Props) {
   const { fazendaAtual } = useFazenda();
   const { registrarMovimentacao } = usePastoMovimentacoes();
 
@@ -56,9 +61,11 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, geoLoading, o
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
+  const labelLayerRef = useRef<L.LayerGroup | null>(null);
 
   const hasGeo = geometrias.length > 0;
   const selectedPasto = selectedGeo?.pasto_id ? pastos.find(p => p.id === selectedGeo.pasto_id) : null;
+  const selectedOc = selectedGeo?.pasto_id ? ocupacoes.get(selectedGeo.pasto_id) : null;
 
   // Init map
   useEffect(() => {
@@ -68,6 +75,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, geoLoading, o
       mapInstance.current.remove();
       mapInstance.current = null;
       layerRef.current = null;
+      labelLayerRef.current = null;
     }
     const map = L.map(el, { center: [-15.8, -47.9], zoom: 5, zoomControl: false });
     L.control.zoom({ position: 'bottomright' }).addTo(map);
@@ -75,7 +83,21 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, geoLoading, o
       attribution: '© OpenStreetMap', maxZoom: 19,
     }).addTo(map);
     layerRef.current = L.layerGroup().addTo(map);
+    labelLayerRef.current = L.layerGroup().addTo(map);
     mapInstance.current = map;
+
+    const updateLabels = () => {
+      const zoom = map.getZoom();
+      const ll = labelLayerRef.current;
+      if (!ll) return;
+      if (zoom >= 14) {
+        if (!map.hasLayer(ll)) map.addLayer(ll);
+      } else {
+        if (map.hasLayer(ll)) map.removeLayer(ll);
+      }
+    };
+    map.on('zoomend', updateLabels);
+
     requestAnimationFrame(() => map.invalidateSize());
     const ro = new ResizeObserver(() => map.invalidateSize());
     ro.observe(el);
@@ -84,33 +106,47 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, geoLoading, o
       map.remove();
       mapInstance.current = null;
       layerRef.current = null;
+      labelLayerRef.current = null;
     };
   }, []);
 
-  // Draw polygons — clean, minimal labels
+  // Draw polygons
   useEffect(() => {
     const map = mapInstance.current;
     const lg = layerRef.current;
-    if (!map || !lg) return;
+    const ll = labelLayerRef.current;
+    if (!map || !lg || !ll) return;
     const timer = setTimeout(() => {
       map.invalidateSize();
       lg.clearLayers();
+      ll.clearLayers();
       if (geometrias.length === 0) return;
       const allBounds: L.LatLngBounds[] = [];
       geometrias.forEach((geo) => {
         try {
           const isSel = selectedGeo?.id === geo.id;
-          const layer = L.geoJSON(geo.geojson as any, { style: getOpStyle(geo, isSel) });
+          const oc = geo.pasto_id ? ocupacoes.get(geo.pasto_id) : null;
+          const status = oc?.status || 'sem_ocupacao';
+
+          const layer = L.geoJSON(geo.geojson as any, { style: getOpStyle(status, isSel) });
           const b = layer.getBounds();
           if (!b.isValid()) return;
-          // Minimal label — only selected gets full name on map
-          if (geo.nome_original && isSel) {
+
+          // Label at high zoom: short name + kg/ha
+          const shortName = geo.nome_original || '';
+          if (shortName) {
+            const kgLabel = oc?.kg_ha != null ? `<br/><span class="kg-value">${formatNum(oc.kg_ha, 0)}</span>` : '';
             const label = L.divIcon({
-              className: 'pasto-label-selected',
-              html: `<span>${geo.nome_original}</span>`,
+              className: isSel ? 'pasto-label-selected' : 'pasto-label-small',
+              html: `<span>${shortName}${kgLabel}</span>`,
             });
-            L.marker(b.getCenter(), { icon: label, interactive: false }).addTo(lg);
+            if (isSel) {
+              L.marker(b.getCenter(), { icon: label, interactive: false }).addTo(lg);
+            } else {
+              L.marker(b.getCenter(), { icon: label, interactive: false }).addTo(ll);
+            }
           }
+
           layer.on('click', () => {
             setSelectedGeo(geo);
             setAction(null);
@@ -128,7 +164,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, geoLoading, o
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [geometrias, selectedGeo]);
+  }, [geometrias, selectedGeo, ocupacoes]);
 
   const resetForm = () => {
     setQty(''); setCat(''); setRef(''); setDestino('');
@@ -193,6 +229,24 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, geoLoading, o
               <p className="text-[10px] text-muted-foreground font-medium">Toque em um pasto para registrar movimentação</p>
             </div>
           )}
+          {/* Legend */}
+          {hasGeo && (
+            <div className="absolute bottom-2 left-2 bg-card/90 backdrop-blur-sm rounded border border-border px-2 py-1 z-10">
+              <div className="flex flex-wrap gap-x-2.5 gap-y-0.5">
+                {([
+                  { key: 'adequado', label: 'Adequado' },
+                  { key: 'atencao', label: 'Atenção' },
+                  { key: 'pressao', label: 'Pressão' },
+                  { key: 'sem_ocupacao', label: 'Sem Ocup.' },
+                ] as const).map(({ key, label }) => (
+                  <div key={key} className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: STATUS_STYLES[key].fillColor, border: `1px solid ${STATUS_STYLES[key].color}` }} />
+                    <span className="text-[8px] text-muted-foreground">{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </Card>
 
         {/* Action panel — desktop side */}
@@ -204,16 +258,36 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, geoLoading, o
                   <h3 className="text-xs font-bold text-foreground">
                     {selectedPasto?.nome || selectedGeo.nome_original || 'Sem nome'}
                   </h3>
-                  {selectedPasto?.area_produtiva_ha && (
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                      {formatNum(selectedPasto.area_produtiva_ha, 1)} ha
-                    </p>
+                  {selectedPasto && (
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {selectedPasto.area_produtiva_ha && (
+                        <span className="text-[10px] text-muted-foreground">{formatNum(selectedPasto.area_produtiva_ha, 1)} ha</span>
+                      )}
+                      {selectedOc?.kg_ha != null && (
+                        <Badge variant="secondary" className="text-[8px] h-3.5 px-1.5">
+                          {formatNum(selectedOc.kg_ha, 0)} kg/ha
+                        </Badge>
+                      )}
+                    </div>
                   )}
                 </div>
                 <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={closePanel}>
                   <X className="h-3 w-3" />
                 </Button>
               </div>
+
+              {selectedOc && (
+                <div className="rounded bg-muted/40 px-2 py-1 grid grid-cols-2 gap-1">
+                  <div>
+                    <p className="text-[8px] text-muted-foreground uppercase">Cabeças</p>
+                    <p className="text-[10px] font-semibold text-foreground">{selectedOc.cabecas}</p>
+                  </div>
+                  <div>
+                    <p className="text-[8px] text-muted-foreground uppercase">Peso Total</p>
+                    <p className="text-[10px] font-semibold text-foreground">{formatNum(selectedOc.peso_total_kg, 0)} kg</p>
+                  </div>
+                </div>
+              )}
 
               {!selectedPasto ? (
                 <p className="text-[10px] text-muted-foreground">Pasto sem vínculo — não é possível registrar movimentação.</p>
@@ -258,7 +332,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, geoLoading, o
                         <Select value={destino} onValueChange={setDestino}>
                           <SelectTrigger className="h-8 mt-0.5 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
                           <SelectContent>
-                            {pastos.filter(p => p.id !== selectedPasto.id && p.ativo).map(p => (
+                            {pastos.filter(p => p.id !== selectedPasto!.id && p.ativo).map(p => (
                               <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
                             ))}
                           </SelectContent>
@@ -285,7 +359,12 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, geoLoading, o
       {selectedGeo && selectedPasto && (
         <Card className="sm:hidden flex-shrink-0 p-2.5 space-y-2">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-foreground">{selectedPasto.nome}</h3>
+            <div>
+              <h3 className="text-xs font-bold text-foreground">{selectedPasto.nome}</h3>
+              {selectedOc?.kg_ha != null && (
+                <span className="text-[10px] text-muted-foreground">{formatNum(selectedOc.kg_ha, 0)} kg/ha · {selectedOc.cabecas} cab</span>
+              )}
+            </div>
             <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={closePanel}>
               <X className="h-3 w-3" />
             </Button>
