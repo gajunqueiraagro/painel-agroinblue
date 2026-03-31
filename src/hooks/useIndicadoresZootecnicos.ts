@@ -866,10 +866,7 @@ export function useIndicadoresZootecnicos(
     const saidasAcumYoY = saidasDesfrute(lancsAcumYoY);
     const arrobasAcumYoY = saidasAcumYoY.reduce((s, l) => s + calcArrobasSafe(l), 0);
     const compArrobasAcum = arrobasAcumYoY > 0 ? buildComparacao(arrobasSaidasAcumuladoAno, arrobasAcumYoY, 'acumulado_yoy') : null;
-    let compArrobasHaAcum: Comparacao | null = null;
-    if (arrobasHaAcumuladoAno !== null && arrobasProduzidasAcumYoY !== null && areaProdutiva > 0) {
-      compArrobasHaAcum = buildComparacao(arrobasHaAcumuladoAno, arrobasProduzidasAcumYoY / areaProdutiva, 'acumulado_yoy');
-    }
+    // compArrobasHaAcum moved below after arrobasProduzidasAcumYoY is computed
 
     // @ produzidas acumulado YoY
     const saldoInicialAnoAnt = saldosIniciais.filter(s => s.ano === anoAnt).reduce((sum, s) => sum + s.quantidade, 0);
