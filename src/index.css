@@ -101,11 +101,23 @@
   font-size: inherit !important;
 }
 
-/* Leaflet map containment */
+/* Leaflet map containment — prevent map from overlaying UI */
 .leaflet-container {
   z-index: 0 !important;
+  position: relative;
+}
+.leaflet-pane {
+  z-index: 0 !important;
+}
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 5 !important;
+}
+.leaflet-control {
+  z-index: 5 !important;
 }
 .pasto-label {
   background: transparent !important;
   border: none !important;
+  pointer-events: none !important;
 }
