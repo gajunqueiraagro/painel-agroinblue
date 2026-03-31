@@ -154,19 +154,24 @@ export function FechamentoPastoDialog({
     : true;
   const tipoUsoLabel = TIPOS_USO_OPTIONS.find(t => t.value === tipoUsoMes)?.label || tipoUsoMes;
 
+  // Separate categories into Machos / Fêmeas for summary
+  const machosCodigos = ['BZ', 'GA', 'NV', 'TO', 'BO'];
+  const summaryMachos = itensComQtd.filter(i => machosCodigos.includes(i.cat?.codigo || ''));
+  const summaryFemeas = itensComQtd.filter(i => !machosCodigos.includes(i.cat?.codigo || ''));
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] flex flex-col max-w-lg p-0 gap-0 overflow-hidden">
-        {/* ── FIXED HEADER: all controls ── */}
-        <div className="shrink-0 bg-background border-b px-3 pt-2.5 pb-2 space-y-1">
-          {/* Row 1: Name + status + area + copy button */}
+        {/* ── FIXED HEADER ── */}
+        <div className="shrink-0 bg-background border-b px-3 pt-2 pb-1.5 space-y-1">
+          {/* Row 1: Name + status + area + copy */}
           <div className="flex items-center gap-2">
-            <span className="font-bold text-sm leading-none">{pasto.nome}</span>
+            <span className="font-bold text-base leading-none">{pasto.nome}</span>
             {pasto.area_produtiva_ha && <span className="text-[10px] text-muted-foreground">{pasto.area_produtiva_ha} ha</span>}
             {isFechado && <Badge variant="default" className="h-4 text-[9px] px-1"><Lock className="h-2.5 w-2.5 mr-0.5" />Fechado</Badge>}
             <div className="flex-1" />
             {!isFechado && (
-              <Button variant="ghost" size="sm" onClick={handleCopiar} className="h-5 text-[10px] text-muted-foreground px-1.5 gap-1">
+              <Button variant="ghost" size="sm" onClick={handleCopiar} className="h-5 text-[9px] text-muted-foreground px-1.5 gap-0.5 mr-4">
                 <Copy className="h-2.5 w-2.5" />Copiar anterior
               </Button>
             )}
@@ -174,104 +179,124 @@ export function FechamentoPastoDialog({
 
           {/* Row 2: Lote + Qual + Tipo Uso */}
           <div className="flex gap-1 items-end">
-            <div className="w-24 shrink-0">
+            <div className="w-20 shrink-0">
               <Label className="text-[9px] text-muted-foreground leading-none">Lote</Label>
-              <Input value={loteMes} onChange={e => setLoteMes(e.target.value)} disabled={isFechado} placeholder="Lote" className="h-6 text-[11px] px-1.5" />
+              <Input value={loteMes} onChange={e => setLoteMes(e.target.value)} disabled={isFechado} placeholder="Lote..." className="h-6 text-[10px] px-1.5 placeholder:text-[9px] placeholder:italic placeholder:text-muted-foreground/60" />
             </div>
-            <div className="w-14 shrink-0">
+            <div className="w-12 shrink-0">
               <Label className="text-[9px] text-muted-foreground leading-none">Qual.</Label>
               <Select value={qualidadeMes?.toString() || ''} onValueChange={v => setQualidadeMes(v ? Number(v) : null)} disabled={isFechado}>
-                <SelectTrigger className="h-6 text-[11px] px-1.5"><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectTrigger className="h-6 text-[10px] px-1.5"><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="">—</SelectItem>
                   {QUALIDADE_OPTIONS.map(q => <SelectItem key={q} value={q.toString()}>{q}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex-1 min-w-0">
+            <div className="w-[130px] shrink-0">
               <Label className="text-[9px] text-muted-foreground leading-none">Tipo Uso</Label>
               <Select value={tipoUsoMes} onValueChange={setTipoUsoMes} disabled={isFechado}>
-                <SelectTrigger className="h-6 text-[11px] px-1.5"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger className="h-6 text-[10px] px-1.5 whitespace-nowrap"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {TIPOS_USO_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
+            <div className="flex-1 min-w-0">
+              <Label className="text-[9px] text-muted-foreground leading-none">Obs. mês</Label>
+              <Input value={observacaoMes} onChange={e => setObservacaoMes(e.target.value)} disabled={isFechado} placeholder="Observação..." className="h-6 text-[10px] px-1.5 placeholder:text-[9px] placeholder:italic placeholder:text-muted-foreground/60" />
+            </div>
           </div>
 
-          {/* Row 3: Obs */}
-          <Input value={observacaoMes} onChange={e => setObservacaoMes(e.target.value)} disabled={isFechado} placeholder="Obs. mês..." className="h-6 text-[11px] px-1.5" />
-
-          {/* Row 4: Current summary */}
+          {/* Row 3: Current summary - Machos | Fêmeas | Total */}
           {itensComQtd.length > 0 && (
             <div className="border rounded bg-muted/40 px-2 py-0.5">
-              <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 text-[10px]">
-                <span className="text-muted-foreground font-medium">Cat</span>
-                <span className="text-muted-foreground font-medium text-right">Qtde</span>
-                <span className="text-muted-foreground font-medium text-right">Peso</span>
-                {itensComQtd.map(i => (
-                  <React.Fragment key={i.categoria_id}>
-                    <span className="truncate">{i.cat?.nome}</span>
-                    <span className="text-right font-semibold tabular-nums">{i.quantidade}</span>
-                    <span className="text-right tabular-nums text-muted-foreground">{i.peso_medio_kg ? `${formatNum(i.peso_medio_kg, 0)}` : '—'}</span>
-                  </React.Fragment>
-                ))}
-                <span className="font-bold border-t border-border pt-0.5">Total</span>
-                <span className="text-right font-bold tabular-nums border-t border-border pt-0.5">{total}</span>
-                <span className="text-right tabular-nums text-muted-foreground border-t border-border pt-0.5">{pesoMedioPonderado > 0 ? formatNum(pesoMedioPonderado, 0) : '—'}</span>
+              <div className="flex gap-3 text-[9px]">
+                {/* Machos */}
+                <div className="flex-1 min-w-0">
+                  <span className="text-muted-foreground font-semibold text-[8px] uppercase tracking-wider">Machos</span>
+                  {summaryMachos.length > 0 ? summaryMachos.map(i => (
+                    <div key={i.categoria_id} className="flex justify-between gap-1">
+                      <span className="truncate">{i.cat?.nome}</span>
+                      <span className="tabular-nums font-semibold shrink-0">{i.quantidade}</span>
+                    </div>
+                  )) : <div className="text-muted-foreground/50">—</div>}
+                </div>
+                {/* Fêmeas */}
+                <div className="flex-1 min-w-0 border-l border-border pl-2">
+                  <span className="text-muted-foreground font-semibold text-[8px] uppercase tracking-wider">Fêmeas</span>
+                  {summaryFemeas.length > 0 ? summaryFemeas.map(i => (
+                    <div key={i.categoria_id} className="flex justify-between gap-1">
+                      <span className="truncate">{i.cat?.nome}</span>
+                      <span className="tabular-nums font-semibold shrink-0">{i.quantidade}</span>
+                    </div>
+                  )) : <div className="text-muted-foreground/50">—</div>}
+                </div>
+                {/* Resumo */}
+                <div className="shrink-0 border-l border-border pl-2 text-right">
+                  <span className="text-muted-foreground font-semibold text-[8px] uppercase tracking-wider">Resumo</span>
+                  <div className="font-bold tabular-nums">{total} cab</div>
+                  <div className="text-muted-foreground tabular-nums">{pesoMedioPonderado > 0 ? `${formatNum(pesoMedioPonderado, 1)} kg` : '—'}</div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* Row 5: Action buttons */}
+          {/* Row 4: Action buttons */}
           {!isFechado ? (
-            <div className="flex gap-1.5 pt-0.5">
-              <Button onClick={handleSave} disabled={saving} size="sm" className="flex-1 h-6 text-[11px] px-2">
-                <Save className="h-3 w-3 mr-1" />{saving ? 'Salvando...' : 'Salvar'}
+            <div className="flex gap-1.5">
+              <Button onClick={handleSave} disabled={saving} size="sm" className="flex-1 h-5 text-[10px] px-2">
+                <Save className="h-2.5 w-2.5 mr-0.5" />{saving ? 'Salvando...' : 'Salvar'}
               </Button>
-              <Button variant="default" size="sm" className="h-6 text-[11px] px-2" onClick={() => setConfirmOpen(true)}>
-                <Lock className="h-3 w-3 mr-1" />Fechar
+              <Button variant="default" size="sm" className="h-5 text-[10px] px-2" onClick={() => setConfirmOpen(true)}>
+                <Lock className="h-2.5 w-2.5 mr-0.5" />Fechar
               </Button>
             </div>
           ) : (
-            <Button variant="outline" onClick={handleReabrir} size="sm" className="w-full h-6 text-[11px]">
-              <LockOpen className="h-3 w-3 mr-1" />Reabrir Pasto
+            <Button variant="outline" onClick={handleReabrir} size="sm" className="w-full h-5 text-[10px]">
+              <LockOpen className="h-2.5 w-2.5 mr-0.5" />Reabrir Pasto
             </Button>
           )}
         </div>
 
         {/* ── SCROLLABLE: category rows ── */}
-        <div className="overflow-y-auto flex-1 px-3 py-1.5">
-          <div className="space-y-0.5">
+        <div className="overflow-y-auto flex-1 px-3 py-1">
+          <div className="space-y-px">
             {categorias.map((cat, idx) => (
-              <div key={cat.id} className="flex items-center gap-1.5 rounded border px-2 py-1">
-                <span className="text-[11px] font-medium flex-1 min-w-0 truncate">{cat.nome}</span>
+              <div key={cat.id} className="flex items-center gap-1 rounded border px-1.5 py-0.5">
+                <span className="text-[10px] font-medium flex-1 min-w-0 truncate">{cat.nome}</span>
                 {itens[idx]?.origem_dado === 'copiado_mes_anterior' && (
-                  <Badge variant="secondary" className="text-[8px] h-3.5 px-1 shrink-0">Cop</Badge>
+                  <Badge variant="secondary" className="text-[7px] h-3 px-0.5 shrink-0">Cop</Badge>
                 )}
                 <Input
                   type="number" inputMode="numeric" min={0}
                   value={itens[idx]?.quantidade || ''}
                   onChange={e => updateItem(idx, 'quantidade', Number(e.target.value) || 0)}
                   disabled={isFechado}
-                  className="h-6 text-[11px] font-bold px-1.5 w-16 shrink-0 text-right"
-                  placeholder="0"
+                  className="h-5 text-[10px] font-bold px-1 w-[72px] shrink-0 text-right placeholder:text-[9px] placeholder:italic placeholder:font-normal placeholder:text-muted-foreground/50"
+                  placeholder="Qtde"
                 />
                 <Input
-                  type="number" inputMode="decimal"
+                  type="number" inputMode="decimal" step="0.01"
                   value={itens[idx]?.peso_medio_kg ?? ''}
                   onChange={e => updateItem(idx, 'peso_medio_kg', e.target.value ? Number(e.target.value) : null)}
+                  onBlur={e => {
+                    if (e.target.value) {
+                      updateItem(idx, 'peso_medio_kg', Math.round(Number(e.target.value) * 100) / 100);
+                    }
+                  }}
                   disabled={isFechado}
-                  className="h-6 text-[11px] px-1.5 w-20 shrink-0 text-right"
-                  placeholder="kg"
+                  className="h-5 text-[10px] px-1 w-[80px] shrink-0 text-right placeholder:text-[9px] placeholder:italic placeholder:font-normal placeholder:text-muted-foreground/50"
+                  placeholder="Peso kg"
                 />
               </div>
             ))}
           </div>
 
           {/* Total bar */}
-          <div className="rounded bg-muted px-3 py-1 text-center mt-1.5">
-            <span className="text-[10px] text-muted-foreground">Total: </span>
-            <span className="text-sm font-bold">{total} cab</span>
+          <div className="rounded bg-muted px-3 py-0.5 text-center mt-1">
+            <span className="text-[9px] text-muted-foreground">Total: </span>
+            <span className="text-xs font-bold">{total} cab</span>
           </div>
         </div>
 
