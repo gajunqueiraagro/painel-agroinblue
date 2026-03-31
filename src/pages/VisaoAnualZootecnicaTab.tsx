@@ -16,6 +16,13 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { TabId } from '@/components/BottomNav';
 import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
+import {
+  statusFinanceiro as calcStatusFinanceiro,
+  statusCategorias as calcStatusCategorias,
+  statusPastos as calcStatusPastos,
+  statusValor as calcStatusValor,
+} from '@/lib/calculos/statusMensal';
+import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
 interface Props {
