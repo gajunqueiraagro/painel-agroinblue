@@ -461,10 +461,7 @@ export function useStatusZootecnico(
     pastosNaoIniciados,
     precosDefinidos,
     categoriasComSaldo,
-    catsDivergentes,
-    difTotalCabecas,
-    saldoTotalSistema,
-    itensTotais,
+    categoriasStatusResult,
     loading,
     isGlobal,
   ]);
