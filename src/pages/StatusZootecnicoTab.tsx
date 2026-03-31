@@ -232,7 +232,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
         const stPastos = calcStatusPastos({
           totalPastos,
           pastosFechados: fechados,
-          pastosComRegistro: fps.length,
+          pastosComRegistro: dedupFps.length,
           statusCategorias: stCatsResult.status,
         });
 
