@@ -174,16 +174,6 @@ export function useStableLeafletMap({
     }
 
     try {
-      // Monkey-patch L.DomUtil.getPosition to never return undefined
-      const origGetPos = L.DomUtil.getPosition;
-      L.DomUtil.getPosition = function (el: any) {
-        const pos = origGetPos.call(this, el);
-        if (!pos) {
-          el._leaflet_pos = L.point(0, 0);
-          return el._leaflet_pos;
-        }
-        return pos;
-      };
 
       const map = L.map(el, {
         center,
