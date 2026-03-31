@@ -23,7 +23,6 @@ import {
   statusValor as calcStatusValor,
 } from '@/lib/calculos/statusMensal';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
-import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
 interface Props {
   lancamentos: Lancamento[];
