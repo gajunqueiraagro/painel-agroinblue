@@ -37,6 +37,12 @@ export function MapaGeoPastosTab() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('gestor');
   const [expanded, setExpanded] = useState(false);
+  const renderedCountRef = useRef(0);
+  const [renderedCount, setRenderedCount] = useState(0);
+  const onRenderedChange = useCallback((n: number) => {
+    renderedCountRef.current = n;
+    setRenderedCount(n);
+  }, []);
 
   const hasGeo = geometrias.length > 0;
 
