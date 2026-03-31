@@ -178,7 +178,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, geoLoading, o
       {/* Map — takes most space */}
       <div className="flex-1 min-h-0 flex gap-2">
         <Card className="flex-1 min-h-0 relative overflow-hidden">
-          <div ref={mapRef} className="absolute inset-0 rounded-lg" style={{ zIndex: 0 }} />
+          <div ref={mapRef} className="absolute inset-0 rounded-lg" style={{ zIndex: 0, minHeight: '400px' }} />
           {geoLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/60 z-10 rounded-lg">
               <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
