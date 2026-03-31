@@ -55,7 +55,7 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
     status: mapStatus,
     debugInfo,
     reportRenderedGeometries,
-  } = useStableLeafletMap({ debugName: 'MapaGestor', debugControlledViewport: true });
+  } = useStableLeafletMap({ debugName: 'MapaGestor' });
 
   const hasGeo = geometrias.length > 0;
 

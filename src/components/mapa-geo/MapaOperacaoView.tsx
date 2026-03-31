@@ -70,7 +70,6 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
     labelLayerRef,
     status: mapStatus,
     debugInfo,
-    scheduleInvalidateSize,
     reportRenderedGeometries,
   } = useStableLeafletMap({ debugName: 'MapaOperacao' });
 
@@ -86,7 +85,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
     if (!map || !featureLayer || !labelLayer) return;
 
     const timer = window.setTimeout(() => {
-      scheduleInvalidateSize();
+      map.invalidateSize(false);
       featureLayer.clearLayers();
       labelLayer.clearLayers();
 
@@ -159,7 +158,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
     mapStatus,
     ocupacoes,
     reportRenderedGeometries,
-    scheduleInvalidateSize,
+    
     selectedGeo,
   ]);
 
