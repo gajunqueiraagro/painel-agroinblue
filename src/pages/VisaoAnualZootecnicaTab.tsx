@@ -211,11 +211,17 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
           categoriasComSaldo: catsComSaldo.length,
         });
 
+        // 5. Econômico
+        const allStatuses: CellStatus[] = [stFin, stPastos, stCatsResult.status as CellStatus, stValor];
+        const stEcon: CellStatus = allStatuses.every(s => s === 'fechado') ? 'fechado'
+          : allStatuses.every(s => s === 'aberto') ? 'aberto' : 'parcial';
+
         result.push({
           financeiro: stFin,
           pastos: stPastos,
-          categorias: stCatsResult.status,
+          categorias: stCatsResult.status as CellStatus,
           valor: stValor,
+          economico: stEcon,
         });
       }
 
