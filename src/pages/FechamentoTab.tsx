@@ -224,7 +224,23 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     [dedupFechamentos]
   );
 
+  // ── Fonte OPERACIONAL: realidade dos pastos (sem dedup, todos os registros do mês) ──
   const pastoDataByCat = useMemo(() => {
+    const catIdToCodigo = new Map((categorias || []).map(c => [c.id, c.codigo]));
+    const map = new Map<string, number>();
+    itensMap.forEach((items, _fechId) => {
+      items.forEach(i => {
+        if (i.quantidade > 0) {
+          const codigo = catIdToCodigo.get(i.categoria_id);
+          if (codigo) map.set(codigo, (map.get(codigo) || 0) + i.quantidade);
+        }
+      });
+    });
+    return map;
+  }, [itensMap, categorias]);
+
+  // ── Fonte de CONCILIAÇÃO: deduplicada para comparação com sistema ──
+  const conciliacaoDataByCat = useMemo(() => {
     const catIdToCodigo = new Map((categorias || []).map(c => [c.id, c.codigo]));
     const map = new Map<string, number>();
     itensMap.forEach((items, fechId) => {
@@ -261,14 +277,18 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     return gerarSugestoes(rows, catMap);
   }, [saldoMap, pastoDataByCat, catMap]);
 
+  // hasDivergencia usa a fonte de CONCILIAÇÃO (deduplicada) para decidir bloqueio
+  const totalConcPasto = CAT_COLS.reduce((s, c) => s + (conciliacaoDataByCat.get(c.codigo) || 0), 0);
+  const totalConcDif = totalConcPasto - totalSistema;
+
   const hasDivergencia = useMemo(() => {
-    if (totalDiferenca !== 0) return true;
+    if (totalConcDif !== 0) return true;
     return CAT_COLS.some(c => {
-      const qtdPasto = pastoDataByCat.get(c.codigo) || 0;
+      const qtdPasto = conciliacaoDataByCat.get(c.codigo) || 0;
       const qtdSistema = saldoMap.get(c.codigo) || 0;
       return qtdPasto - qtdSistema !== 0;
     });
-  }, [totalDiferenca, pastoDataByCat, saldoMap]);
+  }, [totalConcDif, conciliacaoDataByCat, saldoMap]);
 
   const isAdminClosed = (fech: FechamentoPasto | null) => {
     return fech?.responsavel_nome === FECHAMENTO_GLOBAL_MARKER;
