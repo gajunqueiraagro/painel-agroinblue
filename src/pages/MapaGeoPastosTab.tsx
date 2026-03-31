@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
-import { usePastoGeometrias } from '@/hooks/usePastoGeometrias';
+import { usePastoGeometrias, type PastoGeometria } from '@/hooks/usePastoGeometrias';
 import { useFechamento } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { parseKMLFile, type ParsedPolygon } from '@/lib/kmlParser';
@@ -60,8 +60,9 @@ export function MapaGeoPastosTab() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
 
-  const mapRef = useRef<HTMLDivElement>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<L.Map | null>(null);
   const layerGroup = useRef<L.LayerGroup | null>(null);
 
@@ -73,10 +74,9 @@ export function MapaGeoPastosTab() {
     return arr;
   }, [curYear]);
 
-  // Load fechamento data
   useEffect(() => { loadFechamentos(anoMes); }, [anoMes, loadFechamentos]);
 
-  // Build pasto data
+  // Build pasto data from fechamentos
   useEffect(() => {
     const build = async () => {
       const pastosAtivos = pastos.filter(p => p.ativo && p.entra_conciliacao);
@@ -86,7 +86,7 @@ export function MapaGeoPastosTab() {
       const fechMap = new Map(fechamentos.map(f => [f.pasto_id, f]));
       const allItems = await Promise.all(fechamentos.map(f => loadItens(f.id)));
       const itemsByFechId = new Map(fechamentos.map((f, i) => [f.id, allItems[i]]));
-      const geoMap = new Map(geometrias.map(g => [g.pasto_id, g]));
+      const geoMap = new Map(geometrias.filter(g => g.pasto_id).map(g => [g.pasto_id!, g]));
 
       const pastoIds = pastosAtivos.map(p => p.id);
       const { data: condicoes } = await supabase
@@ -162,27 +162,43 @@ export function MapaGeoPastosTab() {
     });
   }, [pastosData, filtroLote, filtroCategoria]);
 
-  const getColor = useCallback((data: PastoMapData): string => {
-    if (data.ultimaCondicao === 'ruim') return '#ef4444';
-    if (data.ultimaCondicao === 'regular') return '#f59e0b';
-    if (data.ultimaCondicao === 'bom') return '#22c55e';
-    if (data.uaHa !== null) {
-      if (data.uaHa > 3) return '#ef4444';
-      if (data.uaHa > 2) return '#f59e0b';
+  const getColor = useCallback((condicao: string | null, uaHa: number | null): string => {
+    if (condicao === 'ruim') return '#ef4444';
+    if (condicao === 'regular') return '#f59e0b';
+    if (condicao === 'bom') return '#22c55e';
+    if (uaHa !== null) {
+      if (uaHa > 3) return '#ef4444';
+      if (uaHa > 2) return '#f59e0b';
       return '#22c55e';
     }
     return '#6b7280';
   }, []);
 
-  // Initialize Leaflet map — re-run when mapRef mounts
-  useEffect(() => {
-    if (!mapRef.current || leafletMap.current) return;
-    if (!hasGeometries) return;
+  // Initialize Leaflet map — use a callback ref pattern
+  const initMap = useCallback((node: HTMLDivElement | null) => {
+    // Store the ref for cleanup
+    (mapContainerRef as any).current = node;
 
-    const map = L.map(mapRef.current, {
+    if (!node) {
+      // Cleanup
+      if (leafletMap.current) {
+        leafletMap.current.remove();
+        leafletMap.current = null;
+        layerGroup.current = null;
+        setMapReady(false);
+      }
+      return;
+    }
+
+    // Already initialized
+    if (leafletMap.current) return;
+
+    const map = L.map(node, {
       center: [-15.8, -47.9],
       zoom: 5,
       zoomControl: true,
+      // Prevent clicks from propagating outside the map
+      scrollWheelZoom: true,
     });
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -193,73 +209,107 @@ export function MapaGeoPastosTab() {
     layerGroup.current = L.layerGroup().addTo(map);
     leafletMap.current = map;
 
-    // Ensure correct sizing after mount
-    setTimeout(() => map.invalidateSize(), 200);
+    // invalidateSize after a short delay to ensure container is laid out
+    setTimeout(() => {
+      map.invalidateSize();
+      setMapReady(true);
+    }, 300);
+  }, []);
 
-    return () => {
-      map.remove();
-      leafletMap.current = null;
-      layerGroup.current = null;
-    };
-  }, [hasGeometries]);
-
-  // Update polygons on map
+  // Draw ALL geometries on map (both matched and unmatched)
   useEffect(() => {
-    if (!leafletMap.current || !layerGroup.current) return;
+    if (!leafletMap.current || !layerGroup.current || !mapReady) return;
 
-    // Ensure map knows its container size
     leafletMap.current.invalidateSize();
-
     layerGroup.current.clearLayers();
 
     const bounds: L.LatLngBounds[] = [];
 
-    filteredPastos.forEach(data => {
-      if (!data.geometria) return;
-
-      const color = getColor(data);
-      const layer = L.geoJSON(data.geometria.geojson as any, {
-        style: {
-          color: color,
-          weight: 2,
-          fillColor: color,
-          fillOpacity: 0.35,
-        },
-      });
-
-      const center = layer.getBounds().getCenter();
-      const label = L.divIcon({
-        className: 'pasto-label',
-        html: `<div style="
-          background: rgba(255,255,255,0.9);
-          border: 1px solid ${color};
-          border-radius: 4px;
-          padding: 2px 6px;
-          font-size: 11px;
-          font-weight: 600;
-          color: #1a1a1a;
-          white-space: nowrap;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-        ">${data.pasto.nome}<br/><span style="font-size:10px;font-weight:400;color:#666">${data.totalCabecas} cab</span></div>`,
-        iconSize: [0, 0],
-        iconAnchor: [0, 0],
-      });
-      L.marker(center, { icon: label }).addTo(layerGroup.current!);
-
-      layer.on('click', () => {
-        setSelectedPasto(data);
-        setSheetOpen(true);
-      });
-
-      layer.addTo(layerGroup.current!);
-      bounds.push(layer.getBounds());
+    // Build lookup from pasto_id -> PastoMapData for matched geometries
+    const pastoDataMap = new Map<string, PastoMapData>();
+    filteredPastos.forEach(pd => {
+      pastoDataMap.set(pd.pasto.id, pd);
     });
+
+    // Track which geometries are from filtered pastos
+    const filteredPastoIds = new Set(filteredPastos.map(p => p.pasto.id));
+
+    // Render ALL geometries
+    geometrias.forEach(geo => {
+      const matchedPasto = geo.pasto_id ? pastoDataMap.get(geo.pasto_id) : null;
+
+      // If there's an active filter and this geometry is linked to a pasto not in the filter, skip
+      if (geo.pasto_id && filteredPastoIds.size > 0 && !filteredPastoIds.has(geo.pasto_id)) {
+        // Only skip if filters are active (not default)
+        if (filtroLote !== '__all__' || filtroCategoria !== '__all__') return;
+      }
+
+      const condicao = matchedPasto?.ultimaCondicao ?? null;
+      const uaHa = matchedPasto?.uaHa ?? null;
+      const color = getColor(condicao, uaHa);
+      const displayName = matchedPasto?.pasto.nome || geo.nome_original || 'Sem nome';
+      const cabecas = matchedPasto?.totalCabecas ?? 0;
+
+      try {
+        const layer = L.geoJSON(geo.geojson as any, {
+          style: {
+            color,
+            weight: 2,
+            fillColor: color,
+            fillOpacity: 0.35,
+          },
+        });
+
+        const layerBounds = layer.getBounds();
+        if (!layerBounds.isValid()) {
+          console.warn(`[MapaPastos] Geometria inválida ignorada: ${displayName}`);
+          return;
+        }
+
+        const center = layerBounds.getCenter();
+        const label = L.divIcon({
+          className: 'pasto-label',
+          html: `<div style="
+            background:rgba(255,255,255,0.9);
+            border:1px solid ${color};
+            border-radius:4px;
+            padding:2px 6px;
+            font-size:11px;
+            font-weight:600;
+            color:#1a1a1a;
+            white-space:nowrap;
+            box-shadow:0 1px 3px rgba(0,0,0,0.2);
+            pointer-events:none;
+          ">${displayName}${cabecas > 0 ? `<br/><span style="font-size:10px;font-weight:400;color:#666">${cabecas} cab</span>` : ''}</div>`,
+          iconSize: [0, 0],
+          iconAnchor: [0, 0],
+        });
+        L.marker(center, { icon: label, interactive: false }).addTo(layerGroup.current!);
+
+        // Only open detail sheet for matched pastos
+        if (matchedPasto) {
+          layer.on('click', (e) => {
+            L.DomEvent.stopPropagation(e);
+            setSelectedPasto(matchedPasto);
+            setSheetOpen(true);
+          });
+        }
+
+        layer.addTo(layerGroup.current!);
+        bounds.push(layerBounds);
+      } catch (err) {
+        console.warn(`[MapaPastos] Erro ao renderizar geometria "${displayName}":`, err);
+      }
+    });
+
+    console.log(`[MapaPastos] Renderizados: ${bounds.length}/${geometrias.length} polígonos`);
 
     if (bounds.length > 0) {
       const combined = bounds.reduce((acc, b) => acc.extend(b));
+      console.log(`[MapaPastos] Bounds: SW(${combined.getSouthWest().lat.toFixed(4)}, ${combined.getSouthWest().lng.toFixed(4)}) NE(${combined.getNorthEast().lat.toFixed(4)}, ${combined.getNorthEast().lng.toFixed(4)})`);
       leafletMap.current.fitBounds(combined, { padding: [30, 30], maxZoom: 17 });
     }
-  }, [filteredPastos, getColor]);
+  }, [geometrias, filteredPastos, mapReady, getColor, filtroLote, filtroCategoria]);
 
   const handleKmlUpload = useCallback(async (polygons: ParsedPolygon[]) => {
     const pastoMap = new Map(pastos.filter(p => p.ativo).map(p => [p.nome.trim().toLowerCase(), p]));
@@ -294,8 +344,8 @@ export function MapaGeoPastosTab() {
 
   return (
     <div className="flex flex-col h-[100dvh] overflow-hidden">
-      {/* Filters bar */}
-      <div className="flex-shrink-0 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 z-50">
+      {/* Filters bar — always on top */}
+      <div className="flex-shrink-0 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 relative" style={{ zIndex: 1000 }}>
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <Select value={anoFiltro} onValueChange={setAnoFiltro}>
@@ -329,14 +379,14 @@ export function MapaGeoPastosTab() {
           </div>
           <div className="flex items-center gap-1.5">
             {hasGeometries && (
-              <Badge variant="outline" className="text-[10px] h-5 text-muted-foreground">
+              <span className="text-[10px] text-muted-foreground">
                 {geometrias.length} polígonos
                 {lastUpload && ` · ${lastUpload.toLocaleDateString('pt-BR')}`}
-              </Badge>
+              </span>
             )}
-            <Badge variant="secondary" className="text-xs h-6">
+            <span className="text-xs font-medium text-foreground bg-secondary/20 px-2 py-0.5 rounded">
               {filteredPastos.reduce((s, p) => s + p.totalCabecas, 0)} cab
-            </Badge>
+            </span>
             <Button variant="outline" size="sm" className="h-7 text-xs px-2" onClick={() => setUploadOpen(true)}>
               {hasGeometries ? (
                 <><RefreshCw className="h-3.5 w-3.5 mr-1" />Atualizar Mapa</>
@@ -358,10 +408,10 @@ export function MapaGeoPastosTab() {
         </div>
       </div>
 
-      {/* Map or empty state */}
-      <div className="flex-1 min-h-0 relative">
+      {/* Map container — contained with lower z-index */}
+      <div className="flex-1 min-h-0 relative overflow-hidden" style={{ zIndex: 1 }}>
         {(loading || geoLoading) && (
-          <div className="absolute inset-0 z-20 bg-background/60 flex items-center justify-center">
+          <div className="absolute inset-0 flex items-center justify-center bg-background/60" style={{ zIndex: 10 }}>
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         )}
@@ -380,9 +430,13 @@ export function MapaGeoPastosTab() {
               <Upload className="h-4 w-4 mr-2" />Importar Mapa
             </Button>
           </div>
-        ) : (
-          <div ref={mapRef} className="absolute inset-0 overflow-hidden" />
-        )}
+        ) : hasGeometries ? (
+          <div
+            ref={initMap}
+            className="w-full h-full"
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}
+          />
+        ) : null}
       </div>
 
       {/* Detail sheet */}
