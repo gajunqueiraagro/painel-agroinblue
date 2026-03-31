@@ -388,7 +388,7 @@ function KpiChip({ label, value, active }: { label: string; value: string; activ
 }
 
 function InfoRow({ label, value, status }: { label: string; value: string; status?: string }) {
-  const bg = status ? STATUS_BG[status] || 'bg-muted/30' : 'bg-muted/30';
+  const bg = status ? STATUS_STYLES[status]?.bgClass || 'bg-muted/30' : 'bg-muted/30';
   const textClass = status ? STATUS_STYLES[status]?.textClass || 'text-foreground' : 'text-foreground';
   return (
     <div className={`rounded px-1.5 py-0.5 border ${bg}`}>
