@@ -443,14 +443,22 @@ export function useStatusZootecnico(
     else descValor = 'Preços completos';
     pendencias.push({ id: 'valor', label: 'Valor do Rebanho', descricao: descValor, status: statusValorCalc, resolverTab: 'valor_rebanho' });
 
+    // ── 5. Econômico (derivado dos 4 anteriores) ──
+    const allPendStatuses = [statusFin, statusPastosCalc, statusCats, statusValorCalc];
+    const statusEcon: StatusItem = allPendStatuses.every(s => s === 'fechado') ? 'fechado'
+      : allPendStatuses.every(s => s === 'aberto') ? 'aberto' : 'parcial';
+    const descEcon = statusEcon === 'fechado' ? 'Base validada'
+      : statusEcon === 'parcial' ? 'Aguardando fechamento das bases' : 'Bases não fechadas';
+    pendencias.push({ id: 'economico', label: 'Econômico', descricao: descEcon, status: statusEcon });
+
     // Contadores
     const contadores = { aberto: 0, parcial: 0, fechado: 0 };
     pendencias.forEach(p => contadores[p.status]++);
 
     // Status geral
     let status: StatusGeral = 'parcial';
-    if (contadores.fechado === 4) status = 'fechado';
-    else if (contadores.aberto === 4) status = 'aberto';
+    if (contadores.fechado === 5) status = 'fechado';
+    else if (contadores.aberto === 5) status = 'aberto';
 
     return { status, pendencias, contadores, loading, pastosPorFazenda };
   }, [
