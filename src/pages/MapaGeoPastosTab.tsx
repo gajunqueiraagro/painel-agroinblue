@@ -9,6 +9,19 @@ import { KmlUploadDialog } from '@/components/mapa-geo/KmlUploadDialog';
 import { usePastos } from '@/hooks/usePastos';
 import { parseKMLFile, type ParsedPolygon } from '@/lib/kmlParser';
 
+export interface PastoMapData {
+  pasto: any;
+  geometria: any;
+  totalCabecas: number;
+  pesoMedio: number | null;
+  uaTotal: number;
+  uaHa: number | null;
+  lote: string | null;
+  qualidade: number | null;
+  categorias: Map<string, { quantidade: number; peso_medio_kg: number | null; categoria_nome: string }>;
+  ultimaCondicao: string | null;
+}
+
 export function MapaGeoPastosTab() {
   const { isGlobal } = useFazenda();
   const { pastos } = usePastos();
