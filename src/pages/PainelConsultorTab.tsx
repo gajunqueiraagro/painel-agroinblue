@@ -604,9 +604,15 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
     return prodRow ? prodRow.valores : undefined;
   }, [zooRows]);
 
+  // Extract peso final kg per month from zooRows for patrimonial indicators
+  const pesoFinMesArr = useMemo(() => {
+    const row = zooRows.find(r => r.indicador.startsWith('Peso total final\n(kg)'));
+    return row ? row.valores : undefined;
+  }, [zooRows]);
+
   const finRows = useMemo(
-    () => buildFinRows(lancFin, anoNum, ateMes, arrobasProdAcum),
-    [lancFin, anoNum, ateMes, arrobasProdAcum],
+    () => buildFinRows(lancFin, anoNum, ateMes, arrobasProdAcum, valorRebanhoMes, pesoFinMesArr),
+    [lancFin, anoNum, ateMes, arrobasProdAcum, valorRebanhoMes, pesoFinMesArr],
   );
 
   const fazendaNome = isGlobal ? 'Global' : (fazendaAtual?.nome || 'Fazenda');
