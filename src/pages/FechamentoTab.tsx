@@ -540,7 +540,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           <p className="text-xs mt-1">Cadastre pastos na aba "Pastos" e marque "Entra na conciliação".</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
           {pastosAtivos.map(p => {
             const fech = getFechamento(p.id);
             const status = fech?.status;
