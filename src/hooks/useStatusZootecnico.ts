@@ -403,7 +403,7 @@ export function useStatusZootecnico(
         : `${pastosFechados} fechado(s) · conciliado`;
     } else if (statusPastosCalc === 'parcial') {
       if (totalFechados >= totalPastosGeral) {
-        descPastos = `Pastos fechados · ${difTotalCabecas} cab divergente(s)`;
+        descPastos = `Pastos fechados · ${categoriasStatusResult.difTotalCabecas} cab divergente(s)`;
       } else {
         descPastos = isGlobal
           ? `${fazendasComPastos.filter(f => f.status === 'fechado').length}/${fazendasComPastos.length} fazenda(s) fechada(s)`
