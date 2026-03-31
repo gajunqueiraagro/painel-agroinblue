@@ -167,14 +167,24 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
       for (let m = 1; m <= 12; m++) {
         const am = anoMeses[m - 1];
         const fps = fpByMonth.get(am) || [];
-        const fechados = fps.filter(f => f.status === 'fechado').length;
+
+        // Deduplicate: keep only the most recent fechamento per pasto
+        const dedupByPasto = new Map<string, typeof fps[0]>();
+        fps.forEach(f => {
+          const existing = dedupByPasto.get(f.pasto_id);
+          if (!existing) { dedupByPasto.set(f.pasto_id, f); return; }
+          // Keep the most recent — no updated_at here, so prefer 'fechado' status
+          if (f.status === 'fechado') dedupByPasto.set(f.pasto_id, f);
+        });
+        const dedupFps = Array.from(dedupByPasto.values());
+        const fechados = dedupFps.filter(f => f.status === 'fechado').length;
 
         // Saldo oficial
         const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, anoNum, m);
         const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
 
-        // Build alocado nos pastos
-        const fechIds = fps.map(f => f.id);
+        // Build alocado nos pastos (using deduplicated fechamentos only)
+        const fechIds = dedupFps.map(f => f.id);
         const monthItens = fechIds.flatMap(id => itensByFech.get(id) || []);
         const alocadoPastos = new Map<string, number>();
         monthItens.forEach(i => {
