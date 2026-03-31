@@ -367,6 +367,8 @@ function buildFinRows(
   ano: number,
   ateMes: number,
   arrobasProdAcum?: number[],
+  valorRebanhoMes?: number[],
+  pesoFinMes?: number[],
 ): FinRow[] {
   const rows: FinRow[] = [];
 
