@@ -210,7 +210,7 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
         const stPastos = calcStatusPastos({
           totalPastos,
           pastosFechados: fechados,
-          pastosComRegistro: fps.length,
+          pastosComRegistro: dedupFps.length,
           statusCategorias: stCatsResult.status,
         });
 
