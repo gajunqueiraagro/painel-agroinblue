@@ -104,12 +104,14 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               unidade="cab"
               compMensal={c.saldoFinalMes.mensal}
               compAnual={c.saldoFinalMes.anual}
+              info={`Saldo final de cabeças no mês.\n\nMês: saldo inicial + entradas − saídas do mês.\nAcumulado: mesmo valor (posição final do mês selecionado).`}
             />
             <KpiCard
               label="Peso Total"
               valor={pesoTotalKg !== null ? formatNum(pesoTotalKg, 0) : '—'}
               unidade="kg"
               semBase={pesoTotalKg === null}
+              info={`Peso total do rebanho.\n\nFórmula: Cabeças × Peso Médio Final.\nBase: dados de fechamento de pastos do mês.`}
             />
             <KpiCard
               label="Peso Médio"
@@ -119,8 +121,8 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               compMensal={c.pesoMedioRebanhoKg.mensal}
               compAnual={c.pesoMedioRebanhoKg.anual}
               semBase={ind.pesoMedioRebanhoKg === null}
+              info={`Peso médio por cabeça no final do mês.\n\nBase: peso informado no fechamento de pastos (média ponderada por categoria).\nSe não houver fechamento, valor é estimado (*).`}
             />
-          </div>
           <div className="grid grid-cols-3 gap-3">
             <KpiCard
               label="Valor Rebanho"
