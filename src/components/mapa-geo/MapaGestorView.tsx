@@ -212,7 +212,7 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
           {selected && selectedPasto && (
             <div className="flex items-center gap-1">
               <span className="text-[6px] font-semibold text-muted-foreground uppercase tracking-widest [writing-mode:vertical-lr] rotate-180 self-center">Pasto</span>
-              <div className={`flex-shrink-0 rounded-md border px-1.5 py-0.5 ${STATUS_BG[selectedStatus]}`}>
+              <div className={`flex-shrink-0 rounded-md border px-1.5 py-0.5 ${STATUS_STYLES[selectedStatus].bgClass}`}>
                 <p className="text-[7px] text-muted-foreground uppercase tracking-wider leading-none">Selecionado</p>
                 <p className="text-[11px] font-bold leading-tight text-foreground truncate max-w-[80px]">{selectedPasto.nome}</p>
               </div>
