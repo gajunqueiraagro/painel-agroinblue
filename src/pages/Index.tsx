@@ -91,6 +91,7 @@ const TITLES: Record<TabId, string> = {
   analise_operacional: 'Análise Operacional',
   fechamento: 'Lançamento de Pasto',
   mapa_pastos: 'Mapa de Pastos',
+  mapa_geo_pastos: 'Mapa Geográfico',
   resumo_pastos: 'Resumo de Pastos',
   visao_anual_zoo: 'Visão Anual Zootécnica',
   indicadores: 'Indicadores',
