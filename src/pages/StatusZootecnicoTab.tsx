@@ -477,22 +477,33 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
   return (
     <div className="max-w-4xl mx-auto animate-fade-in pb-20">
       {/* Filtros */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 pt-3 pb-2">
-        <div className="flex gap-2 items-center">
+      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 pt-2 pb-1.5">
+        <div className="flex items-center gap-2">
           <Select value={anoFiltro} onValueChange={handleAnoChange}>
-            <SelectTrigger className="w-24 text-base font-bold"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-8 min-h-0 w-[76px] bg-card px-2 py-0 text-xs font-semibold border-border/70 [&>span]:truncate [&>svg]:h-3 [&>svg]:w-3">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
-              {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+              {anosDisp.map(a => <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
-            <SelectTrigger className="w-28 text-sm font-bold"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-8 min-h-0 w-[72px] bg-card px-2 py-0 text-xs font-semibold border-border/70 [&>span]:truncate [&>svg]:h-3 [&>svg]:w-3">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               {MESES_COLS.map((m, i) => (
-                <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>
+                <SelectItem key={m.key} value={String(i + 1)} className="text-xs">{m.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex h-8 items-center rounded-md border border-border bg-muted px-2.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted/80"
+          >
+            ← Resumo
+          </button>
         </div>
       </div>
 
