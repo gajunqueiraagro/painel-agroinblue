@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { usePastoGeometrias } from '@/hooks/usePastoGeometrias';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Button } from '@/components/ui/button';
@@ -39,10 +39,31 @@ export function MapaGeoPastosTab() {
   const [expanded, setExpanded] = useState(false);
   const renderedCountRef = useRef(0);
   const [renderedCount, setRenderedCount] = useState(0);
+  const mapModuleRef = useRef<HTMLDivElement | null>(null);
   const onRenderedChange = useCallback((n: number) => {
     renderedCountRef.current = n;
     setRenderedCount(n);
   }, []);
+
+  useEffect(() => {
+    if (expanded) return;
+    const node = mapModuleRef.current;
+    if (!node) return;
+
+    const updateLayoutBounds = () => {
+      const topOffset = Math.max(node.getBoundingClientRect().top, 0);
+      node.style.setProperty('--map-top-offset', `${topOffset}px`);
+    };
+
+    updateLayoutBounds();
+    window.addEventListener('resize', updateLayoutBounds);
+    window.visualViewport?.addEventListener('resize', updateLayoutBounds);
+
+    return () => {
+      window.removeEventListener('resize', updateLayoutBounds);
+      window.visualViewport?.removeEventListener('resize', updateLayoutBounds);
+    };
+  }, [expanded, viewMode]);
 
   const hasGeo = geometrias.length > 0;
 
@@ -159,7 +180,7 @@ export function MapaGeoPastosTab() {
   if (expanded) {
     return (
       <>
-        <div className="fixed inset-0 bottom-16 z-40 bg-background flex flex-col">
+        <div className="fixed inset-x-0 top-0 z-40 bg-background flex flex-col" style={{ bottom: 'var(--bottom-nav-safe, 64px)' }}>
           {topBar}
           {content}
         </div>
@@ -177,7 +198,14 @@ export function MapaGeoPastosTab() {
 
   // Normal mode
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div
+      ref={mapModuleRef}
+      className="flex flex-col min-h-0 overflow-hidden"
+      style={{
+        height: 'calc(100dvh - var(--map-top-offset, 0px) - var(--bottom-nav-safe, 64px))',
+        maxHeight: 'calc(100dvh - var(--map-top-offset, 0px) - var(--bottom-nav-safe, 64px))',
+      }}
+    >
       {topBar}
       {content}
       <KmlUploadDialog
