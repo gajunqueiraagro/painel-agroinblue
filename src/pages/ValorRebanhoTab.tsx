@@ -279,6 +279,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   return (
     <div className="p-3 max-w-4xl mx-auto space-y-2 animate-fade-in pb-20">
+      {/* Bloqueio por conciliação */}
+      {bloqueadoPorConciliacao && (
+        <Alert variant="destructive" className="border-destructive/50">
+          <ShieldAlert className="h-4 w-4" />
+          <AlertDescription className="text-xs font-medium">
+            Fechamento bloqueado: existem divergências na Conciliação de Categorias.
+            {categoriasStatus?.descricao && ` (${categoriasStatus.descricao})`}
+          </AlertDescription>
+        </Alert>
+      )}
       {/* Filtros */}
       <div className="flex gap-1.5 items-center flex-wrap">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
