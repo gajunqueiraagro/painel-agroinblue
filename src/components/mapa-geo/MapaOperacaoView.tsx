@@ -45,6 +45,7 @@ interface Props {
   geoLoading: boolean;
   onUpload: () => void;
   onRefresh?: () => void;
+  onRenderedChange?: (count: number) => void;
 }
 
 type QuickAction = 'entrada' | 'saida' | 'transferencia' | null;
