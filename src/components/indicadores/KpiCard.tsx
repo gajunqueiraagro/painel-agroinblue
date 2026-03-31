@@ -24,8 +24,8 @@ export function KpiCard({ label, valor, unidade, compMensal, compAnual, estimado
         {info && (
           <Popover>
             <PopoverTrigger asChild>
-              <button className="inline-flex items-center justify-center shrink-0 rounded-full hover:bg-muted/60 transition-colors p-0.5" aria-label="Info">
-                <Info className="h-2.5 w-2.5 text-muted-foreground/60 hover:text-primary" />
+              <button className="inline-flex items-center justify-center shrink-0 rounded-full hover:bg-muted/60 transition-colors p-0.5 ml-0.5" aria-label="Info">
+                <Info className="h-3 w-3 text-primary/50 hover:text-primary" />
               </button>
             </PopoverTrigger>
             <PopoverContent side="top" className="max-w-[260px] text-[11px] leading-relaxed p-3 whitespace-pre-line">
