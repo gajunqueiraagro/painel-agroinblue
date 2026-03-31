@@ -185,10 +185,10 @@ export function FechamentoPastoDialog({
             </div>
             <div className="w-12 shrink-0">
               <Label className="text-[9px] text-muted-foreground leading-none">Qual.</Label>
-              <Select value={qualidadeMes?.toString() || ''} onValueChange={v => setQualidadeMes(v ? Number(v) : null)} disabled={isFechado}>
+              <Select value={qualidadeMes?.toString() || 'none'} onValueChange={v => setQualidadeMes(v === 'none' ? null : Number(v))} disabled={isFechado}>
                 <SelectTrigger className="h-6 text-[10px] px-1.5"><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">—</SelectItem>
+                  <SelectItem value="none">—</SelectItem>
                   {QUALIDADE_OPTIONS.map(q => <SelectItem key={q} value={q.toString()}>{q}</SelectItem>)}
                 </SelectContent>
               </Select>
