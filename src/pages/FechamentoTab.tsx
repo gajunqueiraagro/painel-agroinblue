@@ -403,9 +403,9 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                   <tr className="border-b border-border/40 bg-muted">
                     <th className="text-left font-bold text-muted-foreground px-1 py-0.5 w-12 border-r border-border/30 bg-muted">Cab.</th>
                     {CAT_COLS.map((c, idx) => (
-                      <th key={c.sigla} className={`text-center font-bold text-muted-foreground px-0.5 py-0.5 min-w-[28px]${idx === 4 ? ' border-r border-border/30' : ''}`}>{c.sigla}</th>
+                      <th key={c.sigla} className={`text-right font-bold text-muted-foreground px-1 py-0.5 min-w-[28px]${idx === 4 ? ' border-r border-border/30' : ''}`}>{c.sigla}</th>
                     ))}
-                    <th className="text-center font-bold text-foreground px-1 py-0.5 min-w-[32px] border-l border-border/30 bg-muted">Total</th>
+                    <th className="text-right font-bold text-foreground px-1 py-0.5 min-w-[32px] border-l border-border/30 bg-muted">Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -413,17 +413,17 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                     <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30 bg-muted">Pasto</td>
                     {CAT_COLS.map((c, idx) => {
                       const v = pastoDataByCat.get(c.codigo) || 0;
-                      return <td key={c.sigla} className={`text-center text-foreground px-0.5 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v ? v.toLocaleString('pt-BR') : ''}</td>;
+                      return <td key={c.sigla} className={`text-right italic text-foreground px-1 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v ? v.toLocaleString('pt-BR') : ''}</td>;
                     })}
-                    <td className="text-center font-bold text-foreground px-1 py-0.5 border-l border-border/30 bg-muted">{totalPasto.toLocaleString('pt-BR')}</td>
+                    <td className="text-right italic font-bold text-foreground px-1 py-0.5 border-l border-border/30 bg-muted">{totalPasto.toLocaleString('pt-BR')}</td>
                   </tr>
                   <tr>
                     <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30 bg-muted">Sistema</td>
                     {CAT_COLS.map((c, idx) => {
                       const v = saldoMap.get(c.codigo) || 0;
-                      return <td key={c.sigla} className={`text-center text-foreground px-0.5 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v ? v.toLocaleString('pt-BR') : ''}</td>;
+                      return <td key={c.sigla} className={`text-right italic text-foreground px-1 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v ? v.toLocaleString('pt-BR') : ''}</td>;
                     })}
-                    <td className="text-center font-bold text-foreground px-1 py-0.5 border-l border-border/30 bg-muted">{totalSistema.toLocaleString('pt-BR')}</td>
+                    <td className="text-right italic font-bold text-foreground px-1 py-0.5 border-l border-border/30 bg-muted">{totalSistema.toLocaleString('pt-BR')}</td>
                   </tr>
                   <tr className="border-t border-border/40 bg-muted">
                     <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30 bg-muted">Dif.</td>
@@ -433,12 +433,12 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                       const dif = pasto - sistema;
                       const formatted = dif !== 0 ? (dif > 0 ? `+${Math.abs(dif).toLocaleString('pt-BR')}` : `-${Math.abs(dif).toLocaleString('pt-BR')}`) : '';
                       return (
-                        <td key={c.sigla} className={`text-center font-bold px-0.5 py-0.5 ${dif > 0 ? 'text-emerald-600' : dif < 0 ? 'text-red-600' : 'text-muted-foreground'}${idx === 4 ? ' border-r border-border/30' : ''}`}>
+                        <td key={c.sigla} className={`text-right italic font-bold px-1 py-0.5 ${dif > 0 ? 'text-emerald-600' : dif < 0 ? 'text-red-600' : 'text-muted-foreground'}${idx === 4 ? ' border-r border-border/30' : ''}`}>
                           {formatted}
                         </td>
                       );
                     })}
-                    <td className={`text-center font-bold px-1 py-0.5 border-l border-border/30 bg-muted ${totalDiferenca > 0 ? 'text-emerald-600' : totalDiferenca < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                    <td className={`text-right italic font-bold px-1 py-0.5 border-l border-border/30 bg-muted ${totalDiferenca > 0 ? 'text-emerald-600' : totalDiferenca < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
                       {totalDiferenca !== 0 ? (totalDiferenca > 0 ? `+${Math.abs(totalDiferenca).toLocaleString('pt-BR')}` : `-${Math.abs(totalDiferenca).toLocaleString('pt-BR')}`) : '0'}
                     </td>
                   </tr>
