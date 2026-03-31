@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Upload, MapPin, X, LogIn, LogOut, ArrowRightLeft, Check } from 'lucide-react';
 import { formatNum } from '@/lib/calculos/formatters';
 import { usePastoMovimentacoes } from '@/hooks/usePastoMovimentacoes';
