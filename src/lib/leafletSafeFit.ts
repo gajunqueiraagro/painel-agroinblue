@@ -1,48 +1,60 @@
 import L from 'leaflet';
 
 /**
- * Safely calls fitBounds only after confirming the map container is rendered
- * with valid dimensions. Retries up to `maxRetries` times using rAF + setTimeout
- * if the container isn't ready yet.
+ * Safely calls fitBounds only after confirming the map container is fully
+ * rendered with valid dimensions and internal panes initialised.
+ * Retries via rAF + setTimeout if the container isn't ready yet.
  */
 export function safeFitBounds(
   map: L.Map,
   bounds: L.LatLngBounds,
   options: L.FitBoundsOptions = {},
   debugName = 'Map',
-  maxRetries = 5,
+  maxRetries = 6,
 ): void {
   let attempt = 0;
 
-  const tryFit = () => {
-    attempt += 1;
+  const isContainerReady = (): boolean => {
     const container = map.getContainer();
-
-    if (!container) {
-      console.warn(`[${debugName}] safeFitBounds: no container (attempt ${attempt}/${maxRetries})`);
-      if (attempt < maxRetries) scheduleRetry();
-      return;
-    }
+    if (!container) return false;
 
     const { width, height } = container.getBoundingClientRect();
+    if (width < 32 || height < 32) return false;
 
-    if (width < 32 || height < 32) {
-      console.warn(`[${debugName}] safeFitBounds: container too small ${width}x${height} (attempt ${attempt}/${maxRetries})`);
-      if (attempt < maxRetries) scheduleRetry();
+    // Leaflet sets _leaflet_pos on the map pane during initialisation.
+    // If it's missing, fitBounds/setView will throw.
+    const pane = container.querySelector('.leaflet-map-pane') as HTMLElement | null;
+    if (!pane || !(pane as any)._leaflet_pos) return false;
+
+    return true;
+  };
+
+  const tryFit = () => {
+    attempt += 1;
+
+    if (!isContainerReady()) {
+      console.warn(
+        `[${debugName}] safeFitBounds: not ready (attempt ${attempt}/${maxRetries})`,
+      );
+      if (attempt < maxRetries) {
+        scheduleRetry();
+      }
       return;
     }
 
-    // Container is ready — invalidate size first, then fit
     map.invalidateSize(false);
     map.fitBounds(bounds, options);
-    console.info(`[${debugName}] safeFitBounds: success at attempt ${attempt} (${width}x${height})`);
+    console.info(`[${debugName}] safeFitBounds: OK (attempt ${attempt})`);
   };
 
   const scheduleRetry = () => {
     requestAnimationFrame(() => {
-      setTimeout(tryFit, 80);
+      setTimeout(tryFit, 120);
     });
   };
 
-  tryFit();
+  // Always defer the first attempt to let the current layout commit finish
+  requestAnimationFrame(() => {
+    setTimeout(tryFit, 60);
+  });
 }
