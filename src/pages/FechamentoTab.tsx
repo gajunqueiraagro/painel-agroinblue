@@ -455,33 +455,33 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             )}
           </div>
 
-          {/* Botões alinhados à direita - desktop */}
-          <div className="hidden md:flex items-center gap-2 shrink-0 pt-1">
+          {/* Botões em coluna à direita - desktop */}
+          <div className="hidden md:flex flex-col gap-1 shrink-0 pt-0.5">
             {onNavigateToReclass && hasDivergencia && (
               <Button
                 size="sm"
                 variant="outline"
-                className="text-xs font-bold h-7 min-w-[150px] justify-center"
+                className="text-[10px] font-bold h-5 px-2 min-w-[140px] justify-center"
                 onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: mesFiltro })}
               >
-                <Pencil className="h-3.5 w-3.5 mr-1" />
+                <Pencil className="h-3 w-3 mr-1" />
                 Evoluir Categorias
               </Button>
             )}
             <Button
               size="sm"
               variant="outline"
-              className="text-xs font-bold h-7 min-w-[150px] justify-center"
+              className="text-[10px] font-bold h-5 px-2 min-w-[140px] justify-center"
               onClick={() => setShowResumoAtividades(true)}
             >
-              <BarChart3 className="h-3.5 w-3.5 mr-1" />
+              <BarChart3 className="h-3 w-3 mr-1" />
               Resumo por Atividade
             </Button>
             {canBulkClose && (
               <Button
                 size="sm"
                 variant="outline"
-                className="text-xs font-bold border-warning text-warning hover:bg-warning/10 h-7 min-w-[150px] justify-center"
+                className="text-[10px] font-bold border-warning text-warning hover:bg-warning/10 h-5 px-2 min-w-[140px] justify-center"
                 onClick={() => {
                   if (hasDivergencia) {
                     toast.error('Não é possível fechar os pastos. Existem categorias desconciliadas entre Pasto e Sistema. Realize a conciliação antes de fechar.');
@@ -490,7 +490,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                   setConfirmBulkOpen(true);
                 }}
               >
-                <Lock className="h-3.5 w-3.5 mr-1" />
+                <Lock className="h-3 w-3 mr-1" />
                 Fechamento Todos
               </Button>
             )}
@@ -498,10 +498,10 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               <Button
                 size="sm"
                 variant="outline"
-                className="text-xs font-bold border-destructive text-destructive hover:bg-destructive/10 h-7 min-w-[150px] justify-center"
+                className="text-[10px] font-bold border-destructive text-destructive hover:bg-destructive/10 h-5 px-2 min-w-[140px] justify-center"
                 onClick={() => setConfirmBulkReopenOpen(true)}
               >
-                <Unlock className="h-3.5 w-3.5 mr-1" />
+                <Unlock className="h-3 w-3 mr-1" />
                 Reabrir Pastos
               </Button>
             )}
