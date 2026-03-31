@@ -156,6 +156,7 @@ export interface IndicadoresZootecnicos {
   valorRebanho: number | null;
   valorPorCabeca: number | null;
   valorPorHa: number | null;
+  valorArrobaEstoqueFinal: number | null;
 
   // --- Comparações (dual: mensal + anual para cada indicador) ---
   comparacoes: {
