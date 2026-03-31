@@ -113,6 +113,26 @@
 .leaflet-control {
   z-index: 800 !important;
 }
+/* Discrete zoom controls */
+.leaflet-control-zoom a {
+  width: 28px !important;
+  height: 28px !important;
+  line-height: 28px !important;
+  font-size: 14px !important;
+  color: hsl(220, 9%, 46%) !important;
+  border-color: hsl(220, 13%, 91%) !important;
+}
+.leaflet-control-zoom {
+  border: 1px solid hsl(220, 13%, 91%) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08) !important;
+}
+/* Attribution minimal */
+.leaflet-control-attribution {
+  font-size: 8px !important;
+  opacity: 0.5;
+  padding: 1px 4px !important;
+}
 .pasto-label {
   background: transparent !important;
   border: none !important;
