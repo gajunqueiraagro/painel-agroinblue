@@ -2666,6 +2666,7 @@ export type Database = {
           reaberto_por: string | null
           status: string
           updated_at: string
+          valor_total: number
         }
         Insert: {
           ano_mes: string
@@ -2679,6 +2680,7 @@ export type Database = {
           reaberto_por?: string | null
           status?: string
           updated_at?: string
+          valor_total?: number
         }
         Update: {
           ano_mes?: string
@@ -2692,6 +2694,7 @@ export type Database = {
           reaberto_por?: string | null
           status?: string
           updated_at?: string
+          valor_total?: number
         }
         Relationships: [
           {

@@ -1,0 +1,1 @@
+ALTER TABLE public.valor_rebanho_fechamento ADD COLUMN IF NOT EXISTS valor_total numeric NOT NULL DEFAULT 0;
