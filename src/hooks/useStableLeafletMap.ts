@@ -68,7 +68,21 @@ export function useStableLeafletMap({
 
   const syncMetrics = useCallback((patch?: Partial<DebugInfo>) => {
     const metrics = readMetrics();
-    setDebugInfo((current) => ({ ...current, ...metrics, ...patch }));
+    setDebugInfo((current) => {
+      const next = { ...current, ...metrics, ...patch };
+      // Only update if something actually changed to avoid infinite ResizeObserver loops
+      if (
+        current.containerFound === next.containerFound &&
+        current.width === next.width &&
+        current.height === next.height &&
+        current.mapInitialized === next.mapInitialized &&
+        current.renderedGeometries === next.renderedGeometries &&
+        current.errorMessage === next.errorMessage
+      ) {
+        return current;
+      }
+      return next;
+    });
     return metrics;
   }, [readMetrics]);
 
