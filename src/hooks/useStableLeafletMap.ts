@@ -103,14 +103,11 @@ export function useStableLeafletMap({
     labelLayerRef.current = null;
   }, []);
 
-  const ensurePanePos = useCallback((map: L.Map) => {
-    try {
-      const pane = map.getPane('mapPane') as any;
-      if (pane && pane._leaflet_pos === undefined) {
-        pane._leaflet_pos = L.point(0, 0);
-        pane.style.transform = '';
-      }
-    } catch { /* ignore */ }
+  const fixPanePos = useCallback((map: L.Map) => {
+    const mapAny = map as any;
+    if (mapAny._mapPane && mapAny._mapPane._leaflet_pos === undefined) {
+      mapAny._mapPane._leaflet_pos = L.point(0, 0);
+    }
   }, []);
 
   const scheduleInvalidateSize = useCallback(() => {
@@ -124,21 +121,21 @@ export function useStableLeafletMap({
     }
 
     setStatus('ready');
-    ensurePanePos(map);
+    fixPanePos(map);
 
     if (resizeRafRef.current != null) {
       cancelAnimationFrame(resizeRafRef.current);
     }
 
     resizeRafRef.current = requestAnimationFrame(() => {
-      ensurePanePos(map);
+      fixPanePos(map);
       try { map.invalidateSize(false); } catch { /* _leaflet_pos race */ }
       resizeTimeoutRef.current = window.setTimeout(() => {
-        ensurePanePos(map);
+        fixPanePos(map);
         try { map.invalidateSize(false); } catch { /* _leaflet_pos race */ }
       }, 140);
     });
-  }, [ensurePanePos, syncMetrics]);
+  }, [fixPanePos, syncMetrics]);
 
   const initializeMap = useCallback(() => {
     const el = mapContainerRef.current;
