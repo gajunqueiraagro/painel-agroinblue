@@ -1,30 +1,33 @@
 import L from 'leaflet';
 
 /**
- * Safely calls fitBounds, ensuring the map pane's _leaflet_pos is initialised.
- * Leaflet sets _leaflet_pos during _resetView, but if the container was in a
- * flex/hidden context at init time, it may be undefined.  We fix it manually.
+ * Safely calls fitBounds.
+ * Works around the _leaflet_pos error by ensuring the map pane's
+ * internal position property is set before calling fitBounds.
  */
 export function safeFitBounds(
   map: L.Map,
   bounds: L.LatLngBounds,
   options: L.FitBoundsOptions = {},
   debugName = 'Map',
-  maxRetries = 6,
+  maxRetries = 8,
 ): void {
   let attempt = 0;
 
-  const ensurePanePos = () => {
-    try {
-      const pane = map.getPane('mapPane') as any;
-      if (pane && pane._leaflet_pos === undefined) {
-        // Manually set the initial position to (0,0)
-        pane._leaflet_pos = L.point(0, 0);
-        pane.style.transform = '';
-        console.warn(`[safeFitBounds:${debugName}] Fixed missing _leaflet_pos on mapPane`);
+  const fixPanePositions = () => {
+    // Fix _leaflet_pos on ALL pane elements inside the map container
+    const container = map.getContainer?.();
+    if (!container) return;
+    const panes = container.querySelectorAll('[class*="leaflet-"]');
+    panes.forEach((el: any) => {
+      if (el._leaflet_pos === undefined && el.classList.contains('leaflet-map-pane')) {
+        el._leaflet_pos = L.point(0, 0);
       }
-    } catch {
-      // ignore
+    });
+    // Also fix via the map's internal _mapPane reference
+    const mapAny = map as any;
+    if (mapAny._mapPane && mapAny._mapPane._leaflet_pos === undefined) {
+      mapAny._mapPane._leaflet_pos = L.point(0, 0);
     }
   };
 
@@ -33,26 +36,30 @@ export function safeFitBounds(
 
     const container = map.getContainer?.();
     if (!container || container.offsetWidth < 32 || container.offsetHeight < 32) {
-      if (attempt < maxRetries) setTimeout(tryFit, 200);
+      if (attempt < maxRetries) setTimeout(tryFit, 250);
       return;
     }
 
-    ensurePanePos();
+    fixPanePositions();
 
     try {
       map.invalidateSize({ animate: false });
+    } catch {
+      // invalidateSize can also fail with _leaflet_pos — ignore
+    }
+
+    fixPanePositions();
+
+    try {
       map.fitBounds(bounds, options);
-      console.warn(`[safeFitBounds:${debugName}] ✅ fitBounds OK attempt=${attempt}, center=${map.getCenter()}, zoom=${map.getZoom()}`);
+      console.info(`[safeFitBounds:${debugName}] ✅ OK attempt=${attempt}`);
     } catch (err) {
-      console.warn(`[safeFitBounds:${debugName}] attempt ${attempt} failed:`, err);
+      console.warn(`[safeFitBounds:${debugName}] attempt ${attempt} failed`);
       if (attempt < maxRetries) {
-        // Try fixing the pane pos and retry
-        ensurePanePos();
-        setTimeout(tryFit, 250);
+        setTimeout(tryFit, 300);
       }
     }
   };
 
-  // Start after a short delay to let layout settle
-  setTimeout(tryFit, 60);
+  setTimeout(tryFit, 80);
 }
