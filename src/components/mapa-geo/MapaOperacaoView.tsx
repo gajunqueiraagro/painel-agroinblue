@@ -139,6 +139,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
       });
 
       reportRenderedGeometries(renderedCount);
+      onRenderedChange?.(renderedCount);
 
       const fitKey = `${geometrySignature}:${debugInfo.width}:${debugInfo.height}`;
       if (allBounds.length > 0 && fitKey !== lastFitKeyRef.current) {
