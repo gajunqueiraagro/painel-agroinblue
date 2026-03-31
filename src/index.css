@@ -56,6 +56,13 @@
   }
 }
 
+/* Responsive scaling for larger screens */
+@media (min-width: 1024px) {
+  .kpi-value, [data-kpi] {
+    font-size: 1.1em;
+  }
+}
+
 @layer utilities {
   .touch-target {
     @apply min-h-[48px] min-w-[48px];
