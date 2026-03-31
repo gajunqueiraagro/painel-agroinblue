@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import L from 'leaflet';
-import { safeFitBounds } from '@/lib/leafletSafeFit';
+import '@/hooks/useStableLeafletMap';
 import 'leaflet/dist/leaflet.css';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,19 +22,18 @@ import { toast } from 'sonner';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
 
 const STATUS_STYLES: Record<string, { fillColor: string; color: string }> = {
-  adequado: { fillColor: 'hsl(145, 40%, 68%)', color: 'hsl(145, 35%, 42%)' },
-  atencao: { fillColor: 'hsl(45, 65%, 70%)', color: 'hsl(45, 50%, 42%)' },
-  pressao: { fillColor: 'hsl(0, 50%, 68%)', color: 'hsl(0, 40%, 42%)' },
-  sem_ocupacao: { fillColor: 'hsl(220, 8%, 78%)', color: 'hsl(220, 8%, 55%)' },
+  adequado: { fillColor: 'hsl(145, 38%, 62%)', color: 'hsl(145, 30%, 38%)' },
+  atencao: { fillColor: 'hsl(42, 55%, 65%)', color: 'hsl(42, 40%, 38%)' },
+  pressao: { fillColor: 'hsl(0, 45%, 62%)', color: 'hsl(0, 35%, 38%)' },
+  sem_ocupacao: { fillColor: 'hsl(220, 10%, 76%)', color: 'hsl(220, 8%, 52%)' },
 };
 
 function getOpStyle(status: string, isSelected: boolean) {
   if (isSelected) {
-    return { color: 'hsl(213, 75%, 35%)', weight: 2.5, fillColor: 'hsl(213, 65%, 50%)', fillOpacity: 0.4 };
+    return { color: 'hsl(213, 60%, 40%)', weight: 2, fillColor: 'hsl(213, 55%, 55%)', fillOpacity: 0.35 };
   }
-
   const s = STATUS_STYLES[status] || STATUS_STYLES.sem_ocupacao;
-  return { color: s.color, weight: 0.8, fillColor: s.fillColor, fillOpacity: 0.2 };
+  return { color: s.color, weight: 0.6, fillColor: s.fillColor, fillOpacity: 0.18 };
 }
 
 interface Props {
@@ -76,7 +75,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
   const hasGeo = geometrias.length > 0;
   const selectedPasto = selectedGeo?.pasto_id ? pastos.find((p) => p.id === selectedGeo.pasto_id) : null;
   const selectedOc = selectedGeo?.pasto_id ? ocupacoes.get(selectedGeo.pasto_id) : null;
-  const geometrySignature = geometrias.map((geo) => `${geo.id}:${geo.pasto_id ?? 'sem-vinculo'}`).join('|');
+  const geoIdKey = geometrias.map(g => g.id).join(',');
 
   useEffect(() => {
     const map = mapInstanceRef.current;
@@ -85,7 +84,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
     if (!map || !featureLayer || !labelLayer) return;
 
     const timer = window.setTimeout(() => {
-      map.invalidateSize(false);
+      
       featureLayer.clearLayers();
       labelLayer.clearLayers();
 
@@ -133,32 +132,28 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
           layer.addTo(featureLayer);
           allBounds.push(bounds);
           renderedCount += 1;
-        } catch (error) {
-          console.error('[MapaOperacao] Erro geometria:', error);
+        } catch {
+          // skip invalid geometry
         }
       });
 
       reportRenderedGeometries(renderedCount);
       onRenderedChange?.(renderedCount);
 
-      const fitKey = `${geometrySignature}:${debugInfo.width}:${debugInfo.height}`;
-      if (allBounds.length > 0 && fitKey !== lastFitKeyRef.current) {
-        lastFitKeyRef.current = fitKey;
-        const combinedBounds = allBounds.reduce((acc, bounds) => acc.extend(bounds));
-        safeFitBounds(map, combinedBounds, { padding: [30, 30], maxZoom: 17 }, 'MapaOperacao');
+      if (allBounds.length > 0 && geoIdKey !== lastFitKeyRef.current) {
+        lastFitKeyRef.current = geoIdKey;
+        const combinedBounds = allBounds.reduce((acc, b) => acc.extend(b));
+        try { map.fitBounds(combinedBounds, { padding: [20, 20], animate: false, maxZoom: 16 }); } catch { /* */ }
       }
     }, 220);
 
     return () => window.clearTimeout(timer);
   }, [
-    debugInfo.height,
-    debugInfo.width,
     geometrias,
-    geometrySignature,
+    geoIdKey,
     mapStatus,
     ocupacoes,
     reportRenderedGeometries,
-    
     selectedGeo,
   ]);
 
