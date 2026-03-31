@@ -43,8 +43,10 @@ interface Props {
 
 interface SelectedGeo { geo: PastoGeometria }
 
-export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUpload, onRenderedChange }: Props) {
+export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUpload, onRenderedChange, onLink }: Props) {
   const [selected, setSelected] = useState<SelectedGeo | null>(null);
+  const [linkPastoId, setLinkPastoId] = useState('');
+  const [linking, setLinking] = useState(false);
   const lastFitKeyRef = useRef('');
 
   const {
