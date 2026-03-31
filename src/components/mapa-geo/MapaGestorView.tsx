@@ -128,9 +128,9 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
           weight: 4,
           fillColor: '#ffff00',
           fillOpacity: 0.7,
-          renderer: svgRenderer,
-        } as any,
-      });
+        },
+        ...(({ renderer: svgRenderer }) as any),
+      } as any);
 
       const testBounds = testLayer.getBounds();
       const center = testBounds.isValid() ? testBounds.getCenter() : null;
