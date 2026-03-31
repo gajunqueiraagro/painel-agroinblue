@@ -109,14 +109,14 @@ export function useStableLeafletMap({
       if (mapInstanceRef.current) {
         const existing = mapInstanceRef.current;
         if (existing.getContainer() === el) {
-          console.warn('[MAP LIFECYCLE]', 'reuse-instance', { debugName: name, mapId: L.Util.stamp(existing) });
+          // reuse existing instance
           fixPanePos(existing);
           existing.invalidateSize(false);
           setStatus('ready');
           return;
         }
         // Container changed — destroy old
-        console.warn('[MAP LIFECYCLE]', 'container-changed-destroy', { debugName: name });
+        
         existing.remove();
         mapInstanceRef.current = null;
         featureLayerRef.current = null;
@@ -133,11 +133,8 @@ export function useStableLeafletMap({
 
         fixPanePos(map);
 
-        console.warn('[MAP LIFECYCLE]', 'create', {
-          debugName: name,
-          mapId: L.Util.stamp(map),
-          containerSize: { w, h },
-        });
+
+
 
         L.control.zoom({ position: 'bottomright' }).addTo(map);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -214,10 +211,8 @@ export function useStableLeafletMap({
       window.removeEventListener('resize', onWindowResize);
 
       if (mapInstanceRef.current) {
-        console.warn('[MAP LIFECYCLE]', 'destroy', {
-          debugName: name,
-          mapId: L.Util.stamp(mapInstanceRef.current),
-        });
+
+
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
         featureLayerRef.current = null;
