@@ -255,7 +255,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
     if (!fazendaId || isAdmin) return;
     setLoadingYear(true);
     try {
-      const { clienteAtual: cli } = useClienteRef.current;
+      const cli = clienteAtual;
       let fazendaIdsPec: string[] = [];
       let fazendaIdsFin: string[] = [];
       if (isGlobal) {
