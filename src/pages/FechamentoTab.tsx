@@ -202,10 +202,17 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     [saldosIniciais, lancamentos, anoNum, mesNum]
   );
 
+  // Only count items from pastosAtivos (ativo && entra_conciliacao) to match ResumoAtividadesView
+  const activeFechIds = useMemo(() => {
+    const activeIds = new Set(pastosAtivos.map(p => p.id));
+    return new Set(fechamentos.filter(f => activeIds.has(f.pasto_id)).map(f => f.id));
+  }, [pastosAtivos, fechamentos]);
+
   const pastoDataByCat = useMemo(() => {
     const catIdToCodigo = new Map((categorias || []).map(c => [c.id, c.codigo]));
     const map = new Map<string, number>();
-    itensMap.forEach((items) => {
+    itensMap.forEach((items, fechId) => {
+      if (!activeFechIds.has(fechId)) return;
       items.forEach(i => {
         if (i.quantidade > 0) {
           const codigo = catIdToCodigo.get(i.categoria_id);
@@ -214,7 +221,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       });
     });
     return map;
-  }, [itensMap, categorias]);
+  }, [itensMap, categorias, activeFechIds]);
 
   const totalPasto = CAT_COLS.reduce((s, c) => s + (pastoDataByCat.get(c.codigo) || 0), 0);
   const totalSistema = CAT_COLS.reduce((s, c) => s + (saldoMap.get(c.codigo) || 0), 0);
