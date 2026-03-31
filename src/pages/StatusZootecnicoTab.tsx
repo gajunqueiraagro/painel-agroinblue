@@ -191,15 +191,25 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
       const result: FazendaStatus[] = pecFazendas.map(faz => {
         const totalPastos = pastosByFaz.get(faz.id) || 0;
         const fps = fpByFaz.get(faz.id) || [];
-        const fechados = fps.filter(f => f.status === 'fechado').length;
+        
+        // Deduplicate: keep only the most recent fechamento per pasto
+        const dedupByPasto = new Map<string, any>();
+        fps.forEach(f => {
+          const existing = dedupByPasto.get(f.pasto_id);
+          if (!existing || (f.updated_at || '') >= (existing.updated_at || '')) {
+            dedupByPasto.set(f.pasto_id, f);
+          }
+        });
+        const dedupFps = Array.from(dedupByPasto.values());
+        const fechados = dedupFps.filter(f => f.status === 'fechado').length;
 
         const fazLanc = lancByFaz.get(faz.id) || [];
         const fazSaldos = saldosByFaz.get(faz.id) || [];
         const saldoMap = calcSaldoPorCategoriaLegado(fazSaldos, fazLanc, anoNum, mesFiltro);
         const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
 
-        // Build alocado nos pastos
-        const fechIds = fps.map(f => f.id);
+        // Build alocado nos pastos (using deduplicated fechamentos)
+        const fechIds = dedupFps.map(f => f.id);
         const monthItens = fechIds.flatMap(id => itensByFech.get(id) || []);
         const alocadoPastos = new Map<string, number>();
         monthItens.forEach(i => {
