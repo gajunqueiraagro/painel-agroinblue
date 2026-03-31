@@ -66,7 +66,7 @@ export function KmlUploadDialog({ open, onOpenChange, onUpload, pastos }: Props)
           <input
             ref={inputRef}
             type="file"
-            accept=".kml,.kmz"
+            accept=".kml,.kmz,.geojson,.json"
             className="hidden"
             onChange={handleFile}
           />

@@ -41,7 +41,29 @@ export async function parseKMZ(arrayBuffer: ArrayBuffer): Promise<ParsedPolygon[
 }
 
 /**
- * Parse either KML or KMZ file.
+ * Parse a GeoJSON string into polygons.
+ */
+export function parseGeoJSON(text: string): ParsedPolygon[] {
+  const geoJson = JSON.parse(text) as GeoJSON.FeatureCollection | GeoJSON.Feature | GeoJSON.Geometry;
+
+  let features: GeoJSON.Feature[] = [];
+  if ('type' in geoJson) {
+    if (geoJson.type === 'FeatureCollection') features = (geoJson as GeoJSON.FeatureCollection).features;
+    else if (geoJson.type === 'Feature') features = [geoJson as GeoJSON.Feature];
+    else features = [{ type: 'Feature', geometry: geoJson as GeoJSON.Geometry, properties: {} }];
+  }
+
+  return features
+    .filter(f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon'))
+    .map(f => ({
+      name: (f.properties?.name as string) || (f.properties?.Name as string) || (f.properties?.nome as string) || 'Sem nome',
+      geojson: f.geometry!,
+      properties: f.properties || {},
+    }));
+}
+
+/**
+ * Parse KML, KMZ, or GeoJSON file.
  */
 export async function parseKMLFile(file: File): Promise<ParsedPolygon[]> {
   const ext = file.name.toLowerCase().split('.').pop();
@@ -52,5 +74,10 @@ export async function parseKMLFile(file: File): Promise<ParsedPolygon[]> {
   }
   
   const text = await file.text();
+
+  if (ext === 'geojson' || ext === 'json') {
+    return parseGeoJSON(text);
+  }
+
   return parseKML(text);
 }
