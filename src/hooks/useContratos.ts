@@ -46,12 +46,6 @@ export interface ContratoForm {
   status?: string;
 }
 
-function applyNullableFilter(query: any, field: string, value: string | number | null | undefined) {
-  if (value === null || value === undefined) {
-    return query.is(field, null);
-  }
-  return query.eq(field, value);
-}
 
 function addMonthsClamped(dateStr: string, months: number, dayTarget: number): string {
   const d = new Date(dateStr + 'T00:00:00');
