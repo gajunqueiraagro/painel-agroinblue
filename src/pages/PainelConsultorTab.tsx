@@ -68,8 +68,7 @@ function buildZooRows(
   ateMes: number,
   areaProdutiva: number,
   pesosPorMes: Record<string, Record<string, number>>,
-  precosPorMes?: Record<string, Record<string, number>>,
-): { rows: ZooRow[]; valorRebanhoMes: number[] } {
+): ZooRow[] {
   const rows: ZooRow[] = [];
 
   const { saldoInicioMes, saldoFinalAno, saldoInicialAno } = calcSaldoMensalAcumulado(saldosIniciais, lancamentos, ano);
