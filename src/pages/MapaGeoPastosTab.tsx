@@ -160,6 +160,7 @@ export function MapaGeoPastosTab() {
           onUpload={() => setUploadOpen(true)}
           onRenderedChange={onRenderedChange}
           onLink={async (geoId, pastoId) => vincularPasto(geoId, pastoId || null)}
+          rebanhoOficial={rebanhoOficial}
         />
       )}
       {viewMode === 'operacao' && (
