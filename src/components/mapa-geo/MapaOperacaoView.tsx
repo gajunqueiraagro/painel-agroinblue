@@ -84,7 +84,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
     if (!map || !featureLayer || !labelLayer) return;
 
     const timer = window.setTimeout(() => {
-      map.invalidateSize(false);
+      
       featureLayer.clearLayers();
       labelLayer.clearLayers();
 
