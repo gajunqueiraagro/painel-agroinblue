@@ -461,7 +461,7 @@ function buildExcelSheet(rows: (ZooRow | FinRow)[], mesesHeaders: string[], incl
       base[mes] = row.valores[index] ?? 0;
     });
 
-    base.Total = row.total ?? 0;
+    
     return base;
   });
 
