@@ -291,7 +291,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
           {hasGeo && (
             <div className="absolute bottom-2 left-2 bg-card/90 backdrop-blur-sm rounded border border-border px-1.5 py-1 z-10">
               <div className="flex flex-wrap gap-x-2 gap-y-0.5">
-                {(['adequado', 'atencao', 'pressao', 'sem_ocupacao'] as const).map(({ 0: key }) => (
+                {(['adequado', 'atencao', 'pressao', 'sem_ocupacao'] as const).map((key) => (
                   <div key={key} className="flex items-center gap-1">
                     <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: STATUS_STYLES[key].fillColor, border: `1px solid ${STATUS_STYLES[key].color}` }} />
                     <span className="text-[7px] text-muted-foreground">{STATUS_STYLES[key].label}</span>
