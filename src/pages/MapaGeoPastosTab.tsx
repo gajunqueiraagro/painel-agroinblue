@@ -347,6 +347,7 @@ export function MapaGeoPastosTab() {
         data={selectedPasto}
         anoMes={anoMes}
         categorias={categorias}
+        allPastos={pastos}
       />
 
       {/* Upload dialog */}
