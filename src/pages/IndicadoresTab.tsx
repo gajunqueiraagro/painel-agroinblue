@@ -194,7 +194,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               valor={ind.arrobasProduzidasMes !== null ? formatNum(ind.arrobasProduzidasMes, 1) : '—'}
               unidade="@"
               semBase={ind.arrobasProduzidasMes === null}
-              info={`Arrobas produzidas no mês.\n\nFórmula: total de arrobas das saídas (vendas, abates, consumo) no mês.\nConversão: peso kg ÷ 30.`}
+              info={`Arrobas produzidas no mês (ganho biológico).\n\nFórmula: (Peso final − Peso inicial − Peso entradas + Peso saídas) ÷ 30.\nNÃO é o somatório das saídas.`}
             />
             <KpiCard
               label="@ prod. acum."
