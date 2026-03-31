@@ -14,6 +14,13 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
+import {
+  statusFinanceiro as calcStatusFinanceiro,
+  statusCategorias as calcStatusCategorias,
+  statusPastos as calcStatusPastos,
+  statusValor as calcStatusValor,
+  type StatusCor,
+} from '@/lib/calculos/statusMensal';
 
 export type StatusItem = 'aberto' | 'parcial' | 'fechado';
 export type StatusGeral = 'aberto' | 'parcial' | 'fechado';
