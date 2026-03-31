@@ -306,8 +306,15 @@ function buildZooRows(
   const arrobasPeriodoRow = mkRow('Indicadores — Produção', 'Produção de arrobas — no período\n(@)', m => {
     let acum = 0; for (let i = 1; i <= m; i++) acum += saidasArrobasMes(i); return acum;
   }, 'dec1');
+  const arrobasHaMesRow = mkRow('Indicadores — Produção', 'Produção de arrobas por ha — no mês\n(@/ha)', m => {
+    return areaProdutiva > 0 ? saidasArrobasMes(m) / areaProdutiva : 0;
+  }, 'dec2');
+  const arrobasHaPeriodoRow = mkRow('Indicadores — Produção', 'Produção de arrobas por ha — no período\n(@/ha)', m => {
+    let acum = 0; for (let i = 1; i <= m; i++) acum += saidasArrobasMes(i);
+    return areaProdutiva > 0 ? acum / areaProdutiva : 0;
+  }, 'dec2');
 
-  rows.push(arrobasMesRow, arrobasPeriodoRow);
+  rows.push(arrobasMesRow, arrobasPeriodoRow, arrobasHaMesRow, arrobasHaPeriodoRow);
 
   // ── Desempenho (GMD) ──
   const gmdMesRow = mkRow('Indicadores — Desempenho', 'GMD — no mês\n(kg/cab/dia)', m => {
