@@ -219,7 +219,7 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
               <KpiChip label="Cabeças" value={String(selectedOc?.cabecas || 0)} active />
               <KpiChip label="Peso Méd." value={selectedOc?.peso_medio_kg ? `${formatNum(selectedOc.peso_medio_kg, 0)} kg` : '—'} active />
               <KpiChip label="Área" value={selectedPasto.area_produtiva_ha ? `${formatNum(selectedPasto.area_produtiva_ha, 1)} ha` : '—'} active />
-              <div className={`flex-shrink-0 rounded-md border px-1.5 py-0.5 ${STATUS_BG[selectedStatus]}`}>
+              <div className={`flex-shrink-0 rounded-md border px-1.5 py-0.5 ${STATUS_STYLES[selectedStatus].bgClass}`}>
                 <p className="text-[7px] text-muted-foreground uppercase tracking-wider leading-none">kg/ha</p>
                 <p className={`text-[11px] font-bold leading-tight ${STATUS_STYLES[selectedStatus].textClass}`}>
                   {selectedOc?.kg_ha != null ? formatNum(selectedOc.kg_ha, 0) : '—'}
