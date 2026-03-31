@@ -277,7 +277,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               valor={formatNum(ind.arrobasSaidasAcumuladoAno, 1)}
               unidade="@"
               compAnual={c.arrobasDesfrutadasAcum.anual}
-              info={`Total de arrobas que saíram do rebanho no ano (vendas, abates, consumo).\n\nSomatório de Janeiro até o mês selecionado.`}
+              info={`Total de arrobas desfrutadas (realizadas) no ano.\n\nSomatório de arrobas das saídas (vendas, abates, consumo, transf. saída) de Jan até o mês selecionado.\nBase comercial, não produção biológica.`}
             />
           </div>
         </CardContent>
