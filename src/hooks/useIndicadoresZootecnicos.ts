@@ -630,13 +630,14 @@ export function useIndicadoresZootecnicos(
     const lancsMes = filterByAnoMes(lancamentos, anoMes);
     const saidasMes = saidasDesfrute(lancsMes);
     const arrobasSaidasMes = saidasMes.reduce((s, l) => s + calcArrobasSafe(l), 0);
-    const arrobasHaMes = areaProdutiva > 0 ? arrobasSaidasMes / areaProdutiva : null;
+    const arrobasHaMes = areaProdutiva > 0 && arrobasSaidasMes > 0 ? arrobasSaidasMes / areaProdutiva : null;
 
     // Arrobas acumulado
     const lancsAcum = filterByAnoAteMes(lancamentos, ano, mes);
     const saidasAcum = saidasDesfrute(lancsAcum);
     const arrobasSaidasAcumuladoAno = saidasAcum.reduce((s, l) => s + calcArrobasSafe(l), 0);
-    const arrobasHaAcumuladoAno = areaProdutiva > 0 ? arrobasSaidasAcumuladoAno / areaProdutiva : null;
+    // arrobasHaAcumuladoAno will be computed below using arrobasProduzidasAcumulado (biological)
+    const arrobasHaAcumuladoAnoDesfrute = areaProdutiva > 0 ? arrobasSaidasAcumuladoAno / areaProdutiva : null;
 
     // Desfrute mês
     const totalCabSaidasMes = saidasMes.reduce((s, l) => s + l.quantidade, 0);
@@ -742,6 +743,11 @@ export function useIndicadoresZootecnicos(
     const ganhoLiquidoAcum = pesoFinalMes - pesoInicialAno - pesoEntradasAcum + pesoSaidasAcum;
     const arrobasProduzidasAcumulado = (pesoFinalMes > 0 && pesoInicialAno > 0 && cabMediaAcum > 0)
       ? ganhoLiquidoAcum / 30
+      : null;
+
+    // @/ha acumulado — baseado em produção biológica (não saídas)
+    const arrobasHaAcumuladoAno = (arrobasProduzidasAcumulado !== null && areaProdutiva > 0)
+      ? arrobasProduzidasAcumulado / areaProdutiva
       : null;
 
     // Valor patrimonial
@@ -860,10 +866,7 @@ export function useIndicadoresZootecnicos(
     const saidasAcumYoY = saidasDesfrute(lancsAcumYoY);
     const arrobasAcumYoY = saidasAcumYoY.reduce((s, l) => s + calcArrobasSafe(l), 0);
     const compArrobasAcum = arrobasAcumYoY > 0 ? buildComparacao(arrobasSaidasAcumuladoAno, arrobasAcumYoY, 'acumulado_yoy') : null;
-    let compArrobasHaAcum: Comparacao | null = null;
-    if (arrobasAcumYoY > 0 && areaProdutiva > 0 && arrobasHaAcumuladoAno !== null) {
-      compArrobasHaAcum = buildComparacao(arrobasHaAcumuladoAno, arrobasAcumYoY / areaProdutiva, 'acumulado_yoy');
-    }
+    // compArrobasHaAcum moved below after arrobasProduzidasAcumYoY is computed
 
     // @ produzidas acumulado YoY
     const saldoInicialAnoAnt = saldosIniciais.filter(s => s.ano === anoAnt).reduce((sum, s) => sum + s.quantidade, 0);
@@ -884,7 +887,12 @@ export function useIndicadoresZootecnicos(
       ? buildComparacao(arrobasProduzidasAcumulado, arrobasProduzidasAcumYoY, 'acumulado_yoy')
       : null;
 
-    // GMD mês YoY (mesmo mês do ano anterior — só se base confiável)
+    // @/ha acumulado comparação YoY — usa produção biológica
+    let compArrobasHaAcum: Comparacao | null = null;
+    if (arrobasHaAcumuladoAno !== null && arrobasProduzidasAcumYoY !== null && areaProdutiva > 0) {
+      compArrobasHaAcum = buildComparacao(arrobasHaAcumuladoAno, arrobasProduzidasAcumYoY / areaProdutiva, 'acumulado_yoy');
+    }
+
     const gmdMesYoY = computeGmdForPeriod(saldosIniciais, lancamentos, anoAnt, mes, pesoFechamentoYoYMap);
     const compGmdMes = gmdMes !== null && gmdMesYoY !== null ? buildComparacao(gmdMes, gmdMesYoY, 'yoy') : null;
 

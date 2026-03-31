@@ -194,7 +194,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               valor={ind.arrobasProduzidasMes !== null ? formatNum(ind.arrobasProduzidasMes, 1) : '—'}
               unidade="@"
               semBase={ind.arrobasProduzidasMes === null}
-              info={`Arrobas produzidas no mês.\n\nFórmula: total de arrobas das saídas (vendas, abates, consumo) no mês.\nConversão: peso kg ÷ 30.`}
+              info={`Arrobas produzidas no mês (ganho biológico).\n\nFórmula: (Peso final − Peso inicial − Peso entradas + Peso saídas) ÷ 30.\nNÃO é o somatório das saídas.`}
             />
             <KpiCard
               label="@ prod. acum."
@@ -202,14 +202,14 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               unidade="@"
               compAnual={c.arrobasProduzidasAcumulado.anual}
               semBase={ind.arrobasProduzidasAcumulado === null}
-              info={`Arrobas produzidas acumuladas.\n\nSomatório das arrobas de saídas de Janeiro até o mês selecionado.`}
+              info={`Arrobas produzidas acumuladas (ganho biológico).\n\nFórmula: (Peso final − Peso inicial ano − Peso entradas acum. + Peso saídas acum.) ÷ 30.\nDe Janeiro até o mês selecionado.`}
             />
             <KpiCard
               label="@/ha acum."
               valor={ind.arrobasHaAcumuladoAno !== null ? formatNum(ind.arrobasHaAcumuladoAno, 2) : '—'}
               compAnual={c.arrobasHaAcumuladoAno.anual}
               semBase={ind.arrobasHaAcumuladoAno === null}
-              info={`Produtividade acumulada por hectare.\n\nFórmula: @ produzidas acumuladas ÷ Área Produtiva.\nMede a eficiência da terra no período.`}
+              info={`Produtividade acumulada por hectare (biológico).\n\nFórmula: @ produzidas (biológico) ÷ Área Produtiva.\nMede a eficiência da terra no período.`}
             />
           </div>
         </CardContent>
@@ -262,7 +262,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               unidade="%"
               compAnual={c.desfruteCabecasAcumulado.anual}
               semBase={ind.desfruteCabecasAcumulado === null}
-              info={`Desfrute em cabeças acumulado no ano.\n\nFórmula: (Saídas em cabeças no período ÷ Rebanho médio) × 100.\nMede a taxa de extração do rebanho.`}
+              info={`Desfrute em cabeças acumulado no ano.\n\nFórmula: (Saídas em cabeças no período ÷ Saldo inicial do ano) × 100.\nMede a taxa de extração do rebanho.`}
             />
             <KpiCard
               label="Desfrute @"
@@ -270,14 +270,14 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               unidade="%"
               compAnual={c.desfruteArrobasAcumulado.anual}
               semBase={ind.desfruteArrobasAcumulado === null}
-              info={`Desfrute em arrobas acumulado no ano.\n\nFórmula: (@ saídas ÷ @ do rebanho médio) × 100.\nMede eficiência em peso, não apenas em cabeças.`}
+              info={`Desfrute em arrobas acumulado no ano.\n\nFórmula: (@ desfrutadas ÷ @ do saldo inicial) × 100.\nBase de realização (saídas), não produção biológica.`}
             />
             <KpiCard
               label="@ desfrutadas"
               valor={formatNum(ind.arrobasSaidasAcumuladoAno, 1)}
               unidade="@"
               compAnual={c.arrobasDesfrutadasAcum.anual}
-              info={`Total de arrobas que saíram do rebanho no ano (vendas, abates, consumo).\n\nSomatório de Janeiro até o mês selecionado.`}
+              info={`Total de arrobas desfrutadas (realizadas) no ano.\n\nSomatório de arrobas das saídas (vendas, abates, consumo, transf. saída) de Jan até o mês selecionado.\nBase comercial, não produção biológica.`}
             />
           </div>
         </CardContent>

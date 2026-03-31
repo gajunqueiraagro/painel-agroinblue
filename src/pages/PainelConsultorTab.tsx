@@ -301,20 +301,36 @@ function buildZooRows(
 
   rows.push(lotCabHaRow, lotCabHaAcumRow, uaRow, uaAcumRow, lotUaHaRow, lotUaHaAcumRow, lotKgHaRow, lotKgHaAcumRow);
 
-  // ── Produção ──
-  const arrobasMesRow = mkRow('Indicadores — Produção', 'Produção de arrobas — no mês\n(@)', saidasArrobasMes, 'dec1');
+  // ── Produção (biológico) ──
+  // Fórmula: (Peso final - Peso inicial - Peso entradas + Peso saídas) / 30
+  const arrobasProduzidasMesFn = (m: number): number => {
+    const pFin = pesoFinMes(m);
+    const pIni = pesoIniMes(m);
+    if (pFin <= 0 || pIni <= 0) return 0;
+    return (pFin - pIni - entradasKgMes(m) + saidasKgMes(m)) / 30;
+  };
+
+  const arrobasMesRow = mkRow('Indicadores — Produção', 'Produção de arrobas — no mês\n(@)', arrobasProduzidasMesFn, 'dec1');
   const arrobasPeriodoRow = mkRow('Indicadores — Produção', 'Produção de arrobas — no período\n(@)', m => {
-    let acum = 0; for (let i = 1; i <= m; i++) acum += saidasArrobasMes(i); return acum;
+    let acum = 0; for (let i = 1; i <= m; i++) acum += arrobasProduzidasMesFn(i); return acum;
   }, 'dec1');
   const arrobasHaMesRow = mkRow('Indicadores — Produção', 'Produção de arrobas por ha — no mês\n(@/ha)', m => {
-    return areaProdutiva > 0 ? saidasArrobasMes(m) / areaProdutiva : 0;
+    return areaProdutiva > 0 ? arrobasProduzidasMesFn(m) / areaProdutiva : 0;
   }, 'dec2');
   const arrobasHaPeriodoRow = mkRow('Indicadores — Produção', 'Produção de arrobas por ha — no período\n(@/ha)', m => {
-    let acum = 0; for (let i = 1; i <= m; i++) acum += saidasArrobasMes(i);
+    let acum = 0; for (let i = 1; i <= m; i++) acum += arrobasProduzidasMesFn(i);
     return areaProdutiva > 0 ? acum / areaProdutiva : 0;
   }, 'dec2');
 
   rows.push(arrobasMesRow, arrobasPeriodoRow, arrobasHaMesRow, arrobasHaPeriodoRow);
+
+  // ── Desfrute (realização — arrobas das saídas) ──
+  const desfruteMesRow = mkRow('Indicadores — Desfrute', 'Arrobas desfrutadas — no mês\n(@)', saidasArrobasMes, 'dec1');
+  const desfrutePeriodoRow = mkRow('Indicadores — Desfrute', 'Arrobas desfrutadas — no período\n(@)', m => {
+    let acum = 0; for (let i = 1; i <= m; i++) acum += saidasArrobasMes(i); return acum;
+  }, 'dec1');
+
+  rows.push(desfruteMesRow, desfrutePeriodoRow);
 
   // ── Desempenho (GMD) ──
   const gmdMesRow = mkRow('Indicadores — Desempenho', 'GMD — no mês\n(kg/cab/dia)', m => {
