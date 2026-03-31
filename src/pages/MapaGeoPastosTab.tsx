@@ -65,6 +65,8 @@ export function MapaGeoPastosTab() {
   const leafletMap = useRef<L.Map | null>(null);
   const layerGroup = useRef<L.LayerGroup | null>(null);
 
+  const hasGeometries = geometrias.length > 0;
+
   const anosDisp = useMemo(() => {
     const arr: string[] = [];
     for (let y = curYear; y >= curYear - 3; y--) arr.push(String(y));
