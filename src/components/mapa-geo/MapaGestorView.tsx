@@ -45,7 +45,8 @@ interface SelectedGeo {
 
 export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUpload, onRenderedChange }: Props) {
   const [selected, setSelected] = useState<SelectedGeo | null>(null);
-  
+  const viewportLockedRef = useRef(false);
+
   const {
     mapContainerRef,
     mapInstanceRef,
@@ -53,9 +54,8 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
     labelLayerRef,
     status: mapStatus,
     debugInfo,
-    scheduleInvalidateSize,
     reportRenderedGeometries,
-  } = useStableLeafletMap({ debugName: 'MapaGestor' });
+  } = useStableLeafletMap({ debugName: 'MapaGestor', debugControlledViewport: true });
 
   const hasGeo = geometrias.length > 0;
 
