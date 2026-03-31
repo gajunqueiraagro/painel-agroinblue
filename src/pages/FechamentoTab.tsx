@@ -277,14 +277,18 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     return gerarSugestoes(rows, catMap);
   }, [saldoMap, pastoDataByCat, catMap]);
 
+  // hasDivergencia usa a fonte de CONCILIAÇÃO (deduplicada) para decidir bloqueio
+  const totalConcPasto = CAT_COLS.reduce((s, c) => s + (conciliacaoDataByCat.get(c.codigo) || 0), 0);
+  const totalConcDif = totalConcPasto - totalSistema;
+
   const hasDivergencia = useMemo(() => {
-    if (totalDiferenca !== 0) return true;
+    if (totalConcDif !== 0) return true;
     return CAT_COLS.some(c => {
-      const qtdPasto = pastoDataByCat.get(c.codigo) || 0;
+      const qtdPasto = conciliacaoDataByCat.get(c.codigo) || 0;
       const qtdSistema = saldoMap.get(c.codigo) || 0;
       return qtdPasto - qtdSistema !== 0;
     });
-  }, [totalDiferenca, pastoDataByCat, saldoMap]);
+  }, [totalConcDif, conciliacaoDataByCat, saldoMap]);
 
   const isAdminClosed = (fech: FechamentoPasto | null) => {
     return fech?.responsavel_nome === FECHAMENTO_GLOBAL_MARKER;
