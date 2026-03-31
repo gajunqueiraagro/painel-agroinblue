@@ -140,7 +140,12 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
 
       // Group by fazenda
       const pastosByFaz = new Map<string, number>();
-      (pastosRes.data || []).forEach(p => pastosByFaz.set(p.fazenda_id, (pastosByFaz.get(p.fazenda_id) || 0) + 1));
+      const activePastoIdsByFaz = new Map<string, Set<string>>();
+      (pastosRes.data || []).forEach(p => {
+        pastosByFaz.set(p.fazenda_id, (pastosByFaz.get(p.fazenda_id) || 0) + 1);
+        if (!activePastoIdsByFaz.has(p.fazenda_id)) activePastoIdsByFaz.set(p.fazenda_id, new Set());
+        activePastoIdsByFaz.get(p.fazenda_id)!.add(p.id);
+      });
 
       const fpByFaz = new Map<string, any[]>();
       (fpRes.data || []).forEach(fp => {
