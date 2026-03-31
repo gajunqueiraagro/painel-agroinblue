@@ -27,6 +27,7 @@ import { CadastrosTab } from './CadastrosTab';
 import { ConciliacaoTab } from './ConciliacaoTab';
 import { FechamentoTab } from './FechamentoTab';
 import { MapaPastosTab } from './MapaPastosTab';
+import { MapaGeoPastosTab } from './MapaGeoPastosTab';
 import { ResumoPastosTab } from './ResumoPastosTab';
 import { AnaliseOperacionalTab } from './AnaliseOperacionalTab';
 import { ValorRebanhoTab } from './ValorRebanhoTab';
