@@ -221,8 +221,8 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
 
       // Sort: aberto → parcial → fechado (by worst indicator)
       result.sort((a, b) => {
-        const worstA = Math.min(STATUS_ORDER[a.pastos], STATUS_ORDER[a.valor], STATUS_ORDER[a.categorias]);
-        const worstB = Math.min(STATUS_ORDER[b.pastos], STATUS_ORDER[b.valor], STATUS_ORDER[b.categorias]);
+        const worstA = Math.min(STATUS_ORDER[a.pastos], STATUS_ORDER[a.valor], STATUS_ORDER[a.categorias], STATUS_ORDER[a.financeiro]);
+        const worstB = Math.min(STATUS_ORDER[b.pastos], STATUS_ORDER[b.valor], STATUS_ORDER[b.categorias], STATUS_ORDER[b.financeiro]);
         return worstA - worstB;
       });
 
