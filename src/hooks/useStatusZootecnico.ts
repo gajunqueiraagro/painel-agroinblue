@@ -292,12 +292,29 @@ export function useStatusZootecnico(
         }
       }
 
+      // === DIAGNOSTIC LOGS (temporary) ===
+      console.log(`[STATUS-ZOO] anoMes=${anoMes} fazenda=${fazendaId}`);
+      console.log('[STATUS-ZOO] SALDO OFICIAL (sistema)', Array.from(new Map(catsComSaldo).entries()));
+      console.log('[STATUS-ZOO] ALOCADO PASTOS (fechamento)', Array.from(alocadoPastosCodigo.entries()));
+      console.log('[STATUS-ZOO] temItensPastos=', temItensPastos, 'fechIds.length=', fechIds.length);
+      console.log('[STATUS-ZOO] fpData raw count=', fpData.length, 'dedup count=', dedupFechByPasto.size, 'pastosAtivos=', pastosData.length);
+
       // Use calcStatusCategorias from statusMensal.ts — THE official rule
       const catsResult = calcStatusCategorias({
         saldoOficial: new Map(catsComSaldo),
         alocadoPastos: alocadoPastosCodigo,
         temItensPastos,
+        pastosAtivos: pastosData.length,
       });
+
+      console.log('[STATUS-ZOO] RESULTADO:', JSON.stringify({
+        status: catsResult.status,
+        catsDivergentes: catsResult.catsDivergentes,
+        difTotalCabecas: catsResult.difTotalCabecas,
+        difTotalLiquida: catsResult.difTotalLiquida,
+        saldoTotalOficial: catsResult.saldoTotalOficial,
+        totalAlocadoPastos: catsResult.totalAlocadoPastos,
+      }));
 
       // Build description
       let descCatsComputed = '';

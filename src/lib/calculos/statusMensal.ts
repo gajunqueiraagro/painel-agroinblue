@@ -27,6 +27,8 @@ export interface StatusCategoriasInput {
   alocadoPastos: Map<string, number>;
   /** Se há itens de fechamento de pastos no período */
   temItensPastos: boolean;
+  /** Total de pastos ativos (para distinguir "nada a conciliar" de "dados não carregados") */
+  pastosAtivos?: number;
 }
 
 export interface StatusPastosInput {
@@ -80,15 +82,20 @@ export interface StatusCategoriasResult {
 }
 
 export function statusCategorias(input: StatusCategoriasInput): StatusCategoriasResult {
-  const { saldoOficial, alocadoPastos, temItensPastos } = input;
+  const { saldoOficial, alocadoPastos, temItensPastos, pastosAtivos = 0 } = input;
   const catsComSaldo = Array.from(saldoOficial.entries()).filter(([, q]) => q > 0);
   const saldoTotalOficial = catsComSaldo.reduce((s, [, q]) => s + q, 0);
 
   // Total alocado nos pastos
   const totalAlocado = Array.from(alocadoPastos.values()).reduce((s, q) => s + q, 0);
 
-  // Sem itens de pastos e sem saldo → fechado (nada a conciliar)
+  // Sem itens de pastos e sem saldo:
+  // - Se há pastos ativos → aberto (falta preencher)
+  // - Se não há pastos → fechado (nada a conciliar)
   if (!temItensPastos && catsComSaldo.length === 0) {
+    if (pastosAtivos > 0) {
+      return { status: 'aberto', catsDivergentes: 0, difTotalCabecas: 0, difTotalLiquida: 0, saldoTotalOficial: 0, totalAlocadoPastos: 0 };
+    }
     return { status: 'fechado', catsDivergentes: 0, difTotalCabecas: 0, difTotalLiquida: 0, saldoTotalOficial: 0, totalAlocadoPastos: 0 };
   }
 
