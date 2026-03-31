@@ -351,7 +351,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
           </p>
           <div className="flex items-center gap-1 shrink-0">
             <Select value={filtroGlobal.ano} onValueChange={v => onFiltroChange({ ano: v })}>
-              <SelectTrigger className="w-[58px] h-6 text-[10px] font-medium border-border/60 bg-card px-1.5 [&>svg]:h-3 [&>svg]:w-3">
+              <SelectTrigger className="w-[54px] h-7 min-h-0 text-[10px] font-medium border-border/60 bg-card px-1 py-0 [&>svg]:h-3 [&>svg]:w-3">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent side="bottom">
@@ -361,7 +361,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
               </SelectContent>
             </Select>
             <Select value={String(mesNum)} onValueChange={v => onFiltroChange({ mes: Number(v) })}>
-              <SelectTrigger className="w-[52px] h-6 text-[10px] font-medium border-border/60 bg-card px-1.5 [&>svg]:h-3 [&>svg]:w-3">
+              <SelectTrigger className="w-[48px] h-7 min-h-0 text-[10px] font-medium border-border/60 bg-card px-1 py-0 [&>svg]:h-3 [&>svg]:w-3">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent side="bottom">
