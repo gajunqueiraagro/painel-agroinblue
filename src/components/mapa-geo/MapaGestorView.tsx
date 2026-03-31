@@ -15,18 +15,11 @@ import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
 import { supabase } from '@/integrations/supabase/client';
 
 /* ── Status visual system (kg/ha based) ── */
-const STATUS_STYLES: Record<string, { fill: string; stroke: string; label: string; labelShort: string; textClass: string }> = {
-  adequado:    { fill: 'hsl(145, 38%, 62%)', stroke: 'hsl(145, 30%, 42%)', label: 'Ideal', labelShort: 'Ideal', textClass: 'text-green-700' },
-  atencao:     { fill: 'hsl(42, 55%, 65%)',  stroke: 'hsl(42, 40%, 42%)',  label: 'Sublotado', labelShort: 'Sub', textClass: 'text-yellow-700' },
-  pressao:     { fill: 'hsl(0, 45%, 62%)',   stroke: 'hsl(0, 35%, 42%)',   label: 'Carga Alta', labelShort: 'Alto', textClass: 'text-red-700' },
-  sem_ocupacao:{ fill: 'hsl(220, 10%, 78%)', stroke: 'hsl(220, 8%, 56%)', label: 'Vazio', labelShort: 'Vazio', textClass: 'text-muted-foreground' },
-};
-
-const STATUS_BG: Record<string, string> = {
-  adequado: 'bg-green-50 border-green-200',
-  atencao: 'bg-yellow-50 border-yellow-200',
-  pressao: 'bg-red-50 border-red-200',
-  sem_ocupacao: 'bg-muted/40 border-border',
+const STATUS_STYLES: Record<string, { fill: string; stroke: string; label: string; labelShort: string; textClass: string; bgClass: string }> = {
+  adequado:    { fill: 'hsl(145, 38%, 62%)', stroke: 'hsl(145, 30%, 42%)', label: 'Ideal', labelShort: 'Ideal', textClass: 'text-green-800', bgClass: 'bg-green-50 border-green-200 text-green-800' },
+  atencao:     { fill: 'hsl(42, 55%, 65%)',  stroke: 'hsl(42, 40%, 42%)',  label: 'Sublotado', labelShort: 'Sub', textClass: 'text-yellow-800', bgClass: 'bg-yellow-50 border-yellow-200 text-yellow-800' },
+  pressao:     { fill: 'hsl(0, 45%, 62%)',   stroke: 'hsl(0, 35%, 42%)',   label: 'Carga Alta', labelShort: 'Alto', textClass: 'text-red-800', bgClass: 'bg-red-50 border-red-200 text-red-800' },
+  sem_ocupacao:{ fill: 'hsl(220, 10%, 78%)', stroke: 'hsl(220, 8%, 56%)', label: 'Vazio', labelShort: 'Vazio', textClass: 'text-muted-foreground', bgClass: 'bg-muted/40 border-border text-muted-foreground' },
 };
 
 function polyStyle(status: string, isSelected: boolean) {

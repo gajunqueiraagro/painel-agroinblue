@@ -71,12 +71,12 @@ export function MovimentarLoteDialog({ open, onOpenChange, pasto, anoMes, allPas
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-sm h-[90vh] flex flex-col p-0">
+        <DialogHeader className="px-4 pt-4 pb-2 flex-shrink-0">
           <DialogTitle>Movimentação — {pasto.nome}</DialogTitle>
           <DialogDescription>Registrar movimentação de animais.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="flex-1 overflow-y-auto px-4 space-y-3 pb-4">
           <div>
             <Label>Data</Label>
             <Input type="date" value={dataMov} onChange={e => setDataMov(e.target.value)} />
@@ -138,9 +138,14 @@ export function MovimentarLoteDialog({ open, onOpenChange, pasto, anoMes, allPas
             <Label>Observações</Label>
             <Textarea value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} />
           </div>
-
-          <Button className="w-full" onClick={handleSave} disabled={saving || !quantidade}>
-            {saving ? 'Registrando...' : 'Registrar Movimentação'}
+        </div>
+        {/* Sticky footer */}
+        <div className="flex-shrink-0 border-t border-border bg-background px-4 py-3 flex gap-2">
+          <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button className="flex-1" onClick={handleSave} disabled={saving || !quantidade}>
+            {saving ? 'Registrando...' : 'Confirmar'}
           </Button>
         </div>
       </DialogContent>

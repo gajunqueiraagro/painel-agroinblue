@@ -304,7 +304,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
 
         {/* Side Panel */}
         {selectedGeo && (
-          <Card className="hidden sm:flex flex-col w-56 flex-shrink-0 overflow-hidden border-border/60">
+          <Card className="hidden sm:flex flex-col w-60 flex-shrink-0 overflow-hidden border-border/60">
             <div className="p-2 overflow-y-auto flex-1 space-y-1.5">
               <div className="flex items-start justify-between">
                 <div className="min-w-0">
@@ -446,10 +446,6 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
                       <Label className="text-[9px]">Referência</Label>
                       <Input value={ref} onChange={(e) => setRef(e.target.value)} className="h-7 mt-0.5 text-[10px]" placeholder="Ex: Lote A" />
                     </div>
-                    <Button className="w-full h-7 mt-1 text-[10px]" onClick={handleSave} disabled={saving}>
-                      <Check className="h-3 w-3 mr-1" />
-                      {saving ? 'Salvando...' : 'Registrar'}
-                    </Button>
                   </div>
                 </>
               )}
@@ -458,6 +454,18 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
                 <p className="text-[9px] text-muted-foreground">Pasto sem vínculo — não é possível operar.</p>
               )}
             </div>
+
+            {/* Sticky footer for transfer */}
+            {selectedPasto && showTransfer && (
+              <div className="flex-shrink-0 border-t border-border bg-background px-2 py-1.5 flex gap-1.5">
+                <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px]" onClick={() => { setShowTransfer(false); resetForm(); }}>
+                  Cancelar
+                </Button>
+                <Button size="sm" className="flex-1 h-7 text-[10px]" onClick={handleSave} disabled={saving}>
+                  <Check className="h-3 w-3 mr-1" />{saving ? '...' : 'Confirmar'}
+                </Button>
+              </div>
+            )}
           </Card>
         )}
       </div>
