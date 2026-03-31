@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { usePastoGeometrias } from '@/hooks/usePastoGeometrias';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,8 @@ import { Upload, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { KmlUploadDialog } from '@/components/mapa-geo/KmlUploadDialog';
 import { usePastos } from '@/hooks/usePastos';
 import { usePastoOcupacao } from '@/hooks/usePastoOcupacao';
+import { useLancamentos } from '@/hooks/useLancamentos';
+import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
 import { MapaGestorView } from '@/components/mapa-geo/MapaGestorView';
 import { MapaOperacaoView } from '@/components/mapa-geo/MapaOperacaoView';
 import { ValidacaoPoligonosView } from '@/components/mapa-geo/ValidacaoPoligonosView';
@@ -34,6 +36,16 @@ export function MapaGeoPastosTab() {
     atualizarGeometria, excluirGeometrias, vincularPasto,
   } = usePastoGeometrias();
   const { ocupacoes, reload: reloadOcupacao } = usePastoOcupacao(pastos);
+  const { lancamentos, saldosIniciais } = useLancamentos();
+
+  // Compute official herd total for the current month
+  const rebanhoOficial = useMemo(() => {
+    const now = new Date();
+    const ano = now.getFullYear();
+    const mes = now.getMonth() + 1;
+    const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
+    return Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
+  }, [lancamentos, saldosIniciais]);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('gestor');
   const [expanded, setExpanded] = useState(false);
@@ -148,6 +160,7 @@ export function MapaGeoPastosTab() {
           onUpload={() => setUploadOpen(true)}
           onRenderedChange={onRenderedChange}
           onLink={async (geoId, pastoId) => vincularPasto(geoId, pastoId || null)}
+          rebanhoOficial={rebanhoOficial}
         />
       )}
       {viewMode === 'operacao' && (

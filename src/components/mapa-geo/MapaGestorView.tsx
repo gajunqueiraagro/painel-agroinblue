@@ -39,11 +39,12 @@ interface Props {
   onUpload: () => void;
   onRenderedChange?: (count: number) => void;
   onLink?: (geoId: string, pastoId: string) => Promise<boolean>;
+  rebanhoOficial?: number;
 }
 
 interface SelectedGeo { geo: PastoGeometria }
 
-export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUpload, onRenderedChange, onLink }: Props) {
+export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUpload, onRenderedChange, onLink, rebanhoOficial }: Props) {
   const [selected, setSelected] = useState<SelectedGeo | null>(null);
   const [linkPastoId, setLinkPastoId] = useState('');
   const [linking, setLinking] = useState(false);
@@ -214,7 +215,10 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
           {/* Farm summary group */}
           <div className="flex items-center gap-1 border-r border-border/50 pr-1.5">
             <span className="text-[6px] font-semibold text-muted-foreground uppercase tracking-widest [writing-mode:vertical-lr] rotate-180 self-center">Fazenda</span>
-            <KpiChip label="Cabeças" value={String(farmKpis.totalCabecas)} />
+            <KpiChip label="Alocadas" value={String(farmKpis.totalCabecas)} />
+            {rebanhoOficial != null && rebanhoOficial > 0 && (
+              <KpiChip label="Oficial" value={String(rebanhoOficial)} />
+            )}
             <KpiChip label="Peso Méd." value={farmKpis.pesoMedio > 0 ? `${formatNum(farmKpis.pesoMedio, 0)} kg` : '—'} />
             <KpiChip label="Lotação" value={farmKpis.lotacaoKgHa > 0 ? `${formatNum(farmKpis.lotacaoKgHa, 0)} kg/ha` : '—'} />
             <KpiChip label="Área" value={farmKpis.areaTotal > 0 ? `${formatNum(farmKpis.areaTotal, 0)} ha` : '—'} />
@@ -370,6 +374,39 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
                       <p className="text-[8px] text-muted-foreground leading-relaxed">{selectedPasto.observacoes}</p>
                     </>
                   )}
+
+                  {/* ── Conciliação Rebanho ── */}
+                  {rebanhoOficial != null && rebanhoOficial > 0 && (() => {
+                    const diff = rebanhoOficial - farmKpis.totalCabecas;
+                    const isDivergente = diff !== 0;
+                    return (
+                      <>
+                        <Separator className="my-1" />
+                        <div>
+                          <p className="text-[7px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Conciliação Rebanho</p>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center justify-between bg-muted/30 rounded px-1.5 py-0.5">
+                              <span className="text-[8px] text-foreground font-medium">Rebanho oficial</span>
+                              <span className="text-[8px] font-semibold text-foreground">{rebanhoOficial}</span>
+                            </div>
+                            <div className="flex items-center justify-between bg-muted/30 rounded px-1.5 py-0.5">
+                              <span className="text-[8px] text-foreground font-medium">Alocado em pastos</span>
+                              <span className="text-[8px] font-semibold text-foreground">{farmKpis.totalCabecas}</span>
+                            </div>
+                            <div className={`flex items-center justify-between rounded px-1.5 py-0.5 border ${isDivergente ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+                              <span className={`text-[8px] font-medium ${isDivergente ? 'text-amber-800' : 'text-green-800'}`}>Diferença</span>
+                              <span className={`text-[8px] font-bold ${isDivergente ? 'text-amber-800' : 'text-green-800'}`}>{diff > 0 ? `+${diff}` : diff}</span>
+                            </div>
+                            <div className={`flex items-center justify-center rounded px-1.5 py-0.5 ${isDivergente ? 'bg-amber-100 border border-amber-300' : 'bg-green-100 border border-green-300'}`}>
+                              <span className={`text-[7px] font-bold uppercase tracking-wider ${isDivergente ? 'text-amber-800' : 'text-green-800'}`}>
+                                {isDivergente ? '⚠ Divergente' : '✓ Conciliado'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
 
                   <Separator className="my-1" />
                   <div>
