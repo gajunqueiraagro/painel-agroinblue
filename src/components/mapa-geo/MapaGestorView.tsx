@@ -191,14 +191,10 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
     debugInfo.width,
     featureLayerRef,
     geometrias,
-    geometrySignature,
     labelLayerRef,
     mapStatus,
     mapInstanceRef,
-    ocupacoes,
-    pastos,
     reportRenderedGeometries,
-    scheduleInvalidateSize,
     selected,
   ]);
 
