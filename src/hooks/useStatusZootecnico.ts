@@ -254,7 +254,7 @@ export function useStatusZootecnico(
       setPastosRascunho(detalhesPastos.reduce((s, f) => s + f.rascunho, 0));
       setPastosNaoIniciados(detalhesPastos.reduce((s, f) => s + f.naoIniciados, 0));
 
-      // --- Categorias comparison ---
+      // --- Categorias comparison (via calcStatusCategorias — single source of truth) ---
       // Deduplicate: keep only the most recent fechamento per pasto
       const dedupFechByPasto = new Map<string, { id: string; updated_at: string }>();
       fpData.forEach((f: any) => {
@@ -264,58 +264,62 @@ export function useStatusZootecnico(
         }
       });
       const fechIds = Array.from(dedupFechByPasto.values()).map(v => v.id);
+
+      const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
+      const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
+      setCategoriasComSaldo(catsComSaldo.length);
+
+      let alocadoPastosCodigo = new Map<string, number>();
+      let temItensPastos = false;
+
       if (fechIds.length > 0) {
         const { data: itensData } = await supabase
           .from('fechamento_pasto_itens')
-          .select('peso_medio_kg, quantidade, categoria_id')
+          .select('quantidade, categoria_id')
           .in('fechamento_id', fechIds)
           .gt('quantidade', 0);
         const itens = itensData || [];
-        setItensTotais(itens.length);
+        temItensPastos = itens.length > 0;
 
-        const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
-        const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
-        setCategoriasComSaldo(catsComSaldo.length);
-        const totalSist = catsComSaldo.reduce((s, [, q]) => s + q, 0);
-        setSaldoTotalSistema(totalSist);
+        if (itens.length > 0) {
+          const { data: catsData } = await supabase.from('categorias_rebanho').select('id, codigo');
+          const idToCodigo = new Map((catsData || []).map((c: any) => [c.id, c.codigo]));
 
-        const pastosMap = new Map<string, number>();
-        itens.forEach((i: any) => {
-          pastosMap.set(i.categoria_id, (pastosMap.get(i.categoria_id) || 0) + i.quantidade);
-        });
-
-        const { data: catsData } = await supabase.from('categorias_rebanho').select('id, codigo');
-        const idToCodigo = new Map((catsData || []).map((c: any) => [c.id, c.codigo]));
-
-        const pastosMapByCodigo = new Map<string, number>();
-        pastosMap.forEach((qtd, catId) => {
-          const codigo = idToCodigo.get(catId);
-          if (codigo) pastosMapByCodigo.set(codigo, (pastosMapByCodigo.get(codigo) || 0) + qtd);
-        });
-
-        let divCount = 0;
-        let difTotal = 0;
-        catsComSaldo.forEach(([cat, qtdSist]) => {
-          const qtdPastos = pastosMapByCodigo.get(cat) || 0;
-          const dif = Math.abs(qtdPastos - qtdSist);
-          if (dif > 0) { divCount++; difTotal += dif; }
-        });
-        pastosMapByCodigo.forEach((qtdP, cat) => {
-          if (!saldoMap.has(cat) || (saldoMap.get(cat) || 0) <= 0) {
-            if (qtdP > 0) { divCount++; difTotal += qtdP; }
-          }
-        });
-        setCatsDivergentes(divCount);
-        setDifTotalCabecas(difTotal);
-      } else {
-        setItensTotais(0);
-        const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
-        const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
-        setCategoriasComSaldo(catsComSaldo.length);
-        setSaldoTotalSistema(catsComSaldo.reduce((s, [, q]) => s + q, 0));
-        setCatsDivergentes(catsComSaldo.length);
-        setDifTotalCabecas(catsComSaldo.reduce((s, [, q]) => s + q, 0));
+          itens.forEach((i: any) => {
+            const codigo = idToCodigo.get(i.categoria_id);
+            if (codigo) alocadoPastosCodigo.set(codigo, (alocadoPastosCodigo.get(codigo) || 0) + i.quantidade);
+          });
+        }
       }
+
+      // Use calcStatusCategorias from statusMensal.ts — THE official rule
+      const catsResult = calcStatusCategorias({
+        saldoOficial: new Map(catsComSaldo),
+        alocadoPastos: alocadoPastosCodigo,
+        temItensPastos,
+      });
+
+      // Build description
+      let descCatsComputed = '';
+      if (catsResult.status === 'fechado') {
+        descCatsComputed = catsResult.saldoTotalOficial === 0 && !temItensPastos ? 'Nada a conciliar' : 'Categorias conciliadas';
+      } else if (catsResult.status === 'parcial') {
+        descCatsComputed = `${catsResult.catsDivergentes} categoria(s) com compensação cruzada`;
+      } else {
+        descCatsComputed = temItensPastos || catsResult.saldoTotalOficial > 0
+          ? `${catsResult.catsDivergentes} categoria(s) divergente(s) · ${catsResult.difTotalCabecas} cab`
+          : 'Sem dados de pastos';
+      }
+
+      setCategoriasStatusResult({
+        status: catsResult.status,
+        catsDivergentes: catsResult.catsDivergentes,
+        difTotalCabecas: catsResult.difTotalCabecas,
+        difTotalLiquida: catsResult.difTotalLiquida,
+        saldoTotalOficial: catsResult.saldoTotalOficial,
+        totalAlocadoPastos: catsResult.totalAlocadoPastos,
+        descricao: descCatsComputed,
+      });
 
       // Valor do rebanho (precos)
       setPrecosDefinidos((vrResult.data || []).length);
