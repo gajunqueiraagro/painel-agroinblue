@@ -202,17 +202,33 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     [saldosIniciais, lancamentos, anoNum, mesNum]
   );
 
-  // Only count items from pastosAtivos (ativo && entra_conciliacao) to match ResumoAtividadesView
-  const activeFechIds = useMemo(() => {
-    const activeIds = new Set(pastosAtivos.map(p => p.id));
-    return new Set(fechamentos.filter(f => activeIds.has(f.pasto_id)).map(f => f.id));
-  }, [pastosAtivos, fechamentos]);
+  // Fonte oficial da conciliação visual:
+  // fechamento_pastos deduplicado por pasto (updated_at mais recente),
+  // sem depender de pasto ativo atual para não distorcer meses históricos.
+  const dedupFechamentos = useMemo(() => {
+    const byPasto = new Map<string, FechamentoPasto>();
+    fechamentos.forEach(f => {
+      const atual = byPasto.get(f.pasto_id);
+      const tsAtual = atual?.updated_at || '';
+      const tsNovo = f.updated_at || '';
+
+      if (!atual || tsNovo > tsAtual || (tsNovo === tsAtual && f.status === 'fechado' && atual.status !== 'fechado')) {
+        byPasto.set(f.pasto_id, f);
+      }
+    });
+    return Array.from(byPasto.values());
+  }, [fechamentos]);
+
+  const dedupFechIds = useMemo(
+    () => new Set(dedupFechamentos.map(f => f.id)),
+    [dedupFechamentos]
+  );
 
   const pastoDataByCat = useMemo(() => {
     const catIdToCodigo = new Map((categorias || []).map(c => [c.id, c.codigo]));
     const map = new Map<string, number>();
     itensMap.forEach((items, fechId) => {
-      if (!activeFechIds.has(fechId)) return;
+      if (!dedupFechIds.has(fechId)) return;
       items.forEach(i => {
         if (i.quantidade > 0) {
           const codigo = catIdToCodigo.get(i.categoria_id);
@@ -221,7 +237,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       });
     });
     return map;
-  }, [itensMap, categorias, activeFechIds]);
+  }, [itensMap, categorias, dedupFechIds]);
 
   const totalPasto = CAT_COLS.reduce((s, c) => s + (pastoDataByCat.get(c.codigo) || 0), 0);
   const totalSistema = CAT_COLS.reduce((s, c) => s + (saldoMap.get(c.codigo) || 0), 0);
