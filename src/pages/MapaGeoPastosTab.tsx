@@ -1,201 +1,34 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { usePastos, type Pasto } from '@/hooks/usePastos';
-import { usePastoGeometrias, type PastoGeometria } from '@/hooks/usePastoGeometrias';
-import { useFechamento } from '@/hooks/useFechamento';
+import { usePastoGeometrias } from '@/hooks/usePastoGeometrias';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { parseKMLFile, type ParsedPolygon } from '@/lib/kmlParser';
-import { calcUA, calcUAHa, calcPesoMedioPonderado } from '@/lib/calculos/zootecnicos';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Upload, Map as MapIcon, Loader2, Trash2, RefreshCw } from 'lucide-react';
-import { MESES_COLS } from '@/lib/calculos/labels';
-import { PastoDetailSheet } from '@/components/mapa-geo/PastoDetailSheet';
+import { Upload, Map as MapIcon, Loader2 } from 'lucide-react';
 import { KmlUploadDialog } from '@/components/mapa-geo/KmlUploadDialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-
-export interface PastoMapData {
-  pasto: Pasto;
-  geometria: { geojson: GeoJSON.Geometry; cor: string | null } | null;
-  totalCabecas: number;
-  pesoMedio: number | null;
-  uaTotal: number;
-  uaHa: number | null;
-  lote: string | null;
-  qualidade: number | null;
-  categorias: Map<string, { quantidade: number; peso_medio_kg: number | null; categoria_nome: string }>;
-  ultimaCondicao: string | null;
-}
+import { usePastos } from '@/hooks/usePastos';
+import { parseKMLFile, type ParsedPolygon } from '@/lib/kmlParser';
 
 export function MapaGeoPastosTab() {
-  const { isGlobal, fazendaAtual } = useFazenda();
-  const { pastos, categorias } = usePastos();
-  const { geometrias, loading: geoLoading, salvarGeometrias, removerGeometrias } = usePastoGeometrias();
-  const { fechamentos, loadFechamentos, loadItens } = useFechamento();
-
-  const curYear = new Date().getFullYear();
-  const [anoFiltro, setAnoFiltro] = useState(String(curYear));
-  const [mesFiltro, setMesFiltro] = useState(new Date().getMonth() + 1);
-  const [filtroLote, setFiltroLote] = useState<string>('__all__');
-  const [filtroCategoria, setFiltroCategoria] = useState<string>('__all__');
-  const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
-
-  const [pastosData, setPastosData] = useState<PastoMapData[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedPasto, setSelectedPasto] = useState<PastoMapData | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const { isGlobal } = useFazenda();
+  const { pastos } = usePastos();
+  const { geometrias, loading: geoLoading, salvarGeometrias } = usePastoGeometrias();
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
-  const [removing, setRemoving] = useState(false);
-  const [mapReady, setMapReady] = useState(false);
 
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const leafletMap = useRef<L.Map | null>(null);
-  const layerGroup = useRef<L.LayerGroup | null>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstance = useRef<L.Map | null>(null);
+  const layerRef = useRef<L.LayerGroup | null>(null);
 
-  const hasGeometries = geometrias.length > 0;
+  const hasGeo = geometrias.length > 0;
 
-  const anosDisp = useMemo(() => {
-    const arr: string[] = [];
-    for (let y = curYear; y >= curYear - 3; y--) arr.push(String(y));
-    return arr;
-  }, [curYear]);
-
-  useEffect(() => { loadFechamentos(anoMes); }, [anoMes, loadFechamentos]);
-
-  // Build pasto data from fechamentos
+  // Init map once
   useEffect(() => {
-    const build = async () => {
-      const pastosAtivos = pastos.filter(p => p.ativo && p.entra_conciliacao);
-      if (pastosAtivos.length === 0) { setPastosData([]); return; }
-      setLoading(true);
+    if (!mapRef.current || mapInstance.current) return;
 
-      const fechMap = new Map(fechamentos.map(f => [f.pasto_id, f]));
-      const allItems = await Promise.all(fechamentos.map(f => loadItens(f.id)));
-      const itemsByFechId = new Map(fechamentos.map((f, i) => [f.id, allItems[i]]));
-      const geoMap = new Map(geometrias.filter(g => g.pasto_id).map(g => [g.pasto_id!, g]));
-
-      const pastoIds = pastosAtivos.map(p => p.id);
-      const { data: condicoes } = await supabase
-        .from('pasto_condicoes')
-        .select('pasto_id, condicao, data_registro')
-        .in('pasto_id', pastoIds)
-        .order('data_registro', { ascending: false });
-      const condicaoMap = new Map<string, string>();
-      (condicoes || []).forEach(c => {
-        if (!condicaoMap.has(c.pasto_id)) condicaoMap.set(c.pasto_id, c.condicao);
-      });
-
-      const result: PastoMapData[] = pastosAtivos.map(pasto => {
-        const fech = fechMap.get(pasto.id);
-        const catMap = new Map<string, { quantidade: number; peso_medio_kg: number | null; categoria_nome: string }>();
-
-        if (fech) {
-          const items = itemsByFechId.get(fech.id) || [];
-          items.forEach(item => {
-            const cat = categorias.find(c => c.id === item.categoria_id);
-            catMap.set(item.categoria_id, {
-              quantidade: item.quantidade,
-              peso_medio_kg: item.peso_medio_kg,
-              categoria_nome: cat?.nome || 'Desconhecida',
-            });
-          });
-        }
-
-        const totalCab = Array.from(catMap.values()).reduce((s, v) => s + v.quantidade, 0);
-        const pesoMedio = calcPesoMedioPonderado(
-          Array.from(catMap.values()).map(v => ({ quantidade: v.quantidade, pesoKg: v.peso_medio_kg }))
-        );
-        let uaTotal = 0;
-        catMap.forEach(v => { uaTotal += calcUA(v.quantidade, v.peso_medio_kg); });
-        const uaHa = calcUAHa(uaTotal, pasto.area_produtiva_ha);
-
-        const geo = geoMap.get(pasto.id);
-
-        return {
-          pasto,
-          geometria: geo ? { geojson: geo.geojson, cor: geo.cor } : null,
-          totalCabecas: totalCab,
-          pesoMedio,
-          uaTotal,
-          uaHa,
-          lote: fech?.lote_mes ?? null,
-          qualidade: fech?.qualidade_mes ?? null,
-          categorias: catMap,
-          ultimaCondicao: condicaoMap.get(pasto.id) || null,
-        };
-      });
-
-      setPastosData(result);
-      setLoading(false);
-    };
-    build();
-  }, [fechamentos, pastos, geometrias, categorias, loadItens]);
-
-  const lotesDisp = useMemo(() => {
-    const set = new Set<string>();
-    pastosData.forEach(p => { if (p.lote) set.add(p.lote); });
-    return Array.from(set).sort();
-  }, [pastosData]);
-
-  const filteredPastos = useMemo(() => {
-    return pastosData.filter(p => {
-      if (filtroLote !== '__all__' && p.lote !== filtroLote) return false;
-      if (filtroCategoria !== '__all__') {
-        const hasCat = Array.from(p.categorias.values()).some(v => v.categoria_nome === filtroCategoria);
-        if (!hasCat) return false;
-      }
-      return true;
-    });
-  }, [pastosData, filtroLote, filtroCategoria]);
-
-  const getColor = useCallback((condicao: string | null, uaHa: number | null): string => {
-    if (condicao === 'ruim') return '#ef4444';
-    if (condicao === 'regular') return '#f59e0b';
-    if (condicao === 'bom') return '#22c55e';
-    if (uaHa !== null) {
-      if (uaHa > 3) return '#ef4444';
-      if (uaHa > 2) return '#f59e0b';
-      return '#22c55e';
-    }
-    return '#6b7280';
-  }, []);
-
-  // Initialize Leaflet map — use a callback ref pattern
-  const initMap = useCallback((node: HTMLDivElement | null) => {
-    (mapContainerRef as any).current = node;
-
-    if (!node) {
-      if (leafletMap.current) {
-        leafletMap.current.remove();
-        leafletMap.current = null;
-        layerGroup.current = null;
-        setMapReady(false);
-      }
-      return;
-    }
-
-    // Already initialized
-    if (leafletMap.current) return;
-
-    const map = L.map(node, {
+    const map = L.map(mapRef.current, {
       center: [-15.8, -47.9],
       zoom: 5,
       zoomControl: true,
-      scrollWheelZoom: true,
     });
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -203,271 +36,142 @@ export function MapaGeoPastosTab() {
       maxZoom: 19,
     }).addTo(map);
 
-    layerGroup.current = L.layerGroup().addTo(map);
-    leafletMap.current = map;
+    layerRef.current = L.layerGroup().addTo(map);
+    mapInstance.current = map;
 
-    // Wait for map to be fully ready before invalidating size
-    map.whenReady(() => {
-      setTimeout(() => {
-        if (leafletMap.current && mapContainerRef.current) {
-          map.invalidateSize();
-          setMapReady(true);
-        }
-      }, 200);
-    });
-  }, []);
+    console.log('[MapaMin] Mapa inicializado');
 
-  // Draw geometries on map — debounced to prevent render storms
-  const renderGeometries = useCallback(() => {
-    if (!leafletMap.current || !layerGroup.current) return;
+    return () => {
+      map.remove();
+      mapInstance.current = null;
+      layerRef.current = null;
+    };
+  }, [hasGeo]); // only mount when we have geometries
 
-    layerGroup.current.clearLayers();
-    const bounds: L.LatLngBounds[] = [];
-
-    const pastoDataMap = new Map<string, PastoMapData>();
-    filteredPastos.forEach(pd => pastoDataMap.set(pd.pasto.id, pd));
-    const hasActiveFilter = filtroLote !== '__all__' || filtroCategoria !== '__all__';
-    const filteredIds = new Set(filteredPastos.map(p => p.pasto.id));
-
-    geometrias.forEach(geo => {
-      const matchedPasto = geo.pasto_id ? pastoDataMap.get(geo.pasto_id) : null;
-      if (hasActiveFilter && geo.pasto_id && !filteredIds.has(geo.pasto_id)) return;
-
-      const condicao = matchedPasto?.ultimaCondicao ?? null;
-      const uaHa = matchedPasto?.uaHa ?? null;
-      const color = getColor(condicao, uaHa);
-      const displayName = matchedPasto?.pasto.nome || geo.nome_original || 'Sem nome';
-      const cabecas = matchedPasto?.totalCabecas ?? 0;
-
-      try {
-        const layer = L.geoJSON(geo.geojson as any, {
-          style: { color, weight: 2, fillColor: color, fillOpacity: 0.35 },
-        });
-
-        const layerBounds = layer.getBounds();
-        if (!layerBounds.isValid()) return;
-
-        const center = layerBounds.getCenter();
-        const label = L.divIcon({
-          className: 'pasto-label',
-          html: `<div style="
-            background:rgba(255,255,255,0.9);
-            border:1px solid ${color};
-            border-radius:4px;
-            padding:2px 6px;
-            font-size:11px;
-            font-weight:600;
-            color:#1a1a1a;
-            white-space:nowrap;
-            box-shadow:0 1px 3px rgba(0,0,0,0.2);
-            pointer-events:none;
-          ">${displayName}${cabecas > 0 ? `<br/><span style="font-size:10px;font-weight:400;color:#666">${cabecas} cab</span>` : ''}</div>`,
-          iconSize: [0, 0],
-          iconAnchor: [0, 0],
-        });
-        L.marker(center, { icon: label, interactive: false }).addTo(layerGroup.current!);
-
-        if (matchedPasto) {
-          layer.on('click', (e) => {
-            L.DomEvent.stopPropagation(e);
-            setSelectedPasto(matchedPasto);
-            setSheetOpen(true);
-          });
-        }
-
-        layer.addTo(layerGroup.current!);
-        bounds.push(layerBounds);
-      } catch (err) {
-        console.warn(`[MapaPastos] Erro geometria "${displayName}":`, err);
-      }
-    });
-
-    console.log(`[MapaPastos] Renderizados: ${bounds.length}/${geometrias.length} polígonos`);
-
-    if (bounds.length > 0) {
-      const combined = bounds.reduce((acc, b) => acc.extend(b));
-      leafletMap.current!.fitBounds(combined, { padding: [30, 30], maxZoom: 17 });
-    }
-  }, [geometrias, filteredPastos, getColor, filtroLote, filtroCategoria]);
-
-  // Trigger render when map is ready or data changes
+  // Draw polygons
   useEffect(() => {
-    if (!mapReady) return;
-    // Small delay to ensure map pane is fully initialized
-    const timer = setTimeout(renderGeometries, 100);
+    const map = mapInstance.current;
+    const lg = layerRef.current;
+    if (!map || !lg) return;
+
+    // Wait a tick for DOM to settle
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+      lg.clearLayers();
+
+      console.log(`[MapaMin] Geometrias disponíveis: ${geometrias.length}`);
+
+      if (geometrias.length === 0) return;
+
+      // Log first geometry for debug
+      const first = geometrias[0];
+      console.log('[MapaMin] Primeira geometria:', JSON.stringify(first.geojson).slice(0, 200));
+
+      const allBounds: L.LatLngBounds[] = [];
+
+      geometrias.forEach((geo, i) => {
+        try {
+          const layer = L.geoJSON(geo.geojson as any, {
+            style: {
+              color: '#000000',
+              weight: 2,
+              fillColor: '#3b82f6',
+              fillOpacity: 0.3,
+            },
+          });
+
+          const b = layer.getBounds();
+          if (!b.isValid()) {
+            console.warn(`[MapaMin] Geometria ${i} bounds inválidos, ignorando`);
+            return;
+          }
+
+          layer.on('click', () => {
+            console.log(`[MapaMin] Clique no polígono ${i}: ${geo.nome_original || 'sem nome'}`);
+          });
+
+          layer.addTo(lg);
+          allBounds.push(b);
+        } catch (err) {
+          console.error(`[MapaMin] Erro geometria ${i}:`, err);
+        }
+      });
+
+      console.log(`[MapaMin] Polígonos renderizados: ${allBounds.length}`);
+
+      if (allBounds.length > 0) {
+        const combined = allBounds.reduce((acc, b) => acc.extend(b));
+        console.log(`[MapaMin] Bounds: SW(${combined.getSouthWest().lat.toFixed(4)}, ${combined.getSouthWest().lng.toFixed(4)}) NE(${combined.getNorthEast().lat.toFixed(4)}, ${combined.getNorthEast().lng.toFixed(4)})`);
+        map.fitBounds(combined, { padding: [30, 30], maxZoom: 17 });
+      }
+    }, 300);
+
     return () => clearTimeout(timer);
-  }, [mapReady, renderGeometries]);
+  }, [geometrias]);
 
   const handleKmlUpload = useCallback(async (polygons: ParsedPolygon[]) => {
     const pastoMap = new Map(pastos.filter(p => p.ativo).map(p => [p.nome.trim().toLowerCase(), p]));
-
-    const items = polygons.map(poly => {
-      const matched = pastoMap.get(poly.name.trim().toLowerCase());
-      return {
-        pasto_id: matched?.id || null,
-        nome_original: poly.name,
-        geojson: poly.geojson,
-      };
-    });
-
+    const items = polygons.map(poly => ({
+      pasto_id: pastoMap.get(poly.name.trim().toLowerCase())?.id || null,
+      nome_original: poly.name,
+      geojson: poly.geojson,
+    }));
     const success = await salvarGeometrias(items);
     if (success) setUploadOpen(false);
   }, [pastos, salvarGeometrias]);
-
-  const handleRemoveMap = useCallback(async () => {
-    setRemoving(true);
-    await removerGeometrias();
-    setConfirmRemoveOpen(false);
-    setRemoving(false);
-  }, [removerGeometrias]);
 
   if (isGlobal) {
     return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda para ver o mapa.</div>;
   }
 
-  const lastUpload = hasGeometries
-    ? new Date(geometrias.reduce((latest, g) => g.created_at > latest ? g.created_at : latest, geometrias[0].created_at))
-    : null;
-
   return (
     <div className="flex flex-col h-[100dvh] overflow-hidden">
-      {/* Filters bar — always on top */}
-      <div className="flex-shrink-0 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 relative" style={{ zIndex: 1000 }}>
-        <div className="flex items-center justify-between gap-2 flex-wrap">
+      {/* Header */}
+      <div className="flex-shrink-0 bg-background border-b border-border px-3 py-2" style={{ zIndex: 1000 }}>
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold text-foreground">Mapa de Pastos (modo estabilização)</span>
           <div className="flex items-center gap-2">
-            <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-              <SelectTrigger className="w-20 h-8 text-xs font-bold"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
-              <SelectTrigger className="w-20 h-8 text-xs font-bold"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {MESES_COLS.map((m, i) => (
-                  <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filtroLote} onValueChange={setFiltroLote}>
-              <SelectTrigger className="w-24 h-8 text-xs"><SelectValue placeholder="Lote" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">Todos Lotes</SelectItem>
-                {lotesDisp.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
-              <SelectTrigger className="w-28 h-8 text-xs"><SelectValue placeholder="Categoria" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">Todas Cat.</SelectItem>
-                {categorias.map(c => <SelectItem key={c.id} value={c.nome}>{c.nome}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center gap-1.5">
-            {hasGeometries && (
-              <span className="text-[10px] text-muted-foreground">
-                {geometrias.length} polígonos
-                {lastUpload && ` · ${lastUpload.toLocaleDateString('pt-BR')}`}
-              </span>
-            )}
-            <span className="text-xs font-medium text-foreground bg-secondary/20 px-2 py-0.5 rounded">
-              {filteredPastos.reduce((s, p) => s + p.totalCabecas, 0)} cab
-            </span>
-            <Button variant="outline" size="sm" className="h-7 text-xs px-2" onClick={() => setUploadOpen(true)}>
-              {hasGeometries ? (
-                <><RefreshCw className="h-3.5 w-3.5 mr-1" />Atualizar Mapa</>
-              ) : (
-                <><Upload className="h-3.5 w-3.5 mr-1" />Importar Mapa</>
-              )}
+            {hasGeo && <span className="text-xs text-muted-foreground">{geometrias.length} polígonos</span>}
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setUploadOpen(true)}>
+              <Upload className="h-3.5 w-3.5 mr-1" />
+              {hasGeo ? 'Atualizar' : 'Importar'}
             </Button>
-            {hasGeometries && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs px-2 text-destructive hover:bg-destructive/10"
-                onClick={() => setConfirmRemoveOpen(true)}
-              >
-                <Trash2 className="h-3.5 w-3.5 mr-1" />Remover
-              </Button>
-            )}
           </div>
         </div>
       </div>
 
-      {/* Map container — contained with lower z-index */}
-      <div className="flex-1 min-h-0 relative overflow-hidden" style={{ zIndex: 1 }}>
-        {(loading || geoLoading) && (
-          <div className="absolute inset-0 flex items-center justify-center bg-background/60" style={{ zIndex: 10 }}>
+      {/* Map area */}
+      <div className="flex-1 min-h-0 relative" style={{ zIndex: 1 }}>
+        {geoLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/60 z-10">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         )}
 
-        {!hasGeometries && !geoLoading ? (
+        {!hasGeo && !geoLoading ? (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-4">
             <MapIcon className="h-16 w-16 text-muted-foreground/30" />
-            <div>
-              <h3 className="text-lg font-semibold text-foreground">Nenhum mapa cadastrado</h3>
-              <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                Clique em "Importar Mapa" para enviar o arquivo KML, KMZ ou GeoJSON da fazenda.
-                Os polígonos serão vinculados automaticamente aos pastos cadastrados.
-              </p>
-            </div>
-            <Button onClick={() => setUploadOpen(true)} className="mt-2">
+            <h3 className="text-lg font-semibold text-foreground">Nenhum mapa cadastrado</h3>
+            <p className="text-sm text-muted-foreground max-w-md">
+              Clique em "Importar" para enviar o arquivo KML, KMZ ou GeoJSON da fazenda.
+            </p>
+            <Button onClick={() => setUploadOpen(true)}>
               <Upload className="h-4 w-4 mr-2" />Importar Mapa
             </Button>
           </div>
-        ) : hasGeometries ? (
-          <div
-            ref={initMap}
-            className="w-full h-full"
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}
-          />
+        ) : hasGeo ? (
+          <div ref={mapRef} style={{ position: 'absolute', inset: 0 }} />
         ) : null}
       </div>
 
-      {/* Detail sheet */}
-      <PastoDetailSheet
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        data={selectedPasto}
-        anoMes={anoMes}
-        categorias={categorias}
-        allPastos={pastos}
-      />
-
-      {/* Upload dialog */}
       <KmlUploadDialog
         open={uploadOpen}
         onOpenChange={setUploadOpen}
         onUpload={handleKmlUpload}
-        onRemove={handleRemoveMap}
+        onRemove={() => {}}
         pastos={pastos}
-        hasExistingMap={hasGeometries}
+        hasExistingMap={hasGeo}
       />
-
-      {/* Remove confirmation */}
-      <AlertDialog open={confirmRemoveOpen} onOpenChange={setConfirmRemoveOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remover mapa da fazenda?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Todos os polígonos serão removidos do mapa. Os dados históricos de movimentações e condições dos pastos serão preservados.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={removing}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleRemoveMap}
-              disabled={removing}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {removing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
-              Remover Mapa
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
