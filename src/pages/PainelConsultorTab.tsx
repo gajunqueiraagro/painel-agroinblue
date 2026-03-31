@@ -92,19 +92,26 @@ function buildZooRows(
     return { grupo, indicador, valores, total, format };
   };
 
-  // Pre-compute peso final per month
+  // Pre-compute peso final per month AND valor rebanho per month
+  const valorRebanhoMesArr: number[] = [];
   const pesoFinKgRow_valores = Array.from({ length: 12 }, (_, i) => {
     const m = i + 1;
-    if (m > ateMes) return 0;
+    if (m > ateMes) { valorRebanhoMesArr.push(0); return 0; }
     const anoMes = `${ano}-${String(m).padStart(2, '0')}`;
     const pesosMap = pesosPorMes[anoMes] || {};
+    const precosMap = precosPorMes?.[anoMes] || {};
     const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, m);
-    let total = 0;
+    let totalPeso = 0;
+    let totalValor = 0;
     saldoMap.forEach((qtd, cat) => {
       const { valor: pesoMedio } = resolverPesoOficial(cat, pesosMap, saldosIniciais, lancamentos, ano, m);
-      total += qtd * (pesoMedio || 0);
+      const pesoTotal = qtd * (pesoMedio || 0);
+      totalPeso += pesoTotal;
+      const precoKg = precosMap[cat] || 0;
+      totalValor += pesoTotal * precoKg;
     });
-    return total;
+    valorRebanhoMesArr.push(totalValor);
+    return totalPeso;
   });
 
   // Helper: entradas/saídas kg/@ por mês (reusável)
