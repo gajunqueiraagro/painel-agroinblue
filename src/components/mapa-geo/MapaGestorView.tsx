@@ -109,7 +109,6 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
     if (!map || !featureLayer || !labelLayer) return;
 
     const timer = window.setTimeout(() => {
-      scheduleInvalidateSize();
       featureLayer.clearLayers();
       labelLayer.clearLayers();
 
@@ -119,92 +118,74 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
         return;
       }
 
-      const allBounds: L.LatLngBounds[] = [];
-      let renderedCount = 0;
-
-      geometrias.forEach((geo, idx) => {
-        try {
-          const isSelected = selected?.geo.id === geo.id;
-          const pasto = geo.pasto_id ? pastos.find((item) => item.id === geo.pasto_id) : null;
-          const oc = geo.pasto_id ? ocupacoes.get(geo.pasto_id) : null;
-
-          // DEBUG: estilo forte temporário para diagnóstico visual
-          const debugStyle = {
-            color: '#ff0000',
-            weight: 3,
-            fillColor: '#ffff00',
-            fillOpacity: 0.5,
-          };
-
-          const layer = L.geoJSON(geo.geojson as GeoJSON.GeoJsonObject, {
-            style: debugStyle,
-          });
-          const bounds = layer.getBounds();
-          
-          // DEBUG: log primeiro polígono
-          if (idx === 0) {
-            console.warn('[DEBUG-GEO] Primeiro polígono:', geo.nome_original);
-            console.warn('[DEBUG-GEO] GeoJSON type:', (geo.geojson as any)?.type);
-            console.warn('[DEBUG-GEO] Bounds valid:', bounds.isValid());
-            if (bounds.isValid()) {
-              console.warn('[DEBUG-GEO] Bounds SW:', bounds.getSouthWest().toString());
-              console.warn('[DEBUG-GEO] Bounds NE:', bounds.getNorthEast().toString());
-            }
-          }
-          
-          if (!bounds.isValid()) return;
-
-          const kgHaText = oc?.kg_ha != null ? `${formatNum(oc.kg_ha, 0)} kg/ha` : '—';
-          const tipContent = pasto
-            ? `<strong>${pasto.nome}</strong><br/><span style="color:#666">Área: ${pasto.area_produtiva_ha ? `${formatNum(pasto.area_produtiva_ha, 1)} ha` : '—'}</span><br/><span style="color:#666">Cab: ${oc?.cabecas || 0} · ${kgHaText}</span>`
-            : `<em>${geo.nome_original || 'Sem nome'}</em><br/><span style="color:#999">Sem vínculo</span>`;
-
-          layer.bindTooltip(tipContent, {
-            sticky: true,
-            className: 'pasto-tooltip',
-            direction: 'top',
-            offset: [0, -6],
-          });
-
-          const shortName = geo.nome_original || pasto?.nome || '';
-          if (shortName) {
-            const kgLabel = oc?.kg_ha != null ? `<br/><span class="kg-value">${formatNum(oc.kg_ha, 0)}</span>` : '';
-            const label = L.divIcon({
-              className: 'pasto-label-small',
-              html: `<span>${shortName}${kgLabel}</span>`,
-            });
-            L.marker(bounds.getCenter(), { icon: label, interactive: false }).addTo(labelLayer);
-          }
-
-          layer.on('click', () => setSelected({ geo }));
-          layer.addTo(featureLayer);
-          allBounds.push(bounds);
-          renderedCount += 1;
-        } catch (error) {
-          console.error('[MapaGestor] Erro geometria:', error);
-        }
+      // === BRUTE FORCE TEST: only 1st polygon, manual setView, marker ===
+      const firstGeo = geometrias[0];
+      const testLayer = L.geoJSON(firstGeo.geojson as GeoJSON.GeoJsonObject, {
+        style: {
+          color: '#ff0000',
+          weight: 4,
+          fillColor: '#ffff00',
+          fillOpacity: 0.7,
+        },
       });
 
-      reportRenderedGeometries(renderedCount);
-      onRenderedChange?.(renderedCount);
+      const testBounds = testLayer.getBounds();
+      console.warn('[BRUTE-TEST] geo name:', firstGeo.nome_original);
+      console.warn('[BRUTE-TEST] bounds valid:', testBounds.isValid());
 
-      const fitKey = `${geometrySignature}:${debugInfo.width}:${debugInfo.height}`;
-      if (allBounds.length > 0 && fitKey !== lastFitKeyRef.current) {
-        lastFitKeyRef.current = fitKey;
-        const combinedBounds = allBounds.reduce((acc, bounds) => acc.extend(bounds));
-        console.warn('[DEBUG-GEO] Combined bounds SW:', combinedBounds.getSouthWest().toString());
-        console.warn('[DEBUG-GEO] Combined bounds NE:', combinedBounds.getNorthEast().toString());
-        console.warn('[DEBUG-GEO] Map center before fit:', map.getCenter().toString());
-        console.warn('[DEBUG-GEO] Map zoom before fit:', map.getZoom());
-        safeFitBounds(map, combinedBounds, { padding: [40, 40], maxZoom: 17 }, 'MapaGestor');
-        // Log after a delay to capture post-fit state
-        setTimeout(() => {
-          console.warn('[DEBUG-GEO] Map center AFTER fit:', map.getCenter().toString());
-          console.warn('[DEBUG-GEO] Map zoom AFTER fit:', map.getZoom());
-          console.warn('[DEBUG-GEO] featureLayer layer count:', featureLayer.getLayers().length);
-        }, 500);
+      if (!testBounds.isValid()) {
+        console.error('[BRUTE-TEST] bounds INVALID — cannot render');
+        reportRenderedGeometries(0);
+        onRenderedChange?.(0);
+        return;
       }
-    }, 220);
+
+      const center = testBounds.getCenter();
+      console.warn('[BRUTE-TEST] center:', center.lat, center.lng);
+
+      // Add polygon to layer
+      testLayer.addTo(featureLayer);
+
+      // Add a visible marker at center
+      const markerIcon = L.divIcon({
+        className: '',
+        html: '<div style="width:20px;height:20px;background:red;border-radius:50%;border:3px solid white;box-shadow:0 0 6px rgba(0,0,0,0.5)"></div>',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10],
+      });
+      L.marker(center, { icon: markerIcon }).addTo(featureLayer);
+
+      reportRenderedGeometries(1);
+      onRenderedChange?.(1);
+
+      // Direct setView — no fitBounds, no invalidateSize
+      try {
+        map.setView(center, 15, { animate: false });
+        console.warn('[BRUTE-TEST] setView OK — center:', center.lat, center.lng, 'zoom: 15');
+      } catch (err) {
+        console.error('[BRUTE-TEST] setView FAILED:', err);
+        // Last resort: fly to coordinates
+        try {
+          (map as any)._resetView(center, 15);
+          console.warn('[BRUTE-TEST] _resetView fallback OK');
+        } catch (err2) {
+          console.error('[BRUTE-TEST] _resetView also FAILED:', err2);
+        }
+      }
+
+      // Log final state
+      setTimeout(() => {
+        console.warn('[BRUTE-TEST] Final center:', map.getCenter().lat, map.getCenter().lng);
+        console.warn('[BRUTE-TEST] Final zoom:', map.getZoom());
+        console.warn('[BRUTE-TEST] Layers in featureLayer:', featureLayer.getLayers().length);
+        // Check if the polygon layer has actual DOM elements
+        const container = map.getContainer();
+        const paths = container.querySelectorAll('path');
+        const canvasEls = container.querySelectorAll('canvas');
+        console.warn('[BRUTE-TEST] SVG paths in DOM:', paths.length);
+        console.warn('[BRUTE-TEST] Canvas elements:', canvasEls.length);
+      }, 500);
+    }, 300);
 
     return () => window.clearTimeout(timer);
   }, [
