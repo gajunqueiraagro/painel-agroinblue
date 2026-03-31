@@ -125,9 +125,10 @@ export function MapaGeoPastosTab() {
           geometrias={geometrias}
           pastos={pastos}
           categorias={categorias}
+          ocupacoes={ocupacoes}
           geoLoading={geoLoading}
           onUpload={() => setUploadOpen(true)}
-          onRefresh={loadGeometrias}
+          onRefresh={() => { loadGeometrias(); reloadOcupacao(); }}
         />
       )}
       {viewMode === 'validacao' && (
