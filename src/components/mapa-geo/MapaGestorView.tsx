@@ -215,7 +215,10 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
           {/* Farm summary group */}
           <div className="flex items-center gap-1 border-r border-border/50 pr-1.5">
             <span className="text-[6px] font-semibold text-muted-foreground uppercase tracking-widest [writing-mode:vertical-lr] rotate-180 self-center">Fazenda</span>
-            <KpiChip label="Cabeças" value={String(farmKpis.totalCabecas)} />
+            <KpiChip label="Alocadas" value={String(farmKpis.totalCabecas)} />
+            {rebanhoOficial != null && rebanhoOficial > 0 && (
+              <KpiChip label="Oficial" value={String(rebanhoOficial)} />
+            )}
             <KpiChip label="Peso Méd." value={farmKpis.pesoMedio > 0 ? `${formatNum(farmKpis.pesoMedio, 0)} kg` : '—'} />
             <KpiChip label="Lotação" value={farmKpis.lotacaoKgHa > 0 ? `${formatNum(farmKpis.lotacaoKgHa, 0)} kg/ha` : '—'} />
             <KpiChip label="Área" value={farmKpis.areaTotal > 0 ? `${formatNum(farmKpis.areaTotal, 0)} ha` : '—'} />
