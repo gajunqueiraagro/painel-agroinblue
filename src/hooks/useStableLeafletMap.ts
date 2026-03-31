@@ -68,7 +68,21 @@ export function useStableLeafletMap({
 
   const syncMetrics = useCallback((patch?: Partial<DebugInfo>) => {
     const metrics = readMetrics();
-    setDebugInfo((current) => ({ ...current, ...metrics, ...patch }));
+    setDebugInfo((current) => {
+      const next = { ...current, ...metrics, ...patch };
+      // Only update if something actually changed to avoid infinite ResizeObserver loops
+      if (
+        current.containerFound === next.containerFound &&
+        current.width === next.width &&
+        current.height === next.height &&
+        current.mapInitialized === next.mapInitialized &&
+        current.renderedGeometries === next.renderedGeometries &&
+        current.errorMessage === next.errorMessage
+      ) {
+        return current;
+      }
+      return next;
+    });
     return metrics;
   }, [readMetrics]);
 
@@ -224,8 +238,7 @@ export function useStableLeafletMap({
 
     const resizeObserver = typeof ResizeObserver !== 'undefined'
       ? new ResizeObserver(() => {
-          const metrics = syncMetrics();
-          log('altura do container', { altura: metrics.height, largura: metrics.width });
+          const metrics = readMetrics();
 
           if (metrics.width < 32 || metrics.height < 32) {
             setStatus('waiting_container');
