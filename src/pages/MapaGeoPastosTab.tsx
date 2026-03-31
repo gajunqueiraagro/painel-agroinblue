@@ -176,11 +176,9 @@ export function MapaGeoPastosTab() {
 
   // Initialize Leaflet map — use a callback ref pattern
   const initMap = useCallback((node: HTMLDivElement | null) => {
-    // Store the ref for cleanup
     (mapContainerRef as any).current = node;
 
     if (!node) {
-      // Cleanup
       if (leafletMap.current) {
         leafletMap.current.remove();
         leafletMap.current = null;
@@ -197,7 +195,6 @@ export function MapaGeoPastosTab() {
       center: [-15.8, -47.9],
       zoom: 5,
       zoomControl: true,
-      // Prevent clicks from propagating outside the map
       scrollWheelZoom: true,
     });
 
@@ -209,11 +206,15 @@ export function MapaGeoPastosTab() {
     layerGroup.current = L.layerGroup().addTo(map);
     leafletMap.current = map;
 
-    // invalidateSize after a short delay to ensure container is laid out
-    setTimeout(() => {
-      map.invalidateSize();
-      setMapReady(true);
-    }, 300);
+    // Wait for map to be fully ready before invalidating size
+    map.whenReady(() => {
+      setTimeout(() => {
+        if (leafletMap.current && mapContainerRef.current) {
+          map.invalidateSize();
+          setMapReady(true);
+        }
+      }, 200);
+    });
   }, []);
 
   // Draw ALL geometries on map (both matched and unmatched)
