@@ -234,7 +234,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       categoria,
       preco_kg,
     }));
-    await salvarPrecos(items);
+    await salvarPrecos(items, totalRebanho);
   };
 
   const handleCopiarMesAnterior = async () => {
