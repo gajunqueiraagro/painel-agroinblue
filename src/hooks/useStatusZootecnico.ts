@@ -256,8 +256,15 @@ export function useStatusZootecnico(
       setPastosNaoIniciados(detalhesPastos.reduce((s, f) => s + f.naoIniciados, 0));
 
       // --- Categorias comparison ---
-      const fps = fpData;
-      const fechIds = fps.map((f: any) => f.id);
+      // Deduplicate: keep only the most recent fechamento per pasto
+      const dedupFechByPasto = new Map<string, { id: string; updated_at: string }>();
+      fpData.forEach((f: any) => {
+        const existing = dedupFechByPasto.get(f.pasto_id);
+        if (!existing || (f.updated_at || '') >= (existing.updated_at || '')) {
+          dedupFechByPasto.set(f.pasto_id, { id: f.id, updated_at: f.updated_at || '' });
+        }
+      });
+      const fechIds = Array.from(dedupFechByPasto.values()).map(v => v.id);
       if (fechIds.length > 0) {
         const { data: itensData } = await supabase
           .from('fechamento_pasto_itens')
