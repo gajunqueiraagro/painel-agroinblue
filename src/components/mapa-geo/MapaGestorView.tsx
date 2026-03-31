@@ -6,7 +6,8 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Upload, X, MapPin, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Upload, X, MapPin, Link2 } from 'lucide-react';
 import { formatNum } from '@/lib/calculos/formatters';
 import type { PastoGeometria } from '@/hooks/usePastoGeometrias';
 import type { Pasto } from '@/hooks/usePastos';
@@ -15,18 +16,11 @@ import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
 import { supabase } from '@/integrations/supabase/client';
 
 /* ── Status visual system (kg/ha based) ── */
-const STATUS_STYLES: Record<string, { fill: string; stroke: string; label: string; labelShort: string; textClass: string }> = {
-  adequado:    { fill: 'hsl(145, 38%, 62%)', stroke: 'hsl(145, 30%, 42%)', label: 'Ideal', labelShort: 'Ideal', textClass: 'text-green-700' },
-  atencao:     { fill: 'hsl(42, 55%, 65%)',  stroke: 'hsl(42, 40%, 42%)',  label: 'Sublotado', labelShort: 'Sub', textClass: 'text-yellow-700' },
-  pressao:     { fill: 'hsl(0, 45%, 62%)',   stroke: 'hsl(0, 35%, 42%)',   label: 'Carga Alta', labelShort: 'Alto', textClass: 'text-red-700' },
-  sem_ocupacao:{ fill: 'hsl(220, 10%, 78%)', stroke: 'hsl(220, 8%, 56%)', label: 'Vazio', labelShort: 'Vazio', textClass: 'text-muted-foreground' },
-};
-
-const STATUS_BG: Record<string, string> = {
-  adequado: 'bg-green-50 border-green-200',
-  atencao: 'bg-yellow-50 border-yellow-200',
-  pressao: 'bg-red-50 border-red-200',
-  sem_ocupacao: 'bg-muted/40 border-border',
+const STATUS_STYLES: Record<string, { fill: string; stroke: string; label: string; labelShort: string; textClass: string; bgClass: string }> = {
+  adequado:    { fill: 'hsl(145, 38%, 62%)', stroke: 'hsl(145, 30%, 42%)', label: 'Ideal', labelShort: 'Ideal', textClass: 'text-green-800', bgClass: 'bg-green-50 border-green-200 text-green-800' },
+  atencao:     { fill: 'hsl(42, 55%, 65%)',  stroke: 'hsl(42, 40%, 42%)',  label: 'Sublotado', labelShort: 'Sub', textClass: 'text-yellow-800', bgClass: 'bg-yellow-50 border-yellow-200 text-yellow-800' },
+  pressao:     { fill: 'hsl(0, 45%, 62%)',   stroke: 'hsl(0, 35%, 42%)',   label: 'Carga Alta', labelShort: 'Alto', textClass: 'text-red-800', bgClass: 'bg-red-50 border-red-200 text-red-800' },
+  sem_ocupacao:{ fill: 'hsl(220, 10%, 78%)', stroke: 'hsl(220, 8%, 56%)', label: 'Vazio', labelShort: 'Vazio', textClass: 'text-muted-foreground', bgClass: 'bg-muted/40 border-border text-muted-foreground' },
 };
 
 function polyStyle(status: string, isSelected: boolean) {
@@ -44,12 +38,15 @@ interface Props {
   geoLoading: boolean;
   onUpload: () => void;
   onRenderedChange?: (count: number) => void;
+  onLink?: (geoId: string, pastoId: string) => Promise<boolean>;
 }
 
 interface SelectedGeo { geo: PastoGeometria }
 
-export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUpload, onRenderedChange }: Props) {
+export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUpload, onRenderedChange, onLink }: Props) {
   const [selected, setSelected] = useState<SelectedGeo | null>(null);
+  const [linkPastoId, setLinkPastoId] = useState('');
+  const [linking, setLinking] = useState(false);
   const lastFitKeyRef = useRef('');
 
   const {
@@ -219,14 +216,14 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
           {selected && selectedPasto && (
             <div className="flex items-center gap-1">
               <span className="text-[6px] font-semibold text-muted-foreground uppercase tracking-widest [writing-mode:vertical-lr] rotate-180 self-center">Pasto</span>
-              <div className={`flex-shrink-0 rounded-md border px-1.5 py-0.5 ${STATUS_BG[selectedStatus]}`}>
+              <div className={`flex-shrink-0 rounded-md border px-1.5 py-0.5 ${STATUS_STYLES[selectedStatus].bgClass}`}>
                 <p className="text-[7px] text-muted-foreground uppercase tracking-wider leading-none">Selecionado</p>
                 <p className="text-[11px] font-bold leading-tight text-foreground truncate max-w-[80px]">{selectedPasto.nome}</p>
               </div>
               <KpiChip label="Cabeças" value={String(selectedOc?.cabecas || 0)} active />
               <KpiChip label="Peso Méd." value={selectedOc?.peso_medio_kg ? `${formatNum(selectedOc.peso_medio_kg, 0)} kg` : '—'} active />
               <KpiChip label="Área" value={selectedPasto.area_produtiva_ha ? `${formatNum(selectedPasto.area_produtiva_ha, 1)} ha` : '—'} active />
-              <div className={`flex-shrink-0 rounded-md border px-1.5 py-0.5 ${STATUS_BG[selectedStatus]}`}>
+              <div className={`flex-shrink-0 rounded-md border px-1.5 py-0.5 ${STATUS_STYLES[selectedStatus].bgClass}`}>
                 <p className="text-[7px] text-muted-foreground uppercase tracking-wider leading-none">kg/ha</p>
                 <p className={`text-[11px] font-bold leading-tight ${STATUS_STYLES[selectedStatus].textClass}`}>
                   {selectedOc?.kg_ha != null ? formatNum(selectedOc.kg_ha, 0) : '—'}
@@ -373,8 +370,38 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
                 </>
               )}
 
-              {!selectedPasto && (
-                <p className="text-[8px] text-muted-foreground">Sem vínculo com pasto cadastrado.</p>
+              {!selectedPasto && selected && (
+                <div className="space-y-1.5">
+                  <p className="text-[8px] text-muted-foreground">Polígono sem vínculo.</p>
+                  {onLink && (
+                    <>
+                      <Separator className="my-1" />
+                      <p className="text-[7px] font-semibold text-muted-foreground uppercase tracking-wider">Vincular a um pasto</p>
+                      <Select value={linkPastoId} onValueChange={setLinkPastoId}>
+                        <SelectTrigger className="h-7 text-[9px]"><SelectValue placeholder="Selecione o pasto" /></SelectTrigger>
+                        <SelectContent className="max-h-48 overflow-y-auto">
+                          {pastos.filter(p => p.ativo && !geometrias.some(g => g.pasto_id === p.id)).map(p => (
+                            <SelectItem key={p.id} value={p.id} className="text-[9px]">{p.nome}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="sm"
+                        className="w-full h-6 text-[9px]"
+                        disabled={!linkPastoId || linking}
+                        onClick={async () => {
+                          setLinking(true);
+                          const ok = await onLink(selected.geo.id, linkPastoId);
+                          setLinking(false);
+                          if (ok) { setLinkPastoId(''); setSelected(null); }
+                        }}
+                      >
+                        <Link2 className="h-3 w-3 mr-1" />
+                        {linking ? 'Vinculando...' : 'Vincular'}
+                      </Button>
+                    </>
+                  )}
+                </div>
               )}
             </div>
           </Card>
@@ -395,7 +422,7 @@ function KpiChip({ label, value, active }: { label: string; value: string; activ
 }
 
 function InfoRow({ label, value, status }: { label: string; value: string; status?: string }) {
-  const bg = status ? STATUS_BG[status] || 'bg-muted/30' : 'bg-muted/30';
+  const bg = status ? STATUS_STYLES[status]?.bgClass || 'bg-muted/30' : 'bg-muted/30';
   const textClass = status ? STATUS_STYLES[status]?.textClass || 'text-foreground' : 'text-foreground';
   return (
     <div className={`rounded px-1.5 py-0.5 border ${bg}`}>
@@ -405,9 +432,9 @@ function InfoRow({ label, value, status }: { label: string; value: string; statu
   );
 }
 
-/* ── Histórico de Lotação mini-chart ── */
+/* ── Histórico de Lotação with insights ── */
 function HistoricoLotacao({ pastoId, areaHa }: { pastoId: string; areaHa: number }) {
-  const [data, setData] = useState<{ mes: string; kgHa: number; status: string }[]>([]);
+  const [data, setData] = useState<{ mes: string; kgHa: number; cabecas: number; pesoMedio: number; status: string }[]>([]);
   
   useEffect(() => {
     if (!pastoId || !areaHa) return;
@@ -430,19 +457,23 @@ function HistoricoLotacao({ pastoId, areaHa }: { pastoId: string; areaHa: number
       
       if (!itens?.length) { setData([]); return; }
       
-      // Aggregate per fechamento
-      const agg = new Map<string, number>();
+      const agg = new Map<string, { totalKg: number; totalCab: number; weightedKg: number; weightedCab: number }>();
       itens.forEach(item => {
-        const cur = agg.get(item.fechamento_id) || 0;
-        agg.set(item.fechamento_id, cur + item.quantidade * (item.peso_medio_kg || 0));
+        const cur = agg.get(item.fechamento_id) || { totalKg: 0, totalCab: 0, weightedKg: 0, weightedCab: 0 };
+        cur.totalCab += item.quantidade;
+        cur.totalKg += item.quantidade * (item.peso_medio_kg || 0);
+        if (item.peso_medio_kg) { cur.weightedKg += item.quantidade * item.peso_medio_kg; cur.weightedCab += item.quantidade; }
+        agg.set(item.fechamento_id, cur);
       });
       
       const result = fechamentos.map(f => {
-        const totalKg = agg.get(f.id) || 0;
-        const kgHa = areaHa > 0 ? totalKg / areaHa : 0;
+        const a = agg.get(f.id) || { totalKg: 0, totalCab: 0, weightedKg: 0, weightedCab: 0 };
+        const kgHa = areaHa > 0 ? a.totalKg / areaHa : 0;
         return {
-          mes: f.ano_mes.slice(5), // "MM"
+          mes: f.ano_mes.slice(5),
           kgHa,
+          cabecas: a.totalCab,
+          pesoMedio: a.weightedCab > 0 ? a.weightedKg / a.weightedCab : 0,
           status: kgHa === 0 ? 'sem_ocupacao' : kgHa < 280 ? 'atencao' : kgHa <= 600 ? 'adequado' : 'pressao',
         };
       }).reverse();
@@ -456,22 +487,65 @@ function HistoricoLotacao({ pastoId, areaHa }: { pastoId: string; areaHa: number
   }
   
   const maxKg = Math.max(...data.map(d => d.kgHa), 1);
+  const avgKg = data.filter(d => d.kgHa > 0).reduce((s, d) => s + d.kgHa, 0) / (data.filter(d => d.kgHa > 0).length || 1);
+  const peakKg = Math.max(...data.map(d => d.kgHa));
+  const mesesAlto = data.filter(d => d.status === 'pressao').length;
+  const idealRange = 440; // midpoint of ideal range
+  const desvio = avgKg > 0 ? ((avgKg - idealRange) / idealRange) * 100 : 0;
+  
+  // Trend: compare last 3 vs first 3
+  const recent = data.slice(-3).filter(d => d.kgHa > 0);
+  const older = data.slice(0, 3).filter(d => d.kgHa > 0);
+  const recentAvg = recent.length ? recent.reduce((s, d) => s + d.kgHa, 0) / recent.length : 0;
+  const olderAvg = older.length ? older.reduce((s, d) => s + d.kgHa, 0) / older.length : 0;
+  const trend = recentAvg > olderAvg * 1.05 ? 'subindo' : recentAvg < olderAvg * 0.95 ? 'caindo' : 'estável';
   
   return (
-    <div className="flex items-end gap-px h-10">
-      {data.map((d, i) => {
-        const h = Math.max((d.kgHa / maxKg) * 100, 4);
-        const s = STATUS_STYLES[d.status] || STATUS_STYLES.sem_ocupacao;
-        return (
-          <div key={i} className="flex-1 flex flex-col items-center gap-px" title={`${d.mes}: ${formatNum(d.kgHa, 0)} kg/ha`}>
-            <div
-              className="w-full rounded-t-[1px] min-w-[3px]"
-              style={{ height: `${h}%`, backgroundColor: s.fill, border: `0.5px solid ${s.stroke}` }}
-            />
-            <span className="text-[5px] text-muted-foreground leading-none">{d.mes}</span>
-          </div>
-        );
-      })}
+    <div className="space-y-1.5">
+      {/* Bar chart */}
+      <div className="flex items-end gap-px h-12">
+        {data.map((d, i) => {
+          const h = Math.max((d.kgHa / maxKg) * 100, 4);
+          const s = STATUS_STYLES[d.status] || STATUS_STYLES.sem_ocupacao;
+          return (
+            <div key={i} className="flex-1 flex flex-col items-center gap-px" title={`${d.mes}: ${formatNum(d.kgHa, 0)} kg/ha · ${d.cabecas} cab · ${formatNum(d.pesoMedio, 0)} kg`}>
+              <div
+                className="w-full rounded-t-sm min-w-[4px]"
+                style={{ height: `${h}%`, backgroundColor: s.fill, border: `0.5px solid ${s.stroke}` }}
+              />
+              <span className="text-[5px] text-muted-foreground leading-none">{d.mes}</span>
+            </div>
+          );
+        })}
+      </div>
+      
+      {/* Summary metrics */}
+      <div className="grid grid-cols-3 gap-1">
+        <div className="bg-muted/30 rounded px-1 py-0.5">
+          <p className="text-[6px] text-muted-foreground uppercase">Média</p>
+          <p className="text-[8px] font-semibold text-foreground">{formatNum(avgKg, 0)} kg/ha</p>
+        </div>
+        <div className="bg-muted/30 rounded px-1 py-0.5">
+          <p className="text-[6px] text-muted-foreground uppercase">Pico</p>
+          <p className="text-[8px] font-semibold text-foreground">{formatNum(peakKg, 0)} kg/ha</p>
+        </div>
+        <div className="bg-muted/30 rounded px-1 py-0.5">
+          <p className="text-[6px] text-muted-foreground uppercase">Tendência</p>
+          <p className={`text-[8px] font-semibold ${trend === 'subindo' ? 'text-red-700' : trend === 'caindo' ? 'text-green-700' : 'text-foreground'}`}>
+            {trend === 'subindo' ? '↑ Subindo' : trend === 'caindo' ? '↓ Caindo' : '→ Estável'}
+          </p>
+        </div>
+      </div>
+      
+      {/* Insight text */}
+      <div className="text-[7px] text-muted-foreground leading-relaxed space-y-0.5">
+        {mesesAlto > 0 && (
+          <p className="text-red-700">⚠ Operou acima do ideal em {mesesAlto} {mesesAlto === 1 ? 'mês' : 'meses'}</p>
+        )}
+        {avgKg > 0 && (
+          <p>Lotação média {desvio > 0 ? `${formatNum(Math.abs(desvio), 0)}% acima` : `${formatNum(Math.abs(desvio), 0)}% abaixo`} do ideal</p>
+        )}
+      </div>
     </div>
   );
 }
