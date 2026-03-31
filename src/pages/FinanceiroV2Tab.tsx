@@ -344,6 +344,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
   const filteredLancamentos = useMemo(() => {
     let items = hook.lancamentos;
+
+    // Client-side filter for conta destino vs origem
+    // conta_bancaria_id is shared: for entries it's the destination, for exits it's the origin
+    if (contaDestino !== '__all__') {
+      // Only keep records where this account is the DESTINATION (entries / transfer credits)
+      items = items.filter(l => l.conta_bancaria_id === contaDestino && l.sinal > 0);
+    } else if (contaOrigem !== '__all__') {
+      // Only keep records where this account is the ORIGIN (exits / transfer debits)
+      items = items.filter(l => l.conta_bancaria_id === contaOrigem && l.sinal < 0);
+    }
+
     if (produtoFiltro.trim()) {
       const q = produtoFiltro.toLowerCase();
       items = items.filter(l => l.descricao?.toLowerCase().includes(q));
@@ -355,7 +366,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       items = items.filter(l => getAtividade(l.subcentro) === atividadeFiltro);
     }
     return items;
-  }, [hook.lancamentos, produtoFiltro, fornecedorFiltro, atividadeFiltro]);
+  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, fornecedorFiltro, atividadeFiltro]);
 
   const compareDefaultOrder = useCallback((a: LancamentoV2, b: LancamentoV2) => {
     const pagamentoA = a.data_pagamento || '9999-12-31';
