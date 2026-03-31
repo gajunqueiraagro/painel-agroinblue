@@ -181,6 +181,7 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
     geometrias,
     geometrySignature,
     labelLayerRef,
+    mapStatus,
     mapInstanceRef,
     ocupacoes,
     pastos,

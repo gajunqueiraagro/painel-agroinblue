@@ -152,6 +152,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
     debugInfo.width,
     geometrias,
     geometrySignature,
+    mapStatus,
     ocupacoes,
     reportRenderedGeometries,
     scheduleInvalidateSize,
