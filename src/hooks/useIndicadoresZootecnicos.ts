@@ -887,7 +887,12 @@ export function useIndicadoresZootecnicos(
       ? buildComparacao(arrobasProduzidasAcumulado, arrobasProduzidasAcumYoY, 'acumulado_yoy')
       : null;
 
-    // GMD mês YoY (mesmo mês do ano anterior — só se base confiável)
+    // @/ha acumulado comparação YoY — usa produção biológica
+    let compArrobasHaAcum: Comparacao | null = null;
+    if (arrobasHaAcumuladoAno !== null && arrobasProduzidasAcumYoY !== null && areaProdutiva > 0) {
+      compArrobasHaAcum = buildComparacao(arrobasHaAcumuladoAno, arrobasProduzidasAcumYoY / areaProdutiva, 'acumulado_yoy');
+    }
+
     const gmdMesYoY = computeGmdForPeriod(saldosIniciais, lancamentos, anoAnt, mes, pesoFechamentoYoYMap);
     const compGmdMes = gmdMes !== null && gmdMesYoY !== null ? buildComparacao(gmdMes, gmdMesYoY, 'yoy') : null;
 
