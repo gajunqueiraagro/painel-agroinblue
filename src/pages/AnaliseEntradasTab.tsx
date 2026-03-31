@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Lancamento, SaldoInicial, CATEGORIAS } from '@/types/cattle';
 import { parseISO, format } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
+import { StandardTooltip } from '@/lib/chartConfig';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -196,10 +197,10 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
         <h2 className="font-bold text-foreground mb-3">Entradas por Mês</h2>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={barData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip />
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+            <XAxis dataKey="mes" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+            <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+            <Tooltip content={<StandardTooltip />} />
             <Legend />
             <Bar dataKey={anoFiltro} fill="hsl(142, 76%, 36%)" radius={[3, 3, 0, 0]} />
             <Bar dataKey={anoAnterior} fill="hsl(var(--muted-foreground))" radius={[3, 3, 0, 0]} opacity={0.5} />
@@ -212,10 +213,10 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
         <h2 className="font-bold text-foreground mb-3">Tipo de Entrada por Mês</h2>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={barTipoData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip />
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+            <XAxis dataKey="mes" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+            <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+            <Tooltip content={<StandardTooltip />} />
             <Legend wrapperStyle={{ fontSize: '11px' }} />
             {Object.values(TIPOS_ENTRADA_LABELS).map((label, i) => (
               <Bar key={label} dataKey={label} stackId="a" fill={COLORS[i % COLORS.length]} radius={i === Object.values(TIPOS_ENTRADA_LABELS).length - 1 ? [3, 3, 0, 0] : undefined} />
@@ -233,7 +234,7 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
               <Pie data={porCategoria} cx="50%" cy="45%" outerRadius={70} innerRadius={30} dataKey="value" label={false} labelLine={false}>
                 {porCategoria.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
               </Pie>
-              <Tooltip />
+              <Tooltip content={<StandardTooltip />} />
               <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
                 formatter={(value: string) => {
                   const item = porCategoria.find(c => c.name === value);
@@ -255,7 +256,7 @@ export function AnaliseEntradasTab({ lancamentos, saldosIniciais, onTabChange }:
               <Pie data={porTipo} cx="50%" cy="45%" outerRadius={70} innerRadius={30} dataKey="value" label={false} labelLine={false}>
                 {porTipo.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
               </Pie>
-              <Tooltip />
+              <Tooltip content={<StandardTooltip />} />
               <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
                 formatter={(value: string) => {
                   const item = porTipo.find(c => c.name === value);

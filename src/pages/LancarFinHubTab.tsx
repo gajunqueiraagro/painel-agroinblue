@@ -20,6 +20,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
+import { StandardTooltip } from '@/lib/chartConfig';
 import { ChevronRight, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -595,9 +596,9 @@ function GraficosContent({
               <div className="h-48">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                    <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
                     <Tooltip
                       formatter={(value: number) => value !== null ? formatMoeda(value) : '—'}
                       labelStyle={{ fontWeight: 'bold' }}
@@ -620,9 +621,9 @@ function GraficosContent({
               <div className="h-48">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartDataArroba}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                    <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
                     <Tooltip
                       formatter={(value: number) => value !== null ? formatMoeda(value) : '—'}
                       labelStyle={{ fontWeight: 'bold' }}

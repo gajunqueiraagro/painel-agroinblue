@@ -23,6 +23,7 @@ import { TrendingDown, TrendingUp, Building2, AlertTriangle, ChevronDown, Chevro
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_NOMES } from '@/lib/calculos/labels';
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+import { StandardTooltip } from '@/lib/chartConfig';
 import {
   type FinanceiroLancamento,
   type RateioADM,
@@ -1069,11 +1070,11 @@ export function DashboardFinanceiro({
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} barGap={2}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                <YAxis yAxisId="left" tick={{ fontSize: 10 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v: number) => formatMoeda(v)} />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+                <XAxis dataKey="mes" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                <YAxis yAxisId="left" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <Tooltip content={<StandardTooltip isCurrency />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Bar yAxisId="left" dataKey="Entradas" fill="hsl(120, 40%, 40%)" radius={[2, 2, 0, 0]} />
                 <Bar yAxisId="left" dataKey="Saídas" fill="hsl(0, 65%, 50%)" radius={[2, 2, 0, 0]} />

@@ -5,6 +5,7 @@ import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, PieChart, Pie, Cell
 } from 'recharts';
+import { StandardTooltip } from '@/lib/chartConfig';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -297,10 +298,10 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
         <h2 className="font-bold text-foreground mb-3">Desfrute por Mês (cab.)</h2>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={barData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip />
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+            <XAxis dataKey="mes" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+            <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+            <Tooltip content={<StandardTooltip />} />
             <Legend />
             <Bar dataKey={anoFiltro} fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
             <Bar dataKey={anoAnterior} fill="hsl(var(--muted-foreground))" radius={[3, 3, 0, 0]} opacity={0.5} />
@@ -317,7 +318,7 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
               <Pie data={porTipo} cx="50%" cy="45%" outerRadius={70} innerRadius={30} dataKey="value" label={false} labelLine={false}>
                 {porTipo.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
               </Pie>
-              <Tooltip />
+              <Tooltip content={<StandardTooltip />} />
               <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
                 formatter={(value: string) => {
                   const item = porTipo.find(c => c.name === value);
@@ -335,10 +336,10 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
         <h2 className="font-bold text-foreground mb-3">Arrobas Acumuladas</h2>
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={lineArrobasData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip />
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+            <XAxis dataKey="mes" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+            <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+            <Tooltip content={<StandardTooltip />} />
             <Legend />
             <Line type="monotone" dataKey={anoFiltro} stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
             <Line type="monotone" dataKey={anoAnterior} stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} strokeDasharray="5 5" />
@@ -351,10 +352,10 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
         <h2 className="font-bold text-foreground mb-3">Valor Faturado Acumulado</h2>
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={lineValorData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-            <Tooltip formatter={(v: number) => `R$ ${fmtValor(v)}`} />
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+            <XAxis dataKey="mes" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+            <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+            <Tooltip content={<StandardTooltip formatter={(v) => typeof v === 'number' ? `R$ ${fmtValor(v)}` : '—'} />} />
             <Legend />
             <Line type="monotone" dataKey={anoFiltro} stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
             <Line type="monotone" dataKey={anoAnterior} stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} strokeDasharray="5 5" />
@@ -367,10 +368,10 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
         <h2 className="font-bold text-foreground mb-3">R$/líq @ Acumulado</h2>
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={linePrecoData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip formatter={(v: number) => `R$ ${fmtValor(v)}`} />
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+            <XAxis dataKey="mes" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+            <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+            <Tooltip content={<StandardTooltip formatter={(v) => typeof v === 'number' ? `R$ ${fmtValor(v)}` : '—'} />} />
             <Legend />
             <Line type="monotone" dataKey={anoFiltro} stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
             <Line type="monotone" dataKey={anoAnterior} stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} strokeDasharray="5 5" />

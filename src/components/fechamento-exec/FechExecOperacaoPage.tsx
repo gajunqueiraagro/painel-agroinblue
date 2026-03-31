@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { StandardTooltip } from '@/lib/chartConfig';
 
 interface Props {
   snapshot: Record<string, any>;
@@ -61,10 +62,10 @@ export function FechExecOperacaoPage({ snapshot }: Props) {
         <CardContent>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10 }} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={80} />
-              <Tooltip formatter={(v: number) => formatMoeda(v)} />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+              <XAxis type="number" tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={80} />
+              <Tooltip content={<StandardTooltip isCurrency />} />
               <Bar dataKey="valor" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
