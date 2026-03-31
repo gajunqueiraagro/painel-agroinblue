@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-import { Save, Copy, Eye, EyeOff, Info, Lock, Unlock, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Save, Copy, Eye, EyeOff, Info, Lock, Unlock, AlertTriangle, ArrowLeft, ShieldAlert } from 'lucide-react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
@@ -15,6 +16,7 @@ import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { toast } from 'sonner';
 import { useFechamentoCategoria, type OrigemPeso } from '@/hooks/useFechamentoCategoria';
+import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -74,6 +76,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const anoMes = `${anoFiltro}-${mesFiltro}`;
   const isDezembro = mesFiltro === '12';
+
+  // Conciliation check — blocks saving if categories are not conciliated
+  const statusZoo = useStatusZootecnico(fazendaId, Number(anoFiltro), Number(mesFiltro), lancamentos, saldosIniciais);
+  const categoriasStatus = statusZoo.pendencias.find(p => p.id === 'categorias');
+  const categoriasConciliadas = categoriasStatus?.status === 'fechado';
+  const bloqueadoPorConciliacao = !categoriasConciliadas && !isGlobal && !statusZoo.loading;
 
   const {
     precos, loading, saving, salvarPrecos, loadPrecosMesAnterior,
@@ -230,6 +238,10 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   };
 
   const handleSalvar = async () => {
+    if (bloqueadoPorConciliacao) {
+      toast.error('Não é possível salvar. Existem categorias desconciliadas entre Pasto e Sistema. Realize a conciliação antes.');
+      return;
+    }
     const items = Object.entries(precosLocal).map(([categoria, preco_kg]) => ({
       categoria,
       preco_kg,
@@ -267,6 +279,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   return (
     <div className="p-3 max-w-4xl mx-auto space-y-2 animate-fade-in pb-20">
+      {/* Bloqueio por conciliação */}
+      {bloqueadoPorConciliacao && (
+        <Alert variant="destructive" className="border-destructive/50">
+          <ShieldAlert className="h-4 w-4" />
+          <AlertDescription className="text-xs font-medium">
+            Fechamento bloqueado: existem divergências na Conciliação de Categorias.
+            {categoriasStatus?.descricao && ` (${categoriasStatus.descricao})`}
+          </AlertDescription>
+        </Alert>
+      )}
       {/* Filtros */}
       <div className="flex gap-1.5 items-center flex-wrap">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
@@ -480,9 +502,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               </Button>
             )}
             {canEdit && (
-              <Button onClick={handleSalvar} disabled={saving} className="gap-2">
+              <Button onClick={handleSalvar} disabled={saving || bloqueadoPorConciliacao} className="gap-2">
                 <Save className="h-4 w-4" />
-                {saving ? 'Salvando...' : 'Salvar e Fechar'}
+                {bloqueadoPorConciliacao ? 'Bloqueado' : saving ? 'Salvando...' : 'Salvar e Fechar'}
               </Button>
             )}
           </div>
