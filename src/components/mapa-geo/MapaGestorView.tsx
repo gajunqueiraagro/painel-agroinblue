@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import L from 'leaflet';
-import '@/hooks/useStableLeafletMap'; // ensures global _leaflet_pos patch is applied
+import '@/hooks/useStableLeafletMap';
 import 'leaflet/dist/leaflet.css';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -13,21 +13,20 @@ import type { Pasto } from '@/hooks/usePastos';
 import type { PastoOcupacao } from '@/hooks/usePastoOcupacao';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
 
-const STATUS_STYLES: Record<string, { fillColor: string; color: string; label: string }> = {
-  adequado: { fillColor: 'hsl(145, 40%, 68%)', color: 'hsl(145, 35%, 42%)', label: 'Adequado (280–600)' },
-  atencao: { fillColor: 'hsl(45, 65%, 70%)', color: 'hsl(45, 50%, 42%)', label: 'Atenção (< 280)' },
-  pressao: { fillColor: 'hsl(0, 50%, 68%)', color: 'hsl(0, 40%, 42%)', label: 'Pressão Alta (> 600)' },
-  sem_ocupacao: { fillColor: 'hsl(220, 8%, 78%)', color: 'hsl(220, 8%, 55%)', label: 'Sem Ocupação' },
+/* ── Status visual system ── */
+const STATUS_STYLES: Record<string, { fill: string; stroke: string; label: string }> = {
+  adequado: { fill: 'hsl(145, 38%, 62%)', stroke: 'hsl(145, 30%, 38%)', label: 'Adequado' },
+  atencao:  { fill: 'hsl(42, 55%, 65%)',  stroke: 'hsl(42, 40%, 38%)',  label: 'Atenção' },
+  pressao:  { fill: 'hsl(0, 45%, 62%)',   stroke: 'hsl(0, 35%, 38%)',   label: 'Pressão' },
+  sem_ocupacao: { fill: 'hsl(220, 10%, 76%)', stroke: 'hsl(220, 8%, 52%)', label: 'Vazio' },
 };
 
-function getPolyStyle(status: string, isSelected: boolean) {
+function polyStyle(status: string, isSelected: boolean) {
   const s = STATUS_STYLES[status] || STATUS_STYLES.sem_ocupacao;
-  return {
-    color: isSelected ? 'hsl(213, 75%, 35%)' : s.color,
-    weight: isSelected ? 2.5 : 0.8,
-    fillColor: isSelected ? 'hsl(213, 65%, 50%)' : s.fillColor,
-    fillOpacity: isSelected ? 0.45 : 0.22,
-  };
+  if (isSelected) {
+    return { color: 'hsl(213, 60%, 40%)', weight: 2, fillColor: 'hsl(213, 55%, 55%)', fillOpacity: 0.35 };
+  }
+  return { color: s.stroke, weight: 0.6, fillColor: s.fill, fillOpacity: 0.18 };
 }
 
 interface Props {
@@ -39,65 +38,47 @@ interface Props {
   onRenderedChange?: (count: number) => void;
 }
 
-interface SelectedGeo {
-  geo: PastoGeometria;
-}
+interface SelectedGeo { geo: PastoGeometria }
 
 export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUpload, onRenderedChange }: Props) {
   const [selected, setSelected] = useState<SelectedGeo | null>(null);
-  const viewportLockedRef = useRef(false);
+  const lastFitKeyRef = useRef('');
 
   const {
-    mapContainerRef,
-    mapInstanceRef,
-    featureLayerRef,
-    labelLayerRef,
-    status: mapStatus,
-    debugInfo,
-    reportRenderedGeometries,
-  } = useStableLeafletMap({ debugName: 'MapaGestor' });
+    mapContainerRef, mapInstanceRef, featureLayerRef, labelLayerRef,
+    status: mapStatus, reportRenderedGeometries,
+  } = useStableLeafletMap({ debugName: 'MapaGestor', labelZoomThreshold: 14 });
 
   const hasGeo = geometrias.length > 0;
 
+  /* ── KPIs ── */
   const kpis = useMemo(() => {
-    const vinculados = geometrias.filter((g) => g.pasto_id);
-    const linkedPastoIds = new Set(vinculados.map((g) => g.pasto_id!));
-    const linkedPastos = pastos.filter((p) => linkedPastoIds.has(p.id));
-    const totalArea = linkedPastos.reduce((sum, pasto) => sum + (pasto.area_produtiva_ha || 0), 0);
+    const linkedIds = new Set(geometrias.filter(g => g.pasto_id).map(g => g.pasto_id!));
+    const linkedPastos = pastos.filter(p => linkedIds.has(p.id));
+    const totalArea = linkedPastos.reduce((s, p) => s + (p.area_produtiva_ha || 0), 0);
+    let totalCab = 0, totalKg = 0, weightedKg = 0, weightedCab = 0;
 
-    let totalCab = 0;
-    let totalKg = 0;
-    let totalPesoMedio = 0;
-    let countPesoMedio = 0;
-
-    linkedPastoIds.forEach((pid) => {
+    linkedIds.forEach(pid => {
       const oc = ocupacoes.get(pid);
       if (!oc) return;
-
       totalCab += oc.cabecas;
       totalKg += oc.peso_total_kg;
-      if (oc.cabecas > 0 && oc.peso_total_kg > 0) {
-        totalPesoMedio += oc.peso_total_kg;
-        countPesoMedio += oc.cabecas;
-      }
+      if (oc.cabecas > 0 && oc.peso_total_kg > 0) { weightedKg += oc.peso_total_kg; weightedCab += oc.cabecas; }
     });
-
-    const lotKgHa = totalArea > 0 ? totalKg / totalArea : 0;
-    const emPressao = Array.from(ocupacoes.values()).filter((o) => o.status === 'pressao').length;
-    const pesoMedioGeral = countPesoMedio > 0 ? totalPesoMedio / countPesoMedio : 0;
 
     return {
       totalCabecas: totalCab,
-      pesoMedio: pesoMedioGeral,
-      lotacaoKgHa: lotKgHa,
+      pesoMedio: weightedCab > 0 ? weightedKg / weightedCab : 0,
+      lotacaoKgHa: totalArea > 0 ? totalKg / totalArea : 0,
       areaTotal: totalArea,
-      emPressao,
+      emPressao: Array.from(ocupacoes.values()).filter(o => o.status === 'pressao').length,
     };
   }, [geometrias, ocupacoes, pastos]);
 
-  const selectedPasto = selected?.geo.pasto_id ? pastos.find((p) => p.id === selected.geo.pasto_id) : null;
+  const selectedPasto = selected?.geo.pasto_id ? pastos.find(p => p.id === selected.geo.pasto_id) : null;
   const selectedOc = selected?.geo.pasto_id ? ocupacoes.get(selected.geo.pasto_id) : null;
 
+  /* ── Draw geometries ── */
   useEffect(() => {
     if (mapStatus !== 'ready') return;
     const map = mapInstanceRef.current;
@@ -118,129 +99,106 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
       const allBounds = L.latLngBounds([]);
       let rendered = 0;
 
-      geometrias.forEach((geo) => {
+      geometrias.forEach(geo => {
         try {
           const oc = geo.pasto_id ? ocupacoes.get(geo.pasto_id) : undefined;
           const status = oc?.status || 'sem_ocupacao';
           const isSelected = selected?.geo.id === geo.id;
-          const style = getPolyStyle(status, isSelected);
+          const style = polyStyle(status, isSelected);
 
           const layer = L.geoJSON(geo.geojson as GeoJSON.GeoJsonObject, { style });
           const bounds = layer.getBounds();
-
-          if (bounds.isValid()) {
-            allBounds.extend(bounds);
-            rendered++;
-          }
+          if (bounds.isValid()) { allBounds.extend(bounds); rendered++; }
 
           layer.on('click', () => setSelected({ geo }));
           layer.addTo(featureLayer);
 
-          // Label at center
+          // Label — only added to labelLayer (auto-hidden below zoom threshold)
           if (bounds.isValid()) {
-            const center = bounds.getCenter();
-            const pasto = geo.pasto_id ? pastos.find((p) => p.id === geo.pasto_id) : null;
-            const labelText = pasto?.nome || geo.nome_original || '';
-            if (labelText) {
-              L.marker(center, {
+            const pasto = geo.pasto_id ? pastos.find(p => p.id === geo.pasto_id) : null;
+            const name = pasto?.nome || geo.nome_original || '';
+            if (name) {
+              L.marker(bounds.getCenter(), {
                 icon: L.divIcon({
-                  className: '',
-                  html: `<div style="font-size:9px;font-weight:600;color:#1e293b;text-shadow:0 0 3px #fff,0 0 3px #fff;white-space:nowrap;pointer-events:none">${labelText}</div>`,
+                  className: 'pasto-label-small',
+                  html: `<span>${name}</span>`,
                   iconSize: [0, 0],
                   iconAnchor: [0, 0],
                 }),
+                interactive: false,
               }).addTo(labelLayer);
             }
           }
-        } catch (e) {
-          console.warn('[MAP] erro ao renderizar geometria', geo.id, e);
+        } catch {
+          // skip invalid geometry
         }
       });
 
       reportRenderedGeometries(rendered);
       onRenderedChange?.(rendered);
 
-      if (allBounds.isValid()) {
-        try {
-          map.fitBounds(allBounds, { padding: [30, 30], animate: false, maxZoom: 16 });
-        } catch (e) {
-          console.warn('[MAP] fitBounds falhou', e);
-        }
+      // fitBounds only on first load or geometry set change
+      const fitKey = geometrias.map(g => g.id).join(',');
+      if (allBounds.isValid() && fitKey !== lastFitKeyRef.current) {
+        lastFitKeyRef.current = fitKey;
+        try { map.fitBounds(allBounds, { padding: [20, 20], animate: false, maxZoom: 16 }); } catch { /* */ }
       }
-    }, 200);
+    }, 180);
 
     return () => window.clearTimeout(timer);
   }, [mapStatus, geometrias, ocupacoes, pastos, selected, mapInstanceRef, featureLayerRef, labelLayerRef, reportRenderedGeometries, onRenderedChange]);
 
   return (
-    <div className="flex flex-col gap-1.5 h-full min-h-0">
-      <div className="flex-shrink-0 flex items-center gap-1.5 overflow-x-auto px-0.5">
-        <KpiChip
-          label={selected && selectedPasto ? selectedPasto.nome : 'Pasto'}
-          value={selected && selectedOc ? (selectedOc.kg_ha != null ? `${formatNum(selectedOc.kg_ha, 0)} kg/ha` : '—') : '—'}
-          sub={selected && selectedPasto ? (selectedPasto.tipo_uso || '—') : undefined}
-          muted={!selected}
-        />
-        <KpiChip
-          label="Cabeças"
-          value={String(kpis.totalCabecas)}
-          sub={kpis.pesoMedio > 0 ? `${formatNum(kpis.pesoMedio, 0)} kg méd` : undefined}
-        />
-        <KpiChip
-          label="Lotação"
-          value={kpis.lotacaoKgHa > 0 ? `${formatNum(kpis.lotacaoKgHa, 0)} kg/ha` : '—'}
-          sub={kpis.emPressao > 0 ? `${kpis.emPressao} pressão alta` : undefined}
-          accent={kpis.emPressao > 0}
-        />
-        <KpiChip
-          label="Nota"
-          value={selected && selectedPasto?.observacoes ? selectedPasto.observacoes.slice(0, 30) : '—'}
-          muted={!selected || !selectedPasto?.observacoes}
-        />
+    <div className="flex flex-col h-full min-h-0 gap-1">
+      {/* KPI strip */}
+      <div className="flex-shrink-0 flex items-center gap-1 overflow-x-auto px-0.5 pb-0.5">
+        <KpiChip label="Cabeças" value={String(kpis.totalCabecas)} sub={kpis.pesoMedio > 0 ? `${formatNum(kpis.pesoMedio, 0)} kg méd` : undefined} />
+        <KpiChip label="Lotação" value={kpis.lotacaoKgHa > 0 ? `${formatNum(kpis.lotacaoKgHa, 0)} kg/ha` : '—'} accent={kpis.emPressao > 0} sub={kpis.emPressao > 0 ? `${kpis.emPressao} em pressão` : undefined} />
+        <KpiChip label="Área" value={kpis.areaTotal > 0 ? `${formatNum(kpis.areaTotal, 0)} ha` : '—'} />
+        {selected && selectedPasto && (
+          <KpiChip label={selectedPasto.nome} value={selectedOc?.kg_ha != null ? `${formatNum(selectedOc.kg_ha, 0)} kg/ha` : '—'} active />
+        )}
       </div>
 
-      <div className="flex-1 min-h-0 flex gap-1.5 pb-1">
-        <Card className="flex-1 min-h-[320px] sm:min-h-[400px] relative overflow-hidden">
-          <div className="absolute inset-0 rounded-lg bg-muted/10">
-            <div ref={mapContainerRef} className="h-full w-full rounded-lg" style={{ zIndex: 0 }} />
+      {/* Map + side panel */}
+      <div className="flex-1 min-h-0 flex gap-1.5">
+        <Card className="flex-1 relative overflow-hidden border-border/60">
+          <div className="absolute inset-0">
+            <div ref={mapContainerRef} className="h-full w-full" style={{ zIndex: 0 }} />
           </div>
+
           {geoLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-background/60 z-10 rounded-lg">
-              <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-10">
+              <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             </div>
           )}
+
           {hasGeo && !geoLoading && mapStatus !== 'ready' && (
-            <div className="absolute inset-0 flex items-center justify-center bg-background/72 z-10 rounded-lg px-4">
-              <div className="rounded-md border border-border bg-card/95 px-3 py-2 text-center shadow-sm">
-                <p className="text-[11px] font-medium text-foreground">
-                  {mapStatus === 'error' ? 'Falha ao inicializar o mapa' : 'Preparando mapa...'}
-                </p>
-              </div>
+            <div className="absolute inset-0 flex items-center justify-center bg-background/60 z-10">
+              <p className="text-[10px] font-medium text-muted-foreground">
+                {mapStatus === 'error' ? 'Falha ao inicializar' : 'Preparando…'}
+              </p>
             </div>
           )}
+
           {!hasGeo && !geoLoading && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center px-4 bg-card z-10 rounded-lg">
-              <MapPin className="h-10 w-10 text-muted-foreground/20" />
-              <p className="text-xs text-muted-foreground">Esta fazenda ainda não possui mapa importado.</p>
-              <Button size="sm" variant="outline" onClick={onUpload}>
-                <Upload className="h-3.5 w-3.5 mr-1" />
-                Importar
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-card z-10">
+              <MapPin className="h-8 w-8 text-muted-foreground/15" />
+              <p className="text-[10px] text-muted-foreground">Nenhum mapa importado</p>
+              <Button size="sm" variant="outline" className="h-6 text-[9px]" onClick={onUpload}>
+                <Upload className="h-3 w-3 mr-1" /> Importar KML
               </Button>
             </div>
           )}
+
+          {/* Legend */}
           {hasGeo && (
-            <div className="absolute bottom-2 left-2 bg-card/90 backdrop-blur-sm rounded border border-border px-1.5 py-1 z-10">
-              <div className="flex flex-col gap-0.5">
-                {(['adequado', 'atencao', 'pressao', 'sem_ocupacao'] as const).map((key) => (
+            <div className="absolute bottom-1.5 left-1.5 bg-card/85 backdrop-blur-sm rounded border border-border/50 px-1.5 py-1 z-10">
+              <div className="flex flex-col gap-px">
+                {(['adequado', 'atencao', 'pressao', 'sem_ocupacao'] as const).map(key => (
                   <div key={key} className="flex items-center gap-1">
-                    <div
-                      className="w-2 h-2 rounded-sm"
-                      style={{
-                        backgroundColor: STATUS_STYLES[key].fillColor,
-                        border: `1px solid ${STATUS_STYLES[key].color}`,
-                      }}
-                    />
-                    <span className="text-[7px] text-muted-foreground">{STATUS_STYLES[key].label}</span>
+                    <div className="w-1.5 h-1.5 rounded-[2px]" style={{ backgroundColor: STATUS_STYLES[key].fill, border: `1px solid ${STATUS_STYLES[key].stroke}` }} />
+                    <span className="text-[6px] text-muted-foreground leading-none">{STATUS_STYLES[key].label}</span>
                   </div>
                 ))}
               </div>
@@ -248,15 +206,16 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
           )}
         </Card>
 
+        {/* Detail panel */}
         {selected && (
-          <Card className="hidden sm:flex flex-col w-56 flex-shrink-0 overflow-hidden">
+          <Card className="hidden sm:flex flex-col w-52 flex-shrink-0 overflow-hidden border-border/60">
             <div className="p-2 overflow-y-auto flex-1 space-y-1.5">
-              <div className="flex items-start justify-between gap-2">
+              <div className="flex items-start justify-between gap-1">
                 <div className="min-w-0">
-                  <h3 className="text-[11px] font-semibold text-foreground leading-tight truncate">
-                    {selected.geo.nome_original || 'Sem nome'}
+                  <h3 className="text-[10px] font-semibold text-foreground leading-tight truncate">
+                    {selectedPasto?.nome || selected.geo.nome_original || 'Sem nome'}
                   </h3>
-                  <Badge variant={selected.geo.pasto_id ? 'secondary' : 'outline'} className="text-[7px] h-3 mt-0.5 px-1">
+                  <Badge variant={selected.geo.pasto_id ? 'secondary' : 'outline'} className="text-[6px] h-3 mt-0.5 px-1">
                     {selectedOc ? STATUS_STYLES[selectedOc.status]?.label || 'Vinculado' : selected.geo.pasto_id ? 'Sem dados' : 'Sem vínculo'}
                   </Badge>
                 </div>
@@ -266,30 +225,21 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
               </div>
               <Separator />
               {selectedPasto ? (
-                <div className="space-y-1">
-                  <InfoRow label="Nome" value={selectedPasto.nome} />
-                  {selectedPasto.area_produtiva_ha != null && (
-                    <InfoRow label="Área (ha)" value={formatNum(selectedPasto.area_produtiva_ha, 1)} />
-                  )}
+                <div className="space-y-0.5">
+                  {selectedPasto.area_produtiva_ha != null && <InfoRow label="Área" value={`${formatNum(selectedPasto.area_produtiva_ha, 1)} ha`} />}
                   <InfoRow label="Cabeças" value={String(selectedOc?.cabecas || 0)} />
-                  <InfoRow
-                    label="Peso Total"
-                    value={selectedOc?.peso_total_kg ? `${formatNum(selectedOc.peso_total_kg, 0)} kg` : '—'}
-                  />
+                  <InfoRow label="Peso Total" value={selectedOc?.peso_total_kg ? `${formatNum(selectedOc.peso_total_kg, 0)} kg` : '—'} />
                   <InfoRow label="kg/ha" value={selectedOc?.kg_ha != null ? formatNum(selectedOc.kg_ha, 0) : '—'} highlight />
-                  <InfoRow label="Tipo de Uso" value={selectedPasto.tipo_uso || '—'} />
+                  <InfoRow label="Uso" value={selectedPasto.tipo_uso || '—'} />
                   {selectedPasto.observacoes && (
                     <>
-                      <Separator />
-                      <div>
-                        <p className="text-[8px] text-muted-foreground uppercase tracking-wide mb-0.5">Observações</p>
-                        <p className="text-[9px] text-foreground leading-relaxed">{selectedPasto.observacoes}</p>
-                      </div>
+                      <Separator className="my-1" />
+                      <p className="text-[8px] text-muted-foreground leading-relaxed">{selectedPasto.observacoes}</p>
                     </>
                   )}
                 </div>
               ) : (
-                <p className="text-[9px] text-muted-foreground">Polígono sem vínculo com pasto cadastrado.</p>
+                <p className="text-[8px] text-muted-foreground">Sem vínculo com pasto cadastrado.</p>
               )}
             </div>
           </Card>
@@ -299,23 +249,22 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
   );
 }
 
-function KpiChip({ label, value, sub, accent, muted }: { label: string; value: string; sub?: string; accent?: boolean; muted?: boolean }) {
+/* ── Sub-components ── */
+function KpiChip({ label, value, sub, accent, active }: { label: string; value: string; sub?: string; accent?: boolean; active?: boolean }) {
   return (
-    <div className={`flex-shrink-0 rounded-md border border-border bg-card px-2 py-0.5 min-w-0 ${muted ? 'opacity-50' : ''}`}>
-      <p className="text-[8px] text-muted-foreground uppercase tracking-wide leading-none">{label}</p>
-      <p className={`text-[11px] font-bold leading-tight truncate max-w-[120px] ${accent ? 'text-destructive' : 'text-foreground'}`}>
-        {value}
-      </p>
-      {sub && <p className="text-[8px] text-muted-foreground leading-none truncate max-w-[120px]">{sub}</p>}
+    <div className={`flex-shrink-0 rounded-md border px-1.5 py-0.5 min-w-0 ${active ? 'border-primary/30 bg-primary/5' : 'border-border/50 bg-card'}`}>
+      <p className="text-[7px] text-muted-foreground uppercase tracking-wider leading-none">{label}</p>
+      <p className={`text-[10px] font-bold leading-tight truncate max-w-[100px] ${accent ? 'text-destructive' : 'text-foreground'}`}>{value}</p>
+      {sub && <p className="text-[7px] text-muted-foreground leading-none truncate max-w-[100px]">{sub}</p>}
     </div>
   );
 }
 
 function InfoRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className={`rounded px-1.5 py-0.5 ${highlight ? 'bg-primary/10' : 'bg-muted/40'}`}>
-      <p className="text-[8px] text-muted-foreground uppercase tracking-wide">{label}</p>
-      <p className={`text-[9px] font-semibold ${highlight ? 'text-primary' : 'text-foreground'}`}>{value}</p>
+    <div className={`rounded px-1.5 py-0.5 ${highlight ? 'bg-primary/8' : 'bg-muted/30'}`}>
+      <p className="text-[7px] text-muted-foreground uppercase tracking-wide leading-none">{label}</p>
+      <p className={`text-[9px] font-semibold leading-tight ${highlight ? 'text-primary' : 'text-foreground'}`}>{value}</p>
     </div>
   );
 }
