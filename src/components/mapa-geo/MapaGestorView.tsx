@@ -373,7 +373,10 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
 
                   <Separator className="my-1" />
                   <div>
-                    <p className="text-[7px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Histórico de Lotação</p>
+                    <div className="flex items-baseline justify-between mb-1">
+                      <p className="text-[7px] font-semibold text-muted-foreground uppercase tracking-wider">Histórico de Lotação</p>
+                      <span className="text-[6px] font-medium text-muted-foreground">kg/ha</span>
+                    </div>
                     <HistoricoLotacao pastoId={selected.geo.pasto_id!} areaHa={selectedPasto.area_produtiva_ha || 0} />
                   </div>
 
