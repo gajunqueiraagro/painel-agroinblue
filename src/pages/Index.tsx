@@ -439,17 +439,6 @@ const Index = () => {
           filtroMesInicial={filtroGlobal.mes}
         />
       )}
-      {activeTab === 'conciliacao_categoria' && (
-        <ConciliacaoCategoriaTab
-          lancamentos={lancamentosVisiveis}
-          saldosIniciais={saldosIniciais}
-          onBack={goToVisaoZooHub}
-          onNavigateToReclass={goToReclassFromConciliacao}
-          onNavigateToFechamento={goToFechamentoFromConciliacao}
-          filtroAnoInicial={filtroGlobal.ano}
-          filtroMesInicial={filtroGlobal.mes}
-        />
-      )}
       {activeTab === 'fin_caixa' && (
         <FinanceiroCaixaTab
           lancamentosPecuarios={lancamentos}
