@@ -181,7 +181,7 @@ export function MapaGeoPastosTab() {
         open={uploadOpen}
         onOpenChange={setUploadOpen}
         onUpload={handleKmlUpload}
-        onRemove={() => {}}
+        onRemove={async () => {}}
         pastos={pastos}
         hasExistingMap={hasGeo}
       />
