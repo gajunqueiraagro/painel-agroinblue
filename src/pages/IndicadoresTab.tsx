@@ -260,6 +260,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               unidade="%"
               compAnual={c.desfruteCabecasAcumulado.anual}
               semBase={ind.desfruteCabecasAcumulado === null}
+              info={`Desfrute em cabeças acumulado no ano.\n\nFórmula: (Saídas em cabeças no período ÷ Rebanho médio) × 100.\nMede a taxa de extração do rebanho.`}
             />
             <KpiCard
               label="Desfrute @"
@@ -267,12 +268,14 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               unidade="%"
               compAnual={c.desfruteArrobasAcumulado.anual}
               semBase={ind.desfruteArrobasAcumulado === null}
+              info={`Desfrute em arrobas acumulado no ano.\n\nFórmula: (@ saídas ÷ @ do rebanho médio) × 100.\nMede eficiência em peso, não apenas em cabeças.`}
             />
             <KpiCard
               label="@ desfrutadas"
               valor={formatNum(ind.arrobasSaidasAcumuladoAno, 1)}
               unidade="@"
               compAnual={c.arrobasDesfrutadasAcum.anual}
+              info={`Total de arrobas que saíram do rebanho no ano (vendas, abates, consumo).\n\nSomatório de Janeiro até o mês selecionado.`}
             />
           </div>
         </CardContent>
