@@ -140,11 +140,10 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
       reportRenderedGeometries(renderedCount);
       onRenderedChange?.(renderedCount);
 
-      const fitKey = `${geometrySignature}:${debugInfo.width}:${debugInfo.height}`;
-      if (allBounds.length > 0 && fitKey !== lastFitKeyRef.current) {
-        lastFitKeyRef.current = fitKey;
-        const combinedBounds = allBounds.reduce((acc, bounds) => acc.extend(bounds));
-        safeFitBounds(map, combinedBounds, { padding: [30, 30], maxZoom: 17 }, 'MapaOperacao');
+      if (allBounds.length > 0 && geoIdKey !== lastFitKeyRef.current) {
+        lastFitKeyRef.current = geoIdKey;
+        const combinedBounds = allBounds.reduce((acc, b) => acc.extend(b));
+        try { map.fitBounds(combinedBounds, { padding: [20, 20], animate: false, maxZoom: 16 }); } catch { /* */ }
       }
     }, 220);
 
