@@ -330,14 +330,15 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
                     {action === 'transferencia' && (
                       <div>
                         <Label className="text-[10px]">Pasto Destino *</Label>
-                        <Select value={destino} onValueChange={setDestino}>
-                          <SelectTrigger className="h-8 mt-0.5 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                          <SelectContent>
-                            {pastos.filter(p => p.id !== selectedPasto!.id && p.ativo).map(p => (
-                              <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                          value={destino}
+                          onValueChange={setDestino}
+                          options={pastos.filter(p => p.id !== selectedPasto!.id && p.ativo).map(p => ({ value: p.id, label: p.nome }))}
+                          placeholder="Buscar pasto..."
+                          allLabel=""
+                          allValue=""
+                          className="h-8 mt-0.5 text-xs"
+                        />
                       </div>
                     )}
                     <div>
