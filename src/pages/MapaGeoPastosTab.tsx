@@ -34,11 +34,12 @@ export function MapaGeoPastosTab() {
 
   const hasGeo = geometrias.length > 0;
 
-  // Init map once
+  // Init map — always, since the div is always mounted
   useEffect(() => {
-    if (!mapRef.current || mapInstance.current) return;
+    const el = mapRef.current;
+    if (!el || mapInstance.current) return;
 
-    const map = L.map(mapRef.current, {
+    const map = L.map(el, {
       center: [-15.8, -47.9],
       zoom: 5,
       zoomControl: true,
@@ -59,7 +60,7 @@ export function MapaGeoPastosTab() {
       mapInstance.current = null;
       layerRef.current = null;
     };
-  }, [hasGeo]); // only mount when we have geometries
+  }, []);
 
   // Draw polygons
   useEffect(() => {
