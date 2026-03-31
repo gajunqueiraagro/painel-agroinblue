@@ -492,31 +492,33 @@ function InfoRow({ label, value, status }: { label: string; value: string; statu
   );
 }
 
-/* ── Histórico de Lotação with insights ── */
+/* ── Histórico de Lotação – bar chart with status + quality ── */
+interface HistData { mes: string; mesLabel: string; kgHa: number; cabecas: number; pesoMedio: number; status: string; qualidade: number | null }
+
 function HistoricoLotacao({ pastoId, areaHa }: { pastoId: string; areaHa: number }) {
-  const [data, setData] = useState<{ mes: string; kgHa: number; cabecas: number; pesoMedio: number; status: string }[]>([]);
-  
+  const [data, setData] = useState<HistData[]>([]);
+
   useEffect(() => {
     if (!pastoId || !areaHa) return;
-    
+
     (async () => {
       const { data: fechamentos } = await supabase
         .from('fechamento_pastos')
-        .select('id, ano_mes')
+        .select('id, ano_mes, qualidade_mes')
         .eq('pasto_id', pastoId)
         .order('ano_mes', { ascending: false })
         .limit(12);
-      
+
       if (!fechamentos?.length) { setData([]); return; }
-      
+
       const fIds = fechamentos.map(f => f.id);
       const { data: itens } = await supabase
         .from('fechamento_pasto_itens')
         .select('fechamento_id, quantidade, peso_medio_kg')
         .in('fechamento_id', fIds);
-      
+
       if (!itens?.length) { setData([]); return; }
-      
+
       const agg = new Map<string, { totalKg: number; totalCab: number; weightedKg: number; weightedCab: number }>();
       itens.forEach(item => {
         const cur = agg.get(item.fechamento_id) || { totalKg: 0, totalCab: 0, weightedKg: 0, weightedCab: 0 };
@@ -525,61 +527,127 @@ function HistoricoLotacao({ pastoId, areaHa }: { pastoId: string; areaHa: number
         if (item.peso_medio_kg) { cur.weightedKg += item.quantidade * item.peso_medio_kg; cur.weightedCab += item.quantidade; }
         agg.set(item.fechamento_id, cur);
       });
-      
+
+      const MONTH_NAMES = ['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
       const result = fechamentos.map(f => {
         const a = agg.get(f.id) || { totalKg: 0, totalCab: 0, weightedKg: 0, weightedCab: 0 };
         const kgHa = areaHa > 0 ? a.totalKg / areaHa : 0;
+        const monthNum = parseInt(f.ano_mes.slice(5), 10);
         return {
           mes: f.ano_mes.slice(5),
+          mesLabel: MONTH_NAMES[monthNum] || f.ano_mes.slice(5),
           kgHa,
           cabecas: a.totalCab,
           pesoMedio: a.weightedCab > 0 ? a.weightedKg / a.weightedCab : 0,
           status: kgHa === 0 ? 'sem_ocupacao' : kgHa < 280 ? 'atencao' : kgHa <= 600 ? 'adequado' : 'pressao',
+          qualidade: f.qualidade_mes ?? null,
         };
       }).reverse();
-      
+
       setData(result);
     })();
   }, [pastoId, areaHa]);
-  
+
   if (data.length === 0) {
     return <p className="text-[7px] text-muted-foreground italic">Sem dados históricos</p>;
   }
-  
+
   const maxKg = Math.max(...data.map(d => d.kgHa), 1);
-  const avgKg = data.filter(d => d.kgHa > 0).reduce((s, d) => s + d.kgHa, 0) / (data.filter(d => d.kgHa > 0).length || 1);
+  const withValues = data.filter(d => d.kgHa > 0);
+  const avgKg = withValues.length ? withValues.reduce((s, d) => s + d.kgHa, 0) / withValues.length : 0;
   const peakKg = Math.max(...data.map(d => d.kgHa));
   const mesesAlto = data.filter(d => d.status === 'pressao').length;
-  const idealRange = 440; // midpoint of ideal range
+  const idealRange = 440;
   const desvio = avgKg > 0 ? ((avgKg - idealRange) / idealRange) * 100 : 0;
-  
-  // Trend: compare last 3 vs first 3
+
   const recent = data.slice(-3).filter(d => d.kgHa > 0);
   const older = data.slice(0, 3).filter(d => d.kgHa > 0);
   const recentAvg = recent.length ? recent.reduce((s, d) => s + d.kgHa, 0) / recent.length : 0;
   const olderAvg = older.length ? older.reduce((s, d) => s + d.kgHa, 0) / older.length : 0;
   const trend = recentAvg > olderAvg * 1.05 ? 'subindo' : recentAvg < olderAvg * 0.95 ? 'caindo' : 'estável';
-  
+
+  const STATUS_DOT: Record<string, string> = {
+    adequado: 'bg-green-500',
+    atencao: 'bg-yellow-400',
+    pressao: 'bg-red-500',
+    sem_ocupacao: 'bg-muted',
+  };
+
   return (
     <div className="space-y-1.5">
-      {/* Bar chart */}
-      <div className="flex items-end gap-px h-12">
+      {/* ── Column chart with kg/ha + status dot + quality ── */}
+      <div className="flex items-end gap-[3px]" style={{ height: 72 }}>
         {data.map((d, i) => {
-          const h = Math.max((d.kgHa / maxKg) * 100, 4);
+          const barH = Math.max((d.kgHa / maxKg) * 100, 6);
           const s = STATUS_STYLES[d.status] || STATUS_STYLES.sem_ocupacao;
           return (
-            <div key={i} className="flex-1 flex flex-col items-center gap-px" title={`${d.mes}: ${formatNum(d.kgHa, 0)} kg/ha · ${d.cabecas} cab · ${formatNum(d.pesoMedio, 0)} kg`}>
+            <div
+              key={i}
+              className="flex-1 flex flex-col items-center justify-end min-w-0"
+              title={`${d.mesLabel}: ${formatNum(d.kgHa, 0)} kg/ha · ${d.cabecas} cab · ${formatNum(d.pesoMedio, 0)} kg`}
+              style={{ height: '100%' }}
+            >
+              {/* kg/ha value on top */}
+              <span className="text-[5.5px] font-semibold text-foreground leading-none mb-px truncate w-full text-center">
+                {d.kgHa > 0 ? formatNum(d.kgHa, 0) : ''}
+              </span>
+
+              {/* Bar */}
               <div
-                className="w-full rounded-t-sm min-w-[4px]"
-                style={{ height: `${h}%`, backgroundColor: s.fill, border: `0.5px solid ${s.stroke}` }}
+                className="w-full rounded-t-sm"
+                style={{
+                  height: `${barH}%`,
+                  backgroundColor: s.fill,
+                  borderLeft: `0.5px solid ${s.stroke}`,
+                  borderRight: `0.5px solid ${s.stroke}`,
+                  borderTop: `0.5px solid ${s.stroke}`,
+                  minHeight: 3,
+                }}
               />
-              <span className="text-[5px] text-muted-foreground leading-none">{d.mes}</span>
             </div>
           );
         })}
       </div>
-      
-      {/* Summary metrics */}
+
+      {/* ── Status dots row ── */}
+      <div className="flex gap-[3px]">
+        {data.map((d, i) => (
+          <div key={i} className="flex-1 flex justify-center">
+            <div className={`w-2 h-2 rounded-full ${STATUS_DOT[d.status] || 'bg-muted'}`} title={STATUS_STYLES[d.status]?.label || 'Vazio'} />
+          </div>
+        ))}
+      </div>
+
+      {/* ── Quality row ── */}
+      <div className="flex gap-[3px]">
+        {data.map((d, i) => (
+          <div key={i} className="flex-1 text-center">
+            <span className={`text-[5.5px] leading-none ${d.qualidade != null ? 'font-semibold text-foreground' : 'text-muted-foreground/50'}`}>
+              {d.qualidade != null ? d.qualidade : '—'}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Month labels ── */}
+      <div className="flex gap-[3px]">
+        {data.map((d, i) => (
+          <div key={i} className="flex-1 text-center">
+            <span className="text-[5px] text-muted-foreground leading-none">{d.mesLabel}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Legend ── */}
+      <div className="flex items-center gap-2 pt-0.5">
+        <div className="flex items-center gap-0.5"><div className="w-1.5 h-1.5 rounded-full bg-yellow-400" /><span className="text-[5.5px] text-muted-foreground">Sub</span></div>
+        <div className="flex items-center gap-0.5"><div className="w-1.5 h-1.5 rounded-full bg-green-500" /><span className="text-[5.5px] text-muted-foreground">Ideal</span></div>
+        <div className="flex items-center gap-0.5"><div className="w-1.5 h-1.5 rounded-full bg-red-500" /><span className="text-[5.5px] text-muted-foreground">Alto</span></div>
+        <span className="text-[5px] text-muted-foreground ml-auto">Nota ↑</span>
+      </div>
+
+      {/* ── Summary metrics ── */}
       <div className="grid grid-cols-3 gap-1">
         <div className="bg-muted/30 rounded px-1 py-0.5">
           <p className="text-[6px] text-muted-foreground uppercase">Média</p>
@@ -596,8 +664,8 @@ function HistoricoLotacao({ pastoId, areaHa }: { pastoId: string; areaHa: number
           </p>
         </div>
       </div>
-      
-      {/* Insight text */}
+
+      {/* ── Insights ── */}
       <div className="text-[7px] text-muted-foreground leading-relaxed space-y-0.5">
         {mesesAlto > 0 && (
           <p className="text-red-700">⚠ Operou acima do ideal em {mesesAlto} {mesesAlto === 1 ? 'mês' : 'meses'}</p>
