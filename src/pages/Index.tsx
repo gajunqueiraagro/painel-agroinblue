@@ -200,7 +200,7 @@ const Index = () => {
   const goToLancarFinHub = useCallback(() => setActiveTab('lancar_fin_hub'), []);
   const goToVisaoFinHub = useCallback(() => setActiveTab('visao_fin_hub'), []);
   const goToZootecnico = useCallback(() => setActiveTab('zootecnico'), []);
-  const goToConciliacaoCategoria = useCallback(() => setActiveTab('conciliacao_categoria'), []);
+  
   const goToReclassFromConciliacao = useCallback((filtro?: { ano: string; mes: number }) => {
     if (filtro) setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
     setLancamentosFromConciliacao(true);
