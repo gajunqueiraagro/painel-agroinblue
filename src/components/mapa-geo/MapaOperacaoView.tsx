@@ -158,7 +158,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
     mapStatus,
     ocupacoes,
     reportRenderedGeometries,
-    scheduleInvalidateSize,
+    
     selectedGeo,
   ]);
 
