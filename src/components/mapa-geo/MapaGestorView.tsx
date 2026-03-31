@@ -101,50 +101,76 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
   useEffect(() => {
     if (mapStatus !== 'ready') return;
     const map = mapInstanceRef.current;
-    if (!map) {
-      console.warn('[SETVIEW TEST]', 'map status ready but instance null');
-      return;
-    }
+    const featureLayer = featureLayerRef.current;
+    const labelLayer = labelLayerRef.current;
+    if (!map || !featureLayer || !labelLayer) return;
 
     const timer = window.setTimeout(() => {
-      const testCenter: L.LatLngExpression = [-19.65, -54.03];
-      const testZoom = 15;
+      featureLayer.clearLayers();
+      labelLayer.clearLayers();
 
-      console.warn('[SETVIEW TEST BEFORE]', {
-        center: { lat: map.getCenter().lat, lng: map.getCenter().lng },
-        zoom: map.getZoom(),
-        containerSize: {
-          w: map.getContainer().clientWidth,
-          h: map.getContainer().clientHeight,
-        },
-        mapId: L.Util.stamp(map),
+      if (geometrias.length === 0) {
+        reportRenderedGeometries(0);
+        onRenderedChange?.(0);
+        return;
+      }
+
+      const allBounds = L.latLngBounds([]);
+      let rendered = 0;
+
+      geometrias.forEach((geo) => {
+        try {
+          const oc = geo.pasto_id ? ocupacoes.get(geo.pasto_id) : undefined;
+          const status = oc?.status || 'sem_ocupacao';
+          const isSelected = selected?.geo.id === geo.id;
+          const style = getPolyStyle(status, isSelected);
+
+          const layer = L.geoJSON(geo.geojson as GeoJSON.GeoJsonObject, { style });
+          const bounds = layer.getBounds();
+
+          if (bounds.isValid()) {
+            allBounds.extend(bounds);
+            rendered++;
+          }
+
+          layer.on('click', () => setSelected({ geo }));
+          layer.addTo(featureLayer);
+
+          // Label at center
+          if (bounds.isValid()) {
+            const center = bounds.getCenter();
+            const pasto = geo.pasto_id ? pastos.find((p) => p.id === geo.pasto_id) : null;
+            const labelText = pasto?.nome || geo.nome_original || '';
+            if (labelText) {
+              L.marker(center, {
+                icon: L.divIcon({
+                  className: '',
+                  html: `<div style="font-size:9px;font-weight:600;color:#1e293b;text-shadow:0 0 3px #fff,0 0 3px #fff;white-space:nowrap;pointer-events:none">${labelText}</div>`,
+                  iconSize: [0, 0],
+                  iconAnchor: [0, 0],
+                }),
+              }).addTo(labelLayer);
+            }
+          }
+        } catch (e) {
+          console.warn('[MAP] erro ao renderizar geometria', geo.id, e);
+        }
       });
 
-      try {
-        // Bypass the patched wrapper — call the REAL setView
-        const proto = Object.getPrototypeOf(Object.getPrototypeOf(map));
-        if (proto && proto.setView) {
-          proto.setView.call(map, testCenter, testZoom, { animate: false });
-        } else {
-          map.setView(testCenter, testZoom, { animate: false });
-        }
+      reportRenderedGeometries(rendered);
+      onRenderedChange?.(rendered);
 
-        console.warn('[SETVIEW TEST AFTER]', {
-          center: { lat: map.getCenter().lat, lng: map.getCenter().lng },
-          zoom: map.getZoom(),
-          success: true,
-        });
-      } catch (error) {
-        console.warn('[SETVIEW TEST AFTER]', {
-          error: error instanceof Error ? error.message : 'unknown',
-          stack: error instanceof Error ? error.stack?.split('\n').slice(0, 5) : undefined,
-          success: false,
-        });
+      if (allBounds.isValid()) {
+        try {
+          map.fitBounds(allBounds, { padding: [30, 30], animate: false, maxZoom: 16 });
+        } catch (e) {
+          console.warn('[MAP] fitBounds falhou', e);
+        }
       }
-    }, 500);
+    }, 200);
 
     return () => window.clearTimeout(timer);
-  }, [mapInstanceRef, mapStatus]);
+  }, [mapStatus, geometrias, ocupacoes, pastos, selected, mapInstanceRef, featureLayerRef, labelLayerRef, reportRenderedGeometries, onRenderedChange]);
 
   return (
     <div className="flex flex-col gap-1.5 h-full min-h-0">
