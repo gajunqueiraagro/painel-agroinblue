@@ -138,3 +138,11 @@
   border: none !important;
   pointer-events: none !important;
 }
+.pasto-tooltip {
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+  padding: 6px 10px !important;
+  border-radius: 6px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+  border: 1px solid hsl(220, 13%, 91%) !important;
+}
