@@ -357,7 +357,7 @@ function buildZooRows(
 
   rows.push(gmdMesRow, gmdPeriodoRow);
 
-  return rows;
+  return { rows, valorRebanhoMes: valorRebanhoMesArr };
 }
 
 // ─── Financeiro helpers ───
