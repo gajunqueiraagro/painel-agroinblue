@@ -388,7 +388,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
                           value={destino}
                           onValueChange={setDestino}
                           options={pastos
-                            .filter((pasto) => p.id !== selectedPasto.id && pasto.ativo)
+                            .filter((pasto) => pasto.id !== selectedPasto.id && pasto.ativo)
                             .map((pasto) => ({ value: pasto.id, label: pasto.nome }))}
                           placeholder="Buscar pasto..."
                           allLabel=""
