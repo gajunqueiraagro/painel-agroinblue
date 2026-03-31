@@ -100,107 +100,47 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
 
   useEffect(() => {
     const map = mapInstanceRef.current;
-    const featureLayer = featureLayerRef.current;
-    const labelLayer = labelLayerRef.current;
-    if (!map || !featureLayer || !labelLayer) return;
+    if (!map) return;
 
     const timer = window.setTimeout(() => {
-      const mapAny = map as any;
-      const fixAllPanes = () => {
-        if (mapAny._mapPane) mapAny._mapPane._leaflet_pos = mapAny._mapPane._leaflet_pos || L.point(0, 0);
-        ['tilePane', 'overlayPane', 'shadowPane', 'markerPane', 'tooltipPane', 'popupPane'].forEach((name) => {
-          const pane = map.getPane(name) as any;
-          if (pane) pane._leaflet_pos = pane._leaflet_pos || L.point(0, 0);
-        });
-      };
+      const testCenter: L.LatLngExpression = [-19.65, -54.03];
+      const testZoom = 15;
 
-      featureLayer.clearLayers();
-      labelLayer.clearLayers();
-      viewportLockedRef.current = false;
-      mapAny.__viewportLocked = false;
-      mapAny.__lockedViewport = null;
-
-      if (geometrias.length === 0) {
-        reportRenderedGeometries(0);
-        onRenderedChange?.(0);
-        return;
-      }
-
-      fixAllPanes();
-
-      const firstGeo = geometrias[0];
-      const layer = L.geoJSON(firstGeo.geojson as GeoJSON.GeoJsonObject, {
-        style: {
-          color: '#ff0000',
-          weight: 4,
-          fillColor: '#ffff00',
-          fillOpacity: 0.7,
+      console.warn('[SETVIEW TEST BEFORE]', {
+        center: { lat: map.getCenter().lat, lng: map.getCenter().lng },
+        zoom: map.getZoom(),
+        containerSize: {
+          w: map.getContainer().clientWidth,
+          h: map.getContainer().clientHeight,
         },
+        mapId: L.Util.stamp(map),
       });
-      const bounds = layer.getBounds();
-
-      if (!bounds.isValid()) {
-        reportRenderedGeometries(0);
-        onRenderedChange?.(0);
-        return;
-      }
-
-      const targetCenter = bounds.getCenter();
-      const targetZoom = 15;
-
-      console.warn('[MAP TARGET]', {
-        action: 'controlled-test-single-geometry',
-        targetCenter,
-        targetZoom,
-        targetBounds: {
-          southWest: bounds.getSouthWest(),
-          northEast: bounds.getNorthEast(),
-        },
-      });
-
-      layer.on('click', () => setSelected({ geo: firstGeo }));
-      layer.addTo(featureLayer);
-
-      const markerIcon = L.divIcon({
-        className: '',
-        html: '<div style="width:18px;height:18px;background:#dc2626;border-radius:9999px;border:3px solid #ffffff;box-shadow:0 0 8px rgba(0,0,0,0.45)"></div>',
-        iconSize: [18, 18],
-        iconAnchor: [9, 9],
-      });
-      L.marker(targetCenter, { icon: markerIcon, zIndexOffset: 9999 }).addTo(featureLayer);
-
-      reportRenderedGeometries(1);
-      onRenderedChange?.(1);
 
       try {
-        fixAllPanes();
-        map.setView(targetCenter, targetZoom, { animate: false });
-        viewportLockedRef.current = true;
-        mapAny.__viewportLocked = true;
-        mapAny.__lockedViewport = { targetCenter, targetZoom };
-        console.warn('[MAP VIEWPORT]', {
-          action: 'controlled-setView-lock',
-          center: map.getCenter(),
+        // Bypass the patched wrapper — call the REAL setView
+        const proto = Object.getPrototypeOf(Object.getPrototypeOf(map));
+        if (proto && proto.setView) {
+          proto.setView.call(map, testCenter, testZoom, { animate: false });
+        } else {
+          map.setView(testCenter, testZoom, { animate: false });
+        }
+
+        console.warn('[SETVIEW TEST AFTER]', {
+          center: { lat: map.getCenter().lat, lng: map.getCenter().lng },
           zoom: map.getZoom(),
-          mapId: L.Util.stamp(map),
+          success: true,
         });
       } catch (error) {
-        console.warn('[MAP VIEWPORT]', {
-          action: 'controlled-setView-lock:error',
-          errorMessage: error instanceof Error ? error.message : 'unknown_error',
+        console.warn('[SETVIEW TEST AFTER]', {
+          error: error instanceof Error ? error.message : 'unknown',
+          stack: error instanceof Error ? error.stack?.split('\n').slice(0, 5) : undefined,
+          success: false,
         });
       }
-    }, 300);
+    }, 500);
 
     return () => window.clearTimeout(timer);
-  }, [
-    featureLayerRef,
-    geometrias,
-    labelLayerRef,
-    mapInstanceRef,
-    onRenderedChange,
-    reportRenderedGeometries,
-  ]);
+  }, [mapInstanceRef]);
 
   return (
     <div className="flex flex-col gap-1.5 h-full min-h-0">
