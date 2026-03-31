@@ -103,6 +103,16 @@ export function useStableLeafletMap({
     labelLayerRef.current = null;
   }, []);
 
+  const ensurePanePos = useCallback((map: L.Map) => {
+    try {
+      const pane = map.getPane('mapPane') as any;
+      if (pane && pane._leaflet_pos === undefined) {
+        pane._leaflet_pos = L.point(0, 0);
+        pane.style.transform = '';
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   const scheduleInvalidateSize = useCallback(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -114,18 +124,21 @@ export function useStableLeafletMap({
     }
 
     setStatus('ready');
+    ensurePanePos(map);
 
     if (resizeRafRef.current != null) {
       cancelAnimationFrame(resizeRafRef.current);
     }
 
     resizeRafRef.current = requestAnimationFrame(() => {
-      map.invalidateSize(false);
+      ensurePanePos(map);
+      try { map.invalidateSize(false); } catch { /* _leaflet_pos race */ }
       resizeTimeoutRef.current = window.setTimeout(() => {
-        map.invalidateSize(false);
+        ensurePanePos(map);
+        try { map.invalidateSize(false); } catch { /* _leaflet_pos race */ }
       }, 140);
     });
-  }, [syncMetrics]);
+  }, [ensurePanePos, syncMetrics]);
 
   const initializeMap = useCallback(() => {
     const el = mapContainerRef.current;
