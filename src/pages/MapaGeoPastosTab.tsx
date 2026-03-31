@@ -3,7 +3,6 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { usePastoGeometrias } from '@/hooks/usePastoGeometrias';
-import { usePastoCondicoes } from '@/hooks/usePastoCondicoes';
 import { useFechamento } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { parseKMLFile, type ParsedPolygon } from '@/lib/kmlParser';
@@ -13,10 +12,20 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Upload, Map as MapIcon, Loader2 } from 'lucide-react';
+import { Upload, Map as MapIcon, Loader2, Trash2, RefreshCw } from 'lucide-react';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { PastoDetailSheet } from '@/components/mapa-geo/PastoDetailSheet';
 import { KmlUploadDialog } from '@/components/mapa-geo/KmlUploadDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export interface PastoMapData {
   pasto: Pasto;
@@ -34,7 +43,7 @@ export interface PastoMapData {
 export function MapaGeoPastosTab() {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
-  const { geometrias, loading: geoLoading, salvarGeometrias } = usePastoGeometrias();
+  const { geometrias, loading: geoLoading, salvarGeometrias, removerGeometrias } = usePastoGeometrias();
   const { fechamentos, loadFechamentos, loadItens } = useFechamento();
 
   const curYear = new Date().getFullYear();
@@ -49,6 +58,8 @@ export function MapaGeoPastosTab() {
   const [selectedPasto, setSelectedPasto] = useState<PastoMapData | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<L.Map | null>(null);
@@ -75,7 +86,6 @@ export function MapaGeoPastosTab() {
       const itemsByFechId = new Map(fechamentos.map((f, i) => [f.id, allItems[i]]));
       const geoMap = new Map(geometrias.map(g => [g.pasto_id, g]));
 
-      // Load latest conditions for all pastos
       const pastoIds = pastosAtivos.map(p => p.id);
       const { data: condicoes } = await supabase
         .from('pasto_condicoes')
@@ -133,14 +143,12 @@ export function MapaGeoPastosTab() {
     build();
   }, [fechamentos, pastos, geometrias, categorias, loadItens]);
 
-  // Extract available lotes for filter
   const lotesDisp = useMemo(() => {
     const set = new Set<string>();
     pastosData.forEach(p => { if (p.lote) set.add(p.lote); });
     return Array.from(set).sort();
   }, [pastosData]);
 
-  // Filter pastos
   const filteredPastos = useMemo(() => {
     return pastosData.filter(p => {
       if (filtroLote !== '__all__' && p.lote !== filtroLote) return false;
@@ -152,12 +160,10 @@ export function MapaGeoPastosTab() {
     });
   }, [pastosData, filtroLote, filtroCategoria]);
 
-  // Get color based on condition
   const getColor = useCallback((data: PastoMapData): string => {
     if (data.ultimaCondicao === 'ruim') return '#ef4444';
     if (data.ultimaCondicao === 'regular') return '#f59e0b';
     if (data.ultimaCondicao === 'bom') return '#22c55e';
-    // Fallback: based on UA/ha
     if (data.uaHa !== null) {
       if (data.uaHa > 3) return '#ef4444';
       if (data.uaHa > 2) return '#f59e0b';
@@ -210,7 +216,6 @@ export function MapaGeoPastosTab() {
         },
       });
 
-      // Add label
       const center = layer.getBounds().getCenter();
       const label = L.divIcon({
         className: 'pasto-label',
@@ -246,7 +251,6 @@ export function MapaGeoPastosTab() {
   }, [filteredPastos, getColor]);
 
   const handleKmlUpload = useCallback(async (polygons: ParsedPolygon[]) => {
-    // Auto-match polygons to pastos by name
     const pastoMap = new Map(pastos.filter(p => p.ativo).map(p => [p.nome.trim().toLowerCase(), p]));
 
     const items = polygons.map(poly => {
@@ -262,11 +266,21 @@ export function MapaGeoPastosTab() {
     if (success) setUploadOpen(false);
   }, [pastos, salvarGeometrias]);
 
+  const handleRemoveMap = useCallback(async () => {
+    setRemoving(true);
+    await removerGeometrias();
+    setConfirmRemoveOpen(false);
+    setRemoving(false);
+  }, [removerGeometrias]);
+
   if (isGlobal) {
     return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda para ver o mapa.</div>;
   }
 
   const hasGeometries = geometrias.length > 0;
+  const lastUpload = hasGeometries
+    ? new Date(geometrias.reduce((latest, g) => g.created_at > latest ? g.created_at : latest, geometrias[0].created_at))
+    : null;
 
   return (
     <div className="flex flex-col h-[100dvh] overflow-hidden">
@@ -303,13 +317,33 @@ export function MapaGeoPastosTab() {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex gap-1">
+          <div className="flex items-center gap-1.5">
+            {hasGeometries && (
+              <Badge variant="outline" className="text-[10px] h-5 text-muted-foreground">
+                {geometrias.length} polígonos
+                {lastUpload && ` · ${lastUpload.toLocaleDateString('pt-BR')}`}
+              </Badge>
+            )}
             <Badge variant="secondary" className="text-xs h-6">
               {filteredPastos.reduce((s, p) => s + p.totalCabecas, 0)} cab
             </Badge>
             <Button variant="outline" size="sm" className="h-7 text-xs px-2" onClick={() => setUploadOpen(true)}>
-              <Upload className="h-3.5 w-3.5 mr-1" />{hasGeometries ? 'Atualizar KML' : 'Importar KML'}
+              {hasGeometries ? (
+                <><RefreshCw className="h-3.5 w-3.5 mr-1" />Atualizar Mapa</>
+              ) : (
+                <><Upload className="h-3.5 w-3.5 mr-1" />Importar Mapa</>
+              )}
             </Button>
+            {hasGeometries && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs px-2 text-destructive hover:bg-destructive/10"
+                onClick={() => setConfirmRemoveOpen(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1" />Remover
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -326,13 +360,14 @@ export function MapaGeoPastosTab() {
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-4">
             <MapIcon className="h-16 w-16 text-muted-foreground/30" />
             <div>
-              <h3 className="text-lg font-semibold text-foreground">Nenhum mapa carregado</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                Importe um arquivo KML ou KMZ com os polígonos dos pastos da fazenda.
+              <h3 className="text-lg font-semibold text-foreground">Nenhum mapa cadastrado</h3>
+              <p className="text-sm text-muted-foreground mt-1 max-w-md">
+                Clique em "Importar Mapa" para enviar o arquivo KML, KMZ ou GeoJSON da fazenda.
+                Os polígonos serão vinculados automaticamente aos pastos cadastrados.
               </p>
             </div>
             <Button onClick={() => setUploadOpen(true)} className="mt-2">
-              <Upload className="h-4 w-4 mr-2" />Importar arquivo KML/KMZ
+              <Upload className="h-4 w-4 mr-2" />Importar Mapa
             </Button>
           </div>
         ) : (
@@ -357,6 +392,29 @@ export function MapaGeoPastosTab() {
         onUpload={handleKmlUpload}
         pastos={pastos}
       />
+
+      {/* Remove confirmation */}
+      <AlertDialog open={confirmRemoveOpen} onOpenChange={setConfirmRemoveOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover mapa da fazenda?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Todos os polígonos serão removidos do mapa. Os dados históricos de movimentações e condições dos pastos serão preservados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removing}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRemoveMap}
+              disabled={removing}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {removing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              Remover Mapa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
