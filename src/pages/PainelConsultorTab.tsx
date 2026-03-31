@@ -590,7 +590,7 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
                   {showGrupo && (
                     <TableRow key={`grp-${row.grupo}-${idx}`} className="bg-primary/5">
                       <TableCell
-                        colSpan={mesesVisiveis.length + 2}
+                        colSpan={mesesVisiveis.length + 1}
                         className="sticky left-0 text-[10px] font-bold text-primary uppercase tracking-wider py-1.5 px-2"
                       >
                         {row.grupo}
