@@ -211,10 +211,8 @@ export function useStableLeafletMap({
       window.removeEventListener('resize', onWindowResize);
 
       if (mapInstanceRef.current) {
-        console.warn('[MAP LIFECYCLE]', 'destroy', {
-          debugName: name,
-          mapId: L.Util.stamp(mapInstanceRef.current),
-        });
+
+
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
         featureLayerRef.current = null;
