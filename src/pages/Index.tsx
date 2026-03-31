@@ -31,7 +31,7 @@ import { MapaGeoPastosTab } from './MapaGeoPastosTab';
 import { ResumoPastosTab } from './ResumoPastosTab';
 import { AnaliseOperacionalTab } from './AnaliseOperacionalTab';
 import { ValorRebanhoTab } from './ValorRebanhoTab';
-import { ConciliacaoCategoriaTab } from './ConciliacaoCategoriaTab';
+
 import { ChuvasTab } from './ChuvasTab';
 import { VisaoAnualZootecnicaTab } from './VisaoAnualZootecnicaTab';
 import { FechamentoExecutivoTab } from './FechamentoExecutivoTab';
@@ -88,7 +88,7 @@ const TITLES: Record<TabId, string> = {
   conciliacao: 'Conciliação',
   fin_caixa: 'Financeiro',
   valor_rebanho: 'Valor do Rebanho',
-  conciliacao_categoria: 'Conciliação de Categoria',
+  
   analise_operacional: 'Análise Operacional',
   fechamento: 'Lançamento de Pasto',
   mapa_pastos: 'Mapa de Pastos',
@@ -163,7 +163,7 @@ const Index = () => {
   }, []);
 
   // Tabs operacionais bloqueadas no modo Global
-  const BLOCKED_TABS_GLOBAL: TabId[] = ['fechamento', 'conciliacao_categoria', 'conciliacao', 'lancamentos'];
+  const BLOCKED_TABS_GLOBAL: TabId[] = ['fechamento', 'conciliacao', 'lancamentos'];
 
   const handleTabChange = useCallback((tab: TabId, filtro?: { ano: string; mes: number }) => {
     if (isGlobal && BLOCKED_TABS_GLOBAL.includes(tab)) {
@@ -200,7 +200,7 @@ const Index = () => {
   const goToLancarFinHub = useCallback(() => setActiveTab('lancar_fin_hub'), []);
   const goToVisaoFinHub = useCallback(() => setActiveTab('visao_fin_hub'), []);
   const goToZootecnico = useCallback(() => setActiveTab('zootecnico'), []);
-  const goToConciliacaoCategoria = useCallback(() => setActiveTab('conciliacao_categoria'), []);
+  
   const goToReclassFromConciliacao = useCallback((filtro?: { ano: string; mes: number }) => {
     if (filtro) setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
     setLancamentosFromConciliacao(true);
@@ -256,7 +256,7 @@ const Index = () => {
     zootecnico: goToVisaoZooHub,
     indicadores: goToVisaoZooHub,
     visao_anual_zoo: goToVisaoZooHub,
-    conciliacao_categoria: goToVisaoZooHub,
+    
     preco_mercado: goToVisaoZooHub,
     graficos_analise: goToVisaoZooHub,
     movimentacao: goToVisaoZooHub,
@@ -371,7 +371,7 @@ const Index = () => {
           onEditar={wrappedEditar as any}
           onRemover={wrappedRemover as any}
           abaInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? 'reclassificacao' : undefined}
-          onBackToConciliacao={lancamentosFromConciliacao ? goToConciliacaoCategoria : lancamentosFromFechamento ? goToFechamentoTab : lancamentosFromEvolCategoria ? goToEvolucaoRebanhoHub : lancamentosFromFluxoAnual ? goToFluxoAnual : undefined}
+          onBackToConciliacao={lancamentosFromConciliacao ? goToFechamentoTab : lancamentosFromFechamento ? goToFechamentoTab : lancamentosFromEvolCategoria ? goToEvolucaoRebanhoHub : lancamentosFromFluxoAnual ? goToFluxoAnual : undefined}
           dataInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? `${filtroGlobal.ano}-${String(filtroGlobal.mes).padStart(2, '0')}-15` : undefined}
           backLabel={lancamentosFromFechamento ? 'Voltar para Lançamento de Pasto' : (lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? 'Voltar para Evolução por Categoria' : undefined}
         />
@@ -412,7 +412,7 @@ const Index = () => {
         <FechamentoTab
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
-          onBackToConciliacao={fechamentoFromConciliacao ? goToConciliacaoCategoria : undefined}
+          onBackToConciliacao={fechamentoFromConciliacao ? goToVisaoZooHub : undefined}
           onNavigateToReclass={goToReclassFromFechamento}
         />
       )}
@@ -435,17 +435,6 @@ const Index = () => {
           lancamentos={lancamentos}
           saldosIniciais={saldosIniciais}
           onBack={goToZootecnico}
-          filtroAnoInicial={filtroGlobal.ano}
-          filtroMesInicial={filtroGlobal.mes}
-        />
-      )}
-      {activeTab === 'conciliacao_categoria' && (
-        <ConciliacaoCategoriaTab
-          lancamentos={lancamentosVisiveis}
-          saldosIniciais={saldosIniciais}
-          onBack={goToVisaoZooHub}
-          onNavigateToReclass={goToReclassFromConciliacao}
-          onNavigateToFechamento={goToFechamentoFromConciliacao}
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
         />

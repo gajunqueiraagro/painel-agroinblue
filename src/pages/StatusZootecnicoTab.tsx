@@ -49,7 +49,7 @@ const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'S
 const ROWS: { id: keyof MonthStatus; label: string; tab: TabId }[] = [
   { id: 'financeiro', label: 'Conciliação do Financeiro', tab: 'fin_caixa' },
   { id: 'pastos', label: 'Fechamento de Pastos', tab: 'fechamento' },
-  { id: 'categorias', label: 'Conciliação de Categorias', tab: 'conciliacao_categoria' },
+  { id: 'categorias', label: 'Conciliação de Categorias', tab: 'fechamento' },
   { id: 'valor', label: 'Valor do Rebanho', tab: 'valor_rebanho' },
   { id: 'economico', label: 'Econômico', tab: 'visao_zoo_hub' },
 ];
@@ -90,7 +90,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
 
   const statusZoo = useStatusZootecnico(fazendaId, anoNum, mesFiltro, lancamentos, saldosIniciais);
 
-  const BLOCKED_TABS_GLOBAL: TabId[] = ['fechamento', 'conciliacao_categoria', 'conciliacao', 'lancamentos', 'valor_rebanho'];
+  const BLOCKED_TABS_GLOBAL: TabId[] = ['fechamento', 'conciliacao', 'lancamentos', 'valor_rebanho'];
 
   const navTo = (tab: TabId) => {
     if (isGlobal && BLOCKED_TABS_GLOBAL.includes(tab)) return;

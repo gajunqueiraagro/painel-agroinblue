@@ -47,7 +47,7 @@ const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'S
 const ROWS: { id: keyof MonthStatus; label: string; tab: TabId }[] = [
   { id: 'financeiro', label: 'Conciliação do Financeiro', tab: 'fin_caixa' },
   { id: 'pastos', label: 'Fechamento de Pastos', tab: 'fechamento' },
-  { id: 'categorias', label: 'Conciliação de Categorias', tab: 'conciliacao_categoria' },
+  { id: 'categorias', label: 'Conciliação de Categorias', tab: 'fechamento' },
   { id: 'valor', label: 'Valor do Rebanho', tab: 'valor_rebanho' },
   { id: 'economico', label: 'Econômico', tab: 'visao_zoo_hub' },
 ];

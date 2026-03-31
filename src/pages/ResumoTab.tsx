@@ -321,7 +321,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
   const mesLabel = MESES_FULL[mesNum - 1] || '';
 
   // Alertas
-  const BLOCKED_TABS_GLOBAL: TabId[] = ['fechamento', 'conciliacao_categoria', 'conciliacao', 'lancamentos', 'valor_rebanho'];
+  const BLOCKED_TABS_GLOBAL: TabId[] = ['fechamento', 'conciliacao', 'lancamentos', 'valor_rebanho'];
   const alertas = useMemo(() => {
     const items: { texto: string; nivel: StatusNivel; tab: TabId; blockedGlobal: boolean }[] = [];
     if (fazendaNaoPecuaria) return items;

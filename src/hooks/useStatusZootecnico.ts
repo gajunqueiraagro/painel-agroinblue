@@ -399,7 +399,7 @@ export function useStatusZootecnico(
     // ── 3. Conciliação de Categorias (via calcStatusCategorias — fonte única) ──
     const statusCats: StatusItem = categoriasStatusResult.status;
     const descCats = categoriasStatusResult.descricao;
-    pendencias.push({ id: 'categorias', label: 'Conciliação de Categorias', descricao: descCats, status: statusCats, resolverTab: 'conciliacao_categoria' });
+    pendencias.push({ id: 'categorias', label: 'Conciliação de Categorias', descricao: descCats, status: statusCats, resolverTab: 'fechamento' });
 
     // ── 2. Fechamento de Pastos (depende de categorias) ──
     const fazendasComPastos = pastosPorFazenda.filter(f => f.totalPastos > 0);

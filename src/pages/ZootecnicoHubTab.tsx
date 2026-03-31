@@ -53,7 +53,6 @@ const GROUPS: { title: string; emoji: string; items: GroupItem[] }[] = [
     emoji: '✅',
     items: [
       { label: 'Fechamento de Pastos', tab: 'conciliacao', icon: GitCompare, description: 'Conferência pasto vs sistema' },
-      { label: 'Conciliação de Categoria', tab: 'conciliacao_categoria', icon: GitCompare, description: 'Conferência por categoria' },
     ],
   },
 ];
