@@ -334,7 +334,11 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
         } else if (catsComSaldo.length === 0) {
           statusCats = 'fechado';
         }
-        result.push({ pastos: statusPastos, valor: statusValor, categorias: statusCats });
+        // Apply pastos correction: need categorias conciliated
+        const categoriasOkYear = statusCats === 'fechado';
+        if (statusPastos === 'fechado' && !categoriasOkYear) statusPastos = 'parcial';
+
+        result.push({ financeiro: 'aberto' as CellStatus, pastos: statusPastos, valor: statusValor, categorias: statusCats });
       }
       setMonthData(result);
     } catch (e) {
