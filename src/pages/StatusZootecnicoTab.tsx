@@ -34,7 +34,7 @@ interface Props {
 }
 
 type CellStatus = 'aberto' | 'parcial' | 'fechado';
-interface MonthStatus { financeiro: CellStatus; pastos: CellStatus; categorias: CellStatus; valor: CellStatus; }
+interface MonthStatus { financeiro: CellStatus; pastos: CellStatus; categorias: CellStatus; valor: CellStatus; economico: CellStatus; }
 
 interface FazendaStatus {
   fazendaId: string;
@@ -51,6 +51,7 @@ const ROWS: { id: keyof MonthStatus; label: string; tab: TabId }[] = [
   { id: 'pastos', label: 'Fechamento de Pastos', tab: 'fechamento' },
   { id: 'categorias', label: 'Conciliação de Categorias', tab: 'conciliacao_categoria' },
   { id: 'valor', label: 'Valor do Rebanho', tab: 'valor_rebanho' },
+  { id: 'economico', label: 'Econômico', tab: 'visao_zoo_hub' },
 ];
 
 const STATUS_ORDER: Record<CellStatus, number> = { aberto: 0, parcial: 1, fechado: 2 };
