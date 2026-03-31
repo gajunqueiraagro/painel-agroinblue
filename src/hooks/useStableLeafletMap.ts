@@ -238,8 +238,7 @@ export function useStableLeafletMap({
 
     const resizeObserver = typeof ResizeObserver !== 'undefined'
       ? new ResizeObserver(() => {
-          const metrics = syncMetrics();
-          log('altura do container', { altura: metrics.height, largura: metrics.width });
+          const metrics = readMetrics();
 
           if (metrics.width < 32 || metrics.height < 32) {
             setStatus('waiting_container');
