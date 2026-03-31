@@ -126,6 +126,7 @@ export function MapaGeoPastosTab() {
           geoLoading={geoLoading}
           onUpload={() => setUploadOpen(true)}
           onRenderedChange={onRenderedChange}
+          onLink={vincularPasto}
         />
       )}
       {viewMode === 'operacao' && (
