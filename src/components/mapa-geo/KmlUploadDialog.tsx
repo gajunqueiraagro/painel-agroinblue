@@ -55,7 +55,7 @@ export function KmlUploadDialog({ open, onOpenChange, onUpload, pastos }: Props)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[80vh] flex flex-col overflow-hidden z-[1000]">
         <DialogHeader>
           <DialogTitle>Importar Mapa da Fazenda</DialogTitle>
           <DialogDescription>
