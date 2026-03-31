@@ -116,7 +116,7 @@ export function useStableLeafletMap({
           return;
         }
         // Container changed — destroy old
-        console.warn('[MAP LIFECYCLE]', 'container-changed-destroy', { debugName: name });
+        
         existing.remove();
         mapInstanceRef.current = null;
         featureLayerRef.current = null;
