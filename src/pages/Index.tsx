@@ -417,6 +417,7 @@ const Index = () => {
         />
       )}
       {activeTab === 'mapa_pastos' && <MapaPastosTab />}
+      {activeTab === 'mapa_geo_pastos' && <MapaGeoPastosTab />}
       {activeTab === 'resumo_pastos' && <ResumoPastosTab onTabChange={handleTabChange} />}
       {activeTab === 'analise_operacional' && <AnaliseOperacionalTab onNavigateToMovimentacao={navigateToMovimentacao} />}
       {activeTab === 'visao_anual_zoo' && (
