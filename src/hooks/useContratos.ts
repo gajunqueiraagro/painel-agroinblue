@@ -46,12 +46,6 @@ export interface ContratoForm {
   status?: string;
 }
 
-function applyNullableFilter(query: any, field: string, value: string | number | null | undefined) {
-  if (value === null || value === undefined) {
-    return query.is(field, null);
-  }
-  return query.eq(field, value);
-}
 
 function addMonthsClamped(dateStr: string, months: number, dayTarget: number): string {
   const d = new Date(dateStr + 'T00:00:00');
@@ -168,51 +162,17 @@ export function useContratos() {
     if (atualizarFuturos) {
       const today = new Date().toISOString().slice(0, 10);
 
-      const { error: linkedDeleteError, count: linkedDeleted } = await (supabase
+      // Delete future lancamentos linked by contrato_id (single source of truth)
+      const { error: deleteError, count: deleted } = await (supabase
         .from('financeiro_lancamentos_v2') as any)
         .delete()
         .select('id', { count: 'exact', head: true })
         .eq('contrato_id', id)
         .gte('data_competencia', today);
 
-      if (linkedDeleteError) {
+      if (deleteError) {
         toast.error('Erro ao limpar lançamentos futuros do contrato');
-        console.error(linkedDeleteError);
-        return false;
-      }
-
-      let legacyDeleteQuery = (supabase
-        .from('financeiro_lancamentos_v2') as any)
-        .delete()
-        .select('id', { count: 'exact', head: true })
-        .is('contrato_id', null)
-        .eq('origem_lancamento', 'contrato')
-        .eq('cliente_id', contratoAtual.cliente_id)
-        .eq('fazenda_id', contratoAtual.fazenda_id)
-        .eq('tipo_operacao', '2-Saídas')
-        .eq('status_transacao', 'previsto')
-        .gte('data_competencia', today)
-        .eq('descricao', contratoAtual.produto || '');
-
-      legacyDeleteQuery = applyNullableFilter(legacyDeleteQuery, 'favorecido_id', contratoAtual.fornecedor_id);
-      legacyDeleteQuery = applyNullableFilter(legacyDeleteQuery, 'conta_bancaria_id', contratoAtual.conta_bancaria_id);
-      legacyDeleteQuery = applyNullableFilter(legacyDeleteQuery, 'macro_custo', contratoAtual.macro_custo);
-      legacyDeleteQuery = applyNullableFilter(legacyDeleteQuery, 'centro_custo', contratoAtual.centro_custo);
-      legacyDeleteQuery = applyNullableFilter(legacyDeleteQuery, 'subcentro', contratoAtual.subcentro);
-      legacyDeleteQuery = applyNullableFilter(legacyDeleteQuery, 'forma_pagamento', contratoAtual.forma_pagamento);
-      legacyDeleteQuery = applyNullableFilter(legacyDeleteQuery, 'dados_pagamento', contratoAtual.dados_pagamento);
-      legacyDeleteQuery = applyNullableFilter(legacyDeleteQuery, 'observacao', contratoAtual.observacao);
-      legacyDeleteQuery = legacyDeleteQuery.eq('valor', contratoAtual.valor);
-
-      if (contratoAtual.data_fim) {
-        legacyDeleteQuery = legacyDeleteQuery.lte('data_competencia', contratoAtual.data_fim);
-      }
-
-      const { error: legacyDeleteError, count: legacyDeleted } = await legacyDeleteQuery;
-
-      if (legacyDeleteError) {
-        toast.error('Erro ao limpar lançamentos legados do contrato');
-        console.error(legacyDeleteError);
+        console.error(deleteError);
         return false;
       }
 
@@ -228,8 +188,7 @@ export function useContratos() {
         const regenerated = await gerarLancamentos(updated as any as Contrato, today);
         console.info('[Contratos] atualizar futuros', {
           contratoId: id,
-          linkedDeleted: linkedDeleted || 0,
-          legacyDeleted: legacyDeleted || 0,
+          deleted: deleted || 0,
           regenerated,
         });
       }
