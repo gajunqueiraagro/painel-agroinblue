@@ -133,11 +133,8 @@ export function useStableLeafletMap({
 
         fixPanePos(map);
 
-        console.warn('[MAP LIFECYCLE]', 'create', {
-          debugName: name,
-          mapId: L.Util.stamp(map),
-          containerSize: { w, h },
-        });
+
+
 
         L.control.zoom({ position: 'bottomright' }).addTo(map);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
