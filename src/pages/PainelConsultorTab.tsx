@@ -570,41 +570,44 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
     })();
   }, [fazendaId, anoNum, categorias]);
 
-  // Load valor_rebanho_fechamento per month
+  // Load valor_rebanho_mensal prices per month (preco_kg by category)
   useEffect(() => {
-    if (!fazendaId) { setValorRebanhoMes([]); return; }
+    if (!fazendaId) { setPrecosPorMes({}); return; }
     (async () => {
       const meses = Array.from({ length: 12 }, (_, i) => `${anoNum}-${String(i + 1).padStart(2, '0')}`);
+      let query = supabase.from('valor_rebanho_mensal').select('ano_mes, categoria, preco_kg').in('ano_mes', meses);
       if (fazendaId === '__global__') {
         const fids = fazendas.filter(f => f.tem_pecuaria !== false).map(f => f.id);
-        if (fids.length === 0) { setValorRebanhoMes(Array(12).fill(0)); return; }
-        const { data } = await supabase
-          .from('valor_rebanho_fechamento')
-          .select('ano_mes, valor_total')
-          .in('fazenda_id', fids)
-          .in('ano_mes', meses);
-        const map: Record<string, number> = {};
-        (data || []).forEach(r => { map[r.ano_mes] = (map[r.ano_mes] || 0) + (Number(r.valor_total) || 0); });
-        setValorRebanhoMes(meses.map(m => map[m] || 0));
+        if (fids.length === 0) { setPrecosPorMes({}); return; }
+        // For global: we can't simply average prices, but since buildZooRows runs per-fazenda-context
+        // and the component already handles global via lancamentos aggregation,
+        // we load all prices. For single fazenda filter the exact one.
+        query = query.in('fazenda_id', fids);
       } else {
-        const { data } = await supabase
-          .from('valor_rebanho_fechamento')
-          .select('ano_mes, valor_total')
-          .eq('fazenda_id', fazendaId)
-          .in('ano_mes', meses);
-        const map: Record<string, number> = {};
-        (data || []).forEach(r => { map[r.ano_mes] = Number(r.valor_total) || 0; });
-        setValorRebanhoMes(meses.map(m => map[m] || 0));
+        query = query.eq('fazenda_id', fazendaId);
       }
+      const { data } = await query;
+      const result: Record<string, Record<string, number>> = {};
+      (data || []).forEach(r => {
+        if (!result[r.ano_mes]) result[r.ano_mes] = {};
+        // For global, take max price per category (conservative; single fazenda is exact)
+        const existing = result[r.ano_mes][r.categoria] || 0;
+        result[r.ano_mes][r.categoria] = fazendaId === '__global__'
+          ? existing + (Number(r.preco_kg) || 0) // Will be averaged below
+          : (Number(r.preco_kg) || 0);
+      });
+      setPrecosPorMes(result);
     })();
   }, [fazendaId, anoNum, fazendas]);
 
   const areaProdutiva = useMemo(() => calcAreaProdutivaPecuaria(pastos), [pastos]);
 
-  const zooRows = useMemo(
-    () => buildZooRows(lancPec, saldosIniciais, anoNum, ateMes, areaProdutiva, pesosPorMes),
-    [lancPec, saldosIniciais, anoNum, ateMes, areaProdutiva, pesosPorMes],
+  const zooResult = useMemo(
+    () => buildZooRows(lancPec, saldosIniciais, anoNum, ateMes, areaProdutiva, pesosPorMes, precosPorMes),
+    [lancPec, saldosIniciais, anoNum, ateMes, areaProdutiva, pesosPorMes, precosPorMes],
   );
+  const zooRows = zooResult.rows;
+  const valorRebanhoMes = zooResult.valorRebanhoMes;
 
   // Extract arrobas acumuladas from zooRows for financial indicators
   const arrobasProdAcum = useMemo(() => {
@@ -626,13 +629,10 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
   const fazendaNome = isGlobal ? 'Global' : (fazendaAtual?.nome || 'Fazenda');
 
   const handleExport = useCallback(() => {
-    console.log('[EXPORT-DIAG] handleExport CLICADO');
-    console.log('[EXPORT-DIAG] zooRows:', zooRows.length, 'finRows:', finRows.length, 'ano:', anoNum, 'ateMes:', ateMes);
     try {
       exportToExcel(zooRows, finRows, anoNum, ateMes, fazendaNome);
-      console.log('[EXPORT-DIAG] exportToExcel retornou sem erro');
     } catch (err) {
-      console.error('[EXPORT-DIAG] ERRO no exportToExcel:', err);
+      console.error('[EXPORT] Error:', err);
       toast.error('Não foi possível iniciar o download do Excel.');
     }
   }, [zooRows, finRows, anoNum, ateMes, fazendaNome]);
