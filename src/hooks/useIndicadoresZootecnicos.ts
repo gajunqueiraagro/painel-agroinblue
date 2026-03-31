@@ -630,7 +630,7 @@ export function useIndicadoresZootecnicos(
     const lancsMes = filterByAnoMes(lancamentos, anoMes);
     const saidasMes = saidasDesfrute(lancsMes);
     const arrobasSaidasMes = saidasMes.reduce((s, l) => s + calcArrobasSafe(l), 0);
-    const arrobasHaMes = areaProdutiva > 0 ? arrobasSaidasMes / areaProdutiva : null;
+    const arrobasHaMes = areaProdutiva > 0 && arrobasSaidasMes > 0 ? arrobasSaidasMes / areaProdutiva : null;
 
     // Arrobas acumulado
     const lancsAcum = filterByAnoAteMes(lancamentos, ano, mes);
