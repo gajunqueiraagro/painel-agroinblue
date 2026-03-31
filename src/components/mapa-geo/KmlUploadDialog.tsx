@@ -57,9 +57,9 @@ export function KmlUploadDialog({ open, onOpenChange, onUpload, pastos }: Props)
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Importar Mapa KML/KMZ</DialogTitle>
+          <DialogTitle>Importar Mapa da Fazenda</DialogTitle>
           <DialogDescription>
-            Envie um arquivo KML ou KMZ com os polígonos dos pastos. Os nomes serão vinculados automaticamente.
+            Envie um arquivo KML, KMZ ou GeoJSON com os polígonos dos pastos. Os nomes serão vinculados automaticamente.
           </DialogDescription>
         </DialogHeader>
 
