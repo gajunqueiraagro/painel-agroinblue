@@ -124,7 +124,9 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
       const vrAll = vrRes.data || [];
       const idToCodigo = new Map((catsRes.data || []).map(c => [c.id, c.codigo]));
       const finFechAll = finFechRes.data || [];
-      const totalPastos = (pastosRes.data || []).length;
+      const pastosAtivosData = pastosRes.data || [];
+      const totalPastos = pastosAtivosData.length;
+      const activePastoIds = new Set(pastosAtivosData.map((p: any) => p.id));
 
       // Fetch itens
       const fpIds = fpAll.map(f => f.id);
@@ -171,6 +173,7 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
         // Deduplicate: keep only the most recent fechamento per pasto (by updated_at)
         const dedupByPasto = new Map<string, typeof fps[0]>();
         fps.forEach(f => {
+          if (!activePastoIds.has(f.pasto_id)) return; // Ignora pastos inativos
           const existing = dedupByPasto.get(f.pasto_id);
           if (!existing || (f.updated_at || '') >= (existing.updated_at || '')) {
             dedupByPasto.set(f.pasto_id, f);
