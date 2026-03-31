@@ -130,6 +130,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               compMensal={c.valorRebanho.mensal}
               compAnual={c.valorRebanho.anual}
               semBase={ind.valorRebanho === null}
+              info={`Valor total do rebanho em R$.\n\nFórmula: somatório de (cabeças × peso médio × preço da @/30) por categoria.\nBase: preço de mercado e dados de fechamento.`}
             />
             <KpiCard
               label="R$/cab"
@@ -138,6 +139,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               compMensal={c.valorPorCabeca.mensal}
               compAnual={c.valorPorCabeca.anual}
               semBase={ind.valorPorCabeca === null}
+              info={`Valor médio por cabeça.\n\nFórmula: Valor do Rebanho ÷ Cabeças.\nReflete o ticket médio por animal.`}
             />
             <div className="flex flex-col justify-end">
               {ind.valorRebanho !== null && onNavigateSubTab && (
@@ -149,7 +151,6 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
                 </button>
               )}
             </div>
-          </div>
         </CardContent>
       </Card>
 
