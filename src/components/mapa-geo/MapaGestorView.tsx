@@ -398,9 +398,9 @@ function InfoRow({ label, value, status }: { label: string; value: string; statu
   );
 }
 
-/* ── Histórico de Lotação mini-chart ── */
+/* ── Histórico de Lotação with insights ── */
 function HistoricoLotacao({ pastoId, areaHa }: { pastoId: string; areaHa: number }) {
-  const [data, setData] = useState<{ mes: string; kgHa: number; status: string }[]>([]);
+  const [data, setData] = useState<{ mes: string; kgHa: number; cabecas: number; pesoMedio: number; status: string }[]>([]);
   
   useEffect(() => {
     if (!pastoId || !areaHa) return;
@@ -423,19 +423,23 @@ function HistoricoLotacao({ pastoId, areaHa }: { pastoId: string; areaHa: number
       
       if (!itens?.length) { setData([]); return; }
       
-      // Aggregate per fechamento
-      const agg = new Map<string, number>();
+      const agg = new Map<string, { totalKg: number; totalCab: number; weightedKg: number; weightedCab: number }>();
       itens.forEach(item => {
-        const cur = agg.get(item.fechamento_id) || 0;
-        agg.set(item.fechamento_id, cur + item.quantidade * (item.peso_medio_kg || 0));
+        const cur = agg.get(item.fechamento_id) || { totalKg: 0, totalCab: 0, weightedKg: 0, weightedCab: 0 };
+        cur.totalCab += item.quantidade;
+        cur.totalKg += item.quantidade * (item.peso_medio_kg || 0);
+        if (item.peso_medio_kg) { cur.weightedKg += item.quantidade * item.peso_medio_kg; cur.weightedCab += item.quantidade; }
+        agg.set(item.fechamento_id, cur);
       });
       
       const result = fechamentos.map(f => {
-        const totalKg = agg.get(f.id) || 0;
-        const kgHa = areaHa > 0 ? totalKg / areaHa : 0;
+        const a = agg.get(f.id) || { totalKg: 0, totalCab: 0, weightedKg: 0, weightedCab: 0 };
+        const kgHa = areaHa > 0 ? a.totalKg / areaHa : 0;
         return {
-          mes: f.ano_mes.slice(5), // "MM"
+          mes: f.ano_mes.slice(5),
           kgHa,
+          cabecas: a.totalCab,
+          pesoMedio: a.weightedCab > 0 ? a.weightedKg / a.weightedCab : 0,
           status: kgHa === 0 ? 'sem_ocupacao' : kgHa < 280 ? 'atencao' : kgHa <= 600 ? 'adequado' : 'pressao',
         };
       }).reverse();
@@ -449,22 +453,65 @@ function HistoricoLotacao({ pastoId, areaHa }: { pastoId: string; areaHa: number
   }
   
   const maxKg = Math.max(...data.map(d => d.kgHa), 1);
+  const avgKg = data.filter(d => d.kgHa > 0).reduce((s, d) => s + d.kgHa, 0) / (data.filter(d => d.kgHa > 0).length || 1);
+  const peakKg = Math.max(...data.map(d => d.kgHa));
+  const mesesAlto = data.filter(d => d.status === 'pressao').length;
+  const idealRange = 440; // midpoint of ideal range
+  const desvio = avgKg > 0 ? ((avgKg - idealRange) / idealRange) * 100 : 0;
+  
+  // Trend: compare last 3 vs first 3
+  const recent = data.slice(-3).filter(d => d.kgHa > 0);
+  const older = data.slice(0, 3).filter(d => d.kgHa > 0);
+  const recentAvg = recent.length ? recent.reduce((s, d) => s + d.kgHa, 0) / recent.length : 0;
+  const olderAvg = older.length ? older.reduce((s, d) => s + d.kgHa, 0) / older.length : 0;
+  const trend = recentAvg > olderAvg * 1.05 ? 'subindo' : recentAvg < olderAvg * 0.95 ? 'caindo' : 'estável';
   
   return (
-    <div className="flex items-end gap-px h-10">
-      {data.map((d, i) => {
-        const h = Math.max((d.kgHa / maxKg) * 100, 4);
-        const s = STATUS_STYLES[d.status] || STATUS_STYLES.sem_ocupacao;
-        return (
-          <div key={i} className="flex-1 flex flex-col items-center gap-px" title={`${d.mes}: ${formatNum(d.kgHa, 0)} kg/ha`}>
-            <div
-              className="w-full rounded-t-[1px] min-w-[3px]"
-              style={{ height: `${h}%`, backgroundColor: s.fill, border: `0.5px solid ${s.stroke}` }}
-            />
-            <span className="text-[5px] text-muted-foreground leading-none">{d.mes}</span>
-          </div>
-        );
-      })}
+    <div className="space-y-1.5">
+      {/* Bar chart */}
+      <div className="flex items-end gap-px h-12">
+        {data.map((d, i) => {
+          const h = Math.max((d.kgHa / maxKg) * 100, 4);
+          const s = STATUS_STYLES[d.status] || STATUS_STYLES.sem_ocupacao;
+          return (
+            <div key={i} className="flex-1 flex flex-col items-center gap-px" title={`${d.mes}: ${formatNum(d.kgHa, 0)} kg/ha · ${d.cabecas} cab · ${formatNum(d.pesoMedio, 0)} kg`}>
+              <div
+                className="w-full rounded-t-sm min-w-[4px]"
+                style={{ height: `${h}%`, backgroundColor: s.fill, border: `0.5px solid ${s.stroke}` }}
+              />
+              <span className="text-[5px] text-muted-foreground leading-none">{d.mes}</span>
+            </div>
+          );
+        })}
+      </div>
+      
+      {/* Summary metrics */}
+      <div className="grid grid-cols-3 gap-1">
+        <div className="bg-muted/30 rounded px-1 py-0.5">
+          <p className="text-[6px] text-muted-foreground uppercase">Média</p>
+          <p className="text-[8px] font-semibold text-foreground">{formatNum(avgKg, 0)} kg/ha</p>
+        </div>
+        <div className="bg-muted/30 rounded px-1 py-0.5">
+          <p className="text-[6px] text-muted-foreground uppercase">Pico</p>
+          <p className="text-[8px] font-semibold text-foreground">{formatNum(peakKg, 0)} kg/ha</p>
+        </div>
+        <div className="bg-muted/30 rounded px-1 py-0.5">
+          <p className="text-[6px] text-muted-foreground uppercase">Tendência</p>
+          <p className={`text-[8px] font-semibold ${trend === 'subindo' ? 'text-red-700' : trend === 'caindo' ? 'text-green-700' : 'text-foreground'}`}>
+            {trend === 'subindo' ? '↑ Subindo' : trend === 'caindo' ? '↓ Caindo' : '→ Estável'}
+          </p>
+        </div>
+      </div>
+      
+      {/* Insight text */}
+      <div className="text-[7px] text-muted-foreground leading-relaxed space-y-0.5">
+        {mesesAlto > 0 && (
+          <p className="text-red-700">⚠ Operou acima do ideal em {mesesAlto} {mesesAlto === 1 ? 'mês' : 'meses'}</p>
+        )}
+        {avgKg > 0 && (
+          <p>Lotação média {desvio > 0 ? `${formatNum(Math.abs(desvio), 0)}% acima` : `${formatNum(Math.abs(desvio), 0)}% abaixo`} do ideal</p>
+        )}
+      </div>
     </div>
   );
 }
