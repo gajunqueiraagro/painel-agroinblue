@@ -1013,6 +1013,7 @@ export function useIndicadoresZootecnicos(
       valorRebanho,
       valorPorCabeca,
       valorPorHa,
+      valorArrobaEstoqueFinal,
       comparacoes: {
         saldoFinalMes: { mensal: compSaldoMoM, anual: compSaldo },
         pesoMedioRebanhoKg: { mensal: compPesoMedioMoM, anual: compPesoMedio },
