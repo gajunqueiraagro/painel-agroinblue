@@ -577,7 +577,7 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
               {mesesVisiveis.map(m => (
                 <TableHead key={m} className="text-[10px] font-bold text-center w-[88px] min-w-[80px] max-w-[100px]">{m}</TableHead>
               ))}
-              <TableHead className="text-[10px] font-bold text-center w-[88px] min-w-[80px] max-w-[100px] bg-muted">Total</TableHead>
+              
             </TableRow>
           </TableHeader>
           <TableBody>
