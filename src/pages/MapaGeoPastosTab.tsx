@@ -288,7 +288,6 @@ export function MapaGeoPastosTab() {
     return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda para ver o mapa.</div>;
   }
 
-  const hasGeometries = geometrias.length > 0;
   const lastUpload = hasGeometries
     ? new Date(geometrias.reduce((latest, g) => g.created_at > latest ? g.created_at : latest, geometrias[0].created_at))
     : null;
