@@ -215,7 +215,7 @@ function buildZooRows(
     { tipo: 'abate', label: 'Abates', temValor: true, temArroba: true },
     { tipo: 'venda', label: 'Vendas', temValor: true, temArroba: true },
     { tipo: 'transferencia_saida', label: 'Transferências saída', temValor: true, temArroba: true },
-    { tipo: 'consumo', label: 'Consumo', temValor: false, temArroba: true },
+    { tipo: 'consumo', label: 'Consumo', temValor: true, temArroba: true },
     { tipo: 'morte', label: 'Mortes', temValor: false, temArroba: false },
   ];
 
