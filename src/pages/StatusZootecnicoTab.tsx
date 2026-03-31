@@ -379,6 +379,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
           saldoOficial: new Map(catsComSaldo),
           alocadoPastos,
           temItensPastos: monthItens.length > 0,
+          pastosAtivos: totalPastos,
         });
 
         // 2. Pastos

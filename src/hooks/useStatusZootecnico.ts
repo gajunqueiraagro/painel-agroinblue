@@ -304,6 +304,7 @@ export function useStatusZootecnico(
         saldoOficial: new Map(catsComSaldo),
         alocadoPastos: alocadoPastosCodigo,
         temItensPastos,
+        pastosAtivos: pastosData.length,
       });
 
       console.log('[STATUS-ZOO] RESULTADO:', JSON.stringify({
