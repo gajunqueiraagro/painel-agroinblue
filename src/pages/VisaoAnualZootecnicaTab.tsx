@@ -164,92 +164,56 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
 
       for (let m = 1; m <= 12; m++) {
         const am = anoMeses[m - 1];
+        const fps = fpByMonth.get(am) || [];
+        const fechados = fps.filter(f => f.status === 'fechado').length;
 
-        // ── Financeiro status ──
-        const finMonth = finByMonth.get(am) || [];
-        let statusFin: CellStatus = 'aberto';
-        if (finMonth.length > 0) {
-          const allFechado = finMonth.every(f => f.status_fechamento === 'fechado');
-          const someFechado = finMonth.some(f => f.status_fechamento === 'fechado');
-          if (allFechado && (isGlob ? finMonth.length >= fazendaIdsFin.length : true)) {
-            statusFin = 'fechado';
-          } else if (someFechado) {
-            statusFin = 'parcial';
-          }
-        }
-
-        // ── Categorias status (calc first, needed for pastos) ──
+        // Saldo oficial
         const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, anoNum, m);
         const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
 
-        const fps = fpByMonth.get(am) || [];
+        // Build alocado nos pastos
         const fechIds = fps.map(f => f.id);
         const monthItens = fechIds.flatMap(id => itensByFech.get(id) || []);
+        const alocadoPastos = new Map<string, number>();
+        monthItens.forEach(i => {
+          const codigo = idToCodigo.get(i.categoria_id);
+          if (codigo) alocadoPastos.set(codigo, (alocadoPastos.get(codigo) || 0) + i.quantidade);
+        });
 
-        let catsDivergentes = 0;
-        let difTotal = 0;
-        let statusCats: CellStatus = 'aberto';
+        // 1. Financeiro
+        const finMonth = finByMonth.get(am) || [];
+        const stFin = calcStatusFinanceiro({
+          fechamentos: finMonth,
+          totalFazendasEsperadas: fazendaIdsFin.length,
+        });
 
-        if (monthItens.length === 0 && catsComSaldo.length > 0) {
-          statusCats = 'aberto';
-          catsDivergentes = catsComSaldo.length;
-          difTotal = catsComSaldo.reduce((s, [, q]) => s + q, 0);
-        } else if (monthItens.length > 0) {
-          const pastosMap = new Map<string, number>();
-          monthItens.forEach(i => {
-            const codigo = idToCodigo.get(i.categoria_id);
-            if (codigo) pastosMap.set(codigo, (pastosMap.get(codigo) || 0) + i.quantidade);
-          });
-          const totalSist = catsComSaldo.reduce((s, [, q]) => s + q, 0);
-          catsComSaldo.forEach(([cat, qtdSist]) => {
-            const qtdP = pastosMap.get(cat) || 0;
-            const dif = Math.abs(qtdP - qtdSist);
-            if (dif > 0) { catsDivergentes++; difTotal += dif; }
-          });
-          pastosMap.forEach((qtdP, cat) => {
-            if (!saldoMap.has(cat) || (saldoMap.get(cat) || 0) <= 0) {
-              if (qtdP > 0) { catsDivergentes++; difTotal += qtdP; }
-            }
-          });
-          if (catsDivergentes === 0) {
-            statusCats = 'fechado';
-          } else {
-            const pct = totalSist > 0 ? difTotal / totalSist : 1;
-            statusCats = pct > 0.05 ? 'aberto' : 'parcial';
-          }
-        } else if (catsComSaldo.length === 0) {
-          statusCats = 'fechado';
-        }
+        // 3. Categorias (before pastos)
+        const stCatsResult = calcStatusCategorias({
+          saldoOficial: new Map(catsComSaldo),
+          alocadoPastos,
+          temItensPastos: monthItens.length > 0,
+        });
 
-        // ── Pastos status (requires categorias check) ──
-        const fechados = fps.filter(f => f.status === 'fechado').length;
-        const categoriasOk = catsDivergentes === 0 && (monthItens.length > 0 || catsComSaldo.length === 0);
-        let statusPastos: CellStatus = 'aberto';
-        if (totalPastos > 0) {
-          if (fechados >= totalPastos) {
-            // All pastos fechados — but only truly "fechado" if categorias conciliated
-            statusPastos = categoriasOk ? 'fechado' : 'parcial';
-          } else if (fechados > 0 || fps.length > 0) {
-            statusPastos = 'parcial';
-          }
-        }
+        // 2. Pastos
+        const stPastos = calcStatusPastos({
+          totalPastos,
+          pastosFechados: fechados,
+          pastosComRegistro: fps.length,
+          statusCategorias: stCatsResult.status,
+        });
 
-        // ── Valor rebanho status ──
+        // 4. Valor
         const vrMonth = vrAll.filter(v => v.ano_mes === am);
-        let statusValor: CellStatus = 'aberto';
-        if (vrMonth.length === 0) {
-          statusValor = 'aberto';
-        } else if (catsComSaldo.length > 0 && vrMonth.length < catsComSaldo.length) {
-          statusValor = 'parcial';
-        } else {
-          statusValor = 'fechado';
-        }
+        const stValor = calcStatusValor({
+          precosDefinidos: vrMonth.length,
+          categoriasComSaldo: catsComSaldo.length,
+        });
 
         result.push({
-          financeiro: statusFin,
-          pastos: statusPastos,
-          categorias: statusCats,
-          valor: statusValor,
+          financeiro: stFin,
+          pastos: stPastos,
+          categorias: stCatsResult.status,
+          valor: stValor,
         });
       }
 
