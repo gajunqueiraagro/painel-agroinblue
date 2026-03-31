@@ -117,7 +117,7 @@ export function MapaGeoPastosTab() {
   );
 
   const content = (
-    <div className="flex-1 min-h-0 p-2 sm:p-3">
+    <div className="flex-1 min-h-0 p-1.5 sm:p-2">
       {viewMode === 'gestor' && (
         <MapaGestorView
           geometrias={geometrias}
