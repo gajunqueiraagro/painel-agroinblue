@@ -38,6 +38,7 @@ interface Props {
   geoLoading: boolean;
   onUpload: () => void;
   onRenderedChange?: (count: number) => void;
+  onLink?: (geoId: string, pastoId: string) => Promise<boolean>;
 }
 
 interface SelectedGeo { geo: PastoGeometria }
