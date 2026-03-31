@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { type Pasto, type CategoriaRebanho } from '@/hooks/usePastos';
 import { type FechamentoPasto, useFechamento } from '@/hooks/useFechamento';
 import { Button } from '@/components/ui/button';
