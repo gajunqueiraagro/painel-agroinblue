@@ -77,6 +77,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const anoMes = `${anoFiltro}-${mesFiltro}`;
   const isDezembro = mesFiltro === '12';
 
+  // Conciliation check — blocks saving if categories are not conciliated
+  const statusZoo = useStatusZootecnico(fazendaId, Number(anoFiltro), Number(mesFiltro), lancamentos, saldosIniciais);
+  const categoriasStatus = statusZoo.pendencias.find(p => p.id === 'categorias');
+  const categoriasConciliadas = categoriasStatus?.status === 'fechado';
+  const bloqueadoPorConciliacao = !categoriasConciliadas && !isGlobal && !statusZoo.loading;
+
   const {
     precos, loading, saving, salvarPrecos, loadPrecosMesAnterior,
     isFechado, isAdmin, reabrirFechamento,
