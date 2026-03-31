@@ -341,14 +341,24 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
       for (let m = 1; m <= 12; m++) {
         const am = anoMeses[m - 1];
         const fps = fpByMonth.get(am) || [];
-        const fechados = fps.filter(f => f.status === 'fechado').length;
+
+        // Deduplicate per pasto
+        const dedupByPasto = new Map<string, any>();
+        fps.forEach(f => {
+          const existing = dedupByPasto.get(f.pasto_id);
+          if (!existing || (f.updated_at || '') >= (existing.updated_at || '')) {
+            dedupByPasto.set(f.pasto_id, f);
+          }
+        });
+        const dedupFps = Array.from(dedupByPasto.values());
+        const fechados = dedupFps.filter(f => f.status === 'fechado').length;
 
         // Saldo oficial
         const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, Number(anoStr), m);
         const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
 
-        // Build alocado nos pastos
-        const fechIdsMes = fps.map(f => f.id);
+        // Build alocado nos pastos (deduplicated)
+        const fechIdsMes = dedupFps.map(f => f.id);
         const monthItens = fechIdsMes.flatMap(id => itensByFech.get(id) || []);
         const alocadoPastos = new Map<string, number>();
         monthItens.forEach(i => {
