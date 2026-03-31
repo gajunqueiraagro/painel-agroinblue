@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { usePastoGeometrias } from '@/hooks/usePastoGeometrias';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,8 @@ import { Upload, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { KmlUploadDialog } from '@/components/mapa-geo/KmlUploadDialog';
 import { usePastos } from '@/hooks/usePastos';
 import { usePastoOcupacao } from '@/hooks/usePastoOcupacao';
+import { useLancamentos } from '@/hooks/useLancamentos';
+import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
 import { MapaGestorView } from '@/components/mapa-geo/MapaGestorView';
 import { MapaOperacaoView } from '@/components/mapa-geo/MapaOperacaoView';
 import { ValidacaoPoligonosView } from '@/components/mapa-geo/ValidacaoPoligonosView';
