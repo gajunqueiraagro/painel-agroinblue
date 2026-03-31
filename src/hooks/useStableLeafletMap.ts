@@ -109,7 +109,7 @@ export function useStableLeafletMap({
       if (mapInstanceRef.current) {
         const existing = mapInstanceRef.current;
         if (existing.getContainer() === el) {
-          console.warn('[MAP LIFECYCLE]', 'reuse-instance', { debugName: name, mapId: L.Util.stamp(existing) });
+          // reuse existing instance
           fixPanePos(existing);
           existing.invalidateSize(false);
           setStatus('ready');
