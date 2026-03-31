@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Upload, MapPin, X, LogIn, LogOut, ArrowRightLeft, Check } from 'lucide-react';
 import { formatNum } from '@/lib/calculos/formatters';
 import { usePastoMovimentacoes } from '@/hooks/usePastoMovimentacoes';
@@ -319,7 +320,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
                       <Label className="text-[10px]">Categoria</Label>
                       <Select value={cat} onValueChange={setCat}>
                         <SelectTrigger className="h-8 mt-0.5 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-48 overflow-y-auto">
                           {categorias.map(c => (
                             <SelectItem key={c.id} value={c.codigo}>{c.nome}</SelectItem>
                           ))}
@@ -329,14 +330,15 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
                     {action === 'transferencia' && (
                       <div>
                         <Label className="text-[10px]">Pasto Destino *</Label>
-                        <Select value={destino} onValueChange={setDestino}>
-                          <SelectTrigger className="h-8 mt-0.5 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                          <SelectContent>
-                            {pastos.filter(p => p.id !== selectedPasto!.id && p.ativo).map(p => (
-                              <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                          value={destino}
+                          onValueChange={setDestino}
+                          options={pastos.filter(p => p.id !== selectedPasto!.id && p.ativo).map(p => ({ value: p.id, label: p.nome }))}
+                          placeholder="Buscar pasto..."
+                          allLabel=""
+                          allValue=""
+                          className="h-8 mt-0.5 text-xs"
+                        />
                       </div>
                     )}
                     <div>
