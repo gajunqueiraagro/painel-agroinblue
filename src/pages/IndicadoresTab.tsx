@@ -160,11 +160,14 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
           <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Lotação</h3>
           <div className="grid grid-cols-3 gap-3">
             <KpiCard label="Área Prod." valor={formatNum(ind.areaProdutiva, 1)} unidade="ha"
-              estimado={ind.qualidade.areaProdutivaEstimativa} />
-            <KpiCard label="UA Total" valor={formatNum(ind.uaTotal, 1)} unidade="UA" />
+              estimado={ind.qualidade.areaProdutivaEstimativa}
+              info={`Área produtiva total em hectares.\n\nBase: soma da área dos pastos ativos cadastrados.\nSe não houver cadastro, usa fallback estimado (*).`} />
+            <KpiCard label="UA Total" valor={formatNum(ind.uaTotal, 1)} unidade="UA"
+              info={`Unidade Animal total.\n\nFórmula: Peso Total do rebanho ÷ 450 kg.\n1 UA = 450 kg de peso vivo.`} />
             <KpiCard label="UA/ha" valor={ind.uaHa !== null ? formatNum(ind.uaHa, 2) : '—'}
               compMensal={c.uaHa.mensal} compAnual={c.uaHa.anual}
-              semBase={ind.uaHa === null} />
+              semBase={ind.uaHa === null}
+              info={`Lotação no mês.\n\nFórmula: UA Total ÷ Área Produtiva.\nMede a pressão de pastejo no mês selecionado.`} />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <KpiCard
@@ -173,6 +176,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               compMensal={c.uaHaMediaAno.mensal}
               compAnual={c.uaHaMediaAno.anual}
               semBase={ind.uaHaMediaAno === null}
+              info={`Lotação média acumulada no ano.\n\nFórmula: média aritmética dos valores de UA/ha de Janeiro até o mês selecionado.\nReflete a pressão de pastejo ao longo da safra.`}
             />
           </div>
         </CardContent>
