@@ -163,6 +163,7 @@ export function useStableLeafletMap({
       return true;
     }
 
+    try {
       // Monkey-patch L.DomUtil.getPosition to never return undefined
       const origGetPos = L.DomUtil.getPosition;
       L.DomUtil.getPosition = function (el: any) {
