@@ -64,12 +64,19 @@ export function statusFinanceiro(input: StatusFinanceiroInput): StatusCor {
 
 // ─── 3. Conciliação de Categorias ───
 // (calculada antes de Pastos pois Pastos depende dela)
+//
+// REGRA OFICIAL (atualizada):
+// Verde: TODAS as categorias com dif = 0 E dif total = 0
+// Amarelo: dif total = 0 mas alguma categoria ≠ 0 (compensação cruzada)
+// Vermelho: dif total ≠ 0 OU sem dados de pastos com rebanho existente
 
 export interface StatusCategoriasResult {
   status: StatusCor;
   catsDivergentes: number;
   difTotalCabecas: number;
+  difTotalLiquida: number;
   saldoTotalOficial: number;
+  totalAlocadoPastos: number;
 }
 
 export function statusCategorias(input: StatusCategoriasInput): StatusCategoriasResult {
@@ -77,9 +84,12 @@ export function statusCategorias(input: StatusCategoriasInput): StatusCategorias
   const catsComSaldo = Array.from(saldoOficial.entries()).filter(([, q]) => q > 0);
   const saldoTotalOficial = catsComSaldo.reduce((s, [, q]) => s + q, 0);
 
+  // Total alocado nos pastos
+  const totalAlocado = Array.from(alocadoPastos.values()).reduce((s, q) => s + q, 0);
+
   // Sem itens de pastos e sem saldo → fechado (nada a conciliar)
   if (!temItensPastos && catsComSaldo.length === 0) {
-    return { status: 'fechado', catsDivergentes: 0, difTotalCabecas: 0, saldoTotalOficial: 0 };
+    return { status: 'fechado', catsDivergentes: 0, difTotalCabecas: 0, difTotalLiquida: 0, saldoTotalOficial: 0, totalAlocadoPastos: 0 };
   }
 
   // Sem itens de pastos mas com saldo → aberto (pastos não preenchidos)
@@ -88,35 +98,41 @@ export function statusCategorias(input: StatusCategoriasInput): StatusCategorias
       status: 'aberto',
       catsDivergentes: catsComSaldo.length,
       difTotalCabecas: saldoTotalOficial,
+      difTotalLiquida: -saldoTotalOficial,
       saldoTotalOficial,
+      totalAlocadoPastos: 0,
     };
   }
 
-  // Com itens de pastos → comparar
+  // Com itens de pastos → comparar CADA categoria
   let catsDivergentes = 0;
-  let difTotal = 0;
+  let difAbsTotal = 0;
 
   catsComSaldo.forEach(([cat, qtdSist]) => {
     const qtdPastos = alocadoPastos.get(cat) || 0;
     const dif = Math.abs(qtdPastos - qtdSist);
-    if (dif > 0) { catsDivergentes++; difTotal += dif; }
+    if (dif > 0) { catsDivergentes++; difAbsTotal += dif; }
   });
 
   // Categorias nos pastos que não existem no saldo oficial
   alocadoPastos.forEach((qtdP, cat) => {
     if (!saldoOficial.has(cat) || (saldoOficial.get(cat) || 0) <= 0) {
-      if (qtdP > 0) { catsDivergentes++; difTotal += qtdP; }
+      if (qtdP > 0) { catsDivergentes++; difAbsTotal += qtdP; }
     }
   });
 
+  const difTotalLiquida = totalAlocado - saldoTotalOficial;
+
+  // Verde: ZERO divergência em TODAS as categorias
   if (catsDivergentes === 0) {
-    return { status: 'fechado', catsDivergentes: 0, difTotalCabecas: 0, saldoTotalOficial };
+    return { status: 'fechado', catsDivergentes: 0, difTotalCabecas: 0, difTotalLiquida: 0, saldoTotalOficial, totalAlocadoPastos: totalAlocado };
   }
 
-  const pctDiv = saldoTotalOficial > 0 ? difTotal / saldoTotalOficial : 1;
-  const status: StatusCor = pctDiv > 0.05 ? 'aberto' : 'parcial';
+  // Amarelo: total líquido bate (dif = 0) mas categorias individuais divergem
+  // Vermelho: total líquido não bate OU divergência real
+  const status: StatusCor = difTotalLiquida === 0 ? 'parcial' : 'aberto';
 
-  return { status, catsDivergentes, difTotalCabecas: difTotal, saldoTotalOficial };
+  return { status, catsDivergentes, difTotalCabecas: difAbsTotal, difTotalLiquida, saldoTotalOficial, totalAlocadoPastos: totalAlocado };
 }
 
 // ─── 2. Fechamento de Pastos ───
