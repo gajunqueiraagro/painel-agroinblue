@@ -22,19 +22,18 @@ import { toast } from 'sonner';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
 
 const STATUS_STYLES: Record<string, { fillColor: string; color: string }> = {
-  adequado: { fillColor: 'hsl(145, 40%, 68%)', color: 'hsl(145, 35%, 42%)' },
-  atencao: { fillColor: 'hsl(45, 65%, 70%)', color: 'hsl(45, 50%, 42%)' },
-  pressao: { fillColor: 'hsl(0, 50%, 68%)', color: 'hsl(0, 40%, 42%)' },
-  sem_ocupacao: { fillColor: 'hsl(220, 8%, 78%)', color: 'hsl(220, 8%, 55%)' },
+  adequado: { fillColor: 'hsl(145, 38%, 62%)', color: 'hsl(145, 30%, 38%)' },
+  atencao: { fillColor: 'hsl(42, 55%, 65%)', color: 'hsl(42, 40%, 38%)' },
+  pressao: { fillColor: 'hsl(0, 45%, 62%)', color: 'hsl(0, 35%, 38%)' },
+  sem_ocupacao: { fillColor: 'hsl(220, 10%, 76%)', color: 'hsl(220, 8%, 52%)' },
 };
 
 function getOpStyle(status: string, isSelected: boolean) {
   if (isSelected) {
-    return { color: 'hsl(213, 75%, 35%)', weight: 2.5, fillColor: 'hsl(213, 65%, 50%)', fillOpacity: 0.4 };
+    return { color: 'hsl(213, 60%, 40%)', weight: 2, fillColor: 'hsl(213, 55%, 55%)', fillOpacity: 0.35 };
   }
-
   const s = STATUS_STYLES[status] || STATUS_STYLES.sem_ocupacao;
-  return { color: s.color, weight: 0.8, fillColor: s.fillColor, fillOpacity: 0.2 };
+  return { color: s.color, weight: 0.6, fillColor: s.fillColor, fillOpacity: 0.18 };
 }
 
 interface Props {
