@@ -33,6 +33,7 @@ export function MapaGeoPastosTab() {
     geometrias, loading: geoLoading, salvarGeometrias, loadGeometrias,
     atualizarGeometria, excluirGeometrias, vincularPasto,
   } = usePastoGeometrias();
+  const { ocupacoes, reload: reloadOcupacao } = usePastoOcupacao(pastos);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('gestor');
   const [expanded, setExpanded] = useState(false);
