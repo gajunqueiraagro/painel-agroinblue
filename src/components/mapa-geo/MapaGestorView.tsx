@@ -194,7 +194,7 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
         <KpiChip
           label={selected && selectedPasto ? selectedPasto.nome : 'Pasto'}
           value={selected && selectedOc ? (selectedOc.kg_ha != null ? `${formatNum(selectedOc.kg_ha, 0)} kg/ha` : '—') : '—'}
-          sub={selected && selectedPasto ? (selectedPasto.lote || '—') : undefined}
+          sub={selected && selectedPasto ? (selectedPasto.tipo_uso || '—') : undefined}
           muted={!selected}
         />
         <KpiChip
