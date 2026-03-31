@@ -100,3 +100,12 @@
 .table-financeiro td div {
   font-size: inherit !important;
 }
+
+/* Leaflet map containment */
+.leaflet-container {
+  z-index: 0 !important;
+}
+.pasto-label {
+  background: transparent !important;
+  border: none !important;
+}

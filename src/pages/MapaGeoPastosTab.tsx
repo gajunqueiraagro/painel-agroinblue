@@ -371,7 +371,7 @@ export function MapaGeoPastosTab() {
             </Button>
           </div>
         ) : (
-          <div ref={mapRef} className="h-full w-full" />
+          <div ref={mapRef} className="absolute inset-0 overflow-hidden" />
         )}
       </div>
 
