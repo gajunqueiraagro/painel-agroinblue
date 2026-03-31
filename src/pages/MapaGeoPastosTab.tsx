@@ -135,6 +135,7 @@ export function MapaGeoPastosTab() {
           ocupacoes={ocupacoes}
           geoLoading={geoLoading}
           onUpload={() => setUploadOpen(true)}
+          onRenderedChange={onRenderedChange}
         />
       )}
       {viewMode === 'operacao' && (
