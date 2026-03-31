@@ -34,8 +34,10 @@ interface Props {
 
 const TIPOS_SAIDA_DESFRUTE = ['abate', 'venda', 'consumo', 'transferencia_saida'];
 const CHART_COLORS = ['hsl(var(--primary))', 'hsl(var(--muted-foreground))'];
-const DOT_STYLE = { r: 3, strokeWidth: 2 };
-const ACTIVE_DOT_STYLE = { r: 5, strokeWidth: 2 };
+const DOT_STYLE = { r: 2, strokeWidth: 1.5, fill: 'hsl(var(--background))' };
+const ACTIVE_DOT_STYLE = { r: 4, strokeWidth: 2, fill: 'hsl(var(--primary))' };
+const GRID = { strokeDasharray: '3 3', stroke: 'hsl(var(--border))', strokeOpacity: 0.5 };
+const AXIS_TICK = { fontSize: 10, fill: 'hsl(var(--muted-foreground))' };
 
 const isConciliado = (l: FinanceiroLancamento) =>
   (l.status_transacao || '').toLowerCase() === 'conciliado';
