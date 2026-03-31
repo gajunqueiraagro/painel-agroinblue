@@ -156,14 +156,18 @@ export function MapaGeoPastosTab() {
 
       {/* Map area */}
       <div className="flex-1 min-h-0 relative" style={{ zIndex: 1 }}>
+        {/* Always-mounted map div */}
+        <div ref={mapRef} style={{ position: 'absolute', inset: 0 }} />
+
+        {/* Overlays */}
         {geoLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/60 z-10">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         )}
 
-        {!hasGeo && !geoLoading ? (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-4">
+        {!hasGeo && !geoLoading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center px-4 bg-background z-10">
             <MapIcon className="h-16 w-16 text-muted-foreground/30" />
             <h3 className="text-lg font-semibold text-foreground">Nenhum mapa cadastrado</h3>
             <p className="text-sm text-muted-foreground max-w-md">
@@ -173,9 +177,7 @@ export function MapaGeoPastosTab() {
               <Upload className="h-4 w-4 mr-2" />Importar Mapa
             </Button>
           </div>
-        ) : hasGeo ? (
-          <div ref={mapRef} style={{ position: 'absolute', inset: 0 }} />
-        ) : null}
+        )}
       </div>
 
       <KmlUploadDialog
