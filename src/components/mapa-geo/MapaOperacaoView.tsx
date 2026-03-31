@@ -132,8 +132,8 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
           layer.addTo(featureLayer);
           allBounds.push(bounds);
           renderedCount += 1;
-        } catch (error) {
-          console.error('[MapaOperacao] Erro geometria:', error);
+        } catch {
+          // skip invalid geometry
         }
       });
 
