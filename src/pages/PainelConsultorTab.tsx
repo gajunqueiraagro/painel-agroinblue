@@ -466,8 +466,8 @@ function buildExcelSheet(rows: (ZooRow | FinRow)[], mesesHeaders: string[], incl
   });
 
   const cols = includeGrupo
-    ? [{ wch: 18 }, { wch: 26 }, ...mesesHeaders.map(() => ({ wch: 14 })), { wch: 14 }]
-    : [{ wch: 26 }, ...mesesHeaders.map(() => ({ wch: 14 })), { wch: 14 }];
+    ? [{ wch: 18 }, { wch: 26 }, ...mesesHeaders.map(() => ({ wch: 14 }))]
+    : [{ wch: 26 }, ...mesesHeaders.map(() => ({ wch: 14 }))];
 
   return { rows: data, cols };
 }
