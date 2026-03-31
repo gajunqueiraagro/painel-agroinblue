@@ -123,6 +123,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               semBase={ind.pesoMedioRebanhoKg === null}
               info={`Peso médio por cabeça no final do mês.\n\nBase: peso informado no fechamento de pastos (média ponderada por categoria).\nSe não houver fechamento, valor é estimado (*).`}
             />
+          </div>
           <div className="grid grid-cols-3 gap-3">
             <KpiCard
               label="Valor Rebanho"
@@ -151,6 +152,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
                 </button>
               )}
             </div>
+          </div>
         </CardContent>
       </Card>
 
