@@ -90,12 +90,9 @@ export function useStatusZootecnico(
     setPastosRascunho(0);
     setPastosNaoIniciados(0);
     setPastosPorFazenda([]);
-    setItensTotais(0);
     setPrecosDefinidos(0);
     setCategoriasComSaldo(0);
-    setCatsDivergentes(0);
-    setDifTotalCabecas(0);
-    setSaldoTotalSistema(0);
+    setCategoriasStatusResult({ status: 'aberto', catsDivergentes: 0, difTotalCabecas: 0, difTotalLiquida: 0, saldoTotalOficial: 0, totalAlocadoPastos: 0, descricao: '' });
     setFinFechamentoStatus(null);
     setFinTemLancamentos(false);
   }, []);
