@@ -105,8 +105,20 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
     if (!map || !featureLayer || !labelLayer) return;
 
     const timer = window.setTimeout(() => {
+      const mapAny = map as any;
+      const fixAllPanes = () => {
+        if (mapAny._mapPane) mapAny._mapPane._leaflet_pos = mapAny._mapPane._leaflet_pos || L.point(0, 0);
+        ['tilePane', 'overlayPane', 'shadowPane', 'markerPane', 'tooltipPane', 'popupPane'].forEach((name) => {
+          const pane = map.getPane(name) as any;
+          if (pane) pane._leaflet_pos = pane._leaflet_pos || L.point(0, 0);
+        });
+      };
+
       featureLayer.clearLayers();
       labelLayer.clearLayers();
+      viewportLockedRef.current = false;
+      mapAny.__viewportLocked = false;
+      mapAny.__lockedViewport = null;
 
       if (geometrias.length === 0) {
         reportRenderedGeometries(0);
@@ -114,88 +126,80 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
         return;
       }
 
-      // Fix _leaflet_pos on all internal panes before any operation
-      const mapAny = map as any;
-      const fixAllPanes = () => {
-        if (mapAny._mapPane) mapAny._mapPane._leaflet_pos = mapAny._mapPane._leaflet_pos || L.point(0, 0);
-        ['tilePane', 'overlayPane', 'shadowPane', 'markerPane', 'tooltipPane', 'popupPane'].forEach(name => {
-          const pane = map.getPane(name) as any;
-          if (pane) pane._leaflet_pos = pane._leaflet_pos || L.point(0, 0);
-        });
-      };
       fixAllPanes();
 
-      // Render ALL geometries with debug style
-      const allBounds: L.LatLngBounds[] = [];
-      let renderedCount = 0;
+      const firstGeo = geometrias[0];
+      const layer = L.geoJSON(firstGeo.geojson as GeoJSON.GeoJsonObject, {
+        style: {
+          color: '#ff0000',
+          weight: 4,
+          fillColor: '#ffff00',
+          fillOpacity: 0.7,
+        },
+      });
+      const bounds = layer.getBounds();
 
-      geometrias.forEach((geo) => {
-        try {
-          const layer = L.geoJSON(geo.geojson as GeoJSON.GeoJsonObject, {
-            style: {
-              color: '#ff0000',
-              weight: 3,
-              fillColor: '#ffff00',
-              fillOpacity: 0.5,
-            },
-          });
-          const bounds = layer.getBounds();
-          if (!bounds.isValid()) return;
+      if (!bounds.isValid()) {
+        reportRenderedGeometries(0);
+        onRenderedChange?.(0);
+        return;
+      }
 
-          layer.on('click', () => setSelected({ geo }));
-          layer.addTo(featureLayer);
-          allBounds.push(bounds);
-          renderedCount += 1;
-        } catch (err) {
-          console.error('[MapaGestor] geo error:', err);
-        }
+      const targetCenter = bounds.getCenter();
+      const targetZoom = 15;
+
+      console.warn('[MAP TARGET]', {
+        action: 'controlled-test-single-geometry',
+        targetCenter,
+        targetZoom,
+        targetBounds: {
+          southWest: bounds.getSouthWest(),
+          northEast: bounds.getNorthEast(),
+        },
       });
 
-      reportRenderedGeometries(renderedCount);
-      onRenderedChange?.(renderedCount);
+      layer.on('click', () => setSelected({ geo: firstGeo }));
+      layer.addTo(featureLayer);
 
-      // Center map using direct setView on combined bounds center
-      if (allBounds.length > 0) {
-        const combined = allBounds.reduce((acc, b) => acc.extend(b));
-        const center = combined.getCenter();
+      const markerIcon = L.divIcon({
+        className: '',
+        html: '<div style="width:18px;height:18px;background:#dc2626;border-radius:9999px;border:3px solid #ffffff;box-shadow:0 0 8px rgba(0,0,0,0.45)"></div>',
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      });
+      L.marker(targetCenter, { icon: markerIcon, zIndexOffset: 9999 }).addTo(featureLayer);
 
+      reportRenderedGeometries(1);
+      onRenderedChange?.(1);
+
+      try {
         fixAllPanes();
-        try { map.invalidateSize({ animate: false }); } catch { /* ignore */ }
-        fixAllPanes();
-
-        // Use setView instead of fitBounds to avoid _leaflet_pos in complex path
-        try {
-          map.setView(center, 14, { animate: false });
-          console.warn('[MapaGestor] setView OK:', center.lat, center.lng);
-        } catch {
-          console.warn('[MapaGestor] setView failed, trying flyTo');
-          try { map.flyTo(center, 14, { animate: false, duration: 0 }); } catch { /* give up */ }
-        }
-
-        // After setView, try fitBounds for proper zoom
-        setTimeout(() => {
-          fixAllPanes();
-          try {
-            map.fitBounds(combined, { padding: [30, 30], maxZoom: 17, animate: false });
-            console.warn('[MapaGestor] fitBounds OK');
-          } catch {
-            console.warn('[MapaGestor] fitBounds failed — using setView zoom');
-          }
-        }, 200);
+        map.setView(targetCenter, targetZoom, { animate: false });
+        viewportLockedRef.current = true;
+        mapAny.__viewportLocked = true;
+        mapAny.__lockedViewport = { targetCenter, targetZoom };
+        console.warn('[MAP VIEWPORT]', {
+          action: 'controlled-setView-lock',
+          center: map.getCenter(),
+          zoom: map.getZoom(),
+          mapId: L.Util.stamp(map),
+        });
+      } catch (error) {
+        console.warn('[MAP VIEWPORT]', {
+          action: 'controlled-setView-lock:error',
+          errorMessage: error instanceof Error ? error.message : 'unknown_error',
+        });
       }
     }, 300);
 
     return () => window.clearTimeout(timer);
   }, [
-    debugInfo.height,
-    debugInfo.width,
     featureLayerRef,
     geometrias,
     labelLayerRef,
-    mapStatus,
     mapInstanceRef,
+    onRenderedChange,
     reportRenderedGeometries,
-    selected,
   ]);
 
   return (
