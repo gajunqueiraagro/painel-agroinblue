@@ -100,9 +100,16 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
       const [pastosRes, fpRes, vrRes, itensRes, catsRes, finFechRes] = await Promise.all([
         // Pastos ativos
         fq(supabase.from('pastos').select('id').eq('ativo', true).eq('entra_conciliacao', true)),
-        // Fechamento pastos
-        fq(supabase.from('fechamento_pastos').select('id, status, pasto_id, ano_mes, updated_at')
-          .gte('ano_mes', anoMeses[0]).lte('ano_mes', anoMeses[11])),
+        // Fechamento pastos — mesma base operacional da tela Fechamento de Pastos
+        fq(
+          supabase
+            .from('fechamento_pastos')
+            .select('id, status, pasto_id, ano_mes, updated_at, created_at')
+            .gte('ano_mes', anoMeses[0])
+            .lte('ano_mes', anoMeses[11])
+            .order('created_at', { ascending: true })
+            .order('id', { ascending: true })
+        ),
         // Valor rebanho mensal
         fq(supabase.from('valor_rebanho_mensal').select('categoria, ano_mes')
           .gte('ano_mes', anoMeses[0]).lte('ano_mes', anoMeses[11])),
@@ -170,8 +177,18 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
         const am = anoMeses[m - 1];
         const fps = fpByMonth.get(am) || [];
 
-        // Deduplicate: keep only the most recent fechamento per pasto (by updated_at)
-        const dedupByPasto = new Map<string, typeof fps[0]>();
+        // Fonte OPERACIONAL: mesma regra da linha Pasto no Fechamento de Pastos
+        const operationalByPasto = new Map<string, typeof fps[number]>();
+        fps.forEach(f => {
+          if (!activePastoIds.has(f.pasto_id)) return; // Ignora pastos inativos
+          if (!operationalByPasto.has(f.pasto_id)) {
+            operationalByPasto.set(f.pasto_id, f);
+          }
+        });
+        const operationalFps = Array.from(operationalByPasto.values());
+
+        // Status operacional dos pastos continua olhando o registro efetivo mais recente do mês
+        const dedupByPasto = new Map<string, typeof fps[number]>();
         fps.forEach(f => {
           if (!activePastoIds.has(f.pasto_id)) return; // Ignora pastos inativos
           const existing = dedupByPasto.get(f.pasto_id);
@@ -186,9 +203,9 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
         const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, anoNum, m);
         const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
 
-        // Build alocado nos pastos (using deduplicated fechamentos only)
-        const fechIds = dedupFps.map(f => f.id);
-        const monthItens = fechIds.flatMap(id => itensByFech.get(id) || []);
+        // Build alocado nos pastos usando a MESMA base operacional da linha Pasto
+        const operationalFechIds = operationalFps.map(f => f.id);
+        const monthItens = operationalFechIds.flatMap(id => itensByFech.get(id) || []);
         const alocadoPastos = new Map<string, number>();
         monthItens.forEach(i => {
           const codigo = idToCodigo.get(i.categoria_id);
