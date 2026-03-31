@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import L from 'leaflet';
 import '@/hooks/useStableLeafletMap'; // ensures global _leaflet_pos patch is applied
 import 'leaflet/dist/leaflet.css';
