@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-import { Save, Copy, Eye, EyeOff, Info, Lock, Unlock, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Save, Copy, Eye, EyeOff, Info, Lock, Unlock, AlertTriangle, ArrowLeft, ShieldAlert } from 'lucide-react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
@@ -15,6 +16,7 @@ import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { toast } from 'sonner';
 import { useFechamentoCategoria, type OrigemPeso } from '@/hooks/useFechamentoCategoria';
+import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
 
 interface Props {
   lancamentos: Lancamento[];
