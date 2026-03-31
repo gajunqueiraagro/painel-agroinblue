@@ -505,11 +505,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       <Card className="bg-muted/50 border-border/60">
         <CardContent className="p-1.5 space-y-1">
           {/* LINE 1: Ano | Mês | Tipo | Status | Fazenda | Atividade */}
-          <div className="grid grid-cols-6 gap-1">
+          <div className="grid grid-cols-[auto_auto_1fr_1fr_1.5fr_1fr] gap-1 items-end">
             <div>
               <label className={lblCls}>Ano</label>
               <Select value={ano} onValueChange={setAno}>
-                <SelectTrigger className={selCls}><SelectValue /></SelectTrigger>
+                <SelectTrigger className={`${selCls} w-[52px]`}><SelectValue /></SelectTrigger>
                 <SelectContent>{anos.map(a => <SelectItem key={a} value={a} className={itemCls}>{a}</SelectItem>)}</SelectContent>
               </Select>
             </div>
@@ -517,7 +517,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <label className={lblCls}>Mês</label>
               <Popover open={mesPopoverOpen} onOpenChange={setMesPopoverOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full h-6 text-[10px] justify-between font-normal px-1.5">
+                  <Button variant="outline" className="h-6 text-[10px] justify-between font-normal px-1.5 w-[70px]">
                     {mesLabel}
                     <ChevronsUpDown className="h-2.5 w-2.5 opacity-50" />
                   </Button>
