@@ -65,16 +65,6 @@ export function MapaGeoPastosTab() {
     );
   }
 
-  // DEBUG temporário — remover após validação
-  const debugBanner = (
-    <div className="flex-shrink-0 flex flex-wrap items-center gap-3 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 text-[11px] font-mono">
-      <span className="text-muted-foreground">🔍 Fazenda: <strong className="text-foreground">{fazendaAtual?.nome || '—'}</strong></span>
-      <span className="text-muted-foreground">fazenda_id: <strong className="text-foreground">{fazendaAtual?.id || '—'}</strong></span>
-      <span className="text-muted-foreground">Carregadas: <strong className={geometrias.length > 0 ? 'text-green-600 dark:text-green-400' : 'text-destructive'}>{geometrias.length}</strong></span>
-      <span className="text-muted-foreground">Renderizadas: <strong className={renderedCount > 0 ? 'text-green-600 dark:text-green-400' : 'text-destructive'}>{renderedCount}</strong></span>
-      <span>{geoLoading ? '⏳ Carregando...' : '✅'}</span>
-    </div>
-  );
 
   const views: { key: ViewMode; label: string }[] = [
     { key: 'gestor', label: 'Gestor' },
