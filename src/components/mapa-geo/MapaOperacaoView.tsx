@@ -210,7 +210,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
     <div className="flex flex-col h-full min-h-0 gap-1.5">
       <div className="flex-1 min-h-0 flex gap-1.5 pb-1">
         <Card className="flex-1 min-h-[320px] sm:min-h-[400px] relative overflow-hidden">
-          <div className="absolute inset-0 rounded-lg border border-dashed border-border/70 bg-muted/20">
+          <div className="absolute inset-0 rounded-lg bg-muted/10">
             <div ref={mapContainerRef} className="h-full w-full rounded-lg" style={{ zIndex: 0 }} />
           </div>
           {geoLoading && (
@@ -224,16 +224,13 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
                 <p className="text-[11px] font-medium text-foreground">
                   {mapStatus === 'error' ? 'Falha ao inicializar o mapa' : 'Preparando mapa...'}
                 </p>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Container {debugInfo.width}×{debugInfo.height}px
-                </p>
               </div>
             </div>
           )}
           {!hasGeo && !geoLoading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-card z-10 rounded-lg">
               <MapPin className="h-10 w-10 text-muted-foreground/20" />
-              <p className="text-xs text-muted-foreground">Importe o mapa para começar</p>
+              <p className="text-xs text-muted-foreground">Esta fazenda ainda não possui mapa importado.</p>
               <Button size="sm" onClick={onUpload}>
                 <Upload className="h-3.5 w-3.5 mr-1" />
                 Importar
