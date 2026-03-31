@@ -79,7 +79,7 @@ export function KmlUploadDialog({ open, onOpenChange, onUpload, pastos }: Props)
           >
             <div className="flex flex-col items-center gap-1">
               <Upload className="h-6 w-6 text-muted-foreground" />
-              <span className="text-sm">{fileName || 'Clique para selecionar arquivo KML/KMZ'}</span>
+              <span className="text-sm">{fileName || 'Clique para selecionar arquivo KML, KMZ ou GeoJSON'}</span>
             </div>
           </Button>
 
