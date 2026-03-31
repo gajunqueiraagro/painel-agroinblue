@@ -41,10 +41,7 @@ export function usePastoGeometrias() {
     items: { pasto_id: string | null; nome_original: string; geojson: GeoJSON.Geometry; cor?: string }[]
   ) => {
     if (!fazendaId || !clienteId) return false;
-
-    // Delete existing geometries for this farm
     await supabase.from('pasto_geometrias').delete().eq('fazenda_id', fazendaId);
-
     const rows = items.map(item => ({
       fazenda_id: fazendaId,
       cliente_id: clienteId,
@@ -53,7 +50,6 @@ export function usePastoGeometrias() {
       geojson: item.geojson as any,
       cor: item.cor || null,
     }));
-
     const { error } = await supabase.from('pasto_geometrias').insert(rows);
     if (error) { toast.error('Erro ao salvar geometrias'); console.error(error); return false; }
     toast.success(`${rows.length} polígonos salvos`);
@@ -70,5 +66,39 @@ export function usePastoGeometrias() {
     return true;
   }, [fazendaId]);
 
-  return { geometrias, loading, loadGeometrias, salvarGeometrias, removerGeometrias };
+  // --- Single geometry CRUD ---
+
+  const atualizarGeometria = useCallback(async (
+    id: string,
+    updates: { nome_original?: string; pasto_id?: string | null; cor?: string | null }
+  ) => {
+    const { error } = await supabase
+      .from('pasto_geometrias')
+      .update(updates)
+      .eq('id', id);
+    if (error) { toast.error('Erro ao atualizar polígono'); console.error(error); return false; }
+    await loadGeometrias();
+    return true;
+  }, [loadGeometrias]);
+
+  const excluirGeometrias = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return false;
+    const { error } = await supabase
+      .from('pasto_geometrias')
+      .delete()
+      .in('id', ids);
+    if (error) { toast.error('Erro ao excluir polígonos'); console.error(error); return false; }
+    toast.success(`${ids.length} polígono(s) excluído(s)`);
+    await loadGeometrias();
+    return true;
+  }, [loadGeometrias]);
+
+  const vincularPasto = useCallback(async (geoId: string, pastoId: string | null) => {
+    return atualizarGeometria(geoId, { pasto_id: pastoId });
+  }, [atualizarGeometria]);
+
+  return {
+    geometrias, loading, loadGeometrias, salvarGeometrias, removerGeometrias,
+    atualizarGeometria, excluirGeometrias, vincularPasto,
+  };
 }
