@@ -27,6 +27,8 @@ export interface StatusCategoriasInput {
   alocadoPastos: Map<string, number>;
   /** Se há itens de fechamento de pastos no período */
   temItensPastos: boolean;
+  /** Total de pastos ativos (para distinguir "nada a conciliar" de "dados não carregados") */
+  pastosAtivos?: number;
 }
 
 export interface StatusPastosInput {
