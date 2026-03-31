@@ -17,7 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { calcSaldoPorCategoriaLegado, calcPesoMedioPonderado, calcUA, calcUAHa, calcAreaProdutivaPecuaria } from '@/lib/calculos/zootecnicos';
 import { loadPesosPastosPorCategoria, resolverPesoOficial } from '@/hooks/useFechamentoCategoria';
 import { calcArrobasSafe } from '@/lib/calculos/economicos';
-import { ChevronRight, AlertTriangle, CheckCircle2, TrendingUp, TrendingDown, Wallet, BarChart3, Landmark } from 'lucide-react';
+import { ChevronRight, AlertTriangle, CheckCircle2, TrendingUp, Wallet, BarChart3, Landmark } from 'lucide-react';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { Categoria } from '@/types/cattle';
 import type { FiltroGlobal } from './Index';
@@ -337,17 +337,17 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
   }, [statusZoo.pendencias, financeiro.status, fazendaNaoPecuaria]);
 
   return (
-    <div className="max-w-5xl mx-auto animate-fade-in pb-24">
+    <div className="max-w-5xl mx-auto animate-fade-in pb-20">
       {/* ── Sticky filter bar ── */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 md:px-6 py-2">
-        <div className="flex items-center justify-between gap-3 max-w-5xl mx-auto">
-          <p className="text-[11px] text-muted-foreground font-medium">
+      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 md:px-4 py-1.5">
+        <div className="flex items-center justify-between gap-2 max-w-5xl mx-auto">
+          <p className="text-[10px] text-muted-foreground font-medium">
             {mesLabel} / {filtroGlobal.ano}
             {isGlobal ? ' · Consolidado' : ` · ${fazendaAtual?.nome || ''}`}
           </p>
           <div className="flex gap-1">
             <Select value={filtroGlobal.ano} onValueChange={v => onFiltroChange({ ano: v })}>
-              <SelectTrigger className="w-[78px] h-7 text-xs font-medium border-border/60 bg-card">
+              <SelectTrigger className="w-[72px] h-6 text-[10px] font-medium border-border/60 bg-card">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent side="bottom">
@@ -357,7 +357,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
               </SelectContent>
             </Select>
             <Select value={String(mesNum)} onValueChange={v => onFiltroChange({ mes: Number(v) })}>
-              <SelectTrigger className="w-[72px] h-7 text-xs font-medium border-border/60 bg-card">
+              <SelectTrigger className="w-[62px] h-6 text-[10px] font-medium border-border/60 bg-card">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent side="bottom">
@@ -370,44 +370,38 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
         </div>
       </div>
 
+      <div className="px-3 md:px-4 pt-2 space-y-3">
 
-      <div className="p-4 md:p-6 space-y-5">
-
-      {/* ── Status Strip ── */}
+      {/* ── Status Geral — horizontal strip (max 60% width) ── */}
       <button
         onClick={() => onTabChange('zootecnico' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
-        className="w-full rounded-lg border border-border/60 bg-card p-3.5 flex items-center gap-3 transition-colors hover:bg-muted/30 active:bg-muted/50"
+        className="max-w-[60%] rounded-md border border-border/60 bg-card px-3 py-2 flex items-center gap-2.5 transition-colors hover:bg-muted/30 active:bg-muted/50"
       >
-        <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <BarChart3 className="h-4 w-4 text-primary" />
+        <BarChart3 className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+        <span className="text-[10px] font-semibold text-foreground whitespace-nowrap">Status</span>
+        <div className="flex gap-3">
+          {[
+            { label: 'Zoo', nivel: zootecnico.status.nivel },
+            { label: 'Fin', nivel: financeiro.status.nivel },
+            { label: 'Econ', nivel: economico.status.nivel },
+          ].map(item => (
+            <div key={item.label} className="flex items-center gap-1">
+              <StatusDot nivel={item.nivel} />
+              <span className="text-[9px] text-muted-foreground font-medium">{item.label}</span>
+            </div>
+          ))}
         </div>
-        <div className="flex-1 text-left">
-          <span className="text-xs font-semibold text-foreground">Status Geral</span>
-          <div className="flex gap-4 mt-1">
-            {[
-              { label: 'Zootécnico', nivel: zootecnico.status.nivel },
-              { label: 'Financeiro', nivel: financeiro.status.nivel },
-              { label: 'Econômico', nivel: economico.status.nivel },
-            ].map(item => (
-              <div key={item.label} className="flex items-center gap-1.5">
-                <StatusDot nivel={item.nivel} />
-                <span className="text-[10px] text-muted-foreground font-medium">{item.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+        <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0 ml-auto" />
       </button>
 
-      {/* ── Grid: Zootécnico + Financeiro ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* ── Zootécnico + Financeiro side by side ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* ZOOTÉCNICO */}
         <section className="rounded-lg border border-border/60 bg-card">
-          {/* Header */}
-          <div className="px-4 py-3 border-b border-border/40 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-sm">🐄</span>
-              <span className="text-xs font-semibold text-foreground uppercase tracking-wide">Zootécnico</span>
+          <div className="px-3 py-1.5 border-b border-border/40 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs">🐄</span>
+              <span className="text-[10px] font-semibold text-foreground uppercase tracking-wide">Zootécnico</span>
             </div>
             <StatusBadge
               nivel={zootecnico.status.nivel}
@@ -416,52 +410,48 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
           </div>
 
           {fazendaNaoPecuaria ? (
-            <div className="p-5 text-center">
-              <p className="text-xs text-muted-foreground">Sem dados de rebanho para esta fazenda</p>
-              <p className="text-[10px] text-muted-foreground/70 mt-1">Fazenda utilizada apenas para rateio financeiro</p>
+            <div className="p-3 text-center">
+              <p className="text-[10px] text-muted-foreground">Sem dados de rebanho para esta fazenda</p>
             </div>
           ) : (
-            <div className="p-4 space-y-3">
-              {/* Rebanho principal */}
+            <div className="p-3 space-y-2">
               <div className="text-center">
-                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">Rebanho Atual</p>
-                <p className="text-3xl font-bold text-foreground tabular-nums leading-tight mt-1">
+                <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-widest">Rebanho Atual</p>
+                <p className="text-2xl font-bold text-foreground tabular-nums leading-tight">
                   {formatNum(zootecnico.rebanhoAtual)}
                 </p>
-                <p className="text-[10px] text-muted-foreground">cabeças</p>
+                <p className="text-[9px] text-muted-foreground">cabeças</p>
               </div>
 
-              {/* Per-farm breakdown (Global) */}
               {isGlobal && globalFarmKpis.farms.length > 0 && (
-                <div className="border-t border-border/40 pt-2.5 -mx-1">
+                <div className="border-t border-border/40 pt-2 -mx-0.5">
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow className="hover:bg-transparent">
-                          <TableHead className="text-[9px] h-7 px-1.5">Fazenda</TableHead>
-                          <TableHead className="text-[9px] h-7 px-1.5 text-right">Qtde</TableHead>
-                          <TableHead className="text-[9px] h-7 px-1.5 text-right">Peso Méd.</TableHead>
-                          <TableHead className="text-[9px] h-7 px-1.5 text-right">Kg/ha</TableHead>
-                          <TableHead className="text-[9px] h-7 px-1.5 text-right">Área (ha)</TableHead>
+                          <TableHead className="text-[8px] h-6 px-1">Fazenda</TableHead>
+                          <TableHead className="text-[8px] h-6 px-1 text-right">Qtde</TableHead>
+                          <TableHead className="text-[8px] h-6 px-1 text-right">Peso</TableHead>
+                          <TableHead className="text-[8px] h-6 px-1 text-right">Kg/ha</TableHead>
+                          <TableHead className="text-[8px] h-6 px-1 text-right">Área</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {globalFarmKpis.farms.map(f => (
                           <TableRow key={f.id} className="hover:bg-muted/30">
-                            <TableCell className="text-[10px] py-1 px-1.5 font-medium truncate max-w-[100px]">{f.nome}</TableCell>
-                            <TableCell className="text-[10px] py-1 px-1.5 text-right tabular-nums">{formatNum(f.rebanho)}</TableCell>
-                            <TableCell className="text-[10px] py-1 px-1.5 text-right tabular-nums">{f.pesoMedio ? formatNum(f.pesoMedio, 0) : '—'}</TableCell>
-                            <TableCell className="text-[10px] py-1 px-1.5 text-right tabular-nums">{f.lotacaoKgHa ? formatNum(f.lotacaoKgHa, 0) : '—'}</TableCell>
-                            <TableCell className="text-[10px] py-1 px-1.5 text-right tabular-nums">{f.area > 0 ? formatNum(f.area, 0) : '—'}</TableCell>
+                            <TableCell className="text-[9px] py-0.5 px-1 font-medium truncate max-w-[90px]">{f.nome}</TableCell>
+                            <TableCell className="text-[9px] py-0.5 px-1 text-right tabular-nums">{formatNum(f.rebanho)}</TableCell>
+                            <TableCell className="text-[9px] py-0.5 px-1 text-right tabular-nums">{f.pesoMedio ? formatNum(f.pesoMedio, 0) : '—'}</TableCell>
+                            <TableCell className="text-[9px] py-0.5 px-1 text-right tabular-nums">{f.lotacaoKgHa ? formatNum(f.lotacaoKgHa, 0) : '—'}</TableCell>
+                            <TableCell className="text-[9px] py-0.5 px-1 text-right tabular-nums">{f.area > 0 ? formatNum(f.area, 0) : '—'}</TableCell>
                           </TableRow>
                         ))}
-                        {/* Global consolidated row */}
                         <TableRow className="border-t-2 border-border bg-muted/30 hover:bg-muted/40 font-semibold">
-                          <TableCell className="text-[10px] py-1.5 px-1.5 font-bold">Global</TableCell>
-                          <TableCell className="text-[10px] py-1.5 px-1.5 text-right tabular-nums font-bold">{formatNum(globalFarmKpis.globalRow.rebanho)}</TableCell>
-                          <TableCell className="text-[10px] py-1.5 px-1.5 text-right tabular-nums font-bold">{globalFarmKpis.globalRow.pesoMedio ? formatNum(globalFarmKpis.globalRow.pesoMedio, 0) : '—'}</TableCell>
-                          <TableCell className="text-[10px] py-1.5 px-1.5 text-right tabular-nums font-bold">{globalFarmKpis.globalRow.lotacaoKgHa ? formatNum(globalFarmKpis.globalRow.lotacaoKgHa, 0) : '—'}</TableCell>
-                          <TableCell className="text-[10px] py-1.5 px-1.5 text-right tabular-nums font-bold">{globalFarmKpis.globalRow.area > 0 ? formatNum(globalFarmKpis.globalRow.area, 0) : '—'}</TableCell>
+                          <TableCell className="text-[9px] py-1 px-1 font-bold">Global</TableCell>
+                          <TableCell className="text-[9px] py-1 px-1 text-right tabular-nums font-bold">{formatNum(globalFarmKpis.globalRow.rebanho)}</TableCell>
+                          <TableCell className="text-[9px] py-1 px-1 text-right tabular-nums font-bold">{globalFarmKpis.globalRow.pesoMedio ? formatNum(globalFarmKpis.globalRow.pesoMedio, 0) : '—'}</TableCell>
+                          <TableCell className="text-[9px] py-1 px-1 text-right tabular-nums font-bold">{globalFarmKpis.globalRow.lotacaoKgHa ? formatNum(globalFarmKpis.globalRow.lotacaoKgHa, 0) : '—'}</TableCell>
+                          <TableCell className="text-[9px] py-1 px-1 text-right tabular-nums font-bold">{globalFarmKpis.globalRow.area > 0 ? formatNum(globalFarmKpis.globalRow.area, 0) : '—'}</TableCell>
                         </TableRow>
                       </TableBody>
                     </Table>
@@ -469,36 +459,28 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
                 </div>
               )}
 
-              {/* KPIs por fazenda — executive grid */}
               {!isGlobal && (
-                <div className="border-t border-border/40 pt-3">
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="text-center rounded-md bg-muted/30 px-2 py-2">
-                      <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Área (ha)</p>
-                      <p className="text-sm font-bold text-foreground tabular-nums mt-0.5">
-                        {zooKpis.area > 0 ? formatNum(zooKpis.area, 0) : '—'}
-                      </p>
+                <div className="border-t border-border/40 pt-2">
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <div className="text-center rounded-md bg-muted/30 px-1.5 py-1.5">
+                      <p className="text-[8px] font-medium text-muted-foreground uppercase tracking-wider">Área</p>
+                      <p className="text-xs font-bold text-foreground tabular-nums">{zooKpis.area > 0 ? formatNum(zooKpis.area, 0) : '—'} ha</p>
                     </div>
-                    <div className="text-center rounded-md bg-muted/30 px-2 py-2">
-                      <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Peso Méd.</p>
-                      <p className="text-sm font-bold text-foreground tabular-nums mt-0.5">
-                        {zooKpis.pesoMedio ? `${formatNum(zooKpis.pesoMedio, 0)} kg` : '—'}
-                      </p>
+                    <div className="text-center rounded-md bg-muted/30 px-1.5 py-1.5">
+                      <p className="text-[8px] font-medium text-muted-foreground uppercase tracking-wider">Peso Méd.</p>
+                      <p className="text-xs font-bold text-foreground tabular-nums">{zooKpis.pesoMedio ? `${formatNum(zooKpis.pesoMedio, 0)} kg` : '—'}</p>
                     </div>
-                    <div className="text-center rounded-md bg-muted/30 px-2 py-2">
-                      <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Kg/ha Méd.</p>
-                      <p className="text-sm font-bold text-foreground tabular-nums mt-0.5">
-                        {zooKpis.lotacaoKgHa !== null ? formatNum(zooKpis.lotacaoKgHa, 0) : '—'}
-                      </p>
+                    <div className="text-center rounded-md bg-muted/30 px-1.5 py-1.5">
+                      <p className="text-[8px] font-medium text-muted-foreground uppercase tracking-wider">Kg/ha</p>
+                      <p className="text-xs font-bold text-foreground tabular-nums">{zooKpis.lotacaoKgHa !== null ? formatNum(zooKpis.lotacaoKgHa, 0) : '—'}</p>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* CTA */}
               <button
                 onClick={() => onTabChange('visao_zoo_hub', { ano: filtroGlobal.ano, mes: mesNum })}
-                className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold text-primary py-2 rounded border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10 mt-1"
+                className="w-full flex items-center justify-center gap-1 text-[10px] font-semibold text-primary py-1.5 rounded border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10"
               >
                 Painel Zootécnico <ChevronRight className="h-3 w-3" />
               </button>
@@ -508,11 +490,10 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
 
         {/* FINANCEIRO */}
         <section className="rounded-lg border border-border/60 bg-card">
-          {/* Header */}
-          <div className="px-4 py-3 border-b border-border/40 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Wallet className="h-3.5 w-3.5 text-primary" />
-              <span className="text-xs font-semibold text-foreground uppercase tracking-wide">Financeiro</span>
+          <div className="px-3 py-1.5 border-b border-border/40 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Wallet className="h-3 w-3 text-primary" />
+              <span className="text-[10px] font-semibold text-foreground uppercase tracking-wide">Financeiro</span>
             </div>
             <StatusBadge
               nivel={financeiro.status.nivel}
@@ -520,17 +501,15 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
             />
           </div>
 
-          <div className="p-4 space-y-3">
-            {/* Resultado destaque */}
+          <div className="p-3 space-y-2">
             <div className="text-center">
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">Saldo Final em Caixa</p>
-              <p className={`text-3xl font-bold tabular-nums leading-tight mt-1 ${financeiro.caixaAtual >= 0 ? 'text-success' : 'text-destructive'}`}>
+              <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-widest">Saldo Final em Caixa</p>
+              <p className={`text-2xl font-bold tabular-nums leading-tight ${financeiro.caixaAtual >= 0 ? 'text-success' : 'text-destructive'}`}>
                 {formatMoeda(financeiro.caixaAtual)}
               </p>
             </div>
 
-            {/* Entradas / Saídas */}
-            <div className="border-t border-border/40 pt-2.5">
+            <div className="border-t border-border/40 pt-1.5">
               <MetricRow
                 label="Entradas acum."
                 value={formatMoeda(financeiro.totalEntradas)}
@@ -543,10 +522,9 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
               />
             </div>
 
-            {/* CTA */}
             <button
               onClick={() => onTabChange('fin_caixa', { ano: filtroGlobal.ano, mes: mesNum })}
-              className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold text-primary py-2 rounded border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10 mt-1"
+              className="w-full flex items-center justify-center gap-1 text-[10px] font-semibold text-primary py-1.5 rounded border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10"
             >
               Fluxo Financeiro <ChevronRight className="h-3 w-3" />
             </button>
@@ -554,84 +532,44 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
         </section>
       </div>
 
-      {/* ── Cards de navegação ── */}
-      <div className="space-y-2">
-        {/* Operação */}
+      {/* ── Navigation cards (Operação + Painel Consultor only) ── */}
+      <div className="space-y-1.5">
         <button
           onClick={() => onTabChange('visao_zoo_hub' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
-          className="w-full rounded-lg border border-primary/30 bg-primary/5 p-4 flex items-center gap-3 transition-colors hover:bg-primary/10 active:bg-primary/15"
+          className="w-full rounded-md border border-primary/30 bg-primary/5 px-3 py-2 flex items-center gap-2.5 transition-colors hover:bg-primary/10 active:bg-primary/15"
         >
-          <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center flex-shrink-0">
-            <TrendingUp className="h-5 w-5 text-primary" />
+          <div className="h-7 w-7 rounded bg-primary/15 flex items-center justify-center flex-shrink-0">
+            <TrendingUp className="h-3.5 w-3.5 text-primary" />
           </div>
           <div className="flex-1 text-left">
-            <span className="text-sm font-bold text-foreground">Operação</span>
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              Indicadores, gráficos, DRE e desempenho consolidado
-            </p>
+            <span className="text-xs font-bold text-foreground">Operação</span>
+            <p className="text-[9px] text-muted-foreground">Indicadores, gráficos, DRE e desempenho</p>
           </div>
-          <ChevronRight className="h-4 w-4 text-primary flex-shrink-0" />
+          <ChevronRight className="h-3.5 w-3.5 text-primary flex-shrink-0" />
         </button>
 
-        {/* Zootécnico */}
-        <button
-          onClick={() => onTabChange('movimentacao' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
-          className="w-full rounded-lg border border-primary/30 bg-primary/5 p-4 flex items-center gap-3 transition-colors hover:bg-primary/10 active:bg-primary/15"
-        >
-          <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center flex-shrink-0">
-            <BarChart3 className="h-5 w-5 text-primary" />
-          </div>
-          <div className="flex-1 text-left">
-            <span className="text-sm font-bold text-foreground">Zootécnico</span>
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              Movimentações do rebanho: entradas, saídas e transferências
-            </p>
-          </div>
-          <ChevronRight className="h-4 w-4 text-primary flex-shrink-0" />
-        </button>
-
-        {/* Financeiro */}
-        <button
-          onClick={() => onTabChange('fin_caixa' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
-          className="w-full rounded-lg border border-primary/30 bg-primary/5 p-4 flex items-center gap-3 transition-colors hover:bg-primary/10 active:bg-primary/15"
-        >
-          <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center flex-shrink-0">
-            <Wallet className="h-5 w-5 text-primary" />
-          </div>
-          <div className="flex-1 text-left">
-            <span className="text-sm font-bold text-foreground">Financeiro</span>
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              Dashboard financeiro: entradas, saídas e macro custos
-            </p>
-          </div>
-          <ChevronRight className="h-4 w-4 text-primary flex-shrink-0" />
-        </button>
-
-        {/* Painel do Consultor */}
         <button
           onClick={() => onTabChange('painel_consultor' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
-          className="w-full rounded-lg border border-primary/30 bg-primary/5 p-4 flex items-center gap-3 transition-colors hover:bg-primary/10 active:bg-primary/15"
+          className="w-full rounded-md border border-primary/30 bg-primary/5 px-3 py-2 flex items-center gap-2.5 transition-colors hover:bg-primary/10 active:bg-primary/15"
         >
-          <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center flex-shrink-0">
-            <Landmark className="h-5 w-5 text-primary" />
+          <div className="h-7 w-7 rounded bg-primary/15 flex items-center justify-center flex-shrink-0">
+            <Landmark className="h-3.5 w-3.5 text-primary" />
           </div>
           <div className="flex-1 text-left">
-            <span className="text-sm font-bold text-foreground">Painel do Consultor</span>
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              Tabela analítica mensal: conferência, conciliação e fechamento
-            </p>
+            <span className="text-xs font-bold text-foreground">Painel do Consultor</span>
+            <p className="text-[9px] text-muted-foreground">Tabela analítica: conferência e fechamento</p>
           </div>
-          <ChevronRight className="h-4 w-4 text-primary flex-shrink-0" />
+          <ChevronRight className="h-3.5 w-3.5 text-primary flex-shrink-0" />
         </button>
       </div>
 
       {/* ── Pendências ── */}
       {alertas.length > 0 && (
-        <section className="rounded-lg border border-warning/30 bg-card overflow-hidden">
-          <div className="px-3.5 py-2.5 border-b border-warning/20 bg-warning/5 flex items-center gap-2">
-            <AlertTriangle className="h-3.5 w-3.5 text-warning" />
-            <span className="text-xs font-semibold text-foreground">Pendências</span>
-            <span className="text-[10px] font-semibold text-warning bg-warning/15 px-1.5 py-0.5 rounded tabular-nums ml-auto">
+        <section className="rounded-md border border-warning/30 bg-card overflow-hidden">
+          <div className="px-2.5 py-1.5 border-b border-warning/20 bg-warning/5 flex items-center gap-1.5">
+            <AlertTriangle className="h-3 w-3 text-warning" />
+            <span className="text-[10px] font-semibold text-foreground">Pendências</span>
+            <span className="text-[9px] font-semibold text-warning bg-warning/15 px-1.5 py-px rounded tabular-nums ml-auto">
               {alertas.length}
             </span>
           </div>
@@ -642,14 +580,14 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
                 <button
                   key={i}
                   onClick={() => !blocked && onTabChange(a.tab, { ano: filtroGlobal.ano, mes: mesNum })}
-                  className={`w-full flex items-center gap-2.5 text-left px-3.5 py-2.5 transition-colors ${blocked ? 'opacity-50 cursor-default' : 'hover:bg-muted/30'}`}
+                  className={`w-full flex items-center gap-2 text-left px-2.5 py-1.5 transition-colors ${blocked ? 'opacity-50 cursor-default' : 'hover:bg-muted/30'}`}
                 >
                   <StatusDot nivel={a.nivel} />
-                  <span className="flex-1 text-[11px] text-foreground leading-tight">{a.texto}</span>
+                  <span className="flex-1 text-[10px] text-foreground leading-tight">{a.texto}</span>
                   {blocked ? (
-                    <span className="text-[9px] text-muted-foreground whitespace-nowrap">Selecione fazenda</span>
+                    <span className="text-[8px] text-muted-foreground whitespace-nowrap">Selecione fazenda</span>
                   ) : (
-                    <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                    <ChevronRight className="h-2.5 w-2.5 text-muted-foreground flex-shrink-0" />
                   )}
                 </button>
               );
@@ -659,9 +597,9 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
       )}
 
       {alertas.length === 0 && !loading && !statusZoo.loading && (
-        <div className="rounded-lg border border-success/30 bg-success/5 px-3.5 py-3 flex items-center gap-2">
-          <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-          <span className="text-xs font-semibold text-success">
+        <div className="rounded-md border border-success/30 bg-success/5 px-3 py-2 flex items-center gap-2">
+          <CheckCircle2 className="h-3 w-3 text-success" />
+          <span className="text-[10px] font-semibold text-success">
             Nenhuma pendência — {mesLabel}/{filtroGlobal.ano}
           </span>
         </div>
