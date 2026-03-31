@@ -116,7 +116,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
       // Fetch all data in bulk (including financeiro)
       const [pastosRes, fpRes, vrRes, catsRes, finFechRes] = await Promise.all([
         supabase.from('pastos').select('id, fazenda_id').eq('ativo', true).eq('entra_conciliacao', true).in('fazenda_id', fIds),
-        supabase.from('fechamento_pastos').select('id, status, pasto_id, fazenda_id').eq('ano_mes', anoMes).in('fazenda_id', fIds),
+        supabase.from('fechamento_pastos').select('id, status, pasto_id, fazenda_id, updated_at').eq('ano_mes', anoMes).in('fazenda_id', fIds),
         supabase.from('valor_rebanho_mensal').select('categoria, fazenda_id').eq('ano_mes', anoMes).in('fazenda_id', fIds),
         supabase.from('categorias_rebanho').select('id, codigo'),
         clienteAtual?.id
@@ -289,7 +289,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
 
       const [pastosRes, fpRes, vrRes, catsRes, finFechRes] = await Promise.all([
         fq(supabase.from('pastos').select('id').eq('ativo', true).eq('entra_conciliacao', true)),
-        fq(supabase.from('fechamento_pastos').select('id, status, pasto_id, ano_mes')
+        fq(supabase.from('fechamento_pastos').select('id, status, pasto_id, ano_mes, updated_at')
           .gte('ano_mes', anoMeses[0]).lte('ano_mes', anoMeses[11])),
         fq(supabase.from('valor_rebanho_mensal').select('categoria, ano_mes')
           .gte('ano_mes', anoMeses[0]).lte('ano_mes', anoMeses[11])),

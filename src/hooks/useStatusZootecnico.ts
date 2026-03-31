@@ -67,13 +67,15 @@ export function useStatusZootecnico(
   const [pastosRascunho, setPastosRascunho] = useState(0);
   const [pastosNaoIniciados, setPastosNaoIniciados] = useState(0);
   const [pastosPorFazenda, setPastosPorFazenda] = useState<PastosFazendaStatus[]>([]);
-  const [itensTotais, setItensTotais] = useState(0);
   const [precosDefinidos, setPrecosDefinidos] = useState(0);
   const [categoriasComSaldo, setCategoriasComSaldo] = useState(0);
-  const [catsDivergentes, setCatsDivergentes] = useState(0);
-  const [difTotalCabecas, setDifTotalCabecas] = useState(0);
-  const [saldoTotalSistema, setSaldoTotalSistema] = useState(0);
   const [semPecuaria, setSemPecuaria] = useState(false);
+
+  // Categorias status — computed via calcStatusCategorias (single source of truth)
+  const [categoriasStatusResult, setCategoriasStatusResult] = useState<{
+    status: StatusCor; catsDivergentes: number; difTotalCabecas: number; difTotalLiquida: number;
+    saldoTotalOficial: number; totalAlocadoPastos: number; descricao: string;
+  }>({ status: 'aberto', catsDivergentes: 0, difTotalCabecas: 0, difTotalLiquida: 0, saldoTotalOficial: 0, totalAlocadoPastos: 0, descricao: '' });
 
   // Financeiro state
   const [finFechamentoStatus, setFinFechamentoStatus] = useState<string | null>(null); // 'fechado' | 'aberto' | null
@@ -88,12 +90,9 @@ export function useStatusZootecnico(
     setPastosRascunho(0);
     setPastosNaoIniciados(0);
     setPastosPorFazenda([]);
-    setItensTotais(0);
     setPrecosDefinidos(0);
     setCategoriasComSaldo(0);
-    setCatsDivergentes(0);
-    setDifTotalCabecas(0);
-    setSaldoTotalSistema(0);
+    setCategoriasStatusResult({ status: 'aberto', catsDivergentes: 0, difTotalCabecas: 0, difTotalLiquida: 0, saldoTotalOficial: 0, totalAlocadoPastos: 0, descricao: '' });
     setFinFechamentoStatus(null);
     setFinTemLancamentos(false);
   }, []);
@@ -255,7 +254,7 @@ export function useStatusZootecnico(
       setPastosRascunho(detalhesPastos.reduce((s, f) => s + f.rascunho, 0));
       setPastosNaoIniciados(detalhesPastos.reduce((s, f) => s + f.naoIniciados, 0));
 
-      // --- Categorias comparison ---
+      // --- Categorias comparison (via calcStatusCategorias — single source of truth) ---
       // Deduplicate: keep only the most recent fechamento per pasto
       const dedupFechByPasto = new Map<string, { id: string; updated_at: string }>();
       fpData.forEach((f: any) => {
@@ -265,58 +264,62 @@ export function useStatusZootecnico(
         }
       });
       const fechIds = Array.from(dedupFechByPasto.values()).map(v => v.id);
+
+      const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
+      const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
+      setCategoriasComSaldo(catsComSaldo.length);
+
+      let alocadoPastosCodigo = new Map<string, number>();
+      let temItensPastos = false;
+
       if (fechIds.length > 0) {
         const { data: itensData } = await supabase
           .from('fechamento_pasto_itens')
-          .select('peso_medio_kg, quantidade, categoria_id')
+          .select('quantidade, categoria_id')
           .in('fechamento_id', fechIds)
           .gt('quantidade', 0);
         const itens = itensData || [];
-        setItensTotais(itens.length);
+        temItensPastos = itens.length > 0;
 
-        const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
-        const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
-        setCategoriasComSaldo(catsComSaldo.length);
-        const totalSist = catsComSaldo.reduce((s, [, q]) => s + q, 0);
-        setSaldoTotalSistema(totalSist);
+        if (itens.length > 0) {
+          const { data: catsData } = await supabase.from('categorias_rebanho').select('id, codigo');
+          const idToCodigo = new Map((catsData || []).map((c: any) => [c.id, c.codigo]));
 
-        const pastosMap = new Map<string, number>();
-        itens.forEach((i: any) => {
-          pastosMap.set(i.categoria_id, (pastosMap.get(i.categoria_id) || 0) + i.quantidade);
-        });
-
-        const { data: catsData } = await supabase.from('categorias_rebanho').select('id, codigo');
-        const idToCodigo = new Map((catsData || []).map((c: any) => [c.id, c.codigo]));
-
-        const pastosMapByCodigo = new Map<string, number>();
-        pastosMap.forEach((qtd, catId) => {
-          const codigo = idToCodigo.get(catId);
-          if (codigo) pastosMapByCodigo.set(codigo, (pastosMapByCodigo.get(codigo) || 0) + qtd);
-        });
-
-        let divCount = 0;
-        let difTotal = 0;
-        catsComSaldo.forEach(([cat, qtdSist]) => {
-          const qtdPastos = pastosMapByCodigo.get(cat) || 0;
-          const dif = Math.abs(qtdPastos - qtdSist);
-          if (dif > 0) { divCount++; difTotal += dif; }
-        });
-        pastosMapByCodigo.forEach((qtdP, cat) => {
-          if (!saldoMap.has(cat) || (saldoMap.get(cat) || 0) <= 0) {
-            if (qtdP > 0) { divCount++; difTotal += qtdP; }
-          }
-        });
-        setCatsDivergentes(divCount);
-        setDifTotalCabecas(difTotal);
-      } else {
-        setItensTotais(0);
-        const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
-        const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
-        setCategoriasComSaldo(catsComSaldo.length);
-        setSaldoTotalSistema(catsComSaldo.reduce((s, [, q]) => s + q, 0));
-        setCatsDivergentes(catsComSaldo.length);
-        setDifTotalCabecas(catsComSaldo.reduce((s, [, q]) => s + q, 0));
+          itens.forEach((i: any) => {
+            const codigo = idToCodigo.get(i.categoria_id);
+            if (codigo) alocadoPastosCodigo.set(codigo, (alocadoPastosCodigo.get(codigo) || 0) + i.quantidade);
+          });
+        }
       }
+
+      // Use calcStatusCategorias from statusMensal.ts — THE official rule
+      const catsResult = calcStatusCategorias({
+        saldoOficial: new Map(catsComSaldo),
+        alocadoPastos: alocadoPastosCodigo,
+        temItensPastos,
+      });
+
+      // Build description
+      let descCatsComputed = '';
+      if (catsResult.status === 'fechado') {
+        descCatsComputed = catsResult.saldoTotalOficial === 0 && !temItensPastos ? 'Nada a conciliar' : 'Categorias conciliadas';
+      } else if (catsResult.status === 'parcial') {
+        descCatsComputed = `${catsResult.catsDivergentes} categoria(s) com compensação cruzada`;
+      } else {
+        descCatsComputed = temItensPastos || catsResult.saldoTotalOficial > 0
+          ? `${catsResult.catsDivergentes} categoria(s) divergente(s) · ${catsResult.difTotalCabecas} cab`
+          : 'Sem dados de pastos';
+      }
+
+      setCategoriasStatusResult({
+        status: catsResult.status,
+        catsDivergentes: catsResult.catsDivergentes,
+        difTotalCabecas: catsResult.difTotalCabecas,
+        difTotalLiquida: catsResult.difTotalLiquida,
+        saldoTotalOficial: catsResult.saldoTotalOficial,
+        totalAlocadoPastos: catsResult.totalAlocadoPastos,
+        descricao: descCatsComputed,
+      });
 
       // Valor do rebanho (precos)
       setPrecosDefinidos((vrResult.data || []).length);
@@ -374,28 +377,9 @@ export function useStatusZootecnico(
     else descFin = 'Sem lançamentos no período';
     pendencias.push({ id: 'financeiro', label: 'Conciliação do Financeiro', descricao: descFin, status: statusFin, resolverTab: 'fin_caixa' });
 
-    // ── 3. Conciliação de Categorias (calculada antes de Pastos) ──
-    // Regra oficial: verde SOMENTE se TODAS categorias têm dif = 0
-    let statusCats: StatusItem;
-    let descCats = '';
-    if (itensTotais === 0 && categoriasComSaldo === 0) {
-      statusCats = 'fechado';
-      descCats = 'Nada a conciliar';
-    } else if (itensTotais === 0 && categoriasComSaldo > 0) {
-      statusCats = 'aberto';
-      descCats = 'Sem dados de pastos';
-    } else if (catsDivergentes === 0) {
-      statusCats = 'fechado';
-      descCats = 'Categorias conciliadas';
-    } else {
-      // Total líquido = total pastos - total sistema
-      const difLiquida = difTotalCabecas; // abs sum
-      // Check if total matches even though categories don't
-      // We need to know if totals match — approximate using saldoTotalSistema
-      // amarelo: total bate mas categorias divergem | vermelho: total não bate
-      statusCats = 'aberto'; // default: vermelho (divergência real)
-      descCats = `${catsDivergentes} categoria(s) divergente(s) · ${difTotalCabecas} cab`;
-    }
+    // ── 3. Conciliação de Categorias (via calcStatusCategorias — fonte única) ──
+    const statusCats: StatusItem = categoriasStatusResult.status;
+    const descCats = categoriasStatusResult.descricao;
     pendencias.push({ id: 'categorias', label: 'Conciliação de Categorias', descricao: descCats, status: statusCats, resolverTab: 'conciliacao_categoria' });
 
     // ── 2. Fechamento de Pastos (depende de categorias) ──
@@ -419,7 +403,7 @@ export function useStatusZootecnico(
         : `${pastosFechados} fechado(s) · conciliado`;
     } else if (statusPastosCalc === 'parcial') {
       if (totalFechados >= totalPastosGeral) {
-        descPastos = `Pastos fechados · ${difTotalCabecas} cab divergente(s)`;
+        descPastos = `Pastos fechados · ${categoriasStatusResult.difTotalCabecas} cab divergente(s)`;
       } else {
         descPastos = isGlobal
           ? `${fazendasComPastos.filter(f => f.status === 'fechado').length}/${fazendasComPastos.length} fazenda(s) fechada(s)`
@@ -477,10 +461,7 @@ export function useStatusZootecnico(
     pastosNaoIniciados,
     precosDefinidos,
     categoriasComSaldo,
-    catsDivergentes,
-    difTotalCabecas,
-    saldoTotalSistema,
-    itensTotais,
+    categoriasStatusResult,
     loading,
     isGlobal,
   ]);
