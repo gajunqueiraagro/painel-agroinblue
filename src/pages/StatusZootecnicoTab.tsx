@@ -26,21 +26,23 @@ interface Props {
 }
 
 type CellStatus = 'aberto' | 'parcial' | 'fechado';
-interface MonthStatus { pastos: CellStatus; valor: CellStatus; categorias: CellStatus; }
+interface MonthStatus { financeiro: CellStatus; pastos: CellStatus; categorias: CellStatus; valor: CellStatus; }
 
 interface FazendaStatus {
   fazendaId: string;
   fazendaNome: string;
+  financeiro: CellStatus;
   pastos: CellStatus;
-  valor: CellStatus;
   categorias: CellStatus;
+  valor: CellStatus;
 }
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const ROWS: { id: keyof MonthStatus; label: string; tab: TabId }[] = [
+  { id: 'financeiro', label: 'Conciliação do Financeiro', tab: 'fin_caixa' },
   { id: 'pastos', label: 'Fechamento de Pastos', tab: 'fechamento' },
-  { id: 'valor', label: 'Valor do Rebanho', tab: 'valor_rebanho' },
   { id: 'categorias', label: 'Conciliação de Categorias', tab: 'conciliacao_categoria' },
+  { id: 'valor', label: 'Valor do Rebanho', tab: 'valor_rebanho' },
 ];
 
 const STATUS_ORDER: Record<CellStatus, number> = { aberto: 0, parcial: 1, fechado: 2 };
@@ -210,13 +212,17 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
           stCats = 'fechado';
         }
 
-        return { fazendaId: faz.id, fazendaNome: faz.nome, pastos: stPastos, valor: stValor, categorias: stCats };
+        // Apply pastos correction: if all pastos fechados but categorias divergentes → parcial
+        const categoriasOk = stCats === 'fechado';
+        if (stPastos === 'fechado' && !categoriasOk) stPastos = 'parcial';
+
+        return { fazendaId: faz.id, fazendaNome: faz.nome, financeiro: 'aberto' as CellStatus, pastos: stPastos, valor: stValor, categorias: stCats };
       });
 
       // Sort: aberto → parcial → fechado (by worst indicator)
       result.sort((a, b) => {
-        const worstA = Math.min(STATUS_ORDER[a.pastos], STATUS_ORDER[a.valor], STATUS_ORDER[a.categorias]);
-        const worstB = Math.min(STATUS_ORDER[b.pastos], STATUS_ORDER[b.valor], STATUS_ORDER[b.categorias]);
+        const worstA = Math.min(STATUS_ORDER[a.pastos], STATUS_ORDER[a.valor], STATUS_ORDER[a.categorias], STATUS_ORDER[a.financeiro]);
+        const worstB = Math.min(STATUS_ORDER[b.pastos], STATUS_ORDER[b.valor], STATUS_ORDER[b.categorias], STATUS_ORDER[b.financeiro]);
         return worstA - worstB;
       });
 
@@ -232,7 +238,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
 
   // ---- Visão Anual data ----
   const [monthData, setMonthData] = useState<MonthStatus[]>(
-    Array.from({ length: 12 }, () => ({ pastos: 'aberto', valor: 'aberto', categorias: 'aberto' }))
+    Array.from({ length: 12 }, () => ({ financeiro: 'aberto' as CellStatus, pastos: 'aberto' as CellStatus, valor: 'aberto' as CellStatus, categorias: 'aberto' as CellStatus }))
   );
   const [loadingYear, setLoadingYear] = useState(true);
 
@@ -328,7 +334,11 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
         } else if (catsComSaldo.length === 0) {
           statusCats = 'fechado';
         }
-        result.push({ pastos: statusPastos, valor: statusValor, categorias: statusCats });
+        // Apply pastos correction: need categorias conciliated
+        const categoriasOkYear = statusCats === 'fechado';
+        if (statusPastos === 'fechado' && !categoriasOkYear) statusPastos = 'parcial';
+
+        result.push({ financeiro: 'aberto' as CellStatus, pastos: statusPastos, valor: statusValor, categorias: statusCats });
       }
       setMonthData(result);
     } catch (e) {

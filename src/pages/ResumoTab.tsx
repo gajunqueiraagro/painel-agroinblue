@@ -314,6 +314,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
   const alertas = useMemo(() => {
     const items: { texto: string; nivel: StatusNivel; tab: TabId; blockedGlobal: boolean }[] = [];
     if (fazendaNaoPecuaria) return items;
+    // All 4 pendências come from statusZoo (financeiro, pastos, categorias, valor)
     statusZoo.pendencias.forEach(p => {
       if (p.status !== 'fechado') {
         const destTab = (p.resolverTab || 'visao_zoo_hub') as TabId;
@@ -325,16 +326,8 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
         });
       }
     });
-    if (financeiro.status.nivel !== 'fechado') {
-      items.push({
-        texto: `Financeiro: ${financeiro.status.descricao}`,
-        nivel: financeiro.status.nivel,
-        tab: 'fin_caixa',
-        blockedGlobal: false,
-      });
-    }
     return items;
-  }, [statusZoo.pendencias, financeiro.status, fazendaNaoPecuaria]);
+  }, [statusZoo.pendencias, fazendaNaoPecuaria]);
 
   return (
     <div className="max-w-5xl mx-auto animate-fade-in pb-20">
