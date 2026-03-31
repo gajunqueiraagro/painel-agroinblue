@@ -2408,6 +2408,128 @@ export type Database = {
           },
         ]
       }
+      pasto_condicoes: {
+        Row: {
+          altura_pasto_cm: number | null
+          cliente_id: string
+          cobertura_perc: number | null
+          condicao: string
+          created_at: string
+          data_registro: string
+          fazenda_id: string
+          id: string
+          observacoes: string | null
+          pasto_id: string
+          registrado_por: string | null
+        }
+        Insert: {
+          altura_pasto_cm?: number | null
+          cliente_id: string
+          cobertura_perc?: number | null
+          condicao?: string
+          created_at?: string
+          data_registro?: string
+          fazenda_id: string
+          id?: string
+          observacoes?: string | null
+          pasto_id: string
+          registrado_por?: string | null
+        }
+        Update: {
+          altura_pasto_cm?: number | null
+          cliente_id?: string
+          cobertura_perc?: number | null
+          condicao?: string
+          created_at?: string
+          data_registro?: string
+          fazenda_id?: string
+          id?: string
+          observacoes?: string | null
+          pasto_id?: string
+          registrado_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pasto_condicoes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pasto_condicoes_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pasto_condicoes_pasto_id_fkey"
+            columns: ["pasto_id"]
+            isOneToOne: false
+            referencedRelation: "pastos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pasto_geometrias: {
+        Row: {
+          cliente_id: string
+          cor: string | null
+          created_at: string
+          fazenda_id: string
+          geojson: Json
+          id: string
+          nome_original: string | null
+          pasto_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          cliente_id: string
+          cor?: string | null
+          created_at?: string
+          fazenda_id: string
+          geojson: Json
+          id?: string
+          nome_original?: string | null
+          pasto_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cliente_id?: string
+          cor?: string | null
+          created_at?: string
+          fazenda_id?: string
+          geojson?: Json
+          id?: string
+          nome_original?: string | null
+          pasto_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pasto_geometrias_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pasto_geometrias_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pasto_geometrias_pasto_id_fkey"
+            columns: ["pasto_id"]
+            isOneToOne: false
+            referencedRelation: "pastos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pastos: {
         Row: {
           area_produtiva_ha: number | null
