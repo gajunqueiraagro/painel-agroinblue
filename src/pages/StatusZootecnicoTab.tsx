@@ -470,11 +470,18 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
                       fazendaNome: fs.fazendaNome,
                       status: fs.status as CellStatus,
                     }))
-                  : perFarmStatus.map(fs => ({
-                      fazendaId: fs.fazendaId,
-                      fazendaNome: fs.fazendaNome,
-                      status: fs[p.id as keyof MonthStatus] as CellStatus,
-                    }));
+                  : p.id === 'economico'
+                    ? perFarmStatus.map(fs => {
+                        const all: CellStatus[] = [fs.financeiro, fs.pastos, fs.categorias, fs.valor];
+                        const st: CellStatus = all.every(s => s === 'fechado') ? 'fechado'
+                          : all.every(s => s === 'aberto') ? 'aberto' : 'parcial';
+                        return { fazendaId: fs.fazendaId, fazendaNome: fs.fazendaNome, status: st };
+                      })
+                    : perFarmStatus.map(fs => ({
+                        fazendaId: fs.fazendaId,
+                        fazendaNome: fs.fazendaNome,
+                        status: fs[p.id as keyof FazendaStatus] as CellStatus,
+                      }));
                 const farmProblems = isGlobal ? farmRows.filter(fs => fs.status !== 'fechado').length : 0;
                 const hasFarmRows = farmRows.length > 0;
 
