@@ -2530,6 +2530,89 @@ export type Database = {
           },
         ]
       }
+      pasto_movimentacoes: {
+        Row: {
+          categoria: string | null
+          cliente_id: string
+          created_at: string
+          data: string
+          fazenda_id: string
+          id: string
+          lote_id: string | null
+          observacoes: string | null
+          pasto_destino_id: string | null
+          pasto_origem_id: string | null
+          peso_medio_kg: number | null
+          quantidade: number
+          referencia_rebanho: string | null
+          registrado_por: string | null
+          tipo: string
+        }
+        Insert: {
+          categoria?: string | null
+          cliente_id: string
+          created_at?: string
+          data?: string
+          fazenda_id: string
+          id?: string
+          lote_id?: string | null
+          observacoes?: string | null
+          pasto_destino_id?: string | null
+          pasto_origem_id?: string | null
+          peso_medio_kg?: number | null
+          quantidade?: number
+          referencia_rebanho?: string | null
+          registrado_por?: string | null
+          tipo: string
+        }
+        Update: {
+          categoria?: string | null
+          cliente_id?: string
+          created_at?: string
+          data?: string
+          fazenda_id?: string
+          id?: string
+          lote_id?: string | null
+          observacoes?: string | null
+          pasto_destino_id?: string | null
+          pasto_origem_id?: string | null
+          peso_medio_kg?: number | null
+          quantidade?: number
+          referencia_rebanho?: string | null
+          registrado_por?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pasto_movimentacoes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pasto_movimentacoes_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pasto_movimentacoes_pasto_destino_id_fkey"
+            columns: ["pasto_destino_id"]
+            isOneToOne: false
+            referencedRelation: "pastos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pasto_movimentacoes_pasto_origem_id_fkey"
+            columns: ["pasto_origem_id"]
+            isOneToOne: false
+            referencedRelation: "pastos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pastos: {
         Row: {
           area_produtiva_ha: number | null
@@ -2543,6 +2626,8 @@ export type Database = {
           nome: string
           observacoes: string | null
           qualidade: number | null
+          referencia_rebanho: string | null
+          situacao: string
           tipo_uso: string
           updated_at: string
         }
@@ -2558,6 +2643,8 @@ export type Database = {
           nome: string
           observacoes?: string | null
           qualidade?: number | null
+          referencia_rebanho?: string | null
+          situacao?: string
           tipo_uso?: string
           updated_at?: string
         }
@@ -2573,6 +2660,8 @@ export type Database = {
           nome?: string
           observacoes?: string | null
           qualidade?: number | null
+          referencia_rebanho?: string | null
+          situacao?: string
           tipo_uso?: string
           updated_at?: string
         }
