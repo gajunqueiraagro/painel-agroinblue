@@ -164,11 +164,22 @@ export function useStableLeafletMap({
     }
 
     try {
+      // Monkey-patch L.DomUtil.getPosition to never return undefined
+      const origGetPos = L.DomUtil.getPosition;
+      L.DomUtil.getPosition = function (el: any) {
+        const pos = origGetPos.call(this, el);
+        if (!pos) {
+          el._leaflet_pos = L.point(0, 0);
+          return el._leaflet_pos;
+        }
+        return pos;
+      };
+
       const map = L.map(el, {
         center,
         zoom,
         zoomControl: false,
-        preferCanvas: true,
+        preferCanvas: false,
       });
 
       L.control.zoom({ position: 'bottomright' }).addTo(map);
@@ -180,16 +191,22 @@ export function useStableLeafletMap({
       const featureLayer = L.layerGroup().addTo(map);
       const labelLayer = L.layerGroup().addTo(map);
 
+      // Fix _leaflet_pos on ALL panes
+      ['mapPane', 'tilePane', 'overlayPane', 'shadowPane', 'markerPane', 'tooltipPane', 'popupPane'].forEach(name => {
+        const pane = map.getPane(name) as any;
+        if (pane && pane._leaflet_pos === undefined) {
+          pane._leaflet_pos = L.point(0, 0);
+        }
+      });
+
       const syncLabelVisibility = () => {
         if (!labelLayerRef.current || !mapInstanceRef.current) return;
-
         if (mapInstanceRef.current.getZoom() >= labelZoomThreshold) {
           if (!mapInstanceRef.current.hasLayer(labelLayerRef.current)) {
             mapInstanceRef.current.addLayer(labelLayerRef.current);
           }
           return;
         }
-
         if (mapInstanceRef.current.hasLayer(labelLayerRef.current)) {
           mapInstanceRef.current.removeLayer(labelLayerRef.current);
         }
@@ -200,13 +217,6 @@ export function useStableLeafletMap({
       mapInstanceRef.current = map;
       featureLayerRef.current = featureLayer;
       labelLayerRef.current = labelLayer;
-
-      // Fix: ensure mapPane has _leaflet_pos set (can be missing in flex layouts)
-      const mapPane = map.getPane('mapPane') as any;
-      if (mapPane && mapPane._leaflet_pos === undefined) {
-        mapPane._leaflet_pos = L.point(0, 0);
-        log('Fixed missing _leaflet_pos on mapPane');
-      }
 
       syncLabelVisibility();
       syncMetrics({ mapInitialized: true, errorMessage: null });
