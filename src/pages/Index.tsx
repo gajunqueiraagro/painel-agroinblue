@@ -88,7 +88,7 @@ const TITLES: Record<TabId, string> = {
   conciliacao: 'Conciliação',
   fin_caixa: 'Financeiro',
   valor_rebanho: 'Valor do Rebanho',
-  conciliacao_categoria: 'Conciliação de Categoria',
+  
   analise_operacional: 'Análise Operacional',
   fechamento: 'Lançamento de Pasto',
   mapa_pastos: 'Mapa de Pastos',
