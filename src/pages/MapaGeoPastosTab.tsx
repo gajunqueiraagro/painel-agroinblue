@@ -148,8 +148,6 @@ export function MapaGeoPastosTab() {
           onUpload={() => setUploadOpen(true)}
           onRefresh={() => { loadGeometrias(); reloadOcupacao(); }}
           onRenderedChange={onRenderedChange}
-        />
-        />
       )}
       {viewMode === 'validacao' && (
         <ValidacaoPoligonosView
