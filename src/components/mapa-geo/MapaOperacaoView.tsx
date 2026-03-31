@@ -90,6 +90,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, geoLoading, o
     const timer = setTimeout(() => {
       map.invalidateSize();
       lg.clearLayers();
+      console.log(`[MapaOp] Drawing ${geometrias.length} polygons`);
       if (geometrias.length === 0) return;
       const allBounds: L.LatLngBounds[] = [];
       geometrias.forEach((geo) => {
