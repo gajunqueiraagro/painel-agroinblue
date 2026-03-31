@@ -116,7 +116,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
       // Fetch all data in bulk (including financeiro)
       const [pastosRes, fpRes, vrRes, catsRes, finFechRes] = await Promise.all([
         supabase.from('pastos').select('id, fazenda_id').eq('ativo', true).eq('entra_conciliacao', true).in('fazenda_id', fIds),
-        supabase.from('fechamento_pastos').select('id, status, pasto_id, fazenda_id').eq('ano_mes', anoMes).in('fazenda_id', fIds),
+        supabase.from('fechamento_pastos').select('id, status, pasto_id, fazenda_id, updated_at').eq('ano_mes', anoMes).in('fazenda_id', fIds),
         supabase.from('valor_rebanho_mensal').select('categoria, fazenda_id').eq('ano_mes', anoMes).in('fazenda_id', fIds),
         supabase.from('categorias_rebanho').select('id, codigo'),
         clienteAtual?.id
