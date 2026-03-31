@@ -168,13 +168,13 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
         const am = anoMeses[m - 1];
         const fps = fpByMonth.get(am) || [];
 
-        // Deduplicate: keep only the most recent fechamento per pasto
+        // Deduplicate: keep only the most recent fechamento per pasto (by updated_at)
         const dedupByPasto = new Map<string, typeof fps[0]>();
         fps.forEach(f => {
           const existing = dedupByPasto.get(f.pasto_id);
-          if (!existing) { dedupByPasto.set(f.pasto_id, f); return; }
-          // Keep the most recent — no updated_at here, so prefer 'fechado' status
-          if (f.status === 'fechado') dedupByPasto.set(f.pasto_id, f);
+          if (!existing || (f.updated_at || '') >= (existing.updated_at || '')) {
+            dedupByPasto.set(f.pasto_id, f);
+          }
         });
         const dedupFps = Array.from(dedupByPasto.values());
         const fechados = dedupFps.filter(f => f.status === 'fechado').length;
