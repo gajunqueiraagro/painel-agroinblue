@@ -562,6 +562,35 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
     })();
   }, [fazendaId, anoNum, categorias]);
 
+  // Load valor_rebanho_fechamento per month
+  useEffect(() => {
+    if (!fazendaId) { setValorRebanhoMes([]); return; }
+    (async () => {
+      const meses = Array.from({ length: 12 }, (_, i) => `${anoNum}-${String(i + 1).padStart(2, '0')}`);
+      if (fazendaId === '__global__') {
+        const fids = fazendas.filter(f => f.tem_pecuaria !== false).map(f => f.id);
+        if (fids.length === 0) { setValorRebanhoMes(Array(12).fill(0)); return; }
+        const { data } = await supabase
+          .from('valor_rebanho_fechamento')
+          .select('ano_mes, valor_total')
+          .in('fazenda_id', fids)
+          .in('ano_mes', meses);
+        const map: Record<string, number> = {};
+        (data || []).forEach(r => { map[r.ano_mes] = (map[r.ano_mes] || 0) + (Number(r.valor_total) || 0); });
+        setValorRebanhoMes(meses.map(m => map[m] || 0));
+      } else {
+        const { data } = await supabase
+          .from('valor_rebanho_fechamento')
+          .select('ano_mes, valor_total')
+          .eq('fazenda_id', fazendaId)
+          .in('ano_mes', meses);
+        const map: Record<string, number> = {};
+        (data || []).forEach(r => { map[r.ano_mes] = Number(r.valor_total) || 0; });
+        setValorRebanhoMes(meses.map(m => map[m] || 0));
+      }
+    })();
+  }, [fazendaId, anoNum, fazendas]);
+
   const areaProdutiva = useMemo(() => calcAreaProdutivaPecuaria(pastos), [pastos]);
 
   const zooRows = useMemo(
