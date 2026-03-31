@@ -262,7 +262,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               unidade="%"
               compAnual={c.desfruteCabecasAcumulado.anual}
               semBase={ind.desfruteCabecasAcumulado === null}
-              info={`Desfrute em cabeças acumulado no ano.\n\nFórmula: (Saídas em cabeças no período ÷ Rebanho médio) × 100.\nMede a taxa de extração do rebanho.`}
+              info={`Desfrute em cabeças acumulado no ano.\n\nFórmula: (Saídas em cabeças no período ÷ Saldo inicial do ano) × 100.\nMede a taxa de extração do rebanho.`}
             />
             <KpiCard
               label="Desfrute @"
