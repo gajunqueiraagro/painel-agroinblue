@@ -122,17 +122,36 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
       const allBounds: L.LatLngBounds[] = [];
       let renderedCount = 0;
 
-      geometrias.forEach((geo) => {
+      geometrias.forEach((geo, idx) => {
         try {
           const isSelected = selected?.geo.id === geo.id;
           const pasto = geo.pasto_id ? pastos.find((item) => item.id === geo.pasto_id) : null;
           const oc = geo.pasto_id ? ocupacoes.get(geo.pasto_id) : null;
-          const status = oc?.status || 'sem_ocupacao';
+
+          // DEBUG: estilo forte temporário para diagnóstico visual
+          const debugStyle = {
+            color: '#ff0000',
+            weight: 3,
+            fillColor: '#ffff00',
+            fillOpacity: 0.5,
+          };
 
           const layer = L.geoJSON(geo.geojson as GeoJSON.GeoJsonObject, {
-            style: getPolyStyle(status, isSelected),
+            style: debugStyle,
           });
           const bounds = layer.getBounds();
+          
+          // DEBUG: log primeiro polígono
+          if (idx === 0) {
+            console.warn('[DEBUG-GEO] Primeiro polígono:', geo.nome_original);
+            console.warn('[DEBUG-GEO] GeoJSON type:', (geo.geojson as any)?.type);
+            console.warn('[DEBUG-GEO] Bounds valid:', bounds.isValid());
+            if (bounds.isValid()) {
+              console.warn('[DEBUG-GEO] Bounds SW:', bounds.getSouthWest().toString());
+              console.warn('[DEBUG-GEO] Bounds NE:', bounds.getNorthEast().toString());
+            }
+          }
+          
           if (!bounds.isValid()) return;
 
           const kgHaText = oc?.kg_ha != null ? `${formatNum(oc.kg_ha, 0)} kg/ha` : '—';
@@ -173,7 +192,17 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
       if (allBounds.length > 0 && fitKey !== lastFitKeyRef.current) {
         lastFitKeyRef.current = fitKey;
         const combinedBounds = allBounds.reduce((acc, bounds) => acc.extend(bounds));
+        console.warn('[DEBUG-GEO] Combined bounds SW:', combinedBounds.getSouthWest().toString());
+        console.warn('[DEBUG-GEO] Combined bounds NE:', combinedBounds.getNorthEast().toString());
+        console.warn('[DEBUG-GEO] Map center before fit:', map.getCenter().toString());
+        console.warn('[DEBUG-GEO] Map zoom before fit:', map.getZoom());
         safeFitBounds(map, combinedBounds, { padding: [40, 40], maxZoom: 17 }, 'MapaGestor');
+        // Log after a delay to capture post-fit state
+        setTimeout(() => {
+          console.warn('[DEBUG-GEO] Map center AFTER fit:', map.getCenter().toString());
+          console.warn('[DEBUG-GEO] Map zoom AFTER fit:', map.getZoom());
+          console.warn('[DEBUG-GEO] featureLayer layer count:', featureLayer.getLayers().length);
+        }, 500);
       }
     }, 220);
 

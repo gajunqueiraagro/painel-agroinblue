@@ -103,6 +103,13 @@ export function useStableLeafletMap({
     labelLayerRef.current = null;
   }, []);
 
+  const fixPanePos = useCallback((map: L.Map) => {
+    const mapAny = map as any;
+    if (mapAny._mapPane && mapAny._mapPane._leaflet_pos === undefined) {
+      mapAny._mapPane._leaflet_pos = L.point(0, 0);
+    }
+  }, []);
+
   const scheduleInvalidateSize = useCallback(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -114,18 +121,21 @@ export function useStableLeafletMap({
     }
 
     setStatus('ready');
+    fixPanePos(map);
 
     if (resizeRafRef.current != null) {
       cancelAnimationFrame(resizeRafRef.current);
     }
 
     resizeRafRef.current = requestAnimationFrame(() => {
-      map.invalidateSize(false);
+      fixPanePos(map);
+      try { map.invalidateSize(false); } catch { /* _leaflet_pos race */ }
       resizeTimeoutRef.current = window.setTimeout(() => {
-        map.invalidateSize(false);
+        fixPanePos(map);
+        try { map.invalidateSize(false); } catch { /* _leaflet_pos race */ }
       }, 140);
     });
-  }, [syncMetrics]);
+  }, [fixPanePos, syncMetrics]);
 
   const initializeMap = useCallback(() => {
     const el = mapContainerRef.current;
@@ -190,6 +200,13 @@ export function useStableLeafletMap({
       mapInstanceRef.current = map;
       featureLayerRef.current = featureLayer;
       labelLayerRef.current = labelLayer;
+
+      // Fix: ensure mapPane has _leaflet_pos set (can be missing in flex layouts)
+      const mapPane = map.getPane('mapPane') as any;
+      if (mapPane && mapPane._leaflet_pos === undefined) {
+        mapPane._leaflet_pos = L.point(0, 0);
+        log('Fixed missing _leaflet_pos on mapPane');
+      }
 
       syncLabelVisibility();
       syncMetrics({ mapInitialized: true, errorMessage: null });

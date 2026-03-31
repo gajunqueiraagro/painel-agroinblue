@@ -1,55 +1,65 @@
 import L from 'leaflet';
 
 /**
- * Safely calls fitBounds, retrying if the map's internal DOM isn't ready yet.
- * The `_leaflet_pos` error occurs when Leaflet tries to position internal
- * elements before they're fully initialised — this cannot be reliably
- * pre-checked, so we catch + retry.
+ * Safely calls fitBounds.
+ * Works around the _leaflet_pos error by ensuring the map pane's
+ * internal position property is set before calling fitBounds.
  */
 export function safeFitBounds(
   map: L.Map,
   bounds: L.LatLngBounds,
   options: L.FitBoundsOptions = {},
   debugName = 'Map',
-  maxRetries = 6,
+  maxRetries = 8,
 ): void {
   let attempt = 0;
 
-  const isContainerReady = (): boolean => {
+  const fixPanePositions = () => {
+    // Fix _leaflet_pos on ALL pane elements inside the map container
     const container = map.getContainer?.();
-    if (!container) return false;
-    const { width, height } = container.getBoundingClientRect();
-    return width >= 32 && height >= 32;
+    if (!container) return;
+    const panes = container.querySelectorAll('[class*="leaflet-"]');
+    panes.forEach((el: any) => {
+      if (el._leaflet_pos === undefined && el.classList.contains('leaflet-map-pane')) {
+        el._leaflet_pos = L.point(0, 0);
+      }
+    });
+    // Also fix via the map's internal _mapPane reference
+    const mapAny = map as any;
+    if (mapAny._mapPane && mapAny._mapPane._leaflet_pos === undefined) {
+      mapAny._mapPane._leaflet_pos = L.point(0, 0);
+    }
   };
 
   const tryFit = () => {
     attempt += 1;
 
-    if (!isContainerReady()) {
-      if (attempt < maxRetries) scheduleRetry();
+    const container = map.getContainer?.();
+    if (!container || container.offsetWidth < 32 || container.offsetHeight < 32) {
+      if (attempt < maxRetries) setTimeout(tryFit, 250);
       return;
     }
 
+    fixPanePositions();
+
     try {
-      map.invalidateSize(false);
-      map.fitBounds(bounds, options);
+      map.invalidateSize({ animate: false });
     } catch {
-      // _leaflet_pos not yet set on internal elements — retry
+      // invalidateSize can also fail with _leaflet_pos — ignore
+    }
+
+    fixPanePositions();
+
+    try {
+      map.fitBounds(bounds, options);
+      console.info(`[safeFitBounds:${debugName}] ✅ OK attempt=${attempt}`);
+    } catch (err) {
+      console.warn(`[safeFitBounds:${debugName}] attempt ${attempt} failed`);
       if (attempt < maxRetries) {
-        scheduleRetry();
-        return;
+        setTimeout(tryFit, 300);
       }
     }
   };
 
-  const scheduleRetry = () => {
-    requestAnimationFrame(() => {
-      setTimeout(tryFit, 150);
-    });
-  };
-
-  // Always defer to let the current layout commit finish
-  requestAnimationFrame(() => {
-    setTimeout(tryFit, 80);
-  });
+  setTimeout(tryFit, 80);
 }
