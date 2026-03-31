@@ -377,8 +377,8 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
       <div className="px-3 md:px-4 pt-2 space-y-3">
 
       {/* ── Topo executivo: Status + Atalhos ── */}
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-2 items-stretch">
-        {/* STATUS — destaque principal */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-stretch">
+        {/* STATUS — destaque principal, alinhado com Zootécnico */}
         <button
           onClick={() => onTabChange('zootecnico' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
           className="rounded-lg border border-primary/30 bg-primary px-4 py-3.5 flex flex-col gap-2.5 transition-colors hover:bg-primary/90 active:bg-primary/80 text-left"
@@ -405,29 +405,40 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
           </div>
         </button>
 
-        {/* OPERAÇÃO — atalho estratégico */}
-        <button
-          onClick={() => onTabChange('visao_zoo_hub' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
-          className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-3 flex flex-col items-center justify-center gap-1.5 transition-colors hover:bg-primary/10 active:bg-primary/15 w-full md:w-[130px]"
-        >
-          <div className="h-8 w-8 rounded-md bg-primary/15 flex items-center justify-center">
-            <TrendingUp className="h-4 w-4 text-primary" />
-          </div>
-          <span className="text-[10px] font-bold text-foreground">Operação</span>
-          <p className="text-[8px] text-muted-foreground text-center leading-tight">Indicadores e desempenho</p>
-        </button>
+        {/* 3 ATALHOS — alinhados com Financeiro */}
+        <div className="grid grid-cols-3 gap-2 items-stretch">
+          {/* OPERAÇÃO */}
+          <button
+            onClick={() => onTabChange('visao_zoo_hub' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
+            className="rounded-lg border border-primary/30 bg-primary/5 px-2 py-3 flex flex-col items-center justify-center gap-1.5 transition-colors hover:bg-primary/10 active:bg-primary/15"
+          >
+            <div className="h-8 w-8 rounded-md bg-primary/15 flex items-center justify-center">
+              <TrendingUp className="h-4 w-4 text-primary" />
+            </div>
+            <span className="text-[10px] font-bold text-foreground">Operação</span>
+            <p className="text-[8px] text-muted-foreground text-center leading-tight">Indicadores e desempenho</p>
+          </button>
 
-        {/* PAINEL DO CONSULTOR — atalho estratégico */}
-        <button
-          onClick={() => onTabChange('painel_consultor' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
-          className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-3 flex flex-col items-center justify-center gap-1.5 transition-colors hover:bg-primary/10 active:bg-primary/15 w-full md:w-[130px]"
-        >
-          <div className="h-8 w-8 rounded-md bg-primary/15 flex items-center justify-center">
-            <Landmark className="h-4 w-4 text-primary" />
+          {/* PAINEL DO CONSULTOR */}
+          <button
+            onClick={() => onTabChange('painel_consultor' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
+            className="rounded-lg border border-primary/30 bg-primary/5 px-2 py-3 flex flex-col items-center justify-center gap-1.5 transition-colors hover:bg-primary/10 active:bg-primary/15"
+          >
+            <div className="h-8 w-8 rounded-md bg-primary/15 flex items-center justify-center">
+              <Landmark className="h-4 w-4 text-primary" />
+            </div>
+            <span className="text-[10px] font-bold text-foreground text-center">Painel Consultor</span>
+            <p className="text-[8px] text-muted-foreground text-center leading-tight">Conferência e fechamento</p>
+          </button>
+
+          {/* CARD EM BRANCO — reservado */}
+          <div className="rounded-lg border border-border/40 border-dashed bg-muted/20 px-2 py-3 flex flex-col items-center justify-center gap-1.5">
+            <div className="h-8 w-8 rounded-md bg-muted/30 flex items-center justify-center">
+              <span className="text-muted-foreground/40 text-sm">+</span>
+            </div>
+            <span className="text-[10px] font-medium text-muted-foreground/50">Em breve</span>
           </div>
-          <span className="text-[10px] font-bold text-foreground text-center">Painel Consultor</span>
-          <p className="text-[8px] text-muted-foreground text-center leading-tight">Conferência e fechamento</p>
-        </button>
+        </div>
       </div>
 
       {/* ── Zootécnico + Financeiro side by side ── */}
