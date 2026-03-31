@@ -126,14 +126,6 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
           </div>
           <div className="grid grid-cols-3 gap-3">
             <KpiCard
-              label="Valor Rebanho"
-              valor={ind.valorRebanho !== null ? formatMoedaCompacto(ind.valorRebanho) : '—'}
-              compMensal={c.valorRebanho.mensal}
-              compAnual={c.valorRebanho.anual}
-              semBase={ind.valorRebanho === null}
-              info={`Valor total do rebanho em R$.\n\nFórmula: somatório de (cabeças × peso médio × preço da @/30) por categoria.\nBase: preço de mercado e dados de fechamento.`}
-            />
-            <KpiCard
               label="R$/cab"
               valor={ind.valorPorCabeca !== null ? formatMoeda(ind.valorPorCabeca) : '—'}
               small
