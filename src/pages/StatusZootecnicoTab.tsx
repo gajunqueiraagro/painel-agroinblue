@@ -375,7 +375,12 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
           categoriasComSaldo: catsComSaldo.length,
         });
 
-        result.push({ financeiro: stFin, pastos: stPastos, categorias: stCatsResult.status, valor: stValor });
+        // 5. Econômico (derivado: verde se todos verdes, vermelho se todos vermelhos, senão amarelo)
+        const allStatuses = [stFin, stPastos, stCatsResult.status, stValor];
+        const stEcon: CellStatus = allStatuses.every(s => s === 'fechado') ? 'fechado'
+          : allStatuses.every(s => s === 'aberto') ? 'aberto' : 'parcial';
+
+        result.push({ financeiro: stFin, pastos: stPastos, categorias: stCatsResult.status, valor: stValor, economico: stEcon });
       }
       setMonthData(result);
     } catch (e) {
