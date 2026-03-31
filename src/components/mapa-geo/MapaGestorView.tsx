@@ -220,7 +220,7 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
 
       <div className="flex-1 min-h-0 flex gap-1.5 pb-1">
         <Card className="flex-1 min-h-[320px] sm:min-h-[400px] relative overflow-hidden">
-          <div className="absolute inset-0 rounded-lg border border-dashed border-border/70 bg-muted/20">
+          <div className="absolute inset-0 rounded-lg bg-muted/10">
             <div ref={mapContainerRef} className="h-full w-full rounded-lg" style={{ zIndex: 0 }} />
           </div>
           {geoLoading && (
