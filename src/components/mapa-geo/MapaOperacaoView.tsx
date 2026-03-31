@@ -149,14 +149,11 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
 
     return () => window.clearTimeout(timer);
   }, [
-    debugInfo.height,
-    debugInfo.width,
     geometrias,
-    geometrySignature,
+    geoIdKey,
     mapStatus,
     ocupacoes,
     reportRenderedGeometries,
-    
     selectedGeo,
   ]);
 
