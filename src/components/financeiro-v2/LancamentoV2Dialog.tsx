@@ -150,6 +150,11 @@ export function LancamentoV2Dialog({
 }: Props) {
   const { clienteAtual } = useCliente();
   const isEdit = !!lancamento;
+  // Store the editing ID in a ref so it can't become stale during async save
+  const editingIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    editingIdRef.current = lancamento?.id ?? null;
+  }, [lancamento]);
   const [saving, setSaving] = useState(false);
   const [fornecedorDialogOpen, setFornecedorDialogOpen] = useState(false);
 
