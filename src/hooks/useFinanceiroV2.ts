@@ -359,6 +359,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       forma_pagamento: form.forma_pagamento || null,
       dados_pagamento: form.dados_pagamento || null,
       ano_mes: anoMes,
+      editado_manual: true,
       updated_by: user.id,
     }).eq('id', id);
 
