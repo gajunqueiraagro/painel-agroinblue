@@ -9,30 +9,29 @@ import { Upload, Layers, X, MapPin, Maximize2, BarChart3 } from 'lucide-react';
 import { formatNum } from '@/lib/calculos/formatters';
 import type { PastoGeometria } from '@/hooks/usePastoGeometrias';
 import type { Pasto } from '@/hooks/usePastos';
+import type { PastoOcupacao } from '@/hooks/usePastoOcupacao';
 
 const STATUS_STYLES: Record<string, { fillColor: string; color: string; label: string }> = {
-  adequado: { fillColor: 'hsl(145, 40%, 68%)', color: 'hsl(145, 35%, 42%)', label: 'Adequado' },
-  atencao:  { fillColor: 'hsl(45, 65%, 70%)',  color: 'hsl(45, 50%, 42%)',  label: 'Atenção' },
-  pressao:  { fillColor: 'hsl(0, 50%, 68%)',   color: 'hsl(0, 40%, 42%)',   label: 'Pressão Alta' },
-  descanso: { fillColor: 'hsl(210, 45%, 70%)', color: 'hsl(210, 40%, 42%)', label: 'Descanso' },
-  vazio:    { fillColor: 'hsl(220, 8%, 78%)',   color: 'hsl(220, 8%, 55%)',  label: 'Sem Ocupação' },
-  default:  { fillColor: 'hsl(213, 45%, 68%)', color: 'hsl(213, 40%, 38%)', label: 'Vinculado' },
+  adequado:    { fillColor: 'hsl(145, 40%, 68%)', color: 'hsl(145, 35%, 42%)', label: 'Adequado (280–600)' },
+  atencao:     { fillColor: 'hsl(45, 65%, 70%)',  color: 'hsl(45, 50%, 42%)',  label: 'Atenção (< 280)' },
+  pressao:     { fillColor: 'hsl(0, 50%, 68%)',   color: 'hsl(0, 40%, 42%)',   label: 'Pressão Alta (> 600)' },
+  sem_ocupacao:{ fillColor: 'hsl(220, 8%, 78%)',   color: 'hsl(220, 8%, 55%)',  label: 'Sem Ocupação' },
 };
 
-function getPolyStyle(geo: PastoGeometria, isSelected: boolean) {
-  const status = geo.pasto_id ? 'default' : 'vazio';
-  const s = STATUS_STYLES[status] || STATUS_STYLES.default;
+function getPolyStyle(status: string, isSelected: boolean) {
+  const s = STATUS_STYLES[status] || STATUS_STYLES.sem_ocupacao;
   return {
     color: isSelected ? 'hsl(213, 75%, 35%)' : s.color,
     weight: isSelected ? 2.5 : 0.8,
     fillColor: isSelected ? 'hsl(213, 65%, 50%)' : s.fillColor,
-    fillOpacity: isSelected ? 0.45 : 0.18,
+    fillOpacity: isSelected ? 0.45 : 0.22,
   };
 }
 
 interface Props {
   geometrias: PastoGeometria[];
   pastos: Pasto[];
+  ocupacoes: Map<string, PastoOcupacao>;
   geoLoading: boolean;
   onUpload: () => void;
 }
@@ -42,7 +41,7 @@ interface SelectedGeo {
   bounds: L.LatLngBounds;
 }
 
-export function MapaGestorView({ geometrias, pastos, geoLoading, onUpload }: Props) {
+export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUpload }: Props) {
   const [selected, setSelected] = useState<SelectedGeo | null>(null);
 
   const mapRef = useRef<HTMLDivElement>(null);
@@ -57,13 +56,23 @@ export function MapaGestorView({ geometrias, pastos, geoLoading, onUpload }: Pro
     const linkedPastoIds = new Set(vinculados.map(g => g.pasto_id!));
     const linkedPastos = pastos.filter(p => linkedPastoIds.has(p.id));
     const totalArea = linkedPastos.reduce((s, p) => s + (p.area_produtiva_ha || 0), 0);
+    let totalCab = 0;
+    let totalKg = 0;
+    linkedPastoIds.forEach(pid => {
+      const oc = ocupacoes.get(pid);
+      if (oc) { totalCab += oc.cabecas; totalKg += oc.peso_total_kg; }
+    });
+    const lotKgHa = totalArea > 0 ? totalKg / totalArea : 0;
+    const emPressao = Array.from(ocupacoes.values()).filter(o => o.status === 'pressao').length;
     return {
       totalPoligonos: geometrias.length,
       vinculados: vinculados.length,
-      pastosOcupados: linkedPastos.filter(p => p.ativo).length,
+      totalCabecas: totalCab,
+      lotacaoKgHa: lotKgHa,
       areaTotal: totalArea,
+      emPressao,
     };
-  }, [geometrias, pastos]);
+  }, [geometrias, pastos, ocupacoes]);
 
   // Init map
   useEffect(() => {
@@ -84,7 +93,6 @@ export function MapaGestorView({ geometrias, pastos, geoLoading, onUpload }: Pro
     labelLayerRef.current = L.layerGroup().addTo(map);
     mapInstance.current = map;
 
-    // Show/hide labels based on zoom
     const updateLabels = () => {
       const zoom = map.getZoom();
       const ll = labelLayerRef.current;
@@ -124,23 +132,34 @@ export function MapaGestorView({ geometrias, pastos, geoLoading, onUpload }: Pro
       geometrias.forEach((geo) => {
         try {
           const isSelected = selected?.geo?.id === geo.id;
-          const layer = L.geoJSON(geo.geojson as any, { style: getPolyStyle(geo, isSelected) });
+          const pasto = geo.pasto_id ? pastos.find(p => p.id === geo.pasto_id) : null;
+          const oc = geo.pasto_id ? ocupacoes.get(geo.pasto_id) : null;
+          const status = oc?.status || (geo.pasto_id ? 'sem_ocupacao' : 'sem_ocupacao');
+
+          const layer = L.geoJSON(geo.geojson as any, { style: getPolyStyle(status, isSelected) });
           const b = layer.getBounds();
           if (!b.isValid()) return;
-          // Tooltip
-          const pasto = geo.pasto_id ? pastos.find(p => p.id === geo.pasto_id) : null;
+
+          // Tooltip with full details
+          const kgHaText = oc?.kg_ha != null ? `${formatNum(oc.kg_ha, 0)} kg/ha` : '—';
           const tipContent = pasto
-            ? `<strong>${pasto.nome}</strong><br/><span style="color:#666">Área: ${pasto.area_produtiva_ha ? formatNum(pasto.area_produtiva_ha, 1) + ' ha' : '—'}</span>`
+            ? `<strong>${pasto.nome}</strong><br/>
+               <span style="color:#666">Área: ${pasto.area_produtiva_ha ? formatNum(pasto.area_produtiva_ha, 1) + ' ha' : '—'}</span><br/>
+               <span style="color:#666">Cab: ${oc?.cabecas || 0} · ${kgHaText}</span>`
             : `<em>${geo.nome_original || 'Sem nome'}</em><br/><span style="color:#999">Sem vínculo</span>`;
           layer.bindTooltip(tipContent, { sticky: true, className: 'pasto-tooltip', direction: 'top', offset: [0, -6] });
-          // Small label — only visible at high zoom
-          if (geo.nome_original) {
+
+          // Small label — name + kg/ha at high zoom
+          const shortName = geo.nome_original || pasto?.nome || '';
+          if (shortName) {
+            const kgLabel = oc?.kg_ha != null ? `<br/><span class="kg-value">${formatNum(oc.kg_ha, 0)}</span>` : '';
             const label = L.divIcon({
               className: 'pasto-label-small',
-              html: `<span>${geo.nome_original}</span>`,
+              html: `<span>${shortName}${kgLabel}</span>`,
             });
             L.marker(b.getCenter(), { icon: label, interactive: false }).addTo(ll);
           }
+
           layer.on('click', () => setSelected({ geo, bounds: b }));
           layer.addTo(lg);
           allBounds.push(b);
@@ -154,19 +173,21 @@ export function MapaGestorView({ geometrias, pastos, geoLoading, onUpload }: Pro
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [geometrias, selected, pastos]);
+  }, [geometrias, selected, pastos, ocupacoes]);
 
   const selectedPasto = selected?.geo.pasto_id
     ? pastos.find(p => p.id === selected.geo.pasto_id) : null;
+  const selectedOc = selected?.geo.pasto_id
+    ? ocupacoes.get(selected.geo.pasto_id) : null;
 
   return (
     <div className="flex flex-col gap-2 h-full">
       {/* KPI strip */}
       <div className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-4 gap-1.5">
         <KpiMini icon={<Layers className="h-3 w-3" />} label="Polígonos" value={String(kpis.totalPoligonos)} sub={`${kpis.vinculados} vinculados`} />
-        <KpiMini icon={<MapPin className="h-3 w-3" />} label="Pastos Ocupados" value={String(kpis.pastosOcupados)} />
-        <KpiMini icon={<Maximize2 className="h-3 w-3" />} label="Área Mapeada" value={kpis.areaTotal > 0 ? `${formatNum(kpis.areaTotal, 0)} ha` : '—'} />
-        <KpiMini icon={<BarChart3 className="h-3 w-3" />} label="Sem Vínculo" value={String(kpis.totalPoligonos - kpis.vinculados)} accent={kpis.totalPoligonos - kpis.vinculados > 0} />
+        <KpiMini icon={<MapPin className="h-3 w-3" />} label="Cabeças" value={String(kpis.totalCabecas)} />
+        <KpiMini icon={<Maximize2 className="h-3 w-3" />} label="Lotação" value={kpis.lotacaoKgHa > 0 ? `${formatNum(kpis.lotacaoKgHa, 0)} kg/ha` : '—'} />
+        <KpiMini icon={<BarChart3 className="h-3 w-3" />} label="Pressão Alta" value={String(kpis.emPressao)} accent={kpis.emPressao > 0} />
       </div>
 
       {/* Map + detail panel */}
@@ -189,11 +210,12 @@ export function MapaGestorView({ geometrias, pastos, geoLoading, onUpload }: Pro
           )}
           {/* Legend */}
           {hasGeo && (
-            <div className="absolute bottom-2 left-2 bg-card/90 backdrop-blur-sm rounded border border-border px-2 py-1 z-10">
-              <div className="flex flex-wrap gap-x-2.5 gap-y-0.5">
-                {['default', 'vazio'].map(k => (
-                  <div key={k} className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: STATUS_STYLES[k].fillColor, border: `1px solid ${STATUS_STYLES[k].color}` }} />
+            <div className="absolute bottom-2 left-2 bg-card/90 backdrop-blur-sm rounded border border-border px-2 py-1.5 z-10">
+              <p className="text-[8px] text-muted-foreground font-semibold uppercase tracking-wider mb-1">kg/ha</p>
+              <div className="flex flex-col gap-0.5">
+                {(['adequado', 'atencao', 'pressao', 'sem_ocupacao'] as const).map(k => (
+                  <div key={k} className="flex items-center gap-1.5">
+                    <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: STATUS_STYLES[k].fillColor, border: `1px solid ${STATUS_STYLES[k].color}` }} />
                     <span className="text-[8px] text-muted-foreground">{STATUS_STYLES[k].label}</span>
                   </div>
                 ))}
@@ -212,7 +234,7 @@ export function MapaGestorView({ geometrias, pastos, geoLoading, onUpload }: Pro
                     {selected.geo.nome_original || 'Sem nome'}
                   </h3>
                   <Badge variant={selected.geo.pasto_id ? 'secondary' : 'outline'} className="text-[8px] h-3.5 mt-0.5 px-1.5">
-                    {selected.geo.pasto_id ? 'Vinculado' : 'Sem vínculo'}
+                    {selectedOc ? STATUS_STYLES[selectedOc.status]?.label || 'Vinculado' : selected.geo.pasto_id ? 'Sem dados' : 'Sem vínculo'}
                   </Badge>
                 </div>
                 <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground" onClick={() => setSelected(null)}>
@@ -226,9 +248,11 @@ export function MapaGestorView({ geometrias, pastos, geoLoading, onUpload }: Pro
                   {selectedPasto.area_produtiva_ha != null && (
                     <InfoRow label="Área (ha)" value={formatNum(selectedPasto.area_produtiva_ha, 1)} />
                   )}
+                  <InfoRow label="Cabeças" value={String(selectedOc?.cabecas || 0)} />
+                  <InfoRow label="Peso Total (kg)" value={selectedOc?.peso_total_kg ? formatNum(selectedOc.peso_total_kg, 0) : '—'} />
+                  <InfoRow label="kg/ha" value={selectedOc?.kg_ha != null ? formatNum(selectedOc.kg_ha, 0) : '—'} highlight />
                   <InfoRow label="Tipo de Uso" value={selectedPasto.tipo_uso || '—'} />
                   <InfoRow label="Situação" value={selectedPasto.ativo ? 'Ativo' : 'Inativo'} />
-                  {selectedPasto.lote_padrao && <InfoRow label="Lote" value={selectedPasto.lote_padrao} />}
                   {selectedPasto.observacoes && (
                     <>
                       <Separator />
@@ -263,11 +287,11 @@ function KpiMini({ icon, label, value, sub, accent }: { icon: React.ReactNode; l
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className="rounded bg-muted/40 px-2 py-1">
+    <div className={`rounded px-2 py-1 ${highlight ? 'bg-primary/10' : 'bg-muted/40'}`}>
       <p className="text-[9px] text-muted-foreground uppercase tracking-wide">{label}</p>
-      <p className="text-[10px] font-semibold text-foreground">{value}</p>
+      <p className={`text-[10px] font-semibold ${highlight ? 'text-primary' : 'text-foreground'}`}>{value}</p>
     </div>
   );
 }
