@@ -104,12 +104,14 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               unidade="cab"
               compMensal={c.saldoFinalMes.mensal}
               compAnual={c.saldoFinalMes.anual}
+              info={`Saldo final de cabeças no mês.\n\nMês: saldo inicial + entradas − saídas do mês.\nAcumulado: mesmo valor (posição final do mês selecionado).`}
             />
             <KpiCard
               label="Peso Total"
               valor={pesoTotalKg !== null ? formatNum(pesoTotalKg, 0) : '—'}
               unidade="kg"
               semBase={pesoTotalKg === null}
+              info={`Peso total do rebanho.\n\nFórmula: Cabeças × Peso Médio Final.\nBase: dados de fechamento de pastos do mês.`}
             />
             <KpiCard
               label="Peso Médio"
@@ -119,6 +121,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               compMensal={c.pesoMedioRebanhoKg.mensal}
               compAnual={c.pesoMedioRebanhoKg.anual}
               semBase={ind.pesoMedioRebanhoKg === null}
+              info={`Peso médio por cabeça no final do mês.\n\nBase: peso informado no fechamento de pastos (média ponderada por categoria).\nSe não houver fechamento, valor é estimado (*).`}
             />
           </div>
           <div className="grid grid-cols-3 gap-3">
@@ -128,6 +131,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               compMensal={c.valorRebanho.mensal}
               compAnual={c.valorRebanho.anual}
               semBase={ind.valorRebanho === null}
+              info={`Valor total do rebanho em R$.\n\nFórmula: somatório de (cabeças × peso médio × preço da @/30) por categoria.\nBase: preço de mercado e dados de fechamento.`}
             />
             <KpiCard
               label="R$/cab"
@@ -136,6 +140,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               compMensal={c.valorPorCabeca.mensal}
               compAnual={c.valorPorCabeca.anual}
               semBase={ind.valorPorCabeca === null}
+              info={`Valor médio por cabeça.\n\nFórmula: Valor do Rebanho ÷ Cabeças.\nReflete o ticket médio por animal.`}
             />
             <div className="flex flex-col justify-end">
               {ind.valorRebanho !== null && onNavigateSubTab && (
@@ -157,11 +162,14 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
           <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Lotação</h3>
           <div className="grid grid-cols-3 gap-3">
             <KpiCard label="Área Prod." valor={formatNum(ind.areaProdutiva, 1)} unidade="ha"
-              estimado={ind.qualidade.areaProdutivaEstimativa} />
-            <KpiCard label="UA Total" valor={formatNum(ind.uaTotal, 1)} unidade="UA" />
+              estimado={ind.qualidade.areaProdutivaEstimativa}
+              info={`Área produtiva total em hectares.\n\nBase: soma da área dos pastos ativos cadastrados.\nSe não houver cadastro, usa fallback estimado (*).`} />
+            <KpiCard label="UA Total" valor={formatNum(ind.uaTotal, 1)} unidade="UA"
+              info={`Unidade Animal total.\n\nFórmula: Peso Total do rebanho ÷ 450 kg.\n1 UA = 450 kg de peso vivo.`} />
             <KpiCard label="UA/ha" valor={ind.uaHa !== null ? formatNum(ind.uaHa, 2) : '—'}
               compMensal={c.uaHa.mensal} compAnual={c.uaHa.anual}
-              semBase={ind.uaHa === null} />
+              semBase={ind.uaHa === null}
+              info={`Lotação no mês.\n\nFórmula: UA Total ÷ Área Produtiva.\nMede a pressão de pastejo no mês selecionado.`} />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <KpiCard
@@ -170,6 +178,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               compMensal={c.uaHaMediaAno.mensal}
               compAnual={c.uaHaMediaAno.anual}
               semBase={ind.uaHaMediaAno === null}
+              info={`Lotação média acumulada no ano.\n\nFórmula: média aritmética dos valores de UA/ha de Janeiro até o mês selecionado.\nReflete a pressão de pastejo ao longo da safra.`}
             />
           </div>
         </CardContent>
@@ -185,6 +194,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               valor={ind.arrobasProduzidasMes !== null ? formatNum(ind.arrobasProduzidasMes, 1) : '—'}
               unidade="@"
               semBase={ind.arrobasProduzidasMes === null}
+              info={`Arrobas produzidas no mês.\n\nFórmula: total de arrobas das saídas (vendas, abates, consumo) no mês.\nConversão: peso kg ÷ 30.`}
             />
             <KpiCard
               label="@ prod. acum."
@@ -192,12 +202,14 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               unidade="@"
               compAnual={c.arrobasProduzidasAcumulado.anual}
               semBase={ind.arrobasProduzidasAcumulado === null}
+              info={`Arrobas produzidas acumuladas.\n\nSomatório das arrobas de saídas de Janeiro até o mês selecionado.`}
             />
             <KpiCard
               label="@/ha acum."
               valor={ind.arrobasHaAcumuladoAno !== null ? formatNum(ind.arrobasHaAcumuladoAno, 2) : '—'}
               compAnual={c.arrobasHaAcumuladoAno.anual}
               semBase={ind.arrobasHaAcumuladoAno === null}
+              info={`Produtividade acumulada por hectare.\n\nFórmula: @ produzidas acumuladas ÷ Área Produtiva.\nMede a eficiência da terra no período.`}
             />
           </div>
         </CardContent>
@@ -216,12 +228,14 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
                   unidade="kg/dia"
                   compMensal={c.gmdMes.mensal}
                   compAnual={c.gmdMes.anual}
+                  info={`Ganho Médio Diário no mês.\n\nFórmula: (Peso final − Peso inicial − Peso entradas + Peso saídas) ÷ Rebanho médio ÷ Dias do mês.\nIsola o ganho biológico real.`}
                 />
                 <KpiCard
                   label="GMD acumulado"
                   valor={ind.gmdAcumulado !== null ? formatNum(ind.gmdAcumulado, 3) : '—'}
                   unidade="kg/dia"
                   compAnual={c.gmdAcumulado.anual}
+                  info={`GMD médio acumulado no ano.\n\nMédia aritmética dos GMDs mensais de Janeiro até o mês selecionado.`}
                 />
               </div>
               <GmdDetalheSheet abertura={ind.gmdAberturaMes} mesLabel={mesLabel} anoLabel={anoFiltro} />
@@ -248,6 +262,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               unidade="%"
               compAnual={c.desfruteCabecasAcumulado.anual}
               semBase={ind.desfruteCabecasAcumulado === null}
+              info={`Desfrute em cabeças acumulado no ano.\n\nFórmula: (Saídas em cabeças no período ÷ Rebanho médio) × 100.\nMede a taxa de extração do rebanho.`}
             />
             <KpiCard
               label="Desfrute @"
@@ -255,12 +270,14 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               unidade="%"
               compAnual={c.desfruteArrobasAcumulado.anual}
               semBase={ind.desfruteArrobasAcumulado === null}
+              info={`Desfrute em arrobas acumulado no ano.\n\nFórmula: (@ saídas ÷ @ do rebanho médio) × 100.\nMede eficiência em peso, não apenas em cabeças.`}
             />
             <KpiCard
               label="@ desfrutadas"
               valor={formatNum(ind.arrobasSaidasAcumuladoAno, 1)}
               unidade="@"
               compAnual={c.arrobasDesfrutadasAcum.anual}
+              info={`Total de arrobas que saíram do rebanho no ano (vendas, abates, consumo).\n\nSomatório de Janeiro até o mês selecionado.`}
             />
           </div>
         </CardContent>
