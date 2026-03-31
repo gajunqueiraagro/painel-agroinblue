@@ -296,7 +296,7 @@ const Index = () => {
 
 
 
-      <div className="flex-1 overflow-y-auto">
+      <div className={`flex-1 ${activeTab === 'mapa_geo_pastos' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
       {activeTab === 'resumo' && (
         <ResumoTab
           lancamentos={lancamentosVisiveis}
