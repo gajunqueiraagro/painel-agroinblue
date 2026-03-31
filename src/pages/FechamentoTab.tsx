@@ -224,7 +224,23 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     [dedupFechamentos]
   );
 
+  // ── Fonte OPERACIONAL: realidade dos pastos (sem dedup, todos os registros do mês) ──
   const pastoDataByCat = useMemo(() => {
+    const catIdToCodigo = new Map((categorias || []).map(c => [c.id, c.codigo]));
+    const map = new Map<string, number>();
+    itensMap.forEach((items, _fechId) => {
+      items.forEach(i => {
+        if (i.quantidade > 0) {
+          const codigo = catIdToCodigo.get(i.categoria_id);
+          if (codigo) map.set(codigo, (map.get(codigo) || 0) + i.quantidade);
+        }
+      });
+    });
+    return map;
+  }, [itensMap, categorias]);
+
+  // ── Fonte de CONCILIAÇÃO: deduplicada para comparação com sistema ──
+  const conciliacaoDataByCat = useMemo(() => {
     const catIdToCodigo = new Map((categorias || []).map(c => [c.id, c.codigo]));
     const map = new Map<string, number>();
     itensMap.forEach((items, fechId) => {
