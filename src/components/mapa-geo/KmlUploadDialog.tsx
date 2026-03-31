@@ -36,7 +36,8 @@ export function KmlUploadDialog({ open, onOpenChange, onUpload, pastos }: Props)
       setFileName(file.name);
       toast.success(`${parsed.length} polígonos encontrados`);
     } catch (err: any) {
-      toast.error(`Erro ao ler arquivo: ${err.message}`);
+      toast.error('Não foi possível carregar o mapa. Verifique se o arquivo é um KML, KMZ ou GeoJSON válido.');
+      console.error(err);
     }
   }, []);
 
