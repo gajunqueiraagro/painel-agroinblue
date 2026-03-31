@@ -166,6 +166,7 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
       });
 
       reportRenderedGeometries(renderedCount);
+      onRenderedChange?.(renderedCount);
 
       const fitKey = `${geometrySignature}:${debugInfo.width}:${debugInfo.height}`;
       if (allBounds.length > 0 && fitKey !== lastFitKeyRef.current) {
