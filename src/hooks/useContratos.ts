@@ -146,7 +146,7 @@ export function useContratos() {
       .eq('id', id)
       .single();
 
-    const contratoAtual = contratoAtualRaw as Contrato | null;
+    const contratoAtual = contratoAtualRaw as unknown as Contrato | null;
 
     if (contratoAtualError || !contratoAtual) {
       toast.error('Erro ao localizar contrato atual');
@@ -222,7 +222,7 @@ export function useContratos() {
         .eq('id', id)
         .single();
 
-      const updated = updatedRaw as Contrato | null;
+      const updated = updatedRaw as unknown as Contrato | null;
 
       if (updated) {
         const regenerated = await gerarLancamentos(updated as any as Contrato, today);
