@@ -115,6 +115,7 @@ export function MapaGeoPastosTab() {
         <MapaGestorView
           geometrias={geometrias}
           pastos={pastos}
+          ocupacoes={ocupacoes}
           geoLoading={geoLoading}
           onUpload={() => setUploadOpen(true)}
         />
