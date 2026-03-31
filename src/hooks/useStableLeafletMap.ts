@@ -43,14 +43,11 @@ export function useStableLeafletMap({
     errorMessage: null,
   });
 
-  const log = useCallback((message: string, payload?: Record<string, unknown>) => {
-    if (payload) {
-      console.info(`[${debugName}] ${message}`, payload);
-      return;
-    }
-
-    console.info(`[${debugName}] ${message}`);
-  }, [debugName]);
+  const log = useCallback((_message: string, _payload?: Record<string, unknown>) => {
+    // Debug logs silenced — uncomment for troubleshooting:
+    // if (_payload) console.info(`[${debugName}] ${_message}`, _payload);
+    // else console.info(`[${debugName}] ${_message}`);
+  }, []);
 
   const readMetrics = useCallback(() => {
     const el = mapContainerRef.current;
