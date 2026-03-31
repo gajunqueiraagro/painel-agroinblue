@@ -176,11 +176,9 @@ export function MapaGeoPastosTab() {
 
   // Initialize Leaflet map — use a callback ref pattern
   const initMap = useCallback((node: HTMLDivElement | null) => {
-    // Store the ref for cleanup
     (mapContainerRef as any).current = node;
 
     if (!node) {
-      // Cleanup
       if (leafletMap.current) {
         leafletMap.current.remove();
         leafletMap.current = null;
@@ -197,7 +195,6 @@ export function MapaGeoPastosTab() {
       center: [-15.8, -47.9],
       zoom: 5,
       zoomControl: true,
-      // Prevent clicks from propagating outside the map
       scrollWheelZoom: true,
     });
 
@@ -209,40 +206,32 @@ export function MapaGeoPastosTab() {
     layerGroup.current = L.layerGroup().addTo(map);
     leafletMap.current = map;
 
-    // invalidateSize after a short delay to ensure container is laid out
-    setTimeout(() => {
-      map.invalidateSize();
-      setMapReady(true);
-    }, 300);
+    // Wait for map to be fully ready before invalidating size
+    map.whenReady(() => {
+      setTimeout(() => {
+        if (leafletMap.current && mapContainerRef.current) {
+          map.invalidateSize();
+          setMapReady(true);
+        }
+      }, 200);
+    });
   }, []);
 
-  // Draw ALL geometries on map (both matched and unmatched)
-  useEffect(() => {
-    if (!leafletMap.current || !layerGroup.current || !mapReady) return;
+  // Draw geometries on map — debounced to prevent render storms
+  const renderGeometries = useCallback(() => {
+    if (!leafletMap.current || !layerGroup.current) return;
 
-    leafletMap.current.invalidateSize();
     layerGroup.current.clearLayers();
-
     const bounds: L.LatLngBounds[] = [];
 
-    // Build lookup from pasto_id -> PastoMapData for matched geometries
     const pastoDataMap = new Map<string, PastoMapData>();
-    filteredPastos.forEach(pd => {
-      pastoDataMap.set(pd.pasto.id, pd);
-    });
+    filteredPastos.forEach(pd => pastoDataMap.set(pd.pasto.id, pd));
+    const hasActiveFilter = filtroLote !== '__all__' || filtroCategoria !== '__all__';
+    const filteredIds = new Set(filteredPastos.map(p => p.pasto.id));
 
-    // Track which geometries are from filtered pastos
-    const filteredPastoIds = new Set(filteredPastos.map(p => p.pasto.id));
-
-    // Render ALL geometries
     geometrias.forEach(geo => {
       const matchedPasto = geo.pasto_id ? pastoDataMap.get(geo.pasto_id) : null;
-
-      // If there's an active filter and this geometry is linked to a pasto not in the filter, skip
-      if (geo.pasto_id && filteredPastoIds.size > 0 && !filteredPastoIds.has(geo.pasto_id)) {
-        // Only skip if filters are active (not default)
-        if (filtroLote !== '__all__' || filtroCategoria !== '__all__') return;
-      }
+      if (hasActiveFilter && geo.pasto_id && !filteredIds.has(geo.pasto_id)) return;
 
       const condicao = matchedPasto?.ultimaCondicao ?? null;
       const uaHa = matchedPasto?.uaHa ?? null;
@@ -252,19 +241,11 @@ export function MapaGeoPastosTab() {
 
       try {
         const layer = L.geoJSON(geo.geojson as any, {
-          style: {
-            color,
-            weight: 2,
-            fillColor: color,
-            fillOpacity: 0.35,
-          },
+          style: { color, weight: 2, fillColor: color, fillOpacity: 0.35 },
         });
 
         const layerBounds = layer.getBounds();
-        if (!layerBounds.isValid()) {
-          console.warn(`[MapaPastos] Geometria inválida ignorada: ${displayName}`);
-          return;
-        }
+        if (!layerBounds.isValid()) return;
 
         const center = layerBounds.getCenter();
         const label = L.divIcon({
@@ -286,7 +267,6 @@ export function MapaGeoPastosTab() {
         });
         L.marker(center, { icon: label, interactive: false }).addTo(layerGroup.current!);
 
-        // Only open detail sheet for matched pastos
         if (matchedPasto) {
           layer.on('click', (e) => {
             L.DomEvent.stopPropagation(e);
@@ -298,7 +278,7 @@ export function MapaGeoPastosTab() {
         layer.addTo(layerGroup.current!);
         bounds.push(layerBounds);
       } catch (err) {
-        console.warn(`[MapaPastos] Erro ao renderizar geometria "${displayName}":`, err);
+        console.warn(`[MapaPastos] Erro geometria "${displayName}":`, err);
       }
     });
 
@@ -306,10 +286,17 @@ export function MapaGeoPastosTab() {
 
     if (bounds.length > 0) {
       const combined = bounds.reduce((acc, b) => acc.extend(b));
-      console.log(`[MapaPastos] Bounds: SW(${combined.getSouthWest().lat.toFixed(4)}, ${combined.getSouthWest().lng.toFixed(4)}) NE(${combined.getNorthEast().lat.toFixed(4)}, ${combined.getNorthEast().lng.toFixed(4)})`);
-      leafletMap.current.fitBounds(combined, { padding: [30, 30], maxZoom: 17 });
+      leafletMap.current!.fitBounds(combined, { padding: [30, 30], maxZoom: 17 });
     }
-  }, [geometrias, filteredPastos, mapReady, getColor, filtroLote, filtroCategoria]);
+  }, [geometrias, filteredPastos, getColor, filtroLote, filtroCategoria]);
+
+  // Trigger render when map is ready or data changes
+  useEffect(() => {
+    if (!mapReady) return;
+    // Small delay to ensure map pane is fully initialized
+    const timer = setTimeout(renderGeometries, 100);
+    return () => clearTimeout(timer);
+  }, [mapReady, renderGeometries]);
 
   const handleKmlUpload = useCallback(async (polygons: ParsedPolygon[]) => {
     const pastoMap = new Map(pastos.filter(p => p.ativo).map(p => [p.nome.trim().toLowerCase(), p]));
