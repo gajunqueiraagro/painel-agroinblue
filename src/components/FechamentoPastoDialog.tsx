@@ -181,7 +181,7 @@ export function FechamentoPastoDialog({
           <div className="flex gap-1 items-end">
             <div className="w-20 shrink-0">
               <Label className="text-[9px] text-muted-foreground leading-none">Lote</Label>
-              <Input value={loteMes} onChange={e => setLoteMes(e.target.value)} disabled={isFechado} placeholder="Lote..." className="h-6 text-[9px] px-1.5 placeholder:text-[8px] placeholder:italic placeholder:text-muted-foreground/60" />
+              <Input value={loteMes} onChange={e => setLoteMes(e.target.value)} disabled={isFechado} placeholder="Lote..." className="h-6 text-[10px] px-1.5 placeholder:text-[8px] placeholder:italic placeholder:text-muted-foreground/60" />
             </div>
             <div className="w-12 shrink-0">
               <Label className="text-[9px] text-muted-foreground leading-none">Qual.</Label>
@@ -273,20 +273,20 @@ export function FechamentoPastoDialog({
                   value={itens[idx]?.quantidade || ''}
                   onChange={e => updateItem(idx, 'quantidade', Number(e.target.value) || 0)}
                   disabled={isFechado}
-                  className="h-5 text-[10px] font-bold px-1 w-[72px] shrink-0 text-right placeholder:text-[9px] placeholder:italic placeholder:font-normal placeholder:text-muted-foreground/50"
+                  className="h-5 text-[9px] font-bold px-1 w-[72px] shrink-0 text-right placeholder:text-[8px] placeholder:italic placeholder:font-normal placeholder:text-muted-foreground/50"
                   placeholder="Qtde"
                 />
                 <Input
-                  type="number" inputMode="decimal" step="0.01"
+                  type="number" inputMode="decimal" step="0.1"
                   value={itens[idx]?.peso_medio_kg ?? ''}
                   onChange={e => updateItem(idx, 'peso_medio_kg', e.target.value ? Number(e.target.value) : null)}
                   onBlur={e => {
                     if (e.target.value) {
-                      updateItem(idx, 'peso_medio_kg', Math.round(Number(e.target.value) * 100) / 100);
+                      updateItem(idx, 'peso_medio_kg', Math.round(Number(e.target.value) * 10) / 10);
                     }
                   }}
                   disabled={isFechado}
-                  className="h-5 text-[10px] px-1 w-[80px] shrink-0 text-right placeholder:text-[9px] placeholder:italic placeholder:font-normal placeholder:text-muted-foreground/50"
+                  className="h-5 text-[9px] px-1 w-[80px] shrink-0 text-right placeholder:text-[8px] placeholder:italic placeholder:font-normal placeholder:text-muted-foreground/50"
                   placeholder="Peso kg"
                 />
               </div>
