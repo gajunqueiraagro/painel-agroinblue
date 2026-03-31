@@ -297,7 +297,7 @@ export function useStatusZootecnico(
       console.log('[STATUS-ZOO] SALDO OFICIAL (sistema)', Array.from(new Map(catsComSaldo).entries()));
       console.log('[STATUS-ZOO] ALOCADO PASTOS (fechamento)', Array.from(alocadoPastosCodigo.entries()));
       console.log('[STATUS-ZOO] temItensPastos=', temItensPastos, 'fechIds.length=', fechIds.length);
-      console.log('[STATUS-ZOO] fpData raw count=', fpData.length, 'dedup count=', dedupFechByPasto.size);
+      console.log('[STATUS-ZOO] fpData raw count=', fpData.length, 'dedup count=', dedupFechByPasto.size, 'pastosAtivos=', pastosData.length);
 
       // Use calcStatusCategorias from statusMensal.ts — THE official rule
       const catsResult = calcStatusCategorias({
