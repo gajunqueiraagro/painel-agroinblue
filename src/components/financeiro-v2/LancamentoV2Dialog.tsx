@@ -251,6 +251,10 @@ export function LancamentoV2Dialog({
       setObservacao(lancamento.observacao || '');
       setFormaPgto(lancamento.forma_pagamento || '');
       setDadosPagamento(lancamento.dados_pagamento || '');
+      // CRITICAL: reset parcela/recorrência when editing — prevents stale state from previous "new" dialog
+      setFormaPagamentoParc('avista');
+      setNumParcelas(2);
+      setParcelaRows([]);
       setFrequencia('pontual');
       setRecorrenciaRows([]);
       setRecorrenciaEditada(false);
