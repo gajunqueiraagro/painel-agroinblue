@@ -13,6 +13,14 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { TabId } from '@/components/BottomNav';
 import { supabase } from '@/integrations/supabase/client';
 import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
+import { useCliente } from '@/contexts/ClienteContext';
+import {
+  statusFinanceiro as calcStatusFinanceiro,
+  statusCategorias as calcStatusCategorias,
+  statusPastos as calcStatusPastos,
+  statusValor as calcStatusValor,
+  type StatusCor,
+} from '@/lib/calculos/statusMensal';
 import { ChevronRight, ChevronDown, CheckCircle2, Building2 } from 'lucide-react';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 

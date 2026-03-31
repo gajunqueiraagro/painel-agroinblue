@@ -348,70 +348,35 @@ export function useStatusZootecnico(
       };
     }
 
-    // ── 1. Conciliação do Financeiro ──
-    let statusFin: StatusItem = 'aberto';
+    // ── 1. Conciliação do Financeiro (determinístico) ──
+    const finFechArr = finFechamentoStatus === 'fechado'
+      ? [{ status_fechamento: 'fechado' }]
+      : finFechamentoStatus === 'parcial'
+        ? [{ status_fechamento: 'fechado' }, { status_fechamento: 'aberto' }]
+        : finFechamentoStatus === 'aberto'
+          ? [{ status_fechamento: 'aberto' }]
+          : [];
+    const statusFin: StatusItem = calcStatusFinanceiro({
+      fechamentos: finFechArr,
+      totalFazendasEsperadas: 1,
+    });
     let descFin = '';
-    if (finFechamentoStatus === 'fechado') {
-      statusFin = 'fechado';
-      descFin = 'Mês conciliado';
-    } else if (finFechamentoStatus === 'parcial') {
-      statusFin = 'parcial';
-      descFin = 'Parcialmente conciliado';
-    } else if (finTemLancamentos) {
-      statusFin = 'aberto';
-      descFin = 'Pendente de conciliação';
-    } else {
-      statusFin = 'aberto';
-      descFin = 'Sem lançamentos no período';
-    }
+    if (statusFin === 'fechado') descFin = 'Mês conciliado';
+    else if (statusFin === 'parcial') descFin = 'Parcialmente conciliado';
+    else if (finTemLancamentos) descFin = 'Pendente de conciliação';
+    else descFin = 'Sem lançamentos no período';
     pendencias.push({ id: 'financeiro', label: 'Conciliação do Financeiro', descricao: descFin, status: statusFin, resolverTab: 'fin_caixa' });
 
-    // ── 2. Fechamento de Pastos ──
-    // Regra: só "fechado" se TODOS pastos fechados E conciliação categorias sem divergência
-    const categoriasOk = catsDivergentes === 0 && (itensTotais > 0 || categoriasComSaldo === 0);
-
-    let statusPastos: StatusItem = 'aberto';
-    let descPastos = '';
-
-    const fazendasComPastos = pastosPorFazenda.filter(f => f.totalPastos > 0);
-    const fazendasFechadas = fazendasComPastos.filter(f => f.status === 'fechado').length;
-
-    if (fazendasComPastos.length === 0) {
-      statusPastos = 'aberto';
-      descPastos = 'Nenhum pasto cadastrado';
-    } else if (fazendasFechadas === fazendasComPastos.length) {
-      // Todos pastos fechados, mas verificar conciliação
-      if (categoriasOk) {
-        statusPastos = 'fechado';
-        if (isGlobal) {
-          descPastos = `${fazendasFechadas}/${fazendasComPastos.length} fazenda(s) · conciliado`;
-        } else {
-          descPastos = `${pastosFechados} fechado(s) · conciliado`;
-        }
-      } else {
-        // Pastos fechados mas categorias divergentes → parcial
-        statusPastos = 'parcial';
-        descPastos = `Pastos fechados · ${difTotalCabecas} cab divergente(s)`;
-      }
-    } else if (fazendasFechadas === 0) {
-      statusPastos = 'aberto';
-      if (isGlobal) {
-        descPastos = `0/${fazendasComPastos.length} fazenda(s) fechada(s)`;
-      } else {
-        const parts: string[] = [];
-        if (pastosRascunho > 0) parts.push(`${pastosRascunho} em rascunho`);
-        if (pastosNaoIniciados > 0) parts.push(`${pastosNaoIniciados} não iniciado(s)`);
-        descPastos = parts.length ? parts.join(' · ') : 'Sem fechamento no período';
-      }
-    } else {
-      statusPastos = 'parcial';
-      descPastos = `${fazendasFechadas}/${fazendasComPastos.length} fazenda(s) fechada(s)`;
-    }
-
-    pendencias.push({ id: 'pastos', label: 'Fechamento de Pastos', descricao: descPastos, status: statusPastos, resolverTab: 'fechamento' });
-
-    // ── 3. Conciliação de Categorias ──
-    let statusCats: StatusItem = 'aberto';
+    // ── 3. Conciliação de Categorias (calculada antes de Pastos) ──
+    // Build maps for shared function — we already have catsDivergentes/difTotalCabecas from load()
+    // but let's use the shared function semantics for consistency
+    const stCatsResult = calcStatusCategorias({
+      saldoOficial: new Map(), // placeholder — we use pre-computed values
+      alocadoPastos: new Map(),
+      temItensPastos: itensTotais > 0,
+    });
+    // Override with pre-computed values since we already have detailed data
+    let statusCats: StatusItem;
     let descCats = '';
     if (itensTotais === 0 && categoriasComSaldo > 0) {
       statusCats = 'aberto';
@@ -424,22 +389,59 @@ export function useStatusZootecnico(
       statusCats = pctDiv > 0.05 ? 'aberto' : 'parcial';
       descCats = `${catsDivergentes} categoria(s) divergente(s) · ${difTotalCabecas} cab`;
     }
+    if (itensTotais === 0 && categoriasComSaldo === 0) statusCats = 'fechado';
     pendencias.push({ id: 'categorias', label: 'Conciliação de Categorias', descricao: descCats, status: statusCats, resolverTab: 'conciliacao_categoria' });
 
-    // ── 4. Valor do Rebanho ──
-    let statusValor: StatusItem = 'aberto';
-    let descValor = '';
-    if (precosDefinidos === 0) {
-      statusValor = 'aberto';
-      descValor = 'Nenhum preço definido';
-    } else if (categoriasComSaldo > 0 && precosDefinidos < categoriasComSaldo) {
-      statusValor = 'parcial';
-      descValor = `${precosDefinidos}/${categoriasComSaldo} categorias com preço`;
+    // ── 2. Fechamento de Pastos (depende de categorias) ──
+    const fazendasComPastos = pastosPorFazenda.filter(f => f.totalPastos > 0);
+    const totalPastosGeral = fazendasComPastos.reduce((s, f) => s + f.totalPastos, 0);
+    const totalFechados = fazendasComPastos.reduce((s, f) => s + f.fechados, 0);
+    const totalComRegistro = totalFechados + fazendasComPastos.reduce((s, f) => s + f.rascunho, 0);
+
+    const statusPastosCalc: StatusItem = calcStatusPastos({
+      totalPastos: totalPastosGeral,
+      pastosFechados: totalFechados,
+      pastosComRegistro: totalComRegistro,
+      statusCategorias: statusCats,
+    });
+    let descPastos = '';
+    if (totalPastosGeral === 0) {
+      descPastos = 'Nenhum pasto cadastrado';
+    } else if (statusPastosCalc === 'fechado') {
+      descPastos = isGlobal
+        ? `${fazendasComPastos.filter(f => f.status === 'fechado').length}/${fazendasComPastos.length} fazenda(s) · conciliado`
+        : `${pastosFechados} fechado(s) · conciliado`;
+    } else if (statusPastosCalc === 'parcial') {
+      if (totalFechados >= totalPastosGeral) {
+        descPastos = `Pastos fechados · ${difTotalCabecas} cab divergente(s)`;
+      } else {
+        descPastos = isGlobal
+          ? `${fazendasComPastos.filter(f => f.status === 'fechado').length}/${fazendasComPastos.length} fazenda(s) fechada(s)`
+          : `${pastosFechados}/${totalPastosGeral} fechado(s)`;
+      }
     } else {
-      statusValor = 'fechado';
-      descValor = 'Preços completos';
+      if (isGlobal) {
+        descPastos = `0/${fazendasComPastos.length} fazenda(s) fechada(s)`;
+      } else {
+        const parts: string[] = [];
+        if (pastosRascunho > 0) parts.push(`${pastosRascunho} em rascunho`);
+        if (pastosNaoIniciados > 0) parts.push(`${pastosNaoIniciados} não iniciado(s)`);
+        descPastos = parts.length ? parts.join(' · ') : 'Sem fechamento no período';
+      }
     }
-    pendencias.push({ id: 'valor', label: 'Valor do Rebanho', descricao: descValor, status: statusValor, resolverTab: 'valor_rebanho' });
+    // Insert at position 1 (after financeiro)
+    pendencias.splice(1, 0, { id: 'pastos', label: 'Fechamento de Pastos', descricao: descPastos, status: statusPastosCalc, resolverTab: 'fechamento' });
+
+    // ── 4. Valor do Rebanho ──
+    const statusValorCalc: StatusItem = calcStatusValor({
+      precosDefinidos,
+      categoriasComSaldo,
+    });
+    let descValor = '';
+    if (statusValorCalc === 'aberto') descValor = 'Nenhum preço definido';
+    else if (statusValorCalc === 'parcial') descValor = `${precosDefinidos}/${categoriasComSaldo} categorias com preço`;
+    else descValor = 'Preços completos';
+    pendencias.push({ id: 'valor', label: 'Valor do Rebanho', descricao: descValor, status: statusValorCalc, resolverTab: 'valor_rebanho' });
 
     // Contadores
     const contadores = { aberto: 0, parcial: 0, fechado: 0 };
