@@ -123,13 +123,13 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
       const svgRenderer = L.svg();
 
       const testLayer = L.geoJSON(firstGeo.geojson as GeoJSON.GeoJsonObject, {
-        renderer: svgRenderer,
         style: {
           color: '#ff0000',
           weight: 4,
           fillColor: '#ffff00',
           fillOpacity: 0.7,
-        },
+          renderer: svgRenderer,
+        } as any,
       });
 
       const testBounds = testLayer.getBounds();
