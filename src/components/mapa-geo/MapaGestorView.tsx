@@ -99,8 +99,12 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
   const selectedOc = selected?.geo.pasto_id ? ocupacoes.get(selected.geo.pasto_id) : null;
 
   useEffect(() => {
+    if (mapStatus !== 'ready') return;
     const map = mapInstanceRef.current;
-    if (!map) return;
+    if (!map) {
+      console.warn('[SETVIEW TEST]', 'map status ready but instance null');
+      return;
+    }
 
     const timer = window.setTimeout(() => {
       const testCenter: L.LatLngExpression = [-19.65, -54.03];
@@ -140,7 +144,7 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
     }, 500);
 
     return () => window.clearTimeout(timer);
-  }, [mapInstanceRef]);
+  }, [mapInstanceRef, mapStatus]);
 
   return (
     <div className="flex flex-col gap-1.5 h-full min-h-0">
