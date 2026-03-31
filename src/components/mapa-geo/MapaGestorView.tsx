@@ -36,6 +36,7 @@ interface Props {
   ocupacoes: Map<string, PastoOcupacao>;
   geoLoading: boolean;
   onUpload: () => void;
+  onRenderedChange?: (count: number) => void;
 }
 
 interface SelectedGeo {
