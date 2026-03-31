@@ -456,8 +456,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             )}
           </div>
 
-          {/* Botões em coluna à direita - desktop */}
-          <div className="hidden md:flex flex-col gap-1 shrink-0 pt-0.5">
+          {/* Botões em coluna - centralizados no espaço restante */}
+          <div className="hidden md:flex flex-col gap-1 flex-1 items-center justify-center pt-0.5">
             {onNavigateToReclass && hasDivergencia && (
               <Button
                 size="sm"
