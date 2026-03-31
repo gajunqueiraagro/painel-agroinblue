@@ -150,6 +150,11 @@ export function LancamentoV2Dialog({
 }: Props) {
   const { clienteAtual } = useCliente();
   const isEdit = !!lancamento;
+  // Store the editing ID in a ref so it can't become stale during async save
+  const editingIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    editingIdRef.current = lancamento?.id ?? null;
+  }, [lancamento]);
   const [saving, setSaving] = useState(false);
   const [fornecedorDialogOpen, setFornecedorDialogOpen] = useState(false);
 
@@ -246,6 +251,10 @@ export function LancamentoV2Dialog({
       setObservacao(lancamento.observacao || '');
       setFormaPgto(lancamento.forma_pagamento || '');
       setDadosPagamento(lancamento.dados_pagamento || '');
+      // CRITICAL: reset parcela/recorrência when editing — prevents stale state from previous "new" dialog
+      setFormaPagamentoParc('avista');
+      setNumParcelas(2);
+      setParcelaRows([]);
       setFrequencia('pontual');
       setRecorrenciaRows([]);
       setRecorrenciaEditada(false);
@@ -597,6 +606,10 @@ export function LancamentoV2Dialog({
     if (!canSave) return;
     setSaving(true);
 
+    // Capture the editing ID from the stable ref — prevents stale closure issues
+    const currentEditId = editingIdRef.current;
+    const currentIsEdit = !!currentEditId;
+
     let contaBancariaId: string | null = null;
     if (isTransferencia) {
       contaBancariaId = contaOrigemId && contaOrigemId !== '__none__' ? contaOrigemId : null;
@@ -606,8 +619,8 @@ export function LancamentoV2Dialog({
       contaBancariaId = contaOrigemId && contaOrigemId !== '__none__' ? contaOrigemId : null;
     }
 
-    // --- Recurrence logic (only for new, not edit) ---
-    if (!isEdit && frequencia === 'recorrente' && recorrenciaRows.length > 0) {
+    // --- Recurrence logic (ONLY for new lancamentos, NEVER for edit) ---
+    if (!currentIsEdit && frequencia === 'recorrente' && recorrenciaRows.length > 0) {
       let allOk = true;
       for (let i = 0; i < recorrenciaRows.length; i++) {
         const row = recorrenciaRows[i];
@@ -638,8 +651,8 @@ export function LancamentoV2Dialog({
       return;
     }
 
-    // --- Installment logic (only for new, not edit) ---
-    if (!isEdit && formaPagamentoParc === 'parcelada' && numParcelas >= 2 && parcelaRows.length === numParcelas) {
+    // --- Installment logic (ONLY for new lancamentos, NEVER for edit) ---
+    if (!currentIsEdit && formaPagamentoParc === 'parcelada' && numParcelas >= 2 && parcelaRows.length === numParcelas) {
       let allOk = true;
       for (let i = 0; i < numParcelas; i++) {
         const row = parcelaRows[i];
@@ -674,7 +687,7 @@ export function LancamentoV2Dialog({
       return;
     }
 
-    // --- Single (à vista) ---
+    // --- Single save (à vista) or EDIT ---
     const form: LancamentoV2Form = {
       fazenda_id: fazendaId,
       conta_bancaria_id: contaBancariaId,
@@ -694,7 +707,8 @@ export function LancamentoV2Dialog({
       dados_pagamento: dadosPagamento || null,
     };
 
-    const ok = await onSave(form, lancamento?.id);
+    // CRITICAL: pass the stable ID for edits — ensures UPDATE, never INSERT
+    const ok = await onSave(form, currentEditId || undefined);
     setSaving(false);
     if (ok) onClose();
   };

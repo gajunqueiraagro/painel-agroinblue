@@ -305,8 +305,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
   const handleSave = async (form: any, id?: string) => {
     let ok: boolean;
-    if (id) ok = await hook.editarLancamento(id, form);
-    else ok = await hook.criarLancamento(form);
+    if (id) {
+      console.log('[FinV2] UPDATE lancamento id=', id);
+      ok = await hook.editarLancamento(id, form);
+    } else {
+      console.log('[FinV2] INSERT new lancamento');
+      ok = await hook.criarLancamento(form);
+    }
     if (ok) hook.loadLancamentos(filtros, hook.page);
     return ok;
   };
