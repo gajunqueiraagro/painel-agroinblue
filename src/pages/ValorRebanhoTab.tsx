@@ -55,7 +55,6 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const { fazendaAtual, isGlobal } = useFazenda();
   const { categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
-  const fazendaId = fazendaAtual?.id;
 
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
