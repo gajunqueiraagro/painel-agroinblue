@@ -558,36 +558,8 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
         </section>
       </div>
 
-      {/* ── Navigation cards (Operação + Painel Consultor only) ── */}
-      <div className="space-y-1.5">
-        <button
-          onClick={() => onTabChange('visao_zoo_hub' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
-          className="w-full rounded-md border border-primary/30 bg-primary/5 px-3 py-2 flex items-center gap-2.5 transition-colors hover:bg-primary/10 active:bg-primary/15"
-        >
-          <div className="h-7 w-7 rounded bg-primary/15 flex items-center justify-center flex-shrink-0">
-            <TrendingUp className="h-3.5 w-3.5 text-primary" />
-          </div>
-          <div className="flex-1 text-left">
-            <span className="text-xs font-bold text-foreground">Operação</span>
-            <p className="text-[9px] text-muted-foreground">Indicadores, gráficos, DRE e desempenho</p>
-          </div>
-          <ChevronRight className="h-3.5 w-3.5 text-primary flex-shrink-0" />
-        </button>
 
-        <button
-          onClick={() => onTabChange('painel_consultor' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
-          className="w-full rounded-md border border-primary/30 bg-primary/5 px-3 py-2 flex items-center gap-2.5 transition-colors hover:bg-primary/10 active:bg-primary/15"
-        >
-          <div className="h-7 w-7 rounded bg-primary/15 flex items-center justify-center flex-shrink-0">
-            <Landmark className="h-3.5 w-3.5 text-primary" />
-          </div>
-          <div className="flex-1 text-left">
-            <span className="text-xs font-bold text-foreground">Painel do Consultor</span>
-            <p className="text-[9px] text-muted-foreground">Tabela analítica: conferência e fechamento</p>
-          </div>
-          <ChevronRight className="h-3.5 w-3.5 text-primary flex-shrink-0" />
-        </button>
-      </div>
+
 
       {/* ── Pendências ── */}
       {alertas.length > 0 && (
