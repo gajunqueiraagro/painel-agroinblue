@@ -106,15 +106,12 @@
   z-index: 0 !important;
   position: relative;
 }
-.leaflet-pane {
-  z-index: 0 !important;
-}
 .leaflet-top,
 .leaflet-bottom {
-  z-index: 5 !important;
+  z-index: 800 !important;
 }
 .leaflet-control {
-  z-index: 5 !important;
+  z-index: 800 !important;
 }
 .pasto-label {
   background: transparent !important;
