@@ -392,117 +392,96 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   return (
     <div className="pb-24">
       {/* Tabela conciliação + Filtros - sticky */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm pt-2 px-2 pb-2 space-y-2">
-        {/* Tabela resumo conciliação por categoria */}
-        <div className="flex items-start gap-1">
-          <div className="overflow-x-auto flex-1">
-            <table className="w-full text-[10px] border-collapse">
-              <thead>
-                <tr className="border-b border-border/40">
-                  <th className="text-left font-bold text-muted-foreground px-1 py-0.5 w-12 border-r border-border/30">Cat.</th>
-                  {CAT_COLS.map((c, idx) => (
-                    <th key={c.sigla} className={`text-center font-bold text-muted-foreground px-0.5 py-0.5 min-w-[28px]${idx === 4 ? ' border-r border-border/30' : ''}`}>{c.sigla}</th>
-                  ))}
-                  <th className="text-center font-bold text-foreground px-1 py-0.5 min-w-[32px] border-l border-border/30">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {/* Linha Pasto */}
-                <tr>
-                  <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Pasto</td>
-                  {CAT_COLS.map((c, idx) => {
-                    const v = pastoDataByCat.get(c.codigo) || 0;
-                    return <td key={c.sigla} className={`text-center text-foreground px-0.5 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
-                  })}
-                  <td className="text-center font-bold text-foreground px-1 py-0.5 border-l border-border/30">{totalPasto}</td>
-                </tr>
-                {/* Linha Sistema */}
-                <tr>
-                  <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Sistema</td>
-                  {CAT_COLS.map((c, idx) => {
-                    const v = saldoMap.get(c.codigo) || 0;
-                    return <td key={c.sigla} className={`text-center text-foreground px-0.5 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
-                  })}
-                  <td className="text-center font-bold text-foreground px-1 py-0.5 border-l border-border/30">{totalSistema}</td>
-                </tr>
-                {/* Linha Diferença */}
-                <tr className="border-t border-border/40">
-                  <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Dif.</td>
-                  {CAT_COLS.map((c, idx) => {
-                    const pasto = pastoDataByCat.get(c.codigo) || 0;
-                    const sistema = saldoMap.get(c.codigo) || 0;
-                    const dif = pasto - sistema;
-                    return (
-                      <td key={c.sigla} className={`text-center font-bold px-0.5 py-0.5 ${dif > 0 ? 'text-emerald-600' : dif < 0 ? 'text-red-600' : 'text-muted-foreground'}${idx === 4 ? ' border-r border-border/30' : ''}`}>
-                        {dif !== 0 ? (dif > 0 ? `+${dif}` : dif) : ''}
-                      </td>
-                    );
-                  })}
-                  <td className={`text-center font-bold px-1 py-0.5 border-l border-border/30 ${totalDiferenca > 0 ? 'text-emerald-600' : totalDiferenca < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
-                    {totalDiferenca !== 0 ? (totalDiferenca > 0 ? `+${totalDiferenca}` : totalDiferenca) : '0'}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm pt-2 px-2 pb-2 space-y-1.5">
+        {/* Container superior: tabela esquerda + botões direita */}
+        <div className="flex items-start justify-between gap-4">
+          {/* Tabela resumo conciliação - 50% no desktop */}
+          <div className="flex items-start gap-1 w-full md:w-1/2 shrink-0">
+            <div className="overflow-x-auto flex-1">
+              <table className="w-full text-[10px] border-collapse">
+                <thead>
+                  <tr className="border-b border-border/40">
+                    <th className="text-left font-bold text-muted-foreground px-1 py-0.5 w-12 border-r border-border/30">Cat.</th>
+                    {CAT_COLS.map((c, idx) => (
+                      <th key={c.sigla} className={`text-center font-bold text-muted-foreground px-0.5 py-0.5 min-w-[28px]${idx === 4 ? ' border-r border-border/30' : ''}`}>{c.sigla}</th>
+                    ))}
+                    <th className="text-center font-bold text-foreground px-1 py-0.5 min-w-[32px] border-l border-border/30">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Pasto</td>
+                    {CAT_COLS.map((c, idx) => {
+                      const v = pastoDataByCat.get(c.codigo) || 0;
+                      return <td key={c.sigla} className={`text-center text-foreground px-0.5 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
+                    })}
+                    <td className="text-center font-bold text-foreground px-1 py-0.5 border-l border-border/30">{totalPasto}</td>
+                  </tr>
+                  <tr>
+                    <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Sistema</td>
+                    {CAT_COLS.map((c, idx) => {
+                      const v = saldoMap.get(c.codigo) || 0;
+                      return <td key={c.sigla} className={`text-center text-foreground px-0.5 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
+                    })}
+                    <td className="text-center font-bold text-foreground px-1 py-0.5 border-l border-border/30">{totalSistema}</td>
+                  </tr>
+                  <tr className="border-t border-border/40">
+                    <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30">Dif.</td>
+                    {CAT_COLS.map((c, idx) => {
+                      const pasto = pastoDataByCat.get(c.codigo) || 0;
+                      const sistema = saldoMap.get(c.codigo) || 0;
+                      const dif = pasto - sistema;
+                      return (
+                        <td key={c.sigla} className={`text-center font-bold px-0.5 py-0.5 ${dif > 0 ? 'text-emerald-600' : dif < 0 ? 'text-red-600' : 'text-muted-foreground'}${idx === 4 ? ' border-r border-border/30' : ''}`}>
+                          {dif !== 0 ? (dif > 0 ? `+${dif}` : dif) : ''}
+                        </td>
+                      );
+                    })}
+                    <td className={`text-center font-bold px-1 py-0.5 border-l border-border/30 ${totalDiferenca > 0 ? 'text-emerald-600' : totalDiferenca < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                      {totalDiferenca !== 0 ? (totalDiferenca > 0 ? `+${totalDiferenca}` : totalDiferenca) : '0'}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            {sugestoes.length > 0 && (
+              <button
+                onClick={() => setShowSugestoes(true)}
+                className="shrink-0 mt-1 p-1 rounded-md hover:bg-accent transition-colors"
+                title="Ver sugestões de ajuste"
+              >
+                <Lightbulb className="h-4 w-4 text-amber-500" />
+              </button>
+            )}
           </div>
-          {/* Ícone de sugestões */}
-          {sugestoes.length > 0 && (
-            <button
-              onClick={() => setShowSugestoes(true)}
-              className="shrink-0 mt-1 p-1 rounded-md hover:bg-accent transition-colors"
-              title="Ver sugestões de ajuste"
-            >
-              <Lightbulb className="h-4 w-4 text-amber-500" />
-            </button>
-          )}
-        </div>
 
-        {/* Filtros */}
-        <div className="flex items-center gap-2">
-          <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-            <SelectTrigger className="w-20 h-8 text-xs font-bold"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
-            <SelectTrigger className="w-20 h-8 text-xs font-bold"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {MESES_COLS.map((m, i) => (
-                <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex flex-col text-xs">
-            <Badge variant="secondary" className="text-[10px]">{preenchidos}/{pastosAtivos.length} iniciados</Badge>
-            <span className="text-[10px] text-muted-foreground mt-0.5">{fechadosCount} fechados</span>
-          </div>
-          <div className="ml-auto flex items-center gap-1.5 flex-wrap justify-end">
+          {/* Botões alinhados à direita - desktop */}
+          <div className="hidden md:flex items-center gap-2 shrink-0 pt-1">
             {onNavigateToReclass && hasDivergencia && (
               <Button
                 size="sm"
                 variant="outline"
-                className="text-xs font-bold h-8"
+                className="text-xs font-bold h-7 min-w-[150px] justify-center"
                 onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: mesFiltro })}
               >
                 <Pencil className="h-3.5 w-3.5 mr-1" />
-                Evol. Categoria
+                Evoluir Categorias
               </Button>
             )}
             <Button
               size="sm"
               variant="outline"
-              className="text-xs font-bold h-8"
+              className="text-xs font-bold h-7 min-w-[150px] justify-center"
               onClick={() => setShowResumoAtividades(true)}
             >
               <BarChart3 className="h-3.5 w-3.5 mr-1" />
-              Resumo Atividades
+              Resumo por Atividade
             </Button>
             {canBulkClose && (
               <Button
                 size="sm"
                 variant="outline"
-                className="text-xs font-bold border-warning text-warning hover:bg-warning/10 h-8"
+                className="text-xs font-bold border-warning text-warning hover:bg-warning/10 h-7 min-w-[150px] justify-center"
                 onClick={() => {
                   if (hasDivergencia) {
                     toast.error('Não é possível fechar os pastos. Existem categorias desconciliadas entre Pasto e Sistema. Realize a conciliação antes de fechar.');
@@ -519,7 +498,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               <Button
                 size="sm"
                 variant="outline"
-                className="text-xs font-bold border-destructive text-destructive hover:bg-destructive/10 h-8"
+                className="text-xs font-bold border-destructive text-destructive hover:bg-destructive/10 h-7 min-w-[150px] justify-center"
                 onClick={() => setConfirmBulkReopenOpen(true)}
               >
                 <Unlock className="h-3.5 w-3.5 mr-1" />
@@ -527,6 +506,54 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               </Button>
             )}
           </div>
+        </div>
+
+        {/* Container inferior: filtros | status central | status secundário */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+              <SelectTrigger className="w-[68px] h-6 text-[11px] font-bold px-2"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
+              <SelectTrigger className="w-[68px] h-6 text-[11px] font-bold px-2"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {MESES_COLS.map((m, i) => (
+                  <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex-1 flex justify-center">
+            <Badge variant="secondary" className="text-[10px] font-bold">{preenchidos}/{pastosAtivos.length} iniciados</Badge>
+          </div>
+          <div className="shrink-0">
+            <span className="text-[10px] text-muted-foreground font-medium">{fechadosCount} fechados</span>
+          </div>
+        </div>
+
+        {/* Botões mobile */}
+        <div className="flex md:hidden items-center gap-1.5 flex-wrap">
+          {onNavigateToReclass && hasDivergencia && (
+            <Button size="sm" variant="outline" className="text-xs font-bold h-7 flex-1 min-w-[120px] justify-center" onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: mesFiltro })}>
+              <Pencil className="h-3.5 w-3.5 mr-1" /> Evoluir Categorias
+            </Button>
+          )}
+          <Button size="sm" variant="outline" className="text-xs font-bold h-7 flex-1 min-w-[120px] justify-center" onClick={() => setShowResumoAtividades(true)}>
+            <BarChart3 className="h-3.5 w-3.5 mr-1" /> Resumo por Atividade
+          </Button>
+          {canBulkClose && (
+            <Button size="sm" variant="outline" className="text-xs font-bold border-warning text-warning hover:bg-warning/10 h-7 flex-1 min-w-[120px] justify-center" onClick={() => { if (hasDivergencia) { toast.error('Não é possível fechar. Categorias desconciliadas.'); return; } setConfirmBulkOpen(true); }}>
+              <Lock className="h-3.5 w-3.5 mr-1" /> Fechamento Todos
+            </Button>
+          )}
+          {fechadosCount > 0 && (canEdit('zootecnico') || canEdit('pastos')) && (
+            <Button size="sm" variant="outline" className="text-xs font-bold border-destructive text-destructive hover:bg-destructive/10 h-7 flex-1 min-w-[120px] justify-center" onClick={() => setConfirmBulkReopenOpen(true)}>
+              <Unlock className="h-3.5 w-3.5 mr-1" /> Reabrir Pastos
+            </Button>
+          )}
         </div>
       </div>
 
