@@ -377,28 +377,9 @@ export function useStatusZootecnico(
     else descFin = 'Sem lançamentos no período';
     pendencias.push({ id: 'financeiro', label: 'Conciliação do Financeiro', descricao: descFin, status: statusFin, resolverTab: 'fin_caixa' });
 
-    // ── 3. Conciliação de Categorias (calculada antes de Pastos) ──
-    // Regra oficial: verde SOMENTE se TODAS categorias têm dif = 0
-    let statusCats: StatusItem;
-    let descCats = '';
-    if (itensTotais === 0 && categoriasComSaldo === 0) {
-      statusCats = 'fechado';
-      descCats = 'Nada a conciliar';
-    } else if (itensTotais === 0 && categoriasComSaldo > 0) {
-      statusCats = 'aberto';
-      descCats = 'Sem dados de pastos';
-    } else if (catsDivergentes === 0) {
-      statusCats = 'fechado';
-      descCats = 'Categorias conciliadas';
-    } else {
-      // Total líquido = total pastos - total sistema
-      const difLiquida = difTotalCabecas; // abs sum
-      // Check if total matches even though categories don't
-      // We need to know if totals match — approximate using saldoTotalSistema
-      // amarelo: total bate mas categorias divergem | vermelho: total não bate
-      statusCats = 'aberto'; // default: vermelho (divergência real)
-      descCats = `${catsDivergentes} categoria(s) divergente(s) · ${difTotalCabecas} cab`;
-    }
+    // ── 3. Conciliação de Categorias (via calcStatusCategorias — fonte única) ──
+    const statusCats: StatusItem = categoriasStatusResult.status;
+    const descCats = categoriasStatusResult.descricao;
     pendencias.push({ id: 'categorias', label: 'Conciliação de Categorias', descricao: descCats, status: statusCats, resolverTab: 'conciliacao_categoria' });
 
     // ── 2. Fechamento de Pastos (depende de categorias) ──
