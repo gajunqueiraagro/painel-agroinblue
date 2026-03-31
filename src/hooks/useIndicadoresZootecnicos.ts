@@ -745,6 +745,11 @@ export function useIndicadoresZootecnicos(
       ? ganhoLiquidoAcum / 30
       : null;
 
+    // @/ha acumulado — baseado em produção biológica (não saídas)
+    const arrobasHaAcumuladoAno = (arrobasProduzidasAcumulado !== null && areaProdutiva > 0)
+      ? arrobasProduzidasAcumulado / areaProdutiva
+      : null;
+
     // Valor patrimonial
     const valorRebanho = valorRebanhoData?.total ?? null;
     const valorPorCabeca = valorRebanho !== null && saldoFinalMes > 0 ? valorRebanho / saldoFinalMes : null;
