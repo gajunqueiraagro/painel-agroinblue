@@ -169,7 +169,11 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
       if (allBounds.length > 0 && fitKey !== lastFitKeyRef.current) {
         lastFitKeyRef.current = fitKey;
         const combinedBounds = allBounds.reduce((acc, bounds) => acc.extend(bounds));
-        map.fitBounds(combinedBounds, { padding: [40, 40], maxZoom: 17 });
+        try {
+          map.fitBounds(combinedBounds, { padding: [40, 40], maxZoom: 17 });
+        } catch (e) {
+          console.warn('[MapaGestor] fitBounds deferred – container not ready', e);
+        }
       }
     }, 220);
 
