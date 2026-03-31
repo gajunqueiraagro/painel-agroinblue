@@ -36,6 +36,16 @@ export function MapaGeoPastosTab() {
     atualizarGeometria, excluirGeometrias, vincularPasto,
   } = usePastoGeometrias();
   const { ocupacoes, reload: reloadOcupacao } = usePastoOcupacao(pastos);
+  const { lancamentos, saldosIniciais } = useLancamentos();
+
+  // Compute official herd total for the current month
+  const rebanhoOficial = useMemo(() => {
+    const now = new Date();
+    const ano = now.getFullYear();
+    const mes = now.getMonth() + 1;
+    const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
+    return Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
+  }, [lancamentos, saldosIniciais]);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('gestor');
   const [expanded, setExpanded] = useState(false);
