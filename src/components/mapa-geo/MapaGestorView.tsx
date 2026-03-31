@@ -45,7 +45,7 @@ interface SelectedGeo {
 
 export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUpload, onRenderedChange }: Props) {
   const [selected, setSelected] = useState<SelectedGeo | null>(null);
-  const lastFitKeyRef = useRef('');
+  
   const {
     mapContainerRef,
     mapInstanceRef,
