@@ -118,9 +118,12 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
         return;
       }
 
-      // === BRUTE FORCE TEST: only 1st polygon, manual setView, marker ===
+      // === BRUTE FORCE TEST v2: explicit SVG renderer (canvas _ctx is null) ===
       const firstGeo = geometrias[0];
+      const svgRenderer = L.svg();
+
       const testLayer = L.geoJSON(firstGeo.geojson as GeoJSON.GeoJsonObject, {
+        renderer: svgRenderer,
         style: {
           color: '#ff0000',
           weight: 4,
@@ -130,61 +133,75 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
       });
 
       const testBounds = testLayer.getBounds();
-      console.warn('[BRUTE-TEST] geo name:', firstGeo.nome_original);
-      console.warn('[BRUTE-TEST] bounds valid:', testBounds.isValid());
+      const center = testBounds.isValid() ? testBounds.getCenter() : null;
+      console.warn('[BRUTE-v2] name:', firstGeo.nome_original, 'valid:', testBounds.isValid(), 'center:', center?.lat, center?.lng);
 
-      if (!testBounds.isValid()) {
-        console.error('[BRUTE-TEST] bounds INVALID — cannot render');
+      if (!center) {
         reportRenderedGeometries(0);
         onRenderedChange?.(0);
         return;
       }
 
-      const center = testBounds.getCenter();
-      console.warn('[BRUTE-TEST] center:', center.lat, center.lng);
+      // Add polygon directly to map (bypass featureLayer to rule out layer issues)
+      testLayer.addTo(map);
 
-      // Add polygon to layer
-      testLayer.addTo(featureLayer);
-
-      // Add a visible marker at center
+      // Marker
       const markerIcon = L.divIcon({
         className: '',
-        html: '<div style="width:20px;height:20px;background:red;border-radius:50%;border:3px solid white;box-shadow:0 0 6px rgba(0,0,0,0.5)"></div>',
-        iconSize: [20, 20],
-        iconAnchor: [10, 10],
+        html: '<div style="width:24px;height:24px;background:red;border-radius:50%;border:3px solid white;box-shadow:0 0 8px rgba(0,0,0,0.6);z-index:9999"></div>',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
       });
-      L.marker(center, { icon: markerIcon }).addTo(featureLayer);
+      L.marker(center, { icon: markerIcon, zIndexOffset: 9999 }).addTo(map);
 
       reportRenderedGeometries(1);
       onRenderedChange?.(1);
 
-      // Direct setView — no fitBounds, no invalidateSize
+      // Force map pane position fix before setView
+      const mapAny = map as any;
+      if (mapAny._mapPane) {
+        mapAny._mapPane._leaflet_pos = L.point(0, 0);
+        mapAny._mapPane.style.transform = '';
+        mapAny._mapPane.style.left = '0px';
+        mapAny._mapPane.style.top = '0px';
+      }
+
+      // Direct setView
       try {
         map.setView(center, 15, { animate: false });
-        console.warn('[BRUTE-TEST] setView OK — center:', center.lat, center.lng, 'zoom: 15');
+        console.warn('[BRUTE-v2] setView OK');
       } catch (err) {
-        console.error('[BRUTE-TEST] setView FAILED:', err);
-        // Last resort: fly to coordinates
+        console.error('[BRUTE-v2] setView FAILED:', err);
+        // Nuclear fallback: directly manipulate internal state
         try {
-          (map as any)._resetView(center, 15);
-          console.warn('[BRUTE-TEST] _resetView fallback OK');
+          mapAny._zoom = 15;
+          mapAny._animateToCenter = center;
+          mapAny._animateToZoom = 15;
+          mapAny._resetView(L.latLng(center), 15);
+          console.warn('[BRUTE-v2] _resetView fallback OK');
         } catch (err2) {
-          console.error('[BRUTE-TEST] _resetView also FAILED:', err2);
+          console.error('[BRUTE-v2] _resetView FAILED:', err2);
         }
       }
 
-      // Log final state
+      // DOM diagnostics
       setTimeout(() => {
-        console.warn('[BRUTE-TEST] Final center:', map.getCenter().lat, map.getCenter().lng);
-        console.warn('[BRUTE-TEST] Final zoom:', map.getZoom());
-        console.warn('[BRUTE-TEST] Layers in featureLayer:', featureLayer.getLayers().length);
-        // Check if the polygon layer has actual DOM elements
         const container = map.getContainer();
+        const svgs = container.querySelectorAll('svg');
         const paths = container.querySelectorAll('path');
         const canvasEls = container.querySelectorAll('canvas');
-        console.warn('[BRUTE-TEST] SVG paths in DOM:', paths.length);
-        console.warn('[BRUTE-TEST] Canvas elements:', canvasEls.length);
-      }, 500);
+        console.warn('[BRUTE-v2] SVGs:', svgs.length, 'paths:', paths.length, 'canvas:', canvasEls.length);
+        console.warn('[BRUTE-v2] map center:', map.getCenter().lat, map.getCenter().lng, 'zoom:', map.getZoom());
+        // Check container visibility
+        const rect = container.getBoundingClientRect();
+        console.warn('[BRUTE-v2] container rect:', rect.width, 'x', rect.height, 'visible:', rect.width > 0 && rect.height > 0);
+        // Check pane transform
+        const pane = map.getPane('overlayPane');
+        if (pane) {
+          console.warn('[BRUTE-v2] overlayPane transform:', pane.style.transform);
+          console.warn('[BRUTE-v2] overlayPane children:', pane.children.length);
+        }
+      }, 600);
     }, 300);
 
     return () => window.clearTimeout(timer);
