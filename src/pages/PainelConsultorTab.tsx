@@ -455,10 +455,20 @@ function buildFinRows(
     return recPecMes(m) - deducMes(m) - desembPecMes(m) - desembAgriMes(m);
   }));
 
+  // ═══════════════════════════════════════════════
+  // INDICADORES PATRIMONIAIS
+  // ═══════════════════════════════════════════════
+  if (valorRebanhoMes && pesoFinMes) {
+    rows.push(mkRow('Indicadores Patrimoniais', 'Valor do Rebanho\n(R$)', m => valorRebanhoMes[m - 1] || 0));
+    rows.push(mkRow('Indicadores Patrimoniais', 'Valor da arroba — estoque final\n(R$/@)', m => {
+      const vr = valorRebanhoMes[m - 1] || 0;
+      const arrobasEstoque = (pesoFinMes[m - 1] || 0) / 30;
+      return vr > 0 && arrobasEstoque > 0 ? vr / arrobasEstoque : 0;
+    }));
+  }
+
   return rows;
 }
-
-// ─── Format value ───
 
 function fmtVal(v: number, format: string): string {
   if (format === 'money') return formatMoeda(v);
