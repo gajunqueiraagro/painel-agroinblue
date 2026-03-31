@@ -179,7 +179,7 @@ export function FechamentoPastoDialog({
 
           {/* Row 2: Lote + Qual + Tipo Uso */}
           <div className="flex gap-1 items-end">
-            <div className="w-20 shrink-0">
+            <div className="w-28 shrink-0">
               <Label className="text-[9px] text-muted-foreground leading-none">Lote</Label>
               <Input value={loteMes} onChange={e => setLoteMes(e.target.value)} disabled={isFechado} placeholder="Lote..." className="h-6 text-[9px] px-1.5 placeholder:text-[8px] placeholder:italic placeholder:text-muted-foreground/60" />
             </div>
@@ -202,8 +202,8 @@ export function FechamentoPastoDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex-1 min-w-0">
-              <Label className="text-[9px] text-muted-foreground leading-none">Obs. mês</Label>
+            <div className="w-24 shrink-0">
+              <Label className="text-[9px] text-muted-foreground leading-none">Obs.</Label>
               <Input value={observacaoMes} onChange={e => setObservacaoMes(e.target.value)} disabled={isFechado} placeholder="Observação..." className="h-6 text-[10px] px-1.5 placeholder:text-[9px] placeholder:italic placeholder:text-muted-foreground/60" />
             </div>
           </div>
