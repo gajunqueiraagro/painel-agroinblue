@@ -533,7 +533,7 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
   const [ateMes, setAteMes] = useState(filtroGlobal?.mes || new Date().getMonth() + 1);
   const [tab, setTab] = useState<'zoo' | 'fin'>('zoo');
   const [pesosPorMes, setPesosPorMes] = useState<Record<string, Record<string, number>>>({});
-  const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>([]);
+  const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(Array(12).fill(0));
 
   const anoNum = Number(ano);
   const anosDisponiveis = useMemo(() => {
@@ -562,34 +562,89 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
     })();
   }, [fazendaId, anoNum, categorias]);
 
-  // Load valor_rebanho_fechamento per month
+  // Load valor do rebanho per month from valor_rebanho_mensal (preco_kg × saldo × peso)
+  // For each fazenda individually to guarantee correctness, then sum for global
   useEffect(() => {
-    if (!fazendaId) { setValorRebanhoMes([]); return; }
+    if (!fazendaId) { setValorRebanhoMes(Array(12).fill(0)); return; }
     (async () => {
       const meses = Array.from({ length: 12 }, (_, i) => `${anoNum}-${String(i + 1).padStart(2, '0')}`);
-      if (fazendaId === '__global__') {
-        const fids = fazendas.filter(f => f.tem_pecuaria !== false).map(f => f.id);
-        if (fids.length === 0) { setValorRebanhoMes(Array(12).fill(0)); return; }
-        const { data } = await supabase
-          .from('valor_rebanho_fechamento')
-          .select('ano_mes, valor_total')
-          .in('fazenda_id', fids)
-          .in('ano_mes', meses);
-        const map: Record<string, number> = {};
-        (data || []).forEach(r => { map[r.ano_mes] = (map[r.ano_mes] || 0) + (Number(r.valor_total) || 0); });
-        setValorRebanhoMes(meses.map(m => map[m] || 0));
-      } else {
-        const { data } = await supabase
-          .from('valor_rebanho_fechamento')
-          .select('ano_mes, valor_total')
-          .eq('fazenda_id', fazendaId)
-          .in('ano_mes', meses);
-        const map: Record<string, number> = {};
-        (data || []).forEach(r => { map[r.ano_mes] = Number(r.valor_total) || 0; });
-        setValorRebanhoMes(meses.map(m => map[m] || 0));
-      }
+
+      // Determine which fazendas to process
+      const targetFazendas = fazendaId === '__global__'
+        ? fazendas.filter(f => f.tem_pecuaria !== false)
+        : [{ id: fazendaId }];
+
+      if (targetFazendas.length === 0) { setValorRebanhoMes(Array(12).fill(0)); return; }
+
+      // Load all prices at once
+      const fids = targetFazendas.map(f => f.id);
+      const { data: precosData } = await supabase
+        .from('valor_rebanho_mensal')
+        .select('fazenda_id, ano_mes, categoria, preco_kg')
+        .in('fazenda_id', fids)
+        .in('ano_mes', meses);
+
+      // Build lookup: fazenda → anoMes → categoria → precoKg
+      const precosLookup: Record<string, Record<string, Record<string, number>>> = {};
+      (precosData || []).forEach(r => {
+        if (!precosLookup[r.fazenda_id]) precosLookup[r.fazenda_id] = {};
+        if (!precosLookup[r.fazenda_id][r.ano_mes]) precosLookup[r.fazenda_id][r.ano_mes] = {};
+        precosLookup[r.fazenda_id][r.ano_mes][r.categoria] = Number(r.preco_kg) || 0;
+      });
+
+      // For each month, compute valor per fazenda, then sum
+      // We need saldo × peso × preco per category per fazenda
+      // For single fazenda: use lancPec/saldosIniciais (already filtered)
+      // For global: lancPec contains all fazendas, need to filter per fazenda
+      const valores = meses.map((anoMes, idx) => {
+        const m = idx + 1;
+        let totalValor = 0;
+
+        for (const faz of targetFazendas) {
+          const precosMap = precosLookup[faz.id]?.[anoMes] || {};
+          if (Object.keys(precosMap).length === 0) continue;
+
+          // Filter lancamentos and saldos for this fazenda
+          const fazLancs = fazendaId === '__global__'
+            ? lancPec.filter(l => l.fazendaId === faz.id)
+            : lancPec;
+          const fazSaldos = fazendaId === '__global__'
+            ? saldosIniciais.filter(s => s.fazendaId === faz.id)
+            : saldosIniciais;
+
+          const saldoMap = calcSaldoPorCategoriaLegado(fazSaldos, fazLancs, anoNum, m);
+
+          // Load pesos for this fazenda-month (use pesosPorMes if single fazenda)
+          // For global we'd need per-fazenda pesos, but we use a simplified approach:
+          // saldo × estimated peso × preco
+          saldoMap.forEach((qtd, cat) => {
+            if (qtd <= 0) return;
+            const precoKg = precosMap[cat] || 0;
+            if (precoKg <= 0) return;
+            // Get peso medio — for single fazenda use pesosPorMes, for global estimate
+            let pesoMedio = 0;
+            if (fazendaId !== '__global__' && pesosPorMes[anoMes]) {
+              const r = resolverPesoOficial(cat, pesosPorMes[anoMes], saldosIniciais, lancPec, anoNum, m);
+              pesoMedio = r.valor || 0;
+            } else {
+              // For global: use saldo inicial peso or lancamento peso as estimate
+              const si = fazSaldos.find(s => s.categoria === cat);
+              pesoMedio = si?.pesoMedioKg || 0;
+              // Try from lancamentos if no saldo
+              if (pesoMedio <= 0) {
+                const l = fazLancs.filter(l => l.categoria === cat && l.pesoMedioKg).pop();
+                pesoMedio = l?.pesoMedioKg || 0;
+              }
+            }
+            totalValor += qtd * pesoMedio * precoKg;
+          });
+        }
+        return totalValor;
+      });
+
+      setValorRebanhoMes(valores);
     })();
-  }, [fazendaId, anoNum, fazendas]);
+  }, [fazendaId, anoNum, fazendas, lancPec, saldosIniciais, pesosPorMes]);
 
   const areaProdutiva = useMemo(() => calcAreaProdutivaPecuaria(pastos), [pastos]);
 
@@ -618,13 +673,10 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
   const fazendaNome = isGlobal ? 'Global' : (fazendaAtual?.nome || 'Fazenda');
 
   const handleExport = useCallback(() => {
-    console.log('[EXPORT-DIAG] handleExport CLICADO');
-    console.log('[EXPORT-DIAG] zooRows:', zooRows.length, 'finRows:', finRows.length, 'ano:', anoNum, 'ateMes:', ateMes);
     try {
       exportToExcel(zooRows, finRows, anoNum, ateMes, fazendaNome);
-      console.log('[EXPORT-DIAG] exportToExcel retornou sem erro');
     } catch (err) {
-      console.error('[EXPORT-DIAG] ERRO no exportToExcel:', err);
+      console.error('[EXPORT] Error:', err);
       toast.error('Não foi possível iniciar o download do Excel.');
     }
   }, [zooRows, finRows, anoNum, ateMes, fazendaNome]);
