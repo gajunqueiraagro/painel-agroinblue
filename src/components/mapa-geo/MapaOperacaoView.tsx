@@ -320,7 +320,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
                       <Label className="text-[10px]">Categoria</Label>
                       <Select value={cat} onValueChange={setCat}>
                         <SelectTrigger className="h-8 mt-0.5 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-48 overflow-y-auto">
                           {categorias.map(c => (
                             <SelectItem key={c.id} value={c.codigo}>{c.nome}</SelectItem>
                           ))}
