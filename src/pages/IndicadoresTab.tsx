@@ -209,7 +209,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               valor={ind.arrobasHaAcumuladoAno !== null ? formatNum(ind.arrobasHaAcumuladoAno, 2) : '—'}
               compAnual={c.arrobasHaAcumuladoAno.anual}
               semBase={ind.arrobasHaAcumuladoAno === null}
-              info={`Produtividade acumulada por hectare.\n\nFórmula: @ produzidas acumuladas ÷ Área Produtiva.\nMede a eficiência da terra no período.`}
+              info={`Produtividade acumulada por hectare (biológico).\n\nFórmula: @ produzidas (biológico) ÷ Área Produtiva.\nMede a eficiência da terra no período.`}
             />
           </div>
         </CardContent>
