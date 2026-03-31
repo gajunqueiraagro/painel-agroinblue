@@ -462,7 +462,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               <Button
                 size="sm"
                 variant="outline"
-                className="text-[10px] font-bold h-5 px-2 min-w-[140px] justify-center"
+                className="text-[10px] font-bold h-5 px-2 w-[170px] justify-center"
                 onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: mesFiltro })}
               >
                 <Pencil className="h-3 w-3 mr-1" />
@@ -472,7 +472,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             <Button
               size="sm"
               variant="outline"
-              className="text-[10px] font-bold h-5 px-2 min-w-[140px] justify-center"
+              className="text-[10px] font-bold h-5 px-2 w-[170px] justify-center"
               onClick={() => setShowResumoAtividades(true)}
             >
               <BarChart3 className="h-3 w-3 mr-1" />
@@ -482,7 +482,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               <Button
                 size="sm"
                 variant="outline"
-                className="text-[10px] font-bold border-warning text-warning hover:bg-warning/10 h-5 px-2 min-w-[140px] justify-center"
+                className="text-[10px] font-bold border-warning text-warning hover:bg-warning/10 h-5 px-2 w-[170px] justify-center"
                 onClick={() => {
                   if (hasDivergencia) {
                     toast.error('Não é possível fechar os pastos. Existem categorias desconciliadas entre Pasto e Sistema. Realize a conciliação antes de fechar.');
@@ -499,7 +499,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               <Button
                 size="sm"
                 variant="outline"
-                className="text-[10px] font-bold border-destructive text-destructive hover:bg-destructive/10 h-5 px-2 min-w-[140px] justify-center"
+                className="text-[10px] font-bold border-destructive text-destructive hover:bg-destructive/10 h-5 px-2 w-[170px] justify-center"
                 onClick={() => setConfirmBulkReopenOpen(true)}
               >
                 <Unlock className="h-3 w-3 mr-1" />
