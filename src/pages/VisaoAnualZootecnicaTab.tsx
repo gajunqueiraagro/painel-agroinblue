@@ -101,7 +101,7 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
         // Pastos ativos
         fq(supabase.from('pastos').select('id').eq('ativo', true).eq('entra_conciliacao', true)),
         // Fechamento pastos
-        fq(supabase.from('fechamento_pastos').select('id, status, pasto_id, ano_mes')
+        fq(supabase.from('fechamento_pastos').select('id, status, pasto_id, ano_mes, updated_at')
           .gte('ano_mes', anoMeses[0]).lte('ano_mes', anoMeses[11])),
         // Valor rebanho mensal
         fq(supabase.from('valor_rebanho_mensal').select('categoria, ano_mes')
