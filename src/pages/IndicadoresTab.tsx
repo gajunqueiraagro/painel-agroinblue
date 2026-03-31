@@ -192,6 +192,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               valor={ind.arrobasProduzidasMes !== null ? formatNum(ind.arrobasProduzidasMes, 1) : '—'}
               unidade="@"
               semBase={ind.arrobasProduzidasMes === null}
+              info={`Arrobas produzidas no mês.\n\nFórmula: total de arrobas das saídas (vendas, abates, consumo) no mês.\nConversão: peso kg ÷ 30.`}
             />
             <KpiCard
               label="@ prod. acum."
@@ -199,12 +200,14 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               unidade="@"
               compAnual={c.arrobasProduzidasAcumulado.anual}
               semBase={ind.arrobasProduzidasAcumulado === null}
+              info={`Arrobas produzidas acumuladas.\n\nSomatório das arrobas de saídas de Janeiro até o mês selecionado.`}
             />
             <KpiCard
               label="@/ha acum."
               valor={ind.arrobasHaAcumuladoAno !== null ? formatNum(ind.arrobasHaAcumuladoAno, 2) : '—'}
               compAnual={c.arrobasHaAcumuladoAno.anual}
               semBase={ind.arrobasHaAcumuladoAno === null}
+              info={`Produtividade acumulada por hectare.\n\nFórmula: @ produzidas acumuladas ÷ Área Produtiva.\nMede a eficiência da terra no período.`}
             />
           </div>
         </CardContent>
