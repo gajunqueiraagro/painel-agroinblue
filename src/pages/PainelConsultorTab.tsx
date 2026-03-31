@@ -461,13 +461,13 @@ function buildExcelSheet(rows: (ZooRow | FinRow)[], mesesHeaders: string[], incl
       base[mes] = row.valores[index] ?? 0;
     });
 
-    base.Total = row.total ?? 0;
+    
     return base;
   });
 
   const cols = includeGrupo
-    ? [{ wch: 18 }, { wch: 26 }, ...mesesHeaders.map(() => ({ wch: 14 })), { wch: 14 }]
-    : [{ wch: 26 }, ...mesesHeaders.map(() => ({ wch: 14 })), { wch: 14 }];
+    ? [{ wch: 18 }, { wch: 26 }, ...mesesHeaders.map(() => ({ wch: 14 }))]
+    : [{ wch: 26 }, ...mesesHeaders.map(() => ({ wch: 14 }))];
 
   return { rows: data, cols };
 }
@@ -577,7 +577,7 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
               {mesesVisiveis.map(m => (
                 <TableHead key={m} className="text-[10px] font-bold text-center w-[88px] min-w-[80px] max-w-[100px]">{m}</TableHead>
               ))}
-              <TableHead className="text-[10px] font-bold text-center w-[88px] min-w-[80px] max-w-[100px] bg-muted">Total</TableHead>
+              
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -590,7 +590,7 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
                   {showGrupo && (
                     <TableRow key={`grp-${row.grupo}-${idx}`} className="bg-primary/5">
                       <TableCell
-                        colSpan={mesesVisiveis.length + 2}
+                        colSpan={mesesVisiveis.length + 1}
                         className="sticky left-0 text-[10px] font-bold text-primary uppercase tracking-wider py-1.5 px-2"
                       >
                         {row.grupo}
@@ -611,9 +611,6 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
                         {fmtVal(v, row.format)}
                       </TableCell>
                     ))}
-                    <TableCell className="text-[10px] text-right py-1 px-1.5 tabular-nums whitespace-nowrap font-bold bg-muted/30 w-[88px]">
-                      {fmtVal(row.total, row.format)}
-                    </TableCell>
                   </TableRow>
                 </>
               );
