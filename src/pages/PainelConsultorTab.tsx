@@ -611,9 +611,6 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
                         {fmtVal(v, row.format)}
                       </TableCell>
                     ))}
-                    <TableCell className="text-[10px] text-right py-1 px-1.5 tabular-nums whitespace-nowrap font-bold bg-muted/30 w-[88px]">
-                      {fmtVal(row.total, row.format)}
-                    </TableCell>
                   </TableRow>
                 </>
               );
