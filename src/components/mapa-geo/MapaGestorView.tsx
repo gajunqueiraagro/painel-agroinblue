@@ -294,7 +294,7 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
 
         {/* ── Detail Panel (Desktop) ── */}
         {selected && (
-          <Card className="hidden sm:flex flex-col w-56 flex-shrink-0 overflow-hidden border-border/60">
+          <Card className="hidden sm:flex flex-col w-60 flex-shrink-0 overflow-hidden border-border/60">
             <div className="p-2 overflow-y-auto flex-1 space-y-2">
               {/* Header */}
               <div className="flex items-start justify-between gap-1">
@@ -303,8 +303,11 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
                     {selectedPasto?.nome || selected.geo.nome_original || 'Sem nome'}
                   </h3>
                   <div className="flex items-center gap-1 mt-0.5">
-                    <Badge variant={selected.geo.pasto_id ? 'secondary' : 'outline'} className={`text-[6px] h-3 px-1 ${STATUS_STYLES[selectedStatus].textClass}`}>
-                      {STATUS_STYLES[selectedStatus].label}
+                    <Badge
+                      variant={selected.geo.pasto_id ? 'secondary' : 'outline'}
+                      className={`text-[6px] h-3 px-1 ${selected.geo.pasto_id ? 'bg-green-50 text-green-800 border-green-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}
+                    >
+                      {selected.geo.pasto_id ? '● Vinculado' : '○ Sem vínculo'}
                     </Badge>
                     {selectedPasto?.tipo_uso && (
                       <span className="text-[7px] text-muted-foreground capitalize">{selectedPasto.tipo_uso}</span>
@@ -316,7 +319,7 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
                 </Button>
               </div>
 
-              {/* Main metrics */}
+              {/* ── Linked pasto: show metrics + change/remove binding ── */}
               {selectedPasto && (
                 <>
                   <div className="grid grid-cols-2 gap-1">
@@ -353,7 +356,6 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
                     </>
                   )}
 
-                  {/* Observations */}
                   {selectedPasto.observacoes && (
                     <>
                       <Separator className="my-1" />
@@ -361,43 +363,93 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
                     </>
                   )}
 
-                  {/* History placeholder */}
                   <Separator className="my-1" />
                   <div>
                     <p className="text-[7px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Histórico de Lotação</p>
                     <HistoricoLotacao pastoId={selected.geo.pasto_id!} areaHa={selectedPasto.area_produtiva_ha || 0} />
                   </div>
-                </>
-              )}
 
-              {!selectedPasto && selected && (
-                <div className="space-y-1.5">
-                  <p className="text-[8px] text-muted-foreground">Polígono sem vínculo.</p>
+                  {/* Change / Remove binding */}
                   {onLink && (
                     <>
                       <Separator className="my-1" />
+                      <div className="space-y-1">
+                        <p className="text-[7px] font-semibold text-muted-foreground uppercase tracking-wider">Alterar vínculo</p>
+                        <SearchableSelect
+                          value={linkPastoId}
+                          onValueChange={setLinkPastoId}
+                          options={availablePastos}
+                          placeholder="Buscar pasto..."
+                          allLabel="" allValue=""
+                          className="h-7 text-[9px]"
+                        />
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            className="flex-1 h-6 text-[9px]"
+                            disabled={!linkPastoId || linking}
+                            onClick={async () => {
+                              setLinking(true);
+                              const ok = await onLink(selected.geo.id, linkPastoId);
+                              setLinking(false);
+                              if (ok) { setLinkPastoId(''); }
+                            }}
+                          >
+                            <Link2 className="h-3 w-3 mr-1" />
+                            {linking ? '...' : 'Alterar'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-[9px] text-destructive hover:text-destructive"
+                            disabled={linking}
+                            onClick={async () => {
+                              setLinking(true);
+                              const ok = await onLink(selected.geo.id, '');
+                              setLinking(false);
+                              if (ok) { setLinkPastoId(''); }
+                            }}
+                          >
+                            <Unlink className="h-3 w-3 mr-1" />
+                            Remover
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+
+              {/* ── Unlinked polygon: link action ── */}
+              {!selectedPasto && selected && (
+                <div className="space-y-1.5">
+                  <div className="rounded-md border border-orange-200 bg-orange-50 px-2 py-1.5">
+                    <p className="text-[8px] text-orange-800 font-medium">Este polígono não está vinculado a nenhum pasto cadastrado.</p>
+                  </div>
+                  {onLink && (
+                    <>
                       <p className="text-[7px] font-semibold text-muted-foreground uppercase tracking-wider">Vincular a um pasto</p>
-                      <Select value={linkPastoId} onValueChange={setLinkPastoId}>
-                        <SelectTrigger className="h-7 text-[9px]"><SelectValue placeholder="Selecione o pasto" /></SelectTrigger>
-                        <SelectContent className="max-h-48 overflow-y-auto">
-                          {pastos.filter(p => p.ativo && !geometrias.some(g => g.pasto_id === p.id)).map(p => (
-                            <SelectItem key={p.id} value={p.id} className="text-[9px]">{p.nome}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <SearchableSelect
+                        value={linkPastoId}
+                        onValueChange={setLinkPastoId}
+                        options={availablePastos}
+                        placeholder="Buscar pasto..."
+                        allLabel="" allValue=""
+                        className="h-7 text-[9px]"
+                      />
                       <Button
                         size="sm"
-                        className="w-full h-6 text-[9px]"
+                        className="w-full h-7 text-[9px]"
                         disabled={!linkPastoId || linking}
                         onClick={async () => {
                           setLinking(true);
                           const ok = await onLink(selected.geo.id, linkPastoId);
                           setLinking(false);
-                          if (ok) { setLinkPastoId(''); setSelected(null); }
+                          if (ok) { setLinkPastoId(''); }
                         }}
                       >
                         <Link2 className="h-3 w-3 mr-1" />
-                        {linking ? 'Vinculando...' : 'Vincular'}
+                        {linking ? 'Vinculando...' : 'Vincular pasto'}
                       </Button>
                     </>
                   )}
