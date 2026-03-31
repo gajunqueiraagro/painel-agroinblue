@@ -26,6 +26,7 @@ import {
   calcSaldoPorCategoriaLegado,
 } from '@/lib/calculos/zootecnicos';
 import { calcArrobasSafe, calcValorTotal, calcGMD } from '@/lib/calculos/economicos';
+import { supabase } from '@/integrations/supabase/client';
 import { isConciliado as isLancConciliado } from '@/lib/statusOperacional';
 import { loadPesosPastosPorCategoria, resolverPesoOficial } from '@/hooks/useFechamentoCategoria';
 import {
@@ -366,6 +367,8 @@ function buildFinRows(
   ano: number,
   ateMes: number,
   arrobasProdAcum?: number[],
+  valorRebanhoMes?: number[],
+  pesoFinMes?: number[],
 ): FinRow[] {
   const rows: FinRow[] = [];
 
@@ -452,10 +455,20 @@ function buildFinRows(
     return recPecMes(m) - deducMes(m) - desembPecMes(m) - desembAgriMes(m);
   }));
 
+  // ═══════════════════════════════════════════════
+  // INDICADORES PATRIMONIAIS
+  // ═══════════════════════════════════════════════
+  if (valorRebanhoMes && pesoFinMes) {
+    rows.push(mkRow('Indicadores Patrimoniais', 'Valor do Rebanho\n(R$)', m => valorRebanhoMes[m - 1] || 0));
+    rows.push(mkRow('Indicadores Patrimoniais', 'Valor da arroba — estoque final\n(R$/@)', m => {
+      const vr = valorRebanhoMes[m - 1] || 0;
+      const arrobasEstoque = (pesoFinMes[m - 1] || 0) / 30;
+      return vr > 0 && arrobasEstoque > 0 ? vr / arrobasEstoque : 0;
+    }));
+  }
+
   return rows;
 }
-
-// ─── Format value ───
 
 function fmtVal(v: number, format: string): string {
   if (format === 'money') return formatMoeda(v);
@@ -520,6 +533,7 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
   const [ateMes, setAteMes] = useState(filtroGlobal?.mes || new Date().getMonth() + 1);
   const [tab, setTab] = useState<'zoo' | 'fin'>('zoo');
   const [pesosPorMes, setPesosPorMes] = useState<Record<string, Record<string, number>>>({});
+  const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>([]);
 
   const anoNum = Number(ano);
   const anosDisponiveis = useMemo(() => {
@@ -548,6 +562,35 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
     })();
   }, [fazendaId, anoNum, categorias]);
 
+  // Load valor_rebanho_fechamento per month
+  useEffect(() => {
+    if (!fazendaId) { setValorRebanhoMes([]); return; }
+    (async () => {
+      const meses = Array.from({ length: 12 }, (_, i) => `${anoNum}-${String(i + 1).padStart(2, '0')}`);
+      if (fazendaId === '__global__') {
+        const fids = fazendas.filter(f => f.tem_pecuaria !== false).map(f => f.id);
+        if (fids.length === 0) { setValorRebanhoMes(Array(12).fill(0)); return; }
+        const { data } = await supabase
+          .from('valor_rebanho_fechamento')
+          .select('ano_mes, valor_total')
+          .in('fazenda_id', fids)
+          .in('ano_mes', meses);
+        const map: Record<string, number> = {};
+        (data || []).forEach(r => { map[r.ano_mes] = (map[r.ano_mes] || 0) + (Number(r.valor_total) || 0); });
+        setValorRebanhoMes(meses.map(m => map[m] || 0));
+      } else {
+        const { data } = await supabase
+          .from('valor_rebanho_fechamento')
+          .select('ano_mes, valor_total')
+          .eq('fazenda_id', fazendaId)
+          .in('ano_mes', meses);
+        const map: Record<string, number> = {};
+        (data || []).forEach(r => { map[r.ano_mes] = Number(r.valor_total) || 0; });
+        setValorRebanhoMes(meses.map(m => map[m] || 0));
+      }
+    })();
+  }, [fazendaId, anoNum, fazendas]);
+
   const areaProdutiva = useMemo(() => calcAreaProdutivaPecuaria(pastos), [pastos]);
 
   const zooRows = useMemo(
@@ -561,9 +604,15 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
     return prodRow ? prodRow.valores : undefined;
   }, [zooRows]);
 
+  // Extract peso final kg per month from zooRows for patrimonial indicators
+  const pesoFinMesArr = useMemo(() => {
+    const row = zooRows.find(r => r.indicador.startsWith('Peso total final\n(kg)'));
+    return row ? row.valores : undefined;
+  }, [zooRows]);
+
   const finRows = useMemo(
-    () => buildFinRows(lancFin, anoNum, ateMes, arrobasProdAcum),
-    [lancFin, anoNum, ateMes, arrobasProdAcum],
+    () => buildFinRows(lancFin, anoNum, ateMes, arrobasProdAcum, valorRebanhoMes, pesoFinMesArr),
+    [lancFin, anoNum, ateMes, arrobasProdAcum, valorRebanhoMes, pesoFinMesArr],
   );
 
   const fazendaNome = isGlobal ? 'Global' : (fazendaAtual?.nome || 'Fazenda');
