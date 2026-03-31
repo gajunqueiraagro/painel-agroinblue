@@ -191,6 +191,13 @@ export function useStableLeafletMap({
       featureLayerRef.current = featureLayer;
       labelLayerRef.current = labelLayer;
 
+      // Fix: ensure mapPane has _leaflet_pos set (can be missing in flex layouts)
+      const mapPane = map.getPane('mapPane') as any;
+      if (mapPane && mapPane._leaflet_pos === undefined) {
+        mapPane._leaflet_pos = L.point(0, 0);
+        log('Fixed missing _leaflet_pos on mapPane');
+      }
+
       syncLabelVisibility();
       syncMetrics({ mapInitialized: true, errorMessage: null });
       setStatus('ready');
