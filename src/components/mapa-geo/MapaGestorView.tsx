@@ -118,90 +118,75 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
         return;
       }
 
-      // === BRUTE FORCE TEST v2: explicit SVG renderer (canvas _ctx is null) ===
-      const firstGeo = geometrias[0];
-      const svgRenderer = L.svg();
-
-      const testLayer = L.geoJSON(firstGeo.geojson as GeoJSON.GeoJsonObject, {
-        style: {
-          color: '#ff0000',
-          weight: 4,
-          fillColor: '#ffff00',
-          fillOpacity: 0.7,
-        },
-        ...(({ renderer: svgRenderer }) as any),
-      } as any);
-
-      const testBounds = testLayer.getBounds();
-      const center = testBounds.isValid() ? testBounds.getCenter() : null;
-      console.warn('[BRUTE-v2] name:', firstGeo.nome_original, 'valid:', testBounds.isValid(), 'center:', center?.lat, center?.lng);
-
-      if (!center) {
-        reportRenderedGeometries(0);
-        onRenderedChange?.(0);
-        return;
-      }
-
-      // Add polygon directly to map (bypass featureLayer to rule out layer issues)
-      testLayer.addTo(map);
-
-      // Marker
-      const markerIcon = L.divIcon({
-        className: '',
-        html: '<div style="width:24px;height:24px;background:red;border-radius:50%;border:3px solid white;box-shadow:0 0 8px rgba(0,0,0,0.6);z-index:9999"></div>',
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
-      });
-      L.marker(center, { icon: markerIcon, zIndexOffset: 9999 }).addTo(map);
-
-      reportRenderedGeometries(1);
-      onRenderedChange?.(1);
-
-      // Force map pane position fix before setView
+      // Fix _leaflet_pos on all internal panes before any operation
       const mapAny = map as any;
-      if (mapAny._mapPane) {
-        mapAny._mapPane._leaflet_pos = L.point(0, 0);
-        mapAny._mapPane.style.transform = '';
-        mapAny._mapPane.style.left = '0px';
-        mapAny._mapPane.style.top = '0px';
-      }
+      const fixAllPanes = () => {
+        if (mapAny._mapPane) mapAny._mapPane._leaflet_pos = mapAny._mapPane._leaflet_pos || L.point(0, 0);
+        ['tilePane', 'overlayPane', 'shadowPane', 'markerPane', 'tooltipPane', 'popupPane'].forEach(name => {
+          const pane = map.getPane(name) as any;
+          if (pane) pane._leaflet_pos = pane._leaflet_pos || L.point(0, 0);
+        });
+      };
+      fixAllPanes();
 
-      // Direct setView
-      try {
-        map.setView(center, 15, { animate: false });
-        console.warn('[BRUTE-v2] setView OK');
-      } catch (err) {
-        console.error('[BRUTE-v2] setView FAILED:', err);
-        // Nuclear fallback: directly manipulate internal state
+      // Render ALL geometries with debug style
+      const allBounds: L.LatLngBounds[] = [];
+      let renderedCount = 0;
+
+      geometrias.forEach((geo) => {
         try {
-          mapAny._zoom = 15;
-          mapAny._animateToCenter = center;
-          mapAny._animateToZoom = 15;
-          mapAny._resetView(L.latLng(center), 15);
-          console.warn('[BRUTE-v2] _resetView fallback OK');
-        } catch (err2) {
-          console.error('[BRUTE-v2] _resetView FAILED:', err2);
-        }
-      }
+          const layer = L.geoJSON(geo.geojson as GeoJSON.GeoJsonObject, {
+            style: {
+              color: '#ff0000',
+              weight: 3,
+              fillColor: '#ffff00',
+              fillOpacity: 0.5,
+            },
+          });
+          const bounds = layer.getBounds();
+          if (!bounds.isValid()) return;
 
-      // DOM diagnostics
-      setTimeout(() => {
-        const container = map.getContainer();
-        const svgs = container.querySelectorAll('svg');
-        const paths = container.querySelectorAll('path');
-        const canvasEls = container.querySelectorAll('canvas');
-        console.warn('[BRUTE-v2] SVGs:', svgs.length, 'paths:', paths.length, 'canvas:', canvasEls.length);
-        console.warn('[BRUTE-v2] map center:', map.getCenter().lat, map.getCenter().lng, 'zoom:', map.getZoom());
-        // Check container visibility
-        const rect = container.getBoundingClientRect();
-        console.warn('[BRUTE-v2] container rect:', rect.width, 'x', rect.height, 'visible:', rect.width > 0 && rect.height > 0);
-        // Check pane transform
-        const pane = map.getPane('overlayPane');
-        if (pane) {
-          console.warn('[BRUTE-v2] overlayPane transform:', pane.style.transform);
-          console.warn('[BRUTE-v2] overlayPane children:', pane.children.length);
+          layer.on('click', () => setSelected({ geo }));
+          layer.addTo(featureLayer);
+          allBounds.push(bounds);
+          renderedCount += 1;
+        } catch (err) {
+          console.error('[MapaGestor] geo error:', err);
         }
-      }, 600);
+      });
+
+      reportRenderedGeometries(renderedCount);
+      onRenderedChange?.(renderedCount);
+
+      // Center map using direct setView on combined bounds center
+      if (allBounds.length > 0) {
+        const combined = allBounds.reduce((acc, b) => acc.extend(b));
+        const center = combined.getCenter();
+
+        fixAllPanes();
+        try { map.invalidateSize({ animate: false }); } catch { /* ignore */ }
+        fixAllPanes();
+
+        // Use setView instead of fitBounds to avoid _leaflet_pos in complex path
+        try {
+          map.setView(center, 14, { animate: false });
+          console.warn('[MapaGestor] setView OK:', center.lat, center.lng);
+        } catch {
+          console.warn('[MapaGestor] setView failed, trying flyTo');
+          try { map.flyTo(center, 14, { animate: false, duration: 0 }); } catch { /* give up */ }
+        }
+
+        // After setView, try fitBounds for proper zoom
+        setTimeout(() => {
+          fixAllPanes();
+          try {
+            map.fitBounds(combined, { padding: [30, 30], maxZoom: 17, animate: false });
+            console.warn('[MapaGestor] fitBounds OK');
+          } catch {
+            console.warn('[MapaGestor] fitBounds failed — using setView zoom');
+          }
+        }, 200);
+      }
     }, 300);
 
     return () => window.clearTimeout(timer);
