@@ -256,7 +256,7 @@ const Index = () => {
     zootecnico: goToVisaoZooHub,
     indicadores: goToVisaoZooHub,
     visao_anual_zoo: goToVisaoZooHub,
-    conciliacao_categoria: goToVisaoZooHub,
+    
     preco_mercado: goToVisaoZooHub,
     graficos_analise: goToVisaoZooHub,
     movimentacao: goToVisaoZooHub,
