@@ -365,7 +365,9 @@ export function useIndicadoresZootecnicos(
 
   useEffect(() => { loadPesosFechamento(); }, [loadPesosFechamento]);
 
-  // --- Load valor rebanho (current + YoY + MoM) directly from valor_rebanho_fechamento.valor_total ---
+  // --- Load valor rebanho EXCLUSIVELY from valor_rebanho_fechamento.valor_total ---
+  // REGRA GLOBAL: nunca recalcular valor do rebanho. Fonte única é a tabela oficial.
+  // Global = soma exata dos valor_total das fazendas no mesmo ano_mes.
   const loadValorRebanho = useCallback(async () => {
     if (!fazendaId) {
       setValorRebanhoData(null);
@@ -387,52 +389,28 @@ export function useIndicadoresZootecnicos(
       if (isGlobal) {
         const fids = globalFazendaIds || [];
         if (fids.length === 0) {
-          setValorRebanhoData(null);
-          setValorRebanhoYoY(null);
-          setValorRebanhoMoM(null);
+          setValorRebanhoData(null); setValorRebanhoYoY(null); setValorRebanhoMoM(null);
           setLoadingValor(false);
           return;
         }
 
-        // Load fechamento data for all fazendas for current, YoY, MoM
         const [curRes, yoyRes, momRes] = await Promise.all([
           supabase.from('valor_rebanho_fechamento').select('fazenda_id, status, valor_total').in('fazenda_id', fids).eq('ano_mes', anoMes),
           supabase.from('valor_rebanho_fechamento').select('fazenda_id, status, valor_total').in('fazenda_id', fids).eq('ano_mes', anoMesYoY),
           supabase.from('valor_rebanho_fechamento').select('fazenda_id, status, valor_total').in('fazenda_id', fids).eq('ano_mes', anoMesMoM),
         ]);
 
-        // Current: sum valor_total from all fazendas that have fechamento
         const curRows = curRes.data || [];
-        if (curRows.length > 0) {
-          const totalGlobal = curRows.reduce((s, r) => s + (Number(r.valor_total) || 0), 0);
-          const allFechado = curRows.length === fids.length && curRows.every(r => r.status === 'fechado');
-          // If valor_total is 0 for all (legacy data without stored total), fallback to recalculation
-          if (totalGlobal > 0) {
-            setValorRebanhoData({ total: totalGlobal, fechado: allFechado });
-          } else {
-            // Fallback: recalculate for legacy data
-            await loadValorRebanhoFallback();
-            setLoadingValor(false);
-            return;
-          }
-        } else {
-          // No fechamento: try recalculation fallback (open months)
-          await loadValorRebanhoFallback();
-          setLoadingValor(false);
-          return;
-        }
+        const totalGlobal = curRows.reduce((s, r) => s + (Number(r.valor_total) || 0), 0);
+        const allFechado = curRows.length === fids.length && curRows.every(r => r.status === 'fechado');
+        setValorRebanhoData(totalGlobal > 0 ? { total: totalGlobal, fechado: allFechado } : null);
 
-        // YoY
         const yoyRows = yoyRes.data || [];
-        const totalYoY = yoyRows.reduce((s, r) => s + (Number(r.valor_total) || 0), 0);
-        setValorRebanhoYoY(totalYoY > 0 ? totalYoY : null);
+        setValorRebanhoYoY(yoyRows.reduce((s, r) => s + (Number(r.valor_total) || 0), 0) || null);
 
-        // MoM
         const momRows = momRes.data || [];
-        const totalMoM = momRows.reduce((s, r) => s + (Number(r.valor_total) || 0), 0);
-        setValorRebanhoMoM(totalMoM > 0 ? totalMoM : null);
+        setValorRebanhoMoM(momRows.reduce((s, r) => s + (Number(r.valor_total) || 0), 0) || null);
       } else {
-        // Single fazenda
         const [curRes, yoyRes, momRes] = await Promise.all([
           supabase.from('valor_rebanho_fechamento').select('status, valor_total').eq('fazenda_id', fazendaId).eq('ano_mes', anoMes).maybeSingle(),
           supabase.from('valor_rebanho_fechamento').select('status, valor_total').eq('fazenda_id', fazendaId).eq('ano_mes', anoMesYoY).maybeSingle(),
@@ -440,22 +418,7 @@ export function useIndicadoresZootecnicos(
         ]);
 
         const curTotal = Number(curRes.data?.valor_total) || 0;
-        if (curTotal > 0) {
-          setValorRebanhoData({
-            total: curTotal,
-            fechado: curRes.data?.status === 'fechado',
-          });
-        } else if (curRes.data) {
-          // Fechamento exists but valor_total=0 (legacy), fallback
-          await loadValorRebanhoFallback();
-          setLoadingValor(false);
-          return;
-        } else {
-          // No fechamento at all, try fallback for open months
-          await loadValorRebanhoFallback();
-          setLoadingValor(false);
-          return;
-        }
+        setValorRebanhoData(curTotal > 0 ? { total: curTotal, fechado: curRes.data?.status === 'fechado' } : null);
 
         const yoyTotal = Number(yoyRes.data?.valor_total) || 0;
         setValorRebanhoYoY(yoyTotal > 0 ? yoyTotal : null);
@@ -471,86 +434,6 @@ export function useIndicadoresZootecnicos(
       setLoadingValor(false);
     }
   }, [fazendaId, isGlobal, globalFazendaIds, anoMes, ano, mes]);
-
-  /**
-   * Fallback: recalculate valor rebanho for months without stored valor_total
-   * (open months or legacy fechamentos without valor_total).
-   * Uses valor_rebanho_mensal (preco_kg) × saldo × peso oficial.
-   */
-  const loadValorRebanhoFallback = useCallback(async () => {
-    if (!fazendaId) { setValorRebanhoData(null); return; }
-
-    try {
-      if (isGlobal) {
-        const fids = globalFazendaIds || [];
-        if (fids.length === 0) { setValorRebanhoData(null); return; }
-
-        const [precosRes, fechRes, saldosDbRes] = await Promise.all([
-          supabase.from('valor_rebanho_mensal').select('fazenda_id, categoria, preco_kg').in('fazenda_id', fids).eq('ano_mes', anoMes),
-          supabase.from('valor_rebanho_fechamento').select('fazenda_id, status').in('fazenda_id', fids).eq('ano_mes', anoMes),
-          supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade, peso_medio_kg').in('fazenda_id', fids),
-        ]);
-
-        const saldosByFaz = new Map<string, SaldoInicial[]>();
-        saldosDbRes.data?.forEach((s: any) => {
-          const arr = saldosByFaz.get(s.fazenda_id) || [];
-          arr.push({ ano: s.ano, categoria: s.categoria, quantidade: s.quantidade, pesoMedioKg: s.peso_medio_kg ?? undefined });
-          saldosByFaz.set(s.fazenda_id, arr);
-        });
-
-        if (precosRes.data && precosRes.data.length > 0) {
-          const precosByFaz = new Map<string, Map<string, number>>();
-          precosRes.data.forEach(p => {
-            if (!precosByFaz.has(p.fazenda_id)) precosByFaz.set(p.fazenda_id, new Map());
-            precosByFaz.get(p.fazenda_id)!.set(p.categoria, Number(p.preco_kg));
-          });
-
-          let totalGlobal = 0;
-          for (const fid of fids) {
-            const precoMap = precosByFaz.get(fid);
-            if (!precoMap || precoMap.size === 0) continue;
-            const lancsFaz = lancamentos.filter(l => l.fazendaId === fid);
-            const saldosFaz = saldosByFaz.get(fid) || [];
-            const saldoMap = calcSaldoPorCategoriaLegado(saldosFaz, lancsFaz, ano, mes);
-            saldoMap.forEach((qtd, cat) => {
-              const preco = precoMap.get(cat) || 0;
-              const { valor: pesoKg } = resolverPesoOficial(cat, pesoFechamentoMap, saldosFaz, lancsFaz, ano, mes);
-              totalGlobal += qtd * (pesoKg || 0) * preco;
-            });
-          }
-
-          const allFechado = fechRes.data?.length === fids.length && fechRes.data.every(f => f.status === 'fechado');
-          setValorRebanhoData({ total: totalGlobal, fechado: allFechado || false });
-        } else {
-          setValorRebanhoData(null);
-        }
-      } else {
-        const [precosRes, fechRes] = await Promise.all([
-          supabase.from('valor_rebanho_mensal').select('categoria, preco_kg').eq('fazenda_id', fazendaId).eq('ano_mes', anoMes),
-          supabase.from('valor_rebanho_fechamento').select('status').eq('fazenda_id', fazendaId).eq('ano_mes', anoMes).maybeSingle(),
-        ]);
-
-        if (precosRes.data && precosRes.data.length > 0) {
-          const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
-          const precoMap = new Map(precosRes.data.map(p => [p.categoria, Number(p.preco_kg)]));
-          let total = 0;
-          saldoMap.forEach((qtd, cat) => {
-            const preco = precoMap.get(cat) || 0;
-            const { valor: pesoKg } = resolverPesoOficial(cat, pesoFechamentoMap, saldosIniciais, lancamentos, ano, mes);
-            total += qtd * (pesoKg || 0) * preco;
-          });
-          setValorRebanhoData({
-            total,
-            fechado: fechRes.data?.status === 'fechado',
-          });
-        } else {
-          setValorRebanhoData(null);
-        }
-      }
-    } catch {
-      setValorRebanhoData(null);
-    }
-  }, [fazendaId, isGlobal, globalFazendaIds, anoMes, saldosIniciais, lancamentos, ano, mes, pesoFechamentoMap]);
 
   useEffect(() => { loadValorRebanho(); }, [loadValorRebanho]);
 
