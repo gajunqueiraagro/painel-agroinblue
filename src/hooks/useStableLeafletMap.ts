@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 
-// Global monkey-patch: prevent _leaflet_pos undefined errors in flex/dynamic layouts
-const _origGetPosition = L.DomUtil.getPosition;
-L.DomUtil.getPosition = function (el: any) {
-  if (!el || el._leaflet_pos === undefined) {
-    if (el) el._leaflet_pos = L.point(0, 0);
-    return L.point(0, 0);
-  }
-  return _origGetPosition.call(this, el);
-};
+const domUtilAny = L.DomUtil as any;
+if (!domUtilAny.__lovableViewportPatched) {
+  const originalGetPosition = L.DomUtil.getPosition;
+  L.DomUtil.getPosition = function (el: any) {
+    if (!el) return L.point(0, 0);
+    if (el._leaflet_pos === undefined) {
+      el._leaflet_pos = L.point(0, 0);
+    }
+
+    try {
+      return originalGetPosition.call(this, el) || el._leaflet_pos;
+    } catch {
+      return el._leaflet_pos;
+    }
+  };
+  domUtilAny.__lovableViewportPatched = true;
+}
 
 type MapStatus = 'waiting_container' | 'ready' | 'error';
 
@@ -27,13 +35,120 @@ interface Options {
   center?: L.LatLngExpression;
   zoom?: number;
   labelZoomThreshold?: number;
+  debugControlledViewport?: boolean;
 }
+
+const serializeLatLng = (value: L.LatLngExpression | L.LatLng | null | undefined) => {
+  if (!value) return null;
+
+  try {
+    const latLng = value instanceof L.LatLng ? value : L.latLng(value as any);
+    return {
+      lat: Number(latLng.lat.toFixed(6)),
+      lng: Number(latLng.lng.toFixed(6)),
+    };
+  } catch {
+    return null;
+  }
+};
+
+const serializeBounds = (value: L.LatLngBounds | L.LatLngBoundsExpression | null | undefined) => {
+  if (!value) return null;
+
+  try {
+    const bounds = value instanceof L.LatLngBounds ? value : L.latLngBounds(value as any);
+    if (!bounds.isValid()) return null;
+
+    return {
+      southWest: serializeLatLng(bounds.getSouthWest()),
+      northEast: serializeLatLng(bounds.getNorthEast()),
+    };
+  } catch {
+    return null;
+  }
+};
+
+const getViewportSnapshot = (map: L.Map) => {
+  try {
+    return {
+      center: serializeLatLng(map.getCenter()),
+      zoom: map.getZoom(),
+    };
+  } catch (error) {
+    return {
+      center: null,
+      zoom: null,
+      errorMessage: error instanceof Error ? error.message : 'viewport_unavailable',
+    };
+  }
+};
+
+const logViewport = (map: L.Map, debugName: string, action: string, extra?: Record<string, unknown>) => {
+  console.warn('[MAP VIEWPORT]', {
+    action,
+    debugName,
+    mapId: L.Util.stamp(map),
+    ...getViewportSnapshot(map),
+    ...extra,
+  });
+};
+
+const patchViewportMethods = (map: L.Map, debugName: string, debugControlledViewport: boolean) => {
+  const mapAny = map as any;
+  if (mapAny.__viewportMethodsPatched) return;
+
+  const wrapMethod = (methodName: 'setView' | 'fitBounds' | 'flyTo' | 'invalidateSize') => {
+    const originalMethod = mapAny[methodName].bind(map);
+
+    mapAny[methodName] = (...args: any[]) => {
+      const locked = Boolean(mapAny.__viewportLocked);
+      const targetPayload: Record<string, unknown> = { action: methodName, debugName, mapId: L.Util.stamp(map), locked };
+
+      if (methodName === 'setView' || methodName === 'flyTo') {
+        targetPayload.targetCenter = serializeLatLng(args[0]);
+        targetPayload.targetZoom = typeof args[1] === 'number' ? args[1] : map.getZoom();
+      }
+
+      if (methodName === 'fitBounds') {
+        targetPayload.targetBounds = serializeBounds(args[0]);
+      }
+
+      console.warn('[MAP TARGET]', targetPayload);
+
+      if (debugControlledViewport && locked) {
+        logViewport(map, debugName, `${methodName}:blocked`, {
+          lockedTarget: mapAny.__lockedViewport ?? null,
+        });
+        return map;
+      }
+
+      try {
+        const result = originalMethod(...args);
+        logViewport(map, debugName, methodName);
+        return result;
+      } catch (error) {
+        logViewport(map, debugName, `${methodName}:error`, {
+          errorMessage: error instanceof Error ? error.message : 'unknown_error',
+        });
+        throw error;
+      }
+    };
+  };
+
+  wrapMethod('setView');
+  wrapMethod('fitBounds');
+  wrapMethod('flyTo');
+  wrapMethod('invalidateSize');
+
+  mapAny.__viewportMethodsPatched = true;
+};
 
 export function useStableLeafletMap({
   debugName,
   center = [-15.8, -47.9],
   zoom = 5,
   labelZoomThreshold = 14,
+  debugControlledViewport = false,
 }: Options) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -42,6 +157,7 @@ export function useStableLeafletMap({
   const retryTimerRef = useRef<number | null>(null);
   const resizeRafRef = useRef<number | null>(null);
   const resizeTimeoutRef = useRef<number | null>(null);
+  const lastContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [status, setStatus] = useState<MapStatus>('waiting_container');
   const [debugInfo, setDebugInfo] = useState<DebugInfo>({
@@ -57,7 +173,7 @@ export function useStableLeafletMap({
     // Debug logs silenced — uncomment for troubleshooting:
     // if (_payload) console.info(`[${debugName}] ${_message}`, _payload);
     // else console.info(`[${debugName}] ${_message}`);
-  }, []);
+  }, [debugName]);
 
   const readMetrics = useCallback(() => {
     const el = mapContainerRef.current;
@@ -77,7 +193,6 @@ export function useStableLeafletMap({
     const metrics = readMetrics();
     setDebugInfo((current) => {
       const next = { ...current, ...metrics, ...patch };
-      // Only update if something actually changed to avoid infinite ResizeObserver loops
       if (
         current.containerFound === next.containerFound &&
         current.width === next.width &&
@@ -93,6 +208,29 @@ export function useStableLeafletMap({
     return metrics;
   }, [readMetrics]);
 
+  const fixPanePos = useCallback((map: L.Map) => {
+    const mapAny = map as any;
+    const paneNames: Array<'tilePane' | 'overlayPane' | 'shadowPane' | 'markerPane' | 'tooltipPane' | 'popupPane'> = [
+      'tilePane',
+      'overlayPane',
+      'shadowPane',
+      'markerPane',
+      'tooltipPane',
+      'popupPane',
+    ];
+
+    if (mapAny._mapPane && mapAny._mapPane._leaflet_pos === undefined) {
+      mapAny._mapPane._leaflet_pos = L.point(0, 0);
+    }
+
+    paneNames.forEach((name) => {
+      const pane = map.getPane(name) as any;
+      if (pane && pane._leaflet_pos === undefined) {
+        pane._leaflet_pos = L.point(0, 0);
+      }
+    });
+  }, []);
+
   const destroyMap = useCallback(() => {
     if (resizeRafRef.current != null) {
       cancelAnimationFrame(resizeRafRef.current);
@@ -105,20 +243,17 @@ export function useStableLeafletMap({
     }
 
     if (mapInstanceRef.current) {
+      console.warn('[MAP LIFECYCLE]', 'destroy', {
+        debugName,
+        mapId: L.Util.stamp(mapInstanceRef.current),
+      });
       mapInstanceRef.current.remove();
     }
 
     mapInstanceRef.current = null;
     featureLayerRef.current = null;
     labelLayerRef.current = null;
-  }, []);
-
-  const fixPanePos = useCallback((map: L.Map) => {
-    const mapAny = map as any;
-    if (mapAny._mapPane && mapAny._mapPane._leaflet_pos === undefined) {
-      mapAny._mapPane._leaflet_pos = L.point(0, 0);
-    }
-  }, []);
+  }, [debugName]);
 
   const scheduleInvalidateSize = useCallback(() => {
     const map = mapInstanceRef.current;
@@ -126,7 +261,18 @@ export function useStableLeafletMap({
 
     const metrics = syncMetrics();
     if (metrics.width < 32 || metrics.height < 32) {
+      console.warn('[MAP VIEWPORT]', {
+        action: 'scheduleInvalidateSize:waiting_container',
+        debugName,
+        metrics,
+      });
       setStatus('waiting_container');
+      return;
+    }
+
+    if (debugControlledViewport) {
+      logViewport(map, debugName, 'scheduleInvalidateSize:ignored', { metrics });
+      setStatus('ready');
       return;
     }
 
@@ -137,15 +283,30 @@ export function useStableLeafletMap({
       cancelAnimationFrame(resizeRafRef.current);
     }
 
+    console.warn('[MAP VIEWPORT]', {
+      action: 'scheduleInvalidateSize:queued',
+      debugName,
+      metrics,
+      mapId: L.Util.stamp(map),
+    });
+
     resizeRafRef.current = requestAnimationFrame(() => {
       fixPanePos(map);
-      try { map.invalidateSize(false); } catch { /* _leaflet_pos race */ }
+      try {
+        map.invalidateSize(false);
+      } catch {
+        // logged by wrapped method
+      }
       resizeTimeoutRef.current = window.setTimeout(() => {
         fixPanePos(map);
-        try { map.invalidateSize(false); } catch { /* _leaflet_pos race */ }
+        try {
+          map.invalidateSize(false);
+        } catch {
+          // logged by wrapped method
+        }
       }, 140);
     });
-  }, [fixPanePos, syncMetrics]);
+  }, [debugControlledViewport, debugName, fixPanePos, syncMetrics]);
 
   const initializeMap = useCallback(() => {
     const el = mapContainerRef.current;
@@ -153,33 +314,72 @@ export function useStableLeafletMap({
 
     if (!el) {
       setStatus('waiting_container');
+      console.warn('[MAP LIFECYCLE]', 'container-missing', { debugName });
       return false;
     }
 
-    log('container encontrado', { altura: metrics.height, largura: metrics.width });
+    if (lastContainerRef.current && lastContainerRef.current !== el) {
+      console.warn('[MAP LIFECYCLE]', 'container-remount', { debugName });
+    }
+    lastContainerRef.current = el;
 
     if (metrics.width < 32 || metrics.height < 32) {
       setStatus('waiting_container');
-      log('altura do container', { altura: metrics.height, largura: metrics.width });
+      console.warn('[MAP LIFECYCLE]', 'container-waiting-size', {
+        debugName,
+        metrics,
+      });
       return false;
     }
 
     if (mapInstanceRef.current && mapInstanceRef.current.getContainer() !== el) {
+      console.warn('[MAP LIFECYCLE]', 'map-instance-mismatch', {
+        debugName,
+        currentMapId: L.Util.stamp(mapInstanceRef.current),
+      });
       destroyMap();
     }
 
     if (mapInstanceRef.current) {
-      scheduleInvalidateSize();
+      console.warn('[MAP LIFECYCLE]', 'reuse-instance', {
+        debugName,
+        mapId: L.Util.stamp(mapInstanceRef.current),
+      });
+      if (!debugControlledViewport) {
+        scheduleInvalidateSize();
+      }
       return true;
     }
 
     try {
-
       const map = L.map(el, {
         center,
         zoom,
         zoomControl: false,
         preferCanvas: false,
+      });
+
+      patchViewportMethods(map, debugName, debugControlledViewport);
+      fixPanePos(map);
+
+      console.warn('[MAP LIFECYCLE]', 'create', {
+        debugName,
+        mapId: L.Util.stamp(map),
+        controlled: debugControlledViewport,
+        metrics,
+      });
+
+      map.on('moveend', () => logViewport(map, debugName, 'moveend:event'));
+      map.on('zoomend', () => logViewport(map, debugName, 'zoomend:event'));
+      map.on('resize', (event: L.ResizeEvent) => {
+        console.warn('[MAP VIEWPORT]', {
+          action: 'resize:event',
+          debugName,
+          mapId: L.Util.stamp(map),
+          oldSize: event.oldSize,
+          newSize: event.newSize,
+          ...getViewportSnapshot(map),
+        });
       });
 
       L.control.zoom({ position: 'bottomright' }).addTo(map);
@@ -191,22 +391,16 @@ export function useStableLeafletMap({
       const featureLayer = L.layerGroup().addTo(map);
       const labelLayer = L.layerGroup().addTo(map);
 
-      // Fix _leaflet_pos on ALL panes
-      ['mapPane', 'tilePane', 'overlayPane', 'shadowPane', 'markerPane', 'tooltipPane', 'popupPane'].forEach(name => {
-        const pane = map.getPane(name) as any;
-        if (pane && pane._leaflet_pos === undefined) {
-          pane._leaflet_pos = L.point(0, 0);
-        }
-      });
-
       const syncLabelVisibility = () => {
         if (!labelLayerRef.current || !mapInstanceRef.current) return;
+
         if (mapInstanceRef.current.getZoom() >= labelZoomThreshold) {
           if (!mapInstanceRef.current.hasLayer(labelLayerRef.current)) {
             mapInstanceRef.current.addLayer(labelLayerRef.current);
           }
           return;
         }
+
         if (mapInstanceRef.current.hasLayer(labelLayerRef.current)) {
           mapInstanceRef.current.removeLayer(labelLayerRef.current);
         }
@@ -228,7 +422,16 @@ export function useStableLeafletMap({
         retryTimerRef.current = null;
       }
 
-      scheduleInvalidateSize();
+      if (debugControlledViewport) {
+        console.warn('[MAP VIEWPORT]', {
+          action: 'post-create-auto-viewport-disabled',
+          debugName,
+          mapId: L.Util.stamp(map),
+        });
+      } else {
+        scheduleInvalidateSize();
+      }
+
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro desconhecido ao inicializar o mapa';
@@ -238,7 +441,7 @@ export function useStableLeafletMap({
       console.error(`[${debugName}] Falha ao inicializar mapa`, error);
       return false;
     }
-  }, [center, debugName, destroyMap, labelZoomThreshold, log, scheduleInvalidateSize, syncMetrics, zoom]);
+  }, [center, debugControlledViewport, debugName, destroyMap, fixPanePos, labelZoomThreshold, log, scheduleInvalidateSize, syncMetrics, zoom]);
 
   const reportRenderedGeometries = useCallback((count: number) => {
     setDebugInfo((current) => ({ ...current, renderedGeometries: count }));
@@ -249,21 +452,47 @@ export function useStableLeafletMap({
     let active = true;
     const container = mapContainerRef.current;
 
+    console.warn('[MAP LIFECYCLE]', 'effect-mount', {
+      debugName,
+      controlled: debugControlledViewport,
+      hasContainer: Boolean(container),
+    });
+
     const tryInitialize = () => {
       if (!active) return;
 
       const ready = initializeMap();
       if (!ready) {
+        if (debugControlledViewport) {
+          console.warn('[MAP LIFECYCLE]', 'init-not-ready-no-retry', { debugName });
+          return;
+        }
         retryTimerRef.current = window.setTimeout(tryInitialize, 160);
       }
     };
 
     tryInitialize();
 
-    const resizeObserver = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(() => {
-          const metrics = readMetrics();
+    if (debugControlledViewport) {
+      console.warn('[MAP VIEWPORT]', {
+        action: 'resizeObserver:disabled',
+        debugName,
+      });
+      console.warn('[MAP VIEWPORT]', {
+        action: 'windowResizeHandler:disabled',
+        debugName,
+      });
+    }
 
+    const resizeObserver = !debugControlledViewport && typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => {
+          console.warn('[MAP VIEWPORT]', {
+            action: 'resizeObserver:callback',
+            debugName,
+            metrics: readMetrics(),
+          });
+
+          const metrics = readMetrics();
           if (metrics.width < 32 || metrics.height < 32) {
             setStatus('waiting_container');
             return;
@@ -286,6 +515,12 @@ export function useStableLeafletMap({
     }
 
     const handleWindowResize = () => {
+      console.warn('[MAP VIEWPORT]', {
+        action: 'windowResize:callback',
+        debugName,
+        metrics: readMetrics(),
+      });
+
       if (!mapInstanceRef.current) {
         initializeMap();
         return;
@@ -294,10 +529,14 @@ export function useStableLeafletMap({
       scheduleInvalidateSize();
     };
 
-    window.addEventListener('resize', handleWindowResize);
+    if (!debugControlledViewport) {
+      window.addEventListener('resize', handleWindowResize);
+    }
 
     return () => {
       active = false;
+
+      console.warn('[MAP LIFECYCLE]', 'effect-cleanup', { debugName });
 
       if (retryTimerRef.current != null) {
         window.clearTimeout(retryTimerRef.current);
@@ -305,10 +544,12 @@ export function useStableLeafletMap({
       }
 
       resizeObserver?.disconnect();
-      window.removeEventListener('resize', handleWindowResize);
+      if (!debugControlledViewport) {
+        window.removeEventListener('resize', handleWindowResize);
+      }
       destroyMap();
     };
-  }, [destroyMap, initializeMap, log, scheduleInvalidateSize, syncMetrics]);
+  }, [debugControlledViewport, debugName, destroyMap, initializeMap, readMetrics, scheduleInvalidateSize]);
 
   return {
     mapContainerRef,
