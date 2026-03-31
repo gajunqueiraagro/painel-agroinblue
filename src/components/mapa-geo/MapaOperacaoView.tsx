@@ -45,11 +45,12 @@ interface Props {
   geoLoading: boolean;
   onUpload: () => void;
   onRefresh?: () => void;
+  onRenderedChange?: (count: number) => void;
 }
 
 type QuickAction = 'entrada' | 'saida' | 'transferencia' | null;
 
-export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, geoLoading, onUpload, onRefresh }: Props) {
+export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, geoLoading, onUpload, onRefresh, onRenderedChange }: Props) {
   const { fazendaAtual } = useFazenda();
   const { registrarMovimentacao } = usePastoMovimentacoes();
 
@@ -91,6 +92,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
 
       if (geometrias.length === 0) {
         reportRenderedGeometries(0);
+        onRenderedChange?.(0);
         return;
       }
 
@@ -138,6 +140,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
       });
 
       reportRenderedGeometries(renderedCount);
+      onRenderedChange?.(renderedCount);
 
       const fitKey = `${geometrySignature}:${debugInfo.width}:${debugInfo.height}`;
       if (allBounds.length > 0 && fitKey !== lastFitKeyRef.current) {

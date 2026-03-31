@@ -36,13 +36,14 @@ interface Props {
   ocupacoes: Map<string, PastoOcupacao>;
   geoLoading: boolean;
   onUpload: () => void;
+  onRenderedChange?: (count: number) => void;
 }
 
 interface SelectedGeo {
   geo: PastoGeometria;
 }
 
-export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUpload }: Props) {
+export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUpload, onRenderedChange }: Props) {
   const [selected, setSelected] = useState<SelectedGeo | null>(null);
   const lastFitKeyRef = useRef('');
   const {
@@ -114,6 +115,7 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
 
       if (geometrias.length === 0) {
         reportRenderedGeometries(0);
+        onRenderedChange?.(0);
         return;
       }
 
@@ -165,6 +167,7 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
       });
 
       reportRenderedGeometries(renderedCount);
+      onRenderedChange?.(renderedCount);
 
       const fitKey = `${geometrySignature}:${debugInfo.width}:${debugInfo.height}`;
       if (allBounds.length > 0 && fitKey !== lastFitKeyRef.current) {

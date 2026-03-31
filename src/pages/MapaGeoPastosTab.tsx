@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { usePastoGeometrias } from '@/hooks/usePastoGeometrias';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,12 @@ export function MapaGeoPastosTab() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('gestor');
   const [expanded, setExpanded] = useState(false);
+  const renderedCountRef = useRef(0);
+  const [renderedCount, setRenderedCount] = useState(0);
+  const onRenderedChange = useCallback((n: number) => {
+    renderedCountRef.current = n;
+    setRenderedCount(n);
+  }, []);
 
   const hasGeo = geometrias.length > 0;
 
@@ -61,12 +67,12 @@ export function MapaGeoPastosTab() {
 
   // DEBUG temporário — remover após validação
   const debugBanner = (
-    <div className="flex-shrink-0 flex items-center gap-3 px-3 py-1 bg-muted/60 border-b border-border text-[10px] text-muted-foreground font-mono">
-      <span>🔍 Fazenda: <strong className="text-foreground">{fazendaAtual?.nome || '—'}</strong></span>
-      <span>ID: {fazendaAtual?.id?.slice(0, 8) || '—'}</span>
-      <span>Geometrias carregadas: <strong className="text-foreground">{geometrias.length}</strong></span>
-      <span>Pastos: {pastos.length}</span>
-      <span>{geoLoading ? '⏳ Carregando...' : '✅ Pronto'}</span>
+    <div className="flex-shrink-0 flex flex-wrap items-center gap-3 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 text-[11px] font-mono">
+      <span className="text-muted-foreground">🔍 Fazenda: <strong className="text-foreground">{fazendaAtual?.nome || '—'}</strong></span>
+      <span className="text-muted-foreground">fazenda_id: <strong className="text-foreground">{fazendaAtual?.id || '—'}</strong></span>
+      <span className="text-muted-foreground">Carregadas: <strong className={geometrias.length > 0 ? 'text-green-600 dark:text-green-400' : 'text-destructive'}>{geometrias.length}</strong></span>
+      <span className="text-muted-foreground">Renderizadas: <strong className={renderedCount > 0 ? 'text-green-600 dark:text-green-400' : 'text-destructive'}>{renderedCount}</strong></span>
+      <span>{geoLoading ? '⏳ Carregando...' : '✅'}</span>
     </div>
   );
 
@@ -129,6 +135,7 @@ export function MapaGeoPastosTab() {
           ocupacoes={ocupacoes}
           geoLoading={geoLoading}
           onUpload={() => setUploadOpen(true)}
+          onRenderedChange={onRenderedChange}
         />
       )}
       {viewMode === 'operacao' && (
@@ -140,6 +147,7 @@ export function MapaGeoPastosTab() {
           geoLoading={geoLoading}
           onUpload={() => setUploadOpen(true)}
           onRefresh={() => { loadGeometrias(); reloadOcupacao(); }}
+          onRenderedChange={onRenderedChange}
         />
       )}
       {viewMode === 'validacao' && (
