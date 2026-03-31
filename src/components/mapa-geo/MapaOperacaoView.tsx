@@ -18,18 +18,20 @@ import type { PastoGeometria } from '@/hooks/usePastoGeometrias';
 import type { Pasto } from '@/hooks/usePastos';
 import type { PastoOcupacao } from '@/hooks/usePastoOcupacao';
 import { toast } from 'sonner';
+import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
 
 const STATUS_STYLES: Record<string, { fillColor: string; color: string }> = {
-  adequado:    { fillColor: 'hsl(145, 40%, 68%)', color: 'hsl(145, 35%, 42%)' },
-  atencao:     { fillColor: 'hsl(45, 65%, 70%)',  color: 'hsl(45, 50%, 42%)' },
-  pressao:     { fillColor: 'hsl(0, 50%, 68%)',   color: 'hsl(0, 40%, 42%)' },
-  sem_ocupacao:{ fillColor: 'hsl(220, 8%, 78%)',   color: 'hsl(220, 8%, 55%)' },
+  adequado: { fillColor: 'hsl(145, 40%, 68%)', color: 'hsl(145, 35%, 42%)' },
+  atencao: { fillColor: 'hsl(45, 65%, 70%)', color: 'hsl(45, 50%, 42%)' },
+  pressao: { fillColor: 'hsl(0, 50%, 68%)', color: 'hsl(0, 40%, 42%)' },
+  sem_ocupacao: { fillColor: 'hsl(220, 8%, 78%)', color: 'hsl(220, 8%, 55%)' },
 };
 
 function getOpStyle(status: string, isSelected: boolean) {
   if (isSelected) {
     return { color: 'hsl(213, 75%, 35%)', weight: 2.5, fillColor: 'hsl(213, 65%, 50%)', fillOpacity: 0.4 };
   }
+
   const s = STATUS_STYLES[status] || STATUS_STYLES.sem_ocupacao;
   return { color: s.color, weight: 0.8, fillColor: s.fillColor, fillOpacity: 0.2 };
 }
@@ -52,98 +54,72 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
 
   const [selectedGeo, setSelectedGeo] = useState<PastoGeometria | null>(null);
   const [action, setAction] = useState<QuickAction>(null);
-
   const [qty, setQty] = useState('');
   const [cat, setCat] = useState('');
   const [ref, setRef] = useState('');
   const [destino, setDestino] = useState('');
   const [saving, setSaving] = useState(false);
+  const lastFitKeyRef = useRef('');
 
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstance = useRef<L.Map | null>(null);
-  const layerRef = useRef<L.LayerGroup | null>(null);
-  const labelLayerRef = useRef<L.LayerGroup | null>(null);
+  const {
+    mapContainerRef,
+    mapInstanceRef,
+    featureLayerRef,
+    labelLayerRef,
+    status: mapStatus,
+    debugInfo,
+    scheduleInvalidateSize,
+    reportRenderedGeometries,
+  } = useStableLeafletMap({ debugName: 'MapaOperacao' });
 
   const hasGeo = geometrias.length > 0;
-  const selectedPasto = selectedGeo?.pasto_id ? pastos.find(p => p.id === selectedGeo.pasto_id) : null;
+  const selectedPasto = selectedGeo?.pasto_id ? pastos.find((p) => p.id === selectedGeo.pasto_id) : null;
   const selectedOc = selectedGeo?.pasto_id ? ocupacoes.get(selectedGeo.pasto_id) : null;
+  const geometrySignature = geometrias.map((geo) => `${geo.id}:${geo.pasto_id ?? 'sem-vinculo'}`).join('|');
 
-  // Init map
   useEffect(() => {
-    const el = mapRef.current;
-    if (!el) return;
-    if (mapInstance.current) {
-      mapInstance.current.remove();
-      mapInstance.current = null;
-      layerRef.current = null;
-      labelLayerRef.current = null;
-    }
-    const map = L.map(el, { center: [-15.8, -47.9], zoom: 5, zoomControl: false });
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap', maxZoom: 19,
-    }).addTo(map);
-    layerRef.current = L.layerGroup().addTo(map);
-    labelLayerRef.current = L.layerGroup().addTo(map);
-    mapInstance.current = map;
+    const map = mapInstanceRef.current;
+    const featureLayer = featureLayerRef.current;
+    const labelLayer = labelLayerRef.current;
+    if (!map || !featureLayer || !labelLayer) return;
 
-    const updateLabels = () => {
-      const zoom = map.getZoom();
-      const ll = labelLayerRef.current;
-      if (!ll) return;
-      if (zoom >= 14) {
-        if (!map.hasLayer(ll)) map.addLayer(ll);
-      } else {
-        if (map.hasLayer(ll)) map.removeLayer(ll);
+    const timer = window.setTimeout(() => {
+      scheduleInvalidateSize();
+      featureLayer.clearLayers();
+      labelLayer.clearLayers();
+
+      if (geometrias.length === 0) {
+        reportRenderedGeometries(0);
+        return;
       }
-    };
-    map.on('zoomend', updateLabels);
 
-    requestAnimationFrame(() => map.invalidateSize());
-    const ro = new ResizeObserver(() => map.invalidateSize());
-    ro.observe(el);
-    return () => {
-      ro.disconnect();
-      map.remove();
-      mapInstance.current = null;
-      layerRef.current = null;
-      labelLayerRef.current = null;
-    };
-  }, []);
-
-  // Draw polygons
-  useEffect(() => {
-    const map = mapInstance.current;
-    const lg = layerRef.current;
-    const ll = labelLayerRef.current;
-    if (!map || !lg || !ll) return;
-    const timer = setTimeout(() => {
-      map.invalidateSize();
-      lg.clearLayers();
-      ll.clearLayers();
-      if (geometrias.length === 0) return;
       const allBounds: L.LatLngBounds[] = [];
+      let renderedCount = 0;
+
       geometrias.forEach((geo) => {
         try {
-          const isSel = selectedGeo?.id === geo.id;
+          const isSelected = selectedGeo?.id === geo.id;
           const oc = geo.pasto_id ? ocupacoes.get(geo.pasto_id) : null;
           const status = oc?.status || 'sem_ocupacao';
 
-          const layer = L.geoJSON(geo.geojson as any, { style: getOpStyle(status, isSel) });
-          const b = layer.getBounds();
-          if (!b.isValid()) return;
+          const layer = L.geoJSON(geo.geojson as GeoJSON.GeoJsonObject, {
+            style: getOpStyle(status, isSelected),
+          });
+          const bounds = layer.getBounds();
+          if (!bounds.isValid()) return;
 
           const shortName = geo.nome_original || '';
           if (shortName) {
             const kgLabel = oc?.kg_ha != null ? `<br/><span class="kg-value">${formatNum(oc.kg_ha, 0)}</span>` : '';
             const label = L.divIcon({
-              className: isSel ? 'pasto-label-selected' : 'pasto-label-small',
+              className: isSelected ? 'pasto-label-selected' : 'pasto-label-small',
               html: `<span>${shortName}${kgLabel}</span>`,
             });
-            if (isSel) {
-              L.marker(b.getCenter(), { icon: label, interactive: false }).addTo(lg);
+
+            if (isSelected) {
+              L.marker(bounds.getCenter(), { icon: label, interactive: false }).addTo(featureLayer);
             } else {
-              L.marker(b.getCenter(), { icon: label, interactive: false }).addTo(ll);
+              L.marker(bounds.getCenter(), { icon: label, interactive: false }).addTo(labelLayer);
             }
           }
 
@@ -152,22 +128,41 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
             setAction(null);
             resetForm();
           });
-          layer.addTo(lg);
-          allBounds.push(b);
-        } catch (err) {
-          console.error('[MapaOp] Erro:', err);
+          layer.addTo(featureLayer);
+          allBounds.push(bounds);
+          renderedCount += 1;
+        } catch (error) {
+          console.error('[MapaOperacao] Erro geometria:', error);
         }
       });
-      if (allBounds.length > 0) {
-        const combined = allBounds.reduce((acc, b) => acc.extend(b));
-        map.fitBounds(combined, { padding: [30, 30], maxZoom: 17 });
+
+      reportRenderedGeometries(renderedCount);
+
+      const fitKey = `${geometrySignature}:${debugInfo.width}:${debugInfo.height}`;
+      if (allBounds.length > 0 && fitKey !== lastFitKeyRef.current) {
+        lastFitKeyRef.current = fitKey;
+        const combinedBounds = allBounds.reduce((acc, bounds) => acc.extend(bounds));
+        map.fitBounds(combinedBounds, { padding: [30, 30], maxZoom: 17 });
       }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [geometrias, selectedGeo, ocupacoes]);
+    }, 220);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    debugInfo.height,
+    debugInfo.width,
+    geometrias,
+    geometrySignature,
+    ocupacoes,
+    reportRenderedGeometries,
+    scheduleInvalidateSize,
+    selectedGeo,
+  ]);
 
   const resetForm = () => {
-    setQty(''); setCat(''); setRef(''); setDestino('');
+    setQty('');
+    setCat('');
+    setRef('');
+    setDestino('');
   };
 
   const handleSave = async () => {
@@ -175,10 +170,12 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
       toast.error('Preencha a quantidade');
       return;
     }
+
     if (action === 'transferencia' && !destino) {
       toast.error('Selecione o pasto de destino');
       return;
     }
+
     setSaving(true);
     const today = new Date().toISOString().slice(0, 10);
     const success = await registrarMovimentacao({
@@ -193,6 +190,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
       referencia_rebanho: ref || null,
     });
     setSaving(false);
+
     if (success) {
       setAction(null);
       resetForm();
@@ -207,21 +205,37 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
   };
 
   return (
-    <div className="flex flex-col h-full gap-1.5">
+    <div className="flex flex-col h-full min-h-0 gap-1.5">
       <div className="flex-1 min-h-0 flex gap-1.5 pb-1">
-        {/* Map card */}
-        <Card className="flex-1 min-h-0 relative overflow-hidden">
-          <div ref={mapRef} className="absolute inset-0 rounded-lg" style={{ zIndex: 0 }} />
+        <Card className="flex-1 min-h-[320px] sm:min-h-[400px] relative overflow-hidden">
+          <div className="absolute inset-0 rounded-lg border border-dashed border-border/70 bg-muted/20">
+            <div ref={mapContainerRef} className="h-full w-full rounded-lg" style={{ zIndex: 0 }} />
+          </div>
           {geoLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/60 z-10 rounded-lg">
               <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+          {hasGeo && !geoLoading && mapStatus !== 'ready' && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/72 z-10 rounded-lg px-4">
+              <div className="rounded-md border border-border bg-card/95 px-3 py-2 text-center shadow-sm">
+                <p className="text-[11px] font-medium text-foreground">
+                  {mapStatus === 'error' ? 'Falha ao inicializar o mapa' : 'Preparando mapa...'}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Container {debugInfo.width}×{debugInfo.height}px
+                </p>
+              </div>
             </div>
           )}
           {!hasGeo && !geoLoading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-card z-10 rounded-lg">
               <MapPin className="h-10 w-10 text-muted-foreground/20" />
               <p className="text-xs text-muted-foreground">Importe o mapa para começar</p>
-              <Button size="sm" onClick={onUpload}><Upload className="h-3.5 w-3.5 mr-1" />Importar</Button>
+              <Button size="sm" onClick={onUpload}>
+                <Upload className="h-3.5 w-3.5 mr-1" />
+                Importar
+              </Button>
             </div>
           )}
           {hasGeo && !selectedGeo && !geoLoading && (
@@ -229,7 +243,6 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
               <p className="text-[9px] text-muted-foreground font-medium">Toque em um pasto para registrar movimentação</p>
             </div>
           )}
-          {/* Legend */}
           {hasGeo && (
             <div className="absolute bottom-2 left-2 bg-card/90 backdrop-blur-sm rounded border border-border px-1.5 py-1 z-10">
               <div className="flex flex-wrap gap-x-2 gap-y-0.5">
@@ -240,7 +253,13 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
                   { key: 'sem_ocupacao', label: 'Sem Ocup.' },
                 ] as const).map(({ key, label }) => (
                   <div key={key} className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: STATUS_STYLES[key].fillColor, border: `1px solid ${STATUS_STYLES[key].color}` }} />
+                    <div
+                      className="w-2 h-2 rounded-sm"
+                      style={{
+                        backgroundColor: STATUS_STYLES[key].fillColor,
+                        border: `1px solid ${STATUS_STYLES[key].color}`,
+                      }}
+                    />
                     <span className="text-[7px] text-muted-foreground">{label}</span>
                   </div>
                 ))}
@@ -249,7 +268,6 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
           )}
         </Card>
 
-        {/* Action panel — desktop side */}
         {selectedGeo && (
           <Card className="hidden sm:flex flex-col w-56 flex-shrink-0 overflow-hidden">
             <div className="p-2 overflow-y-auto flex-1 space-y-1.5">
@@ -296,32 +314,68 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
                   <Separator />
                   <p className="text-[9px] text-muted-foreground font-medium">O que deseja registrar?</p>
                   <div className="space-y-1">
-                    <ActionButton icon={<LogIn className="h-3 w-3" />} label="Entrada" color="text-green-700 bg-green-50 border-green-200 hover:bg-green-100" onClick={() => setAction('entrada')} />
-                    <ActionButton icon={<LogOut className="h-3 w-3" />} label="Saída" color="text-red-700 bg-red-50 border-red-200 hover:bg-red-100" onClick={() => setAction('saida')} />
-                    <ActionButton icon={<ArrowRightLeft className="h-3 w-3" />} label="Transferência" color="text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100" onClick={() => setAction('transferencia')} />
+                    <ActionButton
+                      icon={<LogIn className="h-3 w-3" />}
+                      label="Entrada"
+                      color="text-green-700 bg-green-50 border-green-200 hover:bg-green-100"
+                      onClick={() => setAction('entrada')}
+                    />
+                    <ActionButton
+                      icon={<LogOut className="h-3 w-3" />}
+                      label="Saída"
+                      color="text-red-700 bg-red-50 border-red-200 hover:bg-red-100"
+                      onClick={() => setAction('saida')}
+                    />
+                    <ActionButton
+                      icon={<ArrowRightLeft className="h-3 w-3" />}
+                      label="Transferência"
+                      color="text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100"
+                      onClick={() => setAction('transferencia')}
+                    />
                   </div>
                 </>
               ) : (
                 <>
                   <Separator />
                   <div className="flex items-center justify-between">
-                    <Badge variant="secondary" className="text-[8px] h-3.5 capitalize">{action}</Badge>
-                    <Button variant="ghost" size="sm" className="h-4 text-[8px] text-muted-foreground" onClick={() => { setAction(null); resetForm(); }}>
+                    <Badge variant="secondary" className="text-[8px] h-3.5 capitalize">
+                      {action}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-4 text-[8px] text-muted-foreground"
+                      onClick={() => {
+                        setAction(null);
+                        resetForm();
+                      }}
+                    >
                       Voltar
                     </Button>
                   </div>
                   <div className="space-y-1.5">
                     <div>
                       <Label className="text-[9px]">Quantidade *</Label>
-                      <Input type="number" min={1} value={qty} onChange={e => setQty(e.target.value)} className="h-7 mt-0.5 text-[10px]" placeholder="Ex: 50" />
+                      <Input
+                        type="number"
+                        min={1}
+                        value={qty}
+                        onChange={(event) => setQty(event.target.value)}
+                        className="h-7 mt-0.5 text-[10px]"
+                        placeholder="Ex: 50"
+                      />
                     </div>
                     <div>
                       <Label className="text-[9px]">Categoria</Label>
                       <Select value={cat} onValueChange={setCat}>
-                        <SelectTrigger className="h-7 mt-0.5 text-[10px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectTrigger className="h-7 mt-0.5 text-[10px]">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
                         <SelectContent className="max-h-48 overflow-y-auto">
-                          {categorias.map(c => (
-                            <SelectItem key={c.id} value={c.codigo}>{c.nome}</SelectItem>
+                          {categorias.map((categoria) => (
+                            <SelectItem key={categoria.id} value={categoria.codigo}>
+                              {categoria.nome}
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -332,7 +386,9 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
                         <SearchableSelect
                           value={destino}
                           onValueChange={setDestino}
-                          options={pastos.filter(p => p.id !== selectedPasto!.id && p.ativo).map(p => ({ value: p.id, label: p.nome }))}
+                          options={pastos
+                            .filter((pasto) => p.id !== selectedPasto.id && pasto.ativo)
+                            .map((pasto) => ({ value: pasto.id, label: pasto.nome }))}
                           placeholder="Buscar pasto..."
                           allLabel=""
                           allValue=""
@@ -342,7 +398,12 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
                     )}
                     <div>
                       <Label className="text-[9px]">Referência</Label>
-                      <Input value={ref} onChange={e => setRef(e.target.value)} className="h-7 mt-0.5 text-[10px]" placeholder="Ex: Lote A" />
+                      <Input
+                        value={ref}
+                        onChange={(event) => setRef(event.target.value)}
+                        className="h-7 mt-0.5 text-[10px]"
+                        placeholder="Ex: Lote A"
+                      />
                     </div>
                     <Button className="w-full h-7 mt-1 text-[10px]" onClick={handleSave} disabled={saving}>
                       <Check className="h-3 w-3 mr-1" />
@@ -356,14 +417,15 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
         )}
       </div>
 
-      {/* Mobile bottom panel */}
       {selectedGeo && selectedPasto && (
         <Card className="sm:hidden flex-shrink-0 p-2 space-y-1.5 mb-1">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-[11px] font-bold text-foreground">{selectedPasto.nome}</h3>
               {selectedOc?.kg_ha != null && (
-                <span className="text-[9px] text-muted-foreground">{formatNum(selectedOc.kg_ha, 0)} kg/ha · {selectedOc.cabecas} cab</span>
+                <span className="text-[9px] text-muted-foreground">
+                  {formatNum(selectedOc.kg_ha, 0)} kg/ha · {selectedOc.cabecas} cab
+                </span>
               )}
             </div>
             <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={closePanel}>
@@ -372,20 +434,58 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
           </div>
           {!action ? (
             <div className="flex gap-1.5">
-              <ActionButton icon={<LogIn className="h-3 w-3" />} label="Entrada" color="text-green-700 bg-green-50 border-green-200" onClick={() => setAction('entrada')} />
-              <ActionButton icon={<LogOut className="h-3 w-3" />} label="Saída" color="text-red-700 bg-red-50 border-red-200" onClick={() => setAction('saida')} />
-              <ActionButton icon={<ArrowRightLeft className="h-3 w-3" />} label="Transfer." color="text-blue-700 bg-blue-50 border-blue-200" onClick={() => setAction('transferencia')} />
+              <ActionButton
+                icon={<LogIn className="h-3 w-3" />}
+                label="Entrada"
+                color="text-green-700 bg-green-50 border-green-200"
+                onClick={() => setAction('entrada')}
+              />
+              <ActionButton
+                icon={<LogOut className="h-3 w-3" />}
+                label="Saída"
+                color="text-red-700 bg-red-50 border-red-200"
+                onClick={() => setAction('saida')}
+              />
+              <ActionButton
+                icon={<ArrowRightLeft className="h-3 w-3" />}
+                label="Transfer."
+                color="text-blue-700 bg-blue-50 border-blue-200"
+                onClick={() => setAction('transferencia')}
+              />
             </div>
           ) : (
             <div className="space-y-1.5">
               <div className="flex gap-1.5">
-                <Input type="number" min={1} value={qty} onChange={e => setQty(e.target.value)} className="h-7 flex-1 text-[10px]" placeholder="Qtd" />
-                <Input value={ref} onChange={e => setRef(e.target.value)} className="h-7 flex-1 text-[10px]" placeholder="Referência" />
+                <Input
+                  type="number"
+                  min={1}
+                  value={qty}
+                  onChange={(event) => setQty(event.target.value)}
+                  className="h-7 flex-1 text-[10px]"
+                  placeholder="Qtd"
+                />
+                <Input
+                  value={ref}
+                  onChange={(event) => setRef(event.target.value)}
+                  className="h-7 flex-1 text-[10px]"
+                  placeholder="Referência"
+                />
               </div>
               <div className="flex gap-1.5">
-                <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px]" onClick={() => { setAction(null); resetForm(); }}>Cancelar</Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 h-7 text-[10px]"
+                  onClick={() => {
+                    setAction(null);
+                    resetForm();
+                  }}
+                >
+                  Cancelar
+                </Button>
                 <Button size="sm" className="flex-1 h-7 text-[10px]" onClick={handleSave} disabled={saving}>
-                  <Check className="h-3 w-3 mr-1" />{saving ? '...' : 'Registrar'}
+                  <Check className="h-3 w-3 mr-1" />
+                  {saving ? '...' : 'Registrar'}
                 </Button>
               </div>
             </div>
