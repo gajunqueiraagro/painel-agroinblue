@@ -142,11 +142,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
       if (allBounds.length > 0 && fitKey !== lastFitKeyRef.current) {
         lastFitKeyRef.current = fitKey;
         const combinedBounds = allBounds.reduce((acc, bounds) => acc.extend(bounds));
-        try {
-          map.fitBounds(combinedBounds, { padding: [30, 30], maxZoom: 17 });
-        } catch (e) {
-          console.warn('[MapaOperacao] fitBounds deferred – container not ready', e);
-        }
+        safeFitBounds(map, combinedBounds, { padding: [30, 30], maxZoom: 17 }, 'MapaOperacao');
       }
     }, 220);
 
