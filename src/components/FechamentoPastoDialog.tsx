@@ -273,7 +273,7 @@ export function FechamentoPastoDialog({
                   value={itens[idx]?.quantidade || ''}
                   onChange={e => updateItem(idx, 'quantidade', Number(e.target.value) || 0)}
                   disabled={isFechado}
-                  className="h-5 text-[10px] font-bold px-1 w-[72px] shrink-0 text-right placeholder:text-[9px] placeholder:italic placeholder:font-normal placeholder:text-muted-foreground/50"
+                  className="h-5 text-[9px] font-bold px-1 w-[72px] shrink-0 text-right placeholder:text-[8px] placeholder:italic placeholder:font-normal placeholder:text-muted-foreground/50"
                   placeholder="Qtde"
                 />
                 <Input
