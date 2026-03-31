@@ -636,7 +636,8 @@ export function useIndicadoresZootecnicos(
     const lancsAcum = filterByAnoAteMes(lancamentos, ano, mes);
     const saidasAcum = saidasDesfrute(lancsAcum);
     const arrobasSaidasAcumuladoAno = saidasAcum.reduce((s, l) => s + calcArrobasSafe(l), 0);
-    const arrobasHaAcumuladoAno = areaProdutiva > 0 ? arrobasSaidasAcumuladoAno / areaProdutiva : null;
+    // arrobasHaAcumuladoAno will be computed below using arrobasProduzidasAcumulado (biological)
+    const arrobasHaAcumuladoAnoDesfrute = areaProdutiva > 0 ? arrobasSaidasAcumuladoAno / areaProdutiva : null;
 
     // Desfrute mês
     const totalCabSaidasMes = saidasMes.reduce((s, l) => s + l.quantidade, 0);
