@@ -238,6 +238,10 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   };
 
   const handleSalvar = async () => {
+    if (bloqueadoPorConciliacao) {
+      toast.error('Não é possível salvar. Existem categorias desconciliadas entre Pasto e Sistema. Realize a conciliação antes.');
+      return;
+    }
     const items = Object.entries(precosLocal).map(([categoria, preco_kg]) => ({
       categoria,
       preco_kg,
