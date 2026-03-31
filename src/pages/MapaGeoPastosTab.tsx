@@ -59,6 +59,17 @@ export function MapaGeoPastosTab() {
     );
   }
 
+  // DEBUG temporário — remover após validação
+  const debugBanner = (
+    <div className="flex-shrink-0 flex items-center gap-3 px-3 py-1 bg-muted/60 border-b border-border text-[10px] text-muted-foreground font-mono">
+      <span>🔍 Fazenda: <strong className="text-foreground">{fazendaAtual?.nome || '—'}</strong></span>
+      <span>ID: {fazendaAtual?.id?.slice(0, 8) || '—'}</span>
+      <span>Geometrias carregadas: <strong className="text-foreground">{geometrias.length}</strong></span>
+      <span>Pastos: {pastos.length}</span>
+      <span>{geoLoading ? '⏳ Carregando...' : '✅ Pronto'}</span>
+    </div>
+  );
+
   const views: { key: ViewMode; label: string }[] = [
     { key: 'gestor', label: 'Gestor' },
     { key: 'operacao', label: 'Operação' },
@@ -168,6 +179,7 @@ export function MapaGeoPastosTab() {
   // Normal mode
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {debugBanner}
       {topBar}
       {content}
       <KmlUploadDialog
