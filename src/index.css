@@ -138,11 +138,41 @@
   border: none !important;
   pointer-events: none !important;
 }
+/* Small labels — visible only at high zoom in Gestor view */
+.pasto-label-small {
+  background: transparent !important;
+  border: none !important;
+  pointer-events: none !important;
+  white-space: nowrap;
+}
+.pasto-label-small span {
+  font-size: 7px;
+  font-weight: 600;
+  color: hsl(222, 47%, 20%);
+  text-shadow: 0 0 2px white, 0 0 2px white, 0 0 2px white;
+  letter-spacing: 0.01em;
+}
+/* Selected pasto label — Operação view */
+.pasto-label-selected {
+  background: transparent !important;
+  border: none !important;
+  pointer-events: none !important;
+  white-space: nowrap;
+}
+.pasto-label-selected span {
+  font-size: 9px;
+  font-weight: 700;
+  color: hsl(213, 75%, 30%);
+  text-shadow: 0 0 3px white, 0 0 3px white;
+  background: hsl(0 0% 100% / 0.7);
+  padding: 0px 3px;
+  border-radius: 2px;
+}
 .pasto-tooltip {
-  font-size: 11px !important;
-  line-height: 1.4 !important;
-  padding: 6px 10px !important;
-  border-radius: 6px !important;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+  font-size: 10px !important;
+  line-height: 1.3 !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.1) !important;
   border: 1px solid hsl(220, 13%, 91%) !important;
 }
