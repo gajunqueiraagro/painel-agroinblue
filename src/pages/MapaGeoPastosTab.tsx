@@ -7,6 +7,7 @@ import { KmlUploadDialog } from '@/components/mapa-geo/KmlUploadDialog';
 import { usePastos } from '@/hooks/usePastos';
 import { MapaGestorView } from '@/components/mapa-geo/MapaGestorView';
 import { MapaOperacaoView } from '@/components/mapa-geo/MapaOperacaoView';
+import { ValidacaoPoligonosView } from '@/components/mapa-geo/ValidacaoPoligonosView';
 import type { ParsedPolygon } from '@/lib/kmlParser';
 
 export interface PastoMapData {
@@ -22,12 +23,15 @@ export interface PastoMapData {
   ultimaCondicao: string | null;
 }
 
-type ViewMode = 'gestor' | 'operacao';
+type ViewMode = 'gestor' | 'operacao' | 'validacao';
 
 export function MapaGeoPastosTab() {
   const { isGlobal } = useFazenda();
   const { pastos, categorias } = usePastos();
-  const { geometrias, loading: geoLoading, salvarGeometrias, loadGeometrias } = usePastoGeometrias();
+  const {
+    geometrias, loading: geoLoading, salvarGeometrias, loadGeometrias,
+    atualizarGeometria, excluirGeometrias, vincularPasto,
+  } = usePastoGeometrias();
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('gestor');
 
@@ -52,34 +56,32 @@ export function MapaGeoPastosTab() {
     );
   }
 
+  const views: { key: ViewMode; label: string }[] = [
+    { key: 'gestor', label: 'Gestor' },
+    { key: 'operacao', label: 'Operação' },
+    { key: 'validacao', label: 'Validação' },
+  ];
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Top bar with toggle */}
       <div className="flex-shrink-0 flex items-center justify-between px-3 sm:px-4 py-2 border-b border-border bg-background">
         <div className="flex items-center gap-3">
           <h2 className="text-sm font-semibold text-foreground">Mapa de Pastos</h2>
-          {/* View toggle */}
           <div className="flex items-center bg-muted rounded-lg p-0.5">
-            <button
-              onClick={() => setViewMode('gestor')}
-              className={`px-3 py-1 rounded-md text-[11px] font-medium transition-all ${
-                viewMode === 'gestor'
-                  ? 'bg-card text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Gestor
-            </button>
-            <button
-              onClick={() => setViewMode('operacao')}
-              className={`px-3 py-1 rounded-md text-[11px] font-medium transition-all ${
-                viewMode === 'operacao'
-                  ? 'bg-card text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Operação
-            </button>
+            {views.map(v => (
+              <button
+                key={v.key}
+                onClick={() => setViewMode(v.key)}
+                className={`px-3 py-1 rounded-md text-[11px] font-medium transition-all ${
+                  viewMode === v.key
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
           </div>
         </div>
         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setUploadOpen(true)}>
@@ -90,20 +92,32 @@ export function MapaGeoPastosTab() {
 
       {/* Content area */}
       <div className="flex-1 min-h-0 p-3 sm:p-4">
-        {viewMode === 'gestor' ? (
+        {viewMode === 'gestor' && (
           <MapaGestorView
             geometrias={geometrias}
             pastos={pastos}
             geoLoading={geoLoading}
             onUpload={() => setUploadOpen(true)}
           />
-        ) : (
+        )}
+        {viewMode === 'operacao' && (
           <MapaOperacaoView
             geometrias={geometrias}
             pastos={pastos}
             categorias={categorias}
             geoLoading={geoLoading}
             onUpload={() => setUploadOpen(true)}
+            onRefresh={loadGeometrias}
+          />
+        )}
+        {viewMode === 'validacao' && (
+          <ValidacaoPoligonosView
+            geometrias={geometrias}
+            pastos={pastos}
+            geoLoading={geoLoading}
+            onUpdate={atualizarGeometria}
+            onDelete={excluirGeometrias}
+            onLink={vincularPasto}
             onRefresh={loadGeometrias}
           />
         )}
