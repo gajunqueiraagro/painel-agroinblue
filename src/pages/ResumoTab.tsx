@@ -300,12 +300,23 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
   const zooKpis = useZooKpis(lancamentos, saldosIniciais, anoNum, mesNum);
   const globalFarmKpis = useGlobalFarmKpis(lancamentos, saldosIniciais, anoNum, mesNum);
 
-  const statusGeral = useMemo((): StatusNivel => {
-    const niveis = [zootecnico.status.nivel, financeiro.status.nivel, economico.status.nivel];
+  // Derive Zoo status from the granular useStatusZootecnico (same source as detail view)
+  const zooNivel: StatusNivel = statusZoo.status as StatusNivel;
+
+  // Econômico derived from all 3 layers
+  const econNivel: StatusNivel = useMemo(() => {
+    const niveis = [zooNivel, financeiro.status.nivel];
     if (niveis.every(n => n === 'fechado')) return 'fechado';
     if (niveis.every(n => n === 'aberto')) return 'aberto';
     return 'parcial';
-  }, [zootecnico.status.nivel, financeiro.status.nivel, economico.status.nivel]);
+  }, [zooNivel, financeiro.status.nivel]);
+
+  const statusGeral = useMemo((): StatusNivel => {
+    const niveis = [zooNivel, financeiro.status.nivel, econNivel];
+    if (niveis.every(n => n === 'fechado')) return 'fechado';
+    if (niveis.every(n => n === 'aberto')) return 'aberto';
+    return 'parcial';
+  }, [zooNivel, financeiro.status.nivel, econNivel]);
 
   const mesLabel = MESES_FULL[mesNum - 1] || '';
 
@@ -380,8 +391,8 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
           <div className="flex flex-col gap-1.5">
             {[
               { label: 'Fin', desc: 'Financeiro', nivel: financeiro.status.nivel },
-              { label: 'Zoo', desc: 'Zootécnico', nivel: zootecnico.status.nivel },
-              { label: 'Econ', desc: 'Econômico', nivel: economico.status.nivel },
+              { label: 'Zoo', desc: 'Zootécnico', nivel: zooNivel },
+              { label: 'Econ', desc: 'Econômico', nivel: econNivel },
             ].map(item => (
               <div key={item.label} className="flex items-center gap-2">
                 <StatusDot nivel={item.nivel} />

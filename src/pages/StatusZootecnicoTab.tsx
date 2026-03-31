@@ -34,7 +34,7 @@ interface Props {
 }
 
 type CellStatus = 'aberto' | 'parcial' | 'fechado';
-interface MonthStatus { financeiro: CellStatus; pastos: CellStatus; categorias: CellStatus; valor: CellStatus; }
+interface MonthStatus { financeiro: CellStatus; pastos: CellStatus; categorias: CellStatus; valor: CellStatus; economico: CellStatus; }
 
 interface FazendaStatus {
   fazendaId: string;
@@ -51,6 +51,7 @@ const ROWS: { id: keyof MonthStatus; label: string; tab: TabId }[] = [
   { id: 'pastos', label: 'Fechamento de Pastos', tab: 'fechamento' },
   { id: 'categorias', label: 'Conciliação de Categorias', tab: 'conciliacao_categoria' },
   { id: 'valor', label: 'Valor do Rebanho', tab: 'valor_rebanho' },
+  { id: 'economico', label: 'Econômico', tab: 'visao_zoo_hub' },
 ];
 
 const STATUS_ORDER: Record<CellStatus, number> = { aberto: 0, parcial: 1, fechado: 2 };
@@ -251,7 +252,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
 
   // ---- Visão Anual data ----
   const [monthData, setMonthData] = useState<MonthStatus[]>(
-    Array.from({ length: 12 }, () => ({ financeiro: 'aberto' as CellStatus, pastos: 'aberto' as CellStatus, valor: 'aberto' as CellStatus, categorias: 'aberto' as CellStatus }))
+    Array.from({ length: 12 }, () => ({ financeiro: 'aberto' as CellStatus, pastos: 'aberto' as CellStatus, valor: 'aberto' as CellStatus, categorias: 'aberto' as CellStatus, economico: 'aberto' as CellStatus }))
   );
   const [loadingYear, setLoadingYear] = useState(true);
 
@@ -374,7 +375,12 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
           categoriasComSaldo: catsComSaldo.length,
         });
 
-        result.push({ financeiro: stFin, pastos: stPastos, categorias: stCatsResult.status, valor: stValor });
+        // 5. Econômico (derivado: verde se todos verdes, vermelho se todos vermelhos, senão amarelo)
+        const allStatuses = [stFin, stPastos, stCatsResult.status, stValor];
+        const stEcon: CellStatus = allStatuses.every(s => s === 'fechado') ? 'fechado'
+          : allStatuses.every(s => s === 'aberto') ? 'aberto' : 'parcial';
+
+        result.push({ financeiro: stFin, pastos: stPastos, categorias: stCatsResult.status, valor: stValor, economico: stEcon });
       }
       setMonthData(result);
     } catch (e) {
@@ -464,11 +470,18 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
                       fazendaNome: fs.fazendaNome,
                       status: fs.status as CellStatus,
                     }))
-                  : perFarmStatus.map(fs => ({
-                      fazendaId: fs.fazendaId,
-                      fazendaNome: fs.fazendaNome,
-                      status: fs[p.id as keyof MonthStatus] as CellStatus,
-                    }));
+                  : p.id === 'economico'
+                    ? perFarmStatus.map(fs => {
+                        const all: CellStatus[] = [fs.financeiro, fs.pastos, fs.categorias, fs.valor];
+                        const st: CellStatus = all.every(s => s === 'fechado') ? 'fechado'
+                          : all.every(s => s === 'aberto') ? 'aberto' : 'parcial';
+                        return { fazendaId: fs.fazendaId, fazendaNome: fs.fazendaNome, status: st };
+                      })
+                    : perFarmStatus.map(fs => ({
+                        fazendaId: fs.fazendaId,
+                        fazendaNome: fs.fazendaNome,
+                        status: fs[p.id as keyof FazendaStatus] as CellStatus,
+                      }));
                 const farmProblems = isGlobal ? farmRows.filter(fs => fs.status !== 'fechado').length : 0;
                 const hasFarmRows = farmRows.length > 0;
 
