@@ -133,7 +133,6 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
           const b = layer.getBounds();
           if (!b.isValid()) return;
 
-          // Label at high zoom: short name + kg/ha
           const shortName = geo.nome_original || '';
           if (shortName) {
             const kgLabel = oc?.kg_ha != null ? `<br/><span class="kg-value">${formatNum(oc.kg_ha, 0)}</span>` : '';
@@ -208,11 +207,11 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
   };
 
   return (
-    <div className="flex flex-col h-full gap-2">
-      <div className="flex-1 min-h-0 flex gap-2">
+    <div className="flex flex-col h-full gap-1.5">
+      <div className="flex-1 min-h-0 flex gap-1.5 pb-1">
         {/* Map card */}
-        <Card className="flex-1 min-h-0 relative overflow-hidden" style={{ minHeight: '400px' }}>
-          <div ref={mapRef} className="absolute inset-0 rounded-lg" style={{ zIndex: 0, minHeight: '400px' }} />
+        <Card className="flex-1 min-h-0 relative overflow-hidden">
+          <div ref={mapRef} className="absolute inset-0 rounded-lg" style={{ zIndex: 0 }} />
           {geoLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/60 z-10 rounded-lg">
               <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -226,14 +225,14 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
             </div>
           )}
           {hasGeo && !selectedGeo && !geoLoading && (
-            <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-card/90 backdrop-blur-sm border border-border rounded-full px-3 py-1 z-10">
-              <p className="text-[10px] text-muted-foreground font-medium">Toque em um pasto para registrar movimentação</p>
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-card/90 backdrop-blur-sm border border-border rounded-full px-3 py-0.5 z-10">
+              <p className="text-[9px] text-muted-foreground font-medium">Toque em um pasto para registrar movimentação</p>
             </div>
           )}
           {/* Legend */}
           {hasGeo && (
-            <div className="absolute bottom-2 left-2 bg-card/90 backdrop-blur-sm rounded border border-border px-2 py-1 z-10">
-              <div className="flex flex-wrap gap-x-2.5 gap-y-0.5">
+            <div className="absolute bottom-2 left-2 bg-card/90 backdrop-blur-sm rounded border border-border px-1.5 py-1 z-10">
+              <div className="flex flex-wrap gap-x-2 gap-y-0.5">
                 {([
                   { key: 'adequado', label: 'Adequado' },
                   { key: 'atencao', label: 'Atenção' },
@@ -242,7 +241,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
                 ] as const).map(({ key, label }) => (
                   <div key={key} className="flex items-center gap-1">
                     <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: STATUS_STYLES[key].fillColor, border: `1px solid ${STATUS_STYLES[key].color}` }} />
-                    <span className="text-[8px] text-muted-foreground">{label}</span>
+                    <span className="text-[7px] text-muted-foreground">{label}</span>
                   </div>
                 ))}
               </div>
@@ -252,20 +251,20 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
 
         {/* Action panel — desktop side */}
         {selectedGeo && (
-          <Card className="hidden sm:flex flex-col w-64 flex-shrink-0 overflow-hidden">
-            <div className="p-2.5 overflow-y-auto flex-1 space-y-2">
+          <Card className="hidden sm:flex flex-col w-56 flex-shrink-0 overflow-hidden">
+            <div className="p-2 overflow-y-auto flex-1 space-y-1.5">
               <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-xs font-bold text-foreground">
+                <div className="min-w-0">
+                  <h3 className="text-[11px] font-bold text-foreground truncate">
                     {selectedPasto?.nome || selectedGeo.nome_original || 'Sem nome'}
                   </h3>
                   {selectedPasto && (
-                    <div className="flex items-center gap-1.5 mt-0.5">
+                    <div className="flex items-center gap-1 mt-0.5">
                       {selectedPasto.area_produtiva_ha && (
-                        <span className="text-[10px] text-muted-foreground">{formatNum(selectedPasto.area_produtiva_ha, 1)} ha</span>
+                        <span className="text-[9px] text-muted-foreground">{formatNum(selectedPasto.area_produtiva_ha, 1)} ha</span>
                       )}
                       {selectedOc?.kg_ha != null && (
-                        <Badge variant="secondary" className="text-[8px] h-3.5 px-1.5">
+                        <Badge variant="secondary" className="text-[7px] h-3 px-1">
                           {formatNum(selectedOc.kg_ha, 0)} kg/ha
                         </Badge>
                       )}
@@ -278,48 +277,48 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
               </div>
 
               {selectedOc && (
-                <div className="rounded bg-muted/40 px-2 py-1 grid grid-cols-2 gap-1">
+                <div className="rounded bg-muted/40 px-1.5 py-1 grid grid-cols-2 gap-1">
                   <div>
-                    <p className="text-[8px] text-muted-foreground uppercase">Cabeças</p>
-                    <p className="text-[10px] font-semibold text-foreground">{selectedOc.cabecas}</p>
+                    <p className="text-[7px] text-muted-foreground uppercase">Cabeças</p>
+                    <p className="text-[9px] font-semibold text-foreground">{selectedOc.cabecas}</p>
                   </div>
                   <div>
-                    <p className="text-[8px] text-muted-foreground uppercase">Peso Total</p>
-                    <p className="text-[10px] font-semibold text-foreground">{formatNum(selectedOc.peso_total_kg, 0)} kg</p>
+                    <p className="text-[7px] text-muted-foreground uppercase">Peso Total</p>
+                    <p className="text-[9px] font-semibold text-foreground">{formatNum(selectedOc.peso_total_kg, 0)} kg</p>
                   </div>
                 </div>
               )}
 
               {!selectedPasto ? (
-                <p className="text-[10px] text-muted-foreground">Pasto sem vínculo — não é possível registrar movimentação.</p>
+                <p className="text-[9px] text-muted-foreground">Pasto sem vínculo — não é possível registrar movimentação.</p>
               ) : !action ? (
                 <>
                   <Separator />
-                  <p className="text-[10px] text-muted-foreground font-medium">O que deseja registrar?</p>
-                  <div className="space-y-1.5">
-                    <ActionButton icon={<LogIn className="h-3.5 w-3.5" />} label="Entrada" color="text-green-700 bg-green-50 border-green-200 hover:bg-green-100" onClick={() => setAction('entrada')} />
-                    <ActionButton icon={<LogOut className="h-3.5 w-3.5" />} label="Saída" color="text-red-700 bg-red-50 border-red-200 hover:bg-red-100" onClick={() => setAction('saida')} />
-                    <ActionButton icon={<ArrowRightLeft className="h-3.5 w-3.5" />} label="Transferência" color="text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100" onClick={() => setAction('transferencia')} />
+                  <p className="text-[9px] text-muted-foreground font-medium">O que deseja registrar?</p>
+                  <div className="space-y-1">
+                    <ActionButton icon={<LogIn className="h-3 w-3" />} label="Entrada" color="text-green-700 bg-green-50 border-green-200 hover:bg-green-100" onClick={() => setAction('entrada')} />
+                    <ActionButton icon={<LogOut className="h-3 w-3" />} label="Saída" color="text-red-700 bg-red-50 border-red-200 hover:bg-red-100" onClick={() => setAction('saida')} />
+                    <ActionButton icon={<ArrowRightLeft className="h-3 w-3" />} label="Transferência" color="text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100" onClick={() => setAction('transferencia')} />
                   </div>
                 </>
               ) : (
                 <>
                   <Separator />
                   <div className="flex items-center justify-between">
-                    <Badge variant="secondary" className="text-[9px] h-4 capitalize">{action}</Badge>
-                    <Button variant="ghost" size="sm" className="h-4 text-[9px] text-muted-foreground" onClick={() => { setAction(null); resetForm(); }}>
+                    <Badge variant="secondary" className="text-[8px] h-3.5 capitalize">{action}</Badge>
+                    <Button variant="ghost" size="sm" className="h-4 text-[8px] text-muted-foreground" onClick={() => { setAction(null); resetForm(); }}>
                       Voltar
                     </Button>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <div>
-                      <Label className="text-[10px]">Quantidade *</Label>
-                      <Input type="number" min={1} value={qty} onChange={e => setQty(e.target.value)} className="h-8 mt-0.5 text-xs" placeholder="Ex: 50" />
+                      <Label className="text-[9px]">Quantidade *</Label>
+                      <Input type="number" min={1} value={qty} onChange={e => setQty(e.target.value)} className="h-7 mt-0.5 text-[10px]" placeholder="Ex: 50" />
                     </div>
                     <div>
-                      <Label className="text-[10px]">Categoria</Label>
+                      <Label className="text-[9px]">Categoria</Label>
                       <Select value={cat} onValueChange={setCat}>
-                        <SelectTrigger className="h-8 mt-0.5 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectTrigger className="h-7 mt-0.5 text-[10px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
                         <SelectContent className="max-h-48 overflow-y-auto">
                           {categorias.map(c => (
                             <SelectItem key={c.id} value={c.codigo}>{c.nome}</SelectItem>
@@ -329,7 +328,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
                     </div>
                     {action === 'transferencia' && (
                       <div>
-                        <Label className="text-[10px]">Pasto Destino *</Label>
+                        <Label className="text-[9px]">Pasto Destino *</Label>
                         <SearchableSelect
                           value={destino}
                           onValueChange={setDestino}
@@ -337,16 +336,16 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
                           placeholder="Buscar pasto..."
                           allLabel=""
                           allValue=""
-                          className="h-8 mt-0.5 text-xs"
+                          className="h-7 mt-0.5 text-[10px]"
                         />
                       </div>
                     )}
                     <div>
-                      <Label className="text-[10px]">Referência</Label>
-                      <Input value={ref} onChange={e => setRef(e.target.value)} className="h-8 mt-0.5 text-xs" placeholder="Ex: Lote A" />
+                      <Label className="text-[9px]">Referência</Label>
+                      <Input value={ref} onChange={e => setRef(e.target.value)} className="h-7 mt-0.5 text-[10px]" placeholder="Ex: Lote A" />
                     </div>
-                    <Button className="w-full h-8 mt-1 text-xs" onClick={handleSave} disabled={saving}>
-                      <Check className="h-3.5 w-3.5 mr-1" />
+                    <Button className="w-full h-7 mt-1 text-[10px]" onClick={handleSave} disabled={saving}>
+                      <Check className="h-3 w-3 mr-1" />
                       {saving ? 'Salvando...' : 'Registrar'}
                     </Button>
                   </div>
@@ -359,12 +358,12 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
 
       {/* Mobile bottom panel */}
       {selectedGeo && selectedPasto && (
-        <Card className="sm:hidden flex-shrink-0 p-2.5 space-y-2">
+        <Card className="sm:hidden flex-shrink-0 p-2 space-y-1.5 mb-1">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-xs font-bold text-foreground">{selectedPasto.nome}</h3>
+              <h3 className="text-[11px] font-bold text-foreground">{selectedPasto.nome}</h3>
               {selectedOc?.kg_ha != null && (
-                <span className="text-[10px] text-muted-foreground">{formatNum(selectedOc.kg_ha, 0)} kg/ha · {selectedOc.cabecas} cab</span>
+                <span className="text-[9px] text-muted-foreground">{formatNum(selectedOc.kg_ha, 0)} kg/ha · {selectedOc.cabecas} cab</span>
               )}
             </div>
             <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={closePanel}>
@@ -373,20 +372,20 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
           </div>
           {!action ? (
             <div className="flex gap-1.5">
-              <ActionButton icon={<LogIn className="h-3.5 w-3.5" />} label="Entrada" color="text-green-700 bg-green-50 border-green-200" onClick={() => setAction('entrada')} />
-              <ActionButton icon={<LogOut className="h-3.5 w-3.5" />} label="Saída" color="text-red-700 bg-red-50 border-red-200" onClick={() => setAction('saida')} />
-              <ActionButton icon={<ArrowRightLeft className="h-3.5 w-3.5" />} label="Transfer." color="text-blue-700 bg-blue-50 border-blue-200" onClick={() => setAction('transferencia')} />
+              <ActionButton icon={<LogIn className="h-3 w-3" />} label="Entrada" color="text-green-700 bg-green-50 border-green-200" onClick={() => setAction('entrada')} />
+              <ActionButton icon={<LogOut className="h-3 w-3" />} label="Saída" color="text-red-700 bg-red-50 border-red-200" onClick={() => setAction('saida')} />
+              <ActionButton icon={<ArrowRightLeft className="h-3 w-3" />} label="Transfer." color="text-blue-700 bg-blue-50 border-blue-200" onClick={() => setAction('transferencia')} />
             </div>
           ) : (
             <div className="space-y-1.5">
               <div className="flex gap-1.5">
-                <Input type="number" min={1} value={qty} onChange={e => setQty(e.target.value)} className="h-8 flex-1 text-xs" placeholder="Qtd" />
-                <Input value={ref} onChange={e => setRef(e.target.value)} className="h-8 flex-1 text-xs" placeholder="Referência" />
+                <Input type="number" min={1} value={qty} onChange={e => setQty(e.target.value)} className="h-7 flex-1 text-[10px]" placeholder="Qtd" />
+                <Input value={ref} onChange={e => setRef(e.target.value)} className="h-7 flex-1 text-[10px]" placeholder="Referência" />
               </div>
               <div className="flex gap-1.5">
-                <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => { setAction(null); resetForm(); }}>Cancelar</Button>
-                <Button size="sm" className="flex-1 h-8 text-xs" onClick={handleSave} disabled={saving}>
-                  <Check className="h-3 w-3 mr-1" />{saving ? '...' : 'Salvar'}
+                <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px]" onClick={() => { setAction(null); resetForm(); }}>Cancelar</Button>
+                <Button size="sm" className="flex-1 h-7 text-[10px]" onClick={handleSave} disabled={saving}>
+                  <Check className="h-3 w-3 mr-1" />{saving ? '...' : 'Registrar'}
                 </Button>
               </div>
             </div>
@@ -401,7 +400,7 @@ function ActionButton({ icon, label, color, onClick }: { icon: React.ReactNode; 
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex items-center justify-center gap-1 rounded-lg border px-2 py-2 text-[11px] font-semibold transition-colors ${color}`}
+      className={`flex items-center gap-1.5 w-full px-2 py-1.5 rounded-md border text-[10px] font-medium transition-colors ${color}`}
     >
       {icon}
       {label}

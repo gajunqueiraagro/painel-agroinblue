@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Upload, Layers, X, MapPin, Maximize2, BarChart3 } from 'lucide-react';
+import { Upload, X, MapPin } from 'lucide-react';
 import { formatNum } from '@/lib/calculos/formatters';
 import type { PastoGeometria } from '@/hooks/usePastoGeometrias';
 import type { Pasto } from '@/hooks/usePastos';
@@ -58,21 +58,35 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
     const totalArea = linkedPastos.reduce((s, p) => s + (p.area_produtiva_ha || 0), 0);
     let totalCab = 0;
     let totalKg = 0;
+    let totalPesoMedio = 0;
+    let countPesoMedio = 0;
     linkedPastoIds.forEach(pid => {
       const oc = ocupacoes.get(pid);
-      if (oc) { totalCab += oc.cabecas; totalKg += oc.peso_total_kg; }
+      if (oc) {
+        totalCab += oc.cabecas;
+        totalKg += oc.peso_total_kg;
+        if (oc.cabecas > 0 && oc.peso_total_kg > 0) {
+          totalPesoMedio += oc.peso_total_kg;
+          countPesoMedio += oc.cabecas;
+        }
+      }
     });
     const lotKgHa = totalArea > 0 ? totalKg / totalArea : 0;
     const emPressao = Array.from(ocupacoes.values()).filter(o => o.status === 'pressao').length;
+    const pesoMedioGeral = countPesoMedio > 0 ? totalPesoMedio / countPesoMedio : 0;
     return {
-      totalPoligonos: geometrias.length,
-      vinculados: vinculados.length,
       totalCabecas: totalCab,
+      pesoMedio: pesoMedioGeral,
       lotacaoKgHa: lotKgHa,
       areaTotal: totalArea,
       emPressao,
     };
   }, [geometrias, pastos, ocupacoes]);
+
+  const selectedPasto = selected?.geo.pasto_id
+    ? pastos.find(p => p.id === selected.geo.pasto_id) : null;
+  const selectedOc = selected?.geo.pasto_id
+    ? ocupacoes.get(selected.geo.pasto_id) : null;
 
   // Init map
   useEffect(() => {
@@ -134,13 +148,12 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
           const isSelected = selected?.geo?.id === geo.id;
           const pasto = geo.pasto_id ? pastos.find(p => p.id === geo.pasto_id) : null;
           const oc = geo.pasto_id ? ocupacoes.get(geo.pasto_id) : null;
-          const status = oc?.status || (geo.pasto_id ? 'sem_ocupacao' : 'sem_ocupacao');
+          const status = oc?.status || 'sem_ocupacao';
 
           const layer = L.geoJSON(geo.geojson as any, { style: getPolyStyle(status, isSelected) });
           const b = layer.getBounds();
           if (!b.isValid()) return;
 
-          // Tooltip with full details
           const kgHaText = oc?.kg_ha != null ? `${formatNum(oc.kg_ha, 0)} kg/ha` : '—';
           const tipContent = pasto
             ? `<strong>${pasto.nome}</strong><br/>
@@ -149,7 +162,6 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
             : `<em>${geo.nome_original || 'Sem nome'}</em><br/><span style="color:#999">Sem vínculo</span>`;
           layer.bindTooltip(tipContent, { sticky: true, className: 'pasto-tooltip', direction: 'top', offset: [0, -6] });
 
-          // Small label — name + kg/ha at high zoom
           const shortName = geo.nome_original || pasto?.nome || '';
           if (shortName) {
             const kgLabel = oc?.kg_ha != null ? `<br/><span class="kg-value">${formatNum(oc.kg_ha, 0)}</span>` : '';
@@ -175,25 +187,38 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
     return () => clearTimeout(timer);
   }, [geometrias, selected, pastos, ocupacoes]);
 
-  const selectedPasto = selected?.geo.pasto_id
-    ? pastos.find(p => p.id === selected.geo.pasto_id) : null;
-  const selectedOc = selected?.geo.pasto_id
-    ? ocupacoes.get(selected.geo.pasto_id) : null;
-
   return (
-    <div className="flex flex-col gap-2 h-full">
-      {/* KPI strip */}
-      <div className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-        <KpiMini icon={<Layers className="h-3 w-3" />} label="Polígonos" value={String(kpis.totalPoligonos)} sub={`${kpis.vinculados} vinculados`} />
-        <KpiMini icon={<MapPin className="h-3 w-3" />} label="Cabeças" value={String(kpis.totalCabecas)} />
-        <KpiMini icon={<Maximize2 className="h-3 w-3" />} label="Lotação" value={kpis.lotacaoKgHa > 0 ? `${formatNum(kpis.lotacaoKgHa, 0)} kg/ha` : '—'} />
-        <KpiMini icon={<BarChart3 className="h-3 w-3" />} label="Pressão Alta" value={String(kpis.emPressao)} accent={kpis.emPressao > 0} />
+    <div className="flex flex-col gap-1.5 h-full">
+      {/* KPI strip — compact */}
+      <div className="flex-shrink-0 flex items-center gap-1.5 overflow-x-auto px-0.5">
+        <KpiChip
+          label={selected && selectedPasto ? selectedPasto.nome : 'Pasto'}
+          value={selected && selectedOc ? (selectedOc.kg_ha != null ? `${formatNum(selectedOc.kg_ha, 0)} kg/ha` : '—') : '—'}
+          sub={selected && selectedPasto ? (selectedPasto.lote || '—') : undefined}
+          muted={!selected}
+        />
+        <KpiChip
+          label="Cabeças"
+          value={String(kpis.totalCabecas)}
+          sub={kpis.pesoMedio > 0 ? `${formatNum(kpis.pesoMedio, 0)} kg méd` : undefined}
+        />
+        <KpiChip
+          label="Lotação"
+          value={kpis.lotacaoKgHa > 0 ? `${formatNum(kpis.lotacaoKgHa, 0)} kg/ha` : '—'}
+          sub={kpis.emPressao > 0 ? `${kpis.emPressao} pressão alta` : undefined}
+          accent={kpis.emPressao > 0}
+        />
+        <KpiChip
+          label="Nota"
+          value={selected && selectedPasto?.observacoes ? selectedPasto.observacoes.slice(0, 30) : '—'}
+          muted={!selected || !selectedPasto?.observacoes}
+        />
       </div>
 
       {/* Map + detail panel */}
-      <div className="flex-1 min-h-0 flex gap-2">
-        <Card className="flex-1 min-h-0 relative overflow-hidden" style={{ minHeight: '380px' }}>
-          <div ref={mapRef} className="absolute inset-0 rounded-lg" style={{ zIndex: 0, minHeight: '380px' }} />
+      <div className="flex-1 min-h-0 flex gap-1.5 pb-1">
+        <Card className="flex-1 min-h-0 relative overflow-hidden">
+          <div ref={mapRef} className="absolute inset-0 rounded-lg" style={{ zIndex: 0 }} />
           {geoLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/60 z-10 rounded-lg">
               <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -210,13 +235,12 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
           )}
           {/* Legend */}
           {hasGeo && (
-            <div className="absolute bottom-2 left-2 bg-card/90 backdrop-blur-sm rounded border border-border px-2 py-1.5 z-10">
-              <p className="text-[8px] text-muted-foreground font-semibold uppercase tracking-wider mb-1">kg/ha</p>
+            <div className="absolute bottom-2 left-2 bg-card/90 backdrop-blur-sm rounded border border-border px-1.5 py-1 z-10">
               <div className="flex flex-col gap-0.5">
                 {(['adequado', 'atencao', 'pressao', 'sem_ocupacao'] as const).map(k => (
-                  <div key={k} className="flex items-center gap-1.5">
-                    <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: STATUS_STYLES[k].fillColor, border: `1px solid ${STATUS_STYLES[k].color}` }} />
-                    <span className="text-[8px] text-muted-foreground">{STATUS_STYLES[k].label}</span>
+                  <div key={k} className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: STATUS_STYLES[k].fillColor, border: `1px solid ${STATUS_STYLES[k].color}` }} />
+                    <span className="text-[7px] text-muted-foreground">{STATUS_STYLES[k].label}</span>
                   </div>
                 ))}
               </div>
@@ -226,14 +250,14 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
 
         {/* Detail panel — desktop only */}
         {selected && (
-          <Card className="hidden sm:flex flex-col w-64 flex-shrink-0 overflow-hidden">
-            <div className="p-2.5 overflow-y-auto flex-1 space-y-2">
+          <Card className="hidden sm:flex flex-col w-56 flex-shrink-0 overflow-hidden">
+            <div className="p-2 overflow-y-auto flex-1 space-y-1.5">
               <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-xs font-semibold text-foreground leading-tight">
+                <div className="min-w-0">
+                  <h3 className="text-[11px] font-semibold text-foreground leading-tight truncate">
                     {selected.geo.nome_original || 'Sem nome'}
                   </h3>
-                  <Badge variant={selected.geo.pasto_id ? 'secondary' : 'outline'} className="text-[8px] h-3.5 mt-0.5 px-1.5">
+                  <Badge variant={selected.geo.pasto_id ? 'secondary' : 'outline'} className="text-[7px] h-3 mt-0.5 px-1">
                     {selectedOc ? STATUS_STYLES[selectedOc.status]?.label || 'Vinculado' : selected.geo.pasto_id ? 'Sem dados' : 'Sem vínculo'}
                   </Badge>
                 </div>
@@ -243,28 +267,27 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
               </div>
               <Separator />
               {selectedPasto ? (
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <InfoRow label="Nome" value={selectedPasto.nome} />
                   {selectedPasto.area_produtiva_ha != null && (
                     <InfoRow label="Área (ha)" value={formatNum(selectedPasto.area_produtiva_ha, 1)} />
                   )}
                   <InfoRow label="Cabeças" value={String(selectedOc?.cabecas || 0)} />
-                  <InfoRow label="Peso Total (kg)" value={selectedOc?.peso_total_kg ? formatNum(selectedOc.peso_total_kg, 0) : '—'} />
+                  <InfoRow label="Peso Total" value={selectedOc?.peso_total_kg ? `${formatNum(selectedOc.peso_total_kg, 0)} kg` : '—'} />
                   <InfoRow label="kg/ha" value={selectedOc?.kg_ha != null ? formatNum(selectedOc.kg_ha, 0) : '—'} highlight />
                   <InfoRow label="Tipo de Uso" value={selectedPasto.tipo_uso || '—'} />
-                  <InfoRow label="Situação" value={selectedPasto.ativo ? 'Ativo' : 'Inativo'} />
                   {selectedPasto.observacoes && (
                     <>
                       <Separator />
                       <div>
-                        <p className="text-[9px] text-muted-foreground uppercase tracking-wide mb-0.5">Observações</p>
-                        <p className="text-[10px] text-foreground leading-relaxed">{selectedPasto.observacoes}</p>
+                        <p className="text-[8px] text-muted-foreground uppercase tracking-wide mb-0.5">Observações</p>
+                        <p className="text-[9px] text-foreground leading-relaxed">{selectedPasto.observacoes}</p>
                       </div>
                     </>
                   )}
                 </div>
               ) : (
-                <p className="text-[10px] text-muted-foreground">Polígono sem vínculo com pasto cadastrado.</p>
+                <p className="text-[9px] text-muted-foreground">Polígono sem vínculo com pasto cadastrado.</p>
               )}
             </div>
           </Card>
@@ -274,24 +297,21 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
   );
 }
 
-function KpiMini({ icon, label, value, sub, accent }: { icon: React.ReactNode; label: string; value: string; sub?: string; accent?: boolean }) {
+function KpiChip({ label, value, sub, accent, muted }: { label: string; value: string; sub?: string; accent?: boolean; muted?: boolean }) {
   return (
-    <Card className="px-2 py-1.5">
-      <div className="flex items-center gap-1 text-muted-foreground mb-0.5">
-        {icon}
-        <span className="text-[9px] uppercase tracking-wide">{label}</span>
-      </div>
-      <p className={`text-sm font-bold leading-none ${accent ? 'text-destructive' : 'text-foreground'}`}>{value}</p>
-      {sub && <p className="text-[9px] text-muted-foreground mt-0.5">{sub}</p>}
-    </Card>
+    <div className={`flex-shrink-0 rounded-md border border-border bg-card px-2 py-0.5 min-w-0 ${muted ? 'opacity-50' : ''}`}>
+      <p className="text-[8px] text-muted-foreground uppercase tracking-wide leading-none">{label}</p>
+      <p className={`text-[11px] font-bold leading-tight truncate max-w-[120px] ${accent ? 'text-destructive' : 'text-foreground'}`}>{value}</p>
+      {sub && <p className="text-[8px] text-muted-foreground leading-none truncate max-w-[120px]">{sub}</p>}
+    </div>
   );
 }
 
 function InfoRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className={`rounded px-2 py-1 ${highlight ? 'bg-primary/10' : 'bg-muted/40'}`}>
-      <p className="text-[9px] text-muted-foreground uppercase tracking-wide">{label}</p>
-      <p className={`text-[10px] font-semibold ${highlight ? 'text-primary' : 'text-foreground'}`}>{value}</p>
+    <div className={`rounded px-1.5 py-0.5 ${highlight ? 'bg-primary/10' : 'bg-muted/40'}`}>
+      <p className="text-[8px] text-muted-foreground uppercase tracking-wide">{label}</p>
+      <p className={`text-[9px] font-semibold ${highlight ? 'text-primary' : 'text-foreground'}`}>{value}</p>
     </div>
   );
 }
