@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+import { StandardTooltip } from '@/lib/chartConfig';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_NOMES } from '@/lib/calculos/labels';
 import { isCusteioProdutivo, isReceitaMacro, isDeducaoReceita, isSaida, isEntrada, somaAbs } from './analiseHelpers';
@@ -167,11 +168,11 @@ export function ReceitaCustoMargem({
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
-                <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} width={55}
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+                <XAxis dataKey="mes" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} width={55}
                   tickFormatter={v => (v / 1000).toFixed(0) + 'k'} />
-                <Tooltip formatter={(v: number) => formatMoeda(v)} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                <Tooltip content={<StandardTooltip isCurrency />} />
                 <Legend wrapperStyle={{ fontSize: 10 }} />
                 <Bar dataKey="Receita" fill="hsl(142, 71%, 45%)" radius={[2, 2, 0, 0]} />
                 <Bar dataKey="Custo" fill="hsl(0, 72%, 51%)" radius={[2, 2, 0, 0]} />

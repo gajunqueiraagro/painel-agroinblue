@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { StandardTooltip } from '@/lib/chartConfig';
 
 interface Props {
   snapshot: Record<string, any>;
@@ -66,7 +67,7 @@ export function FechExecFluxoCaixaPage({ snapshot }: Props) {
                   <Pie data={entradas} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={50} label={false}>
                     {entradas.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                   </Pie>
-                  <Tooltip formatter={(v: number) => formatMoeda(v)} />
+                  <Tooltip content={<StandardTooltip isCurrency />} />
                   <Legend wrapperStyle={{ fontSize: 9 }} />
                 </PieChart>
               </ResponsiveContainer>
@@ -87,7 +88,7 @@ export function FechExecFluxoCaixaPage({ snapshot }: Props) {
                   <Pie data={saidas} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={50} label={false}>
                     {saidas.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                   </Pie>
-                  <Tooltip formatter={(v: number) => formatMoeda(v)} />
+                  <Tooltip content={<StandardTooltip isCurrency />} />
                   <Legend wrapperStyle={{ fontSize: 9 }} />
                 </PieChart>
               </ResponsiveContainer>

@@ -25,6 +25,7 @@ import {
   Tooltip, ResponsiveContainer, AreaChart, Area, Legend, ReferenceLine,
   ComposedChart,
 } from 'recharts';
+import { StandardTooltip } from '@/lib/chartConfig';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
 interface Props {
@@ -615,8 +616,8 @@ interface ChartCardProps {
 }
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--muted-foreground))'];
-const DOT_STYLE = { r: 3, strokeWidth: 2 };
-const ACTIVE_DOT_STYLE = { r: 5, strokeWidth: 2 };
+const DOT_STYLE = { r: 2, strokeWidth: 1.5, fill: 'hsl(var(--background))' };
+const ACTIVE_DOT_STYLE = { r: 4, strokeWidth: 2, fill: 'hsl(var(--primary))' };
 
 function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, mesFiltro, averageKey, averageLabel }: ChartCardProps) {
   // Compute MoM and YoY comparisons from data
@@ -686,10 +687,10 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
             {type === 'bar' ? (
               avgValue !== null ? (
                 <ComposedChart data={data}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip formatter={(v: any) => typeof v === 'number' ? v.toLocaleString('pt-BR', { maximumFractionDigits: decimals }) : '—'} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                  <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                  <Tooltip content={<StandardTooltip formatter={(v) => typeof v === 'number' ? v.toLocaleString('pt-BR', { maximumFractionDigits: decimals }) : '—'} />} />
                   <Legend wrapperStyle={{ fontSize: 10 }} />
                   {keys.map((k, i) => (
                     <Bar key={k} dataKey={k} name={labels[i]} fill={COLORS[i]} fillOpacity={i === 0 ? 1 : 0.4} radius={[3, 3, 0, 0]} />
@@ -699,10 +700,10 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
                 </ComposedChart>
               ) : (
               <BarChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip formatter={(v: any) => typeof v === 'number' ? v.toLocaleString('pt-BR', { maximumFractionDigits: decimals }) : '—'} />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+                <XAxis dataKey="mes" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                <Tooltip content={<StandardTooltip formatter={(v) => typeof v === 'number' ? v.toLocaleString('pt-BR', { maximumFractionDigits: decimals }) : '—'} />} />
                 <Legend wrapperStyle={{ fontSize: 10 }} />
                 {keys.map((k, i) => (
                   <Bar key={k} dataKey={k} name={labels[i]} fill={COLORS[i]} fillOpacity={i === 0 ? 1 : 0.4} radius={[3, 3, 0, 0]} />
@@ -711,28 +712,28 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
               )
             ) : type === 'area' ? (
               <AreaChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip formatter={(v: any) => typeof v === 'number' ? v.toLocaleString('pt-BR', { maximumFractionDigits: decimals }) : '—'} />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+                <XAxis dataKey="mes" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                <Tooltip content={<StandardTooltip formatter={(v) => typeof v === 'number' ? v.toLocaleString('pt-BR', { maximumFractionDigits: decimals }) : '—'} />} />
                 <Legend wrapperStyle={{ fontSize: 10 }} />
                 {keys.map((k, i) => (
                   <Area key={k} type="monotone" dataKey={k} name={labels[i]}
                     stroke={COLORS[i]} fill={COLORS[i]} fillOpacity={i === 0 ? 0.3 : 0.1}
-                    strokeWidth={i === 0 ? 2 : 1} strokeDasharray={i > 0 ? '4 2' : undefined}
+                    strokeWidth={i === 0 ? 2.5 : 1.5} strokeDasharray={i > 0 ? '4 2' : undefined}
                     dot={DOT_STYLE} activeDot={ACTIVE_DOT_STYLE} />
                 ))}
               </AreaChart>
             ) : (
               <LineChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip formatter={(v: any) => typeof v === 'number' ? v.toLocaleString('pt-BR', { maximumFractionDigits: decimals }) : '—'} />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+                <XAxis dataKey="mes" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                <Tooltip content={<StandardTooltip formatter={(v) => typeof v === 'number' ? v.toLocaleString('pt-BR', { maximumFractionDigits: decimals }) : '—'} />} />
                 <Legend wrapperStyle={{ fontSize: 10 }} />
                 {keys.map((k, i) => (
                   <Line key={k} type="monotone" dataKey={k} name={labels[i]}
-                    stroke={COLORS[i]} strokeWidth={i === 0 ? 2 : 1}
+                    stroke={COLORS[i]} strokeWidth={i === 0 ? 2.5 : 1.5}
                     strokeDasharray={i > 0 ? '4 2' : undefined}
                     dot={DOT_STYLE} activeDot={ACTIVE_DOT_STYLE} connectNulls />
                 ))}

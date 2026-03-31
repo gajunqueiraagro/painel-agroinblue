@@ -20,6 +20,7 @@ import {
   Tooltip, ResponsiveContainer, AreaChart, Area, Legend, ReferenceLine,
   ComposedChart,
 } from 'recharts';
+import { StandardTooltip } from '@/lib/chartConfig';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
 type SubAba = 'zootecnico' | 'financeiro' | 'operacional';
@@ -34,8 +35,10 @@ interface Props {
 
 const TIPOS_SAIDA_DESFRUTE = ['abate', 'venda', 'consumo', 'transferencia_saida'];
 const CHART_COLORS = ['hsl(var(--primary))', 'hsl(var(--muted-foreground))'];
-const DOT_STYLE = { r: 3, strokeWidth: 2 };
-const ACTIVE_DOT_STYLE = { r: 5, strokeWidth: 2 };
+const DOT_STYLE = { r: 2, strokeWidth: 1.5, fill: 'hsl(var(--background))' };
+const ACTIVE_DOT_STYLE = { r: 4, strokeWidth: 2, fill: 'hsl(var(--primary))' };
+const GRID = { strokeDasharray: '3 3', stroke: 'hsl(var(--border))', strokeOpacity: 0.5 };
+const AXIS_TICK = { fontSize: 10, fill: 'hsl(var(--muted-foreground))' };
 
 const isConciliado = (l: FinanceiroLancamento) =>
   (l.status_transacao || '').toLowerCase() === 'conciliado';
@@ -521,10 +524,10 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
             {type === 'bar' ? (
               (avgValue !== null || lineOverlayKey) ? (
                 <ComposedChart data={data}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} />
-                  <Tooltip formatter={(v: any) => typeof v === 'number' ? (isCurrency ? formatMoeda(v) : v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })) : '—'} />
+                  <CartesianGrid {...GRID} />
+                  <XAxis dataKey="mes" tick={AXIS_TICK} />
+                  <YAxis tick={AXIS_TICK} tickFormatter={(v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} />
+                  <Tooltip content={<StandardTooltip isCurrency={isCurrency} formatter={(v, name) => typeof v === 'number' ? (isCurrency ? formatMoeda(v) : v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })) : '—'} />} />
                   <Legend wrapperStyle={{ fontSize: 10 }} />
                   {keys.map((k, i) => (
                     <Bar key={k} dataKey={k} name={labels[i]} fill={CHART_COLORS[i]} fillOpacity={i === 0 ? 1 : 0.4} radius={[3, 3, 0, 0]} />
@@ -539,10 +542,10 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
                 </ComposedChart>
               ) : (
                 <BarChart data={data}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} />
-                  <Tooltip formatter={(v: any) => typeof v === 'number' ? (isCurrency ? formatMoeda(v) : v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })) : '—'} />
+                  <CartesianGrid {...GRID} />
+                  <XAxis dataKey="mes" tick={AXIS_TICK} />
+                  <YAxis tick={AXIS_TICK} tickFormatter={(v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} />
+                  <Tooltip content={<StandardTooltip isCurrency={isCurrency} formatter={(v, name) => typeof v === 'number' ? (isCurrency ? formatMoeda(v) : v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })) : '—'} />} />
                   <Legend wrapperStyle={{ fontSize: 10 }} />
                   {keys.map((k, i) => (
                     <Bar key={k} dataKey={k} name={labels[i]} fill={CHART_COLORS[i]} fillOpacity={i === 0 ? 1 : 0.4} radius={[3, 3, 0, 0]} />
@@ -551,29 +554,30 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
               )
             ) : type === 'area' ? (
               <AreaChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip formatter={(v: any) => typeof v === 'number' ? (isCurrency ? formatMoeda(v) : v.toLocaleString('pt-BR', { maximumFractionDigits: decimals })) : '—'} />
+                <CartesianGrid {...GRID} />
+                <XAxis dataKey="mes" tick={AXIS_TICK} />
+                <YAxis tick={AXIS_TICK} />
+                <Tooltip content={<StandardTooltip isCurrency={isCurrency} formatter={(v, name) => typeof v === 'number' ? (isCurrency ? formatMoeda(v) : v.toLocaleString('pt-BR', { maximumFractionDigits: decimals })) : '—'} />} />
                 <Legend wrapperStyle={{ fontSize: 10 }} />
                 {keys.map((k, i) => (
                   <Area key={k} type="monotone" dataKey={k} name={labels[i]}
                     stroke={CHART_COLORS[i]} fill={CHART_COLORS[i]} fillOpacity={i === 0 ? 0.3 : 0.1}
-                    strokeWidth={i === 0 ? 2 : 1} strokeDasharray={i > 0 ? '4 2' : undefined}
+                    strokeWidth={i === 0 ? 2.5 : 1.5} strokeDasharray={i > 0 ? '4 2' : undefined}
                     dot={DOT_STYLE} activeDot={ACTIVE_DOT_STYLE} />
                 ))}
               </AreaChart>
             ) : (
               <LineChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip formatter={(v: any) => typeof v === 'number' ? (isCurrency ? formatMoeda(v) : v.toLocaleString('pt-BR', { maximumFractionDigits: decimals })) : '—'} />
+                <CartesianGrid {...GRID} />
+                <XAxis dataKey="mes" tick={AXIS_TICK} />
+                <YAxis tick={AXIS_TICK} />
+                <Tooltip content={<StandardTooltip isCurrency={isCurrency} formatter={(v, name) => typeof v === 'number' ? (isCurrency ? formatMoeda(v) : v.toLocaleString('pt-BR', { maximumFractionDigits: decimals })) : '—'} />} />
                 <Legend wrapperStyle={{ fontSize: 10 }} />
                 {keys.map((k, i) => (
                   <Line key={k} type="monotone" dataKey={k} name={labels[i]}
-                    stroke={CHART_COLORS[i]} strokeWidth={i === 0 ? 2 : 1}
+                    stroke={CHART_COLORS[i]} strokeWidth={i === 0 ? 2.5 : 1.5}
                     strokeDasharray={i > 0 ? '4 2' : undefined}
+                    strokeOpacity={i > 0 ? 0.55 : 1}
                     dot={DOT_STYLE} activeDot={ACTIVE_DOT_STYLE} connectNulls />
                 ))}
               </LineChart>

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Lancamento, SaldoInicial, CATEGORIAS, isEntrada, isReclassificacao } from '@/types/cattle';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { StandardTooltip } from '@/lib/chartConfig';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TrendingUp, TrendingDown, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -119,10 +120,10 @@ export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange, isGlobal 
         <h2 className="font-bold text-foreground mb-3">Saldo do Rebanho</h2>
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip />
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+            <XAxis dataKey="mes" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+            <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+            <Tooltip content={<StandardTooltip />} />
             <Line type="monotone" dataKey={anoFiltro} stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} name={anoFiltro} />
             <Line type="monotone" dataKey={anoAnterior} stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="5 5" dot={false} name={anoAnterior} />
           </LineChart>
@@ -149,7 +150,7 @@ export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange, isGlobal 
                 <Cell key={i} fill={COLORS[i % COLORS.length]} />
               ))}
             </Pie>
-            <Tooltip formatter={(value: number) => [`${value} cab. (${totalRebanho > 0 ? ((value / totalRebanho) * 100).toFixed(1) : 0}%)`, '']} />
+            <Tooltip content={<StandardTooltip formatter={(v) => typeof v === 'number' ? `${v} cab. (${totalRebanho > 0 ? ((v / totalRebanho) * 100).toFixed(1) : 0}%)` : '—'} />} />
             <Legend
               verticalAlign="bottom"
               formatter={(value: string) => {
