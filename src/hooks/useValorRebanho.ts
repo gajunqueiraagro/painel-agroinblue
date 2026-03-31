@@ -125,7 +125,7 @@ export function useValorRebanho(anoMes: string) {
   }, [loadPrecos, loadFechamentoStatus]);
 
   // Save/upsert prices and close the month
-  const salvarPrecos = useCallback(async (items: PrecoCategoria[]) => {
+  const salvarPrecos = useCallback(async (items: PrecoCategoria[], valorTotal?: number) => {
     if (!fazendaId || fazendaId === '__global__') return;
     setSaving(true);
     try {
@@ -153,7 +153,7 @@ export function useValorRebanho(anoMes: string) {
         if (error) throw error;
       }
 
-      // Upsert fechamento status to 'fechado'
+      // Upsert fechamento status to 'fechado' with the computed total
       const { error: fErr } = await supabase
         .from('valor_rebanho_fechamento')
         .upsert({
@@ -163,6 +163,7 @@ export function useValorRebanho(anoMes: string) {
           status: 'fechado',
           fechado_por: user?.id || null,
           fechado_em: new Date().toISOString(),
+          valor_total: valorTotal ?? 0,
         }, { onConflict: 'fazenda_id,ano_mes' });
 
       if (fErr) throw fErr;
