@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 
+// Global monkey-patch: prevent _leaflet_pos undefined errors in flex/dynamic layouts
+const _origGetPosition = L.DomUtil.getPosition;
+L.DomUtil.getPosition = function (el: any) {
+  if (!el || el._leaflet_pos === undefined) {
+    if (el) el._leaflet_pos = L.point(0, 0);
+    return L.point(0, 0);
+  }
+  return _origGetPosition.call(this, el);
+};
+
 type MapStatus = 'waiting_container' | 'ready' | 'error';
 
 interface DebugInfo {
@@ -164,16 +174,6 @@ export function useStableLeafletMap({
     }
 
     try {
-      // Monkey-patch L.DomUtil.getPosition to never return undefined
-      const origGetPos = L.DomUtil.getPosition;
-      L.DomUtil.getPosition = function (el: any) {
-        const pos = origGetPos.call(this, el);
-        if (!pos) {
-          el._leaflet_pos = L.point(0, 0);
-          return el._leaflet_pos;
-        }
-        return pos;
-      };
 
       const map = L.map(el, {
         center,
