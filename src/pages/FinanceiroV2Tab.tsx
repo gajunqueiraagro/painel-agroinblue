@@ -509,7 +509,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div>
               <label className={lblCls}>Ano</label>
               <Select value={ano} onValueChange={setAno}>
-                <SelectTrigger className={`${selCls} w-[68px]`}><SelectValue /></SelectTrigger></SelectTrigger>
+                <SelectTrigger className={`${selCls} w-[68px]`}><SelectValue /></SelectTrigger>
                 <SelectContent>{anos.map(a => <SelectItem key={a} value={a} className={itemCls}>{a}</SelectItem>)}</SelectContent>
               </Select>
             </div>
