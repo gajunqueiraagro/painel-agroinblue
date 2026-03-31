@@ -365,30 +365,63 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
 
       <div className="px-3 md:px-4 pt-2 space-y-3">
 
-      {/* ── Status Geral — horizontal strip (max 60% width) ── */}
-      <button
-        onClick={() => onTabChange('zootecnico' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
-        className="max-w-[60%] rounded-md border border-border/60 bg-card px-3 py-2 flex items-center gap-2.5 transition-colors hover:bg-muted/30 active:bg-muted/50"
-      >
-        <BarChart3 className="h-3.5 w-3.5 text-primary flex-shrink-0" />
-        <span className="text-[10px] font-semibold text-foreground whitespace-nowrap">Status</span>
-        <div className="flex gap-3">
-          {[
-            { label: 'Zoo', nivel: zootecnico.status.nivel },
-            { label: 'Fin', nivel: financeiro.status.nivel },
-            { label: 'Econ', nivel: economico.status.nivel },
-          ].map(item => (
-            <div key={item.label} className="flex items-center gap-1">
-              <StatusDot nivel={item.nivel} />
-              <span className="text-[9px] text-muted-foreground font-medium">{item.label}</span>
-            </div>
-          ))}
-        </div>
-        <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0 ml-auto" />
-      </button>
+      {/* ── Topo executivo: Status + Atalhos ── */}
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-2 items-stretch">
+        {/* STATUS — destaque principal */}
+        <button
+          onClick={() => onTabChange('zootecnico' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
+          className="rounded-lg border border-primary/30 bg-primary px-4 py-3.5 flex flex-col gap-2.5 transition-colors hover:bg-primary/90 active:bg-primary/80 text-left"
+        >
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-primary-foreground flex-shrink-0" />
+            <span className="text-xs font-bold text-primary-foreground uppercase tracking-wide">Status</span>
+            <ChevronRight className="h-3 w-3 text-primary-foreground/60 flex-shrink-0 ml-auto" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {[
+              { label: 'Fin', desc: 'Financeiro', nivel: financeiro.status.nivel },
+              { label: 'Zoo', desc: 'Zootécnico', nivel: zootecnico.status.nivel },
+              { label: 'Econ', desc: 'Econômico', nivel: economico.status.nivel },
+            ].map(item => (
+              <div key={item.label} className="flex items-center gap-2">
+                <StatusDot nivel={item.nivel} />
+                <span className="text-[11px] text-primary-foreground/90 font-semibold">{item.desc}</span>
+                <span className="text-[9px] text-primary-foreground/60 font-medium ml-auto uppercase">
+                  {item.nivel === 'fechado' ? 'OK' : item.nivel === 'parcial' ? 'Parcial' : 'Pendente'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </button>
+
+        {/* OPERAÇÃO — atalho estratégico */}
+        <button
+          onClick={() => onTabChange('visao_zoo_hub' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
+          className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-3 flex flex-col items-center justify-center gap-1.5 transition-colors hover:bg-primary/10 active:bg-primary/15 w-full md:w-[130px]"
+        >
+          <div className="h-8 w-8 rounded-md bg-primary/15 flex items-center justify-center">
+            <TrendingUp className="h-4 w-4 text-primary" />
+          </div>
+          <span className="text-[10px] font-bold text-foreground">Operação</span>
+          <p className="text-[8px] text-muted-foreground text-center leading-tight">Indicadores e desempenho</p>
+        </button>
+
+        {/* PAINEL DO CONSULTOR — atalho estratégico */}
+        <button
+          onClick={() => onTabChange('painel_consultor' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
+          className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-3 flex flex-col items-center justify-center gap-1.5 transition-colors hover:bg-primary/10 active:bg-primary/15 w-full md:w-[130px]"
+        >
+          <div className="h-8 w-8 rounded-md bg-primary/15 flex items-center justify-center">
+            <Landmark className="h-4 w-4 text-primary" />
+          </div>
+          <span className="text-[10px] font-bold text-foreground text-center">Painel Consultor</span>
+          <p className="text-[8px] text-muted-foreground text-center leading-tight">Conferência e fechamento</p>
+        </button>
+      </div>
 
       {/* ── Zootécnico + Financeiro side by side ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
         {/* ZOOTÉCNICO */}
         <section className="rounded-lg border border-border/60 bg-card">
           <div className="px-3 py-1.5 border-b border-border/40 flex items-center justify-between">
