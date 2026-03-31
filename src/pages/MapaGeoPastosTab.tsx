@@ -65,6 +65,8 @@ export function MapaGeoPastosTab() {
   const leafletMap = useRef<L.Map | null>(null);
   const layerGroup = useRef<L.LayerGroup | null>(null);
 
+  const hasGeometries = geometrias.length > 0;
+
   const anosDisp = useMemo(() => {
     const arr: string[] = [];
     for (let y = curYear; y >= curYear - 3; y--) arr.push(String(y));
@@ -172,9 +174,10 @@ export function MapaGeoPastosTab() {
     return '#6b7280';
   }, []);
 
-  // Initialize Leaflet map
+  // Initialize Leaflet map — re-run when mapRef mounts
   useEffect(() => {
     if (!mapRef.current || leafletMap.current) return;
+    if (!hasGeometries) return;
 
     const map = L.map(mapRef.current, {
       center: [-15.8, -47.9],
@@ -190,15 +193,23 @@ export function MapaGeoPastosTab() {
     layerGroup.current = L.layerGroup().addTo(map);
     leafletMap.current = map;
 
+    // Ensure correct sizing after mount
+    setTimeout(() => map.invalidateSize(), 200);
+
     return () => {
       map.remove();
       leafletMap.current = null;
+      layerGroup.current = null;
     };
-  }, []);
+  }, [hasGeometries]);
 
   // Update polygons on map
   useEffect(() => {
     if (!leafletMap.current || !layerGroup.current) return;
+
+    // Ensure map knows its container size
+    leafletMap.current.invalidateSize();
+
     layerGroup.current.clearLayers();
 
     const bounds: L.LatLngBounds[] = [];
@@ -246,7 +257,7 @@ export function MapaGeoPastosTab() {
 
     if (bounds.length > 0) {
       const combined = bounds.reduce((acc, b) => acc.extend(b));
-      leafletMap.current.fitBounds(combined, { padding: [30, 30] });
+      leafletMap.current.fitBounds(combined, { padding: [30, 30], maxZoom: 17 });
     }
   }, [filteredPastos, getColor]);
 
@@ -277,7 +288,6 @@ export function MapaGeoPastosTab() {
     return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda para ver o mapa.</div>;
   }
 
-  const hasGeometries = geometrias.length > 0;
   const lastUpload = hasGeometries
     ? new Date(geometrias.reduce((latest, g) => g.created_at > latest ? g.created_at : latest, geometrias[0].created_at))
     : null;
