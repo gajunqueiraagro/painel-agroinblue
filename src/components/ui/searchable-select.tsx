@@ -158,6 +158,9 @@ export function SearchableSelect({
               placeholder={placeholder}
               className="w-full h-5 text-[10px] px-1.5 rounded border border-input bg-background outline-none focus:ring-1 focus:ring-ring"
               onKeyDown={handleKeyDown}
+              autoCorrect="off"
+              autoCapitalize="none"
+              spellCheck={false}
             />
           </div>
           <div ref={listRef} className="max-h-[180px] overflow-y-auto px-0.5 pb-0.5">

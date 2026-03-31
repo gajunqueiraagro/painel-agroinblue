@@ -504,8 +504,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       {/* FILTERS */}
       <Card className="bg-muted/50 border-border/60">
         <CardContent className="p-1.5 space-y-1">
-          {/* LINE 1: Ano | Mês | Status | Fazenda | Atividade */}
-          <div className="grid grid-cols-5 gap-1">
+          {/* LINE 1: Ano | Mês | Tipo | Status | Fazenda | Atividade */}
+          <div className="grid grid-cols-6 gap-1">
             <div>
               <label className={lblCls}>Ano</label>
               <Select value={ano} onValueChange={setAno}>
@@ -537,6 +537,18 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                   </div>
                 </PopoverContent>
               </Popover>
+            </div>
+            <div>
+              <label className={lblCls}>Tipo</label>
+              <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigem('__all__'); setContaDestino('__all__'); }}>
+                <SelectTrigger className={selCls}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
+                  <SelectItem value="1-Entradas" className={itemCls}>Entradas</SelectItem>
+                  <SelectItem value="2-Saídas" className={itemCls}>Saídas</SelectItem>
+                  <SelectItem value="3-Transferência" className={itemCls}>Transferências</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className={lblCls}>Status</label>
@@ -574,20 +586,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </div>
           </div>
 
-          {/* LINE 2: Tipo | Conta Origem | Conta Destino */}
+          {/* LINE 2: Conta Origem | Conta Destino | Macro */}
           <div className="grid grid-cols-3 gap-1">
-            <div>
-              <label className={lblCls}>Tipo</label>
-              <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigem('__all__'); setContaDestino('__all__'); }}>
-                <SelectTrigger className={selCls}><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
-                  <SelectItem value="1-Entradas" className={itemCls}>Entradas</SelectItem>
-                  <SelectItem value="2-Saídas" className={itemCls}>Saídas</SelectItem>
-                  <SelectItem value="3-Transferência" className={itemCls}>Transferências</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
             <div>
               <label className={lblCls}>Conta Origem</label>
               <Select value={contaOrigem} onValueChange={setContaOrigem} disabled={isEntrada}>
@@ -608,10 +608,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          {/* LINE 3: Macro | Centro | Subcentro | Produto | Fornecedor */}
-          <div className="grid grid-cols-5 gap-1">
             <div>
               <label className={lblCls}>Macro</label>
               <SearchableSelect
@@ -622,6 +618,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 placeholder="Buscar macro..."
               />
             </div>
+          </div>
+
+          {/* LINE 3: Centro | Subcentro | Produto | Fornecedor */}
+          <div className="grid grid-cols-[1fr_1.4fr_1.4fr_1.6fr] gap-1">
             <div>
               <label className={lblCls}>Centro</label>
               <SearchableSelect
@@ -647,7 +647,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 value={produtoFiltro}
                 onChange={e => setProdutoFiltro(e.target.value)}
                 placeholder="Buscar..."
-                className="h-6 text-[10px] px-1.5"
+                className="h-6 text-[9px] px-1.5"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
               />
             </div>
             <div>
@@ -669,6 +672,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <span className="text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
             </div>
             <div className="flex gap-1">
+              {onBack && (
+                <Button size="sm" variant="outline" onClick={onBack} className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground">
+                  <ChevronLeft className="h-3 w-3" /> Voltar
+                </Button>
+              )}
               <Button size="sm" variant="ghost" onClick={handleLimparFiltros} className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground">
                 <FilterX className="h-3 w-3" /> Limpar
               </Button>
