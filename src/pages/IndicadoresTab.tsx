@@ -226,12 +226,14 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
                   unidade="kg/dia"
                   compMensal={c.gmdMes.mensal}
                   compAnual={c.gmdMes.anual}
+                  info={`Ganho Médio Diário no mês.\n\nFórmula: (Peso final − Peso inicial − Peso entradas + Peso saídas) ÷ Rebanho médio ÷ Dias do mês.\nIsola o ganho biológico real.`}
                 />
                 <KpiCard
                   label="GMD acumulado"
                   valor={ind.gmdAcumulado !== null ? formatNum(ind.gmdAcumulado, 3) : '—'}
                   unidade="kg/dia"
                   compAnual={c.gmdAcumulado.anual}
+                  info={`GMD médio acumulado no ano.\n\nMédia aritmética dos GMDs mensais de Janeiro até o mês selecionado.`}
                 />
               </div>
               <GmdDetalheSheet abertura={ind.gmdAberturaMes} mesLabel={mesLabel} anoLabel={anoFiltro} />
