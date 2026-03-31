@@ -202,7 +202,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               unidade="@"
               compAnual={c.arrobasProduzidasAcumulado.anual}
               semBase={ind.arrobasProduzidasAcumulado === null}
-              info={`Arrobas produzidas acumuladas.\n\nSomatório das arrobas de saídas de Janeiro até o mês selecionado.`}
+              info={`Arrobas produzidas acumuladas (ganho biológico).\n\nFórmula: (Peso final − Peso inicial ano − Peso entradas acum. + Peso saídas acum.) ÷ 30.\nDe Janeiro até o mês selecionado.`}
             />
             <KpiCard
               label="@/ha acum."
