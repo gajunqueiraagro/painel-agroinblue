@@ -27,6 +27,7 @@ import { CadastrosTab } from './CadastrosTab';
 import { ConciliacaoTab } from './ConciliacaoTab';
 import { FechamentoTab } from './FechamentoTab';
 import { MapaPastosTab } from './MapaPastosTab';
+import { MapaGeoPastosTab } from './MapaGeoPastosTab';
 import { ResumoPastosTab } from './ResumoPastosTab';
 import { AnaliseOperacionalTab } from './AnaliseOperacionalTab';
 import { ValorRebanhoTab } from './ValorRebanhoTab';
@@ -91,6 +92,7 @@ const TITLES: Record<TabId, string> = {
   analise_operacional: 'Análise Operacional',
   fechamento: 'Lançamento de Pasto',
   mapa_pastos: 'Mapa de Pastos',
+  mapa_geo_pastos: 'Mapa Geográfico',
   resumo_pastos: 'Resumo de Pastos',
   visao_anual_zoo: 'Visão Anual Zootécnica',
   indicadores: 'Indicadores',
@@ -415,6 +417,7 @@ const Index = () => {
         />
       )}
       {activeTab === 'mapa_pastos' && <MapaPastosTab />}
+      {activeTab === 'mapa_geo_pastos' && <MapaGeoPastosTab />}
       {activeTab === 'resumo_pastos' && <ResumoPastosTab onTabChange={handleTabChange} />}
       {activeTab === 'analise_operacional' && <AnaliseOperacionalTab onNavigateToMovimentacao={navigateToMovimentacao} />}
       {activeTab === 'visao_anual_zoo' && (

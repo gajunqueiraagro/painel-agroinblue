@@ -46,6 +46,7 @@ const ACOES_PRINCIPAIS = [
 
 const PASTOS_ITEMS = [
   { label: 'Mapa de Pastos', tab: 'mapa_pastos' as TabId, icon: Map, description: 'Visualização consolidada' },
+  { label: 'Mapa Geográfico', tab: 'mapa_geo_pastos' as TabId, icon: Map, description: 'Mapa real com polígonos KML' },
 ];
 
 export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
