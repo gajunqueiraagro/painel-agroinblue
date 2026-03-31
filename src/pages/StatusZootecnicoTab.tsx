@@ -140,7 +140,12 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
 
       // Group by fazenda
       const pastosByFaz = new Map<string, number>();
-      (pastosRes.data || []).forEach(p => pastosByFaz.set(p.fazenda_id, (pastosByFaz.get(p.fazenda_id) || 0) + 1));
+      const activePastoIdsByFaz = new Map<string, Set<string>>();
+      (pastosRes.data || []).forEach(p => {
+        pastosByFaz.set(p.fazenda_id, (pastosByFaz.get(p.fazenda_id) || 0) + 1);
+        if (!activePastoIdsByFaz.has(p.fazenda_id)) activePastoIdsByFaz.set(p.fazenda_id, new Set());
+        activePastoIdsByFaz.get(p.fazenda_id)!.add(p.id);
+      });
 
       const fpByFaz = new Map<string, any[]>();
       (fpRes.data || []).forEach(fp => {
@@ -192,9 +197,11 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
         const totalPastos = pastosByFaz.get(faz.id) || 0;
         const fps = fpByFaz.get(faz.id) || [];
         
-        // Deduplicate: keep only the most recent fechamento per pasto
+        // Deduplicate: keep only the most recent fechamento per pasto ATIVO
+        const activePastoIds = activePastoIdsByFaz.get(faz.id) || new Set<string>();
         const dedupByPasto = new Map<string, any>();
         fps.forEach(f => {
+          if (!activePastoIds.has(f.pasto_id)) return; // Ignora pastos inativos
           const existing = dedupByPasto.get(f.pasto_id);
           if (!existing || (f.updated_at || '') >= (existing.updated_at || '')) {
             dedupByPasto.set(f.pasto_id, f);
