@@ -255,9 +255,11 @@ export function useStatusZootecnico(
       setPastosNaoIniciados(detalhesPastos.reduce((s, f) => s + f.naoIniciados, 0));
 
       // --- Categorias comparison (via calcStatusCategorias — single source of truth) ---
-      // Deduplicate: keep only the most recent fechamento per pasto
+      // Deduplicate: keep only the most recent fechamento per pasto ATIVO (mesma base da tela Fechamento de Pastos)
+      const activePastoIds = new Set(pastosData.map((p: any) => p.id));
       const dedupFechByPasto = new Map<string, { id: string; updated_at: string }>();
       fpData.forEach((f: any) => {
+        if (!activePastoIds.has(f.pasto_id)) return; // Ignora pastos inativos
         const existing = dedupFechByPasto.get(f.pasto_id);
         if (!existing || (f.updated_at || '') >= (existing.updated_at || '')) {
           dedupFechByPasto.set(f.pasto_id, { id: f.id, updated_at: f.updated_at || '' });
