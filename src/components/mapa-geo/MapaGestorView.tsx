@@ -234,16 +234,13 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
                 <p className="text-[11px] font-medium text-foreground">
                   {mapStatus === 'error' ? 'Falha ao inicializar o mapa' : 'Preparando mapa...'}
                 </p>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Container {debugInfo.width}×{debugInfo.height}px
-                </p>
               </div>
             </div>
           )}
           {!hasGeo && !geoLoading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center px-4 bg-card z-10 rounded-lg">
               <MapPin className="h-10 w-10 text-muted-foreground/20" />
-              <p className="text-xs text-muted-foreground">Nenhum mapa importado</p>
+              <p className="text-xs text-muted-foreground">Esta fazenda ainda não possui mapa importado.</p>
               <Button size="sm" variant="outline" onClick={onUpload}>
                 <Upload className="h-3.5 w-3.5 mr-1" />
                 Importar
