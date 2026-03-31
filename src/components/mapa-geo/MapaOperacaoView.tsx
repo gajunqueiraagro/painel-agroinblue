@@ -92,6 +92,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
 
       if (geometrias.length === 0) {
         reportRenderedGeometries(0);
+        onRenderedChange?.(0);
         return;
       }
 

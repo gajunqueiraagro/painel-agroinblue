@@ -115,6 +115,7 @@ export function MapaGestorView({ geometrias, pastos, ocupacoes, geoLoading, onUp
 
       if (geometrias.length === 0) {
         reportRenderedGeometries(0);
+        onRenderedChange?.(0);
         return;
       }
 
