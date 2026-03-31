@@ -26,21 +26,23 @@ interface Props {
 }
 
 type CellStatus = 'aberto' | 'parcial' | 'fechado';
-interface MonthStatus { pastos: CellStatus; valor: CellStatus; categorias: CellStatus; }
+interface MonthStatus { financeiro: CellStatus; pastos: CellStatus; categorias: CellStatus; valor: CellStatus; }
 
 interface FazendaStatus {
   fazendaId: string;
   fazendaNome: string;
+  financeiro: CellStatus;
   pastos: CellStatus;
-  valor: CellStatus;
   categorias: CellStatus;
+  valor: CellStatus;
 }
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const ROWS: { id: keyof MonthStatus; label: string; tab: TabId }[] = [
+  { id: 'financeiro', label: 'Conciliação do Financeiro', tab: 'fin_caixa' },
   { id: 'pastos', label: 'Fechamento de Pastos', tab: 'fechamento' },
-  { id: 'valor', label: 'Valor do Rebanho', tab: 'valor_rebanho' },
   { id: 'categorias', label: 'Conciliação de Categorias', tab: 'conciliacao_categoria' },
+  { id: 'valor', label: 'Valor do Rebanho', tab: 'valor_rebanho' },
 ];
 
 const STATUS_ORDER: Record<CellStatus, number> = { aberto: 0, parcial: 1, fechado: 2 };
