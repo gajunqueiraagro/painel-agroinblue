@@ -20,6 +20,7 @@ import {
   Tooltip, ResponsiveContainer, AreaChart, Area, Legend, ReferenceLine,
   ComposedChart,
 } from 'recharts';
+import { StandardTooltip } from '@/lib/chartConfig';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
 type SubAba = 'zootecnico' | 'financeiro' | 'operacional';
