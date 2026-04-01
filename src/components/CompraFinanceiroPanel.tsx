@@ -87,6 +87,20 @@ export function CompraFinanceiroPanel({
       });
   }, [clienteAtual]);
 
+  // Load existing financial records in update mode
+  useEffect(() => {
+    if (mode !== 'update' || !lancamentoId) { setExistingLoaded(true); return; }
+    supabase
+      .from('financeiro_lancamentos_v2')
+      .select('id', { count: 'exact', head: true })
+      .eq('movimentacao_rebanho_id', lancamentoId)
+      .eq('cancelado', false)
+      .then(({ count }) => {
+        setExistingCount(count ?? 0);
+        setExistingLoaded(true);
+      });
+  }, [mode, lancamentoId]);
+
   // Auto-suggest fornecedor based on fazendaOrigem
   useEffect(() => {
     if (!fazendaOrigem?.trim() || origemSugestaoDescartada) {
