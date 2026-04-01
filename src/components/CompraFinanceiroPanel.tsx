@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import type { StatusOperacional } from '@/lib/statusOperacional';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
+import { CATEGORIAS } from '@/types/cattle';
 
 type TipoPreco = 'por_kg' | 'por_cab' | 'por_total';
 
@@ -388,7 +389,9 @@ export function CompraFinanceiroPanel({
       }
 
       const statusFin = statusOp === 'previsto' ? 'previsto' : 'confirmado';
-      const produtoLabel = `Compra & ${categoria}`;
+      const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria;
+      const compraLabel = `Compra ${quantidade} ${catLabel}`;
+      const produtoLabel = `${quantidade} ${catLabel}`;
       const anoMes = data.slice(0, 7);
       const inserts: any[] = [];
 
@@ -424,7 +427,7 @@ export function CompraFinanceiroPanel({
             valor: p.valor,
             data_competencia: data,
             data_pagamento: p.data,
-            descricao: `${produtoLabel} - Parcela ${i + 1}/${parcelas.length}`,
+            descricao: `${compraLabel} - Parcela ${i + 1}/${parcelas.length}`,
             historico: fazendaOrigem ? `Origem: ${fazendaOrigem}` : undefined,
             origem_tipo: 'compra_rebanho:parcela',
             nota_fiscal: notaFiscal || undefined,
@@ -438,7 +441,7 @@ export function CompraFinanceiroPanel({
           valor: calc.valorBase,
           data_competencia: data,
           data_pagamento: data,
-          descricao: produtoLabel,
+          descricao: compraLabel,
           historico: fazendaOrigem ? `Origem: ${fazendaOrigem}` : undefined,
           origem_tipo: 'compra_rebanho:parcela',
           nota_fiscal: notaFiscal || undefined,
@@ -454,7 +457,7 @@ export function CompraFinanceiroPanel({
           valor: calc.freteVal,
           data_competencia: data,
           data_pagamento: data,
-          descricao: `Prev. Mov - Frete compra ${categoria}`,
+          descricao: `Prev. Frete - ${compraLabel}`,
           origem_tipo: 'compra_rebanho:frete',
         });
       }
@@ -468,7 +471,7 @@ export function CompraFinanceiroPanel({
           valor: calc.comissaoVal,
           data_competencia: data,
           data_pagamento: data,
-          descricao: `Prev. Mov - Comissão compra ${categoria}`,
+          descricao: `Prev. Comissão - ${compraLabel}`,
           origem_tipo: 'compra_rebanho:comissao',
         });
       }
