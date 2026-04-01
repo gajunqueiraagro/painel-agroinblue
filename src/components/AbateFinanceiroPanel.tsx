@@ -24,6 +24,7 @@ interface Props {
   categoria: string;
   data: string;
   valorLiquido: number;
+  totalDescontos?: number;
   frigorifico: string;
   notaFiscal: string;
   onNotaFiscalChange: (v: string) => void;
