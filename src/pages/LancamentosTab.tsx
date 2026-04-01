@@ -296,8 +296,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Load abate into form for editing
   const loadAbateForEdit = useCallback((l: Lancamento) => {
+    // 1. Set tab & type
     setAba('saida');
     setTipo('abate');
+
+    // 2. Zootechnical data
     setData(l.data);
     setCategoria(l.categoria);
     setQuantidade(String(l.quantidade));
@@ -308,20 +311,23 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setStatusOp((l.statusOperacional as StatusOperacional) || 'conciliado');
     setTipoPeso(l.tipoPeso || 'vivo');
     setNotaFiscal(l.notaFiscal || '');
+
+    // 3. Financial / commercial data
     setDataVenda(l.dataVenda || '');
     setDataEmbarque(l.dataEmbarque || '');
-    setDataAbate(l.dataAbate || '');
+    setDataAbate(l.dataAbate || l.data || '');
     setTipoVenda(l.tipoVenda || '');
     setPrecoArroba(l.precoArroba ? String(l.precoArroba) : '');
+    setPesoCarcacaKg(l.pesoCarcacaKg ? String(l.pesoCarcacaKg) : '');
 
-    // Reverse-calc rendimento from pesoCarcacaKg / pesoMedioKg
+    // 4. Reverse-calc rendimento from pesoCarcacaKg / pesoMedioKg
     if (l.pesoCarcacaKg && l.pesoMedioKg && l.pesoMedioKg > 0) {
       setRendCarcaca(String(((l.pesoCarcacaKg / l.pesoMedioKg) * 100).toFixed(2)));
     } else {
       setRendCarcaca('');
     }
 
-    // Bonus/desconto stored as totals → convert back to R$/@ for form inputs
+    // 5. Bonus/desconto stored as totals → convert back to R$/@ for form inputs
     const rend = l.pesoCarcacaKg && l.pesoMedioKg ? l.pesoCarcacaKg / l.pesoMedioKg : 0;
     const arrobasCab = (l.pesoMedioKg ?? 0) * rend / 15;
     const totalArrobas = arrobasCab * l.quantidade;
@@ -335,7 +341,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setDescontoQualidade(toArroba(l.descontoQualidade));
     setOutrosDescontos(l.outrosDescontos ? String(l.outrosDescontos) : '');
 
-    // Funrural: stored as total → reverse to percentage of valor bruto
+    // 6. Funrural: stored as total → reverse to percentage of valor bruto
     if (l.descontoFunrural && l.descontoFunrural > 0 && totalArrobas > 0 && l.precoArroba) {
       const valorBruto = totalArrobas * l.precoArroba;
       if (valorBruto > 0) {
@@ -347,8 +353,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setFunruralPct('');
     }
 
+    // 7. Open financial panel and set editing mode
+    setFinanceiroOpen(true);
     setEditingAbateId(l.id);
     setDetalheId(null);
+    setLastSavedLancamentoId(null);
   }, []);
 
   // Auto-load abate for editing when navigated from another tab
