@@ -25,6 +25,7 @@ import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, Ref
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
+import { AbateExportDialog } from '@/components/AbateExportMenu';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useIntegerInput, useDecimalInput } from '@/hooks/useFormattedNumber';
 import { toast } from 'sonner';
