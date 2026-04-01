@@ -25,6 +25,7 @@ import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, Ref
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
+import { AbateExportDialog } from '@/components/AbateExportMenu';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useIntegerInput, useDecimalInput } from '@/hooks/useFormattedNumber';
 import { toast } from 'sonner';
@@ -74,7 +75,7 @@ function getCamposFazenda(tipo: TipoMovimentacao, nomeFazenda: string) {
     case 'transferencia_entrada':
       return { origem: { show: true, auto: false, label: 'Origem', useSelect: true }, destino: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Destino' } };
     case 'abate':
-      return { origem: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Origem' }, destino: { show: true, auto: false, label: 'Destino' } };
+      return { origem: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Origem' }, destino: { show: true, auto: false, label: 'Frigorífico' } };
     case 'venda':
       return { origem: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Origem' }, destino: { show: true, auto: false, label: 'Destino' } };
     case 'transferencia_saida':
@@ -142,6 +143,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [dataVenda, setDataVenda] = useState('');
   const [dataEmbarque, setDataEmbarque] = useState('');
   const [dataAbate, setDataAbate] = useState('');
+  const [tipoVenda, setTipoVenda] = useState('');
 
   const [formaPagamento, setFormaPagamento] = useState<'avista' | 'parcelado'>('avista');
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
@@ -257,7 +259,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setDescontoQualidade(''); setDescontoFunrural(''); setOutrosDescontos('');
     setBonus(''); setDescontos(''); setComissaoPct(''); setFrete(''); setOutrasDespesas('');
     setNotaFiscal(''); setTipoPeso('vivo'); setObservacao('');
-    setDataVenda(''); setDataEmbarque(''); setDataAbate('');
+    setDataVenda(''); setDataEmbarque(''); setDataAbate(''); setTipoVenda('');
     setFormaPagamento('avista'); setParcelas([]); setQtdParcelas('2');
     setMotivoMorte(''); setMotivoMorteCustom('');
   };
@@ -300,6 +302,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       notaFiscal: notaFiscal || undefined,
       tipoPeso,
       statusOperacional: statusOp,
+      dataVenda: dataVenda || undefined,
+      dataEmbarque: dataEmbarque || undefined,
+      dataAbate: dataAbate || undefined,
+      tipoVenda: tipoVenda || undefined,
     });
 
     if (isCompra && returnedId) {
@@ -462,6 +468,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               </div>
             )}
           </div>
+          {/* Tipo de Venda (abate only) */}
+          {isAbate && (
+            <div>
+              <Label className="text-[11px]">Tipo de Venda</Label>
+              <Select value={tipoVenda} onValueChange={setTipoVenda}>
+                <SelectTrigger className="h-8 text-[12px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="escala" className="text-[12px]">Escala</SelectItem>
+                  <SelectItem value="a_termo" className="text-[12px]">A termo</SelectItem>
+                  <SelectItem value="spot" className="text-[12px]">Spot</SelectItem>
+                  <SelectItem value="outro" className="text-[12px]">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <Separator />
         </div>
       )}
@@ -850,6 +871,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-0.5 shrink-0">
+                  {l.tipo === 'abate' && (l.statusOperacional === 'confirmado' || l.statusOperacional === 'conciliado') && (
+                    <AbateExportDialog lancamento={l} fazendaNome={nomeFazenda} />
+                  )}
                   {(() => {
                     const cfg = getStatusBadge(l);
                     return <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${cfg.cls}`}>{cfg.label}</span>;

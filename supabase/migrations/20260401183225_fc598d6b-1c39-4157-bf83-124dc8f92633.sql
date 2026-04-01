@@ -1,0 +1,5 @@
+ALTER TABLE public.lancamentos
+  ADD COLUMN IF NOT EXISTS data_venda text DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS data_embarque text DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS data_abate text DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS tipo_venda text DEFAULT NULL;

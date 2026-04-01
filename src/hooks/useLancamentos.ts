@@ -77,6 +77,10 @@ export function useLancamentos() {
           notaFiscal: l.nota_fiscal ?? undefined,
           tipoPeso: l.tipo_peso ?? 'vivo',
           statusOperacional: l.status_operacional ?? 'conciliado',
+          dataVenda: l.data_venda ?? undefined,
+          dataEmbarque: l.data_embarque ?? undefined,
+          dataAbate: l.data_abate ?? undefined,
+          tipoVenda: l.tipo_venda ?? undefined,
           createdAt: l.created_at,
           updatedAt: l.updated_at,
           createdBy: l.created_by ?? undefined,
@@ -152,6 +156,10 @@ export function useLancamentos() {
         notaFiscal: l.nota_fiscal ?? undefined,
         tipoPeso: l.tipo_peso ?? 'vivo',
         statusOperacional: l.status_operacional ?? 'conciliado',
+        dataVenda: l.data_venda ?? undefined,
+        dataEmbarque: l.data_embarque ?? undefined,
+        dataAbate: l.data_abate ?? undefined,
+        tipoVenda: l.tipo_venda ?? undefined,
         createdAt: l.created_at,
         updatedAt: l.updated_at,
         createdBy: l.created_by ?? undefined,
@@ -259,6 +267,10 @@ export function useLancamentos() {
       nota_fiscal: lancamento.notaFiscal || null,
       tipo_peso: lancamento.tipoPeso || 'vivo',
       status_operacional: lancamento.statusOperacional || 'conciliado',
+      data_venda: lancamento.dataVenda || null,
+      data_embarque: lancamento.dataEmbarque || null,
+      data_abate: lancamento.dataAbate || null,
+      tipo_venda: lancamento.tipoVenda || null,
     };
 
     if (!isOnline()) {
@@ -317,6 +329,10 @@ export function useLancamentos() {
         notaFiscal: data.nota_fiscal ?? undefined,
         tipoPeso: (data.tipo_peso as 'vivo' | 'morto') ?? 'vivo',
         statusOperacional: (data.status_operacional as StatusOperacional) ?? 'conciliado',
+        dataVenda: (data as any).data_venda ?? undefined,
+        dataEmbarque: (data as any).data_embarque ?? undefined,
+        dataAbate: (data as any).data_abate ?? undefined,
+        tipoVenda: (data as any).tipo_venda ?? undefined,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         createdBy: data.created_by ?? undefined,
@@ -355,6 +371,10 @@ export function useLancamentos() {
     if (dados.notaFiscal !== undefined) update.nota_fiscal = dados.notaFiscal;
     if (dados.tipoPeso !== undefined) update.tipo_peso = dados.tipoPeso;
     if (dados.statusOperacional !== undefined) update.status_operacional = dados.statusOperacional;
+    if (dados.dataVenda !== undefined) update.data_venda = dados.dataVenda;
+    if (dados.dataEmbarque !== undefined) update.data_embarque = dados.dataEmbarque;
+    if (dados.dataAbate !== undefined) update.data_abate = dados.dataAbate;
+    if (dados.tipoVenda !== undefined) update.tipo_venda = dados.tipoVenda;
 
     const { error } = await supabase.from('lancamentos').update(update).eq('id', id);
     if (!error) {

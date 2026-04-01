@@ -19,6 +19,7 @@ import { Separator } from '@/components/ui/separator';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Pencil, Trash2, DollarSign, AlertTriangle } from 'lucide-react';
+import { AbateShareButtons } from '@/components/AbateExportMenu';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { STATUS_OPTIONS, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
@@ -60,6 +61,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const [finLoading, setFinLoading] = useState(false);
 
   const isCompra = lancamento.tipo === 'compra';
+  const isAbate = lancamento.tipo === 'abate';
 
   const loadFinRecords = useCallback(() => {
     if (!isCompra) return;
@@ -227,8 +229,52 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 )}
                 {lancamento.fazendaDestino && (
                   <div>
-                    <p className="text-[10px] text-muted-foreground">Fazenda Destino</p>
+                    <p className="text-[10px] text-muted-foreground">{isAbate ? 'Frigorífico' : 'Fazenda Destino'}</p>
                     <p className="font-bold text-foreground">{lancamento.fazendaDestino}</p>
+                  </div>
+                )}
+                {/* Abate: extra dates & tipo venda */}
+                {isAbate && lancamento.dataVenda && (
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Data Venda</p>
+                    <p className="font-bold text-foreground">{format(parseISO(lancamento.dataVenda), 'dd/MM/yyyy')}</p>
+                  </div>
+                )}
+                {isAbate && lancamento.dataEmbarque && (
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Data Embarque</p>
+                    <p className="font-bold text-foreground">{format(parseISO(lancamento.dataEmbarque), 'dd/MM/yyyy')}</p>
+                  </div>
+                )}
+                {isAbate && lancamento.dataAbate && (
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Data Abate</p>
+                    <p className="font-bold text-foreground">{format(parseISO(lancamento.dataAbate), 'dd/MM/yyyy')}</p>
+                  </div>
+                )}
+                {isAbate && lancamento.tipoVenda && (
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Tipo de Venda</p>
+                    <p className="font-bold text-foreground">{{ escala: 'Escala', a_termo: 'A termo', spot: 'Spot', outro: 'Outro' }[lancamento.tipoVenda] || lancamento.tipoVenda}</p>
+                  </div>
+                )}
+                {/* Abate: financial summary */}
+                {isAbate && lancamento.pesoCarcacaKg && (
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Peso Carcaça</p>
+                    <p className="font-bold text-foreground">{lancamento.pesoCarcacaKg} kg</p>
+                  </div>
+                )}
+                {isAbate && lancamento.pesoCarcacaKg && lancamento.pesoMedioKg && (
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Rendimento</p>
+                    <p className="font-bold text-foreground">{((lancamento.pesoCarcacaKg / lancamento.pesoMedioKg) * 100).toFixed(1)}%</p>
+                  </div>
+                )}
+                {isAbate && lancamento.precoArroba && (
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">R$/@ Base</p>
+                    <p className="font-bold text-foreground">{formatMoeda(lancamento.precoArroba)}</p>
                   </div>
                 )}
                 {lancamento.precoMedioCabeca && lancamento.quantidade && (
@@ -239,7 +285,19 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                     </p>
                   </div>
                 )}
+                {isAbate && lancamento.valorTotal && (
+                  <div className="col-span-2 bg-primary/10 rounded-md p-2 mt-0.5">
+                    <p className="text-[10px] text-muted-foreground">Valor Líquido Final</p>
+                    <p className="font-extrabold text-primary text-lg leading-tight">
+                      {formatMoeda(lancamento.valorTotal)}
+                    </p>
+                  </div>
+                )}
               </div>
+              {/* Abate share buttons */}
+              {isAbate && (
+                <AbateShareButtons lancamento={lancamento} fazendaNome={nomeFazenda} />
+              )}
               {/* Audit info */}
               <div className="bg-muted/40 rounded-md px-2.5 py-1.5 space-y-0.5">
                 <p className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wide">Histórico</p>
