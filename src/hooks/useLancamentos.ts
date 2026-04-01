@@ -415,6 +415,7 @@ export function useLancamentos() {
     adicionarLancamento,
     editarLancamento,
     removerLancamento,
+    countFinanceirosVinculados,
     setSaldoInicial,
     loadData,
     loading,
