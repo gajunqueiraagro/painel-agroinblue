@@ -446,10 +446,10 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
 
         {/* ZOOTÉCNICO */}
         <section className="rounded-lg border border-primary/20 bg-primary/[0.04]">
-          <div className="px-3 py-1.5 border-b border-primary/15 flex items-center justify-between">
+          <div className="px-3 py-2 border-b border-primary/15 flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <span className="text-xs">🐄</span>
-              <span className="text-[10px] font-semibold text-foreground uppercase tracking-wide">Zootécnico</span>
+              <span className="text-sm">🐄</span>
+              <span className="text-xs font-bold text-foreground uppercase tracking-wide">Zootécnico</span>
             </div>
             <StatusBadge
               nivel={zootecnico.status.nivel}
