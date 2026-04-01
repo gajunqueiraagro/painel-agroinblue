@@ -87,17 +87,68 @@ export function CompraFinanceiroPanel({
       });
   }, [clienteAtual]);
 
-  // Load existing financial records in update mode
+  // Load existing financial records in update mode and pre-fill fields
   useEffect(() => {
     if (mode !== 'update' || !lancamentoId) { setExistingLoaded(true); return; }
     supabase
       .from('financeiro_lancamentos_v2')
-      .select('id', { count: 'exact', head: true })
+      .select('id, valor, data_competencia, data_pagamento, descricao, origem_tipo, favorecido_id, nota_fiscal')
       .eq('movimentacao_rebanho_id', lancamentoId)
       .eq('cancelado', false)
-      .then(({ count }) => {
-        setExistingCount(count ?? 0);
+      .order('data_pagamento', { ascending: true })
+      .then(({ data: records }) => {
+        const recs = records || [];
+        setExistingCount(recs.length);
         setExistingLoaded(true);
+
+        if (recs.length === 0) return;
+
+        // Separate by origin type
+        const parcelaRecs = recs.filter(r => r.origem_tipo?.includes('parcela'));
+        const freteRec = recs.find(r => r.origem_tipo?.includes('frete'));
+        const comissaoRec = recs.find(r => r.origem_tipo?.includes('comissao'));
+
+        // Calculate total purchase value from parcelas
+        const totalParcelas = parcelaRecs.reduce((s, r) => s + (r.valor || 0), 0);
+
+        if (totalParcelas > 0) {
+          setTipoPreco('por_total');
+          setValorTotal(String(totalParcelas));
+        }
+
+        // Set frete
+        if (freteRec && freteRec.valor > 0) {
+          setFrete(String(freteRec.valor));
+        }
+
+        // Set comissão (reverse calculate percentage)
+        if (comissaoRec && comissaoRec.valor > 0 && totalParcelas > 0) {
+          const pct = (comissaoRec.valor / totalParcelas) * 100;
+          setComissaoPct(String(Math.round(pct * 100) / 100));
+        }
+
+        // Set parcelas if more than 1
+        if (parcelaRecs.length > 1) {
+          setFormaPag('prazo');
+          setPagamentoOpen(true);
+          setQtdParcelas(String(parcelaRecs.length));
+          setParcelas(parcelaRecs.map(r => ({
+            data: r.data_pagamento || r.data_competencia,
+            valor: r.valor,
+          })));
+        }
+
+        // Set fornecedor
+        const favId = recs[0]?.favorecido_id;
+        if (favId && !fornecedorId) {
+          setFornecedorId(favId as string);
+        }
+
+        // Set nota fiscal
+        const nf = parcelaRecs[0]?.nota_fiscal;
+        if (nf && !notaFiscal) {
+          onNotaFiscalChange(nf as string);
+        }
       });
   }, [mode, lancamentoId]);
 
