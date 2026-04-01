@@ -537,21 +537,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
                 {/* Extra dates for Confirmado/Conciliado */}
                 {showExtraDates && (
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-bold text-muted-foreground uppercase">Datas da Operação</h4>
-                    <div className={`grid gap-3 ${isAbate || isTransferencia ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                  <div className="space-y-1.5">
+                    <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Datas da Operação</h4>
+                    <div className={`grid gap-2 ${isAbate || isTransferencia ? 'grid-cols-3' : 'grid-cols-2'}`}>
                       <div>
-                        <Label className="text-xs">Data da Venda</Label>
-                        <Input type="date" value={dataVenda} onChange={e => setDataVenda(e.target.value)} className="h-9" />
+                        <Label className="text-[11px]">Data da Venda</Label>
+                        <Input type="date" value={dataVenda} onChange={e => setDataVenda(e.target.value)} className="h-8 text-[12px]" />
                       </div>
                       <div>
-                        <Label className="text-xs">Data Embarque</Label>
-                        <Input type="date" value={dataEmbarque} onChange={e => setDataEmbarque(e.target.value)} className="h-9" />
+                        <Label className="text-[11px]">Data Embarque</Label>
+                        <Input type="date" value={dataEmbarque} onChange={e => setDataEmbarque(e.target.value)} className="h-8 text-[12px]" />
                       </div>
                       {(isAbate || isTransferencia) && (
                         <div>
-                          <Label className="text-xs">Data Abate</Label>
-                          <Input type="date" value={dataAbate} onChange={e => setDataAbate(e.target.value)} className="h-9" />
+                          <Label className="text-[11px]">Data Abate</Label>
+                          <Input type="date" value={dataAbate} onChange={e => setDataAbate(e.target.value)} className="h-8 text-[12px]" />
                         </div>
                       )}
                     </div>
