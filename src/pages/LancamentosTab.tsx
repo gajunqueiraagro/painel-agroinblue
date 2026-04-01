@@ -396,18 +396,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       {aba === 'reclassificacao' ? (
         <ReclassificacaoForm onAdicionar={onAdicionar} dataInicial={dataInicial} />
       ) : aba !== 'historico' ? (
-        <form onSubmit={handleSubmit} className="bg-card rounded-lg p-3 shadow-sm border space-y-2.5">
+        <form onSubmit={handleSubmit} className="bg-card rounded-md p-3 shadow-sm border space-y-2">
 
           {/* === STATUS OPERACIONAL === */}
           <div className="space-y-1">
-            <Label className="font-bold text-foreground text-xs">Status da Operação</Label>
-            <div className="grid grid-cols-3 gap-1.5">
+            <Label className="font-bold text-[11px]">Status da Operação</Label>
+            <div className="grid grid-cols-3 gap-1">
               {STATUS_OPTIONS.map(s => (
                 <button
                   key={s.value}
                   type="button"
                   onClick={() => setStatusOp(s.value)}
-                  className={`py-1 px-1.5 rounded-md text-[11px] font-bold border transition-all ${
+                  className={`h-8 px-1.5 rounded text-[12px] font-bold border transition-all ${
                     statusOp === s.value
                       ? `${s.bg} text-white border-transparent shadow-sm`
                       : 'border-border text-muted-foreground bg-muted/30'
@@ -423,12 +423,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
           {/* Tipo */}
           <div>
-            <Label className="font-bold text-foreground text-xs">Tipo</Label>
-            <div className="grid grid-cols-3 gap-1 mt-1">
+            <Label className="font-bold text-[11px]">Tipo</Label>
+            <div className="grid grid-cols-3 gap-1 mt-0.5">
               {tiposDisponiveis.map(t => (
                 <button key={t.value} type="button"
                   onClick={() => { setTipo(t.value); setFazendaOrigem(''); setFazendaDestino(''); setMotivoMorte(''); setMotivoMorteCustom(''); resetFinancialFields(); setPesoKg(t.value === 'nascimento' ? '30' : ''); }}
-                  className={`py-1 px-1 rounded-md text-[11px] font-bold border transition-all ${
+                  className={`h-8 px-1 rounded text-[12px] font-bold border transition-all ${
                     tipo === t.value ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground'
                   }`}>
                   {t.icon} {t.label}
@@ -437,23 +437,23 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className={`font-bold text-foreground ${previstoLabelClass}`}>Data</Label>
-              <Input type="date" value={data} onChange={e => setData(e.target.value)} className={`mt-1 touch-target text-base ${previstoInputClass}`} />
+              <Label className={`font-bold text-[11px] ${previstoLabelClass}`}>Data</Label>
+              <Input type="date" value={data} onChange={e => setData(e.target.value)} className={`mt-0.5 h-8 text-[12px] ${previstoInputClass}`} />
             </div>
             <div>
-              <Label className={`font-bold text-foreground ${previstoLabelClass}`}>Qtd. Cabeças</Label>
-              <Input type="number" value={quantidade} onChange={e => setQuantidade(e.target.value)} placeholder="0" min="1" className={`mt-1 touch-target text-base text-center font-bold text-lg ${previstoInputClass}`} />
+              <Label className={`font-bold text-[11px] ${previstoLabelClass}`}>Qtd. Cabeças</Label>
+              <Input type="number" value={quantidade} onChange={e => setQuantidade(e.target.value)} placeholder="0" min="1" className={`mt-0.5 h-8 text-[12px] text-center font-bold ${previstoInputClass}`} />
             </div>
           </div>
 
           <div>
-            <Label className="font-bold text-foreground">Categoria</Label>
+            <Label className="font-bold text-[11px]">Categoria</Label>
             <Select value={categoria} onValueChange={v => setCategoria(v as Categoria)}>
-              <SelectTrigger className="mt-1 touch-target text-base"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-base">{c.label}</SelectItem>)}
+                {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px]">{c.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
