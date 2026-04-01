@@ -175,85 +175,85 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     return (
       <>
         <Dialog open={open} onOpenChange={onClose}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <span className="text-2xl">{tipoInfo?.icon}</span>
+          <DialogContent className="max-w-md">
+            <DialogHeader className="pb-1">
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <span className="text-xl">{tipoInfo?.icon}</span>
                 {tipoInfo?.label}
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[12px]">
                 <div>
-                  <p className="text-muted-foreground">Data</p>
+                  <p className="text-[10px] text-muted-foreground">Data</p>
                   <p className="font-bold text-foreground">
                     {format(parseISO(lancamento.data), 'dd/MM/yyyy', { locale: ptBR })}
                   </p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Quantidade</p>
+                  <p className="text-[10px] text-muted-foreground">Quantidade</p>
                   <p className={`font-bold ${entrada ? 'text-success' : reclass ? 'text-foreground' : 'text-destructive'}`}>
                     {entrada ? '+' : reclass ? '' : '-'}{lancamento.quantidade} cab.
                   </p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Categoria</p>
+                  <p className="text-[10px] text-muted-foreground">Categoria</p>
                   <p className="font-bold text-foreground">{catInfo?.label}</p>
                 </div>
                 {catDestinoInfo && (
                   <div>
-                    <p className="text-muted-foreground">Categoria Destino</p>
+                    <p className="text-[10px] text-muted-foreground">Categoria Destino</p>
                     <p className="font-bold text-foreground">{catDestinoInfo.label}</p>
                   </div>
                 )}
                 {lancamento.pesoMedioKg && (
                   <div>
-                    <p className="text-muted-foreground">Peso Médio</p>
+                    <p className="text-[10px] text-muted-foreground">Peso Médio</p>
                     <p className="font-bold text-foreground">{lancamento.pesoMedioKg} kg ({lancamento.pesoMedioArrobas} @)</p>
                   </div>
                 )}
                 {lancamento.precoMedioCabeca && (
                   <div>
-                    <p className="text-muted-foreground">Preço/Cabeça</p>
+                    <p className="text-[10px] text-muted-foreground">Preço/Cabeça</p>
                     <p className="font-bold text-foreground">R$ {lancamento.precoMedioCabeca.toLocaleString('pt-BR')}</p>
                   </div>
                 )}
                 {lancamento.fazendaOrigem && (
                   <div>
-                    <p className="text-muted-foreground">Fazenda Origem</p>
+                    <p className="text-[10px] text-muted-foreground">Fazenda Origem</p>
                     <p className="font-bold text-foreground">{lancamento.fazendaOrigem}</p>
                   </div>
                 )}
                 {lancamento.fazendaDestino && (
                   <div>
-                    <p className="text-muted-foreground">Fazenda Destino</p>
+                    <p className="text-[10px] text-muted-foreground">Fazenda Destino</p>
                     <p className="font-bold text-foreground">{lancamento.fazendaDestino}</p>
                   </div>
                 )}
                 {lancamento.precoMedioCabeca && lancamento.quantidade && (
-                  <div className="col-span-2 bg-muted rounded-lg p-3">
-                    <p className="text-muted-foreground text-xs">Valor Total</p>
-                    <p className="font-extrabold text-foreground text-lg">
+                  <div className="col-span-2 bg-primary/10 rounded-md p-2 mt-0.5">
+                    <p className="text-[10px] text-muted-foreground">Valor Total</p>
+                    <p className="font-extrabold text-primary text-lg leading-tight">
                       R$ {(lancamento.precoMedioCabeca * lancamento.quantidade).toLocaleString('pt-BR')}
                     </p>
                   </div>
                 )}
               </div>
               {/* Audit info */}
-              <div className="col-span-2 bg-muted/50 rounded-lg p-3 space-y-1">
-                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">Histórico</p>
-                <p className="text-[11px] text-muted-foreground">
+              <div className="bg-muted/40 rounded-md px-2.5 py-1.5 space-y-0.5">
+                <p className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wide">Histórico</p>
+                <p className="text-[10px] text-muted-foreground">
                   <span className="font-semibold">ID:</span> {lancamento.id.slice(0, 8)}
                 </p>
                 {lancamento.createdAt && (
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-[10px] text-muted-foreground">
                     <span className="font-semibold">Criado:</span>{' '}
                     {format(parseISO(lancamento.createdAt), "dd/MM/yy 'às' HH:mm", { locale: ptBR })}
                     {lancamento.createdByNome && ` por ${lancamento.createdByNome}`}
                   </p>
                 )}
                 {lancamento.updatedAt && lancamento.updatedAt !== lancamento.createdAt && (
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-[10px] text-muted-foreground">
                     <span className="font-semibold">Editado:</span>{' '}
                     {format(parseISO(lancamento.updatedAt), "dd/MM/yy 'às' HH:mm", { locale: ptBR })}
                     {lancamento.updatedByNome && ` por ${lancamento.updatedByNome}`}
@@ -261,48 +261,48 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 )}
               </div>
               {isTransferenciaEntrada && (
-                <div className="col-span-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                  <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-2.5 py-1.5">
+                  <p className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
                     🔒 Transferência automática — só pode ser editada/removida na fazenda de origem.
                   </p>
                 </div>
               )}
-              <div className="flex gap-2 pt-2">
+              <div className="flex gap-2 pt-1">
                 {!isTransferenciaEntrada && (
                   <>
-                    <Button variant="outline" className="flex-1 touch-target" onClick={handleEditClick}>
-                      <Pencil className="h-4 w-4 mr-1" /> Editar
+                    <Button variant="default" size="sm" className="flex-1 h-8 text-[11px] font-bold" onClick={handleEditClick}>
+                      <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
                     </Button>
-                    <Button variant="destructive" className="flex-1 touch-target" onClick={handleRemoverClick} disabled={checkingVinculos}>
-                      <Trash2 className="h-4 w-4 mr-1" /> Apagar
+                    <Button variant="destructive" size="sm" className="h-8 text-[11px]" onClick={handleRemoverClick} disabled={checkingVinculos}>
+                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Apagar
                     </Button>
                   </>
                 )}
               </div>
               {/* Resumo financeiro da compra (view-only) */}
               {isCompra && !isTransferenciaEntrada && (
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-muted-foreground tracking-wide">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase text-muted-foreground tracking-wide">
                     <DollarSign className="h-3 w-3" /> Financeiro vinculado
                   </div>
                   {finLoading ? (
-                    <p className="text-[11px] text-muted-foreground">Carregando...</p>
+                    <p className="text-[10px] text-muted-foreground">Carregando...</p>
                   ) : finRecords.length === 0 ? (
-                    <div className="bg-muted/50 rounded-md p-2 text-[11px] text-muted-foreground">
+                    <div className="bg-muted/40 rounded-md px-2 py-1.5 text-[10px] text-muted-foreground">
                       Nenhum lançamento financeiro gerado para esta compra.
                     </div>
                   ) : (
-                    <div className="bg-muted/30 rounded-md p-2 space-y-1">
+                    <div className="bg-muted/20 rounded-md px-2 py-1.5 space-y-px">
                       {finRecords.map(r => {
                         const label = r.origem_tipo?.includes('frete') ? '🚚' : r.origem_tipo?.includes('comissao') ? '📋' : '💰';
                         return (
-                          <div key={r.id} className="flex justify-between text-[10px]">
+                          <div key={r.id} className="flex justify-between text-[10px] leading-relaxed">
                             <span className="text-muted-foreground truncate max-w-[60%]">{label} {r.descricao}</span>
                             <span className="font-semibold shrink-0">R$ {r.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                           </div>
                         );
                       })}
-                      <div className="flex justify-between text-[11px] font-bold pt-1 border-t border-border/50">
+                      <div className="flex justify-between text-[11px] font-bold pt-0.5 border-t border-border/50 text-primary">
                         <span>Total</span>
                         <span>R$ {finRecords.reduce((s, r) => s + r.valor, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                       </div>
