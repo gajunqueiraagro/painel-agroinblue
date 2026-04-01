@@ -142,6 +142,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [dataVenda, setDataVenda] = useState('');
   const [dataEmbarque, setDataEmbarque] = useState('');
   const [dataAbate, setDataAbate] = useState('');
+  const [tipoVenda, setTipoVenda] = useState('');
 
   const [formaPagamento, setFormaPagamento] = useState<'avista' | 'parcelado'>('avista');
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
