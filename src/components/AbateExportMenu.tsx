@@ -207,7 +207,7 @@ async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
   autoTable(doc, { ...tStyle, startY: y4, head: [['RESULTADO ESPERADO', '']], body: bloco4 });
 
   // Observação final
-  const yObs = (doc as any).lastAutoTable?.finalY + 8 ?? y4 + 30;
+  const yObs = ((doc as any).lastAutoTable?.finalY ?? y4 + 26) + 8;
   doc.setFontSize(8);
   doc.setTextColor(100, 100, 100);
   const obs = 'Os valores acima representam uma estimativa baseada nos parâmetros informados. O resultado final pode variar conforme rendimento de carcaça, peso real dos animais, bônus aplicados pelo frigorífico e descontos efetivos no abate.';
