@@ -519,8 +519,8 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
       <NovoFornecedorDialog
         open={novoFornecedorOpen}
-        onOpenChange={setNovoFornecedorOpen}
-        onSalvar={handleNovoFornecedor}
+        onClose={() => setNovoFornecedorOpen(false)}
+        onSave={handleNovoFornecedor}
       />
     </div>
   );
