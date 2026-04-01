@@ -114,20 +114,28 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
 
   const canGenerate = validationErrors.length === 0 && !!lancamentoId;
 
+  // Expose methods via ref for parent to call
+  useImperativeHandle(ref, () => ({
+    generateFinanceiro: async (extLancamentoId: string) => {
+      return handleGerarFinanceiroInternal(extLancamentoId);
+    },
+    getValidationErrors: () => validationErrors,
+  }));
+
   const handleClickGerar = () => {
     if (mode === 'update' && existingCount > 0) {
       setConfirmUpdateOpen(true);
     } else {
-      handleGerarFinanceiro();
+      handleGerarFinanceiroInternal(lancamentoId!);
     }
   };
 
-  const handleGerarFinanceiro = async () => {
-    if (!lancamentoId) {
+  const handleGerarFinanceiroInternal = async (targetLancamentoId: string): Promise<boolean> => {
+    if (!targetLancamentoId) {
       toast.error('Salve o lançamento zootécnico antes de gerar os financeiros.');
-      return;
+      return false;
     }
-    if (!fazendaAtual || !clienteAtual) return;
+    if (!fazendaAtual || !clienteAtual) return false;
     if (validationErrors.length > 0) {
       toast.error(validationErrors[0]);
       return;
