@@ -61,6 +61,45 @@ export function CompraFinanceiroPanel({
   const [gerado, setGerado] = useState(false);
   const [gerando, setGerando] = useState(false);
 
+  // Fornecedor state
+  const [fornecedorId, setFornecedorId] = useState<string>('');
+  const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
+  const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
+
+  useEffect(() => {
+    if (!clienteAtual) return;
+    supabase
+      .from('financeiro_fornecedores')
+      .select('id, nome')
+      .eq('cliente_id', clienteAtual.id)
+      .eq('ativo', true)
+      .order('nome')
+      .then(({ data }) => {
+        if (data) setFornecedores(data);
+      });
+  }, [clienteAtual]);
+
+  const handleNovoFornecedor = async (nome: string, cpfCnpj?: string) => {
+    if (!clienteAtual || !fazendaAtual) return;
+    const { data, error } = await supabase
+      .from('financeiro_fornecedores')
+      .insert({
+        cliente_id: clienteAtual.id,
+        fazenda_id: fazendaAtual.id,
+        nome,
+        cpf_cnpj: cpfCnpj || null,
+      })
+      .select('id, nome')
+      .single();
+    if (error) { toast.error('Erro ao salvar fornecedor'); return; }
+    if (data) {
+      setFornecedores(prev => [...prev, data].sort((a, b) => a.nome.localeCompare(b.nome)));
+      setFornecedorId(data.id);
+      toast.success(`Fornecedor "${data.nome}" criado e selecionado`);
+    }
+    setNovoFornecedorOpen(false);
+  };
+
   const qtd = quantidade || 0;
   const peso = pesoKg || 0;
   const totalKg = peso * qtd;
