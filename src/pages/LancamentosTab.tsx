@@ -867,7 +867,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           : statusOp === 'previsto' ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-800 text-orange-800 dark:text-orange-300'
           : 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-300'
         }`}>
-           {STATUS_DESCRIPTIONS[statusOp]}
+           {getStatusDescription(tipo, statusOp)}
         </div>
       </div>
 
