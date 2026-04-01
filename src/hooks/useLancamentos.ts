@@ -326,6 +326,7 @@ export function useLancamentos() {
       return data.id;
     }
     return undefined;
+  };
 
   const editarLancamento = async (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => {
     const update: any = {};
