@@ -670,15 +670,15 @@ export function CompraFinanceiroPanel({
         <div className={`rounded-md px-2 py-1.5 ${isPrevisto ? 'bg-orange-200/50 dark:bg-orange-950/50' : 'bg-primary/10'}`}>
           <div className="flex justify-between text-[11px] font-bold">
             <span>Valor total líquido</span>
-            <span className={`text-sm ${isPrevisto ? 'text-orange-800 dark:text-orange-300' : 'text-primary'}`}>R$ {fmt(calc.liqTotal)}</span>
+            <span className={`text-sm ${isPrevisto ? 'text-orange-800 dark:text-orange-300' : 'text-primary'}`}>{formatMoeda(calc.liqTotal)}</span>
           </div>
           <div className="flex justify-between text-[10px]">
             <span className="text-muted-foreground">R$/kg líq.</span>
-            <strong>R$ {fmt(calc.liqKg, 4)}</strong>
+            <strong>{formatMoeda(calc.liqKg)}</strong>
           </div>
           <div className="flex justify-between text-[10px]">
             <span className="text-muted-foreground">R$/cab. líq.</span>
-            <strong>R$ {fmt(calc.liqCab)}</strong>
+            <strong>{formatMoeda(calc.liqCab)}</strong>
           </div>
         </div>
       )}
