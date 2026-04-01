@@ -469,7 +469,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
     } finally {
       setGerando(false);
     }
-  };
+  }, [lancamentoId, fazendaAtual, clienteAtual, validationErrors, mode, statusOp, categoria, quantidade, data, fazendaOrigem, notaFiscal, fornecedorId, formaPag, parcelas, calc, onFinanceiroUpdated]);
 
   // Expose imperative methods to parent
   useImperativeHandle(ref, () => ({
