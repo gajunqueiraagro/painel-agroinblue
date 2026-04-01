@@ -238,7 +238,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const showOrigem = !isNascimento;
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <><Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Lançamento</DialogTitle>
