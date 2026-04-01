@@ -32,7 +32,7 @@ export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateT
       </TabsList>
 
       <TabsContent value="movimentacoes">
-        <FinanceiroTab lancamentos={lancamentos} onEditar={onEditar || (() => {})} onRemover={onRemover || (() => {})} modoMovimentacao />
+        <FinanceiroTab lancamentos={lancamentos} onEditar={onEditar || (() => {})} onRemover={onRemover || (() => {})} modoMovimentacao onEditarAbate={onEditarAbate} />
       </TabsContent>
 
       <TabsContent value="evolucao">
