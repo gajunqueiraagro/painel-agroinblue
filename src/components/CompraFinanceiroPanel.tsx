@@ -351,11 +351,32 @@ export function CompraFinanceiroPanel({
         )}
       </div>
 
+      {/* Fornecedor / Favorecido */}
+      <div className="space-y-1">
+        <Label className="text-[11px]">Fornecedor / Favorecido</Label>
+        <div className="flex gap-1">
+          <div className="flex-1">
+            <SearchableSelect
+              value={fornecedorId}
+              onValueChange={setFornecedorId}
+              placeholder="Selecione (opcional)"
+              options={fornecedores.map(f => ({ value: f.id, label: f.nome }))}
+              emptyText="Nenhum fornecedor"
+            />
+          </div>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setNovoFornecedorOpen(true)}>
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
       {/* Nota Fiscal */}
       <div>
         <Label className="text-[11px]">Nota Fiscal</Label>
         <Input value={notaFiscal} onChange={e => onNotaFiscalChange(e.target.value)} placeholder="Nº da nota" className="h-8 text-[12px]" />
       </div>
+
+      <NovoFornecedorDialog open={novoFornecedorOpen} onClose={() => setNovoFornecedorOpen(false)} onSave={handleNovoFornecedor} />
 
       <Separator />
 
