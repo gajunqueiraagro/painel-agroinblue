@@ -286,7 +286,7 @@ export function useLancamentos() {
     if (error) {
       console.error('Erro ao salvar lançamento:', error);
       toast.error('Erro ao salvar lançamento: ' + error.message);
-      return;
+      return undefined;
     }
 
     if (data) {
