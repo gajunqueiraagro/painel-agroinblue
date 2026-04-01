@@ -43,6 +43,8 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [financeiroCount, setFinanceiroCount] = useState(0);
   const [checkingVinculos, setCheckingVinculos] = useState(false);
+  const [financeiroSheetOpen, setFinanceiroSheetOpen] = useState(false);
+  const [notaFiscalEdit, setNotaFiscalEdit] = useState(lancamento.notaFiscal || '');
 
   const tipoInfo = TODOS_TIPOS.find(t => t.value === lancamento.tipo);
   const catInfo = CATEGORIAS.find(c => c.value === lancamento.categoria);
