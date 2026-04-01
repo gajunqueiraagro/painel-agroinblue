@@ -129,6 +129,7 @@ export function CompraFinanceiroPanel({
         if (totalParcelas > 0) {
           setTipoPreco('por_total');
           setValorTotal(String(totalParcelas));
+          setTipoCompraOpen(true);
           setPrecoBaseOpen(true);
         }
 
