@@ -63,7 +63,7 @@ const ABA_CONFIG: { id: Aba; label: string; icon: React.ReactNode }[] = [
 const STATUS_DESCRIPTIONS: Record<StatusOperacional, string> = {
   conciliado: 'Realizado — movimentação concluída e considerada no rebanho real.',
   previsto: 'Meta / Planejamento — entra apenas na previsão, não afeta o saldo real.',
-  confirmado: 'Venda fechada ou operação definida, mas ainda não efetivada. Quando concluída, alterar para Realizado.',
+  confirmado: 'Utilizar quando os animais já foram escalados / venda fechada, mas o abate ainda não ocorreu. Quando o abate for concluído, atualizar os dados finais e alterar para Realizado.',
 };
 
 function getCamposFazenda(tipo: TipoMovimentacao, nomeFazenda: string) {
