@@ -62,9 +62,9 @@ function CollapsibleBlock({ title, open, onOpenChange, children }: { title: stri
   );
 }
 
-export function CompraFinanceiroPanel({
-  quantidade, pesoKg, data, categoria, statusOp, fazendaOrigem, notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated,
-}: Props) {
+export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>(function CompraFinanceiroPanel({
+  quantidade, pesoKg, data, categoria, statusOp, fazendaOrigem, notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated, onValidationChange,
+}, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
 
