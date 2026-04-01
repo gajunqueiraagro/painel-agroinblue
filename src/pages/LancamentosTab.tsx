@@ -352,7 +352,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   }, []);
 
   // Auto-load abate for editing when navigated from another tab
-  React.useEffect(() => {
+  useEffect(() => {
     if (abateParaEditar) {
       loadAbateForEdit(abateParaEditar);
     }
