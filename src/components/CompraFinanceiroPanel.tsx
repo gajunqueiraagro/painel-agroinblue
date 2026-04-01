@@ -662,16 +662,16 @@ export function CompraFinanceiroPanel({
 
       {/* BLOCO 4 — Valor Líquido */}
       {calc.valorBase > 0 && (
-        <div className={`rounded-md p-2 ${isPrevisto ? 'bg-orange-200/50 dark:bg-orange-950/50' : 'bg-primary/10'}`}>
-          <div className="flex justify-between text-[12px] font-bold">
+        <div className={`rounded-md px-2 py-1.5 ${isPrevisto ? 'bg-orange-200/50 dark:bg-orange-950/50' : 'bg-primary/10'}`}>
+          <div className="flex justify-between text-[11px] font-bold">
             <span>Valor total líquido</span>
-            <span className={isPrevisto ? 'text-orange-800 dark:text-orange-300' : 'text-primary'}>R$ {fmt(calc.liqTotal)}</span>
+            <span className={`text-sm ${isPrevisto ? 'text-orange-800 dark:text-orange-300' : 'text-primary'}`}>R$ {fmt(calc.liqTotal)}</span>
           </div>
-          <div className="flex justify-between text-[11px] mt-0.5">
+          <div className="flex justify-between text-[10px]">
             <span className="text-muted-foreground">R$/kg líq.</span>
             <strong>R$ {fmt(calc.liqKg, 4)}</strong>
           </div>
-          <div className="flex justify-between text-[11px] mt-0.5">
+          <div className="flex justify-between text-[10px]">
             <span className="text-muted-foreground">R$/cab. líq.</span>
             <strong>R$ {fmt(calc.liqCab)}</strong>
           </div>
