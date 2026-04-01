@@ -1411,6 +1411,25 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onEditarAbate={loadAbateForEdit}
         />
       )}
+
+      {/* Confirmation dialog */}
+      <ConfirmacaoRegistroDialog
+        open={confirmDialogOpen}
+        onClose={() => setConfirmDialogOpen(false)}
+        onConfirm={() => handleSubmit()}
+        submitting={submitting}
+        operacionais={{
+          status: statusOp,
+          data,
+          quantidade: Number(quantidade) || 0,
+          categoria,
+          pesoKg: Number(pesoKg) || 0,
+          fazendaOrigem: campos.origem.show ? (campos.origem.auto ? campos.origem.value : fazendaOrigem) : undefined,
+          fazendaDestino: campos.destino?.show ? (campos.destino?.auto ? campos.destino?.value : fazendaDestino) : undefined,
+          observacao,
+        }}
+        financeiros={getConfirmacaoFinanceiros()}
+      />
     </div>
   );
 }
