@@ -441,7 +441,7 @@ export function CompraFinanceiroPanel({
           valor: calc.valorBase,
           data_competencia: data,
           data_pagamento: data,
-          descricao: produtoLabel,
+          descricao: compraLabel,
           historico: fazendaOrigem ? `Origem: ${fazendaOrigem}` : undefined,
           origem_tipo: 'compra_rebanho:parcela',
           nota_fiscal: notaFiscal || undefined,
