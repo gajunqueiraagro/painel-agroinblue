@@ -903,6 +903,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             onFinanceiroUpdated={() => {}}
           />
         )}
+
+        {/* Unified register button */}
+        <Separator />
+        <Button
+          type="button"
+          className="w-full h-10 text-[13px] font-bold"
+          onClick={handleRequestRegister}
+          disabled={submitting}
+        >
+          {editingAbateId ? 'Salvar Alterações do Abate' : 'Registrar Abate'}
+        </Button>
       </div>
     );
   };
