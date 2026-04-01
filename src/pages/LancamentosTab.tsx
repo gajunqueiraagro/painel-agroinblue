@@ -261,6 +261,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!quantidade || Number(quantidade) <= 0) return;
+    if (!categoria) { toast.error('Selecione a categoria'); return; }
 
     const origemFinal = campos.origem.show
       ? (campos.origem.auto ? campos.origem.value : fazendaOrigem) || undefined
