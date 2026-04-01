@@ -118,6 +118,12 @@ function inferirEscopo(tipoOp: string | null, macro: string | null): string {
   return 'pecuaria';
 }
 
+function isTransferencia(tipo: string | null): boolean {
+  if (!tipo) return false;
+  const t = tipo.toLowerCase();
+  return t.startsWith('3') || t.includes('transfer') || t.includes('resgate') || t.includes('aplicaç');
+}
+
 // ── Column index mapping ──
 
 const REQUIRED_COLUMNS = [
