@@ -300,7 +300,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
               notaFiscal={notaFiscalEdit}
               onNotaFiscalChange={setNotaFiscalEdit}
               lancamentoId={lancamento.id}
-              mode="update"
+              mode={finRecords.length > 0 ? 'update' : 'create'}
               onFinanceiroUpdated={() => {
                 setFinanceiroSheetOpen(false);
               }}
