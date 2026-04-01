@@ -1254,10 +1254,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           Cancelar Edição
         </Button>
       )}
-      <Button type="submit" className="w-full h-9 text-[12px] font-bold" size="sm">
-        {editingAbateId ? 'Salvar Alterações' : (aba === 'entrada' ? 'Registrar Entrada' : 'Registrar Saída')}
-      </Button>
-    </form>
+    </div>
   );
 
   // ===== HISTORICO VIEW =====
