@@ -293,8 +293,25 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!quantidade || Number(quantidade) <= 0) return;
+    if (!quantidade || Number(quantidade) <= 0) { toast.error('Informe a quantidade'); return; }
     if (!categoria) { toast.error('Selecione a categoria'); return; }
+    if (!data) { toast.error('Informe a data'); return; }
+
+    // Abate: validate required fields
+    if (isAbate) {
+      if (!fazendaDestino) { toast.error('Informe o Frigorífico'); return; }
+      if (isConfirmado || isConciliado) {
+        if (!dataVenda && !format(new Date(), 'yyyy-MM-dd')) { toast.error('Informe a Data da Venda'); return; }
+        if (!tipoVenda) { toast.error('Selecione o Tipo de Venda'); return; }
+        if (!rendCarcaca || Number(rendCarcaca) <= 0) { toast.error('Informe o Rendimento de Carcaça (%)'); return; }
+        if (!precoArroba || Number(precoArroba) <= 0) { toast.error('Informe o R$/@ (preço base)'); return; }
+      }
+    }
+    // Non-abate saídas: validate origin/destination
+    if (aba === 'saida' && !isAbate && !isMorte) {
+      if (campos.destino?.show && !campos.destino.auto && !fazendaDestino) { toast.error('Informe o Destino'); return; }
+    }
+    if (!pesoKg || Number(pesoKg) <= 0) { toast.error('Informe o Peso (kg)'); return; }
 
     const origemFinal = campos.origem.show
       ? (campos.origem.auto ? campos.origem.value : fazendaOrigem) || undefined
