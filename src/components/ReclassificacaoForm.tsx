@@ -54,8 +54,8 @@ export function ReclassificacaoForm({ onAdicionar, dataInicial }: Props) {
           <Label className="font-bold text-foreground">De (Origem)</Label>
           <Select value={categoriaOrigem} onValueChange={v => setCategoriaOrigem(v as Categoria)}>
             <SelectTrigger className="mt-1 touch-target text-base"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {CATEGORIAS.map(c => <SelectItem key={c.value} value={c.value} className="text-base">{c.label}</SelectItem>)}
+            <SelectContent className="max-h-52 overflow-y-auto">
+              {CATEGORIAS.map(c => <SelectItem key={c.value} value={c.value} className="text-base py-1.5">{c.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
