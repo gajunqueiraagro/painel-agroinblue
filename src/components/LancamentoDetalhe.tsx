@@ -90,7 +90,11 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
 
   // ---- Handle edit click ----
   const handleEditClick = () => {
-    if (isCompra) {
+    if (isAbate && onEditarAbate) {
+      // Redirect abate to the full form in LancamentosTab
+      onClose();
+      onEditarAbate(lancamento);
+    } else if (isCompra) {
       // Open unified purchase edit sheet
       setCompraForm({ ...lancamento });
       setCompraZooSaved(false);
