@@ -493,27 +493,30 @@ export function CompraFinanceiroPanel({
   const previstoInputClass = isPrevisto ? 'border-orange-400 text-orange-800 dark:text-orange-300' : '';
 
   return (
-    <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start relative">
+    <div className="bg-card rounded-md border shadow-sm p-2.5 space-y-1.5 self-start relative">
       {/* Overlay: block editing until movimentação is saved */}
       {!lancamentoId && mode === 'create' && (
-        <div className="absolute inset-0 z-10 bg-background/70 backdrop-blur-[1px] rounded-md flex items-center justify-center p-4">
+        <div className="absolute inset-0 z-10 bg-background/70 backdrop-blur-[1px] rounded-md flex items-center justify-center p-3">
           <div className="text-center space-y-1">
-            <AlertTriangle className="h-5 w-5 mx-auto text-muted-foreground" />
-            <p className="text-sm font-medium text-muted-foreground">
+            <AlertTriangle className="h-4 w-4 mx-auto text-muted-foreground" />
+            <p className="text-[11px] font-medium text-muted-foreground">
               Registre a entrada primeiro para depois preencher o financeiro
             </p>
           </div>
         </div>
       )}
 
-      <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">
+      <h3 className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">
         {mode === 'update' ? 'Atualizar Financeiro da Compra' : 'Detalhes Financeiros'}
       </h3>
       {mode === 'update' && existingCount > 0 && (
-        <div className="flex items-center gap-1.5 text-[11px] p-2 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400">
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-          <span>{existingCount} lançamento(s) existente(s) serão cancelados e substituídos pelos novos valores.</span>
+        <div className="flex items-center gap-1 text-[10px] p-1.5 rounded border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400">
+          <AlertTriangle className="h-3 w-3 shrink-0" />
+          <span>{existingCount} lançamento(s) existente(s) serão cancelados e substituídos.</span>
         </div>
+      )}
+      {mode === 'update' && existingLoaded && existingCount > 0 && (
+        <p className="text-[9px] text-muted-foreground/70 italic">Valores atuais carregados automaticamente</p>
       )}
       <Separator />
 
