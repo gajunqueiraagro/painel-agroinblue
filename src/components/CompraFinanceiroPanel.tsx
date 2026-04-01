@@ -326,7 +326,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
     }
   };
 
-  const handleGerarFinanceiro = async (overrideLancamentoId?: string) => {
+  const handleGerarFinanceiro = useCallback(async (overrideLancamentoId?: string) => {
     const effectiveId = overrideLancamentoId || lancamentoId;
     if (!effectiveId) { toast.error('Salve o lançamento zootécnico antes de gerar os financeiros.'); return false; }
     if (!fazendaAtual || !clienteAtual) return false;
