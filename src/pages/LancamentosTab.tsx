@@ -619,21 +619,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // ===== ABATE FINANCIAL PANEL =====
   const renderAbateFinancialPanel = () => {
-    // Previsto: locked with message
-    if (isPrevisto) {
-      return (
-        <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
-          <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
-          <Separator />
-          <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-md p-3 text-center space-y-1 opacity-70">
-            <AlertTriangle className="h-5 w-5 text-orange-500 mx-auto" />
-            <p className="text-[11px] font-semibold text-orange-800 dark:text-orange-300">Registrar o abate primeiro para depois preencher o financeiro.</p>
-            <p className="text-[10px] text-orange-600 dark:text-orange-400">Altere o status para Confirmado ou Realizado para habilitar os campos financeiros.</p>
-          </div>
-        </div>
-      );
-    }
-
     const compactRow = (label: string, input: React.ReactNode, autoLabel?: string, autoValue?: string, autoColor?: string) => (
       <div className="space-y-0.5">
         <div className="flex items-center gap-2">
