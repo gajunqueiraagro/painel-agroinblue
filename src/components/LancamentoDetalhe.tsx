@@ -327,7 +327,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
 
           <div className="flex gap-2 pt-2">
             <Button variant="outline" className="flex-1 touch-target" onClick={() => setEditando(false)}>Cancelar</Button>
-            <Button variant="destructive" className="touch-target" onClick={handleRemover}>
+            <Button variant="destructive" className="touch-target" onClick={handleRemoverClick} disabled={checkingVinculos}>
               <Trash2 className="h-4 w-4" />
             </Button>
             <Button className="flex-1 touch-target" onClick={handleSalvar}>Salvar</Button>
