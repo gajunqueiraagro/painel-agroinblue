@@ -198,7 +198,7 @@ async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
   autoTable(doc, { ...tStyle, startY: y3, head: [['PROJEÇÃO FINANCEIRA (EXPECTATIVA)', '']], body: bloco3 });
 
   // BLOCO 4
-  const y4 = (doc as any).lastAutoTable?.finalY + 4 ?? y3 + 40;
+  const y4 = ((doc as any).lastAutoTable?.finalY ?? y3 + 36) + 4;
   const bloco4: string[][] = [
     ['Líquido Estimado R$/@', formatMoeda(precoLiqArroba)],
     ['Líquido Estimado / Cabeça', formatMoeda(liqCabeca)],
