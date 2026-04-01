@@ -382,7 +382,11 @@ export function CompraFinanceiroPanel({
       if (error) throw error;
 
       setGerado(true);
-      toast.success(`${inserts.length} lançamento(s) financeiro(s) gerado(s) com sucesso!`);
+      const msg = mode === 'update'
+        ? `Financeiro atualizado: ${inserts.length} novo(s) lançamento(s) gerado(s)`
+        : `${inserts.length} lançamento(s) financeiro(s) gerado(s) com sucesso!`;
+      toast.success(msg);
+      if (mode === 'update' && onFinanceiroUpdated) onFinanceiroUpdated();
     } catch (err: any) {
       toast.error('Erro ao gerar lançamentos: ' + (err.message || err));
     } finally {
