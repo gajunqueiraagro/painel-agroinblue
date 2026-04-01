@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Lancamento,
   CATEGORIAS,
@@ -17,10 +17,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Pencil, Trash2, RefreshCw } from 'lucide-react';
+import { Pencil, Trash2, RefreshCw, DollarSign, FileText } from 'lucide-react';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { STATUS_OPTIONS, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Props {
   lancamento: Lancamento;
