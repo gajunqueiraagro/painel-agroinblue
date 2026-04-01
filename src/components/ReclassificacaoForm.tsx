@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
+import { useIntegerInput, useDecimalInput } from '@/hooks/useFormattedNumber';
 
 interface Props {
   onAdicionar: (l: Omit<Lancamento, 'id'>) => void;
@@ -17,6 +18,9 @@ export function ReclassificacaoForm({ onAdicionar, dataInicial }: Props) {
   const [quantidade, setQuantidade] = useState('');
   const [data, setData] = useState(dataInicial || format(new Date(), 'yyyy-MM-dd'));
   const [pesoKg, setPesoKg] = useState('');
+
+  const qtdInput = useIntegerInput(quantidade, setQuantidade);
+  const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,13 +79,13 @@ export function ReclassificacaoForm({ onAdicionar, dataInicial }: Props) {
         </div>
         <div>
           <Label className="font-bold text-foreground">Qtd. Cabeças</Label>
-          <Input type="number" value={quantidade} onChange={e => setQuantidade(e.target.value)} placeholder="0" min="1" className="mt-1 touch-target text-base text-center font-bold text-lg" />
+          <Input type="text" inputMode="numeric" value={qtdInput.displayValue} onChange={qtdInput.onChange} onBlur={qtdInput.onBlur} onFocus={qtdInput.onFocus} placeholder="0" min="1" className="mt-1 touch-target text-base text-center font-bold text-lg" />
         </div>
       </div>
 
       <div>
         <Label className="font-bold text-foreground">Peso Médio (kg) - opcional</Label>
-        <Input type="number" value={pesoKg} onChange={e => setPesoKg(e.target.value)} placeholder="0" className="mt-1 touch-target text-base" />
+        <Input type="text" inputMode="decimal" value={pesoInput.displayValue} onChange={pesoInput.onChange} onBlur={pesoInput.onBlur} onFocus={pesoInput.onFocus} placeholder="0,00" className="mt-1 touch-target text-base" />
       </div>
 
       <Button type="submit" className="w-full touch-target text-base font-bold" size="lg">

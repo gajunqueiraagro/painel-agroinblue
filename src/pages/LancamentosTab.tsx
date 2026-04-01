@@ -24,6 +24,7 @@ import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, Ref
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useIntegerInput, useDecimalInput } from '@/hooks/useFormattedNumber';
 import { toast } from 'sonner';
 
 interface Props {
@@ -141,6 +142,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [formaPagamento, setFormaPagamento] = useState<'avista' | 'parcelado'>('avista');
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
   const [qtdParcelas, setQtdParcelas] = useState('2');
+
+  const qtdInput = useIntegerInput(quantidade, setQuantidade);
+  const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
 
   const isPrevisto = statusOp === 'previsto';
   const isConfirmado = statusOp === 'confirmado';
@@ -702,11 +706,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
         <div className="col-span-2">
           <Label className={`font-bold text-[11px] ${previstoLabelClass}`}>Qtd. Cab.</Label>
-          <Input type="number" value={quantidade} onChange={e => setQuantidade(e.target.value)} placeholder="0" min="1" className={`mt-0.5 h-8 text-[12px] text-center font-bold ${previstoInputClass}`} />
+          <Input type="text" inputMode="numeric" value={qtdInput.displayValue} onChange={qtdInput.onChange} onBlur={qtdInput.onBlur} onFocus={qtdInput.onFocus} placeholder="0" className={`mt-0.5 h-8 text-[12px] text-center font-bold ${previstoInputClass}`} />
         </div>
         <div className="col-span-3">
           <Label className={`font-bold text-[11px] ${previstoLabelClass}`}>Peso (kg)</Label>
-          <Input type="number" value={pesoKg} onChange={e => setPesoKg(e.target.value)} placeholder="0" className={`mt-0.5 h-8 text-[12px] ${previstoInputClass}`} />
+          <Input type="text" inputMode="decimal" value={pesoInput.displayValue} onChange={pesoInput.onChange} onBlur={pesoInput.onBlur} onFocus={pesoInput.onFocus} placeholder="0,00" className={`mt-0.5 h-8 text-[12px] ${previstoInputClass}`} />
           {pesoKg && Number(pesoKg) > 0 && (
             <p className="text-[9px] text-muted-foreground mt-0.5">≈ {kgToArrobas(Number(pesoKg))} @</p>
           )}
