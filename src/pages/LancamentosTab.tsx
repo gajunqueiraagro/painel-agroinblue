@@ -346,53 +346,57 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // ===== LEFT SIDEBAR NAV =====
   const renderSidebar = () => {
     const parentCls = (active: boolean) =>
-      `w-full flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-bold transition-all ${
+      `w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm font-bold transition-all ${
         active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/60'
       }`;
     const childCls = (active: boolean) =>
-      `w-full flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${
+      `w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[13px] font-semibold transition-all ${
         active ? 'bg-primary/15 text-foreground border border-primary/40' : 'text-muted-foreground hover:bg-muted/40 border border-transparent'
       }`;
-    const childWrap = "ml-3 mt-px border-l-2 border-primary/30 pl-1.5 space-y-px";
+    const childWrap = "ml-4 mt-0.5 border-l-2 border-primary/30 pl-2 space-y-0.5";
 
     return (
-      <div className="w-44 shrink-0 space-y-0.5">
+      <div className="w-48 shrink-0 space-y-3">
         {/* Entradas */}
-        <button onClick={() => { setAba('entrada'); setTipo('nascimento'); }} className={parentCls(aba === 'entrada')}>
-          <LogIn className="h-3.5 w-3.5" /> Entradas
-        </button>
-        <div className={childWrap}>
-          {TIPOS_ENTRADA.map(t => (
-            <button key={t.value} type="button"
-              onClick={() => { setAba('entrada'); setTipo(t.value); setFazendaOrigem(''); setFazendaDestino(''); resetFinancialFields(); setPesoKg(t.value === 'nascimento' ? '30' : ''); }}
-              className={childCls(aba === 'entrada' && tipo === t.value)}>
-              <span className="text-[10px]">{t.icon}</span> {t.label}
-            </button>
-          ))}
+        <div>
+          <button onClick={() => { setAba('entrada'); setTipo('nascimento'); }} className={parentCls(aba === 'entrada')}>
+            <LogIn className="h-4 w-4" /> Entradas
+          </button>
+          <div className={childWrap}>
+            {TIPOS_ENTRADA.map(t => (
+              <button key={t.value} type="button"
+                onClick={() => { setAba('entrada'); setTipo(t.value); setFazendaOrigem(''); setFazendaDestino(''); resetFinancialFields(); setPesoKg(t.value === 'nascimento' ? '30' : ''); }}
+                className={childCls(aba === 'entrada' && tipo === t.value)}>
+                <span className="text-sm">{t.icon}</span> {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Saídas */}
-        <button onClick={() => { setAba('saida'); setTipo('abate'); }} className={parentCls(aba === 'saida')}>
-          <LogOut className="h-3.5 w-3.5" /> Saídas
-        </button>
-        <div className={childWrap}>
-          {TIPOS_SAIDA.map(t => (
-            <button key={t.value} type="button"
-              onClick={() => { setAba('saida'); setTipo(t.value); setFazendaOrigem(''); setFazendaDestino(''); setMotivoMorte(''); setMotivoMorteCustom(''); resetFinancialFields(); setPesoKg(''); }}
-              className={childCls(aba === 'saida' && tipo === t.value)}>
-              <span className="text-[10px]">{t.icon}</span> {t.label}
-            </button>
-          ))}
+        <div>
+          <button onClick={() => { setAba('saida'); setTipo('abate'); }} className={parentCls(aba === 'saida')}>
+            <LogOut className="h-4 w-4" /> Saídas
+          </button>
+          <div className={childWrap}>
+            {TIPOS_SAIDA.map(t => (
+              <button key={t.value} type="button"
+                onClick={() => { setAba('saida'); setTipo(t.value); setFazendaOrigem(''); setFazendaDestino(''); setMotivoMorte(''); setMotivoMorteCustom(''); resetFinancialFields(); setPesoKg(''); }}
+                className={childCls(aba === 'saida' && tipo === t.value)}>
+                <span className="text-sm">{t.icon}</span> {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Evoluir Categoria Animal */}
         <button onClick={() => setAba('reclassificacao')} className={parentCls(aba === 'reclassificacao')}>
-          <RefreshCw className="h-3.5 w-3.5" /> Evoluir Categoria
+          <RefreshCw className="h-4 w-4" /> Evoluir Categoria
         </button>
 
         {/* Histórico */}
         <button onClick={() => setAba('historico')} className={parentCls(aba === 'historico')}>
-          <Clock className="h-3.5 w-3.5" /> Histórico
+          <Clock className="h-4 w-4" /> Histórico
         </button>
       </div>
     );
