@@ -352,15 +352,9 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-[11px] font-bold text-foreground">Peso Médio (kg)</Label>
-                    <Input type="number" value={compraForm.pesoMedioKg || ''} onChange={e => setCompraForm(f => ({ ...f, pesoMedioKg: e.target.value ? Number(e.target.value) : undefined }))} className="mt-1 h-8 text-[12px]" />
-                  </div>
-                  <div>
-                    <Label className="text-[11px] font-bold text-foreground">Preço/Cab (R$)</Label>
-                    <Input type="number" value={compraForm.precoMedioCabeca || ''} onChange={e => setCompraForm(f => ({ ...f, precoMedioCabeca: e.target.value ? Number(e.target.value) : undefined }))} className="mt-1 h-8 text-[12px]" />
-                  </div>
+                <div>
+                  <Label className="text-[11px] font-bold text-foreground">Peso Médio (kg)</Label>
+                  <Input type="number" value={compraForm.pesoMedioKg || ''} onChange={e => setCompraForm(f => ({ ...f, pesoMedioKg: e.target.value ? Number(e.target.value) : undefined }))} className="mt-1 h-8 text-[12px]" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
