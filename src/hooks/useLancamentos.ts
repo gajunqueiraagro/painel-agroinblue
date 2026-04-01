@@ -267,6 +267,10 @@ export function useLancamentos() {
       nota_fiscal: lancamento.notaFiscal || null,
       tipo_peso: lancamento.tipoPeso || 'vivo',
       status_operacional: lancamento.statusOperacional || 'conciliado',
+      data_venda: lancamento.dataVenda || null,
+      data_embarque: lancamento.dataEmbarque || null,
+      data_abate: lancamento.dataAbate || null,
+      tipo_venda: lancamento.tipoVenda || null,
     };
 
     if (!isOnline()) {
