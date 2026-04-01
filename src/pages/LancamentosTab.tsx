@@ -392,6 +392,23 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
     if (!pesoKg || Number(pesoKg) <= 0) { toast.error('Informe o Peso (kg)'); return; }
 
+    // Compra: validate financial fields for confirmado/realizado
+    if (isCompra && compraFinanceiroRef.current) {
+      const finErrors = compraFinanceiroRef.current.getValidationErrors();
+      const tipoPrecoVal = compraFinanceiroRef.current.getTipoPreco();
+      const valorBaseVal = compraFinanceiroRef.current.getValorBase();
+      const fornecedorVal = compraFinanceiroRef.current.getFornecedorId();
+
+      if (isConfirmado || isConciliado) {
+        if (!fornecedorVal) { toast.error('Selecione o fornecedor antes de registrar a compra.'); return; }
+        if (valorBaseVal <= 0) { toast.error('Preencha o preço base antes de registrar a compra.'); return; }
+      }
+      if (finErrors.length > 0 && valorBaseVal > 0) {
+        toast.error(finErrors[0]);
+        return;
+      }
+    }
+
     const origemFinal = campos.origem.show
       ? (campos.origem.auto ? campos.origem.value : fazendaOrigem) || undefined
       : undefined;
