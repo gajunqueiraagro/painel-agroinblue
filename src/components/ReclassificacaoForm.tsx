@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
+import { useIntegerInput, useDecimalInput } from '@/hooks/useFormattedNumber';
 
 interface Props {
   onAdicionar: (l: Omit<Lancamento, 'id'>) => void;

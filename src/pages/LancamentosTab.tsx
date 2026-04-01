@@ -24,6 +24,7 @@ import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, Ref
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useIntegerInput, useDecimalInput } from '@/hooks/useFormattedNumber';
 import { toast } from 'sonner';
 
 interface Props {
