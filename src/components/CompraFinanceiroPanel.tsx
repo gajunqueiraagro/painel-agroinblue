@@ -309,9 +309,14 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       });
     }
     return errors;
-  }, [fornecedorId, calc.valorBase, formaPag, parcelas]);
+   }, [fornecedorId, calc.valorBase, formaPag, parcelas]);
 
-  const canGenerate = validationErrors.length === 0 && !!lancamentoId;
+  const canGenerate = validationErrors.length === 0;
+
+  // Report validation to parent
+  useEffect(() => {
+    onValidationChange?.(validationErrors);
+  }, [validationErrors, onValidationChange]);
 
   const handleClickGerar = () => {
     if (mode === 'update' && existingCount > 0) {
