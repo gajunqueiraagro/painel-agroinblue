@@ -61,9 +61,9 @@ const ABA_CONFIG: { id: Aba; label: string; icon: React.ReactNode }[] = [
 ];
 
 const STATUS_DESCRIPTIONS: Record<StatusOperacional, string> = {
-  conciliado: 'A movimentação será realizada e já considerada no rebanho real.',
-  previsto: 'A movimentação será planejada. Entra apenas na meta/previsão.',
-  confirmado: 'Movimentação definida, mas ainda não efetivada no rebanho. Quando ocorrer de fato, alterar para conciliado.',
+  conciliado: 'Realizado — movimentação concluída e considerada no rebanho real.',
+  previsto: 'Meta / Planejamento — entra apenas na previsão, não afeta o saldo real.',
+  confirmado: 'Venda fechada ou operação definida, mas ainda não efetivada. Quando concluída, alterar para Realizado.',
 };
 
 function getCamposFazenda(tipo: TipoMovimentacao, nomeFazenda: string) {
