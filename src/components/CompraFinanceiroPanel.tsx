@@ -1,16 +1,18 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronDown, ChevronUp, Info, AlertTriangle, CheckCircle } from 'lucide-react';
+import { ChevronDown, ChevronUp, Info, AlertTriangle, CheckCircle, Plus } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { toast } from 'sonner';
 import type { StatusOperacional } from '@/lib/statusOperacional';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 
 type TipoPreco = 'por_kg' | 'por_cab' | 'por_total';
 
@@ -58,6 +60,45 @@ export function CompraFinanceiroPanel({
 
   const [gerado, setGerado] = useState(false);
   const [gerando, setGerando] = useState(false);
+
+  // Fornecedor state
+  const [fornecedorId, setFornecedorId] = useState<string>('');
+  const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
+  const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
+
+  useEffect(() => {
+    if (!clienteAtual) return;
+    supabase
+      .from('financeiro_fornecedores')
+      .select('id, nome')
+      .eq('cliente_id', clienteAtual.id)
+      .eq('ativo', true)
+      .order('nome')
+      .then(({ data }) => {
+        if (data) setFornecedores(data);
+      });
+  }, [clienteAtual]);
+
+  const handleNovoFornecedor = async (nome: string, cpfCnpj?: string) => {
+    if (!clienteAtual || !fazendaAtual) return;
+    const { data, error } = await supabase
+      .from('financeiro_fornecedores')
+      .insert({
+        cliente_id: clienteAtual.id,
+        fazenda_id: fazendaAtual.id,
+        nome,
+        cpf_cnpj: cpfCnpj || null,
+      })
+      .select('id, nome')
+      .single();
+    if (error) { toast.error('Erro ao salvar fornecedor'); return; }
+    if (data) {
+      setFornecedores(prev => [...prev, data].sort((a, b) => a.nome.localeCompare(b.nome)));
+      setFornecedorId(data.id);
+      toast.success(`Fornecedor "${data.nome}" criado e selecionado`);
+    }
+    setNovoFornecedorOpen(false);
+  };
 
   const qtd = quantidade || 0;
   const peso = pesoKg || 0;
@@ -156,7 +197,7 @@ export function CompraFinanceiroPanel({
       const subcentroCompra = isFemea ? 'COMPRAS ANIMAIS/FEMEAS' : 'COMPRAS ANIMAIS/MACHOS';
 
       // Base record with full classification (ano_mes will be overridden per entry)
-      const baseRecord = {
+      const baseRecord: Record<string, any> = {
         cliente_id: clienteAtual.id,
         fazenda_id: fazendaAtual.id,
         tipo_operacao: '2-Saídas',
@@ -167,6 +208,11 @@ export function CompraFinanceiroPanel({
         macro_custo: 'Investimento em Bovinos',
         centro_custo: 'Reposição de Bovinos',
       };
+
+      // Add favorecido_id if a fornecedor was selected
+      if (fornecedorId) {
+        baseRecord.favorecido_id = fornecedorId;
+      }
 
       if (formaPag === 'prazo' && parcelas.length > 0) {
         parcelas.forEach((p, i) => {
@@ -310,11 +356,31 @@ export function CompraFinanceiroPanel({
         )}
       </div>
 
+      {/* Fornecedor / Favorecido */}
+      <div className="space-y-1">
+        <Label className="text-[11px]">Fornecedor / Favorecido</Label>
+        <div className="flex gap-1">
+          <div className="flex-1">
+            <SearchableSelect
+              value={fornecedorId}
+              onValueChange={setFornecedorId}
+              placeholder="Selecione (opcional)"
+              options={fornecedores.map(f => ({ value: f.id, label: f.nome }))}
+            />
+          </div>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setNovoFornecedorOpen(true)}>
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
       {/* Nota Fiscal */}
       <div>
         <Label className="text-[11px]">Nota Fiscal</Label>
         <Input value={notaFiscal} onChange={e => onNotaFiscalChange(e.target.value)} placeholder="Nº da nota" className="h-8 text-[12px]" />
       </div>
+
+      <NovoFornecedorDialog open={novoFornecedorOpen} onClose={() => setNovoFornecedorOpen(false)} onSave={handleNovoFornecedor} />
 
       <Separator />
 
