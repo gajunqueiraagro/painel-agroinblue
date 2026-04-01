@@ -61,9 +61,9 @@ const ABA_CONFIG: { id: Aba; label: string; icon: React.ReactNode }[] = [
 ];
 
 const STATUS_DESCRIPTIONS: Record<StatusOperacional, string> = {
-  conciliado: 'A movimentação será realizada e já considerada no rebanho real.',
-  previsto: 'A movimentação será planejada. Entra apenas na meta/previsão.',
-  confirmado: 'Movimentação definida, mas ainda não efetivada no rebanho. Quando ocorrer de fato, alterar para conciliado.',
+  conciliado: 'Realizado — movimentação concluída e considerada no rebanho real.',
+  previsto: 'Meta / Planejamento — entra apenas na previsão, não afeta o saldo real.',
+  confirmado: 'Venda fechada ou operação definida, mas ainda não efetivada. Quando concluída, alterar para Realizado.',
 };
 
 function getCamposFazenda(tipo: TipoMovimentacao, nomeFazenda: string) {
@@ -700,9 +700,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         {/* Row 1: selection cards */}
         <div className="grid grid-cols-3 gap-1.5">
           {([
-            { value: 'conciliado' as StatusOperacional, label: 'Conciliado', dot: 'bg-blue-500', activeBorder: 'border-blue-400', activeBg: 'bg-blue-50 dark:bg-blue-950/30' },
+            { value: 'conciliado' as StatusOperacional, label: 'Realizado', dot: 'bg-green-600', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
+            { value: 'confirmado' as StatusOperacional, label: 'Confirmado', dot: 'bg-blue-500', activeBorder: 'border-blue-400', activeBg: 'bg-blue-50 dark:bg-blue-950/30' },
             { value: 'previsto' as StatusOperacional, label: 'Previsto', dot: 'bg-orange-500', activeBorder: 'border-orange-400', activeBg: 'bg-orange-50 dark:bg-orange-950/30' },
-            { value: 'confirmado' as StatusOperacional, label: 'Confirmado*', dot: 'bg-green-500', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
           ]).map(s => {
             const selected = statusOp === s.value;
             return (
@@ -722,9 +722,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
         {/* Row 2: dynamic explanation card */}
         <div className={`rounded-md border px-3 py-1.5 text-[10px] leading-snug ${
-          statusOp === 'conciliado' ? 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-300'
+          statusOp === 'conciliado' ? 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-800 text-green-800 dark:text-green-300'
           : statusOp === 'previsto' ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-800 text-orange-800 dark:text-orange-300'
-          : 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-800 text-green-800 dark:text-green-300'
+          : 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-300'
         }`}>
            {STATUS_DESCRIPTIONS[statusOp]}
         </div>
