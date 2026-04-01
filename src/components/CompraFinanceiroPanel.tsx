@@ -40,9 +40,11 @@ interface Props {
   onFinanceiroUpdated?: () => void;
 }
 
-function fmt(v?: number, decimals = 2) {
+import { formatMoeda } from '@/lib/calculos/formatters';
+
+function fmtPrecoKg(v?: number) {
   if (v === undefined || v === null || isNaN(v) || v === 0) return '-';
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export function CompraFinanceiroPanel({
@@ -302,7 +304,7 @@ export function CompraFinanceiroPanel({
       const somaParcelas = Math.round(parcelas.reduce((s, p) => s + p.valor, 0) * 100) / 100;
       const valorBaseRound = Math.round(calc.valorBase * 100) / 100;
       if (Math.abs(somaParcelas - valorBaseRound) > 0.01) {
-        errors.push(`A soma das parcelas (R$ ${fmt(somaParcelas)}) deve ser igual ao valor base da compra (R$ ${fmt(valorBaseRound)}).`);
+        errors.push(`A soma das parcelas (${formatMoeda(somaParcelas)}) deve ser igual ao valor base da compra (${formatMoeda(valorBaseRound)}).`);
       }
       parcelas.forEach((p, i) => {
         if (!p.data) errors.push(`Parcela ${i + 1}: data obrigatória.`);
@@ -574,14 +576,14 @@ export function CompraFinanceiroPanel({
         {calc.valorBase > 0 && (
           <div className="bg-muted/30 rounded px-2 py-1.5 space-y-px text-[10px]">
             {tipoPreco !== 'por_kg' && (
-              <div className="flex justify-between"><span className="text-muted-foreground">R$/kg</span><strong>R$ {fmt(calc.rKg, 4)}</strong></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">R$/kg</span><strong>{formatMoeda(calc.rKg)}</strong></div>
             )}
             {tipoPreco !== 'por_cab' && (
-              <div className="flex justify-between"><span className="text-muted-foreground">R$/cab.</span><strong>R$ {fmt(calc.rCab)}</strong></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">R$/cab.</span><strong>{formatMoeda(calc.rCab)}</strong></div>
             )}
             <div className="flex justify-between font-semibold">
               <span className="text-muted-foreground">Total base</span>
-              <span>R$ {fmt(calc.valorBase)}</span>
+              <span>{formatMoeda(calc.valorBase)}</span>
             </div>
           </div>
         )}
@@ -650,13 +652,13 @@ export function CompraFinanceiroPanel({
         {calc.comissaoVal > 0 && (
           <div className="flex justify-between text-[10px] px-1">
             <span className="text-muted-foreground">Comissão (R$)</span>
-            <strong>R$ {fmt(calc.comissaoVal)}</strong>
+            <strong>{formatMoeda(calc.comissaoVal)}</strong>
           </div>
         )}
         {calc.totalDespesas > 0 && (
           <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded px-2 py-1.5 flex justify-between text-[10px] font-bold">
             <span className="text-orange-700 dark:text-orange-400">Total despesas</span>
-            <span className="text-orange-800 dark:text-orange-300">R$ {fmt(calc.totalDespesas)}</span>
+            <span className="text-orange-800 dark:text-orange-300">{formatMoeda(calc.totalDespesas)}</span>
           </div>
         )}
       </div>
@@ -668,15 +670,15 @@ export function CompraFinanceiroPanel({
         <div className={`rounded-md px-2 py-1.5 ${isPrevisto ? 'bg-orange-200/50 dark:bg-orange-950/50' : 'bg-primary/10'}`}>
           <div className="flex justify-between text-[11px] font-bold">
             <span>Valor total líquido</span>
-            <span className={`text-sm ${isPrevisto ? 'text-orange-800 dark:text-orange-300' : 'text-primary'}`}>R$ {fmt(calc.liqTotal)}</span>
+            <span className={`text-sm ${isPrevisto ? 'text-orange-800 dark:text-orange-300' : 'text-primary'}`}>{formatMoeda(calc.liqTotal)}</span>
           </div>
           <div className="flex justify-between text-[10px]">
             <span className="text-muted-foreground">R$/kg líq.</span>
-            <strong>R$ {fmt(calc.liqKg, 4)}</strong>
+            <strong>{formatMoeda(calc.liqKg)}</strong>
           </div>
           <div className="flex justify-between text-[10px]">
             <span className="text-muted-foreground">R$/cab. líq.</span>
-            <strong>R$ {fmt(calc.liqCab)}</strong>
+            <strong>{formatMoeda(calc.liqCab)}</strong>
           </div>
         </div>
       )}
@@ -722,7 +724,7 @@ export function CompraFinanceiroPanel({
               ))}
               {parcelas.length > 0 && (
                 <div className="text-[10px] text-muted-foreground text-right">
-                  Soma: R$ {fmt(parcelas.reduce((s, p) => s + p.valor, 0))}
+                  Soma: {formatMoeda(parcelas.reduce((s, p) => s + p.valor, 0))}
                 </div>
               )}
             </div>
@@ -746,25 +748,25 @@ export function CompraFinanceiroPanel({
               parcelas.map((p, i) => (
                 <div key={i} className="flex justify-between text-[10px]">
                   <span>Parcela {i + 1}/{parcelas.length} — {format(parseISO(p.data), 'dd/MM/yyyy')}</span>
-                  <span className="font-semibold">R$ {fmt(p.valor)}</span>
+                  <span className="font-semibold">{formatMoeda(p.valor)}</span>
                 </div>
               ))
             ) : (
               <div className="flex justify-between text-[10px]">
                 <span>Pagamento único</span>
-                <span className="font-semibold">R$ {fmt(calc.valorBase)}</span>
+                <span className="font-semibold">{formatMoeda(calc.valorBase)}</span>
               </div>
             )}
             {calc.freteVal > 0 && (
               <div className="flex justify-between text-[10px]">
                 <span>Frete</span>
-                <span className="font-semibold">R$ {fmt(calc.freteVal)}</span>
+                <span className="font-semibold">{formatMoeda(calc.freteVal)}</span>
               </div>
             )}
             {calc.comissaoVal > 0 && (
               <div className="flex justify-between text-[10px]">
                 <span>Comissão</span>
-                <span className="font-semibold">R$ {fmt(calc.comissaoVal)}</span>
+                <span className="font-semibold">{formatMoeda(calc.comissaoVal)}</span>
               </div>
             )}
           </div>

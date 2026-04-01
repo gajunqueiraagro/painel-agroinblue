@@ -23,6 +23,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { STATUS_OPTIONS, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 import { supabase } from '@/integrations/supabase/client';
+import { formatMoeda } from '@/lib/calculos/formatters';
 
 interface Props {
   lancamento: Lancamento;
@@ -215,7 +216,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 {lancamento.precoMedioCabeca && (
                   <div>
                     <p className="text-[10px] text-muted-foreground">Preço/Cabeça</p>
-                    <p className="font-bold text-foreground">R$ {lancamento.precoMedioCabeca.toLocaleString('pt-BR')}</p>
+                    <p className="font-bold text-foreground">{formatMoeda(lancamento.precoMedioCabeca)}</p>
                   </div>
                 )}
                 {lancamento.fazendaOrigem && (
@@ -234,7 +235,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                   <div className="col-span-2 bg-primary/10 rounded-md p-2 mt-0.5">
                     <p className="text-[10px] text-muted-foreground">Valor Total</p>
                     <p className="font-extrabold text-primary text-lg leading-tight">
-                      R$ {(lancamento.precoMedioCabeca * lancamento.quantidade).toLocaleString('pt-BR')}
+                      {formatMoeda(lancamento.precoMedioCabeca * lancamento.quantidade)}
                     </p>
                   </div>
                 )}
@@ -296,7 +297,6 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                     const despesas = finRecords.filter(r => r.origem_tipo?.includes('frete') || r.origem_tipo?.includes('comissao'));
                     const totalBov = bovinos.reduce((s, r) => s + r.valor, 0);
                     const totalDesp = despesas.reduce((s, r) => s + r.valor, 0);
-                    const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
                     return (
                       <div className="bg-muted/20 rounded-md px-2 py-1.5 space-y-1.5">
                         {bovinos.length > 0 && (
@@ -305,12 +305,12 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                             {bovinos.map(r => (
                               <div key={r.id} className="flex justify-between text-[10px] leading-relaxed">
                                 <span className="text-muted-foreground truncate max-w-[60%]">💰 {r.descricao}</span>
-                                <span className="font-semibold shrink-0">R$ {fmt(r.valor)}</span>
+                                <span className="font-semibold shrink-0">{formatMoeda(r.valor)}</span>
                               </div>
                             ))}
                             <div className="flex justify-between text-[10px] font-bold pt-0.5 border-t border-border/30">
                               <span>Total Bovinos</span>
-                              <span>R$ {fmt(totalBov)}</span>
+                              <span>{formatMoeda(totalBov)}</span>
                             </div>
                           </div>
                         )}
@@ -322,19 +322,19 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                               return (
                                 <div key={r.id} className="flex justify-between text-[10px] leading-relaxed">
                                   <span className="text-muted-foreground truncate max-w-[60%]">{icon} {r.descricao}</span>
-                                  <span className="font-semibold shrink-0">R$ {fmt(r.valor)}</span>
+                                  <span className="font-semibold shrink-0">{formatMoeda(r.valor)}</span>
                                 </div>
                               );
                             })}
                             <div className="flex justify-between text-[10px] font-bold pt-0.5 border-t border-border/30">
                               <span>Total Despesas</span>
-                              <span>R$ {fmt(totalDesp)}</span>
+                              <span>{formatMoeda(totalDesp)}</span>
                             </div>
                           </div>
                         )}
                         <div className="flex justify-between text-[11px] font-bold pt-1 border-t border-border/50 text-primary">
                           <span>Total Geral Vinculado</span>
-                          <span>R$ {fmt(totalBov + totalDesp)}</span>
+                          <span>{formatMoeda(totalBov + totalDesp)}</span>
                         </div>
                       </div>
                     );
