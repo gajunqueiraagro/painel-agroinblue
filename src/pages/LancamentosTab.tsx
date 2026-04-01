@@ -603,7 +603,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
                 {/* Valor bruto calculado */}
                 {calc.valorBruto > 0 && (
-                  <div className={`rounded-lg p-2.5 text-sm ${isPrevisto ? 'bg-orange-100 dark:bg-orange-950/30' : 'bg-muted/30'}`}>
+                  <div className={`rounded-md p-2 text-[12px] ${isPrevisto ? 'bg-orange-100 dark:bg-orange-950/30' : 'bg-muted/30'}`}>
                     <div className="flex justify-between">
                       <span className={isPrevisto ? 'text-orange-700 dark:text-orange-400' : 'text-muted-foreground'}>Valor total bruto</span>
                       <strong className={isPrevisto ? 'text-orange-800 dark:text-orange-300' : ''}>R$ {fmt(calc.valorBruto)}</strong>
