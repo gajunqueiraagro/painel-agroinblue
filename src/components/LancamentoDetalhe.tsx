@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   Lancamento,
   CATEGORIAS,
@@ -9,6 +9,7 @@ import {
 } from '@/types/cattle';
 import { isEntrada, isReclassificacao } from '@/lib/calculos/zootecnicos';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,6 +26,7 @@ interface Props {
   onClose: () => void;
   onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
   onRemover: (id: string) => void;
+  onCountFinanceiros?: (id: string) => Promise<number>;
 }
 
 export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover }: Props) {
