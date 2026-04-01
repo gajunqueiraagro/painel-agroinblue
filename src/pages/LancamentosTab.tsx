@@ -642,7 +642,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       <div className="shrink-0 space-y-2">
         {/* Entradas */}
         <div>
-          <button onClick={() => { setAba('entrada'); setTipo('nascimento'); }} className={parentCls(aba === 'entrada')}>
+          <button onClick={() => { setAba('entrada'); setTipo('nascimento'); resetAllFields('nascimento'); }} className={parentCls(aba === 'entrada')}>
             <LogIn className="h-3.5 w-3.5" /> Entradas
           </button>
           <div className={childWrap}>
