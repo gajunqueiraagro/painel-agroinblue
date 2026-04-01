@@ -33,6 +33,7 @@ interface Props {
   onAdicionar: (l: Omit<Lancamento, 'id'>) => Promise<string | undefined> | void;
   onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
   onRemover: (id: string) => void;
+  onCountFinanceiros?: (id: string) => Promise<number>;
   abaInicial?: Aba;
   onBackToConciliacao?: () => void;
   dataInicial?: string;
