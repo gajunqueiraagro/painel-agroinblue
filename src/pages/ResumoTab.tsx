@@ -270,8 +270,8 @@ function useGlobalFarmKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInici
 function MetricRow({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
     <div className="flex items-center justify-between py-1">
-      <span className="text-[11px] text-muted-foreground">{label}</span>
-      <span className={`text-[13px] font-semibold tabular-nums ${accent || 'text-foreground'}`}>{value}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className={`text-sm font-semibold tabular-nums ${accent || 'text-foreground'}`}>{value}</span>
     </div>
   );
 }
