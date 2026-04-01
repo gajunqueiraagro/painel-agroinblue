@@ -1100,6 +1100,35 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       )}
       </>
       )}
+
+      {/* Unified register button for non-abate operations */}
+      {!(aba === 'entrada' && tipo === 'nascimento') && (
+        <>
+          <Separator />
+          <Button
+            type="button"
+            className="w-full h-10 text-[13px] font-bold"
+            onClick={handleRequestRegister}
+            disabled={submitting}
+          >
+            {editingAbateId ? 'Salvar Alterações' : `Registrar ${getOperationLabel()}`}
+          </Button>
+        </>
+      )}
+      {/* Nascimento — simpler, still needs a button */}
+      {aba === 'entrada' && tipo === 'nascimento' && (
+        <>
+          <Separator />
+          <Button
+            type="button"
+            className="w-full h-10 text-[13px] font-bold"
+            onClick={handleRequestRegister}
+            disabled={submitting}
+          >
+            Registrar Nascimento
+          </Button>
+        </>
+      )}
     </div>
     );
   };
