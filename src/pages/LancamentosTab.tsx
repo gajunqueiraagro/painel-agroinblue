@@ -625,10 +625,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // ===== MAIN FORM (center) =====
   const renderForm = () => (
-    <form onSubmit={handleSubmit} className="flex-1 bg-card rounded-md p-4 shadow-sm border space-y-3 self-start">
+    <form onSubmit={handleSubmit} className="flex-1 bg-card rounded-md p-3 shadow-sm border space-y-2 self-start">
 
       {/* STATUS — selection + dynamic explanation */}
-      <div className="space-y-1.5">
+      <div className="space-y-1">
         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Status</span>
         {/* Row 1: selection cards */}
         <div className="grid grid-cols-3 gap-1.5">
