@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { parseISO, format } from 'date-fns';
 import { DollarSign, Info, ArrowLeft, Filter } from 'lucide-react';
-import { FinanceiroEditDialog } from '@/components/FinanceiroEditDialog';
+import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { FinanceiroExportMenu } from '@/components/FinanceiroExportMenu';
 import { ChuvasTab } from './ChuvasTab';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -315,7 +315,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   }, [fazendas]);
   const [topTab, setTopTab] = useState<TopTab>(subAbaInicial ? getTopTabFromSubAba(subAbaInicial) : 'entradas');
   const [subAba, setSubAba] = useState<SubAba>(subAbaInicial || 'abate');
-  const [editando, setEditando] = useState<Lancamento | null>(null);
+  const [detalheId, setDetalheId] = useState<string | null>(null);
 
   useEffect(() => {
     if (subAbaInicial) {
@@ -520,23 +520,26 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       {/* Content */}
       <div className="p-4 pt-2">
       {topTab === 'todas' ? (
-        <UnifiedTable lancamentos={filtrados} onEdit={setEditando} showTipo isGlobal={isGlobal} fazendaMap={fazendaMap} />
+        <UnifiedTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} showTipo isGlobal={isGlobal} fazendaMap={fazendaMap} />
       ) : subAba === 'abate' ? (
-        <AbateTable lancamentos={filtrados} onEdit={setEditando} isGlobal={isGlobal} fazendaMap={fazendaMap} />
+        <AbateTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} isGlobal={isGlobal} fazendaMap={fazendaMap} />
       ) : (
-        <UnifiedTable lancamentos={filtrados} onEdit={setEditando} subTipo={subAba} isGlobal={isGlobal} fazendaMap={fazendaMap} />
+        <UnifiedTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} subTipo={subAba} isGlobal={isGlobal} fazendaMap={fazendaMap} />
       )}
 
-      {/* Edit dialog */}
-      {editando && (
-        <FinanceiroEditDialog
-          lancamento={editando}
-          open={!!editando}
-          onClose={() => setEditando(null)}
-          onSave={(id, dados) => { onEditar(id, dados); setEditando(null); }}
-          onDelete={(id) => { onRemover(id); setEditando(null); }}
-        />
-      )}
+      {/* Detail + Edit via LancamentoDetalhe */}
+      {(() => {
+        const lancamentoDetalhe = detalheId ? lancamentos.find(l => l.id === detalheId) : null;
+        return lancamentoDetalhe ? (
+          <LancamentoDetalhe
+            lancamento={lancamentoDetalhe}
+            open={!!detalheId}
+            onClose={() => setDetalheId(null)}
+            onEditar={(id, dados) => { onEditar(id, dados); setDetalheId(null); }}
+            onRemover={(id) => { onRemover(id); setDetalheId(null); }}
+          />
+        ) : null;
+      })()}
       </div>
     </div>
   );
