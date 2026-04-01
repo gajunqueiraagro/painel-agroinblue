@@ -398,41 +398,20 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
             </div>
           )}
 
-          {/* Generate button — for all statuses */}
+          {/* Info banner for previsto */}
           {isPrevisto && (
             <div className="flex items-center gap-2 text-[11px] text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/20 border border-orange-300 dark:border-orange-800 rounded p-2">
               <Info className="h-4 w-4 shrink-0" />
-              <span>Status Previsto: os lançamentos gerados alimentam o fluxo de caixa previsto, sem impacto no financeiro real.</span>
+              <span>Status Previsto: o financeiro será gerado automaticamente ao registrar o abate.</span>
             </div>
           )}
 
-          {!gerado ? (
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              className="w-full text-[12px] font-bold"
-              disabled={!canGenerate || gerando}
-              onClick={handleClickGerar}
-            >
-              {gerando ? 'Gerando...' : mode === 'update' ? 'Atualizar Financeiro' : isPrevisto ? 'Gerar Financeiro Previsto' : 'Gerar Financeiro de Receita'}
-            </Button>
-          ) : (
+          {/* Show status when financeiro already generated (for update mode) */}
+          {gerado && (
             <div className="flex items-center gap-2 text-[11px] text-primary bg-primary/10 rounded p-2">
               <CheckCircle className="h-4 w-4" />
               <span className="font-semibold">Financeiro gerado ({existingCount > 0 ? existingCount : 1} registro{existingCount > 1 ? 's' : ''})</span>
-              {mode === 'update' && (
-                <Button type="button" variant="outline" size="sm" className="ml-auto text-[10px] h-6" onClick={() => { setGerado(false); setExistingLoaded(false); }}>
-                  Recalcular
-                </Button>
-              )}
             </div>
-          )}
-
-          {!lancamentoId && (
-            <p className="text-[10px] text-muted-foreground italic">
-              Salve o lançamento de abate primeiro para habilitar a geração financeira.
-            </p>
           )}
         </CollapsibleContent>
       </Collapsible>
