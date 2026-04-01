@@ -442,7 +442,7 @@ export function FinV2SaldosTab() {
   /* ── render ── */
   return (
     <TooltipProvider>
-      <div className="max-w-4xl mx-auto p-4 pb-20 space-y-3 animate-fade-in">
+      <div className="w-full p-4 pb-20 space-y-3 animate-fade-in">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-foreground">Saldos Bancários Mensais</h2>
           <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Novo</Button>

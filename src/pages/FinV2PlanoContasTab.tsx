@@ -83,7 +83,7 @@ export function FinV2PlanoContasTab() {
   const cellClass = "text-[12px] font-medium leading-tight py-1 px-2";
 
   return (
-    <div className="max-w-4xl mx-auto p-4 pb-20 space-y-4 animate-fade-in">
+    <div className="w-full p-4 pb-20 space-y-4 animate-fade-in">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-lg font-bold text-foreground">Plano de Contas</h2>
         <div className="relative w-48">

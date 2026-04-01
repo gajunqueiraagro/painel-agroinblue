@@ -209,7 +209,7 @@ export function AcessosTab() {
   const fazendaNameMap = new Map(fazendas.map(f => [f.id, f.nome]));
 
   return (
-    <div className="px-4 pt-4 pb-24 max-w-lg mx-auto space-y-4">
+    <div className="px-4 pt-4 pb-24 w-full space-y-4">
       <div className="flex items-center gap-2 mb-2">
         <Users className="h-5 w-5 text-primary" />
         <h2 className="text-lg font-bold text-foreground">Gestão de Acessos</h2>

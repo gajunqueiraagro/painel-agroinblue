@@ -19,7 +19,7 @@ export function Header({ title, clienteNome, fazendaNome, periodo, rightAction }
 
   return (
     <header className="z-40 bg-primary px-4 md:px-6 py-1.5 md:py-2 shadow-md shrink-0">
-      <div className="max-w-5xl mx-auto">
+      <div className="w-full">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <img src={logo} alt="AgroInBlue" className="h-5 md:h-7 w-auto shrink-0" />

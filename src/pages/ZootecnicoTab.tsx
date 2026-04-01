@@ -212,7 +212,7 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
   }
 
   return (
-    <div className="max-w-lg mx-auto animate-fade-in pb-20">
+    <div className="w-full px-4 animate-fade-in pb-20">
       {/* Sticky header + filters */}
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 pt-2 pb-2 space-y-1.5">
         <div className="flex gap-1.5 items-center flex-wrap">
@@ -550,7 +550,7 @@ function GraficosView({ subView, onBack, zoo, lancamentos, saldosIniciais, anoNu
   }, [zoo.historico, anoNum, mesFiltro]);
 
   return (
-    <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
+    <div className="p-4 w-full space-y-4 animate-fade-in pb-20">
       <div className="flex items-center gap-2">
         <button onClick={onBack} className="p-1.5 rounded-md hover:bg-muted transition-colors">
           <ArrowLeft className="h-5 w-5 text-foreground" />

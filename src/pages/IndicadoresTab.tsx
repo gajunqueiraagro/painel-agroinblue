@@ -72,7 +72,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
   const c = ind.comparacoes;
 
   return (
-    <div className="p-4 max-w-lg mx-auto animate-fade-in pb-20 space-y-4">
+    <div className="p-4 w-full animate-fade-in pb-20 space-y-4">
       {/* Seletores */}
       <div className="flex gap-2">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>

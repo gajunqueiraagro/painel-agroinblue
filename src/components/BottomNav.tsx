@@ -49,7 +49,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
       className="fixed bottom-0 left-0 right-0 z-50 border-t bg-card shadow-lg"
       style={{ height: 'var(--bottom-nav-safe, 64px)', paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
-      <div className="flex justify-around items-center h-16 max-w-lg mx-auto">
+      <div className="flex justify-around items-center h-16 w-full">
         {tabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}

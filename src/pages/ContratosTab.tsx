@@ -71,7 +71,7 @@ export function ContratosTab() {
   const defaultFazendaId = fazendaAtual?.id !== '__global__' ? fazendaAtual?.id : undefined;
 
   return (
-    <div className="max-w-2xl mx-auto animate-fade-in pb-24">
+    <div className="w-full px-4 animate-fade-in pb-24">
       <div className="p-4 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">📋 Contratos / Recorrências</h2>
