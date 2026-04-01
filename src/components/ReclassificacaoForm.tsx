@@ -19,6 +19,9 @@ export function ReclassificacaoForm({ onAdicionar, dataInicial }: Props) {
   const [data, setData] = useState(dataInicial || format(new Date(), 'yyyy-MM-dd'));
   const [pesoKg, setPesoKg] = useState('');
 
+  const qtdInput = useIntegerInput(quantidade, setQuantidade);
+  const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!quantidade || Number(quantidade) <= 0) return;
