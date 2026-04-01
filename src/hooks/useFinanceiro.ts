@@ -651,10 +651,46 @@ export function useFinanceiro() {
       if (contasError) throw contasError;
 
       const contasBancarias = (contasData || []) as ContaBancariaImportacao[];
-      const linhasResolvidas: LinhaImportadaResolvida[] = linhas.map((linha) => ({
-        ...linha,
-        contaBancariaId: resolveContaBancariaId(linha.contaOrigem, linha.fazendaId, contasBancarias),
-      }));
+
+      // ── Resolver contas bancárias (origem + destino) ──
+      const errosContaTransf: string[] = [];
+      const linhasResolvidas: LinhaImportadaResolvida[] = [];
+      const linhasBloqueadas: { linha: LinhaImportada; motivo: string }[] = [];
+
+      for (const linha of linhas) {
+        const contaBancariaId = resolveContaBancariaId(linha.contaOrigem, linha.fazendaId, contasBancarias);
+        const contaDestinoId = linha.contaDestino
+          ? resolveContaBancariaId(linha.contaDestino, linha.fazendaId, contasBancarias)
+          : null;
+
+        const tipoNorm = (linha.tipoOperacao || '').toLowerCase();
+        const ehTransf = tipoNorm.startsWith('3') || tipoNorm.includes('transfer') || tipoNorm.includes('resgate') || tipoNorm.includes('aplicaç');
+
+        if (ehTransf) {
+          if (!contaBancariaId) {
+            linhasBloqueadas.push({ linha, motivo: `Conta origem "${linha.contaOrigem}" não reconhecida no cadastro` });
+            continue;
+          }
+          if (!contaDestinoId) {
+            linhasBloqueadas.push({ linha, motivo: `Conta destino "${linha.contaDestino}" não reconhecida no cadastro` });
+            continue;
+          }
+          if (contaBancariaId === contaDestinoId) {
+            linhasBloqueadas.push({ linha, motivo: `Conta origem e destino resolveram para a mesma conta: "${linha.contaOrigem}"` });
+            continue;
+          }
+        }
+
+        linhasResolvidas.push({ ...linha, contaBancariaId, contaDestinoId });
+      }
+
+      if (linhasBloqueadas.length > 0) {
+        const detalhes = linhasBloqueadas.slice(0, 5).map(b =>
+          `Linha ${b.linha.linha}: ${b.motivo} (valor: ${b.linha.valor})`
+        ).join('\n');
+        toast.error(`${linhasBloqueadas.length} transferência(s) bloqueada(s):\n${detalhes}`, { duration: 10000 });
+        return false;
+      }
       const saldosResolvidos: SaldoImportadoResolvido[] = (saldosBancarios || []).map((saldo) => ({
         ...saldo,
         contaBancariaId: resolveContaBancariaId(saldo.contaBanco, saldo.fazendaId, contasBancarias),
