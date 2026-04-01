@@ -47,6 +47,28 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const [financeiroSheetOpen, setFinanceiroSheetOpen] = useState(false);
   const [notaFiscalEdit, setNotaFiscalEdit] = useState(lancamento.notaFiscal || '');
 
+  // Financial records summary for purchases
+  interface FinResumo { id: string; descricao: string; valor: number; data_pagamento: string | null; cancelado: boolean; origem_tipo: string | null; }
+  const [finRecords, setFinRecords] = useState<FinResumo[]>([]);
+  const [finLoading, setFinLoading] = useState(false);
+
+  const isCompra = lancamento.tipo === 'compra';
+
+  useEffect(() => {
+    if (!isCompra || !open) return;
+    setFinLoading(true);
+    supabase
+      .from('financeiro_lancamentos_v2')
+      .select('id, descricao, valor, data_pagamento, cancelado, origem_tipo')
+      .eq('movimentacao_rebanho_id', lancamento.id)
+      .eq('cancelado', false)
+      .order('data_pagamento', { ascending: true })
+      .then(({ data }) => {
+        setFinRecords((data as FinResumo[]) || []);
+        setFinLoading(false);
+      });
+  }, [isCompra, open, lancamento.id, financeiroSheetOpen]);
+
   const tipoInfo = TODOS_TIPOS.find(t => t.value === lancamento.tipo);
   const catInfo = CATEGORIAS.find(c => c.value === lancamento.categoria);
 
