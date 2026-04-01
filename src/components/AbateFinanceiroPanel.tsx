@@ -34,11 +34,16 @@ interface Props {
   statusOperacional?: 'previsto' | 'confirmado' | 'conciliado';
 }
 
-export function AbateFinanceiroPanel({
+export interface AbateFinanceiroPanelRef {
+  generateFinanceiro: (lancamentoId: string) => Promise<boolean>;
+  getValidationErrors: () => string[];
+}
+
+export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(function AbateFinanceiroPanel({
   quantidade, categoria, data, valorLiquido, totalDescontos = 0, frigorifico,
   notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated,
   statusOperacional = 'conciliado',
-}: Props) {
+}: Props, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
   const isPrevisto = statusOperacional === 'previsto';
