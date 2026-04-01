@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { ChevronDown, ChevronUp, Info, AlertTriangle, CheckCircle, Plus } from 'lucide-react';
@@ -15,6 +16,7 @@ import type { StatusOperacional } from '@/lib/statusOperacional';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 import { CATEGORIAS } from '@/types/cattle';
+import { formatMoeda } from '@/lib/calculos/formatters';
 
 type TipoPreco = 'por_kg' | 'por_cab' | 'por_total';
 
@@ -32,19 +34,23 @@ interface Props {
   fazendaOrigem: string;
   notaFiscal: string;
   onNotaFiscalChange: (v: string) => void;
-  /** After saving the lancamento, pass its ID here to enable financial generation */
   lancamentoId?: string;
-  /** 'create' = new purchase flow, 'update' = recalculate existing financial */
   mode?: 'create' | 'update';
-  /** Called after financial records are successfully updated (in update mode) */
   onFinanceiroUpdated?: () => void;
 }
 
-import { formatMoeda } from '@/lib/calculos/formatters';
-
-function fmtPrecoKg(v?: number) {
-  if (v === undefined || v === null || isNaN(v) || v === 0) return '-';
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function CollapsibleBlock({ title, open, onOpenChange, children }: { title: string; open: boolean; onOpenChange: (v: boolean) => void; children: React.ReactNode }) {
+  return (
+    <Collapsible open={open} onOpenChange={onOpenChange}>
+      <CollapsibleTrigger className="flex items-center justify-between w-full text-[10px] font-bold uppercase text-muted-foreground tracking-wide py-1 hover:text-foreground transition-colors">
+        {title}
+        {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+      </CollapsibleTrigger>
+      <CollapsibleContent className="space-y-1.5 pt-1">
+        {children}
+      </CollapsibleContent>
+    </Collapsible>
+  );
 }
 
 export function CompraFinanceiroPanel({
@@ -61,7 +67,11 @@ export function CompraFinanceiroPanel({
   const [frete, setFrete] = useState('');
   const [comissaoPct, setComissaoPct] = useState('');
 
+  // Collapsible states — all closed by default
+  const [precoBaseOpen, setPrecoBaseOpen] = useState(false);
+  const [despesasOpen, setDespesasOpen] = useState(false);
   const [pagamentoOpen, setPagamentoOpen] = useState(false);
+
   const [formaPag, setFormaPag] = useState<'avista' | 'prazo'>('avista');
   const [qtdParcelas, setQtdParcelas] = useState('2');
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
@@ -92,7 +102,7 @@ export function CompraFinanceiroPanel({
       });
   }, [clienteAtual]);
 
-  // Load existing financial records in update mode and pre-fill fields
+  // Load existing financial records in update mode
   useEffect(() => {
     if (mode !== 'update' || !lancamentoId) { setExistingLoaded(true); return; }
     supabase
@@ -108,31 +118,29 @@ export function CompraFinanceiroPanel({
 
         if (recs.length === 0) return;
 
-        // Separate by origin type
         const parcelaRecs = recs.filter(r => r.origem_tipo?.includes('parcela'));
         const freteRec = recs.find(r => r.origem_tipo?.includes('frete'));
         const comissaoRec = recs.find(r => r.origem_tipo?.includes('comissao'));
 
-        // Calculate total purchase value from parcelas
         const totalParcelas = parcelaRecs.reduce((s, r) => s + (r.valor || 0), 0);
 
         if (totalParcelas > 0) {
           setTipoPreco('por_total');
           setValorTotal(String(totalParcelas));
+          setPrecoBaseOpen(true);
         }
 
-        // Set frete
         if (freteRec && freteRec.valor > 0) {
           setFrete(String(freteRec.valor));
+          setDespesasOpen(true);
         }
 
-        // Set comissão (reverse calculate percentage)
         if (comissaoRec && comissaoRec.valor > 0 && totalParcelas > 0) {
           const pct = (comissaoRec.valor / totalParcelas) * 100;
           setComissaoPct(String(Math.round(pct * 100) / 100));
+          setDespesasOpen(true);
         }
 
-        // Set parcelas if more than 1
         if (parcelaRecs.length > 1) {
           setFormaPag('prazo');
           setPagamentoOpen(true);
@@ -143,16 +151,15 @@ export function CompraFinanceiroPanel({
           })));
         }
 
-        // Set fornecedor
         const favId = recs[0]?.favorecido_id;
         if (favId && !fornecedorId) {
           setFornecedorId(favId as string);
         }
 
-        // Set nota fiscal
         const nf = parcelaRecs[0]?.nota_fiscal;
         if (nf && !notaFiscal) {
           onNotaFiscalChange(nf as string);
+          setPagamentoOpen(true);
         }
       });
   }, [mode, lancamentoId]);
@@ -180,7 +187,6 @@ export function CompraFinanceiroPanel({
     }
   }, [fazendaOrigem, fornecedores, fornecedorId, origemSugestaoDescartada]);
 
-  // Reset descartada flag when origem changes
   useEffect(() => {
     setOrigemSugestaoDescartada(false);
   }, [fazendaOrigem]);
@@ -190,11 +196,7 @@ export function CompraFinanceiroPanel({
     const nome = fazendaOrigem.trim();
     const { data, error } = await supabase
       .from('financeiro_fornecedores')
-      .insert({
-        cliente_id: clienteAtual.id,
-        fazenda_id: fazendaAtual.id,
-        nome,
-      })
+      .insert({ cliente_id: clienteAtual.id, fazenda_id: fazendaAtual.id, nome })
       .select('id, nome')
       .single();
     if (error) { toast.error('Erro ao criar fornecedor'); return; }
@@ -210,12 +212,7 @@ export function CompraFinanceiroPanel({
     if (!clienteAtual || !fazendaAtual) return;
     const { data, error } = await supabase
       .from('financeiro_fornecedores')
-      .insert({
-        cliente_id: clienteAtual.id,
-        fazenda_id: fazendaAtual.id,
-        nome,
-        cpf_cnpj: cpfCnpj || null,
-      })
+      .insert({ cliente_id: clienteAtual.id, fazenda_id: fazendaAtual.id, nome, cpf_cnpj: cpfCnpj || null })
       .select('id, nome')
       .single();
     if (error) { toast.error('Erro ao salvar fornecedor'); return; }
@@ -231,7 +228,6 @@ export function CompraFinanceiroPanel({
   const peso = pesoKg || 0;
   const totalKg = peso * qtd;
 
-  // ===== CÁLCULOS =====
   const calc = useMemo(() => {
     let valorBase = 0;
     let rKg = 0;
@@ -262,7 +258,6 @@ export function CompraFinanceiroPanel({
     return { valorBase, rKg, rCab, freteVal, comissaoVal, totalDespesas, liqTotal, liqKg, liqCab };
   }, [tipoPreco, precoKg, precoCab, valorTotal, frete, comissaoPct, totalKg, qtd]);
 
-  // ===== PARCELAS =====
   const gerarParcelas = useCallback((n: number, base: number) => {
     const p: Parcela[] = [];
     const vp = base / n;
@@ -285,21 +280,10 @@ export function CompraFinanceiroPanel({
     }
   };
 
-  // ===== VALIDAÇÕES =====
   const validationErrors = useMemo(() => {
     const errors: string[] = [];
-
-    // 1. Fornecedor obrigatório
-    if (!fornecedorId) {
-      errors.push('Selecione o fornecedor (quem você pagou) antes de gerar o financeiro.');
-    }
-
-    // 2. Valor base obrigatório
-    if (calc.valorBase <= 0) {
-      errors.push('Preencha o valor da compra antes de gerar.');
-    }
-
-    // 3. Validar parcelas (a prazo)
+    if (!fornecedorId) errors.push('Selecione o fornecedor (quem você pagou) antes de gerar o financeiro.');
+    if (calc.valorBase <= 0) errors.push('Preencha o valor da compra antes de gerar.');
     if (formaPag === 'prazo' && parcelas.length > 0) {
       const somaParcelas = Math.round(parcelas.reduce((s, p) => s + p.valor, 0) * 100) / 100;
       const valorBaseRound = Math.round(calc.valorBase * 100) / 100;
@@ -311,13 +295,10 @@ export function CompraFinanceiroPanel({
         if (!p.valor || p.valor <= 0) errors.push(`Parcela ${i + 1}: valor deve ser maior que zero.`);
       });
     }
-
     return errors;
   }, [fornecedorId, calc.valorBase, formaPag, parcelas]);
 
   const canGenerate = validationErrors.length === 0 && !!lancamentoId;
-
-  // ===== CONFIRMAÇÃO DE SUBSTITUIÇÃO (item 6) =====
 
   const handleClickGerar = () => {
     if (mode === 'update' && existingCount > 0) {
@@ -327,21 +308,13 @@ export function CompraFinanceiroPanel({
     }
   };
 
-  // ===== GERAÇÃO FINANCEIRA =====
   const handleGerarFinanceiro = async () => {
-    if (!lancamentoId) {
-      toast.error('Salve o lançamento zootécnico antes de gerar os financeiros.');
-      return;
-    }
+    if (!lancamentoId) { toast.error('Salve o lançamento zootécnico antes de gerar os financeiros.'); return; }
     if (!fazendaAtual || !clienteAtual) return;
-    if (validationErrors.length > 0) {
-      toast.error(validationErrors[0]);
-      return;
-    }
+    if (validationErrors.length > 0) { toast.error(validationErrors[0]); return; }
 
     setGerando(true);
     try {
-      // In update mode, cancel existing records first
       if (mode === 'update') {
         const { data: oldRecords } = await supabase
           .from('financeiro_lancamentos_v2')
@@ -354,28 +327,19 @@ export function CompraFinanceiroPanel({
           const userId = (await supabase.auth.getUser()).data.user?.id;
           await supabase
             .from('financeiro_lancamentos_v2')
-            .update({
-              cancelado: true,
-              cancelado_em: new Date().toISOString(),
-              cancelado_por: userId || null,
-            })
+            .update({ cancelado: true, cancelado_em: new Date().toISOString(), cancelado_por: userId || null })
             .in('id', oldIds);
 
-          // Write audit log
           await supabase.from('audit_log_movimentacoes').insert({
             cliente_id: clienteAtual.id,
             usuario_id: userId || null,
             acao: 'recalculo_financeiro_compra',
             movimentacao_id: lancamentoId,
             financeiro_ids: oldIds,
-            detalhes: {
-              registros_cancelados: oldIds.length,
-              motivo: 'Recálculo financeiro da compra',
-            },
+            detalhes: { registros_cancelados: oldIds.length, motivo: 'Recálculo financeiro da compra' },
           });
         }
       } else {
-        // In create mode, check duplicates
         const { data: existing } = await supabase
           .from('financeiro_lancamentos_v2')
           .select('id')
@@ -393,16 +357,13 @@ export function CompraFinanceiroPanel({
       const statusFin = statusOp === 'previsto' ? 'previsto' : 'confirmado';
       const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria;
       const compraLabel = `Compra ${quantidade} ${catLabel}`;
-      const produtoLabel = `${quantidade} ${catLabel}`;
       const anoMes = data.slice(0, 7);
       const inserts: any[] = [];
 
-      // Determine subcentro based on category (female vs male)
       const FEMEAS = ['mamotes_f', 'desmama_f', 'novilhas', 'vacas'];
       const isFemea = FEMEAS.includes(categoria);
       const subcentroCompra = isFemea ? 'COMPRAS ANIMAIS/FEMEAS' : 'COMPRAS ANIMAIS/MACHOS';
 
-      // Base record with full classification (ano_mes will be overridden per entry)
       const baseRecord: Record<string, any> = {
         cliente_id: clienteAtual.id,
         fazenda_id: fazendaAtual.id,
@@ -415,10 +376,7 @@ export function CompraFinanceiroPanel({
         centro_custo: 'Reposição de Bovinos',
       };
 
-      // Add favorecido_id if a fornecedor was selected
-      if (fornecedorId) {
-        baseRecord.favorecido_id = fornecedorId;
-      }
+      if (fornecedorId) baseRecord.favorecido_id = fornecedorId;
 
       if (formaPag === 'prazo' && parcelas.length > 0) {
         parcelas.forEach((p, i) => {
@@ -450,7 +408,6 @@ export function CompraFinanceiroPanel({
         });
       }
 
-      // Frete
       if (calc.freteVal > 0) {
         inserts.push({
           ...baseRecord,
@@ -464,7 +421,6 @@ export function CompraFinanceiroPanel({
         });
       }
 
-      // Comissão
       if (calc.comissaoVal > 0) {
         inserts.push({
           ...baseRecord,
@@ -525,35 +481,69 @@ export function CompraFinanceiroPanel({
       )}
       <Separator />
 
-      {/* BLOCO 1 — Tipo de Compra */}
-      <div className="space-y-1">
-        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Tipo de Compra</span>
-        <div className="grid grid-cols-3 gap-1">
-          {([
-            { value: 'por_kg' as TipoPreco, label: 'Por kg' },
-            { value: 'por_cab' as TipoPreco, label: 'Por cab.' },
-            { value: 'por_total' as TipoPreco, label: 'Por total' },
-          ]).map(t => (
-            <button
-              key={t.value}
-              type="button"
-              onClick={() => { setTipoPreco(t.value); setPrecoKg(''); setPrecoCab(''); setValorTotal(''); }}
-              className={`h-7 rounded text-[11px] font-bold border transition-all ${
-                tipoPreco === t.value
-                  ? 'border-primary bg-primary/10 text-foreground'
-                  : 'border-border text-muted-foreground hover:bg-muted/30'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+      {/* === SEMPRE VISÍVEL: Tipo de Compra (dropdown) + Fornecedor === */}
+      <div className="space-y-1.5">
+        {/* Tipo de Compra — dropdown */}
+        <div className="space-y-0.5">
+          <Label className="text-[10px]">Tipo de Compra</Label>
+          <Select
+            value={tipoPreco}
+            onValueChange={(v: TipoPreco) => { setTipoPreco(v); setPrecoKg(''); setPrecoCab(''); setValorTotal(''); }}
+          >
+            <SelectTrigger className="h-7 text-[11px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="por_kg">Por kg</SelectItem>
+              <SelectItem value="por_cab">Por cab.</SelectItem>
+              <SelectItem value="por_total">Por total</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Fornecedor (sempre visível) */}
+        <div className="space-y-0.5">
+          <Label className="text-[10px]">Fornecedor (quem você pagou)</Label>
+          <div className="flex gap-1">
+            <div className="flex-1">
+              <SearchableSelect
+                value={fornecedorId}
+                onValueChange={setFornecedorId}
+                placeholder="Selecione o fornecedor"
+                options={fornecedores.map(f => ({ value: f.id, label: f.nome }))}
+              />
+            </div>
+            <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setNovoFornecedorOpen(true)}>
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          {origemSugestao === 'encontrado' && (
+            <p className="text-[9px] text-green-600 flex items-center gap-1">
+              <CheckCircle className="h-2.5 w-2.5" /> Fornecedor selecionado automaticamente
+            </p>
+          )}
+          {origemSugestao === 'criar' && !fornecedorId && (
+            <div className="flex items-center gap-1 p-1 rounded border border-dashed border-muted-foreground/30 bg-muted/40">
+              <span className="text-[9px] text-muted-foreground flex-1">
+                Criar "<strong>{fazendaOrigem?.trim()}</strong>"?
+              </span>
+              <Button type="button" variant="outline" size="sm" className="h-5 text-[9px] px-1.5" onClick={handleCriarFornecedorFromOrigem}>
+                Criar
+              </Button>
+              <Button type="button" variant="ghost" size="sm" className="h-5 text-[9px] px-1" onClick={() => setOrigemSugestaoDescartada(true)}>
+                ✕
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* BLOCO 2 — Preço Base */}
-      <div className="space-y-1">
-        <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wide">Preço Base</span>
+      <NovoFornecedorDialog open={novoFornecedorOpen} onClose={() => setNovoFornecedorOpen(false)} onSave={handleNovoFornecedor} />
 
+      <Separator />
+
+      {/* === BLOCO RECOLHÍVEL 1: Preço Base === */}
+      <CollapsibleBlock title="Preço Base" open={precoBaseOpen} onOpenChange={setPrecoBaseOpen}>
         {tipoPreco === 'por_kg' && (
           <div>
             <Label className="text-[10px]">R$/kg</Label>
@@ -587,58 +577,12 @@ export function CompraFinanceiroPanel({
             </div>
           </div>
         )}
-      </div>
-
-      {/* Fornecedor (quem você pagou) */}
-      <div className="space-y-0.5">
-        <Label className="text-[10px]">Fornecedor (quem você pagou)</Label>
-        <div className="flex gap-1">
-          <div className="flex-1">
-            <SearchableSelect
-              value={fornecedorId}
-              onValueChange={setFornecedorId}
-              placeholder="Selecione o fornecedor"
-              options={fornecedores.map(f => ({ value: f.id, label: f.nome }))}
-            />
-          </div>
-          <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setNovoFornecedorOpen(true)}>
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-        {/* Sugestão automática baseada na Origem */}
-        {origemSugestao === 'encontrado' && (
-          <p className="text-[9px] text-green-600 flex items-center gap-1">
-            <CheckCircle className="h-2.5 w-2.5" /> Fornecedor selecionado automaticamente
-          </p>
-        )}
-        {origemSugestao === 'criar' && !fornecedorId && (
-          <div className="flex items-center gap-1 p-1 rounded border border-dashed border-muted-foreground/30 bg-muted/40">
-            <span className="text-[9px] text-muted-foreground flex-1">
-              Criar "<strong>{fazendaOrigem?.trim()}</strong>"?
-            </span>
-            <Button type="button" variant="outline" size="sm" className="h-5 text-[9px] px-1.5" onClick={handleCriarFornecedorFromOrigem}>
-              Criar
-            </Button>
-            <Button type="button" variant="ghost" size="sm" className="h-5 text-[9px] px-1" onClick={() => setOrigemSugestaoDescartada(true)}>
-              ✕
-            </Button>
-          </div>
-        )}
-      </div>
-
-      {/* Nota Fiscal */}
-      <div>
-        <Label className="text-[10px]">Nota Fiscal</Label>
-        <Input value={notaFiscal} onChange={e => onNotaFiscalChange(e.target.value)} placeholder="Nº da nota" className="h-7 text-[11px]" />
-      </div>
-
-      <NovoFornecedorDialog open={novoFornecedorOpen} onClose={() => setNovoFornecedorOpen(false)} onSave={handleNovoFornecedor} />
+      </CollapsibleBlock>
 
       <Separator />
 
-      {/* BLOCO 3 — Despesas Extras */}
-      <div className="space-y-1">
-        <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wide">Despesas Extras</span>
+      {/* === BLOCO RECOLHÍVEL 2: Despesas Extras === */}
+      <CollapsibleBlock title="Despesas Extras" open={despesasOpen} onOpenChange={setDespesasOpen}>
         <div className="grid grid-cols-2 gap-2">
           <div>
             <Label className="text-[10px]">Frete (R$)</Label>
@@ -661,11 +605,60 @@ export function CompraFinanceiroPanel({
             <span className="text-orange-800 dark:text-orange-300">{formatMoeda(calc.totalDespesas)}</span>
           </div>
         )}
-      </div>
+      </CollapsibleBlock>
 
       <Separator />
 
-      {/* BLOCO 4 — Valor Líquido */}
+      {/* === BLOCO RECOLHÍVEL 3: Informações de Pagamento (inclui NF) === */}
+      <CollapsibleBlock title="Informações de Pagamento" open={pagamentoOpen} onOpenChange={setPagamentoOpen}>
+        {/* Nota Fiscal — agora dentro do pagamento */}
+        <div>
+          <Label className="text-[10px]">Nota Fiscal</Label>
+          <Input value={notaFiscal} onChange={e => onNotaFiscalChange(e.target.value)} placeholder="Nº da nota" className="h-7 text-[11px]" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-1.5">
+          <button type="button" onClick={() => { setFormaPag('avista'); setParcelas([]); }}
+            className={`h-7 rounded text-[11px] font-bold border-2 transition-all ${formaPag === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
+            À vista
+          </button>
+          <button type="button" onClick={() => { setFormaPag('prazo'); if (calc.valorBase > 0) setParcelas(gerarParcelas(Number(qtdParcelas) || 2, calc.valorBase)); }}
+            className={`h-7 rounded text-[11px] font-bold border-2 transition-all ${formaPag === 'prazo' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
+            A prazo
+          </button>
+        </div>
+
+        {formaPag === 'prazo' && (
+          <div className="space-y-1.5">
+            <div>
+              <Label className="text-[11px]">Quantidade de parcelas</Label>
+              <Input type="number" min="2" max="48" value={qtdParcelas} onChange={e => handleQtdParcChange(e.target.value)} className="h-7 text-[11px]" />
+            </div>
+            <p className="text-[9px] text-muted-foreground">Parcelas calculadas sobre o valor base (sem frete/comissão)</p>
+            {parcelas.map((p, i) => (
+              <div key={i} className="grid grid-cols-2 gap-1 bg-muted/30 rounded p-1.5">
+                <div>
+                  <Label className="text-[10px]">Parcela {i + 1}</Label>
+                  <Input type="date" value={p.data} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], data: e.target.value }; setParcelas(np); }} className="h-7 text-[10px]" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">R$</Label>
+                  <Input type="number" value={String(p.valor)} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], valor: Number(e.target.value) || 0 }; setParcelas(np); }} className="h-7 text-[10px]" />
+                </div>
+              </div>
+            ))}
+            {parcelas.length > 0 && (
+              <div className="text-[10px] text-muted-foreground text-right">
+                Soma: {formatMoeda(parcelas.reduce((s, p) => s + p.valor, 0))}
+              </div>
+            )}
+          </div>
+        )}
+      </CollapsibleBlock>
+
+      <Separator />
+
+      {/* === Valor Líquido (sempre visível quando tem valor) === */}
       {calc.valorBase > 0 && (
         <div className={`rounded-md px-2 py-1.5 ${isPrevisto ? 'bg-orange-200/50 dark:bg-orange-950/50' : 'bg-primary/10'}`}>
           <div className="flex justify-between text-[11px] font-bold">
@@ -685,56 +678,7 @@ export function CompraFinanceiroPanel({
 
       <Separator />
 
-      {/* BLOCO 5 — Informações de Pagamento (colapsado) */}
-      <Collapsible open={pagamentoOpen} onOpenChange={setPagamentoOpen}>
-        <CollapsibleTrigger className="flex items-center justify-between w-full text-[10px] font-bold uppercase text-muted-foreground tracking-wide py-1 hover:text-foreground transition-colors">
-          Informações de Pagamento
-          {pagamentoOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-        </CollapsibleTrigger>
-        <CollapsibleContent className="space-y-1.5 pt-1">
-          <div className="grid grid-cols-2 gap-1.5">
-            <button type="button" onClick={() => { setFormaPag('avista'); setParcelas([]); }}
-              className={`h-7 rounded text-[11px] font-bold border-2 transition-all ${formaPag === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
-              À vista
-            </button>
-            <button type="button" onClick={() => { setFormaPag('prazo'); if (calc.valorBase > 0) setParcelas(gerarParcelas(Number(qtdParcelas) || 2, calc.valorBase)); }}
-              className={`h-7 rounded text-[11px] font-bold border-2 transition-all ${formaPag === 'prazo' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
-              A prazo
-            </button>
-          </div>
-
-          {formaPag === 'prazo' && (
-            <div className="space-y-1.5">
-              <div>
-                <Label className="text-[11px]">Quantidade de parcelas</Label>
-                <Input type="number" min="2" max="48" value={qtdParcelas} onChange={e => handleQtdParcChange(e.target.value)} className="h-7 text-[11px]" />
-              </div>
-              <p className="text-[9px] text-muted-foreground">Parcelas calculadas sobre o valor base (sem frete/comissão)</p>
-              {parcelas.map((p, i) => (
-                <div key={i} className="grid grid-cols-2 gap-1 bg-muted/30 rounded p-1.5">
-                  <div>
-                    <Label className="text-[10px]">Parcela {i + 1}</Label>
-                    <Input type="date" value={p.data} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], data: e.target.value }; setParcelas(np); }} className="h-7 text-[10px]" />
-                  </div>
-                  <div>
-                    <Label className="text-[10px]">R$</Label>
-                    <Input type="number" value={String(p.valor)} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], valor: Number(e.target.value) || 0 }; setParcelas(np); }} className="h-7 text-[10px]" />
-                  </div>
-                </div>
-              ))}
-              {parcelas.length > 0 && (
-                <div className="text-[10px] text-muted-foreground text-right">
-                  Soma: {formatMoeda(parcelas.reduce((s, p) => s + p.valor, 0))}
-                </div>
-              )}
-            </div>
-          )}
-        </CollapsibleContent>
-      </Collapsible>
-
-      <Separator />
-
-      {/* BLOCO SUGESTÕES FINANCEIRAS */}
+      {/* === Sugestões financeiras + Gerar === */}
       {calc.valorBase > 0 && (
         <div className="space-y-1.5">
           <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">Sugestões financeiras da movimentação</span>
@@ -771,7 +715,6 @@ export function CompraFinanceiroPanel({
             )}
           </div>
 
-          {/* Validation errors */}
           {validationErrors.length > 0 && !gerado && (
             <div className="space-y-1 p-2 rounded-md border border-destructive/30 bg-destructive/5">
               {validationErrors.map((err, i) => (
@@ -813,7 +756,7 @@ export function CompraFinanceiroPanel({
         </div>
       )}
 
-      {/* Confirmation dialog for update (item 6) */}
+      {/* Confirmation dialog for update */}
       <AlertDialog open={confirmUpdateOpen} onOpenChange={setConfirmUpdateOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
