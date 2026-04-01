@@ -392,6 +392,7 @@ export function CompraFinanceiroPanel({
       const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria;
       const compraLabel = `Compra ${quantidade} ${catLabel}`;
       const produtoLabel = `${quantidade} ${catLabel}`;
+      const anoMes = data.slice(0, 7);
       const inserts: any[] = [];
 
       // Determine subcentro based on category (female vs male)
