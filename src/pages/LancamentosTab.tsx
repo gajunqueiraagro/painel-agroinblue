@@ -1101,7 +1101,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       {/* Row 1: Data | Qtd | Peso | Categoria */}
       <div className="grid grid-cols-12 gap-2">
         <div className="col-span-3">
-          <Label className={`font-bold text-[11px] ${previstoLabelClass}`}>Data</Label>
+          <Label className={`font-bold text-[11px] ${previstoLabelClass}`}>{isAbate ? 'Data do Abate' : 'Data'}</Label>
           <Input type="date" value={data} onChange={e => setData(e.target.value)} className={`mt-0.5 h-8 text-[12px] ${previstoInputClass}`} />
         </div>
         <div className="col-span-2">
