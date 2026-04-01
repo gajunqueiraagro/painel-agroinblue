@@ -795,13 +795,13 @@ export function CompraFinanceiroPanel({
                 type="button"
                 variant={mode === 'update' ? 'default' : 'outline'}
                 size="sm"
-                className="w-full h-8 text-[11px] font-bold"
+                className={`w-full h-8 text-[11px] font-bold ${mode === 'update' ? 'shadow-sm' : ''}`}
                 disabled={!canGenerate || gerando}
                 onClick={handleClickGerar}
               >
                 {gerando
                   ? (mode === 'update' ? 'Atualizando...' : 'Gerando...')
-                  : (mode === 'update' ? 'Atualizar lançamentos no financeiro' : 'Gerar lançamentos no financeiro')}
+                  : (mode === 'update' ? '✓ Atualizar lançamentos no financeiro' : 'Gerar lançamentos no financeiro')}
               </Button>
             </>
           )}
