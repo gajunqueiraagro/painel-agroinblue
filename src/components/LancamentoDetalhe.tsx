@@ -199,7 +199,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                   <Button variant="outline" className="flex-1 touch-target" onClick={() => { setForm({ ...lancamento }); setEditando(true); }}>
                     <Pencil className="h-4 w-4 mr-1" /> Editar
                   </Button>
-                  <Button variant="destructive" className="flex-1 touch-target" onClick={handleRemover}>
+                  <Button variant="destructive" className="flex-1 touch-target" onClick={handleRemoverClick} disabled={checkingVinculos}>
                     <Trash2 className="h-4 w-4 mr-1" /> Apagar
                   </Button>
                 </>
