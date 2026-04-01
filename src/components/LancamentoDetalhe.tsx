@@ -280,7 +280,14 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       <Sheet open={financeiroSheetOpen} onOpenChange={setFinanceiroSheetOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader>
-            <SheetTitle className="text-sm">Alterar Financeiro da Compra</SheetTitle>
+            <SheetTitle className="text-sm">
+              {finRecords.length > 0 ? 'Alterar Financeiro da Compra' : 'Gerar Financeiro da Compra'}
+            </SheetTitle>
+            {finRecords.length > 0 && (
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Os {finRecords.length} lançamento(s) existente(s) serão cancelados e substituídos pelos novos valores.
+              </p>
+            )}
           </SheetHeader>
           <div className="mt-4">
             <CompraFinanceiroPanel
