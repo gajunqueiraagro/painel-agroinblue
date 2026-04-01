@@ -66,13 +66,13 @@ const ABA_CONFIG: { id: Aba; label: string; icon: React.ReactNode }[] = [
 ];
 
 const STATUS_DESCRIPTIONS_DEFAULT: Record<StatusOperacional, string> = {
-  previsto: 'Planejamento (meta). Não impacta o rebanho nem o financeiro real.',
+  previsto: 'Planejamento (meta). Alimenta o fluxo de caixa previsto, sem impacto no financeiro real.',
   confirmado: 'Operação definida, mas ainda não realizada. Quando concluída, alterar para Realizado.',
   conciliado: 'Operação concluída. Impacta rebanho e financeiro real.',
 };
 
 const STATUS_DESCRIPTIONS_ABATE: Record<StatusOperacional, string> = {
-  previsto: 'Planejamento (meta). Não impacta o rebanho nem o financeiro real.',
+  previsto: 'Planejamento (meta). Gera lançamentos previstos que alimentam o fluxo de caixa previsto.',
   confirmado: 'Venda fechada e animais escalados, mas o abate ainda não ocorreu. Os dados ainda são previsões operacionais e financeiras.',
   conciliado: 'Abate concluído com dados reais de carcaça, bônus e descontos. Os valores refletem o resultado efetivo da operação.',
 };
@@ -472,7 +472,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     try {
       if (editingAbateId) {
         onEditar(editingAbateId, lancamentoDados);
-        if (isAbate && (isConciliado || isConfirmado)) {
+        if (isAbate && (isConciliado || isConfirmado || isPrevisto)) {
           setLastSavedLancamentoId(editingAbateId);
           setEditingAbateId(null);
           toast.success('Abate atualizado! Agora você pode gerar/atualizar os lançamentos financeiros.');
@@ -501,7 +501,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('conciliado');
           resetFinancialFields();
           toast.success('Compra registrada com sucesso!');
-        } else if (isAbate && (isConciliado || isConfirmado) && returnedId) {
+        } else if (isAbate && (isConciliado || isConfirmado || isPrevisto) && returnedId) {
           setLastSavedLancamentoId(returnedId);
           toast.success('Abate registrado! Agora você pode gerar os lançamentos financeiros.');
         } else {
@@ -906,6 +906,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           categoria={categoria}
           data={data}
           valorLiquido={calc.valorLiquido}
+          totalDescontos={calc.totalDescontos}
           frigorifico={fazendaDestino}
           notaFiscal={notaFiscal}
           onNotaFiscalChange={setNotaFiscal}

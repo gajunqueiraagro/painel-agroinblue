@@ -24,6 +24,7 @@ interface Props {
   categoria: string;
   data: string;
   valorLiquido: number;
+  totalDescontos?: number;
   frigorifico: string;
   notaFiscal: string;
   onNotaFiscalChange: (v: string) => void;
@@ -34,7 +35,7 @@ interface Props {
 }
 
 export function AbateFinanceiroPanel({
-  quantidade, categoria, data, valorLiquido, frigorifico,
+  quantidade, categoria, data, valorLiquido, totalDescontos = 0, frigorifico,
   notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated,
   statusOperacional = 'conciliado',
 }: Props) {
@@ -187,7 +188,7 @@ export function AbateFinanceiroPanel({
         fazenda_id: fazendaAtual.id,
         tipo_operacao: '1-Entradas',
         sinal: 1,
-        status_transacao: 'confirmado',
+        status_transacao: isPrevisto ? 'previsto' : 'confirmado',
         origem_lancamento: 'movimentacao_rebanho',
         movimentacao_rebanho_id: lancamentoId,
         macro_custo: 'Receita Pecuária',
@@ -210,15 +211,42 @@ export function AbateFinanceiroPanel({
           });
         });
       } else {
+        // Revenue = valorLiquido + totalDescontos (gross before deductions, since deductions are separate)
+        const valorReceita = totalDescontos > 0 ? valorLiquido + totalDescontos : valorLiquido;
         inserts.push({
           ...baseRecord,
           ano_mes: anoMes,
-          valor: valorLiquido,
+          valor: valorReceita,
           data_competencia: data,
           data_pagamento: data,
           descricao: abateLabel,
           historico: frigorifico ? `Frigorífico: ${frigorifico}` : undefined,
           origem_tipo: 'abate:parcela',
+        });
+      }
+
+      // Generate deduction records when there are discounts
+      if (totalDescontos > 0) {
+        const frigorificoLabel = frigorifico ? ` | ${frigorifico}` : '';
+        inserts.push({
+          cliente_id: clienteAtual.id,
+          fazenda_id: fazendaAtual.id,
+          tipo_operacao: '2-Saídas',
+          sinal: -1,
+          status_transacao: isPrevisto ? 'previsto' : 'confirmado',
+          origem_lancamento: 'movimentacao_rebanho',
+          movimentacao_rebanho_id: lancamentoId,
+          macro_custo: 'Dedução de Receitas',
+          centro_custo: 'Dedução de Receitas Pecuária',
+          subcentro: 'PEC/NOTAS COM ABATES E VENDAS EM PÉ',
+          nota_fiscal: notaFiscal || undefined,
+          ano_mes: anoMes,
+          valor: totalDescontos,
+          data_competencia: data,
+          data_pagamento: data,
+          descricao: `Dedução ${abateLabel}${frigorificoLabel}`,
+          historico: frigorifico ? `Frigorífico: ${frigorifico}` : undefined,
+          origem_tipo: 'abate:deducao',
         });
       }
 
@@ -315,13 +343,15 @@ export function AbateFinanceiroPanel({
             </div>
           )}
 
-          {/* Generate button — only for Confirmado/Realizado */}
-          {isPrevisto ? (
-            <div className="flex items-center gap-2 text-[11px] text-muted-foreground bg-muted/40 rounded p-2">
+          {/* Generate button — for all statuses */}
+          {isPrevisto && (
+            <div className="flex items-center gap-2 text-[11px] text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/20 border border-orange-300 dark:border-orange-800 rounded p-2">
               <Info className="h-4 w-4 shrink-0" />
-              <span>Status Previsto: os valores alimentam o fluxo de caixa previsto. Lançamentos financeiros reais serão gerados ao alterar para Confirmado ou Realizado.</span>
+              <span>Status Previsto: os lançamentos gerados alimentam o fluxo de caixa previsto, sem impacto no financeiro real.</span>
             </div>
-          ) : !gerado ? (
+          )}
+
+          {!gerado ? (
             <Button
               type="button"
               variant="default"
@@ -330,7 +360,7 @@ export function AbateFinanceiroPanel({
               disabled={!canGenerate || gerando}
               onClick={handleClickGerar}
             >
-              {gerando ? 'Gerando...' : mode === 'update' ? 'Atualizar Financeiro' : 'Gerar Financeiro de Receita'}
+              {gerando ? 'Gerando...' : mode === 'update' ? 'Atualizar Financeiro' : isPrevisto ? 'Gerar Financeiro Previsto' : 'Gerar Financeiro de Receita'}
             </Button>
           ) : (
             <div className="flex items-center gap-2 text-[11px] text-primary bg-primary/10 rounded p-2">
@@ -344,7 +374,7 @@ export function AbateFinanceiroPanel({
             </div>
           )}
 
-          {!lancamentoId && !isPrevisto && (
+          {!lancamentoId && (
             <p className="text-[10px] text-muted-foreground italic">
               Salve o lançamento de abate primeiro para habilitar a geração financeira.
             </p>
