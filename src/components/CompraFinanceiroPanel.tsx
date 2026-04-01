@@ -653,7 +653,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
             className={`h-7 rounded text-[11px] font-bold border-2 transition-all ${formaPag === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
             À vista
           </button>
-          <button type="button" onClick={() => { setFormaPag('prazo'); if (calc.valorBase > 0) setParcelas(gerarParcelas(Number(qtdParcelas) || 2, calc.valorBase)); }}
+          <button type="button" onClick={() => { setFormaPag('prazo'); if (calc.valorBase > 0) setParcelas(gerarParcelas(Number(qtdParcelas) || 1, calc.valorBase)); }}
             className={`h-7 rounded text-[11px] font-bold border-2 transition-all ${formaPag === 'prazo' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
             A prazo
           </button>
