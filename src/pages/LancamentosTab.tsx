@@ -300,6 +300,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       notaFiscal: notaFiscal || undefined,
       tipoPeso,
       statusOperacional: statusOp,
+      dataVenda: dataVenda || undefined,
+      dataEmbarque: dataEmbarque || undefined,
+      dataAbate: dataAbate || undefined,
+      tipoVenda: tipoVenda || undefined,
     });
 
     if (isCompra && returnedId) {
