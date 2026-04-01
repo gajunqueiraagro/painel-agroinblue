@@ -528,9 +528,9 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
 
               <button
                 onClick={() => onTabChange('visao_zoo_hub', { ano: filtroGlobal.ano, mes: mesNum })}
-                className="w-full flex items-center justify-center gap-1 text-[10px] font-semibold text-primary py-1.5 rounded border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10"
+                className="w-full flex items-center justify-center gap-1 text-xs font-semibold text-primary py-2 rounded border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10"
               >
-                Painel Zootécnico <ChevronRight className="h-3 w-3" />
+                Painel Zootécnico <ChevronRight className="h-3.5 w-3.5" />
               </button>
             </div>
           )}
