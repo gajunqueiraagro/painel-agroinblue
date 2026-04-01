@@ -85,6 +85,7 @@ interface ContaBancariaImportacao {
 
 interface LinhaImportadaResolvida extends LinhaImportada {
   contaBancariaId: string | null;
+  contaDestinoId: string | null;
 }
 
 interface SaldoImportadoResolvido extends SaldoBancarioImportado {
@@ -650,10 +651,46 @@ export function useFinanceiro() {
       if (contasError) throw contasError;
 
       const contasBancarias = (contasData || []) as ContaBancariaImportacao[];
-      const linhasResolvidas: LinhaImportadaResolvida[] = linhas.map((linha) => ({
-        ...linha,
-        contaBancariaId: resolveContaBancariaId(linha.contaOrigem, linha.fazendaId, contasBancarias),
-      }));
+
+      // ── Resolver contas bancárias (origem + destino) ──
+      const errosContaTransf: string[] = [];
+      const linhasResolvidas: LinhaImportadaResolvida[] = [];
+      const linhasBloqueadas: { linha: LinhaImportada; motivo: string }[] = [];
+
+      for (const linha of linhas) {
+        const contaBancariaId = resolveContaBancariaId(linha.contaOrigem, linha.fazendaId, contasBancarias);
+        const contaDestinoId = linha.contaDestino
+          ? resolveContaBancariaId(linha.contaDestino, linha.fazendaId, contasBancarias)
+          : null;
+
+        const tipoNorm = (linha.tipoOperacao || '').toLowerCase();
+        const ehTransf = tipoNorm.startsWith('3') || tipoNorm.includes('transfer') || tipoNorm.includes('resgate') || tipoNorm.includes('aplicaç');
+
+        if (ehTransf) {
+          if (!contaBancariaId) {
+            linhasBloqueadas.push({ linha, motivo: `Conta origem "${linha.contaOrigem}" não reconhecida no cadastro` });
+            continue;
+          }
+          if (!contaDestinoId) {
+            linhasBloqueadas.push({ linha, motivo: `Conta destino "${linha.contaDestino}" não reconhecida no cadastro` });
+            continue;
+          }
+          if (contaBancariaId === contaDestinoId) {
+            linhasBloqueadas.push({ linha, motivo: `Conta origem e destino resolveram para a mesma conta: "${linha.contaOrigem}"` });
+            continue;
+          }
+        }
+
+        linhasResolvidas.push({ ...linha, contaBancariaId, contaDestinoId });
+      }
+
+      if (linhasBloqueadas.length > 0) {
+        const detalhes = linhasBloqueadas.slice(0, 5).map(b =>
+          `Linha ${b.linha.linha}: ${b.motivo} (valor: ${b.linha.valor})`
+        ).join('\n');
+        toast.error(`${linhasBloqueadas.length} transferência(s) bloqueada(s):\n${detalhes}`, { duration: 10000 });
+        return false;
+      }
       const saldosResolvidos: SaldoImportadoResolvido[] = (saldosBancarios || []).map((saldo) => ({
         ...saldo,
         contaBancariaId: resolveContaBancariaId(saldo.contaBanco, saldo.fazendaId, contasBancarias),
@@ -733,19 +770,32 @@ export function useFinanceiro() {
       const sinalFromTipo = (tipo: string | null) => (tipo || '').startsWith('1') ? 1 : -1;
       let inseridos = 0;
       let ignorados = duplicados;
-      for (let i = 0; i < linhasNovas.length; i += insertBatchSize) {
-        const batch = linhasNovas.slice(i, i + insertBatchSize).map((l) => ({
+
+      // ── Expand transfers into paired records (debit + credit) ──
+      const expandedRows: Array<{
+        fazenda_id: string; cliente_id: string; lote_importacao_id: string;
+        origem_lancamento: string; data_competencia: string; data_pagamento: string | null;
+        ano_mes: string; conta_bancaria_id: string | null; descricao: string | null;
+        valor: number; sinal: number; status_transacao: string | null;
+        tipo_operacao: string; macro_custo: string | null; centro_custo: string | null;
+        subcentro: string | null; observacao: string | null; escopo_negocio: string;
+        created_by: string; transferencia_grupo_id: string | null;
+      }> = [];
+
+      for (const l of linhasNovas) {
+        const tipoNorm = (l.tipoOperacao || '').toLowerCase();
+        const ehTransf = tipoNorm.startsWith('3') || tipoNorm.includes('transfer') || tipoNorm.includes('resgate') || tipoNorm.includes('aplicaç');
+        const clienteIdLinha = fazendas.find(f => f.id === l.fazendaId)?.cliente_id || cid;
+        const baseRow = {
           fazenda_id: l.fazendaId!,
-          cliente_id: fazendas.find(f => f.id === l.fazendaId)?.cliente_id || cid,
+          cliente_id: clienteIdLinha,
           lote_importacao_id: imp.id,
           origem_lancamento: origemDado,
           data_competencia: l.dataPagamento || l.anoMes + '-01',
           data_pagamento: l.dataPagamento,
           ano_mes: l.anoMes,
-          conta_bancaria_id: l.contaBancariaId,
           descricao: l.produto,
           valor: l.valor,
-          sinal: sinalFromTipo(l.tipoOperacao),
           status_transacao: l.statusTransacao,
           tipo_operacao: l.tipoOperacao || '2 - Saídas',
           macro_custo: l.macroCusto,
@@ -754,7 +804,37 @@ export function useFinanceiro() {
           observacao: l.obs,
           escopo_negocio: l.escopoNegocio,
           created_by: user.id,
-        }));
+        };
+
+        if (ehTransf && l.contaDestinoId) {
+          // Generate a shared group ID for the pair
+          const grupoId = crypto.randomUUID();
+          // Debit from origin (sinal = -1)
+          expandedRows.push({
+            ...baseRow,
+            conta_bancaria_id: l.contaBancariaId,
+            sinal: -1,
+            transferencia_grupo_id: grupoId,
+          });
+          // Credit to destination (sinal = 1)
+          expandedRows.push({
+            ...baseRow,
+            conta_bancaria_id: l.contaDestinoId,
+            sinal: 1,
+            transferencia_grupo_id: grupoId,
+          });
+        } else {
+          expandedRows.push({
+            ...baseRow,
+            conta_bancaria_id: l.contaBancariaId,
+            sinal: sinalFromTipo(l.tipoOperacao),
+            transferencia_grupo_id: null,
+          });
+        }
+      }
+
+      for (let i = 0; i < expandedRows.length; i += insertBatchSize) {
+        const batch = expandedRows.slice(i, i + insertBatchSize);
         const { error } = await supabase.from('financeiro_lancamentos_v2').insert(batch);
         if (!error) {
           inseridos += batch.length;
