@@ -350,24 +350,24 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // ===== BLOCKED VIEW =====
   if (bloqueado && (aba === 'entrada' || aba === 'saida' || aba === 'reclassificacao')) {
     return (
-      <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
+      <div className="p-3 max-w-2xl mx-auto space-y-2 animate-fade-in pb-20">
         {onBackToConciliacao && (
-          <button onClick={onBackToConciliacao} className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2.5 transition-colors hover:bg-primary/20 mb-2">
-            <ArrowLeft className="h-4 w-4" /> {backLabel || 'Retornar à Conciliação de Categoria'}
+          <button onClick={onBackToConciliacao} className="w-full flex items-center justify-center gap-1 text-[12px] font-bold text-primary bg-primary/10 rounded-md py-1.5 transition-colors hover:bg-primary/20">
+            <ArrowLeft className="h-3.5 w-3.5" /> {backLabel || 'Retornar à Conciliação de Categoria'}
           </button>
         )}
-        <div className="grid grid-cols-4 gap-1 bg-muted rounded-lg p-1">
+        <div className="grid grid-cols-4 gap-1 bg-muted rounded-md p-0.5">
           {abas.map(a => (
             <button key={a.id} onClick={() => { setAba(a.id); if (a.id === 'entrada') setTipo('nascimento'); if (a.id === 'saida') setTipo('abate'); }}
-              className={`py-2 px-1 rounded-md text-xs font-bold transition-colors touch-target ${aba === a.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'}`}>
+              className={`py-1 px-1 rounded text-[11px] font-bold transition-colors ${aba === a.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'}`}>
               {a.label}
             </button>
           ))}
         </div>
-        <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-lg p-6 text-center space-y-3">
-          <AlertTriangle className="h-10 w-10 text-orange-500 mx-auto" />
-          <h3 className="font-bold text-foreground">Lançamento bloqueado</h3>
-          <p className="text-sm text-muted-foreground">
+        <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-md p-4 text-center space-y-2">
+          <AlertTriangle className="h-8 w-8 text-orange-500 mx-auto" />
+          <h3 className="font-bold text-foreground text-sm">Lançamento bloqueado</h3>
+          <p className="text-[12px] text-muted-foreground">
             {isGlobal
               ? 'Selecione uma fazenda específica para realizar lançamentos. O modo Global é apenas para consulta.'
               : 'Fazendas administrativas não permitem lançamentos zootécnicos.'}
@@ -378,16 +378,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   }
 
   return (
-    <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
+    <div className="p-3 max-w-2xl mx-auto space-y-2 animate-fade-in pb-20">
       {onBackToConciliacao && (
-        <button onClick={onBackToConciliacao} className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2.5 transition-colors hover:bg-primary/20 mb-2">
-          <ArrowLeft className="h-4 w-4" /> {backLabel || 'Retornar à Conciliação de Categoria'}
+        <button onClick={onBackToConciliacao} className="w-full flex items-center justify-center gap-1 text-[12px] font-bold text-primary bg-primary/10 rounded-md py-1.5 transition-colors hover:bg-primary/20">
+          <ArrowLeft className="h-3.5 w-3.5" /> {backLabel || 'Retornar à Conciliação de Categoria'}
         </button>
       )}
-      <div className="grid grid-cols-4 gap-1 bg-muted rounded-lg p-1">
+      <div className="grid grid-cols-4 gap-1 bg-muted rounded-md p-0.5">
         {abas.map(a => (
           <button key={a.id} onClick={() => { setAba(a.id); if (a.id === 'entrada') setTipo('nascimento'); if (a.id === 'saida') setTipo('abate'); }}
-            className={`py-2 px-1 rounded-md text-xs font-bold transition-colors touch-target ${aba === a.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'}`}>
+            className={`py-1 px-1 rounded text-[11px] font-bold transition-colors ${aba === a.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'}`}>
             {a.label}
           </button>
         ))}
@@ -396,18 +396,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       {aba === 'reclassificacao' ? (
         <ReclassificacaoForm onAdicionar={onAdicionar} dataInicial={dataInicial} />
       ) : aba !== 'historico' ? (
-        <form onSubmit={handleSubmit} className="bg-card rounded-lg p-3 shadow-sm border space-y-2.5">
+        <form onSubmit={handleSubmit} className="bg-card rounded-md p-3 shadow-sm border space-y-2">
 
           {/* === STATUS OPERACIONAL === */}
           <div className="space-y-1">
-            <Label className="font-bold text-foreground text-xs">Status da Operação</Label>
-            <div className="grid grid-cols-3 gap-1.5">
+            <Label className="font-bold text-[11px]">Status da Operação</Label>
+            <div className="grid grid-cols-3 gap-1">
               {STATUS_OPTIONS.map(s => (
                 <button
                   key={s.value}
                   type="button"
                   onClick={() => setStatusOp(s.value)}
-                  className={`py-1 px-1.5 rounded-md text-[11px] font-bold border transition-all ${
+                  className={`h-8 px-1.5 rounded text-[12px] font-bold border transition-all ${
                     statusOp === s.value
                       ? `${s.bg} text-white border-transparent shadow-sm`
                       : 'border-border text-muted-foreground bg-muted/30'
@@ -423,12 +423,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
           {/* Tipo */}
           <div>
-            <Label className="font-bold text-foreground text-xs">Tipo</Label>
-            <div className="grid grid-cols-3 gap-1 mt-1">
+            <Label className="font-bold text-[11px]">Tipo</Label>
+            <div className="grid grid-cols-3 gap-1 mt-0.5">
               {tiposDisponiveis.map(t => (
                 <button key={t.value} type="button"
                   onClick={() => { setTipo(t.value); setFazendaOrigem(''); setFazendaDestino(''); setMotivoMorte(''); setMotivoMorteCustom(''); resetFinancialFields(); setPesoKg(t.value === 'nascimento' ? '30' : ''); }}
-                  className={`py-1 px-1 rounded-md text-[11px] font-bold border transition-all ${
+                  className={`h-8 px-1 rounded text-[12px] font-bold border transition-all ${
                     tipo === t.value ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground'
                   }`}>
                   {t.icon} {t.label}
@@ -437,23 +437,23 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className={`font-bold text-foreground ${previstoLabelClass}`}>Data</Label>
-              <Input type="date" value={data} onChange={e => setData(e.target.value)} className={`mt-1 touch-target text-base ${previstoInputClass}`} />
+              <Label className={`font-bold text-[11px] ${previstoLabelClass}`}>Data</Label>
+              <Input type="date" value={data} onChange={e => setData(e.target.value)} className={`mt-0.5 h-8 text-[12px] ${previstoInputClass}`} />
             </div>
             <div>
-              <Label className={`font-bold text-foreground ${previstoLabelClass}`}>Qtd. Cabeças</Label>
-              <Input type="number" value={quantidade} onChange={e => setQuantidade(e.target.value)} placeholder="0" min="1" className={`mt-1 touch-target text-base text-center font-bold text-lg ${previstoInputClass}`} />
+              <Label className={`font-bold text-[11px] ${previstoLabelClass}`}>Qtd. Cabeças</Label>
+              <Input type="number" value={quantidade} onChange={e => setQuantidade(e.target.value)} placeholder="0" min="1" className={`mt-0.5 h-8 text-[12px] text-center font-bold ${previstoInputClass}`} />
             </div>
           </div>
 
           <div>
-            <Label className="font-bold text-foreground">Categoria</Label>
+            <Label className="font-bold text-[11px]">Categoria</Label>
             <Select value={categoria} onValueChange={v => setCategoria(v as Categoria)}>
-              <SelectTrigger className="mt-1 touch-target text-base"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-base">{c.label}</SelectItem>)}
+                {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px]">{c.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -461,49 +461,49 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           {/* Motivo da Morte (for morte) */}
           {isMorte && (
             <div>
-              <Label className="font-bold text-foreground">Motivo da Morte</Label>
+              <Label className="font-bold text-[11px]">Motivo da Morte</Label>
               <Select value={motivoMorte} onValueChange={setMotivoMorte}>
-                <SelectTrigger className="mt-1 touch-target text-base"><SelectValue placeholder="Selecione o motivo" /></SelectTrigger>
+                <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione o motivo" /></SelectTrigger>
                 <SelectContent>
-                  {MOTIVOS_MORTE.map(m => <SelectItem key={m} value={m} className="text-base">{m}</SelectItem>)}
-                  <SelectItem value="__custom__" className="text-base">Outro (digitar)</SelectItem>
+                  {MOTIVOS_MORTE.map(m => <SelectItem key={m} value={m} className="text-[12px]">{m}</SelectItem>)}
+                  <SelectItem value="__custom__" className="text-[12px]">Outro (digitar)</SelectItem>
                 </SelectContent>
               </Select>
               {motivoMorte === '__custom__' && (
-                <Input value={motivoMorteCustom} onChange={e => setMotivoMorteCustom(e.target.value)} placeholder="Digite o motivo" className="mt-2 touch-target text-base" />
+                <Input value={motivoMorteCustom} onChange={e => setMotivoMorteCustom(e.target.value)} placeholder="Digite o motivo" className="mt-1 h-8 text-[12px]" />
               )}
             </div>
           )}
 
           {/* Fazenda Origem / Destino */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             {campos.origem.show && (
               <div>
-                <Label className="font-bold text-foreground">{campos.origem.label}</Label>
+                <Label className="font-bold text-[11px]">{campos.origem.label}</Label>
                 {campos.origem.auto ? (
-                  <Input value={campos.origem.value} readOnly className="mt-1 touch-target text-base bg-muted cursor-not-allowed" />
+                  <Input value={campos.origem.value} readOnly className="mt-0.5 h-8 text-[12px] bg-muted cursor-not-allowed" />
                 ) : (campos.origem as any).useSelect && outrasFazendas.length > 0 ? (
                   <Select value={fazendaOrigem} onValueChange={setFazendaOrigem}>
-                    <SelectTrigger className="mt-1 touch-target text-base"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>{outrasFazendas.map(f => <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>)}</SelectContent>
+                    <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>{outrasFazendas.map(f => <SelectItem key={f.id} value={f.nome} className="text-[12px]">{f.nome}</SelectItem>)}</SelectContent>
                   </Select>
                 ) : (
-                  <Input value={fazendaOrigem} onChange={e => setFazendaOrigem(e.target.value)} placeholder="Ex: Faz. Boa Vista" className="mt-1 touch-target text-base" />
+                  <Input value={fazendaOrigem} onChange={e => setFazendaOrigem(e.target.value)} placeholder="Ex: Faz. Boa Vista" className="mt-0.5 h-8 text-[12px]" />
                 )}
               </div>
             )}
             {campos.destino?.show && (
               <div>
-                <Label className="font-bold text-foreground">{campos.destino.label}</Label>
+                <Label className="font-bold text-[11px]">{campos.destino.label}</Label>
                 {campos.destino.auto ? (
-                  <Input value={campos.destino.value} readOnly className="mt-1 touch-target text-base bg-muted cursor-not-allowed" />
+                  <Input value={campos.destino.value} readOnly className="mt-0.5 h-8 text-[12px] bg-muted cursor-not-allowed" />
                 ) : (campos.destino as any).useSelect && outrasFazendas.length > 0 ? (
                   <Select value={fazendaDestino} onValueChange={setFazendaDestino}>
-                    <SelectTrigger className="mt-1 touch-target text-base"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>{outrasFazendas.map(f => <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>)}</SelectContent>
+                    <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>{outrasFazendas.map(f => <SelectItem key={f.id} value={f.nome} className="text-[12px]">{f.nome}</SelectItem>)}</SelectContent>
                   </Select>
                 ) : (
-                  <Input value={fazendaDestino} onChange={e => setFazendaDestino(e.target.value)} placeholder={campos.destino.placeholder || 'Ex: Faz. Santa Cruz'} className="mt-1 touch-target text-base" />
+                  <Input value={fazendaDestino} onChange={e => setFazendaDestino(e.target.value)} placeholder={campos.destino.placeholder || 'Ex: Faz. Santa Cruz'} className="mt-0.5 h-8 text-[12px]" />
                 )}
               </div>
             )}
@@ -511,47 +511,47 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
           {/* Peso */}
           <div>
-            <Label className={`font-bold text-foreground ${previstoLabelClass}`}>Peso Médio (kg)</Label>
-            <Input type="number" value={pesoKg} onChange={e => setPesoKg(e.target.value)} placeholder="0" className={`mt-1 touch-target text-base ${previstoInputClass}`} />
+            <Label className={`font-bold text-[11px] ${previstoLabelClass}`}>Peso Médio (kg)</Label>
+            <Input type="number" value={pesoKg} onChange={e => setPesoKg(e.target.value)} placeholder="0" className={`mt-0.5 h-8 text-[12px] ${previstoInputClass}`} />
             {pesoKg && Number(pesoKg) > 0 && (
-              <p className="text-xs text-muted-foreground mt-1">≈ {kgToArrobas(Number(pesoKg))} arrobas</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">≈ {kgToArrobas(Number(pesoKg))} arrobas</p>
             )}
           </div>
 
           <div>
-            <Label className="font-bold text-foreground">Observação</Label>
-            <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Observação opcional" className="mt-1 touch-target text-base" />
+            <Label className="font-bold text-[11px]">Observação</Label>
+            <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Observação opcional" className="mt-0.5 h-8 text-[12px]" />
           </div>
 
           {/* ============ DETALHES FINANCEIROS ============ */}
           {showFinanceiro && (
             <Collapsible open={financeiroOpen} onOpenChange={setFinanceiroOpen}>
               <CollapsibleTrigger asChild>
-                <button type="button" className="flex items-center gap-2 text-sm font-bold text-primary w-full py-2">
-                  <ChevronDown className={`h-4 w-4 transition-transform ${financeiroOpen ? '' : '-rotate-90'}`} />
+                <button type="button" className="flex items-center gap-1.5 text-[12px] font-bold text-primary w-full py-1">
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${financeiroOpen ? '' : '-rotate-90'}`} />
                   Detalhes Financeiros
                 </button>
               </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-3 pt-2">
+              <CollapsibleContent className="space-y-2 pt-1">
                 <Separator />
 
                 {/* Extra dates for Confirmado/Conciliado */}
                 {showExtraDates && (
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-bold text-muted-foreground uppercase">Datas da Operação</h4>
-                    <div className={`grid gap-3 ${isAbate || isTransferencia ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                  <div className="space-y-1.5">
+                    <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Datas da Operação</h4>
+                    <div className={`grid gap-2 ${isAbate || isTransferencia ? 'grid-cols-3' : 'grid-cols-2'}`}>
                       <div>
-                        <Label className="text-xs">Data da Venda</Label>
-                        <Input type="date" value={dataVenda} onChange={e => setDataVenda(e.target.value)} className="h-9" />
+                        <Label className="text-[11px]">Data da Venda</Label>
+                        <Input type="date" value={dataVenda} onChange={e => setDataVenda(e.target.value)} className="h-8 text-[12px]" />
                       </div>
                       <div>
-                        <Label className="text-xs">Data Embarque</Label>
-                        <Input type="date" value={dataEmbarque} onChange={e => setDataEmbarque(e.target.value)} className="h-9" />
+                        <Label className="text-[11px]">Data Embarque</Label>
+                        <Input type="date" value={dataEmbarque} onChange={e => setDataEmbarque(e.target.value)} className="h-8 text-[12px]" />
                       </div>
                       {(isAbate || isTransferencia) && (
                         <div>
-                          <Label className="text-xs">Data Abate</Label>
-                          <Input type="date" value={dataAbate} onChange={e => setDataAbate(e.target.value)} className="h-9" />
+                          <Label className="text-[11px]">Data Abate</Label>
+                          <Input type="date" value={dataAbate} onChange={e => setDataAbate(e.target.value)} className="h-8 text-[12px]" />
                         </div>
                       )}
                     </div>
@@ -563,16 +563,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 {isAbate && (
                   <>
                     <div>
-                      <Label className="text-xs font-semibold text-muted-foreground">Peso Carcaça (kg)</Label>
-                      <Input type="number" value={pesoCarcacaKg} onChange={e => setPesoCarcacaKg(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                      <Label className="text-[11px] font-semibold text-muted-foreground">Peso Carcaça (kg)</Label>
+                      <Input type="number" value={pesoCarcacaKg} onChange={e => setPesoCarcacaKg(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                     </div>
                     <div>
-                      <Label className="text-xs font-semibold text-muted-foreground">Tipo de Peso Negociado</Label>
+                      <Label className="text-[11px] font-semibold text-muted-foreground">Tipo de Peso Negociado</Label>
                       <Select value={tipoPeso} onValueChange={(v: 'vivo' | 'morto') => setTipoPeso(v)}>
-                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="vivo">Peso Vivo</SelectItem>
-                          <SelectItem value="morto">Peso Morto</SelectItem>
+                          <SelectItem value="vivo" className="text-[12px]">Peso Vivo</SelectItem>
+                          <SelectItem value="morto" className="text-[12px]">Peso Morto</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -580,30 +580,29 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 )}
 
                 <div>
-                  <Label className="text-xs font-semibold text-muted-foreground">Nota Fiscal</Label>
-                  <Input value={notaFiscal} onChange={e => setNotaFiscal(e.target.value)} placeholder="Nº da nota" className="h-9" />
+                  <Label className="text-[11px] font-semibold text-muted-foreground">Nota Fiscal</Label>
+                  <Input value={notaFiscal} onChange={e => setNotaFiscal(e.target.value)} placeholder="Nº da nota" className="h-8 text-[12px]" />
                 </div>
 
                 <Separator />
-                <h4 className="text-xs font-bold text-muted-foreground uppercase">Valor da Operação</h4>
+                <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Valor da Operação</h4>
 
-                {/* Price field */}
                 {usaPrecoArroba && (
                   <div>
-                    <Label className={`text-xs font-semibold ${previstoLabelClass}`}>R$/@ (preço base)</Label>
-                    <Input type="number" value={precoArroba} onChange={e => setPrecoArroba(e.target.value)} placeholder="0,00" className={`h-9 ${previstoInputClass}`} />
+                    <Label className={`text-[11px] font-semibold ${previstoLabelClass}`}>R$/@ (preço base)</Label>
+                    <Input type="number" value={precoArroba} onChange={e => setPrecoArroba(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${previstoInputClass}`} />
                   </div>
                 )}
                 {usaPrecoKg && (
                   <div>
-                    <Label className={`text-xs font-semibold ${previstoLabelClass}`}>R$/kg (preço base)</Label>
-                    <Input type="number" value={precoKg} onChange={e => setPrecoKg(e.target.value)} placeholder="0,00" className={`h-9 ${previstoInputClass}`} />
+                    <Label className={`text-[11px] font-semibold ${previstoLabelClass}`}>R$/kg (preço base)</Label>
+                    <Input type="number" value={precoKg} onChange={e => setPrecoKg(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${previstoInputClass}`} />
                   </div>
                 )}
 
                 {/* Valor bruto calculado */}
                 {calc.valorBruto > 0 && (
-                  <div className={`rounded-lg p-2.5 text-sm ${isPrevisto ? 'bg-orange-100 dark:bg-orange-950/30' : 'bg-muted/30'}`}>
+                  <div className={`rounded-md p-2 text-[12px] ${isPrevisto ? 'bg-orange-100 dark:bg-orange-950/30' : 'bg-muted/30'}`}>
                     <div className="flex justify-between">
                       <span className={isPrevisto ? 'text-orange-700 dark:text-orange-400' : 'text-muted-foreground'}>Valor total bruto</span>
                       <strong className={isPrevisto ? 'text-orange-800 dark:text-orange-300' : ''}>R$ {fmt(calc.valorBruto)}</strong>
@@ -615,48 +614,48 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 {showFormaPagamento && calc.valorBruto > 0 && (
                   <>
                     <Separator />
-                    <h4 className="text-xs font-bold text-muted-foreground uppercase">
+                     <h4 className="text-[10px] font-bold text-muted-foreground uppercase">
                       {isCompra ? 'Forma de Pagamento' : 'Forma de Recebimento'}
                     </h4>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-1.5">
                       <button type="button" onClick={() => { setFormaPagamento('avista'); setParcelas([]); }}
-                        className={`py-2 rounded-lg text-xs font-bold border-2 transition-all ${formaPagamento === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
+                        className={`h-8 rounded text-[12px] font-bold border-2 transition-all ${formaPagamento === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
                         À vista
                       </button>
                       <button type="button" onClick={() => { setFormaPagamento('parcelado'); handleQtdParcelasChange(qtdParcelas); }}
-                        className={`py-2 rounded-lg text-xs font-bold border-2 transition-all ${formaPagamento === 'parcelado' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
+                        className={`h-8 rounded text-[12px] font-bold border-2 transition-all ${formaPagamento === 'parcelado' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
                         Parcelado
                       </button>
                     </div>
 
                     {formaPagamento === 'parcelado' && (
-                      <div className="space-y-3">
+                      <div className="space-y-1.5">
                         <div>
-                          <Label className="text-xs">Quantidade de parcelas</Label>
-                          <Input type="number" min="2" max="48" value={qtdParcelas} onChange={e => handleQtdParcelasChange(e.target.value)} className="h-9" />
+                          <Label className="text-[11px]">Quantidade de parcelas</Label>
+                          <Input type="number" min="2" max="48" value={qtdParcelas} onChange={e => handleQtdParcelasChange(e.target.value)} className="h-8 text-[12px]" />
                         </div>
                         {parcelas.map((p, i) => (
-                          <div key={i} className="grid grid-cols-2 gap-2 bg-muted/30 rounded-lg p-2">
+                          <div key={i} className="grid grid-cols-2 gap-1.5 bg-muted/30 rounded p-1.5">
                             <div>
-                              <Label className="text-xs">Parcela {i + 1} - Data</Label>
+                              <Label className="text-[10px]">Parcela {i + 1} - Data</Label>
                               <Input type="date" value={p.data} onChange={e => {
                                 const np = [...parcelas];
                                 np[i] = { ...np[i], data: e.target.value };
                                 setParcelas(np);
-                              }} className="h-8 text-xs" />
+                              }} className="h-7 text-[11px]" />
                             </div>
                             <div>
-                              <Label className="text-xs">Valor (R$)</Label>
+                              <Label className="text-[10px]">Valor (R$)</Label>
                               <Input type="number" value={String(p.valor)} onChange={e => {
                                 const np = [...parcelas];
                                 np[i] = { ...np[i], valor: Number(e.target.value) || 0 };
                                 setParcelas(np);
-                              }} className="h-8 text-xs" />
+                              }} className="h-7 text-[11px]" />
                             </div>
                           </div>
                         ))}
                         {parcelas.length > 0 && (
-                          <div className="text-xs text-muted-foreground text-right">
+                          <div className="text-[10px] text-muted-foreground text-right">
                             Soma parcelas: R$ {fmt(parcelas.reduce((s, p) => s + p.valor, 0))}
                           </div>
                         )}
@@ -669,48 +668,48 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 {/* Bonus/Descontos */}
                 {isAbate ? (
                   <>
-                    <h4 className="text-xs font-bold text-muted-foreground uppercase">Bônus (R$)</h4>
-                    <div className="grid grid-cols-3 gap-2">
+                    <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Bônus (R$)</h4>
+                    <div className="grid grid-cols-3 gap-1.5">
                       <div>
-                        <Label className="text-xs">Precoce</Label>
-                        <Input type="number" value={bonusPrecoce} onChange={e => setBonusPrecoce(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Precoce</Label>
+                        <Input type="number" value={bonusPrecoce} onChange={e => setBonusPrecoce(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                       <div>
-                        <Label className="text-xs">Qualidade</Label>
-                        <Input type="number" value={bonusQualidade} onChange={e => setBonusQualidade(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Qualidade</Label>
+                        <Input type="number" value={bonusQualidade} onChange={e => setBonusQualidade(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                       <div>
-                        <Label className="text-xs">Lista Trace</Label>
-                        <Input type="number" value={bonusListaTrace} onChange={e => setBonusListaTrace(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Lista Trace</Label>
+                        <Input type="number" value={bonusListaTrace} onChange={e => setBonusListaTrace(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                     </div>
-                    <h4 className="text-xs font-bold text-muted-foreground uppercase">Descontos (R$)</h4>
-                    <div className="grid grid-cols-3 gap-2">
+                    <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Descontos (R$)</h4>
+                    <div className="grid grid-cols-3 gap-1.5">
                       <div>
-                        <Label className="text-xs">Qualidade</Label>
-                        <Input type="number" value={descontoQualidade} onChange={e => setDescontoQualidade(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Qualidade</Label>
+                        <Input type="number" value={descontoQualidade} onChange={e => setDescontoQualidade(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                       <div>
-                        <Label className="text-xs">Funrural</Label>
-                        <Input type="number" value={descontoFunrural} onChange={e => setDescontoFunrural(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Funrural</Label>
+                        <Input type="number" value={descontoFunrural} onChange={e => setDescontoFunrural(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                       <div>
-                        <Label className="text-xs">Outros</Label>
-                        <Input type="number" value={outrosDescontos} onChange={e => setOutrosDescontos(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Outros</Label>
+                        <Input type="number" value={outrosDescontos} onChange={e => setOutrosDescontos(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                     </div>
                   </>
                 ) : (
                   <>
-                    <h4 className="text-xs font-bold text-muted-foreground uppercase">Ajustes (R$)</h4>
-                    <div className="grid grid-cols-2 gap-3">
+                    <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Ajustes (R$)</h4>
+                    <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <Label className="text-xs">Bônus</Label>
-                        <Input type="number" value={bonus} onChange={e => setBonus(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Bônus</Label>
+                        <Input type="number" value={bonus} onChange={e => setBonus(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                       <div>
-                        <Label className="text-xs">Descontos</Label>
-                        <Input type="number" value={descontos} onChange={e => setDescontos(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Descontos</Label>
+                        <Input type="number" value={descontos} onChange={e => setDescontos(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                     </div>
                   </>
@@ -719,21 +718,20 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 {/* Valor total líquido - manual override */}
                 <Separator />
                 <div>
-                  <Label className={`text-xs font-semibold ${previstoLabelClass || 'text-foreground'}`}>Valor total líquido (R$)</Label>
+                  <Label className={`text-[11px] font-semibold ${previstoLabelClass || 'text-foreground'}`}>Valor total líquido (R$)</Label>
                   <Input
                     type="number"
                     value={calc.valorLiquido > 0 ? String(Math.round(calc.valorLiquido * 100) / 100) : ''}
                     onChange={e => {
                       const vt = parseFloat(e.target.value);
                       if (!isNaN(vt)) {
-                        // Back-calculate base price from manual total
                         const totalBon = isAbate
                           ? (Number(bonusPrecoce) || 0) + (Number(bonusQualidade) || 0) + (Number(bonusListaTrace) || 0)
                           : (Number(bonus) || 0);
                         const totalDesc = isAbate
                           ? (Number(descontoQualidade) || 0) + (Number(descontoFunrural) || 0) + (Number(outrosDescontos) || 0)
                           : (Number(descontos) || 0);
-                        const comVal = 0; // comissão depends on bruto, skip for back-calc
+                        const comVal = 0;
                         const freteVal = Number(frete) || 0;
                         const outVal = Number(outrasDespesas) || 0;
                         const brutoNecessario = vt - totalBon + totalDesc + comVal + freteVal + outVal;
@@ -745,28 +743,28 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                       }
                     }}
                     placeholder="Informe o valor total líquido"
-                    className={`h-10 text-base font-bold ${previstoInputClass}`}
+                    className={`h-8 text-[12px] font-bold ${previstoInputClass}`}
                   />
-                  <p className="text-xs text-muted-foreground mt-1">Preencha para retro-calcular o preço base automaticamente</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Preencha para retro-calcular o preço base automaticamente</p>
                 </div>
 
                 {/* Comissão/Frete/Outras despesas */}
                 {(showComissaoFreteDespesas || showComissaoPrevConf) && (
                   <>
                     <Separator />
-                    <h4 className="text-xs font-bold text-muted-foreground uppercase">Despesas Operacionais</h4>
-                    <div className="grid grid-cols-3 gap-2">
+                    <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Despesas Operacionais</h4>
+                    <div className="grid grid-cols-3 gap-1.5">
                       <div>
-                        <Label className="text-xs">Comissão (%)</Label>
-                        <Input type="number" value={comissaoPct} onChange={e => setComissaoPct(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Comissão (%)</Label>
+                        <Input type="number" value={comissaoPct} onChange={e => setComissaoPct(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                       <div>
-                        <Label className="text-xs">Frete (R$)</Label>
-                        <Input type="number" value={frete} onChange={e => setFrete(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Frete (R$)</Label>
+                        <Input type="number" value={frete} onChange={e => setFrete(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                       <div>
-                        <Label className="text-xs">Outras (R$)</Label>
-                        <Input type="number" value={outrasDespesas} onChange={e => setOutrasDespesas(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Outras (R$)</Label>
+                        <Input type="number" value={outrasDespesas} onChange={e => setOutrasDespesas(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                     </div>
                   </>
@@ -774,25 +772,25 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
                 {/* Valor líquido final */}
                 {calc.valorBruto > 0 && (
-                  <div className={`rounded-lg p-3 ${isPrevisto ? 'bg-orange-200/50 dark:bg-orange-950/50' : 'bg-primary/10'}`}>
-                    <div className="flex justify-between text-base font-bold">
+                  <div className={`rounded-md p-2 ${isPrevisto ? 'bg-orange-200/50 dark:bg-orange-950/50' : 'bg-primary/10'}`}>
+                    <div className="flex justify-between text-[12px] font-bold">
                       <span className={isPrevisto ? 'text-orange-800 dark:text-orange-300' : ''}>Valor líquido final</span>
                       <span className={isPrevisto ? 'text-orange-800 dark:text-orange-300' : 'text-primary'}>R$ {fmt(calc.valorLiquido)}</span>
                     </div>
                     {calc.liqArroba > 0 && (
-                      <div className="flex justify-between text-sm mt-1">
+                      <div className="flex justify-between text-[11px] mt-0.5">
                         <span className="text-muted-foreground">R$/líq @</span>
                         <strong>R$ {fmt(calc.liqArroba)}</strong>
                       </div>
                     )}
                     {calc.liqCabeca > 0 && (
-                      <div className="flex justify-between text-sm mt-0.5">
+                      <div className="flex justify-between text-[11px] mt-0.5">
                         <span className="text-muted-foreground">Líq/Cabeça</span>
                         <strong>R$ {fmt(calc.liqCabeca)}</strong>
                       </div>
                     )}
                     {calc.liqKg > 0 && (
-                      <div className="flex justify-between text-sm mt-0.5">
+                      <div className="flex justify-between text-[11px] mt-0.5">
                         <span className="text-muted-foreground">R$/Kg líq</span>
                         <strong>R$ {fmt(calc.liqKg)}</strong>
                       </div>
@@ -803,27 +801,27 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             </Collapsible>
           )}
 
-          <Button type="submit" className="w-full touch-target text-base font-bold" size="lg">
+          <Button type="submit" className="w-full h-8 text-[12px] font-bold" size="sm">
             {aba === 'entrada' ? '📥 Registrar Entrada' : '📤 Registrar Saída'}
           </Button>
         </form>
       ) : (
         <div>
-          <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-2 -mx-4">
-            <div className="flex gap-2">
+          <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 -mx-3">
+            <div className="flex gap-1.5">
               <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-                <SelectTrigger className="touch-target text-base font-bold w-28"><SelectValue placeholder="Ano" /></SelectTrigger>
-                <SelectContent>{anosDisponiveis.map(a => <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>)}</SelectContent>
+                <SelectTrigger className="h-8 text-[12px] font-bold w-24"><SelectValue placeholder="Ano" /></SelectTrigger>
+                <SelectContent>{anosDisponiveis.map(a => <SelectItem key={a} value={a} className="text-[12px]">{a}</SelectItem>)}</SelectContent>
               </Select>
               <Select value={mesFiltro} onValueChange={setMesFiltro}>
-                <SelectTrigger className="touch-target text-base font-bold flex-1"><SelectValue placeholder="Mês" /></SelectTrigger>
-                <SelectContent>{MESES.map(m => <SelectItem key={m.value} value={m.value} className="text-base">{m.label}</SelectItem>)}</SelectContent>
+                <SelectTrigger className="h-8 text-[12px] font-bold flex-1"><SelectValue placeholder="Mês" /></SelectTrigger>
+                <SelectContent>{MESES.map(m => <SelectItem key={m.value} value={m.value} className="text-[12px]">{m.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           </div>
-          <div className="space-y-2 pt-2">
+          <div className="space-y-1.5 pt-1.5">
           {historicoFiltrado.length === 0 ? (
-            <p className="text-center text-muted-foreground py-10">Nenhum lançamento no período</p>
+            <p className="text-center text-muted-foreground py-8 text-[12px]">Nenhum lançamento no período</p>
           ) : (
             historicoFiltrado.slice(0, 50).map(l => {
               const entrada = isEntrada(l.tipo);
@@ -833,27 +831,27 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               const tipoLabel = TODOS_TIPOS.find(t => t.value === l.tipo);
               return (
                 <button key={l.id} onClick={() => setDetalheId(l.id)}
-                  className="w-full bg-card rounded-lg p-3 border shadow-sm flex items-center gap-3 text-left hover:bg-muted/50 transition-colors">
-                  <div className="text-2xl">{tipoLabel?.icon}</div>
+                  className="w-full bg-card rounded-md p-2 border shadow-sm flex items-center gap-2 text-left hover:bg-muted/50 transition-colors">
+                  <div className="text-lg">{tipoLabel?.icon}</div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded ${entrada ? 'bg-success/20 text-success' : reclass ? 'bg-accent/20 text-accent-foreground' : 'bg-destructive/20 text-destructive'}`}>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${entrada ? 'bg-success/20 text-success' : reclass ? 'bg-accent/20 text-accent-foreground' : 'bg-destructive/20 text-destructive'}`}>
                         {entrada ? '+' : reclass ? '↔' : '-'}{l.quantidade}
                       </span>
-                      <span className="text-sm font-bold text-foreground truncate">{tipoLabel?.label}</span>
+                      <span className="text-[12px] font-bold text-foreground truncate">{tipoLabel?.label}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
                       {catLabel}{catDestinoLabel ? ` → ${catDestinoLabel}` : ''} • {format(parseISO(l.data), 'dd/MM/yyyy', { locale: ptBR })}
                       {l.pesoMedioKg ? ` • ${l.pesoMedioKg}kg` : ''}
                       {l.valorTotal ? ` • R$${l.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''}
                     </p>
                   </div>
-                  <div className="flex flex-col items-end gap-1 shrink-0">
+                  <div className="flex flex-col items-end gap-0.5 shrink-0">
                     {(() => {
                       const cfg = getStatusBadge(l);
-                      return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${cfg.cls}`}>{cfg.label}</span>;
+                      return <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${cfg.cls}`}>{cfg.label}</span>;
                     })()}
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                   </div>
                 </button>
               );
