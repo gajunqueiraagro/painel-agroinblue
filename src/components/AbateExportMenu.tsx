@@ -134,13 +134,17 @@ async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
   const totalArrobas = calcArrobasTotaisPrev(l);
+  const pesoVivo = l.pesoMedioKg ?? 0;
+  const rendPct = pesoVivo > 0 && l.pesoCarcacaKg ? (l.pesoCarcacaKg / pesoVivo) * 100 : 0;
+  const pesoCarcaca = pesoVivo * (rendPct / 100);
+  const arrobasCab = pesoCarcaca > 0 ? pesoCarcaca / 15 : 0;
   const bonus = (l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0);
   const desc = (l.descontoQualidade ?? 0) + (l.descontoFunrural ?? 0) + (l.outrosDescontos ?? 0);
-  const valorBase = totalArrobas * (l.precoArroba ?? 0);
-  const valorLiq = valorBase + (bonus * totalArrobas) - (desc * totalArrobas);
-  const bonusArroba = totalArrobas > 0 ? bonus : 0;
-  const descArroba = totalArrobas > 0 ? desc : 0;
-  const liqArroba = totalArrobas > 0 ? valorLiq / totalArrobas : 0;
+  const precoBase = l.precoArroba ?? 0;
+  const precoLiqArroba = precoBase + bonus - desc;
+  const valorLiq = precoLiqArroba * totalArrobas;
+  const liqCabeca = l.quantidade > 0 ? valorLiq / l.quantidade : 0;
+  const liqKg = pesoVivo > 0 && l.quantidade > 0 ? valorLiq / (pesoVivo * l.quantidade) : 0;
 
   let y = 5;
   try {
@@ -155,29 +159,62 @@ async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
   y += 14;
   if (fazendaNome) { doc.setFontSize(11); doc.text(fazendaNome, 105, y, { align: 'center' }); y += 7; }
 
-  const info: string[][] = [
+  const tStyle = { theme: 'grid' as const, headStyles: { fillColor: [34, 120, 74] as [number, number, number], textColor: 255, fontStyle: 'bold' as const, fontSize: 10 }, bodyStyles: { fontSize: 10 }, columnStyles: { 0: { fontStyle: 'bold' as const, cellWidth: 65 } }, margin: { left: 20, right: 20 } };
+
+  // BLOCO 1
+  const bloco1: string[][] = [
+    ['Fazenda', fazendaNome || '-'],
+    ['Frigorífico', l.fazendaDestino || '-'],
+    ['Tipo de Venda', TIPO_VENDA_LABELS[l.tipoVenda ?? ''] || '-'],
+    ['Tipo de Abate', TIPO_ABATE_LABELS[l.tipoPeso ?? ''] || '-'],
     ['Data da Venda', fmtDate(l.dataVenda)],
     ['Data Embarque', fmtDate(l.dataEmbarque)],
     ['Data Prev. Abate', fmtDate(l.dataAbate || l.data)],
-    ['Frigorífico', l.fazendaDestino || '-'],
-  ];
-  if (l.tipoVenda) info.push(['Tipo de Venda', TIPO_VENDA_LABELS[l.tipoVenda] || l.tipoVenda]);
-  info.push(['Tipo de Abate', TIPO_ABATE_LABELS[l.tipoPeso ?? ''] || '-']);
-  info.push(
     ['Categoria', cat],
     ['Quantidade', `${l.quantidade} cab.`],
-    ['Peso Vivo Previsto', `${fmtValor(l.pesoMedioKg)} kg`],
-    ['R$/@ Negociado', formatMoeda(l.precoArroba)],
-    ['Arrobas Totais Previstas', `${fmtValor(totalArrobas)} @`],
-  );
-  if (bonusArroba > 0) info.push(['Expectativa Bônus R$/@', formatMoeda(bonusArroba)]);
-  if (descArroba > 0) info.push(['Expectativa Descontos R$/@', formatMoeda(descArroba)]);
-  info.push(
-    ['Expectativa Líq. Total', formatMoeda(valorLiq)],
-  );
-  if (liqArroba > 0) info.push(['Expectativa Líq. R$/@', formatMoeda(liqArroba)]);
+    ['Preço Negociado', `${formatMoeda(precoBase)} /@`],
+  ];
+  autoTable(doc, { ...tStyle, startY: y, head: [['DADOS CONFIRMADOS', '']], body: bloco1 });
 
-  autoTable(doc, { startY: y, body: info, theme: 'plain', bodyStyles: { fontSize: 11 }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 65 } }, margin: { left: 20, right: 20 } });
+  // BLOCO 2
+  const y2 = ((doc as any).lastAutoTable?.finalY ?? y + 56) + 4;
+  const bloco2: string[][] = [
+    ['Peso Vivo Estimado', `${fmtValor(pesoVivo)} kg`],
+    ['Rend. Carcaça', `${fmtValor(rendPct)} %`],
+    ['Peso Carcaça', `${fmtValor(pesoCarcaca)} kg`],
+    ['Arrobas por Cabeça', `${fmtValor(arrobasCab)} @`],
+    ['Arrobas Totais Estimadas', `${fmtValor(totalArrobas)} @`],
+  ];
+  autoTable(doc, { ...tStyle, startY: y2, head: [['PROJEÇÃO OPERACIONAL (EXPECTATIVA)', '']], body: bloco2 });
+
+  // BLOCO 3
+  const y3 = ((doc as any).lastAutoTable?.finalY ?? y2 + 36) + 4;
+  const bloco3: string[][] = [
+    ['Bônus Estimado', `${formatMoeda(bonus)} /@`],
+    ['Descontos Estimados', `${formatMoeda(desc)} /@`],
+    ['Preço Líq. Estimado', `${formatMoeda(precoLiqArroba)} /@`],
+    ['Valor Líq. Estimado Total', formatMoeda(valorLiq)],
+  ];
+  autoTable(doc, { ...tStyle, startY: y3, head: [['PROJEÇÃO FINANCEIRA (EXPECTATIVA)', '']], body: bloco3 });
+
+  // BLOCO 4
+  const y4 = ((doc as any).lastAutoTable?.finalY ?? y3 + 36) + 4;
+  const bloco4: string[][] = [
+    ['Líquido Estimado R$/@', formatMoeda(precoLiqArroba)],
+    ['Líquido Estimado / Cabeça', formatMoeda(liqCabeca)],
+    ['Líquido Estimado / kg Vivo', formatMoeda(liqKg)],
+  ];
+  autoTable(doc, { ...tStyle, startY: y4, head: [['RESULTADO ESPERADO', '']], body: bloco4 });
+
+  // Observação final
+  const yObs = ((doc as any).lastAutoTable?.finalY ?? y4 + 26) + 8;
+  doc.setFontSize(8);
+  doc.setTextColor(100, 100, 100);
+  const obs = 'Os valores acima representam uma estimativa baseada nos parâmetros informados. O resultado final pode variar conforme rendimento de carcaça, peso real dos animais, bônus aplicados pelo frigorífico e descontos efetivos no abate.';
+  const splitObs = doc.splitTextToSize(obs, 170);
+  doc.text(splitObs, 20, yObs);
+  doc.setTextColor(0, 0, 0);
+
   doc.save(`escala_confirmado_${format(parseISO(l.data), 'ddMMyyyy')}.pdf`);
 }
 
