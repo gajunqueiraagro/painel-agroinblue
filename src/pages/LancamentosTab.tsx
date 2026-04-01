@@ -936,7 +936,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             </button>
             <button type="button" onClick={() => { setFormaPagamento('parcelado'); handleQtdParcelasChange(qtdParcelas); }}
               className={`h-8 rounded text-[12px] font-bold border-2 transition-all ${formaPagamento === 'parcelado' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
-              Parcelado
+              A prazo
             </button>
           </div>
           {formaPagamento === 'parcelado' && (
