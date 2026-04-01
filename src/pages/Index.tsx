@@ -55,6 +55,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
+import { Lancamento } from '@/types/cattle';
 
 export interface FiltroGlobal {
   ano: string;
