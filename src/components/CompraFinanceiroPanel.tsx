@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import type { StatusOperacional } from '@/lib/statusOperacional';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
+import { CATEGORIAS } from '@/types/cattle';
 
 type TipoPreco = 'por_kg' | 'por_cab' | 'por_total';
 
