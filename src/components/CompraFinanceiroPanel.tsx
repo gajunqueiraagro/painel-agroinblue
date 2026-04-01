@@ -366,7 +366,6 @@ export function CompraFinanceiroPanel({
               onValueChange={setFornecedorId}
               placeholder="Selecione (opcional)"
               options={fornecedores.map(f => ({ value: f.id, label: f.nome }))}
-              emptyText="Nenhum fornecedor"
             />
           </div>
           <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setNovoFornecedorOpen(true)}>
