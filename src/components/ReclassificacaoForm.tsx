@@ -79,7 +79,7 @@ export function ReclassificacaoForm({ onAdicionar, dataInicial }: Props) {
         </div>
         <div>
           <Label className="font-bold text-foreground">Qtd. Cabeças</Label>
-          <Input type="number" value={quantidade} onChange={e => setQuantidade(e.target.value)} placeholder="0" min="1" className="mt-1 touch-target text-base text-center font-bold text-lg" />
+          <Input type="text" inputMode="numeric" value={qtdInput.displayValue} onChange={qtdInput.onChange} onBlur={qtdInput.onBlur} onFocus={qtdInput.onFocus} placeholder="0" min="1" className="mt-1 touch-target text-base text-center font-bold text-lg" />
         </div>
       </div>
 
