@@ -457,7 +457,7 @@ export function CompraFinanceiroPanel({
           valor: calc.freteVal,
           data_competencia: data,
           data_pagamento: data,
-          descricao: `Prev. Mov - Frete compra ${categoria}`,
+          descricao: `Prev. Frete - ${compraLabel}`,
           origem_tipo: 'compra_rebanho:frete',
         });
       }
