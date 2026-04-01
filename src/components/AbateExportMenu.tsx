@@ -7,7 +7,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 import { formatMoeda, fmtValor } from '@/lib/calculos/formatters';
-import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
+
 import { getStatus } from '@/lib/statusOperacional';
 import { useState } from 'react';
 import logoUrl from '@/assets/logo.png';
