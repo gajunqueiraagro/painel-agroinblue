@@ -888,7 +888,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         ) : (
           <>
             {renderForm()}
-            {renderFinancialPanel()}
+            {isCompra ? (
+              <CompraFinanceiroPanel
+                quantidade={Number(quantidade) || 0}
+                pesoKg={Number(pesoKg) || 0}
+                data={data}
+                categoria={categoria}
+                statusOp={statusOp}
+                fazendaOrigem={fazendaOrigem}
+                notaFiscal={notaFiscal}
+                onNotaFiscalChange={setNotaFiscal}
+                lancamentoId={latestCompraId || undefined}
+              />
+            ) : (
+              renderFinancialPanel()
+            )}
           </>
         )}
       </div>
