@@ -648,7 +648,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <div className={childWrap}>
             {TIPOS_ENTRADA.map(t => (
               <button key={t.value} type="button"
-                onClick={() => { setAba('entrada'); setTipo(t.value); setCategoria(''); setFazendaOrigem(''); setFazendaDestino(''); resetFinancialFields(); setPesoKg(t.value === 'nascimento' ? '30' : ''); setLastSavedLancamentoId(null); }}
+                onClick={() => { setAba('entrada'); setTipo(t.value); resetAllFields(t.value); }}
                 className={childCls(aba === 'entrada' && tipo === t.value)}>
                 <span className="text-[12px]">{t.icon}</span> {t.label}
               </button>
