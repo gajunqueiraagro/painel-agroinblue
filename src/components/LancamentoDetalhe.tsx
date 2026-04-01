@@ -193,7 +193,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
             <div className="space-y-2">
               <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[12px]">
                 <div>
-                  <p className="text-[10px] text-muted-foreground">Data</p>
+                  <p className="text-[10px] text-muted-foreground">{isAbate ? 'Data do Abate' : 'Data'}</p>
                   <p className="font-bold text-foreground">
                     {format(parseISO(lancamento.data), 'dd/MM/yyyy', { locale: ptBR })}
                   </p>
