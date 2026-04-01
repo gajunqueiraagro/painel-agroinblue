@@ -28,7 +28,7 @@ export function useLancamentos() {
       const fazendaIds = fazendas.map(f => f.id);
       
       const [lancRes, saldoRes] = await Promise.all([
-        supabase.from('lancamentos').select('*').in('fazenda_id', fazendaIds).order('data', { ascending: false }),
+        supabase.from('lancamentos').select('*').in('fazenda_id', fazendaIds).eq('cancelado', false).order('data', { ascending: false }),
         supabase.from('saldos_iniciais').select('*').in('fazenda_id', fazendaIds),
       ]);
 
@@ -103,7 +103,7 @@ export function useLancamentos() {
 
     // Single fazenda mode
     const [lancRes, saldoRes] = await Promise.all([
-      supabase.from('lancamentos').select('*').eq('fazenda_id', fazendaId).order('data', { ascending: false }),
+      supabase.from('lancamentos').select('*').eq('fazenda_id', fazendaId).eq('cancelado', false).order('data', { ascending: false }),
       supabase.from('saldos_iniciais').select('*').eq('fazenda_id', fazendaId),
     ]);
 
@@ -373,9 +373,63 @@ export function useLancamentos() {
   };
 
   const removerLancamento = async (id: string) => {
-    // CASCADE will automatically delete linked financeiro_lancamentos_v2
-    const { error } = await supabase.from('lancamentos').delete().eq('id', id);
+    // Soft delete: mark as cancelled + write audit log
+    const { data: lancRow } = await supabase
+      .from('lancamentos')
+      .select('id, cliente_id, tipo, categoria, quantidade, data')
+      .eq('id', id)
+      .single();
+
+    // Get linked financial records before cancellation
+    const { data: finVinculados } = await supabase
+      .from('financeiro_lancamentos_v2')
+      .select('id')
+      .eq('movimentacao_rebanho_id', id)
+      .eq('cancelado', false);
+
+    const finIds = (finVinculados || []).map(f => f.id);
+
+    // Cancel linked financial records (soft delete)
+    if (finIds.length > 0) {
+      await supabase
+        .from('financeiro_lancamentos_v2')
+        .update({
+          cancelado: true,
+          cancelado_em: new Date().toISOString(),
+          cancelado_por: (await supabase.auth.getUser()).data.user?.id || null,
+        })
+        .in('id', finIds);
+    }
+
+    // Soft delete the movimentação
+    const userId = (await supabase.auth.getUser()).data.user?.id;
+    const { error } = await supabase
+      .from('lancamentos')
+      .update({
+        cancelado: true,
+        cancelado_em: new Date().toISOString(),
+        cancelado_por: userId || null,
+      })
+      .eq('id', id);
+
     if (!error) {
+      // Write audit log
+      if (lancRow?.cliente_id) {
+        await supabase.from('audit_log_movimentacoes').insert({
+          cliente_id: lancRow.cliente_id,
+          usuario_id: userId || null,
+          acao: 'exclusao_movimentacao',
+          movimentacao_id: id,
+          financeiro_ids: finIds.length > 0 ? finIds : null,
+          detalhes: {
+            tipo: lancRow.tipo,
+            categoria: lancRow.categoria,
+            quantidade: lancRow.quantidade,
+            data: lancRow.data,
+            financeiros_cancelados: finIds.length,
+          },
+        });
+      }
       setLancamentos(prev => prev.filter(l => l.id !== id));
     }
     return !error;

@@ -83,6 +83,39 @@ export type Database = {
           },
         ]
       }
+      audit_log_movimentacoes: {
+        Row: {
+          acao: string
+          cliente_id: string
+          created_at: string
+          detalhes: Json | null
+          financeiro_ids: string[] | null
+          id: string
+          movimentacao_id: string | null
+          usuario_id: string | null
+        }
+        Insert: {
+          acao: string
+          cliente_id: string
+          created_at?: string
+          detalhes?: Json | null
+          financeiro_ids?: string[] | null
+          id?: string
+          movimentacao_id?: string | null
+          usuario_id?: string | null
+        }
+        Update: {
+          acao?: string
+          cliente_id?: string
+          created_at?: string
+          detalhes?: Json | null
+          financeiro_ids?: string[] | null
+          id?: string
+          movimentacao_id?: string | null
+          usuario_id?: string | null
+        }
+        Relationships: []
+      }
       categorias_rebanho: {
         Row: {
           codigo: string
@@ -2297,6 +2330,9 @@ export type Database = {
           bonus_lista_trace: number | null
           bonus_precoce: number | null
           bonus_qualidade: number | null
+          cancelado: boolean
+          cancelado_em: string | null
+          cancelado_por: string | null
           categoria: string
           categoria_destino: string | null
           cliente_id: string
@@ -2332,6 +2368,9 @@ export type Database = {
           bonus_lista_trace?: number | null
           bonus_precoce?: number | null
           bonus_qualidade?: number | null
+          cancelado?: boolean
+          cancelado_em?: string | null
+          cancelado_por?: string | null
           categoria: string
           categoria_destino?: string | null
           cliente_id: string
@@ -2367,6 +2406,9 @@ export type Database = {
           bonus_lista_trace?: number | null
           bonus_precoce?: number | null
           bonus_qualidade?: number | null
+          cancelado?: boolean
+          cancelado_em?: string | null
+          cancelado_por?: string | null
           categoria?: string
           categoria_destino?: string | null
           cliente_id?: string

@@ -32,6 +32,10 @@ interface Props {
   onNotaFiscalChange: (v: string) => void;
   /** After saving the lancamento, pass its ID here to enable financial generation */
   lancamentoId?: string;
+  /** 'create' = new purchase flow, 'update' = recalculate existing financial */
+  mode?: 'create' | 'update';
+  /** Called after financial records are successfully updated (in update mode) */
+  onFinanceiroUpdated?: () => void;
 }
 
 function fmt(v?: number, decimals = 2) {
@@ -40,7 +44,7 @@ function fmt(v?: number, decimals = 2) {
 }
 
 export function CompraFinanceiroPanel({
-  quantidade, pesoKg, data, categoria, statusOp, fazendaOrigem, notaFiscal, onNotaFiscalChange, lancamentoId,
+  quantidade, pesoKg, data, categoria, statusOp, fazendaOrigem, notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated,
 }: Props) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
@@ -60,6 +64,8 @@ export function CompraFinanceiroPanel({
 
   const [gerado, setGerado] = useState(false);
   const [gerando, setGerando] = useState(false);
+  const [existingCount, setExistingCount] = useState(0);
+  const [existingLoaded, setExistingLoaded] = useState(false);
 
   // Fornecedor state
   const [fornecedorId, setFornecedorId] = useState<string>('');
@@ -80,6 +86,20 @@ export function CompraFinanceiroPanel({
         if (data) setFornecedores(data);
       });
   }, [clienteAtual]);
+
+  // Load existing financial records in update mode
+  useEffect(() => {
+    if (mode !== 'update' || !lancamentoId) { setExistingLoaded(true); return; }
+    supabase
+      .from('financeiro_lancamentos_v2')
+      .select('id', { count: 'exact', head: true })
+      .eq('movimentacao_rebanho_id', lancamentoId)
+      .eq('cancelado', false)
+      .then(({ count }) => {
+        setExistingCount(count ?? 0);
+        setExistingLoaded(true);
+      });
+  }, [mode, lancamentoId]);
 
   // Auto-suggest fornecedor based on fazendaOrigem
   useEffect(() => {
@@ -223,18 +243,53 @@ export function CompraFinanceiroPanel({
 
     setGerando(true);
     try {
-      // Check duplicates
-      const { data: existing } = await supabase
-        .from('financeiro_lancamentos_v2')
-        .select('id')
-        .eq('movimentacao_rebanho_id', lancamentoId)
-        .eq('cancelado', false)
-        .limit(1);
+      // In update mode, cancel existing records first
+      if (mode === 'update') {
+        const { data: oldRecords } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .select('id')
+          .eq('movimentacao_rebanho_id', lancamentoId)
+          .eq('cancelado', false);
 
-      if (existing && existing.length > 0) {
-        toast.error('Lançamentos financeiros já foram gerados para esta movimentação.');
-        setGerado(true);
-        return;
+        const oldIds = (oldRecords || []).map(r => r.id);
+        if (oldIds.length > 0) {
+          const userId = (await supabase.auth.getUser()).data.user?.id;
+          await supabase
+            .from('financeiro_lancamentos_v2')
+            .update({
+              cancelado: true,
+              cancelado_em: new Date().toISOString(),
+              cancelado_por: userId || null,
+            })
+            .in('id', oldIds);
+
+          // Write audit log
+          await supabase.from('audit_log_movimentacoes').insert({
+            cliente_id: clienteAtual.id,
+            usuario_id: userId || null,
+            acao: 'recalculo_financeiro_compra',
+            movimentacao_id: lancamentoId,
+            financeiro_ids: oldIds,
+            detalhes: {
+              registros_cancelados: oldIds.length,
+              motivo: 'Recálculo financeiro da compra',
+            },
+          });
+        }
+      } else {
+        // In create mode, check duplicates
+        const { data: existing } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .select('id')
+          .eq('movimentacao_rebanho_id', lancamentoId)
+          .eq('cancelado', false)
+          .limit(1);
+
+        if (existing && existing.length > 0) {
+          toast.error('Lançamentos financeiros já foram gerados para esta movimentação.');
+          setGerado(true);
+          return;
+        }
       }
 
       const statusFin = statusOp === 'previsto' ? 'previsto' : 'confirmado';
@@ -327,7 +382,11 @@ export function CompraFinanceiroPanel({
       if (error) throw error;
 
       setGerado(true);
-      toast.success(`${inserts.length} lançamento(s) financeiro(s) gerado(s) com sucesso!`);
+      const msg = mode === 'update'
+        ? `Financeiro atualizado: ${inserts.length} novo(s) lançamento(s) gerado(s)`
+        : `${inserts.length} lançamento(s) financeiro(s) gerado(s) com sucesso!`;
+      toast.success(msg);
+      if (mode === 'update' && onFinanceiroUpdated) onFinanceiroUpdated();
     } catch (err: any) {
       toast.error('Erro ao gerar lançamentos: ' + (err.message || err));
     } finally {
@@ -339,8 +398,28 @@ export function CompraFinanceiroPanel({
   const previstoInputClass = isPrevisto ? 'border-orange-400 text-orange-800 dark:text-orange-300' : '';
 
   return (
-    <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
-      <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
+    <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start relative">
+      {/* Overlay: block editing until movimentação is saved */}
+      {!lancamentoId && mode === 'create' && (
+        <div className="absolute inset-0 z-10 bg-background/70 backdrop-blur-[1px] rounded-md flex items-center justify-center p-4">
+          <div className="text-center space-y-1">
+            <AlertTriangle className="h-5 w-5 mx-auto text-muted-foreground" />
+            <p className="text-sm font-medium text-muted-foreground">
+              Registre a entrada primeiro para depois preencher o financeiro
+            </p>
+          </div>
+        </div>
+      )}
+
+      <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">
+        {mode === 'update' ? 'Atualizar Financeiro da Compra' : 'Detalhes Financeiros'}
+      </h3>
+      {mode === 'update' && existingCount > 0 && (
+        <div className="flex items-center gap-1.5 text-[11px] p-2 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          <span>{existingCount} lançamento(s) existente(s) serão cancelados e substituídos pelos novos valores.</span>
+        </div>
+      )}
       <Separator />
 
       {/* BLOCO 1 — Tipo de Compra */}
@@ -590,11 +669,11 @@ export function CompraFinanceiroPanel({
           {gerado ? (
             <div className="flex items-center gap-1.5 text-[11px] font-bold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/30 rounded-md p-2 border border-green-200 dark:border-green-800">
               <CheckCircle className="h-3.5 w-3.5" />
-              Lançamentos financeiros já gerados
+              {mode === 'update' ? 'Financeiro atualizado com sucesso' : 'Lançamentos financeiros já gerados'}
             </div>
           ) : (
             <>
-              {!lancamentoId && (
+              {!lancamentoId && mode === 'create' && (
                 <div className="flex items-center gap-1 text-[10px] text-orange-600 dark:text-orange-400">
                   <AlertTriangle className="h-3 w-3" />
                   Salve o lançamento zootécnico primeiro
@@ -602,13 +681,15 @@ export function CompraFinanceiroPanel({
               )}
               <Button
                 type="button"
-                variant="outline"
+                variant={mode === 'update' ? 'default' : 'outline'}
                 size="sm"
                 className="w-full h-8 text-[11px] font-bold"
                 disabled={!lancamentoId || gerando}
                 onClick={handleGerarFinanceiro}
               >
-                {gerando ? 'Gerando...' : 'Gerar lançamentos no financeiro'}
+                {gerando
+                  ? (mode === 'update' ? 'Atualizando...' : 'Gerando...')
+                  : (mode === 'update' ? 'Atualizar lançamentos no financeiro' : 'Gerar lançamentos no financeiro')}
               </Button>
             </>
           )}

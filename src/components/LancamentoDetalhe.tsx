@@ -10,15 +10,17 @@ import {
 import { isEntrada, isReclassificacao } from '@/lib/calculos/zootecnicos';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2, RefreshCw } from 'lucide-react';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { STATUS_OPTIONS, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
+import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 
 interface Props {
   lancamento: Lancamento;
@@ -41,6 +43,8 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [financeiroCount, setFinanceiroCount] = useState(0);
   const [checkingVinculos, setCheckingVinculos] = useState(false);
+  const [financeiroSheetOpen, setFinanceiroSheetOpen] = useState(false);
+  const [notaFiscalEdit, setNotaFiscalEdit] = useState(lancamento.notaFiscal || '');
 
   const tipoInfo = TODOS_TIPOS.find(t => t.value === lancamento.tipo);
   const catInfo = CATEGORIAS.find(c => c.value === lancamento.categoria);
@@ -205,9 +209,47 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 </>
               )}
             </div>
+            {/* Alterar financeiro — only for compra type */}
+            {lancamento.tipo === 'compra' && !isTransferenciaEntrada && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full mt-1 text-[11px]"
+                onClick={() => setFinanceiroSheetOpen(true)}
+              >
+                <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                Alterar financeiro da compra
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Sheet para alterar financeiro da compra */}
+      <Sheet open={financeiroSheetOpen} onOpenChange={setFinanceiroSheetOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="text-sm">Alterar Financeiro da Compra</SheetTitle>
+          </SheetHeader>
+          <div className="mt-4">
+            <CompraFinanceiroPanel
+              quantidade={lancamento.quantidade}
+              pesoKg={lancamento.pesoMedioKg || 0}
+              data={lancamento.data}
+              categoria={lancamento.categoria}
+              statusOp={(lancamento.statusOperacional || 'conciliado') as StatusOperacional}
+              fazendaOrigem={lancamento.fazendaOrigem || ''}
+              notaFiscal={notaFiscalEdit}
+              onNotaFiscalChange={setNotaFiscalEdit}
+              lancamentoId={lancamento.id}
+              mode="update"
+              onFinanceiroUpdated={() => {
+                setFinanceiroSheetOpen(false);
+              }}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
