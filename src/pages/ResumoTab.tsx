@@ -538,10 +538,10 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
 
         {/* FINANCEIRO */}
         <section className="rounded-lg border border-primary/20 bg-primary/[0.04]">
-          <div className="px-3 py-1.5 border-b border-primary/15 flex items-center justify-between">
+          <div className="px-3 py-2 border-b border-primary/15 flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <Wallet className="h-3 w-3 text-primary" />
-              <span className="text-[10px] font-semibold text-foreground uppercase tracking-wide">Financeiro</span>
+              <Wallet className="h-3.5 w-3.5 text-primary" />
+              <span className="text-xs font-bold text-foreground uppercase tracking-wide">Financeiro</span>
             </div>
             <StatusBadge
               nivel={financeiro.status.nivel}
