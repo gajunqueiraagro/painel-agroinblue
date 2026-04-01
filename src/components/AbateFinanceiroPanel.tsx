@@ -187,7 +187,7 @@ export function AbateFinanceiroPanel({
         fazenda_id: fazendaAtual.id,
         tipo_operacao: '1-Entradas',
         sinal: 1,
-        status_transacao: 'confirmado',
+        status_transacao: isPrevisto ? 'previsto' : 'confirmado',
         origem_lancamento: 'movimentacao_rebanho',
         movimentacao_rebanho_id: lancamentoId,
         macro_custo: 'Receita Pecuária',
