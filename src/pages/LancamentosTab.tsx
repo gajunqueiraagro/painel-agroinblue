@@ -102,7 +102,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   const [aba, setAba] = useState<Aba>(abaInicial || 'entrada');
   const [tipo, setTipo] = useState<TipoMovimentacao>('nascimento');
-  const [categoria, setCategoria] = useState<Categoria>('bois');
+  const [categoria, setCategoria] = useState<Categoria | ''>('');
   const [quantidade, setQuantidade] = useState('');
   const [data, setData] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [fazendaOrigem, setFazendaOrigem] = useState('');
