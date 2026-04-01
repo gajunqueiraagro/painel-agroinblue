@@ -378,16 +378,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   }
 
   return (
-    <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
+    <div className="p-3 max-w-2xl mx-auto space-y-2 animate-fade-in pb-20">
       {onBackToConciliacao && (
-        <button onClick={onBackToConciliacao} className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-lg py-2.5 transition-colors hover:bg-primary/20 mb-2">
-          <ArrowLeft className="h-4 w-4" /> {backLabel || 'Retornar à Conciliação de Categoria'}
+        <button onClick={onBackToConciliacao} className="w-full flex items-center justify-center gap-1 text-[12px] font-bold text-primary bg-primary/10 rounded-md py-1.5 transition-colors hover:bg-primary/20">
+          <ArrowLeft className="h-3.5 w-3.5" /> {backLabel || 'Retornar à Conciliação de Categoria'}
         </button>
       )}
-      <div className="grid grid-cols-4 gap-1 bg-muted rounded-lg p-1">
+      <div className="grid grid-cols-4 gap-1 bg-muted rounded-md p-0.5">
         {abas.map(a => (
           <button key={a.id} onClick={() => { setAba(a.id); if (a.id === 'entrada') setTipo('nascimento'); if (a.id === 'saida') setTipo('abate'); }}
-            className={`py-2 px-1 rounded-md text-xs font-bold transition-colors touch-target ${aba === a.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'}`}>
+            className={`py-1 px-1 rounded text-[11px] font-bold transition-colors ${aba === a.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'}`}>
             {a.label}
           </button>
         ))}
