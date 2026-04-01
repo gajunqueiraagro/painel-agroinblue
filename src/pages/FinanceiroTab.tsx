@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { parseISO, format } from 'date-fns';
 import { DollarSign, Info, ArrowLeft, Filter } from 'lucide-react';
-import { FinanceiroEditDialog } from '@/components/FinanceiroEditDialog';
+import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { FinanceiroExportMenu } from '@/components/FinanceiroExportMenu';
 import { ChuvasTab } from './ChuvasTab';
 import { useFazenda } from '@/contexts/FazendaContext';
