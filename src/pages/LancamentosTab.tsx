@@ -356,7 +356,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const childWrap = "ml-3 mt-0.5 border-l-2 border-primary/30 pl-1.5 space-y-0.5";
 
     return (
-      <div className="w-44 shrink-0 space-y-2">
+      <div className="shrink-0 space-y-2">
         {/* Entradas */}
         <div>
           <button onClick={() => { setAba('entrada'); setTipo('nascimento'); }} className={parentCls(aba === 'entrada')}>
@@ -404,7 +404,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // ===== FINANCIAL DETAILS PANEL (right column) =====
   const renderFinancialPanel = () => (
-    <div className="w-72 shrink-0 bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
+    <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
       <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
       <Separator />
 
@@ -826,22 +826,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </button>
       )}
 
-      {/* === 3-COLUMN DESKTOP LAYOUT === */}
-      <div className="flex gap-3 items-start">
+      {/* === 3-COLUMN DESKTOP GRID === */}
+      <div className="grid grid-cols-[11rem_1fr_17rem] gap-3 items-start">
         {/* Left: Navigation sidebar */}
         {renderSidebar()}
 
         {/* Center: Form or Historico */}
         {aba === 'reclassificacao' ? (
-          <div className="flex-1 self-start">
+          <div className="col-span-2 self-start">
             <ReclassificacaoForm onAdicionar={onAdicionar} dataInicial={dataInicial} />
           </div>
         ) : aba === 'historico' ? (
-          renderHistorico()
+          <div className="col-span-2 self-start">{renderHistorico()}</div>
         ) : (
           <>
             {renderForm()}
-            {/* Right: Financial details */}
             {renderFinancialPanel()}
           </>
         )}
