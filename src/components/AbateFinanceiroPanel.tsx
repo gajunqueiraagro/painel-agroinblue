@@ -315,8 +315,13 @@ export function AbateFinanceiroPanel({
             </div>
           )}
 
-          {/* Generate button */}
-          {!gerado ? (
+          {/* Generate button — only for Confirmado/Realizado */}
+          {isPrevisto ? (
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground bg-muted/40 rounded p-2">
+              <Info className="h-4 w-4 shrink-0" />
+              <span>Status Previsto: os valores alimentam o fluxo de caixa previsto. Lançamentos financeiros reais serão gerados ao alterar para Confirmado ou Realizado.</span>
+            </div>
+          ) : !gerado ? (
             <Button
               type="button"
               variant="default"
@@ -339,7 +344,7 @@ export function AbateFinanceiroPanel({
             </div>
           )}
 
-          {!lancamentoId && (
+          {!lancamentoId && !isPrevisto && (
             <p className="text-[10px] text-muted-foreground italic">
               Salve o lançamento de abate primeiro para habilitar a geração financeira.
             </p>
