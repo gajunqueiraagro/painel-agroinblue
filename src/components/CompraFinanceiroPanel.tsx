@@ -493,27 +493,30 @@ export function CompraFinanceiroPanel({
   const previstoInputClass = isPrevisto ? 'border-orange-400 text-orange-800 dark:text-orange-300' : '';
 
   return (
-    <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start relative">
+    <div className="bg-card rounded-md border shadow-sm p-2.5 space-y-1.5 self-start relative">
       {/* Overlay: block editing until movimentação is saved */}
       {!lancamentoId && mode === 'create' && (
-        <div className="absolute inset-0 z-10 bg-background/70 backdrop-blur-[1px] rounded-md flex items-center justify-center p-4">
+        <div className="absolute inset-0 z-10 bg-background/70 backdrop-blur-[1px] rounded-md flex items-center justify-center p-3">
           <div className="text-center space-y-1">
-            <AlertTriangle className="h-5 w-5 mx-auto text-muted-foreground" />
-            <p className="text-sm font-medium text-muted-foreground">
+            <AlertTriangle className="h-4 w-4 mx-auto text-muted-foreground" />
+            <p className="text-[11px] font-medium text-muted-foreground">
               Registre a entrada primeiro para depois preencher o financeiro
             </p>
           </div>
         </div>
       )}
 
-      <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">
+      <h3 className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">
         {mode === 'update' ? 'Atualizar Financeiro da Compra' : 'Detalhes Financeiros'}
       </h3>
       {mode === 'update' && existingCount > 0 && (
-        <div className="flex items-center gap-1.5 text-[11px] p-2 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400">
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-          <span>{existingCount} lançamento(s) existente(s) serão cancelados e substituídos pelos novos valores.</span>
+        <div className="flex items-center gap-1 text-[10px] p-1.5 rounded border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400">
+          <AlertTriangle className="h-3 w-3 shrink-0" />
+          <span>{existingCount} lançamento(s) existente(s) serão cancelados e substituídos.</span>
         </div>
+      )}
+      {mode === 'update' && existingLoaded && existingCount > 0 && (
+        <p className="text-[9px] text-muted-foreground/70 italic">Valores atuais carregados automaticamente</p>
       )}
       <Separator />
 
@@ -543,30 +546,30 @@ export function CompraFinanceiroPanel({
       </div>
 
       {/* BLOCO 2 — Preço Base */}
-      <div className="space-y-1.5">
-        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Preço Base</span>
+      <div className="space-y-1">
+        <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wide">Preço Base</span>
 
         {tipoPreco === 'por_kg' && (
           <div>
-            <Label className="text-[11px]">R$/kg</Label>
-            <Input type="number" value={precoKg} onChange={e => setPrecoKg(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${previstoInputClass}`} />
+            <Label className="text-[10px]">R$/kg</Label>
+            <Input type="number" value={precoKg} onChange={e => setPrecoKg(e.target.value)} placeholder="0,00" className={`h-7 text-[11px] ${previstoInputClass}`} />
           </div>
         )}
         {tipoPreco === 'por_cab' && (
           <div>
-            <Label className="text-[11px]">R$/cab.</Label>
-            <Input type="number" value={precoCab} onChange={e => setPrecoCab(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${previstoInputClass}`} />
+            <Label className="text-[10px]">R$/cab.</Label>
+            <Input type="number" value={precoCab} onChange={e => setPrecoCab(e.target.value)} placeholder="0,00" className={`h-7 text-[11px] ${previstoInputClass}`} />
           </div>
         )}
         {tipoPreco === 'por_total' && (
           <div>
-            <Label className="text-[11px]">Valor total (R$)</Label>
-            <Input type="number" value={valorTotal} onChange={e => setValorTotal(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${previstoInputClass}`} />
+            <Label className="text-[10px]">Valor total (R$)</Label>
+            <Input type="number" value={valorTotal} onChange={e => setValorTotal(e.target.value)} placeholder="0,00" className={`h-7 text-[11px] ${previstoInputClass}`} />
           </div>
         )}
 
         {calc.valorBase > 0 && (
-          <div className="bg-muted/30 rounded-md p-2 space-y-0.5 text-[11px]">
+          <div className="bg-muted/30 rounded px-2 py-1.5 space-y-px text-[10px]">
             {tipoPreco !== 'por_kg' && (
               <div className="flex justify-between"><span className="text-muted-foreground">R$/kg</span><strong>R$ {fmt(calc.rKg, 4)}</strong></div>
             )}
@@ -582,37 +585,37 @@ export function CompraFinanceiroPanel({
       </div>
 
       {/* Fornecedor (quem você pagou) */}
-      <div className="space-y-1">
-        <Label className="text-[11px]">Fornecedor (quem você pagou)</Label>
+      <div className="space-y-0.5">
+        <Label className="text-[10px]">Fornecedor (quem você pagou)</Label>
         <div className="flex gap-1">
           <div className="flex-1">
             <SearchableSelect
               value={fornecedorId}
               onValueChange={setFornecedorId}
-              placeholder="Selecione o fornecedor da compra"
+              placeholder="Selecione o fornecedor"
               options={fornecedores.map(f => ({ value: f.id, label: f.nome }))}
             />
           </div>
-          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setNovoFornecedorOpen(true)}>
-            <Plus className="h-4 w-4" />
+          <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setNovoFornecedorOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
           </Button>
         </div>
         {/* Sugestão automática baseada na Origem */}
         {origemSugestao === 'encontrado' && (
-          <p className="text-[10px] text-green-600 flex items-center gap-1 mt-0.5">
-            <CheckCircle className="h-3 w-3" /> Fornecedor selecionado automaticamente a partir da origem
+          <p className="text-[9px] text-green-600 flex items-center gap-1">
+            <CheckCircle className="h-2.5 w-2.5" /> Fornecedor selecionado automaticamente
           </p>
         )}
         {origemSugestao === 'criar' && !fornecedorId && (
-          <div className="flex items-center gap-1.5 mt-0.5 p-1.5 rounded border border-dashed border-muted-foreground/30 bg-muted/40">
-            <span className="text-[10px] text-muted-foreground flex-1">
-              Criar fornecedor "<strong>{fazendaOrigem?.trim()}</strong>"?
+          <div className="flex items-center gap-1 p-1 rounded border border-dashed border-muted-foreground/30 bg-muted/40">
+            <span className="text-[9px] text-muted-foreground flex-1">
+              Criar "<strong>{fazendaOrigem?.trim()}</strong>"?
             </span>
-            <Button type="button" variant="outline" size="sm" className="h-5 text-[10px] px-2" onClick={handleCriarFornecedorFromOrigem}>
-              Criar e selecionar
+            <Button type="button" variant="outline" size="sm" className="h-5 text-[9px] px-1.5" onClick={handleCriarFornecedorFromOrigem}>
+              Criar
             </Button>
-            <Button type="button" variant="ghost" size="sm" className="h-5 text-[10px] px-1.5" onClick={() => setOrigemSugestaoDescartada(true)}>
-              Ignorar
+            <Button type="button" variant="ghost" size="sm" className="h-5 text-[9px] px-1" onClick={() => setOrigemSugestaoDescartada(true)}>
+              ✕
             </Button>
           </div>
         )}
@@ -620,8 +623,8 @@ export function CompraFinanceiroPanel({
 
       {/* Nota Fiscal */}
       <div>
-        <Label className="text-[11px]">Nota Fiscal</Label>
-        <Input value={notaFiscal} onChange={e => onNotaFiscalChange(e.target.value)} placeholder="Nº da nota" className="h-8 text-[12px]" />
+        <Label className="text-[10px]">Nota Fiscal</Label>
+        <Input value={notaFiscal} onChange={e => onNotaFiscalChange(e.target.value)} placeholder="Nº da nota" className="h-7 text-[11px]" />
       </div>
 
       <NovoFornecedorDialog open={novoFornecedorOpen} onClose={() => setNovoFornecedorOpen(false)} onSave={handleNovoFornecedor} />
@@ -629,24 +632,26 @@ export function CompraFinanceiroPanel({
       <Separator />
 
       {/* BLOCO 3 — Despesas Extras */}
-      <div className="space-y-1.5">
-        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Despesas Extras</span>
-        <div>
-          <Label className="text-[11px]">Frete total (R$)</Label>
-          <Input type="number" value={frete} onChange={e => setFrete(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${previstoInputClass}`} />
-        </div>
-        <div>
-          <Label className="text-[11px]">Comissão (%)</Label>
-          <Input type="number" value={comissaoPct} onChange={e => setComissaoPct(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
+      <div className="space-y-1">
+        <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wide">Despesas Extras</span>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Label className="text-[10px]">Frete (R$)</Label>
+            <Input type="number" value={frete} onChange={e => setFrete(e.target.value)} placeholder="0,00" className={`h-7 text-[11px] ${previstoInputClass}`} />
+          </div>
+          <div>
+            <Label className="text-[10px]">Comissão (%)</Label>
+            <Input type="number" value={comissaoPct} onChange={e => setComissaoPct(e.target.value)} placeholder="0" className={`h-7 text-[11px] ${previstoInputClass}`} />
+          </div>
         </div>
         {calc.comissaoVal > 0 && (
-          <div className="flex justify-between text-[11px] px-1">
+          <div className="flex justify-between text-[10px] px-1">
             <span className="text-muted-foreground">Comissão (R$)</span>
             <strong>R$ {fmt(calc.comissaoVal)}</strong>
           </div>
         )}
         {calc.totalDespesas > 0 && (
-          <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-md p-2 flex justify-between text-[11px] font-bold">
+          <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded px-2 py-1.5 flex justify-between text-[10px] font-bold">
             <span className="text-orange-700 dark:text-orange-400">Total despesas</span>
             <span className="text-orange-800 dark:text-orange-300">R$ {fmt(calc.totalDespesas)}</span>
           </div>
@@ -657,16 +662,16 @@ export function CompraFinanceiroPanel({
 
       {/* BLOCO 4 — Valor Líquido */}
       {calc.valorBase > 0 && (
-        <div className={`rounded-md p-2 ${isPrevisto ? 'bg-orange-200/50 dark:bg-orange-950/50' : 'bg-primary/10'}`}>
-          <div className="flex justify-between text-[12px] font-bold">
+        <div className={`rounded-md px-2 py-1.5 ${isPrevisto ? 'bg-orange-200/50 dark:bg-orange-950/50' : 'bg-primary/10'}`}>
+          <div className="flex justify-between text-[11px] font-bold">
             <span>Valor total líquido</span>
-            <span className={isPrevisto ? 'text-orange-800 dark:text-orange-300' : 'text-primary'}>R$ {fmt(calc.liqTotal)}</span>
+            <span className={`text-sm ${isPrevisto ? 'text-orange-800 dark:text-orange-300' : 'text-primary'}`}>R$ {fmt(calc.liqTotal)}</span>
           </div>
-          <div className="flex justify-between text-[11px] mt-0.5">
+          <div className="flex justify-between text-[10px]">
             <span className="text-muted-foreground">R$/kg líq.</span>
             <strong>R$ {fmt(calc.liqKg, 4)}</strong>
           </div>
-          <div className="flex justify-between text-[11px] mt-0.5">
+          <div className="flex justify-between text-[10px]">
             <span className="text-muted-foreground">R$/cab. líq.</span>
             <strong>R$ {fmt(calc.liqCab)}</strong>
           </div>
@@ -790,13 +795,13 @@ export function CompraFinanceiroPanel({
                 type="button"
                 variant={mode === 'update' ? 'default' : 'outline'}
                 size="sm"
-                className="w-full h-8 text-[11px] font-bold"
+                className={`w-full h-8 text-[11px] font-bold ${mode === 'update' ? 'shadow-sm' : ''}`}
                 disabled={!canGenerate || gerando}
                 onClick={handleClickGerar}
               >
                 {gerando
                   ? (mode === 'update' ? 'Atualizando...' : 'Gerando...')
-                  : (mode === 'update' ? 'Atualizar lançamentos no financeiro' : 'Gerar lançamentos no financeiro')}
+                  : (mode === 'update' ? '✓ Atualizar lançamentos no financeiro' : 'Gerar lançamentos no financeiro')}
               </Button>
             </>
           )}
