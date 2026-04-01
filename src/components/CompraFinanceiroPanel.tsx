@@ -37,6 +37,15 @@ interface Props {
   lancamentoId?: string;
   mode?: 'create' | 'update';
   onFinanceiroUpdated?: () => void;
+  onValidationChange?: (errors: string[]) => void;
+}
+
+export interface CompraFinanceiroPanelRef {
+  generateFinanceiro: (lancamentoId: string) => Promise<boolean>;
+  getValidationErrors: () => string[];
+  getFornecedorId: () => string;
+  getValorBase: () => number;
+  getTipoPreco: () => string;
 }
 
 function CollapsibleBlock({ title, open, onOpenChange, children }: { title: string; open: boolean; onOpenChange: (v: boolean) => void; children: React.ReactNode }) {
