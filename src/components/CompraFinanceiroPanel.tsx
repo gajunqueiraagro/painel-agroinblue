@@ -40,9 +40,11 @@ interface Props {
   onFinanceiroUpdated?: () => void;
 }
 
-function fmt(v?: number, decimals = 2) {
+import { formatMoeda } from '@/lib/calculos/formatters';
+
+function fmtPrecoKg(v?: number) {
   if (v === undefined || v === null || isNaN(v) || v === 0) return '-';
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export function CompraFinanceiroPanel({
