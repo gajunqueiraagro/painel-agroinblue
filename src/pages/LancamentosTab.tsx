@@ -437,7 +437,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (editingAbateId) {
       // UPDATE existing lancamento
       onEditar(editingAbateId, lancamentoDados);
-      if (isAbate && isConciliado) {
+      if (isAbate && (isConciliado || isConfirmado)) {
         // Keep form open so user can generate/update financial records
         setLastSavedLancamentoId(editingAbateId);
         setEditingAbateId(null);
