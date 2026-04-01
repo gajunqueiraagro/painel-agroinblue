@@ -46,6 +46,7 @@ export interface CompraFinanceiroPanelRef {
   getFornecedorId: () => string;
   getValorBase: () => number;
   getTipoPreco: () => string;
+  resetForm: () => void;
 }
 
 function CollapsibleBlock({ title, open, onOpenChange, children }: { title: string; open: boolean; onOpenChange: (v: boolean) => void; children: React.ReactNode }) {
@@ -471,6 +472,19 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
     }
   }, [lancamentoId, fazendaAtual, clienteAtual, validationErrors, mode, statusOp, categoria, quantidade, data, fazendaOrigem, notaFiscal, fornecedorId, formaPag, parcelas, calc, onFinanceiroUpdated]);
 
+  const resetForm = useCallback(() => {
+    setTipoPreco('por_kg');
+    setPrecoKg(''); setPrecoCab(''); setValorTotal('');
+    setFrete(''); setComissaoPct('');
+    setFormaPag('avista'); setQtdParcelas('2'); setParcelas([]);
+    setFornecedorId('');
+    setGerado(false); setGerando(false);
+    setExistingCount(0); setExistingLoaded(false);
+    setOrigemSugestao(null); setOrigemSugestaoDescartada(false);
+    setTipoCompraOpen(false); setFornecedorOpen(false);
+    setPrecoBaseOpen(false); setDespesasOpen(false); setPagamentoOpen(false);
+  }, []);
+
   // Expose imperative methods to parent
   useImperativeHandle(ref, () => ({
     generateFinanceiro: (id: string) => handleGerarFinanceiro(id),
@@ -478,7 +492,8 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
     getFornecedorId: () => fornecedorId,
     getValorBase: () => calc.valorBase,
     getTipoPreco: () => tipoPreco,
-  }), [handleGerarFinanceiro, validationErrors, fornecedorId, calc.valorBase, tipoPreco]);
+    resetForm,
+  }), [handleGerarFinanceiro, validationErrors, fornecedorId, calc.valorBase, tipoPreco, resetForm]);
 
   const isPrevisto = statusOp === 'previsto';
   const previstoInputClass = isPrevisto ? 'border-orange-400 text-orange-800 dark:text-orange-300' : '';

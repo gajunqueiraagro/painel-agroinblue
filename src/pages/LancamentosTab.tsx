@@ -482,6 +482,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         if (compraFinanceiroRef.current && compraFinanceiroRef.current.getValorBase() > 0) {
           await compraFinanceiroRef.current.generateFinanceiro(returnedId);
         }
+        // Reset compra financial panel
+        compraFinanceiroRef.current?.resetForm();
         setLastSavedLancamentoId(null);
         setQuantidade('');
         setCategoria('');
