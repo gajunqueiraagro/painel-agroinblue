@@ -138,7 +138,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
     if (!fazendaAtual || !clienteAtual) return false;
     if (validationErrors.length > 0) {
       toast.error(validationErrors[0]);
-      return;
+      return false;
     }
 
     setGerando(true);
@@ -148,7 +148,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
         const { data: oldRecords } = await supabase
           .from('financeiro_lancamentos_v2')
           .select('id')
-          .eq('movimentacao_rebanho_id', lancamentoId)
+          .eq('movimentacao_rebanho_id', targetLancamentoId)
           .eq('cancelado', false);
 
         const oldIds = (oldRecords || []).map(r => r.id);
@@ -167,7 +167,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
             cliente_id: clienteAtual.id,
             usuario_id: userId || null,
             acao: 'recalculo_financeiro_abate',
-            movimentacao_id: lancamentoId,
+            movimentacao_id: targetLancamentoId,
             financeiro_ids: oldIds,
             detalhes: {
               registros_cancelados: oldIds.length,
@@ -180,14 +180,14 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
         const { data: existing } = await supabase
           .from('financeiro_lancamentos_v2')
           .select('id')
-          .eq('movimentacao_rebanho_id', lancamentoId)
+          .eq('movimentacao_rebanho_id', targetLancamentoId)
           .eq('cancelado', false)
           .limit(1);
 
         if (existing && existing.length > 0) {
           toast.error('Lançamentos financeiros já foram gerados para este abate.');
           setGerado(true);
-          return;
+          return false;
         }
       }
 
@@ -214,7 +214,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
       if (!planoReceita || planoReceita.length === 0) {
         toast.error(`Não foi encontrado mapeamento financeiro válido para "${subcentroAbate}" no plano de classificação.`);
         setGerando(false);
-        return;
+        return false;
       }
 
       const clasReceita = planoReceita[0];
@@ -226,7 +226,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
         sinal: 1,
         status_transacao: isPrevisto ? 'previsto' : 'confirmado',
         origem_lancamento: 'movimentacao_rebanho',
-        movimentacao_rebanho_id: lancamentoId,
+        movimentacao_rebanho_id: targetLancamentoId,
         macro_custo: clasReceita.macro_custo,
         centro_custo: clasReceita.centro_custo,
         subcentro: clasReceita.subcentro,
@@ -276,7 +276,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
         if (!planoDeducao || planoDeducao.length === 0) {
           toast.error(`Não foi encontrado mapeamento financeiro válido para "${subcentroDeducao}" no plano de classificação.`);
           setGerando(false);
-          return;
+          return false;
         }
 
         const clasDed = planoDeducao[0];
@@ -288,7 +288,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
           sinal: -1,
           status_transacao: isPrevisto ? 'previsto' : 'confirmado',
           origem_lancamento: 'movimentacao_rebanho',
-          movimentacao_rebanho_id: lancamentoId,
+          movimentacao_rebanho_id: targetLancamentoId,
           macro_custo: clasDed.macro_custo,
           centro_custo: clasDed.centro_custo,
           subcentro: clasDed.subcentro,
@@ -312,8 +312,10 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
         : `${inserts.length} lançamento(s) financeiro(s) de receita gerado(s)!`;
       toast.success(msg);
       if (mode === 'update' && onFinanceiroUpdated) onFinanceiroUpdated();
+      return true;
     } catch (err: any) {
       toast.error('Erro ao gerar lançamentos: ' + (err.message || err));
+      return false;
     } finally {
       setGerando(false);
     }
