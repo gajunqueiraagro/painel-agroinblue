@@ -912,6 +912,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onClose={() => setDetalheId(null)}
           onEditar={onEditar}
           onRemover={onRemover}
+          onCountFinanceiros={onCountFinanceiros}
         />
       )}
     </div>

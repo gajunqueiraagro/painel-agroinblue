@@ -377,6 +377,7 @@ const Index = () => {
           onAdicionar={wrappedAdicionar as any}
           onEditar={wrappedEditar as any}
           onRemover={wrappedRemover as any}
+          onCountFinanceiros={countFinanceirosVinculados}
           abaInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? 'reclassificacao' : undefined}
           onBackToConciliacao={lancamentosFromConciliacao ? goToFechamentoTab : lancamentosFromFechamento ? goToFechamentoTab : lancamentosFromEvolCategoria ? goToEvolucaoRebanhoHub : lancamentosFromFluxoAnual ? goToFluxoAnual : undefined}
           dataInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? `${filtroGlobal.ano}-${String(filtroGlobal.mes).padStart(2, '0')}-15` : undefined}
