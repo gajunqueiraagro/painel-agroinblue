@@ -33,9 +33,10 @@ interface Props {
   onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
   onRemover: (id: string) => void;
   onCountFinanceiros?: (id: string) => Promise<number>;
+  onEditarAbate?: (lancamento: Lancamento) => void;
 }
 
-export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover, onCountFinanceiros }: Props) {
+export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover, onCountFinanceiros, onEditarAbate }: Props) {
   const { fazendaAtual, fazendas } = useFazenda();
   const nomeFazenda = fazendaAtual?.nome || '';
   const outrasFazendas = useMemo(() => fazendas.filter(f => f.id !== fazendaAtual?.id), [fazendas, fazendaAtual]);
@@ -89,7 +90,11 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
 
   // ---- Handle edit click ----
   const handleEditClick = () => {
-    if (isCompra) {
+    if (isAbate && onEditarAbate) {
+      // Redirect abate to the full form in LancamentosTab
+      onClose();
+      onEditarAbate(lancamento);
+    } else if (isCompra) {
       // Open unified purchase edit sheet
       setCompraForm({ ...lancamento });
       setCompraZooSaved(false);

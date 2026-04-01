@@ -126,6 +126,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [observacao, setObservacao] = useState('');
   const [detalheId, setDetalheId] = useState<string | null>(null);
   const [lastSavedLancamentoId, setLastSavedLancamentoId] = useState<string | null>(null);
+  const [editingAbateId, setEditingAbateId] = useState<string | null>(null);
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState('todos');
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
@@ -291,6 +292,63 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setRendCarcaca(''); setFunruralPct('');
   };
 
+  // Load abate into form for editing
+  const loadAbateForEdit = useCallback((l: Lancamento) => {
+    setAba('saida');
+    setTipo('abate');
+    setData(l.data);
+    setCategoria(l.categoria);
+    setQuantidade(String(l.quantidade));
+    setPesoKg(l.pesoMedioKg ? String(l.pesoMedioKg) : '');
+    setFazendaOrigem(l.fazendaOrigem || '');
+    setFazendaDestino(l.fazendaDestino || '');
+    setObservacao(l.observacao || '');
+    setStatusOp((l.statusOperacional as StatusOperacional) || 'conciliado');
+    setTipoPeso(l.tipoPeso || 'vivo');
+    setNotaFiscal(l.notaFiscal || '');
+    setDataVenda(l.dataVenda || '');
+    setDataEmbarque(l.dataEmbarque || '');
+    setDataAbate(l.dataAbate || '');
+    setTipoVenda(l.tipoVenda || '');
+    setPrecoArroba(l.precoArroba ? String(l.precoArroba) : '');
+
+    // Reverse-calc rendimento from pesoCarcacaKg / pesoMedioKg
+    if (l.pesoCarcacaKg && l.pesoMedioKg && l.pesoMedioKg > 0) {
+      setRendCarcaca(String(((l.pesoCarcacaKg / l.pesoMedioKg) * 100).toFixed(2)));
+    } else {
+      setRendCarcaca('');
+    }
+
+    // Bonus/desconto stored as totals → convert back to R$/@ for form inputs
+    const rend = l.pesoCarcacaKg && l.pesoMedioKg ? l.pesoCarcacaKg / l.pesoMedioKg : 0;
+    const arrobasCab = (l.pesoMedioKg ?? 0) * rend / 15;
+    const totalArrobas = arrobasCab * l.quantidade;
+    const toArroba = (total: number | undefined) => {
+      if (!total || totalArrobas <= 0) return '';
+      return String((total / totalArrobas).toFixed(2));
+    };
+    setBonusPrecoce(toArroba(l.bonusPrecoce));
+    setBonusQualidade(toArroba(l.bonusQualidade));
+    setBonusListaTrace(toArroba(l.bonusListaTrace));
+    setDescontoQualidade(toArroba(l.descontoQualidade));
+    setOutrosDescontos(l.outrosDescontos ? String(l.outrosDescontos) : '');
+
+    // Funrural: stored as total → reverse to percentage of valor bruto
+    if (l.descontoFunrural && l.descontoFunrural > 0 && totalArrobas > 0 && l.precoArroba) {
+      const valorBruto = totalArrobas * l.precoArroba;
+      if (valorBruto > 0) {
+        setFunruralPct(String(((l.descontoFunrural / valorBruto) * 100).toFixed(2)));
+      } else {
+        setFunruralPct('');
+      }
+    } else {
+      setFunruralPct('');
+    }
+
+    setEditingAbateId(l.id);
+    setDetalheId(null);
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!quantidade || Number(quantidade) <= 0) { toast.error('Informe a quantidade'); return; }
@@ -331,7 +389,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const abateDataEmbarque = isAbate && data ? format(addDays(parseISO(data), -1), 'yyyy-MM-dd') : (dataEmbarque || undefined);
     const abateDataAbate = isAbate ? data : (dataAbate || undefined);
 
-    const returnedId = await onAdicionar({
+    const lancamentoDados: Partial<Omit<Lancamento, 'id'>> = {
       data, tipo, quantidade: Number(quantidade), categoria: categoria as Categoria,
       fazendaOrigem: origemFinal, fazendaDestino: destinoFinal,
       pesoMedioKg: pesoKg ? Number(pesoKg) : undefined,
@@ -355,22 +413,40 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       dataEmbarque: abateDataEmbarque || undefined,
       dataAbate: abateDataAbate || undefined,
       tipoVenda: tipoVenda || undefined,
-    });
+    };
 
-    if (isCompra && returnedId) {
-      setLastSavedLancamentoId(returnedId);
-      toast.success('Lançamento registrado! Agora você pode gerar os lançamentos financeiros.');
-    } else {
+    if (editingAbateId) {
+      // UPDATE existing lancamento
+      onEditar(editingAbateId, lancamentoDados);
+      setEditingAbateId(null);
       setLastSavedLancamentoId(null);
       setQuantidade('');
       setCategoria('');
-      setPesoKg(tipo === 'nascimento' ? '30' : '');
+      setPesoKg('');
       setFazendaOrigem(''); setFazendaDestino('');
       setData(format(new Date(), 'yyyy-MM-dd'));
       setObservacao('');
       setStatusOp('conciliado');
       resetFinancialFields();
-      toast.success('Lançamento registrado!');
+      toast.success('Abate atualizado com sucesso!');
+    } else {
+      const returnedId = await onAdicionar(lancamentoDados as Omit<Lancamento, 'id'>);
+
+      if (isCompra && returnedId) {
+        setLastSavedLancamentoId(returnedId);
+        toast.success('Lançamento registrado! Agora você pode gerar os lançamentos financeiros.');
+      } else {
+        setLastSavedLancamentoId(null);
+        setQuantidade('');
+        setCategoria('');
+        setPesoKg(tipo === 'nascimento' ? '30' : '');
+        setFazendaOrigem(''); setFazendaDestino('');
+        setData(format(new Date(), 'yyyy-MM-dd'));
+        setObservacao('');
+        setStatusOp('conciliado');
+        resetFinancialFields();
+        toast.success('Lançamento registrado!');
+      }
     }
   };
 
@@ -906,12 +982,19 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // ===== MAIN FORM (center) =====
   const renderForm = () => (
-    <form onSubmit={handleSubmit} className="flex-1 bg-card rounded-md p-3 shadow-sm border space-y-2 self-start">
+    <form onSubmit={handleSubmit} className={`flex-1 bg-card rounded-md p-3 shadow-sm border space-y-2 self-start ${editingAbateId ? 'ring-2 ring-primary' : ''}`}>
+
+      {/* Editing banner */}
+      {editingAbateId && (
+        <div className="bg-primary/10 border border-primary/30 rounded-md px-3 py-1.5 text-[11px] font-bold text-primary">
+          Editando abate #{editingAbateId.slice(0, 8)}
+        </div>
+      )}
 
       {/* Título da movimentação */}
       <div className="flex items-center gap-2">
         <span className="text-base">{currentTipoIcon}</span>
-        <h2 className="text-[15px] font-semibold text-foreground">{currentTipoLabel}</h2>
+        <h2 className="text-[15px] font-semibold text-foreground">{editingAbateId ? 'Editar Abate' : currentTipoLabel}</h2>
       </div>
 
       {/* STATUS — selection + dynamic explanation */}
@@ -1042,8 +1125,20 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
       )}
 
+      {editingAbateId && (
+        <Button type="button" variant="outline" className="w-full h-9 text-[12px] font-bold mb-1" size="sm" onClick={() => {
+          setEditingAbateId(null);
+          setQuantidade(''); setCategoria(''); setPesoKg('');
+          setFazendaOrigem(''); setFazendaDestino('');
+          setData(format(new Date(), 'yyyy-MM-dd'));
+          setObservacao(''); setStatusOp('conciliado');
+          resetFinancialFields();
+        }}>
+          Cancelar Edição
+        </Button>
+      )}
       <Button type="submit" className="w-full h-9 text-[12px] font-bold" size="sm">
-        {aba === 'entrada' ? 'Registrar Entrada' : 'Registrar Saída'}
+        {editingAbateId ? 'Salvar Alterações' : (aba === 'entrada' ? 'Registrar Entrada' : 'Registrar Saída')}
       </Button>
     </form>
   );
@@ -1158,6 +1253,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onEditar={onEditar}
           onRemover={onRemover}
           onCountFinanceiros={onCountFinanceiros}
+          onEditarAbate={loadAbateForEdit}
         />
       )}
     </div>
