@@ -165,7 +165,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   const [formaPagamento, setFormaPagamento] = useState<'avista' | 'parcelado'>('avista');
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
-  const [qtdParcelas, setQtdParcelas] = useState('2');
+  const [qtdParcelas, setQtdParcelas] = useState('1');
 
   const qtdInput = useIntegerInput(quantidade, setQuantidade);
   const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
@@ -291,7 +291,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setBonus(''); setDescontos(''); setComissaoPct(''); setFrete(''); setOutrasDespesas('');
     setNotaFiscal(''); setTipoPeso('vivo'); setObservacao('');
     setDataVenda(''); setDataEmbarque(''); setDataAbate(''); setTipoVenda('');
-    setFormaPagamento('avista'); setParcelas([]); setQtdParcelas('2');
+    setFormaPagamento('avista'); setParcelas([]); setQtdParcelas('1');
     setMotivoMorte(''); setMotivoMorteCustom('');
     setRendCarcaca(''); setFunruralPct('');
   };
@@ -936,14 +936,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             </button>
             <button type="button" onClick={() => { setFormaPagamento('parcelado'); handleQtdParcelasChange(qtdParcelas); }}
               className={`h-8 rounded text-[12px] font-bold border-2 transition-all ${formaPagamento === 'parcelado' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
-              Parcelado
+              A prazo
             </button>
           </div>
           {formaPagamento === 'parcelado' && (
             <div className="space-y-1.5">
               <div>
                 <Label className="text-[11px]">Quantidade de parcelas</Label>
-                <Input type="number" min="2" max="48" value={qtdParcelas} onChange={e => handleQtdParcelasChange(e.target.value)} className="h-8 text-[12px]" />
+                <Input type="number" min="1" max="48" value={qtdParcelas} onChange={e => handleQtdParcelasChange(e.target.value)} className="h-8 text-[12px]" />
               </div>
               {parcelas.map((p, i) => (
                 <div key={i} className="grid grid-cols-2 gap-1.5 bg-muted/30 rounded p-1.5">

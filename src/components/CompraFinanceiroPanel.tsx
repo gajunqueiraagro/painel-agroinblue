@@ -85,7 +85,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
   const [pagamentoOpen, setPagamentoOpen] = useState(false);
 
   const [formaPag, setFormaPag] = useState<'avista' | 'prazo'>('avista');
-  const [qtdParcelas, setQtdParcelas] = useState('2');
+  const [qtdParcelas, setQtdParcelas] = useState('1');
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
 
   const [gerado, setGerado] = useState(false);
@@ -476,7 +476,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
     setTipoPreco('por_kg');
     setPrecoKg(''); setPrecoCab(''); setValorTotal('');
     setFrete(''); setComissaoPct('');
-    setFormaPag('avista'); setQtdParcelas('2'); setParcelas([]);
+    setFormaPag('avista'); setQtdParcelas('1'); setParcelas([]);
     setFornecedorId('');
     setGerado(false); setGerando(false);
     setExistingCount(0); setExistingLoaded(false);
@@ -653,7 +653,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
             className={`h-7 rounded text-[11px] font-bold border-2 transition-all ${formaPag === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
             À vista
           </button>
-          <button type="button" onClick={() => { setFormaPag('prazo'); if (calc.valorBase > 0) setParcelas(gerarParcelas(Number(qtdParcelas) || 2, calc.valorBase)); }}
+          <button type="button" onClick={() => { setFormaPag('prazo'); if (calc.valorBase > 0) setParcelas(gerarParcelas(Number(qtdParcelas) || 1, calc.valorBase)); }}
             className={`h-7 rounded text-[11px] font-bold border-2 transition-all ${formaPag === 'prazo' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
             A prazo
           </button>
@@ -663,7 +663,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
           <div className="space-y-1.5">
             <div>
               <Label className="text-[11px]">Quantidade de parcelas</Label>
-              <Input type="number" min="2" max="48" value={qtdParcelas} onChange={e => handleQtdParcChange(e.target.value)} className="h-7 text-[11px]" />
+              <Input type="number" min="1" max="48" value={qtdParcelas} onChange={e => handleQtdParcChange(e.target.value)} className="h-7 text-[11px]" />
             </div>
             <p className="text-[9px] text-muted-foreground">Parcelas calculadas sobre o valor base (sem frete/comissão)</p>
             {parcelas.map((p, i) => (
