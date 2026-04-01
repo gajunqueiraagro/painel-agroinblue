@@ -472,7 +472,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     try {
       if (editingAbateId) {
         onEditar(editingAbateId, lancamentoDados);
-        if (isAbate && (isConciliado || isConfirmado)) {
+        if (isAbate && (isConciliado || isConfirmado || isPrevisto)) {
           setLastSavedLancamentoId(editingAbateId);
           setEditingAbateId(null);
           toast.success('Abate atualizado! Agora você pode gerar/atualizar os lançamentos financeiros.');
