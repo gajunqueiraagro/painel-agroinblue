@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   Lancamento,
   CATEGORIAS,
@@ -9,6 +9,7 @@ import {
 } from '@/types/cattle';
 import { isEntrada, isReclassificacao } from '@/lib/calculos/zootecnicos';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,15 +26,21 @@ interface Props {
   onClose: () => void;
   onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
   onRemover: (id: string) => void;
+  onCountFinanceiros?: (id: string) => Promise<number>;
 }
 
-export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover }: Props) {
+export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover, onCountFinanceiros }: Props) {
   const { fazendaAtual, fazendas } = useFazenda();
   const nomeFazenda = fazendaAtual?.nome || '';
   const outrasFazendas = useMemo(() => fazendas.filter(f => f.id !== fazendaAtual?.id), [fazendas, fazendaAtual]);
 
   const [editando, setEditando] = useState(false);
   const [form, setForm] = useState({ ...lancamento });
+
+  // Confirmation modal state
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [financeiroCount, setFinanceiroCount] = useState(0);
+  const [checkingVinculos, setCheckingVinculos] = useState(false);
 
   const tipoInfo = TODOS_TIPOS.find(t => t.value === lancamento.tipo);
   const catInfo = CATEGORIAS.find(c => c.value === lancamento.categoria);
@@ -63,7 +70,24 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     onClose();
   };
 
-  const handleRemover = () => {
+  const handleRemoverClick = useCallback(async () => {
+    if (onCountFinanceiros) {
+      setCheckingVinculos(true);
+      try {
+        const count = await onCountFinanceiros(lancamento.id);
+        setFinanceiroCount(count);
+        setConfirmOpen(true);
+      } finally {
+        setCheckingVinculos(false);
+      }
+    } else {
+      setFinanceiroCount(0);
+      setConfirmOpen(true);
+    }
+  }, [lancamento.id, onCountFinanceiros]);
+
+  const handleConfirmRemover = () => {
+    setConfirmOpen(false);
     onRemover(lancamento.id);
     onClose();
   };
@@ -76,7 +100,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       : null;
 
     return (
-      <Dialog open={open} onOpenChange={onClose}>
+      <><Dialog open={open} onOpenChange={onClose}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -175,7 +199,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                   <Button variant="outline" className="flex-1 touch-target" onClick={() => { setForm({ ...lancamento }); setEditando(true); }}>
                     <Pencil className="h-4 w-4 mr-1" /> Editar
                   </Button>
-                  <Button variant="destructive" className="flex-1 touch-target" onClick={handleRemover}>
+                  <Button variant="destructive" className="flex-1 touch-target" onClick={handleRemoverClick} disabled={checkingVinculos}>
                     <Trash2 className="h-4 w-4 mr-1" /> Apagar
                   </Button>
                 </>
@@ -184,6 +208,25 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
           </div>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              {financeiroCount > 0
+                ? `Esta movimentação possui ${financeiroCount} lançamento(s) financeiro(s) vinculado(s). Ao excluir, os lançamentos financeiros restantes também serão removidos.`
+                : 'Deseja realmente excluir esta movimentação?'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmRemover} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {financeiroCount > 0 ? 'Excluir tudo' : 'Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      </>
     );
   }
 
@@ -195,7 +238,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const showOrigem = !isNascimento;
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <><Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Lançamento</DialogTitle>
@@ -303,7 +346,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
 
           <div className="flex gap-2 pt-2">
             <Button variant="outline" className="flex-1 touch-target" onClick={() => setEditando(false)}>Cancelar</Button>
-            <Button variant="destructive" className="touch-target" onClick={handleRemover}>
+            <Button variant="destructive" className="touch-target" onClick={handleRemoverClick} disabled={checkingVinculos}>
               <Trash2 className="h-4 w-4" />
             </Button>
             <Button className="flex-1 touch-target" onClick={handleSalvar}>Salvar</Button>
@@ -311,5 +354,25 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
         </div>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+          <AlertDialogDescription>
+            {financeiroCount > 0
+              ? `Esta movimentação possui ${financeiroCount} lançamento(s) financeiro(s) vinculado(s). Ao excluir, os lançamentos financeiros restantes também serão removidos.`
+              : 'Deseja realmente excluir esta movimentação?'}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction onClick={handleConfirmRemover} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            {financeiroCount > 0 ? 'Excluir tudo' : 'Excluir'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

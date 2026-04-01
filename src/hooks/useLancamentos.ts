@@ -362,11 +362,23 @@ export function useLancamentos() {
     }
   };
 
+  /** Count linked financial records for a movimentação */
+  const countFinanceirosVinculados = async (id: string): Promise<number> => {
+    const { count } = await supabase
+      .from('financeiro_lancamentos_v2')
+      .select('id', { count: 'exact', head: true })
+      .eq('movimentacao_rebanho_id', id)
+      .eq('cancelado', false);
+    return count ?? 0;
+  };
+
   const removerLancamento = async (id: string) => {
+    // CASCADE will automatically delete linked financeiro_lancamentos_v2
     const { error } = await supabase.from('lancamentos').delete().eq('id', id);
     if (!error) {
       setLancamentos(prev => prev.filter(l => l.id !== id));
     }
+    return !error;
   };
 
   const setSaldoInicial = async (ano: number, categoria: SaldoInicial['categoria'], quantidade: number, pesoMedioKg?: number) => {
@@ -403,6 +415,7 @@ export function useLancamentos() {
     adicionarLancamento,
     editarLancamento,
     removerLancamento,
+    countFinanceirosVinculados,
     setSaldoInicial,
     loadData,
     loading,
