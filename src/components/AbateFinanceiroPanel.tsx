@@ -36,6 +36,7 @@ interface Props {
 export function AbateFinanceiroPanel({
   quantidade, categoria, data, valorLiquido, frigorifico,
   notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated,
+  statusOperacional = 'conciliado',
 }: Props) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
