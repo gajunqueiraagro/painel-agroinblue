@@ -391,12 +391,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
         {/* Evoluir Categoria Animal */}
         <button onClick={() => setAba('reclassificacao')} className={parentCls(aba === 'reclassificacao')}>
-          <RefreshCw className="h-4 w-4" /> Evoluir Categoria
+          <RefreshCw className="h-3.5 w-3.5" /> Evoluir Categoria
         </button>
 
         {/* Histórico */}
         <button onClick={() => setAba('historico')} className={parentCls(aba === 'historico')}>
-          <Clock className="h-4 w-4" /> Histórico
+          <Clock className="h-3.5 w-3.5" /> Histórico
         </button>
       </div>
     );
