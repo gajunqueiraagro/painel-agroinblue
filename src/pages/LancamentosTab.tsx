@@ -461,49 +461,49 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           {/* Motivo da Morte (for morte) */}
           {isMorte && (
             <div>
-              <Label className="font-bold text-foreground">Motivo da Morte</Label>
+              <Label className="font-bold text-[11px]">Motivo da Morte</Label>
               <Select value={motivoMorte} onValueChange={setMotivoMorte}>
-                <SelectTrigger className="mt-1 touch-target text-base"><SelectValue placeholder="Selecione o motivo" /></SelectTrigger>
+                <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione o motivo" /></SelectTrigger>
                 <SelectContent>
-                  {MOTIVOS_MORTE.map(m => <SelectItem key={m} value={m} className="text-base">{m}</SelectItem>)}
-                  <SelectItem value="__custom__" className="text-base">Outro (digitar)</SelectItem>
+                  {MOTIVOS_MORTE.map(m => <SelectItem key={m} value={m} className="text-[12px]">{m}</SelectItem>)}
+                  <SelectItem value="__custom__" className="text-[12px]">Outro (digitar)</SelectItem>
                 </SelectContent>
               </Select>
               {motivoMorte === '__custom__' && (
-                <Input value={motivoMorteCustom} onChange={e => setMotivoMorteCustom(e.target.value)} placeholder="Digite o motivo" className="mt-2 touch-target text-base" />
+                <Input value={motivoMorteCustom} onChange={e => setMotivoMorteCustom(e.target.value)} placeholder="Digite o motivo" className="mt-1 h-8 text-[12px]" />
               )}
             </div>
           )}
 
           {/* Fazenda Origem / Destino */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             {campos.origem.show && (
               <div>
-                <Label className="font-bold text-foreground">{campos.origem.label}</Label>
+                <Label className="font-bold text-[11px]">{campos.origem.label}</Label>
                 {campos.origem.auto ? (
-                  <Input value={campos.origem.value} readOnly className="mt-1 touch-target text-base bg-muted cursor-not-allowed" />
+                  <Input value={campos.origem.value} readOnly className="mt-0.5 h-8 text-[12px] bg-muted cursor-not-allowed" />
                 ) : (campos.origem as any).useSelect && outrasFazendas.length > 0 ? (
                   <Select value={fazendaOrigem} onValueChange={setFazendaOrigem}>
-                    <SelectTrigger className="mt-1 touch-target text-base"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>{outrasFazendas.map(f => <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>)}</SelectContent>
+                    <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>{outrasFazendas.map(f => <SelectItem key={f.id} value={f.nome} className="text-[12px]">{f.nome}</SelectItem>)}</SelectContent>
                   </Select>
                 ) : (
-                  <Input value={fazendaOrigem} onChange={e => setFazendaOrigem(e.target.value)} placeholder="Ex: Faz. Boa Vista" className="mt-1 touch-target text-base" />
+                  <Input value={fazendaOrigem} onChange={e => setFazendaOrigem(e.target.value)} placeholder="Ex: Faz. Boa Vista" className="mt-0.5 h-8 text-[12px]" />
                 )}
               </div>
             )}
             {campos.destino?.show && (
               <div>
-                <Label className="font-bold text-foreground">{campos.destino.label}</Label>
+                <Label className="font-bold text-[11px]">{campos.destino.label}</Label>
                 {campos.destino.auto ? (
-                  <Input value={campos.destino.value} readOnly className="mt-1 touch-target text-base bg-muted cursor-not-allowed" />
+                  <Input value={campos.destino.value} readOnly className="mt-0.5 h-8 text-[12px] bg-muted cursor-not-allowed" />
                 ) : (campos.destino as any).useSelect && outrasFazendas.length > 0 ? (
                   <Select value={fazendaDestino} onValueChange={setFazendaDestino}>
-                    <SelectTrigger className="mt-1 touch-target text-base"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>{outrasFazendas.map(f => <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>)}</SelectContent>
+                    <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>{outrasFazendas.map(f => <SelectItem key={f.id} value={f.nome} className="text-[12px]">{f.nome}</SelectItem>)}</SelectContent>
                   </Select>
                 ) : (
-                  <Input value={fazendaDestino} onChange={e => setFazendaDestino(e.target.value)} placeholder={campos.destino.placeholder || 'Ex: Faz. Santa Cruz'} className="mt-1 touch-target text-base" />
+                  <Input value={fazendaDestino} onChange={e => setFazendaDestino(e.target.value)} placeholder={campos.destino.placeholder || 'Ex: Faz. Santa Cruz'} className="mt-0.5 h-8 text-[12px]" />
                 )}
               </div>
             )}
@@ -511,16 +511,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
           {/* Peso */}
           <div>
-            <Label className={`font-bold text-foreground ${previstoLabelClass}`}>Peso Médio (kg)</Label>
-            <Input type="number" value={pesoKg} onChange={e => setPesoKg(e.target.value)} placeholder="0" className={`mt-1 touch-target text-base ${previstoInputClass}`} />
+            <Label className={`font-bold text-[11px] ${previstoLabelClass}`}>Peso Médio (kg)</Label>
+            <Input type="number" value={pesoKg} onChange={e => setPesoKg(e.target.value)} placeholder="0" className={`mt-0.5 h-8 text-[12px] ${previstoInputClass}`} />
             {pesoKg && Number(pesoKg) > 0 && (
-              <p className="text-xs text-muted-foreground mt-1">≈ {kgToArrobas(Number(pesoKg))} arrobas</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">≈ {kgToArrobas(Number(pesoKg))} arrobas</p>
             )}
           </div>
 
           <div>
-            <Label className="font-bold text-foreground">Observação</Label>
-            <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Observação opcional" className="mt-1 touch-target text-base" />
+            <Label className="font-bold text-[11px]">Observação</Label>
+            <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Observação opcional" className="mt-0.5 h-8 text-[12px]" />
           </div>
 
           {/* ============ DETALHES FINANCEIROS ============ */}
