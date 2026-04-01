@@ -38,6 +38,9 @@ interface Props {
   mode?: 'create' | 'update';
   onFinanceiroUpdated?: () => void;
   onValidationChange?: (errors: string[]) => void;
+  onRequestRegister?: () => void;
+  registerLabel?: string;
+  submitting?: boolean;
 }
 
 export interface CompraFinanceiroPanelRef {
