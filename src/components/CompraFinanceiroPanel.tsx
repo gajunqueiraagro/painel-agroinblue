@@ -724,7 +724,7 @@ export function CompraFinanceiroPanel({
               ))}
               {parcelas.length > 0 && (
                 <div className="text-[10px] text-muted-foreground text-right">
-                  Soma: R$ {fmt(parcelas.reduce((s, p) => s + p.valor, 0))}
+                  Soma: {formatMoeda(parcelas.reduce((s, p) => s + p.valor, 0))}
                 </div>
               )}
             </div>
