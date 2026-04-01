@@ -260,7 +260,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setMotivoMorte(''); setMotivoMorteCustom('');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!quantidade || Number(quantidade) <= 0) return;
     if (!categoria) { toast.error('Selecione a categoria'); return; }
@@ -278,7 +278,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     const valorTotalFinal = calc.valorLiquido > 0 ? calc.valorLiquido : undefined;
 
-    onAdicionar({
+    const returnedId = await onAdicionar({
       data, tipo, quantidade: Number(quantidade), categoria: categoria as Categoria,
       fazendaOrigem: origemFinal, fazendaDestino: destinoFinal,
       pesoMedioKg: pesoKg ? Number(pesoKg) : undefined,
@@ -300,14 +300,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       statusOperacional: statusOp,
     });
 
-    if (!isCompra) {
+    if (isCompra && returnedId) {
+      setLastSavedLancamentoId(returnedId);
+      toast.success('Lançamento registrado! Agora você pode gerar os lançamentos financeiros.');
+    } else {
+      setLastSavedLancamentoId(null);
       setQuantidade('');
       setCategoria('');
       setPesoKg(tipo === 'nascimento' ? '30' : '');
       setFazendaOrigem(''); setFazendaDestino('');
       resetFinancialFields();
+      toast.success('Lançamento registrado!');
     }
-    toast.success('Lançamento registrado!');
     // For compra, keep fields so user can generate financial records
   };
 
