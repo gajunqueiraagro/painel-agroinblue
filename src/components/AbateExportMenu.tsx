@@ -58,40 +58,48 @@ function calcArrobasTotaisPrev(l: Lancamento): number {
 // ── Texto WhatsApp Confirmado ──
 function textoConfirmado(l: Lancamento, fazendaNome?: string): string {
   const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
-  const c = calcIndicadoresLancamento(l);
-  const totalArrobas = calcArrobasTotaisPrev(l);
-  const bonus = (l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0);
-  const desc = (l.descontoQualidade ?? 0) + (l.descontoFunrural ?? 0) + (l.outrosDescontos ?? 0);
-  const valorBase = totalArrobas * (l.precoArroba ?? 0);
-  const valorLiq = valorBase + (bonus * totalArrobas) - (desc * totalArrobas);
-  const bonusArroba = totalArrobas > 0 ? bonus : 0;
-  const descArroba = totalArrobas > 0 ? desc : 0;
+  const pesoVivo = l.pesoMedioKg ?? 0;
+  const rendPct = pesoVivo > 0 && l.pesoCarcacaKg ? (l.pesoCarcacaKg / pesoVivo) : 0;
+  const arrobasCab = (pesoVivo * rendPct) / 15;
+  const totalArrobas = arrobasCab * l.quantidade;
+  const precoBase = l.precoArroba ?? 0;
+  const valorBase = precoBase * totalArrobas;
+  const bonusTotal = (l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0);
+  const descTotal = (l.descontoQualidade ?? 0) + (l.descontoFunrural ?? 0) + (l.outrosDescontos ?? 0);
+  const bonusArroba = totalArrobas > 0 ? bonusTotal / totalArrobas : 0;
+  const descArroba = totalArrobas > 0 ? descTotal / totalArrobas : 0;
+  const valorLiq = valorBase + bonusTotal - descTotal;
   const liqArroba = totalArrobas > 0 ? valorLiq / totalArrobas : 0;
 
-  const lines: string[] = [`📋 *Escala de Abate — Confirmado*\n`];
-  if (fazendaNome) lines.push(`🏠 Fazenda: ${fazendaNome}`);
-  lines.push(
-    `📅 Data da Venda: ${fmtDate(l.dataVenda)}`,
-    `🚛 Data Embarque: ${fmtDate(l.dataEmbarque)}`,
-    `📅 Data Prev. Abate: ${fmtDate(l.dataAbate || l.data)}`,
-    `🏭 Frigorífico: ${l.fazendaDestino || '-'}`,
-  );
-  if (l.tipoVenda) lines.push(`📦 Tipo Venda: ${TIPO_VENDA_LABELS[l.tipoVenda] || l.tipoVenda}`);
-  if (l.tipoPeso) lines.push(`🔪 Tipo de Abate: ${TIPO_ABATE_LABELS[l.tipoPeso] || l.tipoPeso}`);
-  lines.push(
+  const lines: string[] = [
+    'ESCALA DE ABATE - CONFIRMADO',
     '',
-    `🐂 Quantidade: ${l.quantidade} cab.`,
-    `⚖️ Peso Vivo Previsto: ${fmtValor(l.pesoMedioKg)} kg`,
-    `💲 R$/@ Negociado: ${formatMoeda(l.precoArroba)}`,
-  );
-  if (totalArrobas > 0) lines.push(`📐 Arrobas Totais Previstas: ${fmtValor(totalArrobas)} @`);
-  lines.push('');
-  if (bonusArroba > 0) lines.push(`🎯 Expectativa Bônus: ${formatMoeda(bonusArroba)} /@`);
-  if (descArroba > 0) lines.push(`📉 Expectativa Descontos: ${formatMoeda(descArroba)} /@`);
+    `Fazenda: ${fazendaNome || '-'}`,
+    `Frigorifico: ${l.fazendaDestino || '-'}`,
+    `Tipo de Venda: ${TIPO_VENDA_LABELS[l.tipoVenda ?? ''] || '-'}`,
+    `Tipo de Abate: ${TIPO_ABATE_LABELS[l.tipoPeso ?? ''] || '-'}`,
+    '',
+    `Data da Venda: ${fmtDate(l.dataVenda)}`,
+    `Data Embarque: ${fmtDate(l.dataEmbarque)}`,
+    `Data Prev. Abate: ${fmtDate(l.dataAbate || l.data)}`,
+    '',
+    `Categoria: ${cat}`,
+    `Quantidade: ${l.quantidade} cab.`,
+    '',
+    `Peso Vivo: ${fmtValor(pesoVivo)} kg`,
+    `Rendimento: ${fmtValor(rendPct * 100)} %`,
+    `R$/@: ${formatMoeda(precoBase)}`,
+    '',
+    `Arrobas/cab: ${fmtValor(arrobasCab)} @`,
+    `Arrobas totais: ${fmtValor(totalArrobas)} @`,
+    '',
+  ];
+  if (bonusArroba > 0) lines.push(`Bonus R$/@: ${formatMoeda(bonusArroba)}`);
+  if (descArroba > 0) lines.push(`Descontos R$/@: ${formatMoeda(descArroba)}`);
   lines.push(
-    `💰 *Expectativa Líq. Total: ${formatMoeda(valorLiq)}*`,
+    `Preco liquido R$/@: ${formatMoeda(liqArroba)}`,
+    `Valor liquido total: ${formatMoeda(valorLiq)}`,
   );
-  if (liqArroba > 0) lines.push(`📈 Expectativa Líq. R$/@: ${formatMoeda(liqArroba)}`);
   return lines.join('\n');
 }
 
