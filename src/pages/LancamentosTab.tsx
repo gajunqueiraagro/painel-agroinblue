@@ -292,6 +292,63 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setRendCarcaca(''); setFunruralPct('');
   };
 
+  // Load abate into form for editing
+  const loadAbateForEdit = useCallback((l: Lancamento) => {
+    setAba('saida');
+    setTipo('abate');
+    setData(l.data);
+    setCategoria(l.categoria);
+    setQuantidade(String(l.quantidade));
+    setPesoKg(l.pesoMedioKg ? String(l.pesoMedioKg) : '');
+    setFazendaOrigem(l.fazendaOrigem || '');
+    setFazendaDestino(l.fazendaDestino || '');
+    setObservacao(l.observacao || '');
+    setStatusOp((l.statusOperacional as StatusOperacional) || 'conciliado');
+    setTipoPeso(l.tipoPeso || 'vivo');
+    setNotaFiscal(l.notaFiscal || '');
+    setDataVenda(l.dataVenda || '');
+    setDataEmbarque(l.dataEmbarque || '');
+    setDataAbate(l.dataAbate || '');
+    setTipoVenda(l.tipoVenda || '');
+    setPrecoArroba(l.precoArroba ? String(l.precoArroba) : '');
+
+    // Reverse-calc rendimento from pesoCarcacaKg / pesoMedioKg
+    if (l.pesoCarcacaKg && l.pesoMedioKg && l.pesoMedioKg > 0) {
+      setRendCarcaca(String(((l.pesoCarcacaKg / l.pesoMedioKg) * 100).toFixed(2)));
+    } else {
+      setRendCarcaca('');
+    }
+
+    // Bonus/desconto stored as totals → convert back to R$/@ for form inputs
+    const rend = l.pesoCarcacaKg && l.pesoMedioKg ? l.pesoCarcacaKg / l.pesoMedioKg : 0;
+    const arrobasCab = (l.pesoMedioKg ?? 0) * rend / 15;
+    const totalArrobas = arrobasCab * l.quantidade;
+    const toArroba = (total: number | undefined) => {
+      if (!total || totalArrobas <= 0) return '';
+      return String((total / totalArrobas).toFixed(2));
+    };
+    setBonusPrecoce(toArroba(l.bonusPrecoce));
+    setBonusQualidade(toArroba(l.bonusQualidade));
+    setBonusListaTrace(toArroba(l.bonusListaTrace));
+    setDescontoQualidade(toArroba(l.descontoQualidade));
+    setOutrosDescontos(l.outrosDescontos ? String(l.outrosDescontos) : '');
+
+    // Funrural: stored as total → reverse to percentage of valor bruto
+    if (l.descontoFunrural && l.descontoFunrural > 0 && totalArrobas > 0 && l.precoArroba) {
+      const valorBruto = totalArrobas * l.precoArroba;
+      if (valorBruto > 0) {
+        setFunruralPct(String(((l.descontoFunrural / valorBruto) * 100).toFixed(2)));
+      } else {
+        setFunruralPct('');
+      }
+    } else {
+      setFunruralPct('');
+    }
+
+    setEditingAbateId(l.id);
+    setDetalheId(null);
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!quantidade || Number(quantidade) <= 0) { toast.error('Informe a quantidade'); return; }
