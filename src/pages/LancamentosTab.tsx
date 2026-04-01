@@ -102,7 +102,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   const [aba, setAba] = useState<Aba>(abaInicial || 'entrada');
   const [tipo, setTipo] = useState<TipoMovimentacao>('nascimento');
-  const [categoria, setCategoria] = useState<Categoria>('bois');
+  const [categoria, setCategoria] = useState<Categoria | ''>('');
   const [quantidade, setQuantidade] = useState('');
   const [data, setData] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [fazendaOrigem, setFazendaOrigem] = useState('');
@@ -261,6 +261,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!quantidade || Number(quantidade) <= 0) return;
+    if (!categoria) { toast.error('Selecione a categoria'); return; }
 
     const origemFinal = campos.origem.show
       ? (campos.origem.auto ? campos.origem.value : fazendaOrigem) || undefined
@@ -276,7 +277,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const valorTotalFinal = calc.valorLiquido > 0 ? calc.valorLiquido : undefined;
 
     onAdicionar({
-      data, tipo, quantidade: Number(quantidade), categoria,
+      data, tipo, quantidade: Number(quantidade), categoria: categoria as Categoria,
       fazendaOrigem: origemFinal, fazendaDestino: destinoFinal,
       pesoMedioKg: pesoKg ? Number(pesoKg) : undefined,
       pesoMedioArrobas: pesoKg ? kgToArrobas(Number(pesoKg)) : undefined,
@@ -298,6 +299,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     });
 
     setQuantidade('');
+    setCategoria('');
     setPesoKg(tipo === 'nascimento' ? '30' : '');
     setFazendaOrigem(''); setFazendaDestino('');
     resetFinancialFields();
@@ -369,7 +371,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <div className={childWrap}>
             {TIPOS_ENTRADA.map(t => (
               <button key={t.value} type="button"
-                onClick={() => { setAba('entrada'); setTipo(t.value); setFazendaOrigem(''); setFazendaDestino(''); resetFinancialFields(); setPesoKg(t.value === 'nascimento' ? '30' : ''); }}
+                onClick={() => { setAba('entrada'); setTipo(t.value); setCategoria(''); setFazendaOrigem(''); setFazendaDestino(''); resetFinancialFields(); setPesoKg(t.value === 'nascimento' ? '30' : ''); }}
                 className={childCls(aba === 'entrada' && tipo === t.value)}>
                 <span className="text-[12px]">{t.icon}</span> {t.label}
               </button>
@@ -385,7 +387,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <div className={childWrap}>
             {TIPOS_SAIDA.map(t => (
               <button key={t.value} type="button"
-                onClick={() => { setAba('saida'); setTipo(t.value); setFazendaOrigem(''); setFazendaDestino(''); setMotivoMorte(''); setMotivoMorteCustom(''); resetFinancialFields(); setPesoKg(''); }}
+                onClick={() => { setAba('saida'); setTipo(t.value); setCategoria(''); setFazendaOrigem(''); setFazendaDestino(''); setMotivoMorte(''); setMotivoMorteCustom(''); resetFinancialFields(); setPesoKg(''); }}
                 className={childCls(aba === 'saida' && tipo === t.value)}>
                 <span className="text-[12px]">{t.icon}</span> {t.label}
               </button>
@@ -718,9 +720,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         <div className="col-span-4">
           <Label className="font-bold text-[11px]">Categoria</Label>
           <Select value={categoria} onValueChange={v => setCategoria(v as Categoria)}>
-            <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px]">{c.label}</SelectItem>)}
+            <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+            <SelectContent className="max-h-52 overflow-y-auto">
+              {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px] py-1.5">{c.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
