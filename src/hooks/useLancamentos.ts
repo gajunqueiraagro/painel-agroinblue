@@ -230,8 +230,8 @@ export function useLancamentos() {
     doMigrate();
   }, [fazendaId, migrated, loadData]);
 
-  const adicionarLancamento = async (lancamento: Omit<Lancamento, 'id'>) => {
-    if (!fazendaId || fazendaId === '__global__') return;
+  const adicionarLancamento = async (lancamento: Omit<Lancamento, 'id'>): Promise<string | undefined> => {
+    if (!fazendaId || fazendaId === '__global__') return undefined;
 
     const insertData = {
       data: lancamento.data,
@@ -274,7 +274,7 @@ export function useLancamentos() {
         ...lancamento,
       }, ...prev]);
       toast.info('Lançamento salvo na fila offline');
-      return;
+      return undefined;
     }
 
     const { data, error } = await supabase.from('lancamentos').insert({
@@ -286,7 +286,7 @@ export function useLancamentos() {
     if (error) {
       console.error('Erro ao salvar lançamento:', error);
       toast.error('Erro ao salvar lançamento: ' + error.message);
-      return;
+      return undefined;
     }
 
     if (data) {
@@ -323,7 +323,9 @@ export function useLancamentos() {
         updatedBy: data.updated_by ?? undefined,
         fazendaId: data.fazenda_id,
       }, ...prev]);
+      return data.id;
     }
+    return undefined;
   };
 
   const editarLancamento = async (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => {

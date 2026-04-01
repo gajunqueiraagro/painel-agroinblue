@@ -151,42 +151,39 @@ export function CompraFinanceiroPanel({
       const inserts: any[] = [];
 
       // Parcels or single payment
+      const baseRecord = {
+        cliente_id: clienteAtual.id,
+        fazenda_id: fazendaAtual.id,
+        tipo_operacao: 'Saída',
+        sinal: -1,
+        ano_mes: anoMes,
+        status_transacao: statusFin,
+        origem_lancamento: 'movimentacao_rebanho',
+        movimentacao_rebanho_id: lancamentoId,
+      };
+
       if (formaPag === 'prazo' && parcelas.length > 0) {
         parcelas.forEach((p, i) => {
           inserts.push({
-            cliente_id: clienteAtual.id,
-            fazenda_id: fazendaAtual.id,
-            tipo_operacao: 'Saída',
+            ...baseRecord,
             valor: p.valor,
-            sinal: -1,
             data_competencia: data,
             data_pagamento: p.data,
-            ano_mes: anoMes,
             descricao: `${produtoLabel} - Parcela ${i + 1}/${parcelas.length}`,
             historico: fazendaOrigem ? `Origem: ${fazendaOrigem}` : undefined,
-            status_transacao: statusFin,
-            origem_lancamento: 'movimentacao_rebanho',
-            movimentacao_rebanho_id: lancamentoId,
-            origem_tipo: 'compra_rebanho',
+            origem_tipo: 'compra_rebanho:parcela',
             nota_fiscal: notaFiscal || undefined,
           });
         });
       } else {
         inserts.push({
-          cliente_id: clienteAtual.id,
-          fazenda_id: fazendaAtual.id,
-          tipo_operacao: 'Saída',
+          ...baseRecord,
           valor: calc.valorBase,
-          sinal: -1,
           data_competencia: data,
           data_pagamento: data,
-          ano_mes: anoMes,
           descricao: produtoLabel,
           historico: fazendaOrigem ? `Origem: ${fazendaOrigem}` : undefined,
-          status_transacao: statusFin,
-          origem_lancamento: 'movimentacao_rebanho',
-          movimentacao_rebanho_id: lancamentoId,
-          origem_tipo: 'compra_rebanho',
+          origem_tipo: 'compra_rebanho:parcela',
           nota_fiscal: notaFiscal || undefined,
         });
       }
@@ -194,38 +191,24 @@ export function CompraFinanceiroPanel({
       // Frete
       if (calc.freteVal > 0) {
         inserts.push({
-          cliente_id: clienteAtual.id,
-          fazenda_id: fazendaAtual.id,
-          tipo_operacao: 'Saída',
+          ...baseRecord,
           valor: calc.freteVal,
-          sinal: -1,
           data_competencia: data,
           data_pagamento: data,
-          ano_mes: anoMes,
           descricao: `Prev. Mov - Frete compra ${categoria}`,
-          status_transacao: statusFin,
-          origem_lancamento: 'movimentacao_rebanho',
-          movimentacao_rebanho_id: lancamentoId,
-          origem_tipo: 'compra_rebanho',
+          origem_tipo: 'compra_rebanho:frete',
         });
       }
 
       // Comissão
       if (calc.comissaoVal > 0) {
         inserts.push({
-          cliente_id: clienteAtual.id,
-          fazenda_id: fazendaAtual.id,
-          tipo_operacao: 'Saída',
+          ...baseRecord,
           valor: calc.comissaoVal,
-          sinal: -1,
           data_competencia: data,
           data_pagamento: data,
-          ano_mes: anoMes,
           descricao: `Prev. Mov - Comissão compra ${categoria}`,
-          status_transacao: statusFin,
-          origem_lancamento: 'movimentacao_rebanho',
-          movimentacao_rebanho_id: lancamentoId,
-          origem_tipo: 'compra_rebanho',
+          origem_tipo: 'compra_rebanho:comissao',
         });
       }
 

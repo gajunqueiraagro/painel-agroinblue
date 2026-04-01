@@ -30,7 +30,7 @@ import { toast } from 'sonner';
 
 interface Props {
   lancamentos: Lancamento[];
-  onAdicionar: (l: Omit<Lancamento, 'id'>) => void;
+  onAdicionar: (l: Omit<Lancamento, 'id'>) => Promise<string | undefined> | void;
   onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
   onRemover: (id: string) => void;
   abaInicial?: Aba;
@@ -247,13 +247,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const lancamentoDetalhe = detalheId ? lancamentos.find(l => l.id === detalheId) : null;
   const campos = useMemo(() => getCamposFazenda(tipo, nomeFazenda), [tipo, nomeFazenda]);
 
-  // Track latest compra lancamento for financial generation
-  const latestCompraId = useMemo(() => {
-    if (!isCompra) return null;
-    const compras = lancamentos.filter(l => l.tipo === 'compra').sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-    return compras[0]?.id || null;
-  }, [lancamentos, isCompra]);
-
   const numOrUndef = (v: string) => { const n = parseFloat(v); return isNaN(n) ? undefined : n; };
 
   const resetFinancialFields = () => {
@@ -267,7 +260,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setMotivoMorte(''); setMotivoMorteCustom('');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!quantidade || Number(quantidade) <= 0) return;
     if (!categoria) { toast.error('Selecione a categoria'); return; }
@@ -285,7 +278,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     const valorTotalFinal = calc.valorLiquido > 0 ? calc.valorLiquido : undefined;
 
-    onAdicionar({
+    const returnedId = await onAdicionar({
       data, tipo, quantidade: Number(quantidade), categoria: categoria as Categoria,
       fazendaOrigem: origemFinal, fazendaDestino: destinoFinal,
       pesoMedioKg: pesoKg ? Number(pesoKg) : undefined,
@@ -307,14 +300,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       statusOperacional: statusOp,
     });
 
-    if (!isCompra) {
+    if (isCompra && returnedId) {
+      setLastSavedLancamentoId(returnedId);
+      toast.success('Lançamento registrado! Agora você pode gerar os lançamentos financeiros.');
+    } else {
+      setLastSavedLancamentoId(null);
       setQuantidade('');
       setCategoria('');
       setPesoKg(tipo === 'nascimento' ? '30' : '');
       setFazendaOrigem(''); setFazendaDestino('');
       resetFinancialFields();
+      toast.success('Lançamento registrado!');
     }
-    toast.success('Lançamento registrado!');
     // For compra, keep fields so user can generate financial records
   };
 
@@ -383,7 +380,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <div className={childWrap}>
             {TIPOS_ENTRADA.map(t => (
               <button key={t.value} type="button"
-                onClick={() => { setAba('entrada'); setTipo(t.value); setCategoria(''); setFazendaOrigem(''); setFazendaDestino(''); resetFinancialFields(); setPesoKg(t.value === 'nascimento' ? '30' : ''); }}
+                onClick={() => { setAba('entrada'); setTipo(t.value); setCategoria(''); setFazendaOrigem(''); setFazendaDestino(''); resetFinancialFields(); setPesoKg(t.value === 'nascimento' ? '30' : ''); setLastSavedLancamentoId(null); }}
                 className={childCls(aba === 'entrada' && tipo === t.value)}>
                 <span className="text-[12px]">{t.icon}</span> {t.label}
               </button>
@@ -399,7 +396,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <div className={childWrap}>
             {TIPOS_SAIDA.map(t => (
               <button key={t.value} type="button"
-                onClick={() => { setAba('saida'); setTipo(t.value); setCategoria(''); setFazendaOrigem(''); setFazendaDestino(''); setMotivoMorte(''); setMotivoMorteCustom(''); resetFinancialFields(); setPesoKg(''); }}
+                onClick={() => { setAba('saida'); setTipo(t.value); setCategoria(''); setFazendaOrigem(''); setFazendaDestino(''); setMotivoMorte(''); setMotivoMorteCustom(''); resetFinancialFields(); setPesoKg(''); setLastSavedLancamentoId(null); }}
                 className={childCls(aba === 'saida' && tipo === t.value)}>
                 <span className="text-[12px]">{t.icon}</span> {t.label}
               </button>
@@ -898,7 +895,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 fazendaOrigem={fazendaOrigem}
                 notaFiscal={notaFiscal}
                 onNotaFiscalChange={setNotaFiscal}
-                lancamentoId={latestCompraId || undefined}
+                lancamentoId={lastSavedLancamentoId || undefined}
               />
             ) : (
               renderFinancialPanel()
