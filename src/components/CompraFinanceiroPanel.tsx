@@ -155,13 +155,12 @@ export function CompraFinanceiroPanel({
       const isFemea = FEMEAS.includes(categoria);
       const subcentroCompra = isFemea ? 'COMPRAS ANIMAIS/FEMEAS' : 'COMPRAS ANIMAIS/MACHOS';
 
-      // Base record with full classification
+      // Base record with full classification (ano_mes will be overridden per entry)
       const baseRecord = {
         cliente_id: clienteAtual.id,
         fazenda_id: fazendaAtual.id,
         tipo_operacao: '2-Saídas',
         sinal: -1,
-        ano_mes: anoMes,
         status_transacao: statusFin,
         origem_lancamento: 'movimentacao_rebanho',
         movimentacao_rebanho_id: lancamentoId,
@@ -173,6 +172,7 @@ export function CompraFinanceiroPanel({
         parcelas.forEach((p, i) => {
           inserts.push({
             ...baseRecord,
+            ano_mes: p.data.slice(0, 7),
             subcentro: subcentroCompra,
             valor: p.valor,
             data_competencia: data,
