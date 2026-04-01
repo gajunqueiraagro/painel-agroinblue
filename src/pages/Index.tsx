@@ -198,6 +198,7 @@ const Index = () => {
       setLancamentosFromFechamento(false);
       setLancamentosFromEvolCategoria(false);
       setLancamentosFromFluxoAnual(false);
+      setAbateParaEditar(null);
     }
     if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
     setActiveTab(tab);
