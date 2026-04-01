@@ -360,14 +360,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         {/* Entradas */}
         <div>
           <button onClick={() => { setAba('entrada'); setTipo('nascimento'); }} className={parentCls(aba === 'entrada')}>
-            <LogIn className="h-4 w-4" /> Entradas
+            <LogIn className="h-3.5 w-3.5" /> Entradas
           </button>
           <div className={childWrap}>
             {TIPOS_ENTRADA.map(t => (
               <button key={t.value} type="button"
                 onClick={() => { setAba('entrada'); setTipo(t.value); setFazendaOrigem(''); setFazendaDestino(''); resetFinancialFields(); setPesoKg(t.value === 'nascimento' ? '30' : ''); }}
                 className={childCls(aba === 'entrada' && tipo === t.value)}>
-                <span className="text-sm">{t.icon}</span> {t.label}
+                <span className="text-[12px]">{t.icon}</span> {t.label}
               </button>
             ))}
           </div>
