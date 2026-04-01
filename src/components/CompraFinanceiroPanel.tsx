@@ -150,22 +150,30 @@ export function CompraFinanceiroPanel({
       const anoMes = data.slice(0, 7);
       const inserts: any[] = [];
 
-      // Parcels or single payment
+      // Determine subcentro based on category (female vs male)
+      const FEMEAS = ['mamotes_f', 'desmama_f', 'novilhas', 'vacas'];
+      const isFemea = FEMEAS.includes(categoria);
+      const subcentroCompra = isFemea ? 'COMPRAS ANIMAIS/FEMEAS' : 'COMPRAS ANIMAIS/MACHOS';
+
+      // Base record with full classification
       const baseRecord = {
         cliente_id: clienteAtual.id,
         fazenda_id: fazendaAtual.id,
-        tipo_operacao: 'Saída',
+        tipo_operacao: '2-Saídas',
         sinal: -1,
         ano_mes: anoMes,
         status_transacao: statusFin,
         origem_lancamento: 'movimentacao_rebanho',
         movimentacao_rebanho_id: lancamentoId,
+        macro_custo: 'Investimento em Bovinos',
+        centro_custo: 'Reposição de Bovinos',
       };
 
       if (formaPag === 'prazo' && parcelas.length > 0) {
         parcelas.forEach((p, i) => {
           inserts.push({
             ...baseRecord,
+            subcentro: subcentroCompra,
             valor: p.valor,
             data_competencia: data,
             data_pagamento: p.data,
@@ -178,6 +186,7 @@ export function CompraFinanceiroPanel({
       } else {
         inserts.push({
           ...baseRecord,
+          subcentro: subcentroCompra,
           valor: calc.valorBase,
           data_competencia: data,
           data_pagamento: data,
@@ -192,6 +201,7 @@ export function CompraFinanceiroPanel({
       if (calc.freteVal > 0) {
         inserts.push({
           ...baseRecord,
+          subcentro: 'FRETE COMPRA ANIMAIS',
           valor: calc.freteVal,
           data_competencia: data,
           data_pagamento: data,
@@ -204,6 +214,7 @@ export function CompraFinanceiroPanel({
       if (calc.comissaoVal > 0) {
         inserts.push({
           ...baseRecord,
+          subcentro: 'COMISSÃO COMPRA ANIMAIS',
           valor: calc.comissaoVal,
           data_competencia: data,
           data_pagamento: data,
