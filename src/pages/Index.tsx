@@ -410,6 +410,7 @@ const Index = () => {
           filtroMesInicial={movFiltroMes}
           drillDownLabel={movDrillLabel}
           onBack={movBackTab ? () => setActiveTab(movBackTab) : undefined}
+          onEditarAbate={(l) => { setAbateParaEditar(l); setActiveTab('lancamentos'); }}
         />
       )}
       {activeTab === 'acessos' && <AcessosTab />}
