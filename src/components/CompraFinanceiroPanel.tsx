@@ -65,6 +65,8 @@ export function CompraFinanceiroPanel({
   const [fornecedorId, setFornecedorId] = useState<string>('');
   const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
   const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
+  const [origemSugestao, setOrigemSugestao] = useState<'encontrado' | 'criar' | null>(null);
+  const [origemSugestaoDescartada, setOrigemSugestaoDescartada] = useState(false);
 
   useEffect(() => {
     if (!clienteAtual) return;
@@ -78,6 +80,55 @@ export function CompraFinanceiroPanel({
         if (data) setFornecedores(data);
       });
   }, [clienteAtual]);
+
+  // Auto-suggest fornecedor based on fazendaOrigem
+  useEffect(() => {
+    if (!fazendaOrigem?.trim() || origemSugestaoDescartada) {
+      setOrigemSugestao(null);
+      return;
+    }
+    const nomeNorm = fazendaOrigem.trim().toLowerCase();
+    const match = fornecedores.find(f => f.nome.toLowerCase() === nomeNorm);
+    if (match) {
+      if (!fornecedorId) {
+        setFornecedorId(match.id);
+        setOrigemSugestao('encontrado');
+        setTimeout(() => setOrigemSugestao(null), 3000);
+      } else {
+        setOrigemSugestao(null);
+      }
+    } else if (fazendaOrigem.trim().length >= 3) {
+      setOrigemSugestao('criar');
+    } else {
+      setOrigemSugestao(null);
+    }
+  }, [fazendaOrigem, fornecedores, fornecedorId, origemSugestaoDescartada]);
+
+  // Reset descartada flag when origem changes
+  useEffect(() => {
+    setOrigemSugestaoDescartada(false);
+  }, [fazendaOrigem]);
+
+  const handleCriarFornecedorFromOrigem = async () => {
+    if (!clienteAtual || !fazendaAtual || !fazendaOrigem?.trim()) return;
+    const nome = fazendaOrigem.trim();
+    const { data, error } = await supabase
+      .from('financeiro_fornecedores')
+      .insert({
+        cliente_id: clienteAtual.id,
+        fazenda_id: fazendaAtual.id,
+        nome,
+      })
+      .select('id, nome')
+      .single();
+    if (error) { toast.error('Erro ao criar fornecedor'); return; }
+    if (data) {
+      setFornecedores(prev => [...prev, data].sort((a, b) => a.nome.localeCompare(b.nome)));
+      setFornecedorId(data.id);
+      setOrigemSugestao(null);
+      toast.success(`Fornecedor "${data.nome}" criado e selecionado`);
+    }
+  };
 
   const handleNovoFornecedor = async (nome: string, cpfCnpj?: string) => {
     if (!clienteAtual || !fazendaAtual) return;
@@ -372,6 +423,25 @@ export function CompraFinanceiroPanel({
             <Plus className="h-4 w-4" />
           </Button>
         </div>
+        {/* Sugestão automática baseada na Origem */}
+        {origemSugestao === 'encontrado' && (
+          <p className="text-[10px] text-green-600 flex items-center gap-1 mt-0.5">
+            <CheckCircle className="h-3 w-3" /> Fornecedor selecionado automaticamente a partir da origem
+          </p>
+        )}
+        {origemSugestao === 'criar' && !fornecedorId && (
+          <div className="flex items-center gap-1.5 mt-0.5 p-1.5 rounded border border-dashed border-muted-foreground/30 bg-muted/40">
+            <span className="text-[10px] text-muted-foreground flex-1">
+              Criar fornecedor "<strong>{fazendaOrigem?.trim()}</strong>"?
+            </span>
+            <Button type="button" variant="outline" size="sm" className="h-5 text-[10px] px-2" onClick={handleCriarFornecedorFromOrigem}>
+              Criar e selecionar
+            </Button>
+            <Button type="button" variant="ghost" size="sm" className="h-5 text-[10px] px-1.5" onClick={() => setOrigemSugestaoDescartada(true)}>
+              Ignorar
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Nota Fiscal */}
