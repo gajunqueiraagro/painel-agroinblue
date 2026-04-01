@@ -719,21 +719,20 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 {/* Valor total líquido - manual override */}
                 <Separator />
                 <div>
-                  <Label className={`text-xs font-semibold ${previstoLabelClass || 'text-foreground'}`}>Valor total líquido (R$)</Label>
+                  <Label className={`text-[11px] font-semibold ${previstoLabelClass || 'text-foreground'}`}>Valor total líquido (R$)</Label>
                   <Input
                     type="number"
                     value={calc.valorLiquido > 0 ? String(Math.round(calc.valorLiquido * 100) / 100) : ''}
                     onChange={e => {
                       const vt = parseFloat(e.target.value);
                       if (!isNaN(vt)) {
-                        // Back-calculate base price from manual total
                         const totalBon = isAbate
                           ? (Number(bonusPrecoce) || 0) + (Number(bonusQualidade) || 0) + (Number(bonusListaTrace) || 0)
                           : (Number(bonus) || 0);
                         const totalDesc = isAbate
                           ? (Number(descontoQualidade) || 0) + (Number(descontoFunrural) || 0) + (Number(outrosDescontos) || 0)
                           : (Number(descontos) || 0);
-                        const comVal = 0; // comissão depends on bruto, skip for back-calc
+                        const comVal = 0;
                         const freteVal = Number(frete) || 0;
                         const outVal = Number(outrasDespesas) || 0;
                         const brutoNecessario = vt - totalBon + totalDesc + comVal + freteVal + outVal;
@@ -745,9 +744,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                       }
                     }}
                     placeholder="Informe o valor total líquido"
-                    className={`h-10 text-base font-bold ${previstoInputClass}`}
+                    className={`h-8 text-[12px] font-bold ${previstoInputClass}`}
                   />
-                  <p className="text-xs text-muted-foreground mt-1">Preencha para retro-calcular o preço base automaticamente</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Preencha para retro-calcular o preço base automaticamente</p>
                 </div>
 
                 {/* Comissão/Frete/Outras despesas */}
