@@ -895,7 +895,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 fazendaOrigem={fazendaOrigem}
                 notaFiscal={notaFiscal}
                 onNotaFiscalChange={setNotaFiscal}
-                lancamentoId={latestCompraId || undefined}
+                lancamentoId={lastSavedLancamentoId || undefined}
               />
             ) : (
               renderFinancialPanel()
