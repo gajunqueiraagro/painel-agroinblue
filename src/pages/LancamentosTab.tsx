@@ -808,21 +808,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </form>
       ) : (
         <div>
-          <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-2 -mx-4">
-            <div className="flex gap-2">
+          <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 -mx-3">
+            <div className="flex gap-1.5">
               <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-                <SelectTrigger className="touch-target text-base font-bold w-28"><SelectValue placeholder="Ano" /></SelectTrigger>
-                <SelectContent>{anosDisponiveis.map(a => <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>)}</SelectContent>
+                <SelectTrigger className="h-8 text-[12px] font-bold w-24"><SelectValue placeholder="Ano" /></SelectTrigger>
+                <SelectContent>{anosDisponiveis.map(a => <SelectItem key={a} value={a} className="text-[12px]">{a}</SelectItem>)}</SelectContent>
               </Select>
               <Select value={mesFiltro} onValueChange={setMesFiltro}>
-                <SelectTrigger className="touch-target text-base font-bold flex-1"><SelectValue placeholder="Mês" /></SelectTrigger>
-                <SelectContent>{MESES.map(m => <SelectItem key={m.value} value={m.value} className="text-base">{m.label}</SelectItem>)}</SelectContent>
+                <SelectTrigger className="h-8 text-[12px] font-bold flex-1"><SelectValue placeholder="Mês" /></SelectTrigger>
+                <SelectContent>{MESES.map(m => <SelectItem key={m.value} value={m.value} className="text-[12px]">{m.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           </div>
-          <div className="space-y-2 pt-2">
+          <div className="space-y-1.5 pt-1.5">
           {historicoFiltrado.length === 0 ? (
-            <p className="text-center text-muted-foreground py-10">Nenhum lançamento no período</p>
+            <p className="text-center text-muted-foreground py-8 text-[12px]">Nenhum lançamento no período</p>
           ) : (
             historicoFiltrado.slice(0, 50).map(l => {
               const entrada = isEntrada(l.tipo);
@@ -832,27 +832,27 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               const tipoLabel = TODOS_TIPOS.find(t => t.value === l.tipo);
               return (
                 <button key={l.id} onClick={() => setDetalheId(l.id)}
-                  className="w-full bg-card rounded-lg p-3 border shadow-sm flex items-center gap-3 text-left hover:bg-muted/50 transition-colors">
-                  <div className="text-2xl">{tipoLabel?.icon}</div>
+                  className="w-full bg-card rounded-md p-2 border shadow-sm flex items-center gap-2 text-left hover:bg-muted/50 transition-colors">
+                  <div className="text-lg">{tipoLabel?.icon}</div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded ${entrada ? 'bg-success/20 text-success' : reclass ? 'bg-accent/20 text-accent-foreground' : 'bg-destructive/20 text-destructive'}`}>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${entrada ? 'bg-success/20 text-success' : reclass ? 'bg-accent/20 text-accent-foreground' : 'bg-destructive/20 text-destructive'}`}>
                         {entrada ? '+' : reclass ? '↔' : '-'}{l.quantidade}
                       </span>
-                      <span className="text-sm font-bold text-foreground truncate">{tipoLabel?.label}</span>
+                      <span className="text-[12px] font-bold text-foreground truncate">{tipoLabel?.label}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
                       {catLabel}{catDestinoLabel ? ` → ${catDestinoLabel}` : ''} • {format(parseISO(l.data), 'dd/MM/yyyy', { locale: ptBR })}
                       {l.pesoMedioKg ? ` • ${l.pesoMedioKg}kg` : ''}
                       {l.valorTotal ? ` • R$${l.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''}
                     </p>
                   </div>
-                  <div className="flex flex-col items-end gap-1 shrink-0">
+                  <div className="flex flex-col items-end gap-0.5 shrink-0">
                     {(() => {
                       const cfg = getStatusBadge(l);
-                      return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${cfg.cls}`}>{cfg.label}</span>;
+                      return <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${cfg.cls}`}>{cfg.label}</span>;
                     })()}
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                   </div>
                 </button>
               );
