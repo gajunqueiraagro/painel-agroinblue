@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
   Lancamento,
@@ -41,6 +41,8 @@ interface Props {
   onBackToConciliacao?: () => void;
   dataInicial?: string;
   backLabel?: string;
+  /** Abate para abrir em modo edição automaticamente */
+  abateParaEditar?: Lancamento | null;
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
@@ -105,7 +107,7 @@ function fmt(v?: number, decimals = 2) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const nomeFazenda = fazendaAtual?.nome || '';
   const isAdministrativo = fazendaAtual?.tem_pecuaria === false;
@@ -348,6 +350,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingAbateId(l.id);
     setDetalheId(null);
   }, []);
+
+  // Auto-load abate for editing when navigated from another tab
+  useEffect(() => {
+    if (abateParaEditar) {
+      loadAbateForEdit(abateParaEditar);
+    }
+  }, [abateParaEditar]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

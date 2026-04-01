@@ -30,6 +30,8 @@ interface Props {
   onBack?: () => void;
   /** Label do filtro aplicado (drill-down) */
   drillDownLabel?: string;
+  /** Callback para editar abate no formulário completo (navega para LancamentosTab) */
+  onEditarAbate?: (lancamento: Lancamento) => void;
 }
 
 export type SubAba = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
@@ -306,7 +308,7 @@ function getTopTabFromSubAba(subAba?: SubAba): TopTab {
   return 'entradas';
 }
 
-export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, onBack, drillDownLabel }: Props) {
+export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, onBack, drillDownLabel, onEditarAbate }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const fazendaMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -537,6 +539,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
             onClose={() => setDetalheId(null)}
             onEditar={(id, dados) => { onEditar(id, dados); setDetalheId(null); }}
             onRemover={(id) => { onRemover(id); setDetalheId(null); }}
+            onEditarAbate={onEditarAbate ? (l) => { setDetalheId(null); onEditarAbate(l); } : undefined}
           />
         ) : null;
       })()}
