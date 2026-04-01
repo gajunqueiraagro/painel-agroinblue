@@ -632,24 +632,26 @@ export function CompraFinanceiroPanel({
       <Separator />
 
       {/* BLOCO 3 — Despesas Extras */}
-      <div className="space-y-1.5">
-        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Despesas Extras</span>
-        <div>
-          <Label className="text-[11px]">Frete total (R$)</Label>
-          <Input type="number" value={frete} onChange={e => setFrete(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${previstoInputClass}`} />
-        </div>
-        <div>
-          <Label className="text-[11px]">Comissão (%)</Label>
-          <Input type="number" value={comissaoPct} onChange={e => setComissaoPct(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
+      <div className="space-y-1">
+        <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wide">Despesas Extras</span>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Label className="text-[10px]">Frete (R$)</Label>
+            <Input type="number" value={frete} onChange={e => setFrete(e.target.value)} placeholder="0,00" className={`h-7 text-[11px] ${previstoInputClass}`} />
+          </div>
+          <div>
+            <Label className="text-[10px]">Comissão (%)</Label>
+            <Input type="number" value={comissaoPct} onChange={e => setComissaoPct(e.target.value)} placeholder="0" className={`h-7 text-[11px] ${previstoInputClass}`} />
+          </div>
         </div>
         {calc.comissaoVal > 0 && (
-          <div className="flex justify-between text-[11px] px-1">
+          <div className="flex justify-between text-[10px] px-1">
             <span className="text-muted-foreground">Comissão (R$)</span>
             <strong>R$ {fmt(calc.comissaoVal)}</strong>
           </div>
         )}
         {calc.totalDespesas > 0 && (
-          <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-md p-2 flex justify-between text-[11px] font-bold">
+          <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded px-2 py-1.5 flex justify-between text-[10px] font-bold">
             <span className="text-orange-700 dark:text-orange-400">Total despesas</span>
             <span className="text-orange-800 dark:text-orange-300">R$ {fmt(calc.totalDespesas)}</span>
           </div>
