@@ -139,6 +139,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [outrasDespesas, setOutrasDespesas] = useState('');
   const [notaFiscal, setNotaFiscal] = useState('');
   const [tipoPeso, setTipoPeso] = useState<'vivo' | 'morto'>('vivo');
+  const [rendCarcaca, setRendCarcaca] = useState('');
+  const [funruralPct, setFunruralPct] = useState('');
 
   const [dataVenda, setDataVenda] = useState('');
   const [dataEmbarque, setDataEmbarque] = useState('');
