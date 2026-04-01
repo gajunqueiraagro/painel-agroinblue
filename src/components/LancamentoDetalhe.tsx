@@ -209,9 +209,47 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 </>
               )}
             </div>
+            {/* Alterar financeiro — only for compra type */}
+            {lancamento.tipo === 'compra' && !isTransferenciaEntrada && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full mt-1 text-[11px]"
+                onClick={() => setFinanceiroSheetOpen(true)}
+              >
+                <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                Alterar financeiro da compra
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Sheet para alterar financeiro da compra */}
+      <Sheet open={financeiroSheetOpen} onOpenChange={setFinanceiroSheetOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="text-sm">Alterar Financeiro da Compra</SheetTitle>
+          </SheetHeader>
+          <div className="mt-4">
+            <CompraFinanceiroPanel
+              quantidade={lancamento.quantidade}
+              pesoKg={lancamento.pesoMedioKg || 0}
+              data={lancamento.data}
+              categoria={lancamento.categoria}
+              statusOp={(lancamento.statusOperacional || 'conciliado') as StatusOperacional}
+              fazendaOrigem={lancamento.fazendaOrigem || ''}
+              notaFiscal={notaFiscalEdit}
+              onNotaFiscalChange={setNotaFiscalEdit}
+              lancamentoId={lancamento.id}
+              mode="update"
+              onFinanceiroUpdated={() => {
+                setFinanceiroSheetOpen(false);
+              }}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
