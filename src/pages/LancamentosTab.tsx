@@ -607,34 +607,32 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const renderForm = () => (
     <form onSubmit={handleSubmit} className="flex-1 bg-card rounded-md p-4 shadow-sm border space-y-3 self-start">
 
-      {/* STATUS OPERACIONAL — descriptive */}
-      <div className="space-y-1.5">
-        <Label className="font-bold text-[10px] uppercase text-muted-foreground tracking-wide">Status da Operação</Label>
-        <div className="space-y-1">
-          {STATUS_OPTIONS.map(s => {
-            const selected = statusOp === s.value;
-            return (
-              <button
-                key={s.value}
-                type="button"
-                onClick={() => setStatusOp(s.value)}
-                className={`w-full flex items-start gap-3 px-3 py-2 rounded-md border transition-all text-left ${
-                  selected
-                    ? `${s.value === 'conciliado' ? 'border-green-500 bg-green-50 dark:bg-green-950/30' : s.value === 'confirmado' ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30' : 'border-orange-500 bg-orange-50 dark:bg-orange-950/30'}`
-                    : 'border-border bg-muted/20 hover:bg-muted/40'
-                }`}
-              >
-                <div className={`w-3 h-3 rounded-full mt-0.5 shrink-0 ${selected ? s.bg : 'bg-muted-foreground/30'}`} />
-                <div className="min-w-0">
-                  <span className={`text-[12px] font-bold ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>{s.label}</span>
-                  <p className={`text-[10px] mt-0.5 leading-tight ${selected ? 'text-foreground/70' : 'text-muted-foreground/70'}`}>
-                    {STATUS_DESCRIPTIONS[s.value]}
-                  </p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+      {/* STATUS OPERACIONAL — compact radio */}
+      <div className="flex items-center gap-3 h-8">
+        <span className="text-[11px] font-bold text-muted-foreground uppercase shrink-0">Status:</span>
+        {STATUS_OPTIONS.map(s => {
+          const selected = statusOp === s.value;
+          const dotColor = s.value === 'conciliado' ? 'bg-green-600' : s.value === 'confirmado' ? 'bg-blue-500' : 'bg-orange-500';
+          return (
+            <Tooltip key={s.value}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => setStatusOp(s.value)}
+                  className={`flex items-center gap-1.5 text-[12px] font-semibold transition-colors ${
+                    selected ? 'text-foreground' : 'text-muted-foreground hover:text-foreground/70'
+                  }`}
+                >
+                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${selected ? dotColor : 'border-2 border-muted-foreground/40 bg-transparent'}`} />
+                  {s.label}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-[11px] max-w-[220px]">
+                {STATUS_DESCRIPTIONS[s.value]}
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
       </div>
 
       <Separator />
