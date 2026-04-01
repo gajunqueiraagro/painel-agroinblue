@@ -23,6 +23,7 @@ import { ptBR } from 'date-fns/locale';
 import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, RefreshCw, Clock, Info } from 'lucide-react';
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
+import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useIntegerInput, useDecimalInput } from '@/hooks/useFormattedNumber';
 import { toast } from 'sonner';
@@ -110,6 +111,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [pesoKg, setPesoKg] = useState(abaInicial === 'entrada' || !abaInicial ? '30' : '');
   const [observacao, setObservacao] = useState('');
   const [detalheId, setDetalheId] = useState<string | null>(null);
+  const [lastSavedLancamentoId, setLastSavedLancamentoId] = useState<string | null>(null);
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState('todos');
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
@@ -245,6 +247,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const lancamentoDetalhe = detalheId ? lancamentos.find(l => l.id === detalheId) : null;
   const campos = useMemo(() => getCamposFazenda(tipo, nomeFazenda), [tipo, nomeFazenda]);
 
+  // Track latest compra lancamento for financial generation
+  const latestCompraId = useMemo(() => {
+    if (!isCompra) return null;
+    const compras = lancamentos.filter(l => l.tipo === 'compra').sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    return compras[0]?.id || null;
+  }, [lancamentos, isCompra]);
+
   const numOrUndef = (v: string) => { const n = parseFloat(v); return isNaN(n) ? undefined : n; };
 
   const resetFinancialFields = () => {
@@ -298,12 +307,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       statusOperacional: statusOp,
     });
 
-    setQuantidade('');
-    setCategoria('');
-    setPesoKg(tipo === 'nascimento' ? '30' : '');
-    setFazendaOrigem(''); setFazendaDestino('');
-    resetFinancialFields();
+    if (!isCompra) {
+      setQuantidade('');
+      setCategoria('');
+      setPesoKg(tipo === 'nascimento' ? '30' : '');
+      setFazendaOrigem(''); setFazendaDestino('');
+      resetFinancialFields();
+    }
     toast.success('Lançamento registrado!');
+    // For compra, keep fields so user can generate financial records
   };
 
   const tiposDisponiveis = aba === 'entrada' ? TIPOS_ENTRADA : TIPOS_SAIDA;
@@ -876,7 +888,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         ) : (
           <>
             {renderForm()}
-            {renderFinancialPanel()}
+            {isCompra ? (
+              <CompraFinanceiroPanel
+                quantidade={Number(quantidade) || 0}
+                pesoKg={Number(pesoKg) || 0}
+                data={data}
+                categoria={categoria}
+                statusOp={statusOp}
+                fazendaOrigem={fazendaOrigem}
+                notaFiscal={notaFiscal}
+                onNotaFiscalChange={setNotaFiscal}
+                lancamentoId={latestCompraId || undefined}
+              />
+            ) : (
+              renderFinancialPanel()
+            )}
           </>
         )}
       </div>

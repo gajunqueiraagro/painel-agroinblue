@@ -1682,9 +1682,11 @@ export type Database = {
           id: string
           lote_importacao_id: string | null
           macro_custo: string | null
+          movimentacao_rebanho_id: string | null
           nota_fiscal: string | null
           observacao: string | null
           origem_lancamento: string
+          origem_tipo: string | null
           plano_conta_id: string | null
           sinal: number
           status_transacao: string | null
@@ -1722,9 +1724,11 @@ export type Database = {
           id?: string
           lote_importacao_id?: string | null
           macro_custo?: string | null
+          movimentacao_rebanho_id?: string | null
           nota_fiscal?: string | null
           observacao?: string | null
           origem_lancamento?: string
+          origem_tipo?: string | null
           plano_conta_id?: string | null
           sinal?: number
           status_transacao?: string | null
@@ -1762,9 +1766,11 @@ export type Database = {
           id?: string
           lote_importacao_id?: string | null
           macro_custo?: string | null
+          movimentacao_rebanho_id?: string | null
           nota_fiscal?: string | null
           observacao?: string | null
           origem_lancamento?: string
+          origem_tipo?: string | null
           plano_conta_id?: string | null
           sinal?: number
           status_transacao?: string | null
@@ -1816,6 +1822,13 @@ export type Database = {
             columns: ["lote_importacao_id"]
             isOneToOne: false
             referencedRelation: "financeiro_importacoes_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_lancamentos_v2_movimentacao_rebanho_id_fkey"
+            columns: ["movimentacao_rebanho_id"]
+            isOneToOne: false
+            referencedRelation: "lancamentos"
             referencedColumns: ["id"]
           },
           {
