@@ -235,7 +235,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                   <div className="col-span-2 bg-primary/10 rounded-md p-2 mt-0.5">
                     <p className="text-[10px] text-muted-foreground">Valor Total</p>
                     <p className="font-extrabold text-primary text-lg leading-tight">
-                      R$ {(lancamento.precoMedioCabeca * lancamento.quantidade).toLocaleString('pt-BR')}
+                      {formatMoeda(lancamento.precoMedioCabeca * lancamento.quantidade)}
                     </p>
                   </div>
                 )}
