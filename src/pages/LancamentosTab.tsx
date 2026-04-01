@@ -126,6 +126,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [observacao, setObservacao] = useState('');
   const [detalheId, setDetalheId] = useState<string | null>(null);
   const [lastSavedLancamentoId, setLastSavedLancamentoId] = useState<string | null>(null);
+  const [editingAbateId, setEditingAbateId] = useState<string | null>(null);
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState('todos');
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
