@@ -1331,6 +1331,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             {renderForm()}
             {isCompra ? (
               <CompraFinanceiroPanel
+                ref={compraFinanceiroRef}
                 quantidade={Number(quantidade) || 0}
                 pesoKg={Number(pesoKg) || 0}
                 data={data}
