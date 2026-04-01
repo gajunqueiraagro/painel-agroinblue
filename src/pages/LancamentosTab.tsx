@@ -846,7 +846,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   <p className="text-[10px] text-muted-foreground mt-0.5">
                     {catLabel}{catDestinoLabel ? ` → ${catDestinoLabel}` : ''} • {format(parseISO(l.data), 'dd/MM/yyyy', { locale: ptBR })}
                     {l.pesoMedioKg ? ` • ${l.pesoMedioKg}kg` : ''}
-                    {l.valorTotal ? ` • R$${l.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''}
+                    {l.valorTotal ? ` • ${formatMoeda(l.valorTotal)}` : ''}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-0.5 shrink-0">
