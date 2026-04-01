@@ -669,11 +669,11 @@ export function CompraFinanceiroPanel({
           {gerado ? (
             <div className="flex items-center gap-1.5 text-[11px] font-bold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/30 rounded-md p-2 border border-green-200 dark:border-green-800">
               <CheckCircle className="h-3.5 w-3.5" />
-              Lançamentos financeiros já gerados
+              {mode === 'update' ? 'Financeiro atualizado com sucesso' : 'Lançamentos financeiros já gerados'}
             </div>
           ) : (
             <>
-              {!lancamentoId && (
+              {!lancamentoId && mode === 'create' && (
                 <div className="flex items-center gap-1 text-[10px] text-orange-600 dark:text-orange-400">
                   <AlertTriangle className="h-3 w-3" />
                   Salve o lançamento zootécnico primeiro
@@ -681,13 +681,15 @@ export function CompraFinanceiroPanel({
               )}
               <Button
                 type="button"
-                variant="outline"
+                variant={mode === 'update' ? 'default' : 'outline'}
                 size="sm"
                 className="w-full h-8 text-[11px] font-bold"
                 disabled={!lancamentoId || gerando}
                 onClick={handleGerarFinanceiro}
               >
-                {gerando ? 'Gerando...' : 'Gerar lançamentos no financeiro'}
+                {gerando
+                  ? (mode === 'update' ? 'Atualizando...' : 'Gerando...')
+                  : (mode === 'update' ? 'Atualizar lançamentos no financeiro' : 'Gerar lançamentos no financeiro')}
               </Button>
             </>
           )}
