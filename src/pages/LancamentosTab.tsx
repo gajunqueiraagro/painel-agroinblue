@@ -1082,7 +1082,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         <div className="col-span-3">
           <Label className={`font-bold text-[11px] ${previstoLabelClass}`}>Peso (kg)</Label>
           <Input type="text" inputMode="decimal" value={pesoInput.displayValue} onChange={pesoInput.onChange} onBlur={pesoInput.onBlur} onFocus={pesoInput.onFocus} placeholder="0,00" className={`mt-0.5 h-8 text-[12px] ${previstoInputClass}`} />
-          {pesoKg && Number(pesoKg) > 0 && !isAbate && (
+          {pesoKg && Number(pesoKg) > 0 && !isAbate && !isNascimento && (
             <p className="text-[9px] text-muted-foreground mt-0.5">≈ {kgToArrobas(Number(pesoKg))} @</p>
           )}
         </div>
