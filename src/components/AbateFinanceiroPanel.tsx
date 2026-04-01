@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -34,11 +34,16 @@ interface Props {
   statusOperacional?: 'previsto' | 'confirmado' | 'conciliado';
 }
 
-export function AbateFinanceiroPanel({
+export interface AbateFinanceiroPanelRef {
+  generateFinanceiro: (lancamentoId: string) => Promise<boolean>;
+  getValidationErrors: () => string[];
+}
+
+export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(function AbateFinanceiroPanel({
   quantidade, categoria, data, valorLiquido, totalDescontos = 0, frigorifico,
   notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated,
   statusOperacional = 'conciliado',
-}: Props) {
+}: Props, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
   const isPrevisto = statusOperacional === 'previsto';
@@ -109,23 +114,31 @@ export function AbateFinanceiroPanel({
 
   const canGenerate = validationErrors.length === 0 && !!lancamentoId;
 
+  // Expose methods via ref for parent to call
+  useImperativeHandle(ref, () => ({
+    generateFinanceiro: async (extLancamentoId: string) => {
+      return handleGerarFinanceiroInternal(extLancamentoId);
+    },
+    getValidationErrors: () => validationErrors,
+  }));
+
   const handleClickGerar = () => {
     if (mode === 'update' && existingCount > 0) {
       setConfirmUpdateOpen(true);
     } else {
-      handleGerarFinanceiro();
+      handleGerarFinanceiroInternal(lancamentoId!);
     }
   };
 
-  const handleGerarFinanceiro = async () => {
-    if (!lancamentoId) {
+  const handleGerarFinanceiroInternal = async (targetLancamentoId: string): Promise<boolean> => {
+    if (!targetLancamentoId) {
       toast.error('Salve o lançamento zootécnico antes de gerar os financeiros.');
-      return;
+      return false;
     }
-    if (!fazendaAtual || !clienteAtual) return;
+    if (!fazendaAtual || !clienteAtual) return false;
     if (validationErrors.length > 0) {
       toast.error(validationErrors[0]);
-      return;
+      return false;
     }
 
     setGerando(true);
@@ -135,7 +148,7 @@ export function AbateFinanceiroPanel({
         const { data: oldRecords } = await supabase
           .from('financeiro_lancamentos_v2')
           .select('id')
-          .eq('movimentacao_rebanho_id', lancamentoId)
+          .eq('movimentacao_rebanho_id', targetLancamentoId)
           .eq('cancelado', false);
 
         const oldIds = (oldRecords || []).map(r => r.id);
@@ -154,7 +167,7 @@ export function AbateFinanceiroPanel({
             cliente_id: clienteAtual.id,
             usuario_id: userId || null,
             acao: 'recalculo_financeiro_abate',
-            movimentacao_id: lancamentoId,
+            movimentacao_id: targetLancamentoId,
             financeiro_ids: oldIds,
             detalhes: {
               registros_cancelados: oldIds.length,
@@ -167,14 +180,14 @@ export function AbateFinanceiroPanel({
         const { data: existing } = await supabase
           .from('financeiro_lancamentos_v2')
           .select('id')
-          .eq('movimentacao_rebanho_id', lancamentoId)
+          .eq('movimentacao_rebanho_id', targetLancamentoId)
           .eq('cancelado', false)
           .limit(1);
 
         if (existing && existing.length > 0) {
           toast.error('Lançamentos financeiros já foram gerados para este abate.');
           setGerado(true);
-          return;
+          return false;
         }
       }
 
@@ -201,7 +214,7 @@ export function AbateFinanceiroPanel({
       if (!planoReceita || planoReceita.length === 0) {
         toast.error(`Não foi encontrado mapeamento financeiro válido para "${subcentroAbate}" no plano de classificação.`);
         setGerando(false);
-        return;
+        return false;
       }
 
       const clasReceita = planoReceita[0];
@@ -213,7 +226,7 @@ export function AbateFinanceiroPanel({
         sinal: 1,
         status_transacao: isPrevisto ? 'previsto' : 'confirmado',
         origem_lancamento: 'movimentacao_rebanho',
-        movimentacao_rebanho_id: lancamentoId,
+        movimentacao_rebanho_id: targetLancamentoId,
         macro_custo: clasReceita.macro_custo,
         centro_custo: clasReceita.centro_custo,
         subcentro: clasReceita.subcentro,
@@ -263,7 +276,7 @@ export function AbateFinanceiroPanel({
         if (!planoDeducao || planoDeducao.length === 0) {
           toast.error(`Não foi encontrado mapeamento financeiro válido para "${subcentroDeducao}" no plano de classificação.`);
           setGerando(false);
-          return;
+          return false;
         }
 
         const clasDed = planoDeducao[0];
@@ -275,7 +288,7 @@ export function AbateFinanceiroPanel({
           sinal: -1,
           status_transacao: isPrevisto ? 'previsto' : 'confirmado',
           origem_lancamento: 'movimentacao_rebanho',
-          movimentacao_rebanho_id: lancamentoId,
+          movimentacao_rebanho_id: targetLancamentoId,
           macro_custo: clasDed.macro_custo,
           centro_custo: clasDed.centro_custo,
           subcentro: clasDed.subcentro,
@@ -299,8 +312,10 @@ export function AbateFinanceiroPanel({
         : `${inserts.length} lançamento(s) financeiro(s) de receita gerado(s)!`;
       toast.success(msg);
       if (mode === 'update' && onFinanceiroUpdated) onFinanceiroUpdated();
+      return true;
     } catch (err: any) {
       toast.error('Erro ao gerar lançamentos: ' + (err.message || err));
+      return false;
     } finally {
       setGerando(false);
     }
@@ -383,41 +398,20 @@ export function AbateFinanceiroPanel({
             </div>
           )}
 
-          {/* Generate button — for all statuses */}
+          {/* Info banner for previsto */}
           {isPrevisto && (
             <div className="flex items-center gap-2 text-[11px] text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/20 border border-orange-300 dark:border-orange-800 rounded p-2">
               <Info className="h-4 w-4 shrink-0" />
-              <span>Status Previsto: os lançamentos gerados alimentam o fluxo de caixa previsto, sem impacto no financeiro real.</span>
+              <span>Status Previsto: o financeiro será gerado automaticamente ao registrar o abate.</span>
             </div>
           )}
 
-          {!gerado ? (
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              className="w-full text-[12px] font-bold"
-              disabled={!canGenerate || gerando}
-              onClick={handleClickGerar}
-            >
-              {gerando ? 'Gerando...' : mode === 'update' ? 'Atualizar Financeiro' : isPrevisto ? 'Gerar Financeiro Previsto' : 'Gerar Financeiro de Receita'}
-            </Button>
-          ) : (
+          {/* Show status when financeiro already generated (for update mode) */}
+          {gerado && (
             <div className="flex items-center gap-2 text-[11px] text-primary bg-primary/10 rounded p-2">
               <CheckCircle className="h-4 w-4" />
               <span className="font-semibold">Financeiro gerado ({existingCount > 0 ? existingCount : 1} registro{existingCount > 1 ? 's' : ''})</span>
-              {mode === 'update' && (
-                <Button type="button" variant="outline" size="sm" className="ml-auto text-[10px] h-6" onClick={() => { setGerado(false); setExistingLoaded(false); }}>
-                  Recalcular
-                </Button>
-              )}
             </div>
-          )}
-
-          {!lancamentoId && (
-            <p className="text-[10px] text-muted-foreground italic">
-              Salve o lançamento de abate primeiro para habilitar a geração financeira.
-            </p>
           )}
         </CollapsibleContent>
       </Collapsible>
@@ -437,7 +431,7 @@ export function AbateFinanceiroPanel({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleGerarFinanceiro}>
+            <AlertDialogAction onClick={() => handleGerarFinanceiroInternal(lancamentoId!)}>
               Confirmar Substituição
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -445,4 +439,4 @@ export function AbateFinanceiroPanel({
       </AlertDialog>
     </div>
   );
-}
+});

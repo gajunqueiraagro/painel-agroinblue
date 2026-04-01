@@ -27,7 +27,7 @@ import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
 import { CompraFinanceiroPanel, CompraFinanceiroPanelRef } from '@/components/CompraFinanceiroPanel';
 import { AbateExportDialog } from '@/components/AbateExportMenu';
-import { AbateFinanceiroPanel } from '@/components/AbateFinanceiroPanel';
+import { AbateFinanceiroPanel, AbateFinanceiroPanelRef } from '@/components/AbateFinanceiroPanel';
 import { ConfirmacaoRegistroDialog } from '@/components/ConfirmacaoRegistroDialog';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useIntegerInput, useDecimalInput } from '@/hooks/useFormattedNumber';
@@ -132,6 +132,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [lastSavedLancamentoId, setLastSavedLancamentoId] = useState<string | null>(null);
   const [editingAbateId, setEditingAbateId] = useState<string | null>(null);
   const compraFinanceiroRef = useRef<CompraFinanceiroPanelRef>(null);
+  const abateFinanceiroRef = useRef<AbateFinanceiroPanelRef>(null);
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState('todos');
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
@@ -473,9 +474,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       if (editingAbateId) {
         onEditar(editingAbateId, lancamentoDados);
         if (isAbate && (isConciliado || isConfirmado || isPrevisto)) {
-          setLastSavedLancamentoId(editingAbateId);
+          // Auto-generate/update financeiro for abate
+          if (abateFinanceiroRef.current) {
+            await abateFinanceiroRef.current.generateFinanceiro(editingAbateId);
+          }
           setEditingAbateId(null);
-          toast.success('Abate atualizado! Agora você pode gerar/atualizar os lançamentos financeiros.');
+          setLastSavedLancamentoId(null);
+          setQuantidade(''); setCategoria(''); setPesoKg('');
+          setFazendaOrigem(''); setFazendaDestino('');
+          setData(format(new Date(), 'yyyy-MM-dd'));
+          setObservacao(''); setStatusOp('conciliado');
+          resetFinancialFields();
+          toast.success('Abate atualizado com financeiro!');
         } else {
           setEditingAbateId(null);
           setLastSavedLancamentoId(null);
@@ -502,8 +512,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Compra registrada com sucesso!');
         } else if (isAbate && (isConciliado || isConfirmado || isPrevisto) && returnedId) {
-          setLastSavedLancamentoId(returnedId);
-          toast.success('Abate registrado! Agora você pode gerar os lançamentos financeiros.');
+          // Auto-generate financeiro for abate (like Compras)
+          if (abateFinanceiroRef.current) {
+            await abateFinanceiroRef.current.generateFinanceiro(returnedId);
+          }
+          setLastSavedLancamentoId(null);
+          setQuantidade(''); setCategoria(''); setPesoKg('');
+          setFazendaOrigem(''); setFazendaDestino('');
+          setData(format(new Date(), 'yyyy-MM-dd'));
+          setObservacao(''); setStatusOp('conciliado');
+          resetFinancialFields();
+          toast.success('Abate registrado com financeiro!');
         } else {
           setLastSavedLancamentoId(null);
           setQuantidade(''); setCategoria('');
@@ -902,6 +921,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
         {/* Informações de Pagamento - all statuses */}
         <AbateFinanceiroPanel
+          ref={abateFinanceiroRef}
           quantidade={Number(quantidade) || 0}
           categoria={categoria}
           data={data}
