@@ -247,13 +247,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const lancamentoDetalhe = detalheId ? lancamentos.find(l => l.id === detalheId) : null;
   const campos = useMemo(() => getCamposFazenda(tipo, nomeFazenda), [tipo, nomeFazenda]);
 
-  // Track latest compra lancamento for financial generation
-  const latestCompraId = useMemo(() => {
-    if (!isCompra) return null;
-    const compras = lancamentos.filter(l => l.tipo === 'compra').sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-    return compras[0]?.id || null;
-  }, [lancamentos, isCompra]);
-
   const numOrUndef = (v: string) => { const n = parseFloat(v); return isNaN(n) ? undefined : n; };
 
   const resetFinancialFields = () => {
