@@ -437,7 +437,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (editingAbateId) {
       // UPDATE existing lancamento
       onEditar(editingAbateId, lancamentoDados);
-      if (isAbate && isConciliado) {
+      if (isAbate && (isConciliado || isConfirmado)) {
         // Keep form open so user can generate/update financial records
         setLastSavedLancamentoId(editingAbateId);
         setEditingAbateId(null);
@@ -461,9 +461,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       if (isCompra && returnedId) {
         setLastSavedLancamentoId(returnedId);
         toast.success('Lançamento registrado! Agora você pode gerar os lançamentos financeiros.');
-      } else if (isAbate && isConciliado && returnedId) {
+      } else if (isAbate && (isConciliado || isConfirmado) && returnedId) {
         setLastSavedLancamentoId(returnedId);
-        toast.success('Abate registrado! Agora você pode gerar os lançamentos financeiros de receita.');
+        toast.success('Abate registrado! Agora você pode gerar os lançamentos financeiros.');
       } else {
         setLastSavedLancamentoId(null);
         setQuantidade('');
@@ -805,8 +805,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           </CollapsibleContent>
         </Collapsible>
 
-        {/* Informações de Pagamento - only for Realizado */}
-        {isConciliado && (
+        {/* Informações de Pagamento - for Confirmado and Realizado */}
+        {(isConfirmado || isConciliado) && (
           <AbateFinanceiroPanel
             quantidade={Number(quantidade) || 0}
             categoria={categoria}

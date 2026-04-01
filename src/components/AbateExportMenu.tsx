@@ -7,7 +7,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 import { formatMoeda, fmtValor } from '@/lib/calculos/formatters';
-import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
+
 import { getStatus } from '@/lib/statusOperacional';
 import { useState } from 'react';
 import logoUrl from '@/assets/logo.png';
@@ -113,34 +113,46 @@ function textoConfirmado(l: Lancamento, fazendaNome?: string): string {
 // ── Texto WhatsApp Realizado ──
 function textoRealizado(l: Lancamento, fazendaNome?: string): string {
   const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
-  const c = calcIndicadoresLancamento(l);
-  const lines = [`🔪 *Resumo Final de Abate — Realizado*\n`];
-  if (fazendaNome) lines.push(`🏠 Fazenda: ${fazendaNome}`);
+  const c = calcConfirmado(l);
+
+  const lines: string[] = [
+    'ACERTO FINAL DE ABATE - REALIZADO',
+    '',
+    `Fazenda: ${fazendaNome || '-'}`,
+    `Frigorifico: ${l.fazendaDestino || '-'}`,
+    '',
+    `Tipo de Venda: ${TIPO_VENDA_LABELS[l.tipoVenda ?? ''] || '-'}`,
+    `Tipo de Abate: ${TIPO_ABATE_LABELS[l.tipoPeso ?? ''] || '-'}`,
+    '',
+    `Data da Venda: ${fmtDate(l.dataVenda)}`,
+    `Data Embarque: ${fmtDate(l.dataEmbarque)}`,
+    `Data do Abate: ${fmtDate(l.dataAbate || l.data)}`,
+    '',
+    `Categoria: ${cat}`,
+    `Quantidade: ${l.quantidade} cabecas`,
+    '',
+    `Peso Vivo: ${fmtValor(c.pesoVivo)} kg`,
+    `Rendimento Carcaca: ${fmtValor(c.rendPct)}%`,
+    `Peso Carcaca: ${fmtValor(c.pesoCarcaca)} kg`,
+    '',
+    `Arrobas por Cabeca: ${fmtValor(c.arrobasCab)} @`,
+    `Arrobas Totais: ${fmtValor(c.arrobasTotais)} @`,
+    '',
+    `R$/@ Base: ${formatMoeda(c.precoBase)}`,
+    '',
+  ];
+  if (c.bonusArroba > 0) lines.push(`Bonus: ${formatMoeda(c.bonusArroba)}/@`);
+  if (c.descArroba > 0) lines.push(`Descontos: ${formatMoeda(c.descArroba)}/@`);
+  if (c.bonusArroba > 0 || c.descArroba > 0) lines.push('');
   lines.push(
-    `📅 Data da Venda: ${fmtDate(l.dataVenda)}`,
-    `🚛 Data Embarque: ${fmtDate(l.dataEmbarque)}`,
-    `📅 Data do Abate: ${fmtDate(l.dataAbate || l.data)}`,
-    `🏭 Frigorífico: ${l.fazendaDestino || '-'}`,
-    `🐂 ${l.quantidade} ${cat}`,
+    `Preco Liquido: ${formatMoeda(c.liqArroba)}/@`,
+    `Valor Liquido Total: ${formatMoeda(c.valorLiq)}`,
     '',
-    `⚖️ Peso vivo: ${fmtValor(l.pesoMedioKg)} kg`,
-    `📊 Rendimento: ${c.rendimento ? fmtValor(c.rendimento, 1) + '%' : '-'}`,
-    `🥩 Peso carcaça: ${fmtValor(l.pesoCarcacaKg)} kg`,
-    `📐 Arrobas finais: ${fmtValor(c.pesoTotalArrobas)}`,
-    '',
+    `R$/@ liq: ${formatMoeda(c.liqArroba)}`,
+    `R$/cab liq: ${formatMoeda(c.liqCabeca)}`,
+    `R$/kg vivo liq: ${formatMoeda(c.liqKg)}`,
   );
-  const bonus = (l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0);
-  const desc = (l.descontoQualidade ?? 0) + (l.descontoFunrural ?? 0) + (l.outrosDescontos ?? 0);
-  if (bonus > 0) lines.push(`✅ Bônus reais: ${formatMoeda(bonus)}`);
-  if (desc > 0) lines.push(`❌ Descontos reais: ${formatMoeda(desc)}`);
-  lines.push(
-    '',
-    `💰 *Valor Líquido Final: ${formatMoeda(c.valorFinal)}*`,
-    `📈 Líq/@: ${formatMoeda(c.liqArroba)}`,
-    `📈 Líq/Cab: ${formatMoeda(c.liqCabeca)}`,
-    `📈 Líq/Kg: ${formatMoeda(c.liqKg)}`,
-  );
-  if (l.notaFiscal) lines.push(`📄 NF: ${l.notaFiscal}`);
+  if (l.notaFiscal) lines.push('', `NF: ${l.notaFiscal}`);
   return lines.join('\n');
 }
 
@@ -225,8 +237,9 @@ async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
 // ── PDF Realizado ──
 async function pdfRealizado(l: Lancamento, fazendaNome?: string) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
-  const c = calcIndicadoresLancamento(l);
+  const cat = CATEGORIAS.find(cc => cc.value === l.categoria)?.label ?? l.categoria;
+  const c = calcConfirmado(l);
+
   let y = 5;
   try {
     const logo = await loadLogoBase64();
@@ -236,45 +249,59 @@ async function pdfRealizado(l: Lancamento, fazendaNome?: string) {
   } catch {}
 
   doc.setFontSize(16);
-  doc.text('Resumo Final de Abate — Realizado', 105, y + 5, { align: 'center' });
+  doc.text('Acerto Final de Abate - Realizado', 105, y + 5, { align: 'center' });
   y += 14;
   if (fazendaNome) { doc.setFontSize(11); doc.text(fazendaNome, 105, y, { align: 'center' }); y += 7; }
 
-  const info: string[][] = [
+  const tStyle = { theme: 'grid' as const, headStyles: { fillColor: [34, 120, 74] as [number, number, number], textColor: 255, fontStyle: 'bold' as const, fontSize: 10 }, bodyStyles: { fontSize: 10 }, columnStyles: { 0: { fontStyle: 'bold' as const, cellWidth: 65 } }, margin: { left: 20, right: 20 } };
+
+  // BLOCO 1 - Dados do Abate
+  const bloco1: string[][] = [
+    ['Fazenda', fazendaNome || '-'],
+    ['Frigorifico', l.fazendaDestino || '-'],
+    ['Tipo de Venda', TIPO_VENDA_LABELS[l.tipoVenda ?? ''] || '-'],
+    ['Tipo de Abate', TIPO_ABATE_LABELS[l.tipoPeso ?? ''] || '-'],
     ['Data da Venda', fmtDate(l.dataVenda)],
     ['Data Embarque', fmtDate(l.dataEmbarque)],
     ['Data do Abate', fmtDate(l.dataAbate || l.data)],
-    ['Frigorífico', l.fazendaDestino || '-'],
     ['Categoria', cat],
-    ['Quantidade', `${l.quantidade} cabeças`],
+    ['Quantidade', `${l.quantidade} cab.`],
   ];
-  if (l.notaFiscal) info.push(['Nota Fiscal', l.notaFiscal]);
-  autoTable(doc, { startY: y, body: info, theme: 'plain', bodyStyles: { fontSize: 11 }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55 } }, margin: { left: 20, right: 20 } });
+  if (l.notaFiscal) bloco1.push(['Nota Fiscal', l.notaFiscal]);
+  bloco1.push(['R$/@ Base', `${formatMoeda(c.precoBase)} /@`]);
+  autoTable(doc, { ...tStyle, startY: y, head: [['DADOS DO ABATE', '']], body: bloco1 });
 
-  const lastY1 = (doc as any).lastAutoTable?.finalY ?? 80;
-  const detalhes: string[][] = [
-    ['Peso vivo (kg)', fmtValor(l.pesoMedioKg)],
-    ['Peso carcaça (kg)', fmtValor(l.pesoCarcacaKg)],
-    ['Rendimento', c.rendimento ? fmtValor(c.rendimento, 1) + '%' : '-'],
-    ['Arrobas finais', fmtValor(c.pesoTotalArrobas)],
-    ['R$/@ base', fmtValor(l.precoArroba)],
-    ['Bônus precoce', fmtValor(l.bonusPrecoce)],
-    ['Bônus qualidade', fmtValor(l.bonusQualidade)],
-    ['Bônus lista trace', fmtValor(l.bonusListaTrace)],
-    ['Desc. qualidade', fmtValor(l.descontoQualidade)],
-    ['Desc. funrural', fmtValor(l.descontoFunrural)],
-    ['Outros descontos', fmtValor(l.outrosDescontos)],
-    ['', ''],
-    ['VALOR LÍQUIDO FINAL', formatMoeda(c.valorFinal)],
-    ['Líquido por @', formatMoeda(c.liqArroba)],
-    ['Líquido por cabeça', formatMoeda(c.liqCabeca)],
-    ['Líquido por kg vivo', formatMoeda(c.liqKg)],
+  // BLOCO 2 - Indicadores Zootecnicos
+  const y2 = ((doc as any).lastAutoTable?.finalY ?? y + 56) + 4;
+  const bloco2: string[][] = [
+    ['Peso Vivo', `${fmtValor(c.pesoVivo)} kg`],
+    ['Rend. Carcaca', `${fmtValor(c.rendPct)} %`],
+    ['Peso Carcaca', `${fmtValor(c.pesoCarcaca)} kg`],
+    ['Arrobas por Cabeca', `${fmtValor(c.arrobasCab)} @`],
+    ['Arrobas Totais', `${fmtValor(c.arrobasTotais)} @`],
   ];
-  autoTable(doc, {
-    startY: lastY1 + 5, head: [['Campo', 'Valor']], body: detalhes, theme: 'grid',
-    headStyles: { fillColor: [34, 120, 74] }, bodyStyles: { fontSize: 10 },
-    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 } }, margin: { left: 20, right: 20 },
-  });
+  autoTable(doc, { ...tStyle, startY: y2, head: [['INDICADORES ZOOTECNICOS', '']], body: bloco2 });
+
+  // BLOCO 3 - Resultado Financeiro
+  const y3 = ((doc as any).lastAutoTable?.finalY ?? y2 + 36) + 4;
+  const bloco3: string[][] = [];
+  if (c.bonusArroba > 0) bloco3.push(['Bonus', `${formatMoeda(c.bonusArroba)} /@`]);
+  if (c.descArroba > 0) bloco3.push(['Descontos', `${formatMoeda(c.descArroba)} /@`]);
+  bloco3.push(
+    ['Preco Liquido', `${formatMoeda(c.liqArroba)} /@`],
+    ['Valor Liquido Total', formatMoeda(c.valorLiq)],
+  );
+  autoTable(doc, { ...tStyle, startY: y3, head: [['RESULTADO FINANCEIRO', '']], body: bloco3 });
+
+  // BLOCO 4 - Resultado por Unidade
+  const y4 = ((doc as any).lastAutoTable?.finalY ?? y3 + 36) + 4;
+  const bloco4: string[][] = [
+    ['Liquido R$/@', formatMoeda(c.liqArroba)],
+    ['Liquido / Cabeca', formatMoeda(c.liqCabeca)],
+    ['Liquido / kg Vivo', formatMoeda(c.liqKg)],
+  ];
+  autoTable(doc, { ...tStyle, startY: y4, head: [['RESULTADO POR UNIDADE', '']], body: bloco4 });
+
   doc.save(`abate_realizado_${format(parseISO(l.data), 'ddMMyyyy')}.pdf`);
 }
 
