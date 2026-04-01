@@ -41,6 +41,8 @@ interface Props {
   onBackToConciliacao?: () => void;
   dataInicial?: string;
   backLabel?: string;
+  /** Abate para abrir em modo edição automaticamente */
+  abateParaEditar?: Lancamento | null;
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
