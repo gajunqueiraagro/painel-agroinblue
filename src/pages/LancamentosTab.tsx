@@ -753,19 +753,19 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 {(showComissaoFreteDespesas || showComissaoPrevConf) && (
                   <>
                     <Separator />
-                    <h4 className="text-xs font-bold text-muted-foreground uppercase">Despesas Operacionais</h4>
-                    <div className="grid grid-cols-3 gap-2">
+                    <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Despesas Operacionais</h4>
+                    <div className="grid grid-cols-3 gap-1.5">
                       <div>
-                        <Label className="text-xs">Comissão (%)</Label>
-                        <Input type="number" value={comissaoPct} onChange={e => setComissaoPct(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Comissão (%)</Label>
+                        <Input type="number" value={comissaoPct} onChange={e => setComissaoPct(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                       <div>
-                        <Label className="text-xs">Frete (R$)</Label>
-                        <Input type="number" value={frete} onChange={e => setFrete(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Frete (R$)</Label>
+                        <Input type="number" value={frete} onChange={e => setFrete(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                       <div>
-                        <Label className="text-xs">Outras (R$)</Label>
-                        <Input type="number" value={outrasDespesas} onChange={e => setOutrasDespesas(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Outras (R$)</Label>
+                        <Input type="number" value={outrasDespesas} onChange={e => setOutrasDespesas(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                     </div>
                   </>
