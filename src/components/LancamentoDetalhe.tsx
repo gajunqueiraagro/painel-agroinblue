@@ -29,13 +29,18 @@ interface Props {
   onCountFinanceiros?: (id: string) => Promise<number>;
 }
 
-export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover }: Props) {
+export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover, onCountFinanceiros }: Props) {
   const { fazendaAtual, fazendas } = useFazenda();
   const nomeFazenda = fazendaAtual?.nome || '';
   const outrasFazendas = useMemo(() => fazendas.filter(f => f.id !== fazendaAtual?.id), [fazendas, fazendaAtual]);
 
   const [editando, setEditando] = useState(false);
   const [form, setForm] = useState({ ...lancamento });
+
+  // Confirmation modal state
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [financeiroCount, setFinanceiroCount] = useState(0);
+  const [checkingVinculos, setCheckingVinculos] = useState(false);
 
   const tipoInfo = TODOS_TIPOS.find(t => t.value === lancamento.tipo);
   const catInfo = CATEGORIAS.find(c => c.value === lancamento.categoria);
@@ -65,7 +70,24 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     onClose();
   };
 
-  const handleRemover = () => {
+  const handleRemoverClick = useCallback(async () => {
+    if (onCountFinanceiros) {
+      setCheckingVinculos(true);
+      try {
+        const count = await onCountFinanceiros(lancamento.id);
+        setFinanceiroCount(count);
+        setConfirmOpen(true);
+      } finally {
+        setCheckingVinculos(false);
+      }
+    } else {
+      setFinanceiroCount(0);
+      setConfirmOpen(true);
+    }
+  }, [lancamento.id, onCountFinanceiros]);
+
+  const handleConfirmRemover = () => {
+    setConfirmOpen(false);
     onRemover(lancamento.id);
     onClose();
   };
