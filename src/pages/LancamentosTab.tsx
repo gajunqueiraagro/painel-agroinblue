@@ -826,14 +826,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </button>
       )}
 
-      {/* === 3-COLUMN DESKTOP LAYOUT === */}
-      <div className="flex gap-3 items-start">
+      {/* === 3-COLUMN DESKTOP GRID === */}
+      <div className="grid grid-cols-[11rem_1fr_17rem] gap-3 items-start">
         {/* Left: Navigation sidebar */}
         {renderSidebar()}
 
         {/* Center: Form or Historico */}
         {aba === 'reclassificacao' ? (
-          <div className="flex-1 self-start">
+          <div className="self-start">
             <ReclassificacaoForm onAdicionar={onAdicionar} dataInicial={dataInicial} />
           </div>
         ) : aba === 'historico' ? (
