@@ -791,4 +791,4 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       </AlertDialog>
     </div>
   );
-}
+});
