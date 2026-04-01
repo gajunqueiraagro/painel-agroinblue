@@ -787,6 +787,21 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
         </div>
       )}
 
+      {/* Unified register button */}
+      {onRequestRegister && (
+        <>
+          <Separator />
+          <Button
+            type="button"
+            className="w-full h-10 text-[13px] font-bold"
+            onClick={onRequestRegister}
+            disabled={externalSubmitting}
+          >
+            {externalSubmitting ? 'Registrando...' : (registerLabel || 'Registrar Compra')}
+          </Button>
+        </>
+      )}
+
       {/* Confirmation dialog for update */}
       <AlertDialog open={confirmUpdateOpen} onOpenChange={setConfirmUpdateOpen}>
         <AlertDialogContent>
