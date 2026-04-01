@@ -44,7 +44,7 @@ function fmt(v?: number, decimals = 2) {
 }
 
 export function CompraFinanceiroPanel({
-  quantidade, pesoKg, data, categoria, statusOp, fazendaOrigem, notaFiscal, onNotaFiscalChange, lancamentoId,
+  quantidade, pesoKg, data, categoria, statusOp, fazendaOrigem, notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated,
 }: Props) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
