@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,15 @@ interface Props {
   lancamentoId?: string;
   mode?: 'create' | 'update';
   onFinanceiroUpdated?: () => void;
+  onValidationChange?: (errors: string[]) => void;
+}
+
+export interface CompraFinanceiroPanelRef {
+  generateFinanceiro: (lancamentoId: string) => Promise<boolean>;
+  getValidationErrors: () => string[];
+  getFornecedorId: () => string;
+  getValorBase: () => number;
+  getTipoPreco: () => string;
 }
 
 function CollapsibleBlock({ title, open, onOpenChange, children }: { title: string; open: boolean; onOpenChange: (v: boolean) => void; children: React.ReactNode }) {
@@ -53,9 +62,9 @@ function CollapsibleBlock({ title, open, onOpenChange, children }: { title: stri
   );
 }
 
-export function CompraFinanceiroPanel({
-  quantidade, pesoKg, data, categoria, statusOp, fazendaOrigem, notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated,
-}: Props) {
+export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>(function CompraFinanceiroPanel({
+  quantidade, pesoKg, data, categoria, statusOp, fazendaOrigem, notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated, onValidationChange,
+}, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
 
@@ -300,9 +309,14 @@ export function CompraFinanceiroPanel({
       });
     }
     return errors;
-  }, [fornecedorId, calc.valorBase, formaPag, parcelas]);
+   }, [fornecedorId, calc.valorBase, formaPag, parcelas]);
 
-  const canGenerate = validationErrors.length === 0 && !!lancamentoId;
+  const canGenerate = validationErrors.length === 0;
+
+  // Report validation to parent
+  useEffect(() => {
+    onValidationChange?.(validationErrors);
+  }, [validationErrors, onValidationChange]);
 
   const handleClickGerar = () => {
     if (mode === 'update' && existingCount > 0) {
@@ -312,10 +326,11 @@ export function CompraFinanceiroPanel({
     }
   };
 
-  const handleGerarFinanceiro = async () => {
-    if (!lancamentoId) { toast.error('Salve o lançamento zootécnico antes de gerar os financeiros.'); return; }
-    if (!fazendaAtual || !clienteAtual) return;
-    if (validationErrors.length > 0) { toast.error(validationErrors[0]); return; }
+  const handleGerarFinanceiro = useCallback(async (overrideLancamentoId?: string) => {
+    const effectiveId = overrideLancamentoId || lancamentoId;
+    if (!effectiveId) { toast.error('Salve o lançamento zootécnico antes de gerar os financeiros.'); return false; }
+    if (!fazendaAtual || !clienteAtual) return false;
+    if (validationErrors.length > 0) { toast.error(validationErrors[0]); return false; }
 
     setGerando(true);
     try {
@@ -323,7 +338,7 @@ export function CompraFinanceiroPanel({
         const { data: oldRecords } = await supabase
           .from('financeiro_lancamentos_v2')
           .select('id')
-          .eq('movimentacao_rebanho_id', lancamentoId)
+          .eq('movimentacao_rebanho_id', effectiveId)
           .eq('cancelado', false);
 
         const oldIds = (oldRecords || []).map(r => r.id);
@@ -338,7 +353,7 @@ export function CompraFinanceiroPanel({
             cliente_id: clienteAtual.id,
             usuario_id: userId || null,
             acao: 'recalculo_financeiro_compra',
-            movimentacao_id: lancamentoId,
+            movimentacao_id: effectiveId,
             financeiro_ids: oldIds,
             detalhes: { registros_cancelados: oldIds.length, motivo: 'Recálculo financeiro da compra' },
           });
@@ -347,14 +362,14 @@ export function CompraFinanceiroPanel({
         const { data: existing } = await supabase
           .from('financeiro_lancamentos_v2')
           .select('id')
-          .eq('movimentacao_rebanho_id', lancamentoId)
+          .eq('movimentacao_rebanho_id', effectiveId)
           .eq('cancelado', false)
           .limit(1);
 
         if (existing && existing.length > 0) {
           toast.error('Lançamentos financeiros já foram gerados para esta movimentação.');
           setGerado(true);
-          return;
+          return false;
         }
       }
 
@@ -375,7 +390,7 @@ export function CompraFinanceiroPanel({
         sinal: -1,
         status_transacao: statusFin,
         origem_lancamento: 'movimentacao_rebanho',
-        movimentacao_rebanho_id: lancamentoId,
+        movimentacao_rebanho_id: effectiveId,
         macro_custo: 'Investimento em Bovinos',
         centro_custo: 'Reposição de Bovinos',
       };
@@ -447,29 +462,29 @@ export function CompraFinanceiroPanel({
         : `${inserts.length} lançamento(s) financeiro(s) gerado(s) com sucesso!`;
       toast.success(msg);
       if (mode === 'update' && onFinanceiroUpdated) onFinanceiroUpdated();
+      return true;
     } catch (err: any) {
       toast.error('Erro ao gerar lançamentos: ' + (err.message || err));
+      return false;
     } finally {
       setGerando(false);
     }
-  };
+  }, [lancamentoId, fazendaAtual, clienteAtual, validationErrors, mode, statusOp, categoria, quantidade, data, fazendaOrigem, notaFiscal, fornecedorId, formaPag, parcelas, calc, onFinanceiroUpdated]);
+
+  // Expose imperative methods to parent
+  useImperativeHandle(ref, () => ({
+    generateFinanceiro: (id: string) => handleGerarFinanceiro(id),
+    getValidationErrors: () => validationErrors,
+    getFornecedorId: () => fornecedorId,
+    getValorBase: () => calc.valorBase,
+    getTipoPreco: () => tipoPreco,
+  }), [handleGerarFinanceiro, validationErrors, fornecedorId, calc.valorBase, tipoPreco]);
 
   const isPrevisto = statusOp === 'previsto';
   const previstoInputClass = isPrevisto ? 'border-orange-400 text-orange-800 dark:text-orange-300' : '';
 
   return (
     <div className="bg-card rounded-md border shadow-sm p-2.5 space-y-1.5 self-start relative">
-      {/* Overlay: block editing until movimentação is saved */}
-      {!lancamentoId && mode === 'create' && (
-        <div className="absolute inset-0 z-10 bg-background/70 backdrop-blur-[1px] rounded-md flex items-center justify-center p-3">
-          <div className="text-center space-y-1">
-            <AlertTriangle className="h-4 w-4 mx-auto text-muted-foreground" />
-            <p className="text-[11px] font-medium text-muted-foreground">
-              Registre a entrada primeiro para depois preencher o financeiro
-            </p>
-          </div>
-        </div>
-      )}
 
       <h3 className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">
         {mode === 'update' ? 'Atualizar Financeiro da Compra' : 'Detalhes Financeiros'}
@@ -734,24 +749,21 @@ export function CompraFinanceiroPanel({
             </div>
           ) : (
             <>
-              {!lancamentoId && mode === 'create' && (
-                <div className="flex items-center gap-1 text-[10px] text-orange-600 dark:text-orange-400">
-                  <AlertTriangle className="h-3 w-3" />
-                  Salve o lançamento zootécnico primeiro
-                </div>
-              )}
               <Button
                 type="button"
                 variant={mode === 'update' ? 'default' : 'outline'}
                 size="sm"
                 className={`w-full h-8 text-[11px] font-bold ${mode === 'update' ? 'shadow-sm' : ''}`}
-                disabled={!canGenerate || gerando}
+                disabled={!canGenerate || gerando || (!lancamentoId && mode === 'create')}
                 onClick={handleClickGerar}
               >
                 {gerando
                   ? (mode === 'update' ? 'Atualizando...' : 'Gerando...')
                   : (mode === 'update' ? '✓ Atualizar lançamentos no financeiro' : 'Gerar lançamentos no financeiro')}
               </Button>
+              {!lancamentoId && mode === 'create' && (
+                <p className="text-[9px] text-muted-foreground text-center">O financeiro será gerado automaticamente ao registrar a entrada</p>
+              )}
             </>
           )}
         </div>
@@ -782,4 +794,4 @@ export function CompraFinanceiroPanel({
       </AlertDialog>
     </div>
   );
-}
+});

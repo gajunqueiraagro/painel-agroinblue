@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
   Lancamento,
@@ -25,7 +25,7 @@ import { ptBR } from 'date-fns/locale';
 import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, RefreshCw, Clock, Info } from 'lucide-react';
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
-import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
+import { CompraFinanceiroPanel, CompraFinanceiroPanelRef } from '@/components/CompraFinanceiroPanel';
 import { AbateExportDialog } from '@/components/AbateExportMenu';
 import { AbateFinanceiroPanel } from '@/components/AbateFinanceiroPanel';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -130,6 +130,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [detalheId, setDetalheId] = useState<string | null>(null);
   const [lastSavedLancamentoId, setLastSavedLancamentoId] = useState<string | null>(null);
   const [editingAbateId, setEditingAbateId] = useState<string | null>(null);
+  const compraFinanceiroRef = useRef<CompraFinanceiroPanelRef>(null);
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState('todos');
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
@@ -391,6 +392,23 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
     if (!pesoKg || Number(pesoKg) <= 0) { toast.error('Informe o Peso (kg)'); return; }
 
+    // Compra: validate financial fields for confirmado/realizado
+    if (isCompra && compraFinanceiroRef.current) {
+      const finErrors = compraFinanceiroRef.current.getValidationErrors();
+      const tipoPrecoVal = compraFinanceiroRef.current.getTipoPreco();
+      const valorBaseVal = compraFinanceiroRef.current.getValorBase();
+      const fornecedorVal = compraFinanceiroRef.current.getFornecedorId();
+
+      if (isConfirmado || isConciliado) {
+        if (!fornecedorVal) { toast.error('Selecione o fornecedor antes de registrar a compra.'); return; }
+        if (valorBaseVal <= 0) { toast.error('Preencha o preço base antes de registrar a compra.'); return; }
+      }
+      if (finErrors.length > 0 && valorBaseVal > 0) {
+        toast.error(finErrors[0]);
+        return;
+      }
+    }
+
     const origemFinal = campos.origem.show
       ? (campos.origem.auto ? campos.origem.value : fazendaOrigem) || undefined
       : undefined;
@@ -460,8 +478,20 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       const returnedId = await onAdicionar(lancamentoDados as Omit<Lancamento, 'id'>);
 
       if (isCompra && returnedId) {
-        setLastSavedLancamentoId(returnedId);
-        toast.success('Lançamento registrado! Agora você pode gerar os lançamentos financeiros.');
+        // Auto-generate financial records
+        if (compraFinanceiroRef.current && compraFinanceiroRef.current.getValorBase() > 0) {
+          await compraFinanceiroRef.current.generateFinanceiro(returnedId);
+        }
+        setLastSavedLancamentoId(null);
+        setQuantidade('');
+        setCategoria('');
+        setPesoKg('');
+        setFazendaOrigem(''); setFazendaDestino('');
+        setData(format(new Date(), 'yyyy-MM-dd'));
+        setObservacao('');
+        setStatusOp('conciliado');
+        resetFinancialFields();
+        toast.success('Compra registrada com sucesso!');
       } else if (isAbate && (isConciliado || isConfirmado) && returnedId) {
         setLastSavedLancamentoId(returnedId);
         toast.success('Abate registrado! Agora você pode gerar os lançamentos financeiros.');
@@ -1301,6 +1331,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             {renderForm()}
             {isCompra ? (
               <CompraFinanceiroPanel
+                ref={compraFinanceiroRef}
                 quantidade={Number(quantidade) || 0}
                 pesoKg={Number(pesoKg) || 0}
                 data={data}
