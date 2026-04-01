@@ -315,7 +315,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   }, [fazendas]);
   const [topTab, setTopTab] = useState<TopTab>(subAbaInicial ? getTopTabFromSubAba(subAbaInicial) : 'entradas');
   const [subAba, setSubAba] = useState<SubAba>(subAbaInicial || 'abate');
-  const [editando, setEditando] = useState<Lancamento | null>(null);
+  const [detalheId, setDetalheId] = useState<string | null>(null);
 
   useEffect(() => {
     if (subAbaInicial) {
