@@ -328,7 +328,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                             })}
                             <div className="flex justify-between text-[10px] font-bold pt-0.5 border-t border-border/30">
                               <span>Total Despesas</span>
-                              <span>R$ {fmt(totalDesp)}</span>
+                              <span>{formatMoeda(totalDesp)}</span>
                             </div>
                           </div>
                         )}
