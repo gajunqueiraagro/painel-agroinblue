@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { formatMoeda } from '@/lib/calculos/formatters';
 import {
   Lancamento,
   CATEGORIAS,
