@@ -987,6 +987,105 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     // For abate, use dedicated panel
     if (isAbate) return renderAbateFinancialPanel();
 
+    // Transferência: no financial impact
+    if (isTransferencia) {
+      return (
+        <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
+          <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
+          <Separator />
+          <div className="flex gap-2 items-start py-1">
+            <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+            <div className="text-[11px] text-muted-foreground leading-relaxed">
+              <p className="font-semibold mb-1">Transferência não gera lançamento financeiro.</p>
+              <ul className="space-y-0.5 list-disc list-inside text-[10px]">
+                <li>Movimentação interna entre fazendas</li>
+                <li>Não impacta fluxo de caixa</li>
+              </ul>
+            </div>
+          </div>
+          <Separator />
+          <Button type="button" className="w-full h-10 text-[13px] font-bold" onClick={handleRequestRegister} disabled={submitting}>
+            Registrar Transferência
+          </Button>
+        </div>
+      );
+    }
+
+    // Morte: no financial impact
+    if (isMorte) {
+      return (
+        <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
+          <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
+          <Separator />
+          <div className="flex gap-2 items-start py-1">
+            <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+            <div className="text-[11px] text-muted-foreground leading-relaxed">
+              <p className="font-semibold mb-1">Morte não gera lançamento financeiro.</p>
+              <ul className="space-y-0.5 list-disc list-inside text-[10px]">
+                <li>Impacta apenas o estoque de rebanho</li>
+                <li>Não possui valor monetário associado</li>
+              </ul>
+            </div>
+          </div>
+          <Separator />
+          <Button type="button" className="w-full h-10 text-[13px] font-bold" onClick={handleRequestRegister} disabled={submitting}>
+            Registrar Morte
+          </Button>
+        </div>
+      );
+    }
+
+    // Venda: use dedicated VendaFinanceiroPanel
+    if (isVenda) {
+      return (
+        <VendaFinanceiroPanel
+          ref={vendaFinanceiroRef}
+          quantidade={Number(quantidade) || 0}
+          pesoKg={Number(pesoKg) || 0}
+          categoria={categoria}
+          data={data}
+          destino={fazendaDestino}
+          notaFiscal={notaFiscal}
+          onNotaFiscalChange={setNotaFiscal}
+          statusOp={statusOp}
+          lancamentoId={lastSavedLancamentoId || undefined}
+          tipoVenda={tipoVenda}
+          onTipoVendaChange={setTipoVenda}
+          tipoPeso={tipoPeso}
+          onTipoPesoChange={setTipoPeso}
+          valorBruto={calc.valorBruto}
+          totalBonus={calc.totalBonus}
+          totalDescontos={calc.totalDescontos}
+          valorLiquido={calc.valorLiquido}
+          onRequestRegister={handleRequestRegister}
+          registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
+          submitting={submitting}
+        />
+      );
+    }
+
+    // Consumo: use dedicated ConsumoFinanceiroPanel
+    if (isConsumo) {
+      return (
+        <ConsumoFinanceiroPanel
+          ref={consumoFinanceiroRef}
+          quantidade={Number(quantidade) || 0}
+          pesoKg={Number(pesoKg) || 0}
+          categoria={categoria}
+          data={data}
+          notaFiscal={notaFiscal}
+          onNotaFiscalChange={setNotaFiscal}
+          statusOp={statusOp}
+          lancamentoId={lastSavedLancamentoId || undefined}
+          valorBruto={calc.valorBruto}
+          valorLiquido={calc.valorLiquido}
+          onRequestRegister={handleRequestRegister}
+          registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Consumo'}
+          submitting={submitting}
+        />
+      );
+    }
+
     return (
     <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
       <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
