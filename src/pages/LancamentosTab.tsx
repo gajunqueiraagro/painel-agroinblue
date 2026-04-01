@@ -641,9 +641,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               <span className="text-[10px] text-muted-foreground min-w-[90px]">Data Abate</span>
               <Input type="date" value={abateDataAbateAuto} readOnly className="h-7 text-[11px] flex-1 bg-muted cursor-not-allowed" />
             </div>
-            {/* Tipo de Venda */}
+            {/* Comercialização (ex Tipo de Venda) */}
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-muted-foreground min-w-[90px]">Tipo de Venda</span>
+              <span className="text-[10px] text-muted-foreground min-w-[90px]">Comercialização</span>
               <Select value={tipoVenda} onValueChange={setTipoVenda}>
                 <SelectTrigger className="h-7 text-[11px] flex-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                 <SelectContent>
@@ -651,6 +651,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   <SelectItem value="a_termo" className="text-[11px]">A termo</SelectItem>
                   <SelectItem value="spot" className="text-[11px]">Spot</SelectItem>
                   <SelectItem value="outro" className="text-[11px]">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {/* Tipo de Abate (Base de Pagamento) */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-muted-foreground min-w-[90px]">Tipo de Abate</span>
+              <Select value={tipoPeso} onValueChange={(v: 'vivo' | 'morto') => setTipoPeso(v)}>
+                <SelectTrigger className="h-7 text-[11px] flex-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="vivo" className="text-[11px]">Peso vivo</SelectItem>
+                  <SelectItem value="morto" className="text-[11px]">Peso morto</SelectItem>
                 </SelectContent>
               </Select>
             </div>
