@@ -356,7 +356,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const childWrap = "ml-3 mt-0.5 border-l-2 border-primary/30 pl-1.5 space-y-0.5";
 
     return (
-      <div className="w-44 shrink-0 space-y-2">
+      <div className="shrink-0 space-y-2">
         {/* Entradas */}
         <div>
           <button onClick={() => { setAba('entrada'); setTipo('nascimento'); }} className={parentCls(aba === 'entrada')}>
