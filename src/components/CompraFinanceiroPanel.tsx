@@ -64,6 +64,8 @@ export function CompraFinanceiroPanel({
 
   const [gerado, setGerado] = useState(false);
   const [gerando, setGerando] = useState(false);
+  const [existingCount, setExistingCount] = useState(0);
+  const [existingLoaded, setExistingLoaded] = useState(false);
 
   // Fornecedor state
   const [fornecedorId, setFornecedorId] = useState<string>('');
