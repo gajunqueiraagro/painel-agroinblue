@@ -658,7 +658,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
         {/* Saídas */}
         <div>
-          <button onClick={() => { setAba('saida'); setTipo('abate'); }} className={parentCls(aba === 'saida')}>
+          <button onClick={() => { setAba('saida'); setTipo('abate'); resetAllFields('abate'); }} className={parentCls(aba === 'saida')}>
             <LogOut className="h-3.5 w-3.5" /> Saídas
           </button>
           <div className={childWrap}>
