@@ -351,6 +351,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setDetalheId(null);
   }, []);
 
+  // Auto-load abate for editing when navigated from another tab
+  React.useEffect(() => {
+    if (abateParaEditar) {
+      loadAbateForEdit(abateParaEditar);
+    }
+  }, [abateParaEditar]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!quantidade || Number(quantidade) <= 0) { toast.error('Informe a quantidade'); return; }
