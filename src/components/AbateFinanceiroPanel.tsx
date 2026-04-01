@@ -35,7 +35,7 @@ interface Props {
 }
 
 export function AbateFinanceiroPanel({
-  quantidade, categoria, data, valorLiquido, frigorifico,
+  quantidade, categoria, data, valorLiquido, totalDescontos = 0, frigorifico,
   notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated,
   statusOperacional = 'conciliado',
 }: Props) {
