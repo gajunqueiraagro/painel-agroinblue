@@ -625,6 +625,37 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           </div>
         )}
 
+        {/* Resultado Esperado — summary block */}
+        {calc.valorLiquido > 0 && Number(quantidade) > 0 && (
+          <>
+            <Separator />
+            <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Resultado Esperado</h4>
+            <div className="bg-muted/30 rounded-md p-2 space-y-0.5 text-[10px]">
+              <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-semibold">{fmt(Number(quantidade), 0)} {categoria ? CATEGORIAS.find(c => c.value === categoria)?.label?.toLowerCase() || 'cab.' : 'cab.'}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Peso médio</span><span className="font-semibold">{fmt(Number(pesoKg))} kg</span></div>
+              {Number(rendCarcaca) > 0 && (
+                <div className="flex justify-between"><span className="text-muted-foreground">Rendimento</span><span className="font-semibold">{fmt(Number(rendCarcaca), 2)}%</span></div>
+              )}
+              {calc.pesoArroba > 0 && (
+                <div className="flex justify-between"><span className="text-muted-foreground">Arrobas</span><span className="font-semibold">{fmt(calc.pesoArroba)} @ / cab</span></div>
+              )}
+              {calc.totalArrobas > 0 && (
+                <div className="flex justify-between"><span className="text-muted-foreground">Total arrobas</span><span className="font-semibold">{fmt(calc.totalArrobas)} @</span></div>
+              )}
+              {Number(precoArroba) > 0 && (
+                <div className="flex justify-between"><span className="text-muted-foreground">Preço venda</span><span className="font-semibold">{formatMoeda(Number(precoArroba))}</span></div>
+              )}
+              <Separator className="my-1" />
+              <div className="flex justify-between"><span className="text-muted-foreground">Preço líquido R$/@</span><span className="font-semibold">{formatMoeda(calc.liqArroba)}</span></div>
+              <div className="flex justify-between font-bold text-[11px]"><span>Valor líquido total</span><span className="text-primary">{formatMoeda(calc.valorLiquido)}</span></div>
+              <Separator className="my-1" />
+              <div className="flex justify-between"><span className="text-muted-foreground">R$/@ líq</span><span className="font-semibold">{formatMoeda(calc.liqArroba)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">R$/cab líq</span><span className="font-semibold">{formatMoeda(calc.liqCabeca)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">R$/kg vivo líq</span><span className="font-semibold">{formatMoeda(calc.liqKg)}</span></div>
+            </div>
+          </>
+        )}
+
         {/* Nota Fiscal - only for Realizado */}
         {isConciliado && (
           <>
