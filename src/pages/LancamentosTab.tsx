@@ -527,12 +527,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           {showFinanceiro && (
             <Collapsible open={financeiroOpen} onOpenChange={setFinanceiroOpen}>
               <CollapsibleTrigger asChild>
-                <button type="button" className="flex items-center gap-2 text-sm font-bold text-primary w-full py-2">
-                  <ChevronDown className={`h-4 w-4 transition-transform ${financeiroOpen ? '' : '-rotate-90'}`} />
+                <button type="button" className="flex items-center gap-1.5 text-[12px] font-bold text-primary w-full py-1">
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${financeiroOpen ? '' : '-rotate-90'}`} />
                   Detalhes Financeiros
                 </button>
               </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-3 pt-2">
+              <CollapsibleContent className="space-y-2 pt-1">
                 <Separator />
 
                 {/* Extra dates for Confirmado/Conciliado */}
