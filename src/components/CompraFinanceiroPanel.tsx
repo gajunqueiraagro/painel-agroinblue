@@ -652,7 +652,7 @@ export function CompraFinanceiroPanel({
         {calc.comissaoVal > 0 && (
           <div className="flex justify-between text-[10px] px-1">
             <span className="text-muted-foreground">Comissão (R$)</span>
-            <strong>R$ {fmt(calc.comissaoVal)}</strong>
+            <strong>{formatMoeda(calc.comissaoVal)}</strong>
           </div>
         )}
         {calc.totalDespesas > 0 && (
