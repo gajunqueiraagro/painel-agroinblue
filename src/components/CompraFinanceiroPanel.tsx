@@ -65,6 +65,8 @@ export function CompraFinanceiroPanel({
   const [fornecedorId, setFornecedorId] = useState<string>('');
   const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
   const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
+  const [origemSugestao, setOrigemSugestao] = useState<'encontrado' | 'criar' | null>(null);
+  const [origemSugestaoDescartada, setOrigemSugestaoDescartada] = useState(false);
 
   useEffect(() => {
     if (!clienteAtual) return;
@@ -78,6 +80,55 @@ export function CompraFinanceiroPanel({
         if (data) setFornecedores(data);
       });
   }, [clienteAtual]);
+
+  // Auto-suggest fornecedor based on fazendaOrigem
+  useEffect(() => {
+    if (!fazendaOrigem?.trim() || origemSugestaoDescartada) {
+      setOrigemSugestao(null);
+      return;
+    }
+    const nomeNorm = fazendaOrigem.trim().toLowerCase();
+    const match = fornecedores.find(f => f.nome.toLowerCase() === nomeNorm);
+    if (match) {
+      if (!fornecedorId) {
+        setFornecedorId(match.id);
+        setOrigemSugestao('encontrado');
+        setTimeout(() => setOrigemSugestao(null), 3000);
+      } else {
+        setOrigemSugestao(null);
+      }
+    } else if (fazendaOrigem.trim().length >= 3) {
+      setOrigemSugestao('criar');
+    } else {
+      setOrigemSugestao(null);
+    }
+  }, [fazendaOrigem, fornecedores, fornecedorId, origemSugestaoDescartada]);
+
+  // Reset descartada flag when origem changes
+  useEffect(() => {
+    setOrigemSugestaoDescartada(false);
+  }, [fazendaOrigem]);
+
+  const handleCriarFornecedorFromOrigem = async () => {
+    if (!clienteAtual || !fazendaAtual || !fazendaOrigem?.trim()) return;
+    const nome = fazendaOrigem.trim();
+    const { data, error } = await supabase
+      .from('financeiro_fornecedores')
+      .insert({
+        cliente_id: clienteAtual.id,
+        fazenda_id: fazendaAtual.id,
+        nome,
+      })
+      .select('id, nome')
+      .single();
+    if (error) { toast.error('Erro ao criar fornecedor'); return; }
+    if (data) {
+      setFornecedores(prev => [...prev, data].sort((a, b) => a.nome.localeCompare(b.nome)));
+      setFornecedorId(data.id);
+      setOrigemSugestao(null);
+      toast.success(`Fornecedor "${data.nome}" criado e selecionado`);
+    }
+  };
 
   const handleNovoFornecedor = async (nome: string, cpfCnpj?: string) => {
     if (!clienteAtual || !fazendaAtual) return;
