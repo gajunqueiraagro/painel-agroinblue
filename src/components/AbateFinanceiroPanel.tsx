@@ -250,6 +250,23 @@ export function AbateFinanceiroPanel({
 
       // Generate deduction records when there are discounts
       if (totalDescontos > 0) {
+        const subcentroDeducao = 'PEC/NOTAS COM ABATES E VENDAS EM PÉ';
+        const { data: planoDeducao } = await supabase
+          .from('financeiro_plano_contas')
+          .select('id, macro_custo, centro_custo, subcentro')
+          .eq('cliente_id', clienteAtual.id)
+          .eq('ativo', true)
+          .eq('tipo_operacao', '2-Saídas')
+          .eq('subcentro', subcentroDeducao)
+          .limit(1);
+
+        if (!planoDeducao || planoDeducao.length === 0) {
+          toast.error(`Não foi encontrado mapeamento financeiro válido para "${subcentroDeducao}" no plano de classificação.`);
+          setGerando(false);
+          return;
+        }
+
+        const clasDed = planoDeducao[0];
         const frigorificoLabel = frigorifico ? ` | ${frigorifico}` : '';
         inserts.push({
           cliente_id: clienteAtual.id,
@@ -259,9 +276,9 @@ export function AbateFinanceiroPanel({
           status_transacao: isPrevisto ? 'previsto' : 'confirmado',
           origem_lancamento: 'movimentacao_rebanho',
           movimentacao_rebanho_id: lancamentoId,
-          macro_custo: 'Dedução de Receitas',
-          centro_custo: 'Dedução de Receitas Pecuária',
-          subcentro: 'PEC/NOTAS COM ABATES E VENDAS EM PÉ',
+          macro_custo: clasDed.macro_custo,
+          centro_custo: clasDed.centro_custo,
+          subcentro: clasDed.subcentro,
           nota_fiscal: notaFiscal || undefined,
           ano_mes: anoMes,
           valor: totalDescontos,
