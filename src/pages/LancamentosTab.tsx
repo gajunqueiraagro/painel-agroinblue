@@ -20,7 +20,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { format, parseISO, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, RefreshCw, Clock } from 'lucide-react';
+import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, RefreshCw, Clock, Info } from 'lucide-react';
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -408,6 +408,23 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
       <Separator />
 
+      {/* Nascimento: sem impacto financeiro */}
+      {aba === 'entrada' && tipo === 'nascimento' ? (
+        <div className="flex gap-2 items-start py-1">
+          <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+          <div className="text-[11px] text-muted-foreground leading-relaxed">
+            <p className="font-semibold mb-1">Nascimento não possui impacto financeiro direto.</p>
+            <ul className="space-y-0.5 list-disc list-inside text-[10px]">
+              <li>Não gera entrada ou saída de caixa</li>
+              <li>Não utiliza nota fiscal</li>
+              <li>Não possui valor da operação</li>
+              <li>Não possui ajustes financeiros</li>
+            </ul>
+          </div>
+        </div>
+      ) : (
+      <>
+
       {/* Extra dates */}
       {showExtraDates && (
         <div className="space-y-1.5">
@@ -619,6 +636,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             </div>
           )}
         </div>
+      )}
+      </>
       )}
     </div>
   );
