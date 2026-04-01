@@ -539,6 +539,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
             onClose={() => setDetalheId(null)}
             onEditar={(id, dados) => { onEditar(id, dados); setDetalheId(null); }}
             onRemover={(id) => { onRemover(id); setDetalheId(null); }}
+            onEditarAbate={onEditarAbate ? (l) => { setDetalheId(null); onEditarAbate(l); } : undefined}
           />
         ) : null;
       })()}
