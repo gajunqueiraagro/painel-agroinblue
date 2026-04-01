@@ -304,7 +304,7 @@ export function CompraFinanceiroPanel({
       const somaParcelas = Math.round(parcelas.reduce((s, p) => s + p.valor, 0) * 100) / 100;
       const valorBaseRound = Math.round(calc.valorBase * 100) / 100;
       if (Math.abs(somaParcelas - valorBaseRound) > 0.01) {
-        errors.push(`A soma das parcelas (R$ ${fmt(somaParcelas)}) deve ser igual ao valor base da compra (R$ ${fmt(valorBaseRound)}).`);
+        errors.push(`A soma das parcelas (${formatMoeda(somaParcelas)}) deve ser igual ao valor base da compra (${formatMoeda(valorBaseRound)}).`);
       }
       parcelas.forEach((p, i) => {
         if (!p.data) errors.push(`Parcela ${i + 1}: data obrigatória.`);
