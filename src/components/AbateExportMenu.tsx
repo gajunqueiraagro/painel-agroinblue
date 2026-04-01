@@ -185,7 +185,7 @@ async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
     ['Tipo de Abate', TIPO_ABATE_LABELS[l.tipoPeso ?? ''] || '-'],
     ['Data da Venda', fmtDate(l.dataVenda)],
     ['Data Embarque', fmtDate(l.dataEmbarque)],
-    ['Data Prev. Abate', fmtDate(l.dataAbate || l.data)],
+    ['Data do Abate', fmtDate(l.dataAbate || l.data)],
     ['Categoria', cat],
     ['Quantidade', `${l.quantidade} cab.`],
     ['Preço Negociado', `${formatMoeda(c.precoBase)} /@`],
