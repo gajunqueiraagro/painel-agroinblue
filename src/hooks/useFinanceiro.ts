@@ -85,6 +85,7 @@ interface ContaBancariaImportacao {
 
 interface LinhaImportadaResolvida extends LinhaImportada {
   contaBancariaId: string | null;
+  contaDestinoId: string | null;
 }
 
 interface SaldoImportadoResolvido extends SaldoBancarioImportado {
