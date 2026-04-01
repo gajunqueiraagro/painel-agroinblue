@@ -113,7 +113,14 @@ const TITLES: Record<TabId, string> = {
 };
 
 const Index = () => {
-  const [activeTab, setActiveTab] = useState<TabId>('resumo');
+  const [activeTab, setActiveTabRaw] = useState<TabId>(() => {
+    const saved = sessionStorage.getItem('agroinblue_active_tab');
+    return (saved && saved in TITLES) ? saved as TabId : 'resumo';
+  });
+  const setActiveTab = useCallback((tab: TabId) => {
+    sessionStorage.setItem('agroinblue_active_tab', tab);
+    setActiveTabRaw(tab);
+  }, []);
   const [subAbaFinanceiro, setSubAbaFinanceiro] = useState<SubAba | undefined>(undefined);
   const [movFiltroAno, setMovFiltroAno] = useState<string | undefined>(undefined);
   const [movFiltroMes, setMovFiltroMes] = useState<string | undefined>(undefined);
