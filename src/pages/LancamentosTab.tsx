@@ -376,14 +376,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         {/* Saídas */}
         <div>
           <button onClick={() => { setAba('saida'); setTipo('abate'); }} className={parentCls(aba === 'saida')}>
-            <LogOut className="h-4 w-4" /> Saídas
+            <LogOut className="h-3.5 w-3.5" /> Saídas
           </button>
           <div className={childWrap}>
             {TIPOS_SAIDA.map(t => (
               <button key={t.value} type="button"
                 onClick={() => { setAba('saida'); setTipo(t.value); setFazendaOrigem(''); setFazendaDestino(''); setMotivoMorte(''); setMotivoMorteCustom(''); resetFinancialFields(); setPesoKg(''); }}
                 className={childCls(aba === 'saida' && tipo === t.value)}>
-                <span className="text-sm">{t.icon}</span> {t.label}
+                <span className="text-[12px]">{t.icon}</span> {t.label}
               </button>
             ))}
           </div>
