@@ -754,7 +754,7 @@ export function CompraFinanceiroPanel({
             ) : (
               <div className="flex justify-between text-[10px]">
                 <span>Pagamento único</span>
-                <span className="font-semibold">R$ {fmt(calc.valorBase)}</span>
+                <span className="font-semibold">{formatMoeda(calc.valorBase)}</span>
               </div>
             )}
             {calc.freteVal > 0 && (
