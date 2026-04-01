@@ -748,7 +748,7 @@ export function CompraFinanceiroPanel({
               parcelas.map((p, i) => (
                 <div key={i} className="flex justify-between text-[10px]">
                   <span>Parcela {i + 1}/{parcelas.length} — {format(parseISO(p.data), 'dd/MM/yyyy')}</span>
-                  <span className="font-semibold">R$ {fmt(p.valor)}</span>
+                  <span className="font-semibold">{formatMoeda(p.valor)}</span>
                 </div>
               ))
             ) : (
