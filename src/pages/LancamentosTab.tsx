@@ -531,6 +531,30 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('conciliado');
           resetFinancialFields();
           toast.success('Abate registrado com financeiro!');
+        } else if (isVenda && returnedId) {
+          if (vendaFinanceiroRef.current && calc.valorLiquido > 0) {
+            await vendaFinanceiroRef.current.generateFinanceiro(returnedId);
+          }
+          vendaFinanceiroRef.current?.resetForm();
+          setLastSavedLancamentoId(null);
+          setQuantidade(''); setCategoria(''); setPesoKg('');
+          setFazendaOrigem(''); setFazendaDestino('');
+          setData(format(new Date(), 'yyyy-MM-dd'));
+          setObservacao(''); setStatusOp('conciliado');
+          resetFinancialFields();
+          toast.success('Venda registrada com sucesso!');
+        } else if (isConsumo && returnedId) {
+          if (consumoFinanceiroRef.current && calc.valorLiquido > 0) {
+            await consumoFinanceiroRef.current.generateFinanceiro(returnedId);
+          }
+          consumoFinanceiroRef.current?.resetForm();
+          setLastSavedLancamentoId(null);
+          setQuantidade(''); setCategoria(''); setPesoKg('');
+          setFazendaOrigem(''); setFazendaDestino('');
+          setData(format(new Date(), 'yyyy-MM-dd'));
+          setObservacao(''); setStatusOp('conciliado');
+          resetFinancialFields();
+          toast.success('Consumo registrado com sucesso!');
         } else {
           setLastSavedLancamentoId(null);
           setQuantidade(''); setCategoria('');
