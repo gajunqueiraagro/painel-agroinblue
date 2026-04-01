@@ -346,12 +346,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     let items = hook.lancamentos;
 
     // Client-side filter for conta destino vs origem
-    // conta_bancaria_id is shared: for entries it's the destination, for exits it's the origin
+    // Must match Conciliação logic: conta_bancaria_id identifies the account,
+    // sinal determines the role (>=0 = destination/entry, <0 = origin/exit)
     if (contaDestino !== '__all__') {
-      // Only keep records where this account is the DESTINATION (entries / transfer credits)
-      items = items.filter(l => l.conta_bancaria_id === contaDestino && l.sinal > 0);
+      items = items.filter(l => l.conta_bancaria_id === contaDestino && l.sinal >= 0);
     } else if (contaOrigem !== '__all__') {
-      // Only keep records where this account is the ORIGIN (exits / transfer debits)
       items = items.filter(l => l.conta_bancaria_id === contaOrigem && l.sinal < 0);
     }
 
