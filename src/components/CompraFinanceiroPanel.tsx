@@ -423,6 +423,25 @@ export function CompraFinanceiroPanel({
             <Plus className="h-4 w-4" />
           </Button>
         </div>
+        {/* Sugestão automática baseada na Origem */}
+        {origemSugestao === 'encontrado' && (
+          <p className="text-[10px] text-green-600 flex items-center gap-1 mt-0.5">
+            <CheckCircle className="h-3 w-3" /> Fornecedor selecionado automaticamente a partir da origem
+          </p>
+        )}
+        {origemSugestao === 'criar' && !fornecedorId && (
+          <div className="flex items-center gap-1.5 mt-0.5 p-1.5 rounded border border-dashed border-muted-foreground/30 bg-muted/40">
+            <span className="text-[10px] text-muted-foreground flex-1">
+              Criar fornecedor "<strong>{fazendaOrigem?.trim()}</strong>"?
+            </span>
+            <Button type="button" variant="outline" size="sm" className="h-5 text-[10px] px-2" onClick={handleCriarFornecedorFromOrigem}>
+              Criar e selecionar
+            </Button>
+            <Button type="button" variant="ghost" size="sm" className="h-5 text-[10px] px-1.5" onClick={() => setOrigemSugestaoDescartada(true)}>
+              Ignorar
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Nota Fiscal */}
