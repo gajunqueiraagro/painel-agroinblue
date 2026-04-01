@@ -833,15 +833,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
         {/* Center: Form or Historico */}
         {aba === 'reclassificacao' ? (
-          <div className="self-start">
+          <div className="col-span-2 self-start">
             <ReclassificacaoForm onAdicionar={onAdicionar} dataInicial={dataInicial} />
           </div>
         ) : aba === 'historico' ? (
-          renderHistorico()
+          <div className="col-span-2 self-start">{renderHistorico()}</div>
         ) : (
           <>
             {renderForm()}
-            {/* Right: Financial details */}
             {renderFinancialPanel()}
           </>
         )}
