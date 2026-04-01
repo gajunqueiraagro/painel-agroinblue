@@ -84,7 +84,7 @@ function textoConfirmado(l: Lancamento, fazendaNome?: string): string {
     '',
     `Data da Venda: ${fmtDate(l.dataVenda)}`,
     `Data Embarque: ${fmtDate(l.dataEmbarque)}`,
-    `Data Prev. Abate: ${fmtDate(l.dataAbate || l.data)}`,
+    `Data do Abate: ${fmtDate(l.dataAbate || l.data)}`,
     '',
     `Categoria: ${cat}`,
     `Quantidade: ${l.quantidade} cabecas`,
