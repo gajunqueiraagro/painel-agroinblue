@@ -315,7 +315,6 @@ export function CompraFinanceiroPanel({
   const canGenerate = validationErrors.length === 0 && !!lancamentoId;
 
   // ===== CONFIRMAÇÃO DE SUBSTITUIÇÃO (item 6) =====
-  const [confirmUpdateOpen, setConfirmUpdateOpen] = useState(false);
 
   const handleClickGerar = () => {
     if (mode === 'update' && existingCount > 0) {
