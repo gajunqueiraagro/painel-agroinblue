@@ -464,11 +464,11 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
           ) : (
             <div className="p-3 space-y-2">
               <div className="text-center">
-                <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-widest">Rebanho Atual</p>
-                <p className="text-2xl font-bold text-foreground tabular-nums leading-tight">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">Rebanho Atual</p>
+                <p className="text-3xl font-extrabold text-foreground tabular-nums leading-tight">
                   {formatNum(zootecnico.rebanhoAtual)}
                 </p>
-                <p className="text-[9px] text-muted-foreground">cabeças</p>
+                <p className="text-[10px] text-muted-foreground">cabeças</p>
               </div>
 
               {isGlobal && globalFarmKpis.farms.length > 0 && (
