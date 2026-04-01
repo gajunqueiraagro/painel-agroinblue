@@ -427,7 +427,7 @@ export function CompraFinanceiroPanel({
             valor: p.valor,
             data_competencia: data,
             data_pagamento: p.data,
-            descricao: `${produtoLabel} - Parcela ${i + 1}/${parcelas.length}`,
+            descricao: `${compraLabel} - Parcela ${i + 1}/${parcelas.length}`,
             historico: fazendaOrigem ? `Origem: ${fazendaOrigem}` : undefined,
             origem_tipo: 'compra_rebanho:parcela',
             nota_fiscal: notaFiscal || undefined,
