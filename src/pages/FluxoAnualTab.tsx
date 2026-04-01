@@ -11,6 +11,13 @@ import { calcFluxoAnual, FLUXO_LINHAS } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { parseISO, format } from 'date-fns';
 
+const fmtNum = (v: number | string | undefined): string => {
+  if (v == null) return '–';
+  const n = typeof v === 'string' ? Number(v) : v;
+  if (!n && n !== 0) return '–';
+  return n.toLocaleString('pt-BR');
+};
+
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
