@@ -563,16 +563,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 {isAbate && (
                   <>
                     <div>
-                      <Label className="text-xs font-semibold text-muted-foreground">Peso Carcaça (kg)</Label>
-                      <Input type="number" value={pesoCarcacaKg} onChange={e => setPesoCarcacaKg(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                      <Label className="text-[11px] font-semibold text-muted-foreground">Peso Carcaça (kg)</Label>
+                      <Input type="number" value={pesoCarcacaKg} onChange={e => setPesoCarcacaKg(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                     </div>
                     <div>
-                      <Label className="text-xs font-semibold text-muted-foreground">Tipo de Peso Negociado</Label>
+                      <Label className="text-[11px] font-semibold text-muted-foreground">Tipo de Peso Negociado</Label>
                       <Select value={tipoPeso} onValueChange={(v: 'vivo' | 'morto') => setTipoPeso(v)}>
-                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="vivo">Peso Vivo</SelectItem>
-                          <SelectItem value="morto">Peso Morto</SelectItem>
+                          <SelectItem value="vivo" className="text-[12px]">Peso Vivo</SelectItem>
+                          <SelectItem value="morto" className="text-[12px]">Peso Morto</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -580,24 +580,23 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 )}
 
                 <div>
-                  <Label className="text-xs font-semibold text-muted-foreground">Nota Fiscal</Label>
-                  <Input value={notaFiscal} onChange={e => setNotaFiscal(e.target.value)} placeholder="Nº da nota" className="h-9" />
+                  <Label className="text-[11px] font-semibold text-muted-foreground">Nota Fiscal</Label>
+                  <Input value={notaFiscal} onChange={e => setNotaFiscal(e.target.value)} placeholder="Nº da nota" className="h-8 text-[12px]" />
                 </div>
 
                 <Separator />
-                <h4 className="text-xs font-bold text-muted-foreground uppercase">Valor da Operação</h4>
+                <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Valor da Operação</h4>
 
-                {/* Price field */}
                 {usaPrecoArroba && (
                   <div>
-                    <Label className={`text-xs font-semibold ${previstoLabelClass}`}>R$/@ (preço base)</Label>
-                    <Input type="number" value={precoArroba} onChange={e => setPrecoArroba(e.target.value)} placeholder="0,00" className={`h-9 ${previstoInputClass}`} />
+                    <Label className={`text-[11px] font-semibold ${previstoLabelClass}`}>R$/@ (preço base)</Label>
+                    <Input type="number" value={precoArroba} onChange={e => setPrecoArroba(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${previstoInputClass}`} />
                   </div>
                 )}
                 {usaPrecoKg && (
                   <div>
-                    <Label className={`text-xs font-semibold ${previstoLabelClass}`}>R$/kg (preço base)</Label>
-                    <Input type="number" value={precoKg} onChange={e => setPrecoKg(e.target.value)} placeholder="0,00" className={`h-9 ${previstoInputClass}`} />
+                    <Label className={`text-[11px] font-semibold ${previstoLabelClass}`}>R$/kg (preço base)</Label>
+                    <Input type="number" value={precoKg} onChange={e => setPrecoKg(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${previstoInputClass}`} />
                   </div>
                 )}
 
