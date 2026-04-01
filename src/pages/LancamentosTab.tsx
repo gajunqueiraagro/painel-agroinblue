@@ -501,7 +501,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('conciliado');
           resetFinancialFields();
           toast.success('Compra registrada com sucesso!');
-        } else if (isAbate && (isConciliado || isConfirmado) && returnedId) {
+        } else if (isAbate && (isConciliado || isConfirmado || isPrevisto) && returnedId) {
           setLastSavedLancamentoId(returnedId);
           toast.success('Abate registrado! Agora você pode gerar os lançamentos financeiros.');
         } else {
