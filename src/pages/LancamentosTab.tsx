@@ -710,9 +710,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
       )}
 
-      {/* Row 2: Fazenda Origem / Destino */}
-      {(campos.origem.show || campos.destino?.show) && (
-        <div className="grid grid-cols-2 gap-2">
+      {/* Row 2: Fazenda Origem / Destino + Observação */}
+      {(campos.origem.show || campos.destino?.show) ? (
+        <div className={`grid gap-2 ${campos.destino?.show ? 'grid-cols-3' : 'grid-cols-2'}`}>
           {campos.origem.show && (
             <div>
               <Label className="font-bold text-[11px]">{campos.origem.label}</Label>
@@ -743,14 +743,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               )}
             </div>
           )}
+          <div>
+            <Label className="font-bold text-[11px]">Observação</Label>
+            <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Opcional" className="mt-0.5 h-8 text-[12px]" />
+          </div>
+        </div>
+      ) : (
+        <div>
+          <Label className="font-bold text-[11px]">Observação</Label>
+          <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Observação opcional" className="mt-0.5 h-8 text-[12px]" />
         </div>
       )}
-
-      {/* Row 3: Observação */}
-      <div>
-        <Label className="font-bold text-[11px]">Observação</Label>
-        <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Observação opcional" className="mt-0.5 h-8 text-[12px]" />
-      </div>
 
       <Button type="submit" className="w-full h-9 text-[12px] font-bold" size="sm">
         {aba === 'entrada' ? 'Registrar Entrada' : 'Registrar Saída'}
