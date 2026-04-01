@@ -40,6 +40,7 @@ export function AbateFinanceiroPanel({
 }: Props) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
+  const isPrevisto = statusOperacional === 'previsto';
 
   const [formaReceb, setFormaReceb] = useState<'avista' | 'prazo'>('avista');
   const [qtdParcelas, setQtdParcelas] = useState('2');
