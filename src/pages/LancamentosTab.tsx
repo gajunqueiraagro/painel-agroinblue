@@ -810,13 +810,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     </div>
     );
   };
-          )}
-        </div>
-      )}
-      </>
-      )}
-    </div>
-  );
 
   const currentTipoConfig = [...TIPOS_ENTRADA, ...TIPOS_SAIDA].find(t => t.value === tipo);
   const currentTipoLabel = currentTipoConfig?.label || tipo;
