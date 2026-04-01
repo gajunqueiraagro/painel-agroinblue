@@ -152,7 +152,7 @@ export function FinV2ContasTab() {
   const cellClass = "text-[12px] font-medium leading-tight py-1 px-2";
 
   return (
-    <div className="max-w-3xl mx-auto p-4 pb-20 space-y-4 animate-fade-in">
+    <div className="w-full p-4 pb-20 space-y-4 animate-fade-in">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-foreground">Contas Bancárias</h2>
         <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Nova Conta</Button>

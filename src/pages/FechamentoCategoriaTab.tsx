@@ -62,7 +62,7 @@ export function FechamentoCategoriaTab({ lancamentos, saldosIniciais }: Props) {
   const rowsEstimativa = resumo.rows.filter(r => r.quantidadeFinal > 0 && (r.origemPeso === 'lancamento' || r.origemPeso === 'saldo_inicial'));
 
   return (
-    <div className="max-w-4xl mx-auto animate-fade-in pb-20">
+    <div className="w-full animate-fade-in pb-20">
       {/* Filtros - sticky */}
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-2">
         <div className="grid grid-cols-2 gap-3">

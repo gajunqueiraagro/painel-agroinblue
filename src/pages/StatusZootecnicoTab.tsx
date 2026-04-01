@@ -452,7 +452,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
   // ===== RENDER: Administrative farm =====
   if (isAdmin) {
     return (
-      <div className="max-w-4xl mx-auto animate-fade-in pb-20">
+      <div className="w-full animate-fade-in pb-20">
         <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 pt-3 pb-2">
           <div className="flex gap-2 items-center">
             <Select value={anoFiltro} onValueChange={handleAnoChange}>
@@ -475,7 +475,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
   }
 
   return (
-    <div className="max-w-4xl mx-auto animate-fade-in pb-20">
+    <div className="w-full animate-fade-in pb-20">
       {/* Filtros */}
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 pt-2 pb-1.5">
         <div className="flex items-center gap-2">

@@ -102,7 +102,7 @@ export function AnaliseSaidasTab({ lancamentos, saldosIniciais, onTabChange }: P
   });
 
   return (
-    <div className="p-4 max-w-lg mx-auto space-y-4 animate-fade-in pb-20">
+    <div className="p-4 w-full space-y-4 animate-fade-in pb-20">
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="icon" onClick={() => onTabChange('analise')}>
           <ArrowLeft className="h-5 w-5" />

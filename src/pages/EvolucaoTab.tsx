@@ -91,7 +91,7 @@ export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
 
   if (meses.length === 0) {
     return (
-      <div className="p-4 max-w-lg mx-auto animate-fade-in pb-20">
+      <div className="p-4 w-full animate-fade-in pb-20">
         <div className="text-center py-10">
           <p className="text-muted-foreground text-lg font-semibold">Nenhum dado ainda</p>
           <p className="text-muted-foreground text-sm mt-1">Faça lançamentos para ver a evolução</p>
@@ -103,7 +103,7 @@ export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
   const totalSaldoInicial = CATEGORIAS.reduce((s, c) => s + (dados[c.value]?.saldoInicial || 0), 0);
 
   return (
-    <div className="max-w-4xl mx-auto animate-fade-in pb-20">
+    <div className="w-full animate-fade-in pb-20">
       {/* Filtro de ano - sticky */}
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-2">
         <div className="w-40">

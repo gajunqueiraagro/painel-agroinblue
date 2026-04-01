@@ -325,7 +325,7 @@ export function CadastrosTab() {
   if (loading) return <div className="p-4 text-center text-muted-foreground">Carregando...</div>;
 
   return (
-    <div className="pb-24 max-w-lg mx-auto">
+    <div className="pb-24 w-full">
       {/* Sticky action buttons */}
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 pt-2 pb-2">
         <div className="flex gap-2 justify-end">

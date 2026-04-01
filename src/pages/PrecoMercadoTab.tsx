@@ -195,7 +195,7 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
   );
 
   return (
-    <div className="max-w-lg mx-auto animate-fade-in pb-24">
+    <div className="w-full animate-fade-in pb-24">
       <div className="p-4 space-y-3">
         {/* Filtro mês/ano + status */}
         <Card>

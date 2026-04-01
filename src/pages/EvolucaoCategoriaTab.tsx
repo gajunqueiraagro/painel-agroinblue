@@ -351,7 +351,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   };
 
   return (
-    <div className="p-3 max-w-4xl mx-auto space-y-2 animate-fade-in pb-20">
+    <div className="p-3 w-full space-y-2 animate-fade-in pb-20">
       {/* Filtros */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">

@@ -68,7 +68,7 @@ export function ZootecnicoHubTab({ onTabChange, filtroGlobal }: Props) {
   };
 
   return (
-    <div className="max-w-lg mx-auto animate-fade-in pb-20">
+    <div className="w-full animate-fade-in pb-20">
 
       <div className="p-4 space-y-4">
         {GROUPS.map(group => (
