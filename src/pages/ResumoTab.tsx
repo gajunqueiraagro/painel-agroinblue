@@ -537,8 +537,8 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
         </section>
 
         {/* FINANCEIRO */}
-        <section className="rounded-lg border border-border/60 bg-card">
-          <div className="px-3 py-1.5 border-b border-border/40 flex items-center justify-between">
+        <section className="rounded-lg border border-primary/20 bg-primary/[0.04]">
+          <div className="px-3 py-1.5 border-b border-primary/15 flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               <Wallet className="h-3 w-3 text-primary" />
               <span className="text-[10px] font-semibold text-foreground uppercase tracking-wide">Financeiro</span>
