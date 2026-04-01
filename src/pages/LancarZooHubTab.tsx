@@ -69,7 +69,7 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
   const isBlocked = (tab: TabId) => isGlobal && !ALLOWED_GLOBAL.includes(tab);
 
   return (
-    <div className="w-full animate-fade-in pb-20">
+    <div className="w-full px-4 animate-fade-in pb-20">
       {isGlobal && (
         <div className="mx-4 mt-4 flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2.5">
           <AlertCircle className="h-4 w-4 text-muted-foreground shrink-0" />

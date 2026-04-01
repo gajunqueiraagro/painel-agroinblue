@@ -341,7 +341,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
   }, [statusZoo.pendencias, fazendaNaoPecuaria]);
 
   return (
-    <div className="w-full animate-fade-in pb-20">
+    <div className="w-full px-4 animate-fade-in pb-20">
       {/* ── Sticky filter bar ── */}
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 md:px-4 py-0.5">
         <div className="flex items-center justify-between gap-2 w-full">

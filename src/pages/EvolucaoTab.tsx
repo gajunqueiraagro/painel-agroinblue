@@ -103,7 +103,7 @@ export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
   const totalSaldoInicial = CATEGORIAS.reduce((s, c) => s + (dados[c.value]?.saldoInicial || 0), 0);
 
   return (
-    <div className="w-full animate-fade-in pb-20">
+    <div className="w-full px-4 animate-fade-in pb-20">
       {/* Filtro de ano - sticky */}
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-2">
         <div className="w-40">

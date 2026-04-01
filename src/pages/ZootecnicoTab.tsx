@@ -212,7 +212,7 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
   }
 
   return (
-    <div className="w-full animate-fade-in pb-20">
+    <div className="w-full px-4 animate-fade-in pb-20">
       {/* Sticky header + filters */}
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 pt-2 pb-2 space-y-1.5">
         <div className="flex gap-1.5 items-center flex-wrap">

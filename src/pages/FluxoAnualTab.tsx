@@ -81,7 +81,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   }
 
   return (
-    <div className="w-full animate-fade-in pb-20">
+    <div className="w-full px-4 animate-fade-in pb-20">
       {/* Filtros - sticky */}
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-1.5">
         <div className="flex items-center gap-2 flex-wrap">
