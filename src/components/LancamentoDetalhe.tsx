@@ -61,6 +61,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const [finLoading, setFinLoading] = useState(false);
 
   const isCompra = lancamento.tipo === 'compra';
+  const isAbate = lancamento.tipo === 'abate';
 
   const loadFinRecords = useCallback(() => {
     if (!isCompra) return;
