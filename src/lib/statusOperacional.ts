@@ -15,7 +15,7 @@ import type { Lancamento } from '@/types/cattle';
 export type StatusOperacional = 'previsto' | 'confirmado' | 'conciliado';
 
 export const STATUS_OPTIONS: { value: StatusOperacional; label: string; labelCurto: string; color: string; bg: string }[] = [
-  { value: 'conciliado', label: 'Conciliado', labelCurto: 'Realizado', color: 'text-green-800 dark:text-green-400', bg: 'bg-green-700' },
+  { value: 'conciliado', label: 'Realizado', labelCurto: 'Realizado', color: 'text-green-800 dark:text-green-400', bg: 'bg-green-700' },
   { value: 'confirmado', label: 'Confirmado', labelCurto: 'Confirmado', color: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-500' },
   { value: 'previsto', label: 'Previsto', labelCurto: 'Meta', color: 'text-orange-700 dark:text-orange-400', bg: 'bg-orange-500' },
 ];
