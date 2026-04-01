@@ -322,7 +322,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                               return (
                                 <div key={r.id} className="flex justify-between text-[10px] leading-relaxed">
                                   <span className="text-muted-foreground truncate max-w-[60%]">{icon} {r.descricao}</span>
-                                  <span className="font-semibold shrink-0">R$ {fmt(r.valor)}</span>
+                                  <span className="font-semibold shrink-0">{formatMoeda(r.valor)}</span>
                                 </div>
                               );
                             })}
