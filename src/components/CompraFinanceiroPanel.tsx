@@ -65,6 +65,7 @@ export function CompraFinanceiroPanel({
 
   const [gerado, setGerado] = useState(false);
   const [gerando, setGerando] = useState(false);
+  const [confirmUpdateOpen, setConfirmUpdateOpen] = useState(false);
   const [existingCount, setExistingCount] = useState(0);
   const [existingLoaded, setExistingLoaded] = useState(false);
 
