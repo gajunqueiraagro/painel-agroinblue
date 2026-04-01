@@ -389,7 +389,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const abateDataEmbarque = isAbate && data ? format(addDays(parseISO(data), -1), 'yyyy-MM-dd') : (dataEmbarque || undefined);
     const abateDataAbate = isAbate ? data : (dataAbate || undefined);
 
-    const returnedId = await onAdicionar({
+    const lancamentoDados: Partial<Omit<Lancamento, 'id'>> = {
       data, tipo, quantidade: Number(quantidade), categoria: categoria as Categoria,
       fazendaOrigem: origemFinal, fazendaDestino: destinoFinal,
       pesoMedioKg: pesoKg ? Number(pesoKg) : undefined,
@@ -413,22 +413,40 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       dataEmbarque: abateDataEmbarque || undefined,
       dataAbate: abateDataAbate || undefined,
       tipoVenda: tipoVenda || undefined,
-    });
+    };
 
-    if (isCompra && returnedId) {
-      setLastSavedLancamentoId(returnedId);
-      toast.success('Lançamento registrado! Agora você pode gerar os lançamentos financeiros.');
-    } else {
+    if (editingAbateId) {
+      // UPDATE existing lancamento
+      onEditar(editingAbateId, lancamentoDados);
+      setEditingAbateId(null);
       setLastSavedLancamentoId(null);
       setQuantidade('');
       setCategoria('');
-      setPesoKg(tipo === 'nascimento' ? '30' : '');
+      setPesoKg('');
       setFazendaOrigem(''); setFazendaDestino('');
       setData(format(new Date(), 'yyyy-MM-dd'));
       setObservacao('');
       setStatusOp('conciliado');
       resetFinancialFields();
-      toast.success('Lançamento registrado!');
+      toast.success('Abate atualizado com sucesso!');
+    } else {
+      const returnedId = await onAdicionar(lancamentoDados);
+
+      if (isCompra && returnedId) {
+        setLastSavedLancamentoId(returnedId);
+        toast.success('Lançamento registrado! Agora você pode gerar os lançamentos financeiros.');
+      } else {
+        setLastSavedLancamentoId(null);
+        setQuantidade('');
+        setCategoria('');
+        setPesoKg(tipo === 'nascimento' ? '30' : '');
+        setFazendaOrigem(''); setFazendaDestino('');
+        setData(format(new Date(), 'yyyy-MM-dd'));
+        setObservacao('');
+        setStatusOp('conciliado');
+        resetFinancialFields();
+        toast.success('Lançamento registrado!');
+      }
     }
   };
 
