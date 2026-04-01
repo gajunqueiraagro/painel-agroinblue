@@ -982,12 +982,19 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // ===== MAIN FORM (center) =====
   const renderForm = () => (
-    <form onSubmit={handleSubmit} className="flex-1 bg-card rounded-md p-3 shadow-sm border space-y-2 self-start">
+    <form onSubmit={handleSubmit} className={`flex-1 bg-card rounded-md p-3 shadow-sm border space-y-2 self-start ${editingAbateId ? 'ring-2 ring-primary' : ''}`}>
+
+      {/* Editing banner */}
+      {editingAbateId && (
+        <div className="bg-primary/10 border border-primary/30 rounded-md px-3 py-1.5 text-[11px] font-bold text-primary">
+          Editando abate #{editingAbateId.slice(0, 8)}
+        </div>
+      )}
 
       {/* Título da movimentação */}
       <div className="flex items-center gap-2">
         <span className="text-base">{currentTipoIcon}</span>
-        <h2 className="text-[15px] font-semibold text-foreground">{currentTipoLabel}</h2>
+        <h2 className="text-[15px] font-semibold text-foreground">{editingAbateId ? 'Editar Abate' : currentTipoLabel}</h2>
       </div>
 
       {/* STATUS — selection + dynamic explanation */}
