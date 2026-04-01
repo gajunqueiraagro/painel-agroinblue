@@ -346,17 +346,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // ===== LEFT SIDEBAR NAV =====
   const renderSidebar = () => {
     const parentCls = (active: boolean) =>
-      `w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm font-bold transition-all ${
+      `w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[13px] font-bold transition-all ${
         active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/60'
       }`;
     const childCls = (active: boolean) =>
-      `w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[13px] font-semibold transition-all ${
+      `w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] font-semibold transition-all ${
         active ? 'bg-primary/15 text-foreground border border-primary/40' : 'text-muted-foreground hover:bg-muted/40 border border-transparent'
       }`;
-    const childWrap = "ml-4 mt-0.5 border-l-2 border-primary/30 pl-2 space-y-0.5";
+    const childWrap = "ml-3 mt-0.5 border-l-2 border-primary/30 pl-1.5 space-y-0.5";
 
     return (
-      <div className="w-48 shrink-0 space-y-3">
+      <div className="w-44 shrink-0 space-y-2">
         {/* Entradas */}
         <div>
           <button onClick={() => { setAba('entrada'); setTipo('nascimento'); }} className={parentCls(aba === 'entrada')}>
