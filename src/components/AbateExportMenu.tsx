@@ -48,34 +48,37 @@ const TIPO_ABATE_LABELS: Record<string, string> = {
   morto: 'Peso Morto',
 };
 
-function calcArrobasTotaisPrev(l: Lancamento): number {
-  const peso = l.pesoMedioKg ?? 0;
-  const rend = l.pesoCarcacaKg && l.pesoMedioKg ? (l.pesoCarcacaKg / l.pesoMedioKg) : 0;
-  if (peso <= 0 || rend <= 0) return 0;
-  return (peso * rend / 15) * l.quantidade;
+/** Cálculos compartilhados para Abate Confirmado (tela, PDF, WhatsApp) */
+function calcConfirmado(l: Lancamento) {
+  const pesoVivo = l.pesoMedioKg ?? 0;
+  const rendFrac = pesoVivo > 0 && l.pesoCarcacaKg ? l.pesoCarcacaKg / pesoVivo : 0;
+  const pesoCarcaca = pesoVivo * rendFrac;
+  const arrobasCab = pesoCarcaca / 15;
+  const arrobasTotais = arrobasCab * l.quantidade;
+  const precoBase = l.precoArroba ?? 0;
+  const valorBruto = arrobasTotais * precoBase;
+  const bonusTotal = (l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0);
+  const descTotal = (l.descontoQualidade ?? 0) + (l.descontoFunrural ?? 0) + (l.outrosDescontos ?? 0);
+  const valorLiq = valorBruto + bonusTotal - descTotal;
+  const bonusArroba = arrobasTotais > 0 ? bonusTotal / arrobasTotais : 0;
+  const descArroba = arrobasTotais > 0 ? descTotal / arrobasTotais : 0;
+  const liqArroba = arrobasTotais > 0 ? valorLiq / arrobasTotais : 0;
+  const liqCabeca = l.quantidade > 0 ? valorLiq / l.quantidade : 0;
+  const liqKg = pesoVivo > 0 && l.quantidade > 0 ? valorLiq / (pesoVivo * l.quantidade) : 0;
+  return { pesoVivo, rendPct: rendFrac * 100, pesoCarcaca, arrobasCab, arrobasTotais, precoBase, valorBruto, bonusTotal, descTotal, bonusArroba, descArroba, valorLiq, liqArroba, liqCabeca, liqKg };
 }
 
 // ── Texto WhatsApp Confirmado ──
 function textoConfirmado(l: Lancamento, fazendaNome?: string): string {
   const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
-  const pesoVivo = l.pesoMedioKg ?? 0;
-  const rendPct = pesoVivo > 0 && l.pesoCarcacaKg ? (l.pesoCarcacaKg / pesoVivo) : 0;
-  const arrobasCab = (pesoVivo * rendPct) / 15;
-  const totalArrobas = arrobasCab * l.quantidade;
-  const precoBase = l.precoArroba ?? 0;
-  const valorBase = precoBase * totalArrobas;
-  const bonusTotal = (l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0);
-  const descTotal = (l.descontoQualidade ?? 0) + (l.descontoFunrural ?? 0) + (l.outrosDescontos ?? 0);
-  const bonusArroba = totalArrobas > 0 ? bonusTotal / totalArrobas : 0;
-  const descArroba = totalArrobas > 0 ? descTotal / totalArrobas : 0;
-  const valorLiq = valorBase + bonusTotal - descTotal;
-  const liqArroba = totalArrobas > 0 ? valorLiq / totalArrobas : 0;
+  const c = calcConfirmado(l);
 
   const lines: string[] = [
     'ESCALA DE ABATE - CONFIRMADO',
     '',
     `Fazenda: ${fazendaNome || '-'}`,
     `Frigorifico: ${l.fazendaDestino || '-'}`,
+    '',
     `Tipo de Venda: ${TIPO_VENDA_LABELS[l.tipoVenda ?? ''] || '-'}`,
     `Tipo de Abate: ${TIPO_ABATE_LABELS[l.tipoPeso ?? ''] || '-'}`,
     '',
@@ -84,21 +87,25 @@ function textoConfirmado(l: Lancamento, fazendaNome?: string): string {
     `Data Prev. Abate: ${fmtDate(l.dataAbate || l.data)}`,
     '',
     `Categoria: ${cat}`,
-    `Quantidade: ${l.quantidade} cab.`,
+    `Quantidade: ${l.quantidade} cabecas`,
     '',
-    `Peso Vivo: ${fmtValor(pesoVivo)} kg`,
-    `Rendimento: ${fmtValor(rendPct * 100)} %`,
-    `R$/@: ${formatMoeda(precoBase)}`,
+    `Peso Vivo Previsto: ${fmtValor(c.pesoVivo)} kg`,
     '',
-    `Arrobas/cab: ${fmtValor(arrobasCab)} @`,
-    `Arrobas totais: ${fmtValor(totalArrobas)} @`,
+    `R$/@ Negociado: ${formatMoeda(c.precoBase)}`,
+    '',
+    `Arrobas Estimadas: ${fmtValor(c.arrobasTotais)} @`,
     '',
   ];
-  if (bonusArroba > 0) lines.push(`Bonus R$/@: ${formatMoeda(bonusArroba)}`);
-  if (descArroba > 0) lines.push(`Descontos R$/@: ${formatMoeda(descArroba)}`);
+  if (c.bonusArroba > 0) lines.push(`Bonus Estimado: ${formatMoeda(c.bonusArroba)}/@`);
+  if (c.descArroba > 0) lines.push(`Descontos Estimados: ${formatMoeda(c.descArroba)}/@`);
+  if (c.bonusArroba > 0 || c.descArroba > 0) lines.push('');
   lines.push(
-    `Preco liquido R$/@: ${formatMoeda(liqArroba)}`,
-    `Valor liquido total: ${formatMoeda(valorLiq)}`,
+    `Preco Liquido Estimado: ${formatMoeda(c.liqArroba)}/@`,
+    '',
+    `Valor Liquido Estimado: ${formatMoeda(c.valorLiq)}`,
+    '',
+    'Observacao:',
+    'Os valores acima representam uma estimativa baseada nos parametros informados. O resultado final pode variar conforme rendimento, peso real, bonus e descontos efetivos no abate.',
   );
   return lines.join('\n');
 }
