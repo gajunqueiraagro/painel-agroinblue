@@ -314,6 +314,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingAbateId(null);
     resetFinancialFields();
     compraFinanceiroRef.current?.resetForm();
+    vendaFinanceiroRef.current?.resetForm();
+    consumoFinanceiroRef.current?.resetForm();
   };
 
   // Load abate into form for editing
