@@ -452,7 +452,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleGerarFinanceiro}>
+            <AlertDialogAction onClick={() => handleGerarFinanceiroInternal(lancamentoId!)}>
               Confirmar Substituição
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -460,4 +460,4 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
       </AlertDialog>
     </div>
   );
-}
+});
