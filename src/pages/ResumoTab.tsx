@@ -270,8 +270,8 @@ function useGlobalFarmKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInici
 function MetricRow({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
     <div className="flex items-center justify-between py-1">
-      <span className="text-[11px] text-muted-foreground">{label}</span>
-      <span className={`text-[13px] font-semibold tabular-nums ${accent || 'text-foreground'}`}>{value}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className={`text-sm font-semibold tabular-nums ${accent || 'text-foreground'}`}>{value}</span>
     </div>
   );
 }
@@ -446,10 +446,10 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
 
         {/* ZOOTÉCNICO */}
         <section className="rounded-lg border border-primary/20 bg-primary/[0.04]">
-          <div className="px-3 py-1.5 border-b border-primary/15 flex items-center justify-between">
+          <div className="px-3 py-2 border-b border-primary/15 flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <span className="text-xs">🐄</span>
-              <span className="text-[10px] font-semibold text-foreground uppercase tracking-wide">Zootécnico</span>
+              <span className="text-sm">🐄</span>
+              <span className="text-xs font-bold text-foreground uppercase tracking-wide">Zootécnico</span>
             </div>
             <StatusBadge
               nivel={zootecnico.status.nivel}
@@ -464,11 +464,11 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
           ) : (
             <div className="p-3 space-y-2">
               <div className="text-center">
-                <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-widest">Rebanho Atual</p>
-                <p className="text-2xl font-bold text-foreground tabular-nums leading-tight">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">Rebanho Atual</p>
+                <p className="text-3xl font-extrabold text-foreground tabular-nums leading-tight">
                   {formatNum(zootecnico.rebanhoAtual)}
                 </p>
-                <p className="text-[9px] text-muted-foreground">cabeças</p>
+                <p className="text-[10px] text-muted-foreground">cabeças</p>
               </div>
 
               {isGlobal && globalFarmKpis.farms.length > 0 && (
@@ -510,17 +510,17 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
               {!isGlobal && (
                 <div className="border-t border-border/40 pt-2">
                   <div className="grid grid-cols-3 gap-1.5">
-                    <div className="text-center rounded-md bg-muted/30 px-1.5 py-1.5">
-                      <p className="text-[8px] font-medium text-muted-foreground uppercase tracking-wider">Área</p>
-                      <p className="text-xs font-bold text-foreground tabular-nums">{zooKpis.area > 0 ? formatNum(zooKpis.area, 0) : '—'} ha</p>
+                    <div className="text-center rounded-md bg-muted/30 px-1.5 py-2">
+                      <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Área</p>
+                      <p className="text-sm font-bold text-foreground tabular-nums">{zooKpis.area > 0 ? formatNum(zooKpis.area, 0) : '—'} ha</p>
                     </div>
-                    <div className="text-center rounded-md bg-muted/30 px-1.5 py-1.5">
-                      <p className="text-[8px] font-medium text-muted-foreground uppercase tracking-wider">Peso Méd.</p>
-                      <p className="text-xs font-bold text-foreground tabular-nums">{zooKpis.pesoMedio ? `${formatNum(zooKpis.pesoMedio, 0)} kg` : '—'}</p>
+                    <div className="text-center rounded-md bg-muted/30 px-1.5 py-2">
+                      <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Peso Méd.</p>
+                      <p className="text-sm font-bold text-foreground tabular-nums">{zooKpis.pesoMedio ? `${formatNum(zooKpis.pesoMedio, 0)} kg` : '—'}</p>
                     </div>
-                    <div className="text-center rounded-md bg-muted/30 px-1.5 py-1.5">
-                      <p className="text-[8px] font-medium text-muted-foreground uppercase tracking-wider">Kg/ha</p>
-                      <p className="text-xs font-bold text-foreground tabular-nums">{zooKpis.lotacaoKgHa !== null ? formatNum(zooKpis.lotacaoKgHa, 0) : '—'}</p>
+                    <div className="text-center rounded-md bg-muted/30 px-1.5 py-2">
+                      <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Kg/ha</p>
+                      <p className="text-sm font-bold text-foreground tabular-nums">{zooKpis.lotacaoKgHa !== null ? formatNum(zooKpis.lotacaoKgHa, 0) : '—'}</p>
                     </div>
                   </div>
                 </div>
@@ -528,9 +528,9 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
 
               <button
                 onClick={() => onTabChange('visao_zoo_hub', { ano: filtroGlobal.ano, mes: mesNum })}
-                className="w-full flex items-center justify-center gap-1 text-[10px] font-semibold text-primary py-1.5 rounded border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10"
+                className="w-full flex items-center justify-center gap-1 text-xs font-semibold text-primary py-2 rounded border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10"
               >
-                Painel Zootécnico <ChevronRight className="h-3 w-3" />
+                Painel Zootécnico <ChevronRight className="h-3.5 w-3.5" />
               </button>
             </div>
           )}
@@ -538,10 +538,10 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
 
         {/* FINANCEIRO */}
         <section className="rounded-lg border border-primary/20 bg-primary/[0.04]">
-          <div className="px-3 py-1.5 border-b border-primary/15 flex items-center justify-between">
+          <div className="px-3 py-2 border-b border-primary/15 flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <Wallet className="h-3 w-3 text-primary" />
-              <span className="text-[10px] font-semibold text-foreground uppercase tracking-wide">Financeiro</span>
+              <Wallet className="h-3.5 w-3.5 text-primary" />
+              <span className="text-xs font-bold text-foreground uppercase tracking-wide">Financeiro</span>
             </div>
             <StatusBadge
               nivel={financeiro.status.nivel}
@@ -551,8 +551,8 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
 
           <div className="p-3 space-y-2">
             <div className="text-center">
-              <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-widest">Saldo Final em Caixa</p>
-              <p className={`text-2xl font-bold tabular-nums leading-tight ${financeiro.caixaAtual >= 0 ? 'text-success' : 'text-destructive'}`}>
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">Saldo Final em Caixa</p>
+              <p className={`text-3xl font-extrabold tabular-nums leading-tight ${financeiro.caixaAtual >= 0 ? 'text-success' : 'text-destructive'}`}>
                 {formatMoeda(financeiro.caixaAtual)}
               </p>
             </div>
@@ -572,9 +572,9 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
 
             <button
               onClick={() => onTabChange('fin_caixa', { ano: filtroGlobal.ano, mes: mesNum })}
-              className="w-full flex items-center justify-center gap-1 text-[10px] font-semibold text-primary py-1.5 rounded border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10"
+              className="w-full flex items-center justify-center gap-1 text-xs font-semibold text-primary py-2 rounded border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10"
             >
-              Fluxo Financeiro <ChevronRight className="h-3 w-3" />
+              Fluxo Financeiro <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
         </section>
