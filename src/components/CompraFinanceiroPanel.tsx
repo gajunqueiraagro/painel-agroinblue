@@ -1,16 +1,18 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronDown, ChevronUp, Info, AlertTriangle, CheckCircle } from 'lucide-react';
+import { ChevronDown, ChevronUp, Info, AlertTriangle, CheckCircle, Plus } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { toast } from 'sonner';
 import type { StatusOperacional } from '@/lib/statusOperacional';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 
 type TipoPreco = 'por_kg' | 'por_cab' | 'por_total';
 
