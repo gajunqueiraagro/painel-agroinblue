@@ -326,10 +326,11 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
     }
   };
 
-  const handleGerarFinanceiro = async () => {
-    if (!lancamentoId) { toast.error('Salve o lançamento zootécnico antes de gerar os financeiros.'); return; }
-    if (!fazendaAtual || !clienteAtual) return;
-    if (validationErrors.length > 0) { toast.error(validationErrors[0]); return; }
+  const handleGerarFinanceiro = async (overrideLancamentoId?: string) => {
+    const effectiveId = overrideLancamentoId || lancamentoId;
+    if (!effectiveId) { toast.error('Salve o lançamento zootécnico antes de gerar os financeiros.'); return false; }
+    if (!fazendaAtual || !clienteAtual) return false;
+    if (validationErrors.length > 0) { toast.error(validationErrors[0]); return false; }
 
     setGerando(true);
     try {
