@@ -389,8 +389,9 @@ export function CompraFinanceiroPanel({
       }
 
       const statusFin = statusOp === 'previsto' ? 'previsto' : 'confirmado';
-      const produtoLabel = `Compra & ${categoria}`;
-      const anoMes = data.slice(0, 7);
+      const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria;
+      const compraLabel = `Compra ${quantidade} ${catLabel}`;
+      const produtoLabel = `${quantidade} ${catLabel}`;
       const inserts: any[] = [];
 
       // Determine subcentro based on category (female vs male)
