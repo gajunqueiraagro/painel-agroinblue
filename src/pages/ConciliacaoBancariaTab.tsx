@@ -418,6 +418,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                 <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${cfg.color}`}>
                   {cfg.label}
                 </Badge>
+                {onNavigateToLancamentos && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-5 text-[9px] gap-0.5 px-1.5"
+                    onClick={() => onNavigateToLancamentos(ano, parseInt(selectedMes))}
+                  >
+                    <ExternalLink className="h-3 w-3" /> Lançamentos
+                  </Button>
+                )}
                 <div className="ml-auto text-right">
                   <p className="text-[9px] text-muted-foreground">Saldo Calculado</p>
                   <p className={`text-xs font-bold ${card.saldoCalculado >= 0 ? 'text-foreground' : 'text-red-600'}`}>
