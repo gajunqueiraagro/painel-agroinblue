@@ -186,6 +186,7 @@ export function CompraFinanceiroPanel({
       } else {
         inserts.push({
           ...baseRecord,
+          ano_mes: anoMes,
           subcentro: subcentroCompra,
           valor: calc.valorBase,
           data_competencia: data,
@@ -201,6 +202,7 @@ export function CompraFinanceiroPanel({
       if (calc.freteVal > 0) {
         inserts.push({
           ...baseRecord,
+          ano_mes: anoMes,
           subcentro: 'FRETE COMPRA ANIMAIS',
           valor: calc.freteVal,
           data_competencia: data,
@@ -214,6 +216,7 @@ export function CompraFinanceiroPanel({
       if (calc.comissaoVal > 0) {
         inserts.push({
           ...baseRecord,
+          ano_mes: anoMes,
           subcentro: 'COMISSÃO COMPRA ANIMAIS',
           valor: calc.comissaoVal,
           data_competencia: data,
