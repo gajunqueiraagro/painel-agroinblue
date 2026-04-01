@@ -30,7 +30,7 @@ import { toast } from 'sonner';
 
 interface Props {
   lancamentos: Lancamento[];
-  onAdicionar: (l: Omit<Lancamento, 'id'>) => void;
+  onAdicionar: (l: Omit<Lancamento, 'id'>) => Promise<string | undefined> | void;
   onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
   onRemover: (id: string) => void;
   abaInicial?: Aba;
