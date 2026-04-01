@@ -749,24 +749,21 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
             </div>
           ) : (
             <>
-              {!lancamentoId && mode === 'create' && (
-                <div className="flex items-center gap-1 text-[10px] text-orange-600 dark:text-orange-400">
-                  <AlertTriangle className="h-3 w-3" />
-                  Salve o lançamento zootécnico primeiro
-                </div>
-              )}
               <Button
                 type="button"
                 variant={mode === 'update' ? 'default' : 'outline'}
                 size="sm"
                 className={`w-full h-8 text-[11px] font-bold ${mode === 'update' ? 'shadow-sm' : ''}`}
-                disabled={!canGenerate || gerando}
+                disabled={!canGenerate || gerando || (!lancamentoId && mode === 'create')}
                 onClick={handleClickGerar}
               >
                 {gerando
                   ? (mode === 'update' ? 'Atualizando...' : 'Gerando...')
                   : (mode === 'update' ? '✓ Atualizar lançamentos no financeiro' : 'Gerar lançamentos no financeiro')}
               </Button>
+              {!lancamentoId && mode === 'create' && (
+                <p className="text-[9px] text-muted-foreground text-center">O financeiro será gerado automaticamente ao registrar a entrada</p>
+              )}
             </>
           )}
         </div>
