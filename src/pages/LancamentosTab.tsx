@@ -805,8 +805,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           </CollapsibleContent>
         </Collapsible>
 
-        {/* Informações de Pagamento - only for Realizado */}
-        {isConciliado && (
+        {/* Informações de Pagamento - for Confirmado and Realizado */}
+        {(isConfirmado || isConciliado) && (
           <AbateFinanceiroPanel
             quantidade={Number(quantidade) || 0}
             categoria={categoria}
