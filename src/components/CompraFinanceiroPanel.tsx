@@ -658,7 +658,7 @@ export function CompraFinanceiroPanel({
         {calc.totalDespesas > 0 && (
           <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded px-2 py-1.5 flex justify-between text-[10px] font-bold">
             <span className="text-orange-700 dark:text-orange-400">Total despesas</span>
-            <span className="text-orange-800 dark:text-orange-300">R$ {fmt(calc.totalDespesas)}</span>
+            <span className="text-orange-800 dark:text-orange-300">{formatMoeda(calc.totalDespesas)}</span>
           </div>
         )}
       </div>
