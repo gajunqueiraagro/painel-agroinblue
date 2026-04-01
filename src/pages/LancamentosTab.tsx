@@ -277,7 +277,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const valorTotalFinal = calc.valorLiquido > 0 ? calc.valorLiquido : undefined;
 
     onAdicionar({
-      data, tipo, quantidade: Number(quantidade), categoria,
+      data, tipo, quantidade: Number(quantidade), categoria: categoria as Categoria,
       fazendaOrigem: origemFinal, fazendaDestino: destinoFinal,
       pesoMedioKg: pesoKg ? Number(pesoKg) : undefined,
       pesoMedioArrobas: pesoKg ? kgToArrobas(Number(pesoKg)) : undefined,
