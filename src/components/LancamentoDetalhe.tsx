@@ -23,6 +23,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { STATUS_OPTIONS, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 import { supabase } from '@/integrations/supabase/client';
+import { formatMoeda } from '@/lib/calculos/formatters';
 
 interface Props {
   lancamento: Lancamento;
