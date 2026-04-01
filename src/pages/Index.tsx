@@ -135,7 +135,7 @@ const Index = () => {
   const { canViewTab, canEdit, isReadOnly } = usePermissions();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clientes, clienteAtual } = useCliente();
-  const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, setSaldoInicial, loadData } = useLancamentos();
+  const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, countFinanceirosVinculados, setSaldoInicial, loadData } = useLancamentos();
   const { pendingCount, syncing, online, syncQueue } = useOfflineSync(fazendaAtual?.id === '__global__' ? undefined : fazendaAtual?.id, loadData);
 
   // Wrap edit actions based on permissions
@@ -377,6 +377,7 @@ const Index = () => {
           onAdicionar={wrappedAdicionar as any}
           onEditar={wrappedEditar as any}
           onRemover={wrappedRemover as any}
+          onCountFinanceiros={countFinanceirosVinculados}
           abaInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? 'reclassificacao' : undefined}
           onBackToConciliacao={lancamentosFromConciliacao ? goToFechamentoTab : lancamentosFromFechamento ? goToFechamentoTab : lancamentosFromEvolCategoria ? goToEvolucaoRebanhoHub : lancamentosFromFluxoAnual ? goToFluxoAnual : undefined}
           dataInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? `${filtroGlobal.ano}-${String(filtroGlobal.mes).padStart(2, '0')}-15` : undefined}

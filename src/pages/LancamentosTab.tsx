@@ -33,6 +33,7 @@ interface Props {
   onAdicionar: (l: Omit<Lancamento, 'id'>) => Promise<string | undefined> | void;
   onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
   onRemover: (id: string) => void;
+  onCountFinanceiros?: (id: string) => Promise<number>;
   abaInicial?: Aba;
   onBackToConciliacao?: () => void;
   dataInicial?: string;
@@ -91,7 +92,7 @@ function fmt(v?: number, decimals = 2) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, abaInicial, onBackToConciliacao, dataInicial, backLabel }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const nomeFazenda = fazendaAtual?.nome || '';
   const isAdministrativo = fazendaAtual?.tem_pecuaria === false;
@@ -911,6 +912,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onClose={() => setDetalheId(null)}
           onEditar={onEditar}
           onRemover={onRemover}
+          onCountFinanceiros={onCountFinanceiros}
         />
       )}
     </div>
