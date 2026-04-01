@@ -114,8 +114,11 @@ const STATUS_CONFIG = {
   pendente: { label: 'Pendente', color: 'bg-muted text-muted-foreground', icon: AlertTriangle, iconColor: 'text-muted-foreground' },
 };
 
-/* ── Component ── */
-export function ConciliacaoBancariaTab() {
+interface ConciliacaoProps {
+  onNavigateToLancamentos?: (ano: string, mes: number) => void;
+}
+
+export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoProps = {}) {
   const { clienteAtual } = useCliente();
   const perm = usePermissions();
   const isAdmin = perm.perfil === 'admin_agroinblue' || perm.perfil === 'gestor_cliente';
