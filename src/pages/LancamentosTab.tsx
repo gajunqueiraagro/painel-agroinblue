@@ -906,6 +906,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           categoria={categoria}
           data={data}
           valorLiquido={calc.valorLiquido}
+          totalDescontos={calc.totalDescontos}
           frigorifico={fazendaDestino}
           notaFiscal={notaFiscal}
           onNotaFiscalChange={setNotaFiscal}
