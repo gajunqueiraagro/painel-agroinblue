@@ -175,30 +175,43 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const calc = useMemo(() => {
     const qtd = Number(quantidade) || 0;
     const peso = Number(pesoKg) || 0;
-    const carcaca = Number(pesoCarcacaKg) || 0;
+    const rend = Number(rendCarcaca) || 0;
+    const carcacaCalc = isAbate && rend > 0 ? peso * rend / 100 : Number(pesoCarcacaKg) || 0;
     let pesoArroba = 0;
-    if (isAbate) { pesoArroba = carcaca > 0 ? carcaca / 15 : 0; }
+    if (isAbate) { pesoArroba = carcacaCalc > 0 ? carcacaCalc / 15 : 0; }
     else { pesoArroba = peso > 0 ? peso / 30 : 0; }
     const totalArrobas = pesoArroba * qtd;
     const totalKg = peso * qtd;
     let valorBruto = 0;
     if (usaPrecoArroba) { valorBruto = totalArrobas * (Number(precoArroba) || 0); }
     else if (usaPrecoKg) { valorBruto = totalKg * (Number(precoKg) || 0); }
+    // Abate: bonus/desconto inputs are R$/@ → multiply by totalArrobas
+    const bonusPrecoceTotal = isAbate ? (Number(bonusPrecoce) || 0) * totalArrobas : 0;
+    const bonusQualidadeTotal = isAbate ? (Number(bonusQualidade) || 0) * totalArrobas : 0;
+    const bonusListaTraceTotal = isAbate ? (Number(bonusListaTrace) || 0) * totalArrobas : 0;
+    const descQualidadeTotal = isAbate ? (Number(descontoQualidade) || 0) * totalArrobas : 0;
+    const descFunruralTotal = isAbate ? valorBruto * (Number(funruralPct) || 0) / 100 : 0;
+    const descOutrosTotal = isAbate ? (Number(outrosDescontos) || 0) : 0;
     const totalBonus = isAbate
-      ? (Number(bonusPrecoce) || 0) + (Number(bonusQualidade) || 0) + (Number(bonusListaTrace) || 0)
+      ? bonusPrecoceTotal + bonusQualidadeTotal + bonusListaTraceTotal
       : (Number(bonus) || 0);
     const totalDescontos = isAbate
-      ? (Number(descontoQualidade) || 0) + (Number(descontoFunrural) || 0) + (Number(outrosDescontos) || 0)
+      ? descQualidadeTotal + descFunruralTotal + descOutrosTotal
       : (Number(descontos) || 0);
-    const comissaoVal = valorBruto * (Number(comissaoPct) || 0) / 100;
-    const freteVal = Number(frete) || 0;
-    const outrasDespVal = Number(outrasDespesas) || 0;
+    const comissaoVal = isAbate ? 0 : valorBruto * (Number(comissaoPct) || 0) / 100;
+    const freteVal = isAbate ? 0 : Number(frete) || 0;
+    const outrasDespVal = isAbate ? 0 : Number(outrasDespesas) || 0;
     const valorLiquido = valorBruto + totalBonus - totalDescontos - comissaoVal - freteVal - outrasDespVal;
     const liqArroba = totalArrobas > 0 ? valorLiquido / totalArrobas : 0;
     const liqCabeca = qtd > 0 ? valorLiquido / qtd : 0;
     const liqKg = totalKg > 0 ? valorLiquido / totalKg : 0;
-    return { pesoArroba, totalArrobas, totalKg, valorBruto, totalBonus, totalDescontos, comissaoVal, freteVal, outrasDespVal, valorLiquido, liqArroba, liqCabeca, liqKg };
-  }, [quantidade, pesoKg, pesoCarcacaKg, precoArroba, precoKg, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, descontoFunrural, outrosDescontos, bonus, descontos, comissaoPct, frete, outrasDespesas, isAbate, usaPrecoArroba, usaPrecoKg]);
+    return {
+      pesoArroba, totalArrobas, totalKg, valorBruto, totalBonus, totalDescontos,
+      comissaoVal, freteVal, outrasDespVal, valorLiquido, liqArroba, liqCabeca, liqKg,
+      carcacaCalc, bonusPrecoceTotal, bonusQualidadeTotal, bonusListaTraceTotal,
+      descQualidadeTotal, descFunruralTotal, descOutrosTotal,
+    };
+  }, [quantidade, pesoKg, pesoCarcacaKg, rendCarcaca, precoArroba, precoKg, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, funruralPct, outrosDescontos, bonus, descontos, comissaoPct, frete, outrasDespesas, isAbate, usaPrecoArroba, usaPrecoKg]);
 
   const gerarParcelas = useCallback((numParcelas: number, baseDate: string, valorTotal: number) => {
     const p: Parcela[] = [];
