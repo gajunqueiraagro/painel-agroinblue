@@ -299,6 +299,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setRendCarcaca(''); setFunruralPct('');
   };
 
+  const resetAllFields = (newTipo?: string) => {
+    setQuantidade(''); setCategoria('');
+    setPesoKg(newTipo === 'nascimento' ? '30' : '');
+    setFazendaOrigem(''); setFazendaDestino('');
+    setData(format(new Date(), 'yyyy-MM-dd'));
+    setStatusOp('conciliado');
+    setLastSavedLancamentoId(null);
+    setEditingAbateId(null);
+    resetFinancialFields();
+    compraFinanceiroRef.current?.resetForm();
+  };
+
   // Load abate into form for editing
   const loadAbateForEdit = useCallback((l: Lancamento) => {
     // 1. Set tab & type
