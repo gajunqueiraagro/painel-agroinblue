@@ -585,37 +585,37 @@ export function CompraFinanceiroPanel({
       </div>
 
       {/* Fornecedor (quem você pagou) */}
-      <div className="space-y-1">
-        <Label className="text-[11px]">Fornecedor (quem você pagou)</Label>
+      <div className="space-y-0.5">
+        <Label className="text-[10px]">Fornecedor (quem você pagou)</Label>
         <div className="flex gap-1">
           <div className="flex-1">
             <SearchableSelect
               value={fornecedorId}
               onValueChange={setFornecedorId}
-              placeholder="Selecione o fornecedor da compra"
+              placeholder="Selecione o fornecedor"
               options={fornecedores.map(f => ({ value: f.id, label: f.nome }))}
             />
           </div>
-          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setNovoFornecedorOpen(true)}>
-            <Plus className="h-4 w-4" />
+          <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setNovoFornecedorOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
           </Button>
         </div>
         {/* Sugestão automática baseada na Origem */}
         {origemSugestao === 'encontrado' && (
-          <p className="text-[10px] text-green-600 flex items-center gap-1 mt-0.5">
-            <CheckCircle className="h-3 w-3" /> Fornecedor selecionado automaticamente a partir da origem
+          <p className="text-[9px] text-green-600 flex items-center gap-1">
+            <CheckCircle className="h-2.5 w-2.5" /> Fornecedor selecionado automaticamente
           </p>
         )}
         {origemSugestao === 'criar' && !fornecedorId && (
-          <div className="flex items-center gap-1.5 mt-0.5 p-1.5 rounded border border-dashed border-muted-foreground/30 bg-muted/40">
-            <span className="text-[10px] text-muted-foreground flex-1">
-              Criar fornecedor "<strong>{fazendaOrigem?.trim()}</strong>"?
+          <div className="flex items-center gap-1 p-1 rounded border border-dashed border-muted-foreground/30 bg-muted/40">
+            <span className="text-[9px] text-muted-foreground flex-1">
+              Criar "<strong>{fazendaOrigem?.trim()}</strong>"?
             </span>
-            <Button type="button" variant="outline" size="sm" className="h-5 text-[10px] px-2" onClick={handleCriarFornecedorFromOrigem}>
-              Criar e selecionar
+            <Button type="button" variant="outline" size="sm" className="h-5 text-[9px] px-1.5" onClick={handleCriarFornecedorFromOrigem}>
+              Criar
             </Button>
-            <Button type="button" variant="ghost" size="sm" className="h-5 text-[10px] px-1.5" onClick={() => setOrigemSugestaoDescartada(true)}>
-              Ignorar
+            <Button type="button" variant="ghost" size="sm" className="h-5 text-[9px] px-1" onClick={() => setOrigemSugestaoDescartada(true)}>
+              ✕
             </Button>
           </div>
         )}
@@ -623,8 +623,8 @@ export function CompraFinanceiroPanel({
 
       {/* Nota Fiscal */}
       <div>
-        <Label className="text-[11px]">Nota Fiscal</Label>
-        <Input value={notaFiscal} onChange={e => onNotaFiscalChange(e.target.value)} placeholder="Nº da nota" className="h-8 text-[12px]" />
+        <Label className="text-[10px]">Nota Fiscal</Label>
+        <Input value={notaFiscal} onChange={e => onNotaFiscalChange(e.target.value)} placeholder="Nº da nota" className="h-7 text-[11px]" />
       </div>
 
       <NovoFornecedorDialog open={novoFornecedorOpen} onClose={() => setNovoFornecedorOpen(false)} onSave={handleNovoFornecedor} />
