@@ -478,8 +478,20 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       const returnedId = await onAdicionar(lancamentoDados as Omit<Lancamento, 'id'>);
 
       if (isCompra && returnedId) {
-        setLastSavedLancamentoId(returnedId);
-        toast.success('Lançamento registrado! Agora você pode gerar os lançamentos financeiros.');
+        // Auto-generate financial records
+        if (compraFinanceiroRef.current && compraFinanceiroRef.current.getValorBase() > 0) {
+          await compraFinanceiroRef.current.generateFinanceiro(returnedId);
+        }
+        setLastSavedLancamentoId(null);
+        setQuantidade('');
+        setCategoria('');
+        setPesoKg('');
+        setFazendaOrigem(''); setFazendaDestino('');
+        setData(format(new Date(), 'yyyy-MM-dd'));
+        setObservacao('');
+        setStatusOp('conciliado');
+        resetFinancialFields();
+        toast.success('Compra registrada com sucesso!');
       } else if (isAbate && (isConciliado || isConfirmado) && returnedId) {
         setLastSavedLancamentoId(returnedId);
         toast.success('Abate registrado! Agora você pode gerar os lançamentos financeiros.');
