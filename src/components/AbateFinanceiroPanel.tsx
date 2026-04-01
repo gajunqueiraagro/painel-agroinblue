@@ -223,6 +223,31 @@ export function AbateFinanceiroPanel({
         });
       }
 
+      // Generate deduction records when there are discounts
+      if (totalDescontos > 0) {
+        const frigorificoLabel = frigorifico ? ` | ${frigorifico}` : '';
+        inserts.push({
+          cliente_id: clienteAtual.id,
+          fazenda_id: fazendaAtual.id,
+          tipo_operacao: '2-Saídas',
+          sinal: -1,
+          status_transacao: isPrevisto ? 'previsto' : 'confirmado',
+          origem_lancamento: 'movimentacao_rebanho',
+          movimentacao_rebanho_id: lancamentoId,
+          macro_custo: 'Dedução de Receitas',
+          centro_custo: 'Dedução de Receitas Pecuária',
+          subcentro: 'PEC/NOTAS COM ABATES E VENDAS EM PÉ',
+          nota_fiscal: notaFiscal || undefined,
+          ano_mes: anoMes,
+          valor: totalDescontos,
+          data_competencia: data,
+          data_pagamento: data,
+          descricao: `Dedução ${abateLabel}${frigorificoLabel}`,
+          historico: frigorifico ? `Frigorífico: ${frigorifico}` : undefined,
+          origem_tipo: 'abate:deducao',
+        });
+      }
+
       const { error } = await supabase.from('financeiro_lancamentos_v2').insert(inserts);
       if (error) throw error;
 
