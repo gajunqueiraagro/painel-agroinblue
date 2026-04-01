@@ -535,11 +535,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         {compactRow(
           'Rend. Carcaça (%)',
           <Input type="number" value={rendCarcaca} onChange={e => setRendCarcaca(e.target.value)} placeholder="0,0" className="h-7 text-[11px]" step="0.1" />,
-          'Peso Carcaça',
-          calc.carcacaCalc > 0 ? `${fmt(calc.carcacaCalc)} kg` : undefined,
+        )}
+        {calc.carcacaCalc > 0 && (
+          <p className="text-[9px] text-muted-foreground pl-[98px]">Peso Carcaça: {fmt(calc.carcacaCalc)} kg</p>
+        )}
+        {calc.pesoArroba > 0 && (
+          <p className="text-[9px] text-muted-foreground pl-[98px]">Arrobas: {fmt(calc.pesoArroba)} @ / cab</p>
         )}
         {calc.totalArrobas > 0 && (
-          <p className="text-[9px] text-muted-foreground pl-[98px]">Arrobas: {fmt(calc.totalArrobas)} @</p>
+          <p className="text-[9px] font-semibold text-muted-foreground pl-[98px]">Total Arrobas: {fmt(calc.totalArrobas)} @</p>
         )}
 
         <Separator />
