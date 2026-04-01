@@ -147,19 +147,8 @@ function textoRealizado(l: Lancamento, fazendaNome?: string): string {
 // ── PDF Confirmado ──
 async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
-  const totalArrobas = calcArrobasTotaisPrev(l);
-  const pesoVivo = l.pesoMedioKg ?? 0;
-  const rendPct = pesoVivo > 0 && l.pesoCarcacaKg ? (l.pesoCarcacaKg / pesoVivo) * 100 : 0;
-  const pesoCarcaca = pesoVivo * (rendPct / 100);
-  const arrobasCab = pesoCarcaca > 0 ? pesoCarcaca / 15 : 0;
-  const bonus = (l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0);
-  const desc = (l.descontoQualidade ?? 0) + (l.descontoFunrural ?? 0) + (l.outrosDescontos ?? 0);
-  const precoBase = l.precoArroba ?? 0;
-  const precoLiqArroba = precoBase + bonus - desc;
-  const valorLiq = precoLiqArroba * totalArrobas;
-  const liqCabeca = l.quantidade > 0 ? valorLiq / l.quantidade : 0;
-  const liqKg = pesoVivo > 0 && l.quantidade > 0 ? valorLiq / (pesoVivo * l.quantidade) : 0;
+  const cat = CATEGORIAS.find(cc => cc.value === l.categoria)?.label ?? l.categoria;
+  const c = calcConfirmado(l);
 
   let y = 5;
   try {
