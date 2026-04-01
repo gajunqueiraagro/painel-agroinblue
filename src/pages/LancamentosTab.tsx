@@ -430,7 +430,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       resetFinancialFields();
       toast.success('Abate atualizado com sucesso!');
     } else {
-      const returnedId = await onAdicionar(lancamentoDados);
+      const returnedId = await onAdicionar(lancamentoDados as Omit<Lancamento, 'id'>);
 
       if (isCompra && returnedId) {
         setLastSavedLancamentoId(returnedId);
