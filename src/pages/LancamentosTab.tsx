@@ -795,15 +795,20 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           </CollapsibleContent>
         </Collapsible>
 
-        {/* Nota Fiscal - only for Realizado */}
+        {/* Informações de Pagamento - only for Realizado */}
         {isConciliado && (
-          <>
-            <Separator />
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-muted-foreground min-w-[90px]">Nota Fiscal</span>
-              <Input value={notaFiscal} onChange={e => setNotaFiscal(e.target.value)} placeholder="Nº da nota" className="h-7 text-[11px] flex-1" />
-            </div>
-          </>
+          <AbateFinanceiroPanel
+            quantidade={Number(quantidade) || 0}
+            categoria={categoria}
+            data={data}
+            valorLiquido={calc.valorLiquido}
+            frigorifico={fazendaDestino}
+            notaFiscal={notaFiscal}
+            onNotaFiscalChange={setNotaFiscal}
+            lancamentoId={editingAbateId || lastSavedLancamentoId || undefined}
+            mode={editingAbateId ? 'update' : 'create'}
+            onFinanceiroUpdated={() => {}}
+          />
         )}
       </div>
     );
