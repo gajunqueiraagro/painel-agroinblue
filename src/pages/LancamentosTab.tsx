@@ -512,8 +512,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Compra registrada com sucesso!');
         } else if (isAbate && (isConciliado || isConfirmado || isPrevisto) && returnedId) {
-          setLastSavedLancamentoId(returnedId);
-          toast.success('Abate registrado! Agora você pode gerar os lançamentos financeiros.');
+          // Auto-generate financeiro for abate (like Compras)
+          if (abateFinanceiroRef.current) {
+            await abateFinanceiroRef.current.generateFinanceiro(returnedId);
+          }
+          setLastSavedLancamentoId(null);
+          setQuantidade(''); setCategoria(''); setPesoKg('');
+          setFazendaOrigem(''); setFazendaDestino('');
+          setData(format(new Date(), 'yyyy-MM-dd'));
+          setObservacao(''); setStatusOp('conciliado');
+          resetFinancialFields();
+          toast.success('Abate registrado com financeiro!');
         } else {
           setLastSavedLancamentoId(null);
           setQuantidade(''); setCategoria('');
