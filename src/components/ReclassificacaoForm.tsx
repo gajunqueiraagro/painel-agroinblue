@@ -85,7 +85,7 @@ export function ReclassificacaoForm({ onAdicionar, dataInicial }: Props) {
 
       <div>
         <Label className="font-bold text-foreground">Peso Médio (kg) - opcional</Label>
-        <Input type="number" value={pesoKg} onChange={e => setPesoKg(e.target.value)} placeholder="0" className="mt-1 touch-target text-base" />
+        <Input type="text" inputMode="decimal" value={pesoInput.displayValue} onChange={pesoInput.onChange} onBlur={pesoInput.onBlur} onFocus={pesoInput.onFocus} placeholder="0,00" className="mt-1 touch-target text-base" />
       </div>
 
       <Button type="submit" className="w-full touch-target text-base font-bold" size="lg">
