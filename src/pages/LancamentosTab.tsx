@@ -165,7 +165,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   const [formaPagamento, setFormaPagamento] = useState<'avista' | 'parcelado'>('avista');
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
-  const [qtdParcelas, setQtdParcelas] = useState('2');
+  const [qtdParcelas, setQtdParcelas] = useState('1');
 
   const qtdInput = useIntegerInput(quantidade, setQuantidade);
   const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
