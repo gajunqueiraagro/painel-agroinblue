@@ -232,17 +232,45 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 </>
               )}
             </div>
-            {/* Alterar financeiro — only for compra type */}
-            {lancamento.tipo === 'compra' && !isTransferenciaEntrada && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full mt-1 text-[11px]"
-                onClick={() => setFinanceiroSheetOpen(true)}
-              >
-                <RefreshCw className="h-3.5 w-3.5 mr-1" />
-                Alterar financeiro da compra
-              </Button>
+            {/* Resumo financeiro da compra */}
+            {isCompra && !isTransferenciaEntrada && (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-muted-foreground tracking-wide">
+                  <DollarSign className="h-3 w-3" /> Financeiro vinculado
+                </div>
+                {finLoading ? (
+                  <p className="text-[11px] text-muted-foreground">Carregando...</p>
+                ) : finRecords.length === 0 ? (
+                  <div className="bg-muted/50 rounded-md p-2 text-[11px] text-muted-foreground">
+                    Nenhum lançamento financeiro gerado para esta compra.
+                  </div>
+                ) : (
+                  <div className="bg-muted/30 rounded-md p-2 space-y-1">
+                    {finRecords.map(r => {
+                      const label = r.origem_tipo?.includes('frete') ? '🚚' : r.origem_tipo?.includes('comissao') ? '📋' : '💰';
+                      return (
+                        <div key={r.id} className="flex justify-between text-[10px]">
+                          <span className="text-muted-foreground truncate max-w-[60%]">{label} {r.descricao}</span>
+                          <span className="font-semibold shrink-0">R$ {r.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      );
+                    })}
+                    <div className="flex justify-between text-[11px] font-bold pt-1 border-t border-border/50">
+                      <span>Total</span>
+                      <span>R$ {finRecords.reduce((s, r) => s + r.valor, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-7 text-[11px]"
+                  onClick={() => setFinanceiroSheetOpen(true)}
+                >
+                  <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                  {finRecords.length > 0 ? 'Alterar financeiro da compra' : 'Gerar financeiro da compra'}
+                </Button>
+              </div>
             )}
           </div>
         </DialogContent>
