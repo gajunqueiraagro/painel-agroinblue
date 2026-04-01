@@ -68,6 +68,8 @@ export function CompraFinanceiroPanel({
   const [comissaoPct, setComissaoPct] = useState('');
 
   // Collapsible states — all closed by default
+  const [tipoCompraOpen, setTipoCompraOpen] = useState(false);
+  const [fornecedorOpen, setFornecedorOpen] = useState(false);
   const [precoBaseOpen, setPrecoBaseOpen] = useState(false);
   const [despesasOpen, setDespesasOpen] = useState(false);
   const [pagamentoOpen, setPagamentoOpen] = useState(false);
@@ -127,6 +129,7 @@ export function CompraFinanceiroPanel({
         if (totalParcelas > 0) {
           setTipoPreco('por_total');
           setValorTotal(String(totalParcelas));
+          setTipoCompraOpen(true);
           setPrecoBaseOpen(true);
         }
 
@@ -154,6 +157,7 @@ export function CompraFinanceiroPanel({
         const favId = recs[0]?.favorecido_id;
         if (favId && !fornecedorId) {
           setFornecedorId(favId as string);
+          setFornecedorOpen(true);
         }
 
         const nf = parcelaRecs[0]?.nota_fiscal;
@@ -481,62 +485,59 @@ export function CompraFinanceiroPanel({
       )}
       <Separator />
 
-      {/* === SEMPRE VISÍVEL: Tipo de Compra (dropdown) + Fornecedor === */}
-      <div className="space-y-1.5">
-        {/* Tipo de Compra — dropdown */}
-        <div className="space-y-0.5">
-          <Label className="text-[10px]">Tipo de Compra</Label>
-          <Select
-            value={tipoPreco}
-            onValueChange={(v: TipoPreco) => { setTipoPreco(v); setPrecoKg(''); setPrecoCab(''); setValorTotal(''); }}
-          >
-            <SelectTrigger className="h-7 text-[11px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="por_kg">Por kg</SelectItem>
-              <SelectItem value="por_cab">Por cab.</SelectItem>
-              <SelectItem value="por_total">Por total</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      {/* === BLOCO RECOLHÍVEL: Tipo de Compra === */}
+      <CollapsibleBlock title="Tipo de Compra" open={tipoCompraOpen} onOpenChange={setTipoCompraOpen}>
+        <Select
+          value={tipoPreco}
+          onValueChange={(v: TipoPreco) => { setTipoPreco(v); setPrecoKg(''); setPrecoCab(''); setValorTotal(''); }}
+        >
+          <SelectTrigger className="h-7 text-[11px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="por_kg">Por kg</SelectItem>
+            <SelectItem value="por_cab">Por cab.</SelectItem>
+            <SelectItem value="por_total">Por total</SelectItem>
+          </SelectContent>
+        </Select>
+      </CollapsibleBlock>
 
-        {/* Fornecedor (sempre visível) */}
-        <div className="space-y-0.5">
-          <Label className="text-[10px]">Fornecedor (quem você pagou)</Label>
-          <div className="flex gap-1">
-            <div className="flex-1">
-              <SearchableSelect
-                value={fornecedorId}
-                onValueChange={setFornecedorId}
-                placeholder="Selecione o fornecedor"
-                options={fornecedores.map(f => ({ value: f.id, label: f.nome }))}
-              />
-            </div>
-            <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setNovoFornecedorOpen(true)}>
-              <Plus className="h-3.5 w-3.5" />
+      <Separator />
+
+      {/* === BLOCO RECOLHÍVEL: Fornecedor === */}
+      <CollapsibleBlock title="Fornecedor (quem você pagou)" open={fornecedorOpen} onOpenChange={setFornecedorOpen}>
+        <div className="flex gap-1">
+          <div className="flex-1">
+            <SearchableSelect
+              value={fornecedorId}
+              onValueChange={setFornecedorId}
+              placeholder="Selecione o fornecedor"
+              options={fornecedores.map(f => ({ value: f.id, label: f.nome }))}
+            />
+          </div>
+          <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setNovoFornecedorOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+        {origemSugestao === 'encontrado' && (
+          <p className="text-[9px] text-green-600 flex items-center gap-1">
+            <CheckCircle className="h-2.5 w-2.5" /> Fornecedor selecionado automaticamente
+          </p>
+        )}
+        {origemSugestao === 'criar' && !fornecedorId && (
+          <div className="flex items-center gap-1 p-1 rounded border border-dashed border-muted-foreground/30 bg-muted/40">
+            <span className="text-[9px] text-muted-foreground flex-1">
+              Criar "<strong>{fazendaOrigem?.trim()}</strong>"?
+            </span>
+            <Button type="button" variant="outline" size="sm" className="h-5 text-[9px] px-1.5" onClick={handleCriarFornecedorFromOrigem}>
+              Criar
+            </Button>
+            <Button type="button" variant="ghost" size="sm" className="h-5 text-[9px] px-1" onClick={() => setOrigemSugestaoDescartada(true)}>
+              ✕
             </Button>
           </div>
-          {origemSugestao === 'encontrado' && (
-            <p className="text-[9px] text-green-600 flex items-center gap-1">
-              <CheckCircle className="h-2.5 w-2.5" /> Fornecedor selecionado automaticamente
-            </p>
-          )}
-          {origemSugestao === 'criar' && !fornecedorId && (
-            <div className="flex items-center gap-1 p-1 rounded border border-dashed border-muted-foreground/30 bg-muted/40">
-              <span className="text-[9px] text-muted-foreground flex-1">
-                Criar "<strong>{fazendaOrigem?.trim()}</strong>"?
-              </span>
-              <Button type="button" variant="outline" size="sm" className="h-5 text-[9px] px-1.5" onClick={handleCriarFornecedorFromOrigem}>
-                Criar
-              </Button>
-              <Button type="button" variant="ghost" size="sm" className="h-5 text-[9px] px-1" onClick={() => setOrigemSugestaoDescartada(true)}>
-                ✕
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
+        )}
+      </CollapsibleBlock>
 
       <NovoFornecedorDialog open={novoFornecedorOpen} onClose={() => setNovoFornecedorOpen(false)} onSave={handleNovoFornecedor} />
 
