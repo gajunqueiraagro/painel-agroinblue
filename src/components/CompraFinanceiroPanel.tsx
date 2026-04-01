@@ -280,6 +280,49 @@ export function CompraFinanceiroPanel({
     }
   };
 
+  // ===== VALIDAÇÕES =====
+  const validationErrors = useMemo(() => {
+    const errors: string[] = [];
+
+    // 1. Fornecedor obrigatório
+    if (!fornecedorId) {
+      errors.push('Selecione o fornecedor (quem você pagou) antes de gerar o financeiro.');
+    }
+
+    // 2. Valor base obrigatório
+    if (calc.valorBase <= 0) {
+      errors.push('Preencha o valor da compra antes de gerar.');
+    }
+
+    // 3. Validar parcelas (a prazo)
+    if (formaPag === 'prazo' && parcelas.length > 0) {
+      const somaParcelas = Math.round(parcelas.reduce((s, p) => s + p.valor, 0) * 100) / 100;
+      const valorBaseRound = Math.round(calc.valorBase * 100) / 100;
+      if (Math.abs(somaParcelas - valorBaseRound) > 0.01) {
+        errors.push(`A soma das parcelas (R$ ${fmt(somaParcelas)}) deve ser igual ao valor base da compra (R$ ${fmt(valorBaseRound)}).`);
+      }
+      parcelas.forEach((p, i) => {
+        if (!p.data) errors.push(`Parcela ${i + 1}: data obrigatória.`);
+        if (!p.valor || p.valor <= 0) errors.push(`Parcela ${i + 1}: valor deve ser maior que zero.`);
+      });
+    }
+
+    return errors;
+  }, [fornecedorId, calc.valorBase, formaPag, parcelas]);
+
+  const canGenerate = validationErrors.length === 0 && !!lancamentoId;
+
+  // ===== CONFIRMAÇÃO DE SUBSTITUIÇÃO (item 6) =====
+  const [confirmUpdateOpen, setConfirmUpdateOpen] = useState(false);
+
+  const handleClickGerar = () => {
+    if (mode === 'update' && existingCount > 0) {
+      setConfirmUpdateOpen(true);
+    } else {
+      handleGerarFinanceiro();
+    }
+  };
+
   // ===== GERAÇÃO FINANCEIRA =====
   const handleGerarFinanceiro = async () => {
     if (!lancamentoId) {
@@ -287,8 +330,8 @@ export function CompraFinanceiroPanel({
       return;
     }
     if (!fazendaAtual || !clienteAtual) return;
-    if (calc.valorBase <= 0) {
-      toast.error('Preencha o valor da compra antes de gerar.');
+    if (validationErrors.length > 0) {
+      toast.error(validationErrors[0]);
       return;
     }
 
