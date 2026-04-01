@@ -467,6 +467,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               </div>
             )}
           </div>
+          {/* Tipo de Venda (abate only) */}
+          {isAbate && (
+            <div>
+              <Label className="text-[11px]">Tipo de Venda</Label>
+              <Select value={tipoVenda} onValueChange={setTipoVenda}>
+                <SelectTrigger className="h-8 text-[12px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="escala" className="text-[12px]">Escala</SelectItem>
+                  <SelectItem value="a_termo" className="text-[12px]">A termo</SelectItem>
+                  <SelectItem value="spot" className="text-[12px]">Spot</SelectItem>
+                  <SelectItem value="outro" className="text-[12px]">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <Separator />
         </div>
       )}
