@@ -100,7 +100,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       : null;
 
     return (
-      <Dialog open={open} onOpenChange={onClose}>
+      <><Dialog open={open} onOpenChange={onClose}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
