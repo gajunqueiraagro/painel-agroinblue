@@ -399,6 +399,7 @@ const Index = () => {
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
           onNavigateToReclass={goToReclassFromEvolCategoria}
+          onEditarAbate={(l) => { setAbateParaEditar(l); setActiveTab('lancamentos'); }}
         />
       )}
       {activeTab === 'financeiro' && (
