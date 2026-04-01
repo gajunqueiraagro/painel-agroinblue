@@ -47,20 +47,22 @@ function shareWhatsApp(text: string) {
 function textoConfirmado(l: Lancamento, fazendaNome?: string): string {
   const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
   const c = calcIndicadoresLancamento(l);
-  const lines = [`📋 *Escala de Abate — Confirmado*\n`];
+  const lines: string[] = [`📋 *Escala de Abate — Confirmado*\n`];
   if (fazendaNome) lines.push(`🏠 Fazenda: ${fazendaNome}`);
   lines.push(
     `📅 Data da Venda: ${fmtDate(l.dataVenda)}`,
     `🚛 Data Embarque: ${fmtDate(l.dataEmbarque)}`,
     `📅 Data Prev. Abate: ${fmtDate(l.dataAbate || l.data)}`,
     `🏭 Frigorífico: ${l.fazendaDestino || '-'}`,
-    l.tipoVenda ? `📦 Tipo Venda: ${TIPO_VENDA_LABELS[l.tipoVenda] || l.tipoVenda}` : '',
+  );
+  if (l.tipoVenda) lines.push(`📦 Tipo Venda: ${TIPO_VENDA_LABELS[l.tipoVenda] || l.tipoVenda}`);
+  lines.push(
     `🐂 ${l.quantidade} ${cat}`,
     `⚖️ Peso vivo: ${fmtValor(l.pesoMedioKg)} kg`,
     `💲 R$/@: ${fmtValor(l.precoArroba)}`,
     '',
     `💰 *Valor Base Negociado: ${formatMoeda(c.valorFinal)}*`,
-  ).filter(Boolean);
+  );
   if ((l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0) > 0) {
     lines.push(`🎯 Expectativa bônus: ${formatMoeda((l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0))}`);
   }
