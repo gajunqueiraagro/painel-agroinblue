@@ -471,22 +471,20 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
     }
   };
 
+  // Expose imperative methods to parent
+  useImperativeHandle(ref, () => ({
+    generateFinanceiro: (id: string) => handleGerarFinanceiro(id),
+    getValidationErrors: () => validationErrors,
+    getFornecedorId: () => fornecedorId,
+    getValorBase: () => calc.valorBase,
+    getTipoPreco: () => tipoPreco,
+  }), [handleGerarFinanceiro, validationErrors, fornecedorId, calc.valorBase, tipoPreco]);
+
   const isPrevisto = statusOp === 'previsto';
   const previstoInputClass = isPrevisto ? 'border-orange-400 text-orange-800 dark:text-orange-300' : '';
 
   return (
     <div className="bg-card rounded-md border shadow-sm p-2.5 space-y-1.5 self-start relative">
-      {/* Overlay: block editing until movimentação is saved */}
-      {!lancamentoId && mode === 'create' && (
-        <div className="absolute inset-0 z-10 bg-background/70 backdrop-blur-[1px] rounded-md flex items-center justify-center p-3">
-          <div className="text-center space-y-1">
-            <AlertTriangle className="h-4 w-4 mx-auto text-muted-foreground" />
-            <p className="text-[11px] font-medium text-muted-foreground">
-              Registre a entrada primeiro para depois preencher o financeiro
-            </p>
-          </div>
-        </div>
-      )}
 
       <h3 className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">
         {mode === 'update' ? 'Atualizar Financeiro da Compra' : 'Detalhes Financeiros'}
