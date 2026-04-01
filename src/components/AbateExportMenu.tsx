@@ -113,34 +113,46 @@ function textoConfirmado(l: Lancamento, fazendaNome?: string): string {
 // ── Texto WhatsApp Realizado ──
 function textoRealizado(l: Lancamento, fazendaNome?: string): string {
   const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
-  const c = calcIndicadoresLancamento(l);
-  const lines = [`🔪 *Resumo Final de Abate — Realizado*\n`];
-  if (fazendaNome) lines.push(`🏠 Fazenda: ${fazendaNome}`);
+  const c = calcConfirmado(l);
+
+  const lines: string[] = [
+    'ACERTO FINAL DE ABATE - REALIZADO',
+    '',
+    `Fazenda: ${fazendaNome || '-'}`,
+    `Frigorifico: ${l.fazendaDestino || '-'}`,
+    '',
+    `Tipo de Venda: ${TIPO_VENDA_LABELS[l.tipoVenda ?? ''] || '-'}`,
+    `Tipo de Abate: ${TIPO_ABATE_LABELS[l.tipoPeso ?? ''] || '-'}`,
+    '',
+    `Data da Venda: ${fmtDate(l.dataVenda)}`,
+    `Data Embarque: ${fmtDate(l.dataEmbarque)}`,
+    `Data do Abate: ${fmtDate(l.dataAbate || l.data)}`,
+    '',
+    `Categoria: ${cat}`,
+    `Quantidade: ${l.quantidade} cabecas`,
+    '',
+    `Peso Vivo: ${fmtValor(c.pesoVivo)} kg`,
+    `Rendimento Carcaca: ${fmtValor(c.rendPct)}%`,
+    `Peso Carcaca: ${fmtValor(c.pesoCarcaca)} kg`,
+    '',
+    `Arrobas por Cabeca: ${fmtValor(c.arrobasCab)} @`,
+    `Arrobas Totais: ${fmtValor(c.arrobasTotais)} @`,
+    '',
+    `R$/@ Base: ${formatMoeda(c.precoBase)}`,
+    '',
+  ];
+  if (c.bonusArroba > 0) lines.push(`Bonus: ${formatMoeda(c.bonusArroba)}/@`);
+  if (c.descArroba > 0) lines.push(`Descontos: ${formatMoeda(c.descArroba)}/@`);
+  if (c.bonusArroba > 0 || c.descArroba > 0) lines.push('');
   lines.push(
-    `📅 Data da Venda: ${fmtDate(l.dataVenda)}`,
-    `🚛 Data Embarque: ${fmtDate(l.dataEmbarque)}`,
-    `📅 Data do Abate: ${fmtDate(l.dataAbate || l.data)}`,
-    `🏭 Frigorífico: ${l.fazendaDestino || '-'}`,
-    `🐂 ${l.quantidade} ${cat}`,
+    `Preco Liquido: ${formatMoeda(c.liqArroba)}/@`,
+    `Valor Liquido Total: ${formatMoeda(c.valorLiq)}`,
     '',
-    `⚖️ Peso vivo: ${fmtValor(l.pesoMedioKg)} kg`,
-    `📊 Rendimento: ${c.rendimento ? fmtValor(c.rendimento, 1) + '%' : '-'}`,
-    `🥩 Peso carcaça: ${fmtValor(l.pesoCarcacaKg)} kg`,
-    `📐 Arrobas finais: ${fmtValor(c.pesoTotalArrobas)}`,
-    '',
+    `R$/@ liq: ${formatMoeda(c.liqArroba)}`,
+    `R$/cab liq: ${formatMoeda(c.liqCabeca)}`,
+    `R$/kg vivo liq: ${formatMoeda(c.liqKg)}`,
   );
-  const bonus = (l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0);
-  const desc = (l.descontoQualidade ?? 0) + (l.descontoFunrural ?? 0) + (l.outrosDescontos ?? 0);
-  if (bonus > 0) lines.push(`✅ Bônus reais: ${formatMoeda(bonus)}`);
-  if (desc > 0) lines.push(`❌ Descontos reais: ${formatMoeda(desc)}`);
-  lines.push(
-    '',
-    `💰 *Valor Líquido Final: ${formatMoeda(c.valorFinal)}*`,
-    `📈 Líq/@: ${formatMoeda(c.liqArroba)}`,
-    `📈 Líq/Cab: ${formatMoeda(c.liqCabeca)}`,
-    `📈 Líq/Kg: ${formatMoeda(c.liqKg)}`,
-  );
-  if (l.notaFiscal) lines.push(`📄 NF: ${l.notaFiscal}`);
+  if (l.notaFiscal) lines.push('', `NF: ${l.notaFiscal}`);
   return lines.join('\n');
 }
 
