@@ -63,7 +63,7 @@ const ABA_CONFIG: { id: Aba; label: string; icon: React.ReactNode }[] = [
 const STATUS_DESCRIPTIONS: Record<StatusOperacional, string> = {
   conciliado: 'Realizado — movimentação concluída e considerada no rebanho real.',
   previsto: 'Meta / Planejamento — entra apenas na previsão, não afeta o saldo real.',
-  confirmado: 'Venda fechada ou operação definida, mas ainda não efetivada. Quando concluída, alterar para Realizado.',
+  confirmado: 'Utilizar quando os animais já foram escalados / venda fechada, mas o abate ainda não ocorreu. Quando o abate for concluído, atualizar os dados finais e alterar para Realizado.',
 };
 
 function getCamposFazenda(tipo: TipoMovimentacao, nomeFazenda: string) {
@@ -139,6 +139,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [outrasDespesas, setOutrasDespesas] = useState('');
   const [notaFiscal, setNotaFiscal] = useState('');
   const [tipoPeso, setTipoPeso] = useState<'vivo' | 'morto'>('vivo');
+  const [rendCarcaca, setRendCarcaca] = useState('');
+  const [funruralPct, setFunruralPct] = useState('');
 
   const [dataVenda, setDataVenda] = useState('');
   const [dataEmbarque, setDataEmbarque] = useState('');
@@ -173,30 +175,43 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const calc = useMemo(() => {
     const qtd = Number(quantidade) || 0;
     const peso = Number(pesoKg) || 0;
-    const carcaca = Number(pesoCarcacaKg) || 0;
+    const rend = Number(rendCarcaca) || 0;
+    const carcacaCalc = isAbate && rend > 0 ? peso * rend / 100 : Number(pesoCarcacaKg) || 0;
     let pesoArroba = 0;
-    if (isAbate) { pesoArroba = carcaca > 0 ? carcaca / 15 : 0; }
+    if (isAbate) { pesoArroba = carcacaCalc > 0 ? carcacaCalc / 15 : 0; }
     else { pesoArroba = peso > 0 ? peso / 30 : 0; }
     const totalArrobas = pesoArroba * qtd;
     const totalKg = peso * qtd;
     let valorBruto = 0;
     if (usaPrecoArroba) { valorBruto = totalArrobas * (Number(precoArroba) || 0); }
     else if (usaPrecoKg) { valorBruto = totalKg * (Number(precoKg) || 0); }
+    // Abate: bonus/desconto inputs are R$/@ → multiply by totalArrobas
+    const bonusPrecoceTotal = isAbate ? (Number(bonusPrecoce) || 0) * totalArrobas : 0;
+    const bonusQualidadeTotal = isAbate ? (Number(bonusQualidade) || 0) * totalArrobas : 0;
+    const bonusListaTraceTotal = isAbate ? (Number(bonusListaTrace) || 0) * totalArrobas : 0;
+    const descQualidadeTotal = isAbate ? (Number(descontoQualidade) || 0) * totalArrobas : 0;
+    const descFunruralTotal = isAbate ? valorBruto * (Number(funruralPct) || 0) / 100 : 0;
+    const descOutrosTotal = isAbate ? (Number(outrosDescontos) || 0) : 0;
     const totalBonus = isAbate
-      ? (Number(bonusPrecoce) || 0) + (Number(bonusQualidade) || 0) + (Number(bonusListaTrace) || 0)
+      ? bonusPrecoceTotal + bonusQualidadeTotal + bonusListaTraceTotal
       : (Number(bonus) || 0);
     const totalDescontos = isAbate
-      ? (Number(descontoQualidade) || 0) + (Number(descontoFunrural) || 0) + (Number(outrosDescontos) || 0)
+      ? descQualidadeTotal + descFunruralTotal + descOutrosTotal
       : (Number(descontos) || 0);
-    const comissaoVal = valorBruto * (Number(comissaoPct) || 0) / 100;
-    const freteVal = Number(frete) || 0;
-    const outrasDespVal = Number(outrasDespesas) || 0;
+    const comissaoVal = isAbate ? 0 : valorBruto * (Number(comissaoPct) || 0) / 100;
+    const freteVal = isAbate ? 0 : Number(frete) || 0;
+    const outrasDespVal = isAbate ? 0 : Number(outrasDespesas) || 0;
     const valorLiquido = valorBruto + totalBonus - totalDescontos - comissaoVal - freteVal - outrasDespVal;
     const liqArroba = totalArrobas > 0 ? valorLiquido / totalArrobas : 0;
     const liqCabeca = qtd > 0 ? valorLiquido / qtd : 0;
     const liqKg = totalKg > 0 ? valorLiquido / totalKg : 0;
-    return { pesoArroba, totalArrobas, totalKg, valorBruto, totalBonus, totalDescontos, comissaoVal, freteVal, outrasDespVal, valorLiquido, liqArroba, liqCabeca, liqKg };
-  }, [quantidade, pesoKg, pesoCarcacaKg, precoArroba, precoKg, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, descontoFunrural, outrosDescontos, bonus, descontos, comissaoPct, frete, outrasDespesas, isAbate, usaPrecoArroba, usaPrecoKg]);
+    return {
+      pesoArroba, totalArrobas, totalKg, valorBruto, totalBonus, totalDescontos,
+      comissaoVal, freteVal, outrasDespVal, valorLiquido, liqArroba, liqCabeca, liqKg,
+      carcacaCalc, bonusPrecoceTotal, bonusQualidadeTotal, bonusListaTraceTotal,
+      descQualidadeTotal, descFunruralTotal, descOutrosTotal,
+    };
+  }, [quantidade, pesoKg, pesoCarcacaKg, rendCarcaca, precoArroba, precoKg, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, funruralPct, outrosDescontos, bonus, descontos, comissaoPct, frete, outrasDespesas, isAbate, usaPrecoArroba, usaPrecoKg]);
 
   const gerarParcelas = useCallback((numParcelas: number, baseDate: string, valorTotal: number) => {
     const p: Parcela[] = [];
@@ -262,6 +277,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setDataVenda(''); setDataEmbarque(''); setDataAbate(''); setTipoVenda('');
     setFormaPagamento('avista'); setParcelas([]); setQtdParcelas('2');
     setMotivoMorte(''); setMotivoMorteCustom('');
+    setRendCarcaca(''); setFunruralPct('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -282,29 +298,34 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     const valorTotalFinal = calc.valorLiquido > 0 ? calc.valorLiquido : undefined;
 
+    // For abate: auto-compute dates and convert R$/@ to absolute values
+    const abateDataVenda = isAbate ? (dataVenda || format(new Date(), 'yyyy-MM-dd')) : (dataVenda || undefined);
+    const abateDataEmbarque = isAbate && data ? format(addDays(parseISO(data), -1), 'yyyy-MM-dd') : (dataEmbarque || undefined);
+    const abateDataAbate = isAbate ? data : (dataAbate || undefined);
+
     const returnedId = await onAdicionar({
       data, tipo, quantidade: Number(quantidade), categoria: categoria as Categoria,
       fazendaOrigem: origemFinal, fazendaDestino: destinoFinal,
       pesoMedioKg: pesoKg ? Number(pesoKg) : undefined,
       pesoMedioArrobas: pesoKg ? kgToArrobas(Number(pesoKg)) : undefined,
       observacao: observacao || undefined,
-      pesoCarcacaKg: numOrUndef(pesoCarcacaKg),
+      pesoCarcacaKg: isAbate ? (calc.carcacaCalc > 0 ? calc.carcacaCalc : undefined) : numOrUndef(pesoCarcacaKg),
       precoArroba: numOrUndef(precoArroba) || undefined,
-      bonusPrecoce: numOrUndef(bonusPrecoce),
-      bonusQualidade: numOrUndef(bonusQualidade),
-      bonusListaTrace: numOrUndef(bonusListaTrace),
-      descontoQualidade: numOrUndef(descontoQualidade),
-      descontoFunrural: numOrUndef(descontoFunrural),
-      outrosDescontos: numOrUndef(outrosDescontos),
+      bonusPrecoce: isAbate ? (calc.bonusPrecoceTotal > 0 ? calc.bonusPrecoceTotal : undefined) : numOrUndef(bonusPrecoce),
+      bonusQualidade: isAbate ? (calc.bonusQualidadeTotal > 0 ? calc.bonusQualidadeTotal : undefined) : numOrUndef(bonusQualidade),
+      bonusListaTrace: isAbate ? (calc.bonusListaTraceTotal > 0 ? calc.bonusListaTraceTotal : undefined) : numOrUndef(bonusListaTrace),
+      descontoQualidade: isAbate ? (calc.descQualidadeTotal > 0 ? calc.descQualidadeTotal : undefined) : numOrUndef(descontoQualidade),
+      descontoFunrural: isAbate ? (calc.descFunruralTotal > 0 ? calc.descFunruralTotal : undefined) : numOrUndef(descontoFunrural),
+      outrosDescontos: isAbate ? (Number(outrosDescontos) || undefined) : numOrUndef(outrosDescontos),
       acrescimos: numOrUndef(bonus),
       deducoes: numOrUndef(descontos),
       valorTotal: valorTotalFinal,
-      notaFiscal: notaFiscal || undefined,
+      notaFiscal: isAbate && isConfirmado ? undefined : (notaFiscal || undefined),
       tipoPeso,
       statusOperacional: statusOp,
-      dataVenda: dataVenda || undefined,
-      dataEmbarque: dataEmbarque || undefined,
-      dataAbate: dataAbate || undefined,
+      dataVenda: abateDataVenda || undefined,
+      dataEmbarque: abateDataEmbarque || undefined,
+      dataAbate: abateDataAbate || undefined,
       tipoVenda: tipoVenda || undefined,
     });
 
@@ -328,10 +349,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const previstoInputClass = isPrevisto ? 'border-orange-400 text-orange-800 dark:text-orange-300' : '';
   const previstoLabelClass = isPrevisto ? 'text-orange-700 dark:text-orange-400' : '';
 
-  const showExtraDates = (isConfirmado || isConciliado) && (isAbate || isVenda || isTransferencia);
-  const showFormaPagamento = (isConfirmado || isConciliado) && (isAbate || isVenda || isCompra || isTransferencia);
-  const showComissaoFreteDespesas = isConciliado && (isAbate || isVenda || isCompra || isTransferencia);
+  const showExtraDates = !isAbate && (isConfirmado || isConciliado) && (isVenda || isTransferencia);
+  const showFormaPagamento = !isAbate && (isConfirmado || isConciliado) && (isVenda || isCompra || isTransferencia);
+  const showComissaoFreteDespesas = !isAbate && isConciliado && (isVenda || isCompra || isTransferencia);
   const showComissaoPrevConf = (isConfirmado) && (isCompra);
+
+  // Auto-computed dates for abate
+  const abateDataVendaAuto = dataVenda || format(new Date(), 'yyyy-MM-dd');
+  const abateDataEmbarqueAuto = data ? format(addDays(parseISO(data), -1), 'yyyy-MM-dd') : '';
+  const abateDataAbateAuto = data;
 
   // ===== BLOCKED VIEW =====
   if (bloqueado && (aba === 'entrada' || aba === 'saida' || aba === 'reclassificacao')) {
@@ -425,8 +451,186 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     );
   };
 
-  // ===== FINANCIAL DETAILS PANEL (right column) =====
-  const renderFinancialPanel = () => (
+  // ===== ABATE FINANCIAL PANEL =====
+  const renderAbateFinancialPanel = () => {
+    // Previsto: locked with message
+    if (isPrevisto) {
+      return (
+        <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
+          <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
+          <Separator />
+          <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-md p-3 text-center space-y-1 opacity-70">
+            <AlertTriangle className="h-5 w-5 text-orange-500 mx-auto" />
+            <p className="text-[11px] font-semibold text-orange-800 dark:text-orange-300">Registrar o abate primeiro para depois preencher o financeiro.</p>
+            <p className="text-[10px] text-orange-600 dark:text-orange-400">Altere o status para Confirmado ou Realizado para habilitar os campos financeiros.</p>
+          </div>
+        </div>
+      );
+    }
+
+    const compactRow = (label: string, input: React.ReactNode, autoLabel?: string, autoValue?: string, autoColor?: string) => (
+      <div className="space-y-0.5">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-muted-foreground whitespace-nowrap min-w-[90px]">{label}</span>
+          <div className="flex-1">{input}</div>
+        </div>
+        {autoLabel && autoValue && autoValue !== '-' && (
+          <p className={`text-[9px] pl-[98px] ${autoColor || 'text-muted-foreground'}`}>
+            {autoLabel}: {autoValue}
+          </p>
+        )}
+      </div>
+    );
+
+    return (
+      <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
+        <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
+        <Separator />
+
+        {/* Datas da Operação */}
+        <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Datas da Operação</h4>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-muted-foreground min-w-[90px]">Data da Venda</span>
+            <Input type="date" value={dataVenda || format(new Date(), 'yyyy-MM-dd')} onChange={e => setDataVenda(e.target.value)} className="h-7 text-[11px] flex-1" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-muted-foreground min-w-[90px]">Data Embarque</span>
+            <Input type="date" value={abateDataEmbarqueAuto} readOnly className="h-7 text-[11px] flex-1 bg-muted cursor-not-allowed" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-muted-foreground min-w-[90px]">Data Abate</span>
+            <Input type="date" value={abateDataAbateAuto} readOnly className="h-7 text-[11px] flex-1 bg-muted cursor-not-allowed" />
+          </div>
+        </div>
+
+        {/* Tipo de Venda */}
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-muted-foreground min-w-[90px]">Tipo de Venda</span>
+          <Select value={tipoVenda} onValueChange={setTipoVenda}>
+            <SelectTrigger className="h-7 text-[11px] flex-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="escala" className="text-[11px]">Escala</SelectItem>
+              <SelectItem value="a_termo" className="text-[11px]">A termo</SelectItem>
+              <SelectItem value="spot" className="text-[11px]">Spot</SelectItem>
+              <SelectItem value="outro" className="text-[11px]">Outro</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Separator />
+
+        {/* Rendimento e Carcaça */}
+        <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Carcaça</h4>
+        {compactRow(
+          'Rend. Carcaça (%)',
+          <Input type="number" value={rendCarcaca} onChange={e => setRendCarcaca(e.target.value)} placeholder="0,0" className="h-7 text-[11px]" step="0.1" />,
+          'Peso Carcaça',
+          calc.carcacaCalc > 0 ? `${fmt(calc.carcacaCalc)} kg` : undefined,
+        )}
+        {calc.totalArrobas > 0 && (
+          <p className="text-[9px] text-muted-foreground pl-[98px]">Arrobas: {fmt(calc.totalArrobas)} @</p>
+        )}
+
+        <Separator />
+
+        {/* Valor da Operação */}
+        <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Valor da Operação</h4>
+        {compactRow(
+          'R$/@ (preço base)',
+          <Input type="number" value={precoArroba} onChange={e => setPrecoArroba(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />,
+          'Valor Total Base',
+          calc.valorBruto > 0 ? formatMoeda(calc.valorBruto) : undefined,
+        )}
+
+        <Separator />
+
+        {/* Bônus (R$/@) */}
+        <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Bônus (R$/@)</h4>
+        <div className="space-y-1">
+          {compactRow(
+            'Precoce R$/@',
+            <Input type="number" value={bonusPrecoce} onChange={e => setBonusPrecoce(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />,
+            'Precoce R$',
+            calc.bonusPrecoceTotal > 0 ? formatMoeda(calc.bonusPrecoceTotal) : undefined,
+          )}
+          {compactRow(
+            'Qualidade R$/@',
+            <Input type="number" value={bonusQualidade} onChange={e => setBonusQualidade(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />,
+            'Qualidade R$',
+            calc.bonusQualidadeTotal > 0 ? formatMoeda(calc.bonusQualidadeTotal) : undefined,
+          )}
+          {compactRow(
+            'Lista Trace R$/@',
+            <Input type="number" value={bonusListaTrace} onChange={e => setBonusListaTrace(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />,
+            'Lista Trace R$',
+            calc.bonusListaTraceTotal > 0 ? formatMoeda(calc.bonusListaTraceTotal) : undefined,
+          )}
+        </div>
+
+        <Separator />
+
+        {/* Descontos (R$/@) */}
+        <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Descontos</h4>
+        <div className="space-y-1">
+          {compactRow(
+            'Qualidade R$/@',
+            <Input type="number" value={descontoQualidade} onChange={e => setDescontoQualidade(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />,
+            'Qualidade R$',
+            calc.descQualidadeTotal > 0 ? `-${formatMoeda(calc.descQualidadeTotal)}` : undefined,
+            'text-destructive',
+          )}
+          {compactRow(
+            'Funrural %',
+            <Input type="number" value={funruralPct} onChange={e => setFunruralPct(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" step="0.01" />,
+            'Funrural R$',
+            calc.descFunruralTotal > 0 ? `-${formatMoeda(calc.descFunruralTotal)}` : undefined,
+            'text-destructive',
+          )}
+          {compactRow(
+            'Outros R$',
+            <Input type="number" value={outrosDescontos} onChange={e => setOutrosDescontos(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />,
+            'Outros R$',
+            Number(outrosDescontos) > 0 ? `-${formatMoeda(Number(outrosDescontos))}` : undefined,
+            'text-destructive',
+          )}
+        </div>
+
+        <Separator />
+
+        {/* Resultado Final */}
+        <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Resultado</h4>
+        <div className="flex justify-between items-center text-[12px]">
+          <span className="text-muted-foreground font-semibold">Valor Líquido Total</span>
+          <strong className={calc.valorLiquido > 0 ? 'text-primary' : 'text-muted-foreground'}>{calc.valorLiquido > 0 ? formatMoeda(calc.valorLiquido) : '-'}</strong>
+        </div>
+        {calc.liqArroba > 0 && (
+          <div className="flex justify-between text-[10px]">
+            <span className="text-muted-foreground">Líquido R$/@</span>
+            <span className="font-semibold">{formatMoeda(calc.liqArroba)}</span>
+          </div>
+        )}
+
+        {/* Nota Fiscal - only for Realizado */}
+        {isConciliado && (
+          <>
+            <Separator />
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-muted-foreground min-w-[90px]">Nota Fiscal</span>
+              <Input value={notaFiscal} onChange={e => setNotaFiscal(e.target.value)} placeholder="Nº da nota" className="h-7 text-[11px] flex-1" />
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  // ===== FINANCIAL DETAILS PANEL (right column — non-abate) =====
+  const renderFinancialPanel = () => {
+    // For abate, use dedicated panel
+    if (isAbate) return renderAbateFinancialPanel();
+
+    return (
     <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
       <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
       <Separator />
@@ -461,50 +665,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               <Label className="text-[11px]">Data Embarque</Label>
               <Input type="date" value={dataEmbarque} onChange={e => setDataEmbarque(e.target.value)} className="h-8 text-[12px]" />
             </div>
-            {(isAbate || isTransferencia) && (
-              <div>
-                <Label className="text-[11px]">Data Abate</Label>
-                <Input type="date" value={dataAbate} onChange={e => setDataAbate(e.target.value)} className="h-8 text-[12px]" />
-              </div>
-            )}
           </div>
-          {/* Tipo de Venda (abate only) */}
-          {isAbate && (
-            <div>
-              <Label className="text-[11px]">Tipo de Venda</Label>
-              <Select value={tipoVenda} onValueChange={setTipoVenda}>
-                <SelectTrigger className="h-8 text-[12px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="escala" className="text-[12px]">Escala</SelectItem>
-                  <SelectItem value="a_termo" className="text-[12px]">A termo</SelectItem>
-                  <SelectItem value="spot" className="text-[12px]">Spot</SelectItem>
-                  <SelectItem value="outro" className="text-[12px]">Outro</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
           <Separator />
         </div>
-      )}
-
-      {/* Abate-specific */}
-      {isAbate && (
-        <>
-          <div>
-            <Label className="text-[11px]">Peso Carcaça (kg)</Label>
-            <Input type="number" value={pesoCarcacaKg} onChange={e => setPesoCarcacaKg(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
-          </div>
-          <div>
-            <Label className="text-[11px]">Tipo de Peso Negociado</Label>
-            <Select value={tipoPeso} onValueChange={(v: 'vivo' | 'morto') => setTipoPeso(v)}>
-              <SelectTrigger className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="vivo" className="text-[12px]">Peso Vivo</SelectItem>
-                <SelectItem value="morto" className="text-[12px]">Peso Morto</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </>
       )}
 
       <div>
@@ -515,12 +678,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       <Separator />
       <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Valor da Operação</h4>
 
-      {usaPrecoArroba && (
-        <div>
-          <Label className={`text-[11px] ${previstoLabelClass}`}>R$/@ (preço base)</Label>
-          <Input type="number" value={precoArroba} onChange={e => setPrecoArroba(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${previstoInputClass}`} />
-        </div>
-      )}
       {usaPrecoKg && (
         <div>
           <Label className={`text-[11px] ${previstoLabelClass}`}>R$/kg (preço base)</Label>
@@ -532,7 +689,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         <div className={`rounded-md p-2 text-[12px] ${isPrevisto ? 'bg-orange-100 dark:bg-orange-950/30' : 'bg-muted/30'}`}>
           <div className="flex justify-between">
             <span className={isPrevisto ? 'text-orange-700 dark:text-orange-400' : 'text-muted-foreground'}>Valor total bruto</span>
-            <strong className={isPrevisto ? 'text-orange-800 dark:text-orange-300' : ''}>R$ {fmt(calc.valorBruto)}</strong>
+            <strong className={isPrevisto ? 'text-orange-800 dark:text-orange-300' : ''}>{formatMoeda(calc.valorBruto)}</strong>
           </div>
         </div>
       )}
@@ -574,7 +731,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               ))}
               {parcelas.length > 0 && (
                 <div className="text-[10px] text-muted-foreground text-right">
-                  Soma parcelas: R$ {fmt(parcelas.reduce((s, p) => s + p.valor, 0))}
+                  Soma parcelas: {formatMoeda(parcelas.reduce((s, p) => s + p.valor, 0))}
                 </div>
               )}
             </div>
@@ -582,33 +739,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </>
       )}
 
-      {/* Bonus/Descontos */}
-      {isAbate ? (
-        <>
-          <Separator />
-          <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Bônus (R$)</h4>
-          <div className="space-y-1.5">
-            <div><Label className="text-[11px]">Precoce</Label><Input type="number" value={bonusPrecoce} onChange={e => setBonusPrecoce(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
-            <div><Label className="text-[11px]">Qualidade</Label><Input type="number" value={bonusQualidade} onChange={e => setBonusQualidade(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
-            <div><Label className="text-[11px]">Lista Trace</Label><Input type="number" value={bonusListaTrace} onChange={e => setBonusListaTrace(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
-          </div>
-          <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Descontos (R$)</h4>
-          <div className="space-y-1.5">
-            <div><Label className="text-[11px]">Qualidade</Label><Input type="number" value={descontoQualidade} onChange={e => setDescontoQualidade(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
-            <div><Label className="text-[11px]">Funrural</Label><Input type="number" value={descontoFunrural} onChange={e => setDescontoFunrural(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
-            <div><Label className="text-[11px]">Outros</Label><Input type="number" value={outrosDescontos} onChange={e => setOutrosDescontos(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
-          </div>
-        </>
-      ) : (
-        <>
-          <Separator />
-          <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Ajustes (R$)</h4>
-          <div className="space-y-1.5">
-            <div><Label className="text-[11px]">Bônus</Label><Input type="number" value={bonus} onChange={e => setBonus(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
-            <div><Label className="text-[11px]">Descontos</Label><Input type="number" value={descontos} onChange={e => setDescontos(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
-          </div>
-        </>
-      )}
+      {/* Bonus/Descontos (non-abate) */}
+      <Separator />
+      <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Ajustes (R$)</h4>
+      <div className="space-y-1.5">
+        <div><Label className="text-[11px]">Bônus</Label><Input type="number" value={bonus} onChange={e => setBonus(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
+        <div><Label className="text-[11px]">Descontos</Label><Input type="number" value={descontos} onChange={e => setDescontos(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
+      </div>
 
       {/* Valor líquido override */}
       <Separator />
@@ -620,13 +757,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onChange={e => {
             const vt = parseFloat(e.target.value);
             if (!isNaN(vt)) {
-              const totalBon = isAbate ? (Number(bonusPrecoce) || 0) + (Number(bonusQualidade) || 0) + (Number(bonusListaTrace) || 0) : (Number(bonus) || 0);
-              const totalDesc = isAbate ? (Number(descontoQualidade) || 0) + (Number(descontoFunrural) || 0) + (Number(outrosDescontos) || 0) : (Number(descontos) || 0);
+              const totalBon = (Number(bonus) || 0);
+              const totalDesc = (Number(descontos) || 0);
               const freteVal = Number(frete) || 0;
               const outVal = Number(outrasDespesas) || 0;
               const brutoNecessario = vt - totalBon + totalDesc + freteVal + outVal;
-              if (usaPrecoArroba && calc.totalArrobas > 0) { setPrecoArroba(String((brutoNecessario / calc.totalArrobas).toFixed(4))); }
-              else if (usaPrecoKg && calc.totalKg > 0) { setPrecoKg(String((brutoNecessario / calc.totalKg).toFixed(4))); }
+              if (usaPrecoKg && calc.totalKg > 0) { setPrecoKg(String((brutoNecessario / calc.totalKg).toFixed(4))); }
             }
           }}
           placeholder="Informe o valor total líquido"
@@ -653,24 +789,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         <div className={`rounded-md p-2 ${isPrevisto ? 'bg-orange-200/50 dark:bg-orange-950/50' : 'bg-primary/10'}`}>
           <div className="flex justify-between text-[12px] font-bold">
             <span className={isPrevisto ? 'text-orange-800 dark:text-orange-300' : ''}>Valor líquido final</span>
-            <span className={isPrevisto ? 'text-orange-800 dark:text-orange-300' : 'text-primary'}>R$ {fmt(calc.valorLiquido)}</span>
+            <span className={isPrevisto ? 'text-orange-800 dark:text-orange-300' : 'text-primary'}>{formatMoeda(calc.valorLiquido)}</span>
           </div>
-          {calc.liqArroba > 0 && (
-            <div className="flex justify-between text-[11px] mt-0.5">
-              <span className="text-muted-foreground">R$/líq @</span>
-              <strong>R$ {fmt(calc.liqArroba)}</strong>
-            </div>
-          )}
           {calc.liqCabeca > 0 && (
             <div className="flex justify-between text-[11px] mt-0.5">
               <span className="text-muted-foreground">Líq/Cabeça</span>
-              <strong>R$ {fmt(calc.liqCabeca)}</strong>
+              <strong>{formatMoeda(calc.liqCabeca)}</strong>
             </div>
           )}
           {calc.liqKg > 0 && (
             <div className="flex justify-between text-[11px] mt-0.5">
               <span className="text-muted-foreground">R$/Kg líq</span>
-              <strong>R$ {fmt(calc.liqKg)}</strong>
+              <strong>{formatMoeda(calc.liqKg)}</strong>
             </div>
           )}
         </div>
@@ -678,7 +808,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       </>
       )}
     </div>
-  );
+    );
+  };
 
   const currentTipoConfig = [...TIPOS_ENTRADA, ...TIPOS_SAIDA].find(t => t.value === tipo);
   const currentTipoLabel = currentTipoConfig?.label || tipo;
