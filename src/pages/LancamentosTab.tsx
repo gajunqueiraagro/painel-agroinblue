@@ -888,21 +888,20 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           </CollapsibleContent>
         </Collapsible>
 
-        {/* Informações de Pagamento - for Confirmado and Realizado */}
-        {(isConfirmado || isConciliado) && (
-          <AbateFinanceiroPanel
-            quantidade={Number(quantidade) || 0}
-            categoria={categoria}
-            data={data}
-            valorLiquido={calc.valorLiquido}
-            frigorifico={fazendaDestino}
-            notaFiscal={notaFiscal}
-            onNotaFiscalChange={setNotaFiscal}
-            lancamentoId={editingAbateId || lastSavedLancamentoId || undefined}
-            mode={editingAbateId ? 'update' : 'create'}
-            onFinanceiroUpdated={() => {}}
-          />
-        )}
+        {/* Informações de Pagamento - all statuses */}
+        <AbateFinanceiroPanel
+          quantidade={Number(quantidade) || 0}
+          categoria={categoria}
+          data={data}
+          valorLiquido={calc.valorLiquido}
+          frigorifico={fazendaDestino}
+          notaFiscal={notaFiscal}
+          onNotaFiscalChange={setNotaFiscal}
+          lancamentoId={editingAbateId || lastSavedLancamentoId || undefined}
+          mode={editingAbateId ? 'update' : 'create'}
+          onFinanceiroUpdated={() => {}}
+          statusOperacional={statusOp}
+        />
 
         {/* Unified register button */}
         <Separator />

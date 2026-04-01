@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
-import { ChevronDown, CheckCircle, AlertTriangle } from 'lucide-react';
+import { ChevronDown, CheckCircle, AlertTriangle, Info } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -30,14 +30,17 @@ interface Props {
   lancamentoId?: string;
   mode?: 'create' | 'update';
   onFinanceiroUpdated?: () => void;
+  statusOperacional?: 'previsto' | 'confirmado' | 'conciliado';
 }
 
 export function AbateFinanceiroPanel({
   quantidade, categoria, data, valorLiquido, frigorifico,
   notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated,
+  statusOperacional = 'conciliado',
 }: Props) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
+  const isPrevisto = statusOperacional === 'previsto';
 
   const [formaReceb, setFormaReceb] = useState<'avista' | 'prazo'>('avista');
   const [qtdParcelas, setQtdParcelas] = useState('2');
@@ -312,8 +315,13 @@ export function AbateFinanceiroPanel({
             </div>
           )}
 
-          {/* Generate button */}
-          {!gerado ? (
+          {/* Generate button — only for Confirmado/Realizado */}
+          {isPrevisto ? (
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground bg-muted/40 rounded p-2">
+              <Info className="h-4 w-4 shrink-0" />
+              <span>Status Previsto: os valores alimentam o fluxo de caixa previsto. Lançamentos financeiros reais serão gerados ao alterar para Confirmado ou Realizado.</span>
+            </div>
+          ) : !gerado ? (
             <Button
               type="button"
               variant="default"
@@ -336,7 +344,7 @@ export function AbateFinanceiroPanel({
             </div>
           )}
 
-          {!lancamentoId && (
+          {!lancamentoId && !isPrevisto && (
             <p className="text-[10px] text-muted-foreground italic">
               Salve o lançamento de abate primeiro para habilitar a geração financeira.
             </p>
