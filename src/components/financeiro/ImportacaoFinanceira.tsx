@@ -291,21 +291,44 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
             )}
 
             {/* Erros */}
-            {preview.erros.length > 0 && (
-              <div className="space-y-1 max-h-40 overflow-y-auto">
-                <p className="text-xs font-bold text-destructive flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" /> Erros encontrados:
-                </p>
-                {preview.erros.slice(0, 20).map((e, i) => (
-                  <div key={i} className="text-xs bg-destructive/5 rounded px-2 py-1">
-                    <span className="font-bold">Linha {e.linha}</span> — {e.campo}: {e.mensagem}
-                  </div>
-                ))}
-                {preview.erros.length > 20 && (
-                  <div className="text-xs text-muted-foreground">... e mais {preview.erros.length - 20} erros</div>
-                )}
-              </div>
-            )}
+            {preview.erros.length > 0 && (() => {
+              const errosTransf = preview.erros.filter(e => e.campo === 'Conta_Destino');
+              const errosOutros = preview.erros.filter(e => e.campo !== 'Conta_Destino' && e.campo !== 'Centro de Custo');
+              return (
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {errosTransf.length > 0 && (
+                    <div className="bg-destructive/10 rounded-lg p-2 mb-1">
+                      <p className="text-xs font-bold text-destructive flex items-center gap-1 mb-1">
+                        <AlertTriangle className="h-3 w-3" /> {errosTransf.length} transferência(s) bloqueada(s) — conta destino ausente ou inválida
+                      </p>
+                      {errosTransf.slice(0, 10).map((e, i) => (
+                        <div key={`t${i}`} className="text-xs bg-destructive/5 rounded px-2 py-0.5 mt-0.5">
+                          <span className="font-bold">Linha {e.linha}</span> — {e.mensagem}
+                        </div>
+                      ))}
+                      {errosTransf.length > 10 && (
+                        <div className="text-xs text-muted-foreground mt-0.5">... e mais {errosTransf.length - 10}</div>
+                      )}
+                    </div>
+                  )}
+                  {errosOutros.length > 0 && (
+                    <>
+                      <p className="text-xs font-bold text-destructive flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" /> Erros encontrados:
+                      </p>
+                      {errosOutros.slice(0, 20).map((e, i) => (
+                        <div key={i} className="text-xs bg-destructive/5 rounded px-2 py-1">
+                          <span className="font-bold">Linha {e.linha}</span> — {e.campo}: {e.mensagem}
+                        </div>
+                      ))}
+                      {errosOutros.length > 20 && (
+                        <div className="text-xs text-muted-foreground">... e mais {errosOutros.length - 20} erros</div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Preview table - lancamentos */}
             {preview.lancamentos.length > 0 && (
