@@ -338,7 +338,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
         const { data: oldRecords } = await supabase
           .from('financeiro_lancamentos_v2')
           .select('id')
-          .eq('movimentacao_rebanho_id', lancamentoId)
+          .eq('movimentacao_rebanho_id', effectiveId)
           .eq('cancelado', false);
 
         const oldIds = (oldRecords || []).map(r => r.id);
@@ -353,7 +353,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
             cliente_id: clienteAtual.id,
             usuario_id: userId || null,
             acao: 'recalculo_financeiro_compra',
-            movimentacao_id: lancamentoId,
+            movimentacao_id: effectiveId,
             financeiro_ids: oldIds,
             detalhes: { registros_cancelados: oldIds.length, motivo: 'Recálculo financeiro da compra' },
           });
@@ -362,14 +362,14 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
         const { data: existing } = await supabase
           .from('financeiro_lancamentos_v2')
           .select('id')
-          .eq('movimentacao_rebanho_id', lancamentoId)
+          .eq('movimentacao_rebanho_id', effectiveId)
           .eq('cancelado', false)
           .limit(1);
 
         if (existing && existing.length > 0) {
           toast.error('Lançamentos financeiros já foram gerados para esta movimentação.');
           setGerado(true);
-          return;
+          return false;
         }
       }
 
@@ -390,7 +390,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
         sinal: -1,
         status_transacao: statusFin,
         origem_lancamento: 'movimentacao_rebanho',
-        movimentacao_rebanho_id: lancamentoId,
+        movimentacao_rebanho_id: effectiveId,
         macro_custo: 'Investimento em Bovinos',
         centro_custo: 'Reposição de Bovinos',
       };
@@ -462,8 +462,10 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
         : `${inserts.length} lançamento(s) financeiro(s) gerado(s) com sucesso!`;
       toast.success(msg);
       if (mode === 'update' && onFinanceiroUpdated) onFinanceiroUpdated();
+      return true;
     } catch (err: any) {
       toast.error('Erro ao gerar lançamentos: ' + (err.message || err));
+      return false;
     } finally {
       setGerando(false);
     }
