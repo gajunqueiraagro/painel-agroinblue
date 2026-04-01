@@ -421,11 +421,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                 {onNavigateToLancamentos && (
                   <Button
                     size="sm"
-                    variant="outline"
-                    className="h-5 text-[9px] gap-0.5 px-1.5"
+                    className="h-6 text-[10px] gap-1 px-2.5 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold shadow-sm"
                     onClick={() => onNavigateToLancamentos(ano, parseInt(selectedMes))}
                   >
-                    <ExternalLink className="h-3 w-3" /> Lançamentos
+                    <ExternalLink className="h-3.5 w-3.5" /> Lançamentos
                   </Button>
                 )}
                 <div className="ml-auto text-right">
