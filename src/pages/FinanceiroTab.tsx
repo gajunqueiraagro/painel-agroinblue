@@ -30,6 +30,8 @@ interface Props {
   onBack?: () => void;
   /** Label do filtro aplicado (drill-down) */
   drillDownLabel?: string;
+  /** Callback para editar abate no formulário completo (navega para LancamentosTab) */
+  onEditarAbate?: (lancamento: Lancamento) => void;
 }
 
 export type SubAba = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
