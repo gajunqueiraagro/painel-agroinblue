@@ -133,7 +133,15 @@ function textoRealizado(l: Lancamento, fazendaNome?: string): string {
 async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
-  const c = calcIndicadoresLancamento(l);
+  const totalArrobas = calcArrobasTotaisPrev(l);
+  const bonus = (l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0);
+  const desc = (l.descontoQualidade ?? 0) + (l.descontoFunrural ?? 0) + (l.outrosDescontos ?? 0);
+  const valorBase = totalArrobas * (l.precoArroba ?? 0);
+  const valorLiq = valorBase + (bonus * totalArrobas) - (desc * totalArrobas);
+  const bonusArroba = totalArrobas > 0 ? bonus : 0;
+  const descArroba = totalArrobas > 0 ? desc : 0;
+  const liqArroba = totalArrobas > 0 ? valorLiq / totalArrobas : 0;
+
   let y = 5;
   try {
     const logo = await loadLogoBase64();
@@ -154,20 +162,22 @@ async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
     ['Frigorífico', l.fazendaDestino || '-'],
   ];
   if (l.tipoVenda) info.push(['Tipo de Venda', TIPO_VENDA_LABELS[l.tipoVenda] || l.tipoVenda]);
+  info.push(['Tipo de Abate', TIPO_ABATE_LABELS[l.tipoPeso ?? ''] || '-']);
   info.push(
     ['Categoria', cat],
-    ['Quantidade', `${l.quantidade} cabeças`],
-    ['Peso Vivo', `${fmtValor(l.pesoMedioKg)} kg`],
-    ['R$/@ negociado', fmtValor(l.precoArroba)],
-    ['Valor Base Negociado', formatMoeda(c.valorFinal)],
+    ['Quantidade', `${l.quantidade} cab.`],
+    ['Peso Vivo Previsto', `${fmtValor(l.pesoMedioKg)} kg`],
+    ['R$/@ Negociado', formatMoeda(l.precoArroba)],
+    ['Arrobas Totais Previstas', `${fmtValor(totalArrobas)} @`],
   );
-  const bonus = (l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0);
-  const desc = (l.descontoQualidade ?? 0) + (l.descontoFunrural ?? 0) + (l.outrosDescontos ?? 0);
-  if (bonus > 0) info.push(['Expectativa Bônus', formatMoeda(bonus)]);
-  if (desc > 0) info.push(['Expectativa Descontos', formatMoeda(desc)]);
-  if (c.liqArroba > 0) info.push(['Expectativa Líq/@', formatMoeda(c.liqArroba)]);
+  if (bonusArroba > 0) info.push(['Expectativa Bônus R$/@', formatMoeda(bonusArroba)]);
+  if (descArroba > 0) info.push(['Expectativa Descontos R$/@', formatMoeda(descArroba)]);
+  info.push(
+    ['Expectativa Líq. Total', formatMoeda(valorLiq)],
+  );
+  if (liqArroba > 0) info.push(['Expectativa Líq. R$/@', formatMoeda(liqArroba)]);
 
-  autoTable(doc, { startY: y, body: info, theme: 'plain', bodyStyles: { fontSize: 11 }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55 } }, margin: { left: 20, right: 20 } });
+  autoTable(doc, { startY: y, body: info, theme: 'plain', bodyStyles: { fontSize: 11 }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 65 } }, margin: { left: 20, right: 20 } });
   doc.save(`escala_confirmado_${format(parseISO(l.data), 'ddMMyyyy')}.pdf`);
 }
 
