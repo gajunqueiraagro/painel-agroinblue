@@ -669,48 +669,48 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 {/* Bonus/Descontos */}
                 {isAbate ? (
                   <>
-                    <h4 className="text-xs font-bold text-muted-foreground uppercase">Bônus (R$)</h4>
-                    <div className="grid grid-cols-3 gap-2">
+                    <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Bônus (R$)</h4>
+                    <div className="grid grid-cols-3 gap-1.5">
                       <div>
-                        <Label className="text-xs">Precoce</Label>
-                        <Input type="number" value={bonusPrecoce} onChange={e => setBonusPrecoce(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Precoce</Label>
+                        <Input type="number" value={bonusPrecoce} onChange={e => setBonusPrecoce(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                       <div>
-                        <Label className="text-xs">Qualidade</Label>
-                        <Input type="number" value={bonusQualidade} onChange={e => setBonusQualidade(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Qualidade</Label>
+                        <Input type="number" value={bonusQualidade} onChange={e => setBonusQualidade(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                       <div>
-                        <Label className="text-xs">Lista Trace</Label>
-                        <Input type="number" value={bonusListaTrace} onChange={e => setBonusListaTrace(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Lista Trace</Label>
+                        <Input type="number" value={bonusListaTrace} onChange={e => setBonusListaTrace(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                     </div>
-                    <h4 className="text-xs font-bold text-muted-foreground uppercase">Descontos (R$)</h4>
-                    <div className="grid grid-cols-3 gap-2">
+                    <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Descontos (R$)</h4>
+                    <div className="grid grid-cols-3 gap-1.5">
                       <div>
-                        <Label className="text-xs">Qualidade</Label>
-                        <Input type="number" value={descontoQualidade} onChange={e => setDescontoQualidade(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Qualidade</Label>
+                        <Input type="number" value={descontoQualidade} onChange={e => setDescontoQualidade(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                       <div>
-                        <Label className="text-xs">Funrural</Label>
-                        <Input type="number" value={descontoFunrural} onChange={e => setDescontoFunrural(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Funrural</Label>
+                        <Input type="number" value={descontoFunrural} onChange={e => setDescontoFunrural(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                       <div>
-                        <Label className="text-xs">Outros</Label>
-                        <Input type="number" value={outrosDescontos} onChange={e => setOutrosDescontos(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Outros</Label>
+                        <Input type="number" value={outrosDescontos} onChange={e => setOutrosDescontos(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                     </div>
                   </>
                 ) : (
                   <>
-                    <h4 className="text-xs font-bold text-muted-foreground uppercase">Ajustes (R$)</h4>
-                    <div className="grid grid-cols-2 gap-3">
+                    <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Ajustes (R$)</h4>
+                    <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <Label className="text-xs">Bônus</Label>
-                        <Input type="number" value={bonus} onChange={e => setBonus(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Bônus</Label>
+                        <Input type="number" value={bonus} onChange={e => setBonus(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                       <div>
-                        <Label className="text-xs">Descontos</Label>
-                        <Input type="number" value={descontos} onChange={e => setDescontos(e.target.value)} placeholder="0" className={`h-9 ${previstoInputClass}`} />
+                        <Label className="text-[11px]">Descontos</Label>
+                        <Input type="number" value={descontos} onChange={e => setDescontos(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} />
                       </div>
                     </div>
                   </>
