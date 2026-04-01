@@ -67,7 +67,7 @@ function CollapsibleBlock({ title, open, onOpenChange, children }: { title: stri
 }
 
 export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>(function CompraFinanceiroPanel({
-  quantidade, pesoKg, data, categoria, statusOp, fazendaOrigem, notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated, onValidationChange,
+  quantidade, pesoKg, data, categoria, statusOp, fazendaOrigem, notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated, onValidationChange, onRequestRegister, registerLabel, submitting: externalSubmitting,
 }, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
