@@ -334,7 +334,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                         )}
                         <div className="flex justify-between text-[11px] font-bold pt-1 border-t border-border/50 text-primary">
                           <span>Total Geral Vinculado</span>
-                          <span>R$ {fmt(totalBov + totalDesp)}</span>
+                          <span>{formatMoeda(totalBov + totalDesp)}</span>
                         </div>
                       </div>
                     );
