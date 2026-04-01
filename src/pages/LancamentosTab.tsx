@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
   Lancamento,
