@@ -315,13 +315,15 @@ export function AbateFinanceiroPanel({
             </div>
           )}
 
-          {/* Generate button — only for Confirmado/Realizado */}
-          {isPrevisto ? (
-            <div className="flex items-center gap-2 text-[11px] text-muted-foreground bg-muted/40 rounded p-2">
+          {/* Generate button — for all statuses */}
+          {isPrevisto && (
+            <div className="flex items-center gap-2 text-[11px] text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/20 border border-orange-300 dark:border-orange-800 rounded p-2">
               <Info className="h-4 w-4 shrink-0" />
-              <span>Status Previsto: os valores alimentam o fluxo de caixa previsto. Lançamentos financeiros reais serão gerados ao alterar para Confirmado ou Realizado.</span>
+              <span>Status Previsto: os lançamentos gerados alimentam o fluxo de caixa previsto, sem impacto no financeiro real.</span>
             </div>
-          ) : !gerado ? (
+          )}
+
+          {!gerado ? (
             <Button
               type="button"
               variant="default"
@@ -330,7 +332,7 @@ export function AbateFinanceiroPanel({
               disabled={!canGenerate || gerando}
               onClick={handleClickGerar}
             >
-              {gerando ? 'Gerando...' : mode === 'update' ? 'Atualizar Financeiro' : 'Gerar Financeiro de Receita'}
+              {gerando ? 'Gerando...' : mode === 'update' ? 'Atualizar Financeiro' : isPrevisto ? 'Gerar Financeiro Previsto' : 'Gerar Financeiro de Receita'}
             </Button>
           ) : (
             <div className="flex items-center gap-2 text-[11px] text-primary bg-primary/10 rounded p-2">
@@ -344,7 +346,7 @@ export function AbateFinanceiroPanel({
             </div>
           )}
 
-          {!lancamentoId && !isPrevisto && (
+          {!lancamentoId && (
             <p className="text-[10px] text-muted-foreground italic">
               Salve o lançamento de abate primeiro para habilitar a geração financeira.
             </p>
