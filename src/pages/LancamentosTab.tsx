@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ChevronDown as CollapseIcon } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { format, parseISO, addDays } from 'date-fns';
@@ -292,8 +293,25 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!quantidade || Number(quantidade) <= 0) return;
+    if (!quantidade || Number(quantidade) <= 0) { toast.error('Informe a quantidade'); return; }
     if (!categoria) { toast.error('Selecione a categoria'); return; }
+    if (!data) { toast.error('Informe a data'); return; }
+
+    // Abate: validate required fields
+    if (isAbate) {
+      if (!fazendaDestino) { toast.error('Informe o Frigorífico'); return; }
+      if (isConfirmado || isConciliado) {
+        if (!dataVenda && !format(new Date(), 'yyyy-MM-dd')) { toast.error('Informe a Data da Venda'); return; }
+        if (!tipoVenda) { toast.error('Selecione o Tipo de Venda'); return; }
+        if (!rendCarcaca || Number(rendCarcaca) <= 0) { toast.error('Informe o Rendimento de Carcaça (%)'); return; }
+        if (!precoArroba || Number(precoArroba) <= 0) { toast.error('Informe o R$/@ (preço base)'); return; }
+      }
+    }
+    // Non-abate saídas: validate origin/destination
+    if (aba === 'saida' && !isAbate && !isMorte) {
+      if (campos.destino?.show && !campos.destino.auto && !fazendaDestino) { toast.error('Informe o Destino'); return; }
+    }
+    if (!pesoKg || Number(pesoKg) <= 0) { toast.error('Informe o Peso (kg)'); return; }
 
     const origemFinal = campos.origem.show
       ? (campos.origem.auto ? campos.origem.value : fazendaOrigem) || undefined
@@ -348,10 +366,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setCategoria('');
       setPesoKg(tipo === 'nascimento' ? '30' : '');
       setFazendaOrigem(''); setFazendaDestino('');
+      setData(format(new Date(), 'yyyy-MM-dd'));
+      setObservacao('');
+      setStatusOp('conciliado');
       resetFinancialFields();
       toast.success('Lançamento registrado!');
     }
-    // For compra, keep fields so user can generate financial records
   };
 
   const tiposDisponiveis = aba === 'entrada' ? TIPOS_ENTRADA : TIPOS_SAIDA;
@@ -497,164 +517,188 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
         <Separator />
 
-        {/* Datas da Operação */}
-        <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Datas da Operação</h4>
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground min-w-[90px]">Data da Venda</span>
-            <Input type="date" value={dataVenda || format(new Date(), 'yyyy-MM-dd')} onChange={e => setDataVenda(e.target.value)} className="h-7 text-[11px] flex-1" />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground min-w-[90px]">Data Embarque</span>
-            <Input type="date" value={abateDataEmbarqueAuto} readOnly className="h-7 text-[11px] flex-1 bg-muted cursor-not-allowed" />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground min-w-[90px]">Data Abate</span>
-            <Input type="date" value={abateDataAbateAuto} readOnly className="h-7 text-[11px] flex-1 bg-muted cursor-not-allowed" />
-          </div>
-        </div>
-
-        {/* Tipo de Venda */}
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted-foreground min-w-[90px]">Tipo de Venda</span>
-          <Select value={tipoVenda} onValueChange={setTipoVenda}>
-            <SelectTrigger className="h-7 text-[11px] flex-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="escala" className="text-[11px]">Escala</SelectItem>
-              <SelectItem value="a_termo" className="text-[11px]">A termo</SelectItem>
-              <SelectItem value="spot" className="text-[11px]">Spot</SelectItem>
-              <SelectItem value="outro" className="text-[11px]">Outro</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <Separator />
-
-        {/* Rendimento e Carcaça */}
-        <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Carcaça</h4>
-        {compactRow(
-          'Rend. Carcaça (%)',
-          <Input type="number" value={rendCarcaca} onChange={e => setRendCarcaca(e.target.value)} placeholder="0,0" className="h-7 text-[11px]" step="0.1" />,
-        )}
-        {calc.carcacaCalc > 0 && (
-          <p className="text-[9px] text-muted-foreground pl-[98px]">Peso Carcaça: {fmt(calc.carcacaCalc)} kg</p>
-        )}
-        {calc.pesoArroba > 0 && (
-          <p className="text-[9px] text-muted-foreground pl-[98px]">Arrobas: {fmt(calc.pesoArroba)} @ / cab</p>
-        )}
-        {calc.totalArrobas > 0 && (
-          <p className="text-[9px] font-semibold text-muted-foreground pl-[98px]">Total Arrobas: {fmt(calc.totalArrobas)} @</p>
-        )}
-
-        <Separator />
-
-        {/* Valor da Operação */}
-        <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Valor da Operação</h4>
-        {compactRow(
-          'R$/@ (preço base)',
-          <Input type="number" value={precoArroba} onChange={e => setPrecoArroba(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />,
-          'Valor Total Base',
-          calc.valorBruto > 0 ? formatMoeda(calc.valorBruto) : undefined,
-        )}
-
-        <Separator />
-
-        {/* Bônus (R$/@) */}
-        <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Bônus (R$/@)</h4>
-        <div className="space-y-1">
-          {compactRow(
-            'Precoce R$/@',
-            <Input type="number" value={bonusPrecoce} onChange={e => setBonusPrecoce(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />,
-            'Precoce R$',
-            calc.bonusPrecoceTotal > 0 ? formatMoeda(calc.bonusPrecoceTotal) : undefined,
-          )}
-          {compactRow(
-            'Qualidade R$/@',
-            <Input type="number" value={bonusQualidade} onChange={e => setBonusQualidade(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />,
-            'Qualidade R$',
-            calc.bonusQualidadeTotal > 0 ? formatMoeda(calc.bonusQualidadeTotal) : undefined,
-          )}
-          {compactRow(
-            'Lista Trace R$/@',
-            <Input type="number" value={bonusListaTrace} onChange={e => setBonusListaTrace(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />,
-            'Lista Trace R$',
-            calc.bonusListaTraceTotal > 0 ? formatMoeda(calc.bonusListaTraceTotal) : undefined,
-          )}
-        </div>
-
-        <Separator />
-
-        {/* Descontos (R$/@) */}
-        <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Descontos</h4>
-        <div className="space-y-1">
-          {compactRow(
-            'Qualidade R$/@',
-            <Input type="number" value={descontoQualidade} onChange={e => setDescontoQualidade(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />,
-            'Qualidade R$',
-            calc.descQualidadeTotal > 0 ? `-${formatMoeda(calc.descQualidadeTotal)}` : undefined,
-            'text-destructive',
-          )}
-          {compactRow(
-            'Funrural %',
-            <Input type="number" value={funruralPct} onChange={e => setFunruralPct(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" step="0.01" />,
-            'Funrural R$',
-            calc.descFunruralTotal > 0 ? `-${formatMoeda(calc.descFunruralTotal)}` : undefined,
-            'text-destructive',
-          )}
-          {compactRow(
-            'Outros R$',
-            <Input type="number" value={outrosDescontos} onChange={e => setOutrosDescontos(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />,
-            'Outros R$',
-            Number(outrosDescontos) > 0 ? `-${formatMoeda(Number(outrosDescontos))}` : undefined,
-            'text-destructive',
-          )}
-        </div>
-
-        <Separator />
-
-        {/* Resultado Final */}
-        <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Resultado</h4>
-        <div className="flex justify-between items-center text-[12px]">
-          <span className="text-muted-foreground font-semibold">Valor Líquido Total</span>
-          <strong className={calc.valorLiquido > 0 ? 'text-primary' : 'text-muted-foreground'}>{calc.valorLiquido > 0 ? formatMoeda(calc.valorLiquido) : '-'}</strong>
-        </div>
-        {calc.liqArroba > 0 && (
-          <div className="flex justify-between text-[10px]">
-            <span className="text-muted-foreground">Líquido R$/@</span>
-            <span className="font-semibold">{formatMoeda(calc.liqArroba)}</span>
-          </div>
-        )}
-
-        {/* Resultado Esperado — summary block */}
-        {calc.valorLiquido > 0 && Number(quantidade) > 0 && (
-          <>
-            <Separator />
-            <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Resultado Esperado</h4>
-            <div className="bg-muted/30 rounded-md p-2 space-y-0.5 text-[10px]">
-              <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-semibold">{fmt(Number(quantidade), 0)} {categoria ? CATEGORIAS.find(c => c.value === categoria)?.label?.toLowerCase() || 'cab.' : 'cab.'}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Peso médio</span><span className="font-semibold">{fmt(Number(pesoKg))} kg</span></div>
-              {Number(rendCarcaca) > 0 && (
-                <div className="flex justify-between"><span className="text-muted-foreground">Rendimento</span><span className="font-semibold">{fmt(Number(rendCarcaca), 2)}%</span></div>
-              )}
-              {calc.pesoArroba > 0 && (
-                <div className="flex justify-between"><span className="text-muted-foreground">Arrobas</span><span className="font-semibold">{fmt(calc.pesoArroba)} @ / cab</span></div>
-              )}
-              {calc.totalArrobas > 0 && (
-                <div className="flex justify-between"><span className="text-muted-foreground">Total arrobas</span><span className="font-semibold">{fmt(calc.totalArrobas)} @</span></div>
-              )}
-              {Number(precoArroba) > 0 && (
-                <div className="flex justify-between"><span className="text-muted-foreground">Preço venda</span><span className="font-semibold">{formatMoeda(Number(precoArroba))}</span></div>
-              )}
-              <Separator className="my-1" />
-              <div className="flex justify-between"><span className="text-muted-foreground">Preço líquido R$/@</span><span className="font-semibold">{formatMoeda(calc.liqArroba)}</span></div>
-              <div className="flex justify-between font-bold text-[11px]"><span>Valor líquido total</span><span className="text-primary">{formatMoeda(calc.valorLiquido)}</span></div>
-              <Separator className="my-1" />
-              <div className="flex justify-between"><span className="text-muted-foreground">R$/@ líq</span><span className="font-semibold">{formatMoeda(calc.liqArroba)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">R$/cab líq</span><span className="font-semibold">{formatMoeda(calc.liqCabeca)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">R$/kg vivo líq</span><span className="font-semibold">{formatMoeda(calc.liqKg)}</span></div>
+        {/* Datas da Operação — collapsible */}
+        <Collapsible>
+          <CollapsibleTrigger className="flex items-center justify-between w-full group">
+            <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Datas da Operação</h4>
+            <CollapseIcon className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-1 pt-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-muted-foreground min-w-[90px]">Data da Venda</span>
+              <Input type="date" value={dataVenda || format(new Date(), 'yyyy-MM-dd')} onChange={e => setDataVenda(e.target.value)} className="h-7 text-[11px] flex-1" />
             </div>
-          </>
-        )}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-muted-foreground min-w-[90px]">Data Embarque</span>
+              <Input type="date" value={abateDataEmbarqueAuto} readOnly className="h-7 text-[11px] flex-1 bg-muted cursor-not-allowed" />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-muted-foreground min-w-[90px]">Data Abate</span>
+              <Input type="date" value={abateDataAbateAuto} readOnly className="h-7 text-[11px] flex-1 bg-muted cursor-not-allowed" />
+            </div>
+            {/* Tipo de Venda */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-muted-foreground min-w-[90px]">Tipo de Venda</span>
+              <Select value={tipoVenda} onValueChange={setTipoVenda}>
+                <SelectTrigger className="h-7 text-[11px] flex-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="escala" className="text-[11px]">Escala</SelectItem>
+                  <SelectItem value="a_termo" className="text-[11px]">A termo</SelectItem>
+                  <SelectItem value="spot" className="text-[11px]">Spot</SelectItem>
+                  <SelectItem value="outro" className="text-[11px]">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+
+        <Separator />
+
+        {/* Carcaça e Valor da Operação — collapsible */}
+        <Collapsible>
+          <CollapsibleTrigger className="flex items-center justify-between w-full group">
+            <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Carcaça e Valor da Operação</h4>
+            <CollapseIcon className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-1 pt-1">
+            {compactRow(
+              'Rend. Carcaça (%)',
+              <Input type="number" value={rendCarcaca} onChange={e => setRendCarcaca(e.target.value)} placeholder="0,0" className="h-7 text-[11px]" step="0.1" />,
+            )}
+            {calc.carcacaCalc > 0 && (
+              <p className="text-[9px] text-muted-foreground pl-[98px]">Peso Carcaça: {fmt(calc.carcacaCalc)} kg</p>
+            )}
+            {calc.pesoArroba > 0 && (
+              <p className="text-[9px] text-muted-foreground pl-[98px]">Arrobas: {fmt(calc.pesoArroba)} @ / cab</p>
+            )}
+            {calc.totalArrobas > 0 && (
+              <p className="text-[9px] font-semibold text-muted-foreground pl-[98px]">Total Arrobas: {fmt(calc.totalArrobas)} @</p>
+            )}
+            <Separator className="my-1" />
+            {compactRow(
+              'R$/@ (preço base)',
+              <Input type="number" value={precoArroba} onChange={e => setPrecoArroba(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />,
+              'Valor Total Base',
+              calc.valorBruto > 0 ? formatMoeda(calc.valorBruto) : undefined,
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+
+        <Separator />
+
+        {/* Bônus (R$/@) — collapsible */}
+        <Collapsible>
+          <CollapsibleTrigger className="flex items-center justify-between w-full group">
+            <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Bônus (R$/@)</h4>
+            <CollapseIcon className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-1 pt-1">
+            {compactRow(
+              'Precoce R$/@',
+              <Input type="number" value={bonusPrecoce} onChange={e => setBonusPrecoce(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />,
+              'Precoce R$',
+              calc.bonusPrecoceTotal > 0 ? formatMoeda(calc.bonusPrecoceTotal) : undefined,
+            )}
+            {compactRow(
+              'Qualidade R$/@',
+              <Input type="number" value={bonusQualidade} onChange={e => setBonusQualidade(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />,
+              'Qualidade R$',
+              calc.bonusQualidadeTotal > 0 ? formatMoeda(calc.bonusQualidadeTotal) : undefined,
+            )}
+            {compactRow(
+              'Lista Trace R$/@',
+              <Input type="number" value={bonusListaTrace} onChange={e => setBonusListaTrace(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />,
+              'Lista Trace R$',
+              calc.bonusListaTraceTotal > 0 ? formatMoeda(calc.bonusListaTraceTotal) : undefined,
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+
+        <Separator />
+
+        {/* Descontos — collapsible */}
+        <Collapsible>
+          <CollapsibleTrigger className="flex items-center justify-between w-full group">
+            <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Descontos</h4>
+            <CollapseIcon className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-1 pt-1">
+            {compactRow(
+              'Qualidade R$/@',
+              <Input type="number" value={descontoQualidade} onChange={e => setDescontoQualidade(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />,
+              'Qualidade R$',
+              calc.descQualidadeTotal > 0 ? `-${formatMoeda(calc.descQualidadeTotal)}` : undefined,
+              'text-destructive',
+            )}
+            {compactRow(
+              'Funrural %',
+              <Input type="number" value={funruralPct} onChange={e => setFunruralPct(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" step="0.01" />,
+              'Funrural R$',
+              calc.descFunruralTotal > 0 ? `-${formatMoeda(calc.descFunruralTotal)}` : undefined,
+              'text-destructive',
+            )}
+            {compactRow(
+              'Outros R$',
+              <Input type="number" value={outrosDescontos} onChange={e => setOutrosDescontos(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />,
+              'Outros R$',
+              Number(outrosDescontos) > 0 ? `-${formatMoeda(Number(outrosDescontos))}` : undefined,
+              'text-destructive',
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+
+        <Separator />
+
+        {/* Resultado Final — collapsible */}
+        <Collapsible>
+          <CollapsibleTrigger className="flex items-center justify-between w-full group">
+            <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Resultado Final</h4>
+            <CollapseIcon className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-1 pt-1">
+            <div className="flex justify-between items-center text-[12px]">
+              <span className="text-muted-foreground font-semibold">Valor Líquido Total</span>
+              <strong className={calc.valorLiquido > 0 ? 'text-primary' : 'text-muted-foreground'}>{calc.valorLiquido > 0 ? formatMoeda(calc.valorLiquido) : '-'}</strong>
+            </div>
+            {calc.liqArroba > 0 && (
+              <div className="flex justify-between text-[10px]">
+                <span className="text-muted-foreground">Líquido R$/@</span>
+                <span className="font-semibold">{formatMoeda(calc.liqArroba)}</span>
+              </div>
+            )}
+
+            {/* Resultado Esperado — summary block */}
+            {calc.valorLiquido > 0 && Number(quantidade) > 0 && (
+              <>
+                <Separator className="my-1" />
+                <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Resultado Esperado</h4>
+                <div className="bg-muted/30 rounded-md p-2 space-y-0.5 text-[10px]">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-semibold">{fmt(Number(quantidade), 0)} {categoria ? CATEGORIAS.find(c => c.value === categoria)?.label?.toLowerCase() || 'cab.' : 'cab.'}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Peso médio</span><span className="font-semibold">{fmt(Number(pesoKg))} kg</span></div>
+                  {Number(rendCarcaca) > 0 && (
+                    <div className="flex justify-between"><span className="text-muted-foreground">Rendimento</span><span className="font-semibold">{fmt(Number(rendCarcaca), 2)}%</span></div>
+                  )}
+                  {calc.pesoArroba > 0 && (
+                    <div className="flex justify-between"><span className="text-muted-foreground">Arrobas</span><span className="font-semibold">{fmt(calc.pesoArroba)} @ / cab</span></div>
+                  )}
+                  {calc.totalArrobas > 0 && (
+                    <div className="flex justify-between"><span className="text-muted-foreground">Total arrobas</span><span className="font-semibold">{fmt(calc.totalArrobas)} @</span></div>
+                  )}
+                  {Number(precoArroba) > 0 && (
+                    <div className="flex justify-between"><span className="text-muted-foreground">Preço venda</span><span className="font-semibold">{formatMoeda(Number(precoArroba))}</span></div>
+                  )}
+                  <Separator className="my-1" />
+                  <div className="flex justify-between"><span className="text-muted-foreground">Preço líquido R$/@</span><span className="font-semibold">{formatMoeda(calc.liqArroba)}</span></div>
+                  <div className="flex justify-between font-bold text-[11px]"><span>Valor líquido total</span><span className="text-primary">{formatMoeda(calc.valorLiquido)}</span></div>
+                  <Separator className="my-1" />
+                  <div className="flex justify-between"><span className="text-muted-foreground">R$/@ líq</span><span className="font-semibold">{formatMoeda(calc.liqArroba)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">R$/cab líq</span><span className="font-semibold">{formatMoeda(calc.liqCabeca)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">R$/kg vivo líq</span><span className="font-semibold">{formatMoeda(calc.liqKg)}</span></div>
+                </div>
+              </>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
 
         {/* Nota Fiscal - only for Realizado */}
         {isConciliado && (
