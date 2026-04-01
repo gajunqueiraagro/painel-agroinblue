@@ -72,7 +72,7 @@ const STATUS_DESCRIPTIONS_DEFAULT: Record<StatusOperacional, string> = {
 };
 
 const STATUS_DESCRIPTIONS_ABATE: Record<StatusOperacional, string> = {
-  previsto: 'Planejamento (meta). Não impacta o rebanho nem o financeiro real.',
+  previsto: 'Planejamento (meta). Gera lançamentos previstos que alimentam o fluxo de caixa previsto.',
   confirmado: 'Venda fechada e animais escalados, mas o abate ainda não ocorreu. Os dados ainda são previsões operacionais e financeiras.',
   conciliado: 'Abate concluído com dados reais de carcaça, bônus e descontos. Os valores refletem o resultado efetivo da operação.',
 };
