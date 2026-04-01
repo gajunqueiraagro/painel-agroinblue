@@ -497,7 +497,14 @@ const Index = () => {
       {activeTab === 'fin_v2_plano' && <FinV2PlanoContasTab />}
       {activeTab === 'fin_v2_saldos' && <FinV2SaldosTab />}
       {activeTab === 'contratos' && <ContratosTab />}
-      {activeTab === 'conciliacao_bancaria' && <ConciliacaoBancariaTab />}
+      {activeTab === 'conciliacao_bancaria' && (
+        <ConciliacaoBancariaTab
+          onNavigateToLancamentos={(a, m) => {
+            setFiltroGlobal({ ano: a, mes: m });
+            setActiveTab('financeiro_v2');
+          }}
+        />
+      )}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>

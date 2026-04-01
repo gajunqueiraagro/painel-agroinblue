@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
-  CheckCircle2, AlertTriangle, XCircle, Pencil,
+  CheckCircle2, AlertTriangle, XCircle, Pencil, ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
@@ -114,8 +114,11 @@ const STATUS_CONFIG = {
   pendente: { label: 'Pendente', color: 'bg-muted text-muted-foreground', icon: AlertTriangle, iconColor: 'text-muted-foreground' },
 };
 
-/* ── Component ── */
-export function ConciliacaoBancariaTab() {
+interface ConciliacaoProps {
+  onNavigateToLancamentos?: (ano: string, mes: number) => void;
+}
+
+export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoProps = {}) {
   const { clienteAtual } = useCliente();
   const perm = usePermissions();
   const isAdmin = perm.perfil === 'admin_agroinblue' || perm.perfil === 'gestor_cliente';
@@ -415,6 +418,16 @@ export function ConciliacaoBancariaTab() {
                 <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${cfg.color}`}>
                   {cfg.label}
                 </Badge>
+                {onNavigateToLancamentos && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-5 text-[9px] gap-0.5 px-1.5"
+                    onClick={() => onNavigateToLancamentos(ano, parseInt(selectedMes))}
+                  >
+                    <ExternalLink className="h-3 w-3" /> Lançamentos
+                  </Button>
+                )}
                 <div className="ml-auto text-right">
                   <p className="text-[9px] text-muted-foreground">Saldo Calculado</p>
                   <p className={`text-xs font-bold ${card.saldoCalculado >= 0 ? 'text-foreground' : 'text-red-600'}`}>
