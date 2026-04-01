@@ -356,15 +356,15 @@ export function CompraFinanceiroPanel({
         )}
       </div>
 
-      {/* Fornecedor / Favorecido */}
+      {/* Fornecedor (quem você pagou) */}
       <div className="space-y-1">
-        <Label className="text-[11px]">Fornecedor / Favorecido</Label>
+        <Label className="text-[11px]">Fornecedor (quem você pagou)</Label>
         <div className="flex gap-1">
           <div className="flex-1">
             <SearchableSelect
               value={fornecedorId}
               onValueChange={setFornecedorId}
-              placeholder="Selecione (opcional)"
+              placeholder="Selecione o fornecedor da compra"
               options={fornecedores.map(f => ({ value: f.id, label: f.nome }))}
             />
           </div>
