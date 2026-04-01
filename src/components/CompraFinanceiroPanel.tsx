@@ -387,6 +387,31 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       const isFemea = FEMEAS.includes(categoria);
       const subcentroCompra = isFemea ? 'COMPRAS ANIMAIS/FEMEAS' : 'COMPRAS ANIMAIS/MACHOS';
 
+      // Validar classificação no plano de contas real
+      const subcentrosNecessarios = [subcentroCompra];
+      if (calc.freteVal > 0) subcentrosNecessarios.push('FRETE COMPRA ANIMAIS');
+      if (calc.comissaoVal > 0) subcentrosNecessarios.push('COMISSÃO COMPRA ANIMAIS');
+
+      const { data: planoContas } = await supabase
+        .from('financeiro_plano_contas')
+        .select('id, macro_custo, centro_custo, subcentro')
+        .eq('cliente_id', clienteAtual.id)
+        .eq('ativo', true)
+        .eq('tipo_operacao', '2-Saídas')
+        .in('subcentro', subcentrosNecessarios);
+
+      const planoMap = new Map((planoContas || []).map(p => [p.subcentro, p]));
+
+      // Verificar se todos os subcentros necessários existem
+      for (const sub of subcentrosNecessarios) {
+        if (!planoMap.has(sub)) {
+          toast.error(`Não foi encontrado mapeamento financeiro válido para "${sub}" no plano de classificação.`);
+          return false;
+        }
+      }
+
+      const clasCompra = planoMap.get(subcentroCompra)!;
+
       const baseRecord: Record<string, any> = {
         cliente_id: clienteAtual.id,
         fazenda_id: fazendaAtual.id,
@@ -395,8 +420,8 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
         status_transacao: statusFin,
         origem_lancamento: 'movimentacao_rebanho',
         movimentacao_rebanho_id: effectiveId,
-        macro_custo: 'Investimento em Bovinos',
-        centro_custo: 'Reposição de Bovinos',
+        macro_custo: clasCompra.macro_custo,
+        centro_custo: clasCompra.centro_custo,
       };
 
       if (fornecedorId) baseRecord.favorecido_id = fornecedorId;
@@ -406,7 +431,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
           inserts.push({
             ...baseRecord,
             ano_mes: p.data.slice(0, 7),
-            subcentro: subcentroCompra,
+            subcentro: clasCompra.subcentro,
             valor: p.valor,
             data_competencia: data,
             data_pagamento: p.data,
@@ -420,7 +445,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
         inserts.push({
           ...baseRecord,
           ano_mes: anoMes,
-          subcentro: subcentroCompra,
+          subcentro: clasCompra.subcentro,
           valor: calc.valorBase,
           data_competencia: data,
           data_pagamento: data,
@@ -432,10 +457,13 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       }
 
       if (calc.freteVal > 0) {
+        const clasFrete = planoMap.get('FRETE COMPRA ANIMAIS')!;
         inserts.push({
           ...baseRecord,
           ano_mes: anoMes,
-          subcentro: 'FRETE COMPRA ANIMAIS',
+          macro_custo: clasFrete.macro_custo,
+          centro_custo: clasFrete.centro_custo,
+          subcentro: clasFrete.subcentro,
           valor: calc.freteVal,
           data_competencia: data,
           data_pagamento: data,
@@ -445,10 +473,13 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       }
 
       if (calc.comissaoVal > 0) {
+        const clasComissao = planoMap.get('COMISSÃO COMPRA ANIMAIS')!;
         inserts.push({
           ...baseRecord,
           ano_mes: anoMes,
-          subcentro: 'COMISSÃO COMPRA ANIMAIS',
+          macro_custo: clasComissao.macro_custo,
+          centro_custo: clasComissao.centro_custo,
+          subcentro: clasComissao.subcentro,
           valor: calc.comissaoVal,
           data_competencia: data,
           data_pagamento: data,
