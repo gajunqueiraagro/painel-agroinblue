@@ -157,6 +157,7 @@ export function CompraFinanceiroPanel({
         const favId = recs[0]?.favorecido_id;
         if (favId && !fornecedorId) {
           setFornecedorId(favId as string);
+          setFornecedorOpen(true);
         }
 
         const nf = parcelaRecs[0]?.nota_fiscal;
