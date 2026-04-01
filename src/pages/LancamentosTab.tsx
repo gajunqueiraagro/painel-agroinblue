@@ -1198,7 +1198,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           </div>
         </div>
       )}
-
+      {editingAbateId && (
         <Button type="button" variant="outline" className="w-full h-9 text-[12px] font-bold mb-1" size="sm" onClick={() => {
           setEditingAbateId(null);
           setQuantidade(''); setCategoria(''); setPesoKg('');
