@@ -264,6 +264,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setDataVenda(''); setDataEmbarque(''); setDataAbate(''); setTipoVenda('');
     setFormaPagamento('avista'); setParcelas([]); setQtdParcelas('2');
     setMotivoMorte(''); setMotivoMorteCustom('');
+    setRendCarcaca(''); setFunruralPct('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
