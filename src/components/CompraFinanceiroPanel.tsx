@@ -38,6 +38,9 @@ interface Props {
   mode?: 'create' | 'update';
   onFinanceiroUpdated?: () => void;
   onValidationChange?: (errors: string[]) => void;
+  onRequestRegister?: () => void;
+  registerLabel?: string;
+  submitting?: boolean;
 }
 
 export interface CompraFinanceiroPanelRef {
@@ -64,7 +67,7 @@ function CollapsibleBlock({ title, open, onOpenChange, children }: { title: stri
 }
 
 export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>(function CompraFinanceiroPanel({
-  quantidade, pesoKg, data, categoria, statusOp, fazendaOrigem, notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated, onValidationChange,
+  quantidade, pesoKg, data, categoria, statusOp, fazendaOrigem, notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated, onValidationChange, onRequestRegister, registerLabel, submitting: externalSubmitting,
 }, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
@@ -782,6 +785,21 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
             </>
           )}
         </div>
+      )}
+
+      {/* Unified register button */}
+      {onRequestRegister && (
+        <>
+          <Separator />
+          <Button
+            type="button"
+            className="w-full h-10 text-[13px] font-bold"
+            onClick={onRequestRegister}
+            disabled={externalSubmitting}
+          >
+            {externalSubmitting ? 'Registrando...' : (registerLabel || 'Registrar Compra')}
+          </Button>
+        </>
       )}
 
       {/* Confirmation dialog for update */}

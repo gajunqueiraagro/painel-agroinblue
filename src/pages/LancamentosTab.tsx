@@ -28,6 +28,7 @@ import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
 import { CompraFinanceiroPanel, CompraFinanceiroPanelRef } from '@/components/CompraFinanceiroPanel';
 import { AbateExportDialog } from '@/components/AbateExportMenu';
 import { AbateFinanceiroPanel } from '@/components/AbateFinanceiroPanel';
+import { ConfirmacaoRegistroDialog } from '@/components/ConfirmacaoRegistroDialog';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useIntegerInput, useDecimalInput } from '@/hooks/useFormattedNumber';
 import { toast } from 'sonner';
@@ -135,6 +136,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [mesFiltro, setMesFiltro] = useState('todos');
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
   const [statusOp, setStatusOp] = useState<StatusOperacional>('conciliado');
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const [motivoMorte, setMotivoMorte] = useState('');
   const [motivoMorteCustom, setMotivoMorteCustom] = useState('');
@@ -369,33 +372,28 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
   }, [abateParaEditar]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Validate form and open confirmation dialog
+  const handleRequestRegister = () => {
     if (!quantidade || Number(quantidade) <= 0) { toast.error('Informe a quantidade'); return; }
     if (!categoria) { toast.error('Selecione a categoria'); return; }
     if (!data) { toast.error('Informe a data'); return; }
 
-    // Abate: validate required fields
     if (isAbate) {
       if (!fazendaDestino) { toast.error('Informe o Frigorífico'); return; }
       if (isConfirmado || isConciliado) {
-        if (!dataVenda && !format(new Date(), 'yyyy-MM-dd')) { toast.error('Informe a Data da Venda'); return; }
         if (!tipoVenda) { toast.error('Selecione a Comercialização'); return; }
         if (!tipoPeso) { toast.error('Selecione o Tipo de Abate'); return; }
         if (!rendCarcaca || Number(rendCarcaca) <= 0) { toast.error('Informe o Rendimento de Carcaça (%)'); return; }
         if (!precoArroba || Number(precoArroba) <= 0) { toast.error('Informe o R$/@ (preço base)'); return; }
       }
     }
-    // Non-abate saídas: validate origin/destination
     if (aba === 'saida' && !isAbate && !isMorte) {
       if (campos.destino?.show && !campos.destino.auto && !fazendaDestino) { toast.error('Informe o Destino'); return; }
     }
     if (!pesoKg || Number(pesoKg) <= 0) { toast.error('Informe o Peso (kg)'); return; }
 
-    // Compra: validate financial fields for confirmado/realizado
     if (isCompra && compraFinanceiroRef.current) {
       const finErrors = compraFinanceiroRef.current.getValidationErrors();
-      const tipoPrecoVal = compraFinanceiroRef.current.getTipoPreco();
       const valorBaseVal = compraFinanceiroRef.current.getValorBase();
       const fornecedorVal = compraFinanceiroRef.current.getFornecedorId();
 
@@ -408,6 +406,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         return;
       }
     }
+
+    setConfirmDialogOpen(true);
+  };
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
 
     const origemFinal = campos.origem.show
       ? (campos.origem.auto ? campos.origem.value : fazendaOrigem) || undefined
@@ -422,7 +426,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     const valorTotalFinal = calc.valorLiquido > 0 ? calc.valorLiquido : undefined;
 
-    // For abate: auto-compute dates and convert R$/@ to absolute values
     const abateDataVenda = isAbate ? (dataVenda || format(new Date(), 'yyyy-MM-dd')) : (dataVenda || undefined);
     const abateDataEmbarque = isAbate && data ? format(addDays(parseISO(data), -1), 'yyyy-MM-dd') : (dataEmbarque || undefined);
     const abateDataAbate = isAbate ? data : (dataAbate || undefined);
@@ -453,63 +456,114 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       tipoVenda: tipoVenda || undefined,
     };
 
-    if (editingAbateId) {
-      // UPDATE existing lancamento
-      onEditar(editingAbateId, lancamentoDados);
-      if (isAbate && (isConciliado || isConfirmado)) {
-        // Keep form open so user can generate/update financial records
-        setLastSavedLancamentoId(editingAbateId);
-        setEditingAbateId(null);
-        toast.success('Abate atualizado! Agora você pode gerar/atualizar os lançamentos financeiros.');
-      } else {
-        setEditingAbateId(null);
-        setLastSavedLancamentoId(null);
-        setQuantidade('');
-        setCategoria('');
-        setPesoKg('');
-        setFazendaOrigem(''); setFazendaDestino('');
-        setData(format(new Date(), 'yyyy-MM-dd'));
-        setObservacao('');
-        setStatusOp('conciliado');
-        resetFinancialFields();
-        toast.success('Abate atualizado com sucesso!');
-      }
-    } else {
-      const returnedId = await onAdicionar(lancamentoDados as Omit<Lancamento, 'id'>);
-
-      if (isCompra && returnedId) {
-        // Auto-generate financial records
-        if (compraFinanceiroRef.current && compraFinanceiroRef.current.getValorBase() > 0) {
-          await compraFinanceiroRef.current.generateFinanceiro(returnedId);
+    setSubmitting(true);
+    try {
+      if (editingAbateId) {
+        onEditar(editingAbateId, lancamentoDados);
+        if (isAbate && (isConciliado || isConfirmado)) {
+          setLastSavedLancamentoId(editingAbateId);
+          setEditingAbateId(null);
+          toast.success('Abate atualizado! Agora você pode gerar/atualizar os lançamentos financeiros.');
+        } else {
+          setEditingAbateId(null);
+          setLastSavedLancamentoId(null);
+          setQuantidade(''); setCategoria(''); setPesoKg('');
+          setFazendaOrigem(''); setFazendaDestino('');
+          setData(format(new Date(), 'yyyy-MM-dd'));
+          setObservacao(''); setStatusOp('conciliado');
+          resetFinancialFields();
+          toast.success('Registro atualizado com sucesso!');
         }
-        // Reset compra financial panel
-        compraFinanceiroRef.current?.resetForm();
-        setLastSavedLancamentoId(null);
-        setQuantidade('');
-        setCategoria('');
-        setPesoKg('');
-        setFazendaOrigem(''); setFazendaDestino('');
-        setData(format(new Date(), 'yyyy-MM-dd'));
-        setObservacao('');
-        setStatusOp('conciliado');
-        resetFinancialFields();
-        toast.success('Compra registrada com sucesso!');
-      } else if (isAbate && (isConciliado || isConfirmado) && returnedId) {
-        setLastSavedLancamentoId(returnedId);
-        toast.success('Abate registrado! Agora você pode gerar os lançamentos financeiros.');
       } else {
-        setLastSavedLancamentoId(null);
-        setQuantidade('');
-        setCategoria('');
-        setPesoKg(tipo === 'nascimento' ? '30' : '');
-        setFazendaOrigem(''); setFazendaDestino('');
-        setData(format(new Date(), 'yyyy-MM-dd'));
-        setObservacao('');
-        setStatusOp('conciliado');
-        resetFinancialFields();
-        toast.success('Lançamento registrado!');
+        const returnedId = await onAdicionar(lancamentoDados as Omit<Lancamento, 'id'>);
+
+        if (isCompra && returnedId) {
+          if (compraFinanceiroRef.current && compraFinanceiroRef.current.getValorBase() > 0) {
+            await compraFinanceiroRef.current.generateFinanceiro(returnedId);
+          }
+          compraFinanceiroRef.current?.resetForm();
+          setLastSavedLancamentoId(null);
+          setQuantidade(''); setCategoria(''); setPesoKg('');
+          setFazendaOrigem(''); setFazendaDestino('');
+          setData(format(new Date(), 'yyyy-MM-dd'));
+          setObservacao(''); setStatusOp('conciliado');
+          resetFinancialFields();
+          toast.success('Compra registrada com sucesso!');
+        } else if (isAbate && (isConciliado || isConfirmado) && returnedId) {
+          setLastSavedLancamentoId(returnedId);
+          toast.success('Abate registrado! Agora você pode gerar os lançamentos financeiros.');
+        } else {
+          setLastSavedLancamentoId(null);
+          setQuantidade(''); setCategoria('');
+          setPesoKg(tipo === 'nascimento' ? '30' : '');
+          setFazendaOrigem(''); setFazendaDestino('');
+          setData(format(new Date(), 'yyyy-MM-dd'));
+          setObservacao(''); setStatusOp('conciliado');
+          resetFinancialFields();
+          toast.success('Lançamento registrado!');
+        }
+      }
+    } finally {
+      setSubmitting(false);
+      setConfirmDialogOpen(false);
+    }
+  };
+
+  // Build confirmation dialog data
+  const getOperationLabel = () => {
+    if (isCompra) return 'Compra';
+    if (isAbate) return 'Abate';
+    if (isVenda) return 'Venda em Pé';
+    const cfg = [...TIPOS_ENTRADA, ...TIPOS_SAIDA].find(t => t.value === tipo);
+    return cfg?.label || tipo;
+  };
+
+  const getConfirmacaoFinanceiros = () => {
+    const label = getOperationLabel();
+    const result: any = { tipoOperacao: label };
+    
+    if (isAbate) {
+      result.fornecedorOuFrigorifico = fazendaDestino;
+      result.comercializacao = tipoVenda;
+      result.tipoAbate = tipoPeso;
+      result.rendCarcaca = Number(rendCarcaca) || 0;
+      result.totalArrobas = calc.totalArrobas;
+      result.precoBase = Number(precoArroba) || 0;
+      result.precoBaseLabel = 'R$/@';
+      result.totalBruto = calc.valorBruto;
+      result.totalBonus = calc.totalBonus;
+      result.totalDescontos = calc.totalDescontos;
+      result.valorLiquido = calc.valorLiquido;
+      result.dataVenda = dataVenda || format(new Date(), 'yyyy-MM-dd');
+      if (formaPagamento === 'parcelado' && parcelas.length > 0) {
+        result.formaPagamento = `A prazo (${parcelas.length}x)`;
+        result.parcelas = parcelas;
+      } else {
+        result.formaPagamento = 'À vista';
+      }
+    } else if (isCompra && compraFinanceiroRef.current) {
+      const valorBase = compraFinanceiroRef.current.getValorBase();
+      const tipoPrecoLabel = compraFinanceiroRef.current.getTipoPreco();
+      result.precoBase = valorBase;
+      result.precoBaseLabel = tipoPrecoLabel === 'por_kg' ? 'R$/kg' : tipoPrecoLabel === 'por_cab' ? 'R$/cab' : 'Total';
+      result.totalBruto = valorBase;
+      result.valorLiquido = valorBase;
+      result.fornecedorOuFrigorifico = fazendaOrigem;
+    } else {
+      result.precoBase = Number(precoKg) || 0;
+      result.precoBaseLabel = 'R$/kg';
+      result.totalBruto = calc.valorBruto;
+      result.totalBonus = Number(bonus) || 0;
+      result.totalDescontos = Number(descontos) || 0;
+      result.valorLiquido = calc.valorLiquido;
+      if (formaPagamento === 'parcelado' && parcelas.length > 0) {
+        result.formaPagamento = `A prazo (${parcelas.length}x)`;
+        result.parcelas = parcelas;
+      } else {
+        result.formaPagamento = 'À vista';
       }
     }
+    return result;
   };
 
   const tiposDisponiveis = aba === 'entrada' ? TIPOS_ENTRADA : TIPOS_SAIDA;
@@ -849,6 +903,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             onFinanceiroUpdated={() => {}}
           />
         )}
+
+        {/* Unified register button */}
+        <Separator />
+        <Button
+          type="button"
+          className="w-full h-10 text-[13px] font-bold"
+          onClick={handleRequestRegister}
+          disabled={submitting}
+        >
+          {editingAbateId ? 'Salvar Alterações do Abate' : 'Registrar Abate'}
+        </Button>
       </div>
     );
   };
@@ -1035,6 +1100,35 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       )}
       </>
       )}
+
+      {/* Unified register button for non-abate operations */}
+      {!(aba === 'entrada' && tipo === 'nascimento') && (
+        <>
+          <Separator />
+          <Button
+            type="button"
+            className="w-full h-10 text-[13px] font-bold"
+            onClick={handleRequestRegister}
+            disabled={submitting}
+          >
+            {editingAbateId ? 'Salvar Alterações' : `Registrar ${getOperationLabel()}`}
+          </Button>
+        </>
+      )}
+      {/* Nascimento — simpler, still needs a button */}
+      {aba === 'entrada' && tipo === 'nascimento' && (
+        <>
+          <Separator />
+          <Button
+            type="button"
+            className="w-full h-10 text-[13px] font-bold"
+            onClick={handleRequestRegister}
+            disabled={submitting}
+          >
+            Registrar Nascimento
+          </Button>
+        </>
+      )}
     </div>
     );
   };
@@ -1045,7 +1139,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // ===== MAIN FORM (center) =====
   const renderForm = () => (
-    <form onSubmit={handleSubmit} className={`flex-1 bg-card rounded-md p-3 shadow-sm border space-y-2 self-start ${editingAbateId ? 'ring-2 ring-primary' : ''}`}>
+    <div className={`flex-1 bg-card rounded-md p-3 shadow-sm border space-y-2 self-start ${editingAbateId ? 'ring-2 ring-primary' : ''}`}>
 
       {/* Editing banner */}
       {editingAbateId && (
@@ -1200,10 +1294,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           Cancelar Edição
         </Button>
       )}
-      <Button type="submit" className="w-full h-9 text-[12px] font-bold" size="sm">
-        {editingAbateId ? 'Salvar Alterações' : (aba === 'entrada' ? 'Registrar Entrada' : 'Registrar Saída')}
-      </Button>
-    </form>
+    </div>
   );
 
   // ===== HISTORICO VIEW =====
@@ -1301,6 +1392,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 notaFiscal={notaFiscal}
                 onNotaFiscalChange={setNotaFiscal}
                 lancamentoId={lastSavedLancamentoId || undefined}
+                onRequestRegister={handleRequestRegister}
+                registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Compra'}
+                submitting={submitting}
               />
             ) : (
               renderFinancialPanel()
@@ -1320,6 +1414,25 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onEditarAbate={loadAbateForEdit}
         />
       )}
+
+      {/* Confirmation dialog */}
+      <ConfirmacaoRegistroDialog
+        open={confirmDialogOpen}
+        onClose={() => setConfirmDialogOpen(false)}
+        onConfirm={() => handleSubmit()}
+        submitting={submitting}
+        operacionais={{
+          status: statusOp,
+          data,
+          quantidade: Number(quantidade) || 0,
+          categoria,
+          pesoKg: Number(pesoKg) || 0,
+          fazendaOrigem: campos.origem.show ? (campos.origem.auto ? campos.origem.value : fazendaOrigem) : undefined,
+          fazendaDestino: campos.destino?.show ? (campos.destino?.auto ? campos.destino?.value : fazendaDestino) : undefined,
+          observacao,
+        }}
+        financeiros={getConfirmacaoFinanceiros()}
+      />
     </div>
   );
 }
