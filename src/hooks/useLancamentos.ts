@@ -274,7 +274,7 @@ export function useLancamentos() {
         ...lancamento,
       }, ...prev]);
       toast.info('Lançamento salvo na fila offline');
-      return;
+      return undefined;
     }
 
     const { data, error } = await supabase.from('lancamentos').insert({
