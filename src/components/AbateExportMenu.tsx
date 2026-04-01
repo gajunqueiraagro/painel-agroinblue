@@ -43,10 +43,31 @@ function shareWhatsApp(text: string) {
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
 }
 
+const TIPO_ABATE_LABELS: Record<string, string> = {
+  vivo: 'Peso Vivo',
+  morto: 'Peso Morto',
+};
+
+function calcArrobasTotaisPrev(l: Lancamento): number {
+  const peso = l.pesoMedioKg ?? 0;
+  const rend = l.pesoCarcacaKg && l.pesoMedioKg ? (l.pesoCarcacaKg / l.pesoMedioKg) : 0;
+  if (peso <= 0 || rend <= 0) return 0;
+  return (peso * rend / 15) * l.quantidade;
+}
+
 // ── Texto WhatsApp Confirmado ──
 function textoConfirmado(l: Lancamento, fazendaNome?: string): string {
   const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
   const c = calcIndicadoresLancamento(l);
+  const totalArrobas = calcArrobasTotaisPrev(l);
+  const bonus = (l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0);
+  const desc = (l.descontoQualidade ?? 0) + (l.descontoFunrural ?? 0) + (l.outrosDescontos ?? 0);
+  const valorBase = totalArrobas * (l.precoArroba ?? 0);
+  const valorLiq = valorBase + (bonus * totalArrobas) - (desc * totalArrobas);
+  const bonusArroba = totalArrobas > 0 ? bonus : 0;
+  const descArroba = totalArrobas > 0 ? desc : 0;
+  const liqArroba = totalArrobas > 0 ? valorLiq / totalArrobas : 0;
+
   const lines: string[] = [`📋 *Escala de Abate — Confirmado*\n`];
   if (fazendaNome) lines.push(`🏠 Fazenda: ${fazendaNome}`);
   lines.push(
@@ -56,20 +77,21 @@ function textoConfirmado(l: Lancamento, fazendaNome?: string): string {
     `🏭 Frigorífico: ${l.fazendaDestino || '-'}`,
   );
   if (l.tipoVenda) lines.push(`📦 Tipo Venda: ${TIPO_VENDA_LABELS[l.tipoVenda] || l.tipoVenda}`);
+  if (l.tipoPeso) lines.push(`🔪 Tipo de Abate: ${TIPO_ABATE_LABELS[l.tipoPeso] || l.tipoPeso}`);
   lines.push(
-    `🐂 ${l.quantidade} ${cat}`,
-    `⚖️ Peso vivo: ${fmtValor(l.pesoMedioKg)} kg`,
-    `💲 R$/@: ${fmtValor(l.precoArroba)}`,
     '',
-    `💰 *Valor Base Negociado: ${formatMoeda(c.valorFinal)}*`,
+    `🐂 Quantidade: ${l.quantidade} cab.`,
+    `⚖️ Peso Vivo Previsto: ${fmtValor(l.pesoMedioKg)} kg`,
+    `💲 R$/@ Negociado: ${formatMoeda(l.precoArroba)}`,
   );
-  if ((l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0) > 0) {
-    lines.push(`🎯 Expectativa bônus: ${formatMoeda((l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0))}`);
-  }
-  if ((l.descontoQualidade ?? 0) + (l.descontoFunrural ?? 0) + (l.outrosDescontos ?? 0) > 0) {
-    lines.push(`📉 Expectativa descontos: ${formatMoeda((l.descontoQualidade ?? 0) + (l.descontoFunrural ?? 0) + (l.outrosDescontos ?? 0))}`);
-  }
-  if (c.liqArroba > 0) lines.push(`📈 Expectativa líq/@: ${formatMoeda(c.liqArroba)}`);
+  if (totalArrobas > 0) lines.push(`📐 Arrobas Totais Previstas: ${fmtValor(totalArrobas)} @`);
+  lines.push('');
+  if (bonusArroba > 0) lines.push(`🎯 Expectativa Bônus: ${formatMoeda(bonusArroba)} /@`);
+  if (descArroba > 0) lines.push(`📉 Expectativa Descontos: ${formatMoeda(descArroba)} /@`);
+  lines.push(
+    `💰 *Expectativa Líq. Total: ${formatMoeda(valorLiq)}*`,
+  );
+  if (liqArroba > 0) lines.push(`📈 Expectativa Líq. R$/@: ${formatMoeda(liqArroba)}`);
   return lines.join('\n');
 }
 
