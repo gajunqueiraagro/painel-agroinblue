@@ -177,7 +177,7 @@ async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
   autoTable(doc, { ...tStyle, startY: y, head: [['DADOS CONFIRMADOS', '']], body: bloco1 });
 
   // BLOCO 2
-  const y2 = (doc as any).lastAutoTable?.finalY + 4 ?? y + 60;
+  const y2 = ((doc as any).lastAutoTable?.finalY ?? y + 56) + 4;
   const bloco2: string[][] = [
     ['Peso Vivo Estimado', `${fmtValor(pesoVivo)} kg`],
     ['Rend. Carcaça', `${fmtValor(rendPct)} %`],
