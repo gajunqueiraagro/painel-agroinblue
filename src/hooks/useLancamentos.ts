@@ -371,6 +371,10 @@ export function useLancamentos() {
     if (dados.notaFiscal !== undefined) update.nota_fiscal = dados.notaFiscal;
     if (dados.tipoPeso !== undefined) update.tipo_peso = dados.tipoPeso;
     if (dados.statusOperacional !== undefined) update.status_operacional = dados.statusOperacional;
+    if (dados.dataVenda !== undefined) update.data_venda = dados.dataVenda;
+    if (dados.dataEmbarque !== undefined) update.data_embarque = dados.dataEmbarque;
+    if (dados.dataAbate !== undefined) update.data_abate = dados.dataAbate;
+    if (dados.tipoVenda !== undefined) update.tipo_venda = dados.tipoVenda;
 
     const { error } = await supabase.from('lancamentos').update(update).eq('id', id);
     if (!error) {
