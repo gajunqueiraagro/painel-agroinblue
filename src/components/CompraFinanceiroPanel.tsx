@@ -476,7 +476,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
     setTipoPreco('por_kg');
     setPrecoKg(''); setPrecoCab(''); setValorTotal('');
     setFrete(''); setComissaoPct('');
-    setFormaPag('avista'); setQtdParcelas('2'); setParcelas([]);
+    setFormaPag('avista'); setQtdParcelas('1'); setParcelas([]);
     setFornecedorId('');
     setGerado(false); setGerando(false);
     setExistingCount(0); setExistingLoaded(false);
