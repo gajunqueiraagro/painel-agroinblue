@@ -46,6 +46,7 @@ export interface CompraFinanceiroPanelRef {
   getFornecedorId: () => string;
   getValorBase: () => number;
   getTipoPreco: () => string;
+  resetForm: () => void;
 }
 
 function CollapsibleBlock({ title, open, onOpenChange, children }: { title: string; open: boolean; onOpenChange: (v: boolean) => void; children: React.ReactNode }) {
