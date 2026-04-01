@@ -773,25 +773,25 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
                 {/* Valor líquido final */}
                 {calc.valorBruto > 0 && (
-                  <div className={`rounded-lg p-3 ${isPrevisto ? 'bg-orange-200/50 dark:bg-orange-950/50' : 'bg-primary/10'}`}>
-                    <div className="flex justify-between text-base font-bold">
+                  <div className={`rounded-md p-2 ${isPrevisto ? 'bg-orange-200/50 dark:bg-orange-950/50' : 'bg-primary/10'}`}>
+                    <div className="flex justify-between text-[12px] font-bold">
                       <span className={isPrevisto ? 'text-orange-800 dark:text-orange-300' : ''}>Valor líquido final</span>
                       <span className={isPrevisto ? 'text-orange-800 dark:text-orange-300' : 'text-primary'}>R$ {fmt(calc.valorLiquido)}</span>
                     </div>
                     {calc.liqArroba > 0 && (
-                      <div className="flex justify-between text-sm mt-1">
+                      <div className="flex justify-between text-[11px] mt-0.5">
                         <span className="text-muted-foreground">R$/líq @</span>
                         <strong>R$ {fmt(calc.liqArroba)}</strong>
                       </div>
                     )}
                     {calc.liqCabeca > 0 && (
-                      <div className="flex justify-between text-sm mt-0.5">
+                      <div className="flex justify-between text-[11px] mt-0.5">
                         <span className="text-muted-foreground">Líq/Cabeça</span>
                         <strong>R$ {fmt(calc.liqCabeca)}</strong>
                       </div>
                     )}
                     {calc.liqKg > 0 && (
-                      <div className="flex justify-between text-sm mt-0.5">
+                      <div className="flex justify-between text-[11px] mt-0.5">
                         <span className="text-muted-foreground">R$/Kg líq</span>
                         <strong>R$ {fmt(calc.liqKg)}</strong>
                       </div>
@@ -802,7 +802,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             </Collapsible>
           )}
 
-          <Button type="submit" className="w-full touch-target text-base font-bold" size="lg">
+          <Button type="submit" className="w-full h-8 text-[12px] font-bold" size="sm">
             {aba === 'entrada' ? '📥 Registrar Entrada' : '📤 Registrar Saída'}
           </Button>
         </form>
