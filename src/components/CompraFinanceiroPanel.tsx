@@ -471,7 +471,7 @@ export function CompraFinanceiroPanel({
           valor: calc.comissaoVal,
           data_competencia: data,
           data_pagamento: data,
-          descricao: `Prev. Mov - Comissão compra ${categoria}`,
+          descricao: `Prev. Comissão - ${compraLabel}`,
           origem_tipo: 'compra_rebanho:comissao',
         });
       }
