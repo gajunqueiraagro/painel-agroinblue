@@ -345,7 +345,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // ===== LEFT SIDEBAR NAV =====
   const renderSidebar = () => (
-    <div className="w-48 shrink-0 space-y-0.5">
+    <div className="w-44 shrink-0 space-y-px">
       {ABA_CONFIG.map(a => {
         const isActive = aba === a.id;
         const subtypes = a.id === 'entrada' ? TIPOS_ENTRADA : a.id === 'saida' ? TIPOS_SAIDA : null;
@@ -353,26 +353,25 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <div key={a.id}>
             <button
               onClick={() => { setAba(a.id); if (a.id === 'entrada') setTipo('nascimento'); if (a.id === 'saida') setTipo('abate'); }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md text-[12px] font-bold transition-all ${
+              className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-[11px] font-bold transition-all ${
                 isActive ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/60'
               }`}
             >
               {a.icon}
               <span>{a.label}</span>
             </button>
-            {/* Subtypes nested under active parent */}
             {isActive && subtypes && (
-              <div className="ml-4 mt-0.5 mb-1 border-l-2 border-primary/30 pl-2 space-y-0.5">
+              <div className="ml-3.5 mt-px mb-px border-l-2 border-primary/30 pl-1.5 space-y-px">
                 {subtypes.map(t => (
                   <button
                     key={t.value}
                     type="button"
                     onClick={() => { setTipo(t.value); setFazendaOrigem(''); setFazendaDestino(''); setMotivoMorte(''); setMotivoMorteCustom(''); resetFinancialFields(); setPesoKg(t.value === 'nascimento' ? '30' : ''); }}
-                    className={`w-full flex items-center gap-1.5 px-2.5 py-2 rounded text-[11px] font-semibold transition-all ${
+                    className={`w-full flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold transition-all ${
                       tipo === t.value ? 'bg-primary/15 text-foreground border border-primary/40' : 'text-muted-foreground hover:bg-muted/40 border border-transparent'
                     }`}
                   >
-                    <span className="text-sm">{t.icon}</span> {t.label}
+                    <span className="text-xs">{t.icon}</span> {t.label}
                   </button>
                 ))}
               </div>
