@@ -607,14 +607,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const renderForm = () => (
     <form onSubmit={handleSubmit} className="flex-1 bg-card rounded-md p-4 shadow-sm border space-y-3 self-start">
 
-      {/* STATUS OPERACIONAL — compact with descriptions */}
-      <div className="space-y-1">
+      {/* STATUS — selection + dynamic explanation */}
+      <div className="space-y-1.5">
         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Status</span>
-        <div className="grid grid-cols-3 gap-3">
+        {/* Row 1: selection cards */}
+        <div className="grid grid-cols-3 gap-1.5">
           {([
-            { value: 'conciliado' as StatusOperacional, label: 'Conciliado', desc: 'Movimentação realizada e já considerada no rebanho real.', dot: 'bg-green-600' },
-            { value: 'previsto' as StatusOperacional, label: 'Previsto', desc: 'Movimentação planejada. Entra apenas na meta/previsão.', dot: 'bg-orange-500' },
-            { value: 'confirmado' as StatusOperacional, label: 'Confirmado*', desc: 'Movimentação definida, mas ainda não efetivada no rebanho. Quando ocorrer de fato, alterar para conciliado.', dot: 'bg-blue-500' },
+            { value: 'conciliado' as StatusOperacional, label: 'Conciliado', dot: 'bg-blue-500', activeBorder: 'border-blue-400', activeBg: 'bg-blue-50 dark:bg-blue-950/30' },
+            { value: 'previsto' as StatusOperacional, label: 'Previsto', dot: 'bg-orange-500', activeBorder: 'border-orange-400', activeBg: 'bg-orange-50 dark:bg-orange-950/30' },
+            { value: 'confirmado' as StatusOperacional, label: 'Confirmado*', dot: 'bg-green-500', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
           ]).map(s => {
             const selected = statusOp === s.value;
             return (
@@ -622,20 +623,25 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 key={s.value}
                 type="button"
                 onClick={() => setStatusOp(s.value)}
-                className={`flex flex-col items-start gap-0.5 px-2 py-1.5 rounded-md border transition-all text-left ${
-                  selected
-                    ? `border-current/20 ${s.value === 'conciliado' ? 'bg-green-50 dark:bg-green-950/30 border-green-400' : s.value === 'previsto' ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-400' : 'bg-blue-50 dark:bg-blue-950/30 border-blue-400'}`
-                    : 'border-border bg-muted/10 hover:bg-muted/30'
+                className={`flex items-center justify-center gap-1.5 h-8 rounded-md border transition-all ${
+                  selected ? `${s.activeBg} ${s.activeBorder}` : 'border-border bg-muted/10 hover:bg-muted/30'
                 }`}
               >
-                <div className="flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${selected ? s.dot : 'border border-muted-foreground/40 bg-transparent'}`} />
-                  <span className={`text-[12px] font-bold ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>{s.label}</span>
-                </div>
-                <p className={`text-[9px] leading-tight ${selected ? 'text-foreground/60' : 'text-muted-foreground/50'}`}>{s.desc}</p>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${selected ? s.dot : 'border border-muted-foreground/40 bg-transparent'}`} />
+                <span className={`text-[11px] font-bold ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>{s.label}</span>
               </button>
             );
           })}
+        </div>
+        {/* Row 2: dynamic explanation card */}
+        <div className={`rounded-md border px-3 py-1.5 text-[10px] leading-snug ${
+          statusOp === 'conciliado' ? 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-300'
+          : statusOp === 'previsto' ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-800 text-orange-800 dark:text-orange-300'
+          : 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-800 text-green-800 dark:text-green-300'
+        }`}>
+          {statusOp === 'conciliado' && 'Movimentação realizada e já considerada no rebanho real.'}
+          {statusOp === 'previsto' && 'Movimentação planejada. Entra apenas na meta/previsão.'}
+          {statusOp === 'confirmado' && 'Movimentação definida, mas ainda não efetivada no rebanho. Quando ocorrer de fato, alterar para conciliado.'}
         </div>
       </div>
 
