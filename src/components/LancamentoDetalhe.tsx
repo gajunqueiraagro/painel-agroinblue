@@ -297,7 +297,6 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                     const despesas = finRecords.filter(r => r.origem_tipo?.includes('frete') || r.origem_tipo?.includes('comissao'));
                     const totalBov = bovinos.reduce((s, r) => s + r.valor, 0);
                     const totalDesp = despesas.reduce((s, r) => s + r.valor, 0);
-                    const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
                     return (
                       <div className="bg-muted/20 rounded-md px-2 py-1.5 space-y-1.5">
                         {bovinos.length > 0 && (
