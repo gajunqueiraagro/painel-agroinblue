@@ -176,37 +176,37 @@ async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
     ['Data Prev. Abate', fmtDate(l.dataAbate || l.data)],
     ['Categoria', cat],
     ['Quantidade', `${l.quantidade} cab.`],
-    ['Preço Negociado', `${formatMoeda(precoBase)} /@`],
+    ['Preço Negociado', `${formatMoeda(c.precoBase)} /@`],
   ];
   autoTable(doc, { ...tStyle, startY: y, head: [['DADOS CONFIRMADOS', '']], body: bloco1 });
 
   // BLOCO 2
   const y2 = ((doc as any).lastAutoTable?.finalY ?? y + 56) + 4;
   const bloco2: string[][] = [
-    ['Peso Vivo Estimado', `${fmtValor(pesoVivo)} kg`],
-    ['Rend. Carcaça', `${fmtValor(rendPct)} %`],
-    ['Peso Carcaça', `${fmtValor(pesoCarcaca)} kg`],
-    ['Arrobas por Cabeça', `${fmtValor(arrobasCab)} @`],
-    ['Arrobas Totais Estimadas', `${fmtValor(totalArrobas)} @`],
+    ['Peso Vivo Estimado', `${fmtValor(c.pesoVivo)} kg`],
+    ['Rend. Carcaça', `${fmtValor(c.rendPct)} %`],
+    ['Peso Carcaça', `${fmtValor(c.pesoCarcaca)} kg`],
+    ['Arrobas por Cabeça', `${fmtValor(c.arrobasCab)} @`],
+    ['Arrobas Totais Estimadas', `${fmtValor(c.arrobasTotais)} @`],
   ];
   autoTable(doc, { ...tStyle, startY: y2, head: [['PROJEÇÃO OPERACIONAL (EXPECTATIVA)', '']], body: bloco2 });
 
   // BLOCO 3
   const y3 = ((doc as any).lastAutoTable?.finalY ?? y2 + 36) + 4;
   const bloco3: string[][] = [
-    ['Bônus Estimado', `${formatMoeda(bonus)} /@`],
-    ['Descontos Estimados', `${formatMoeda(desc)} /@`],
-    ['Preço Líq. Estimado', `${formatMoeda(precoLiqArroba)} /@`],
-    ['Valor Líq. Estimado Total', formatMoeda(valorLiq)],
+    ['Bônus Estimado', `${formatMoeda(c.bonusArroba)} /@`],
+    ['Descontos Estimados', `${formatMoeda(c.descArroba)} /@`],
+    ['Preço Líq. Estimado', `${formatMoeda(c.liqArroba)} /@`],
+    ['Valor Líq. Estimado Total', formatMoeda(c.valorLiq)],
   ];
   autoTable(doc, { ...tStyle, startY: y3, head: [['PROJEÇÃO FINANCEIRA (EXPECTATIVA)', '']], body: bloco3 });
 
   // BLOCO 4
   const y4 = ((doc as any).lastAutoTable?.finalY ?? y3 + 36) + 4;
   const bloco4: string[][] = [
-    ['Líquido Estimado R$/@', formatMoeda(precoLiqArroba)],
-    ['Líquido Estimado / Cabeça', formatMoeda(liqCabeca)],
-    ['Líquido Estimado / kg Vivo', formatMoeda(liqKg)],
+    ['Líquido Estimado R$/@', formatMoeda(c.liqArroba)],
+    ['Líquido Estimado / Cabeça', formatMoeda(c.liqCabeca)],
+    ['Líquido Estimado / kg Vivo', formatMoeda(c.liqKg)],
   ];
   autoTable(doc, { ...tStyle, startY: y4, head: [['RESULTADO ESPERADO', '']], body: bloco4 });
 
