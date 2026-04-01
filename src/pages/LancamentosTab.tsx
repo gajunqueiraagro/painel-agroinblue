@@ -921,6 +921,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
         {/* Informações de Pagamento - all statuses */}
         <AbateFinanceiroPanel
+          ref={abateFinanceiroRef}
           quantidade={Number(quantidade) || 0}
           categoria={categoria}
           data={data}
