@@ -356,13 +356,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             <ArrowLeft className="h-3.5 w-3.5" /> {backLabel || 'Retornar à Conciliação de Categoria'}
           </button>
         )}
-        <div className="grid grid-cols-4 gap-1 bg-muted rounded-md p-0.5">
-          {abas.map(a => (
-            <button key={a.id} onClick={() => { setAba(a.id); if (a.id === 'entrada') setTipo('nascimento'); if (a.id === 'saida') setTipo('abate'); }}
-              className={`py-1 px-1 rounded text-[11px] font-bold transition-colors ${aba === a.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'}`}>
-              {a.label}
-            </button>
-          ))}
+        <div className="bg-card rounded-md border shadow-sm overflow-hidden">
+          <div className="grid grid-cols-4 gap-0 bg-muted">
+            {abas.map(a => (
+              <button key={a.id} onClick={() => { setAba(a.id); if (a.id === 'entrada') setTipo('nascimento'); if (a.id === 'saida') setTipo('abate'); }}
+                className={`py-1.5 px-1 text-[11px] font-bold transition-colors ${aba === a.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/80'}`}>
+                {a.label}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-md p-4 text-center space-y-2">
           <AlertTriangle className="h-8 w-8 text-orange-500 mx-auto" />
