@@ -546,30 +546,30 @@ export function CompraFinanceiroPanel({
       </div>
 
       {/* BLOCO 2 — Preço Base */}
-      <div className="space-y-1.5">
-        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Preço Base</span>
+      <div className="space-y-1">
+        <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wide">Preço Base</span>
 
         {tipoPreco === 'por_kg' && (
           <div>
-            <Label className="text-[11px]">R$/kg</Label>
-            <Input type="number" value={precoKg} onChange={e => setPrecoKg(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${previstoInputClass}`} />
+            <Label className="text-[10px]">R$/kg</Label>
+            <Input type="number" value={precoKg} onChange={e => setPrecoKg(e.target.value)} placeholder="0,00" className={`h-7 text-[11px] ${previstoInputClass}`} />
           </div>
         )}
         {tipoPreco === 'por_cab' && (
           <div>
-            <Label className="text-[11px]">R$/cab.</Label>
-            <Input type="number" value={precoCab} onChange={e => setPrecoCab(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${previstoInputClass}`} />
+            <Label className="text-[10px]">R$/cab.</Label>
+            <Input type="number" value={precoCab} onChange={e => setPrecoCab(e.target.value)} placeholder="0,00" className={`h-7 text-[11px] ${previstoInputClass}`} />
           </div>
         )}
         {tipoPreco === 'por_total' && (
           <div>
-            <Label className="text-[11px]">Valor total (R$)</Label>
-            <Input type="number" value={valorTotal} onChange={e => setValorTotal(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${previstoInputClass}`} />
+            <Label className="text-[10px]">Valor total (R$)</Label>
+            <Input type="number" value={valorTotal} onChange={e => setValorTotal(e.target.value)} placeholder="0,00" className={`h-7 text-[11px] ${previstoInputClass}`} />
           </div>
         )}
 
         {calc.valorBase > 0 && (
-          <div className="bg-muted/30 rounded-md p-2 space-y-0.5 text-[11px]">
+          <div className="bg-muted/30 rounded px-2 py-1.5 space-y-px text-[10px]">
             {tipoPreco !== 'por_kg' && (
               <div className="flex justify-between"><span className="text-muted-foreground">R$/kg</span><strong>R$ {fmt(calc.rKg, 4)}</strong></div>
             )}
