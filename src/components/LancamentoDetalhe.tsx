@@ -216,7 +216,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 {lancamento.precoMedioCabeca && (
                   <div>
                     <p className="text-[10px] text-muted-foreground">Preço/Cabeça</p>
-                    <p className="font-bold text-foreground">R$ {lancamento.precoMedioCabeca.toLocaleString('pt-BR')}</p>
+                    <p className="font-bold text-foreground">{formatMoeda(lancamento.precoMedioCabeca)}</p>
                   </div>
                 )}
                 {lancamento.fazendaOrigem && (
