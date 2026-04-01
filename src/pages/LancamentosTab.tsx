@@ -1392,6 +1392,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 notaFiscal={notaFiscal}
                 onNotaFiscalChange={setNotaFiscal}
                 lancamentoId={lastSavedLancamentoId || undefined}
+                onRequestRegister={handleRequestRegister}
+                registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Compra'}
+                submitting={submitting}
               />
             ) : (
               renderFinancialPanel()
