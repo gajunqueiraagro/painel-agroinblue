@@ -143,6 +143,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
   const [qtdParcelas, setQtdParcelas] = useState('2');
 
+  const qtdInput = useIntegerInput(quantidade, setQuantidade);
+  const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
+
   const isPrevisto = statusOp === 'previsto';
   const isConfirmado = statusOp === 'confirmado';
   const isConciliado = statusOp === 'conciliado';
