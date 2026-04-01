@@ -349,10 +349,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const previstoInputClass = isPrevisto ? 'border-orange-400 text-orange-800 dark:text-orange-300' : '';
   const previstoLabelClass = isPrevisto ? 'text-orange-700 dark:text-orange-400' : '';
 
-  const showExtraDates = (isConfirmado || isConciliado) && (isAbate || isVenda || isTransferencia);
-  const showFormaPagamento = (isConfirmado || isConciliado) && (isAbate || isVenda || isCompra || isTransferencia);
-  const showComissaoFreteDespesas = isConciliado && (isAbate || isVenda || isCompra || isTransferencia);
+  const showExtraDates = !isAbate && (isConfirmado || isConciliado) && (isVenda || isTransferencia);
+  const showFormaPagamento = !isAbate && (isConfirmado || isConciliado) && (isVenda || isCompra || isTransferencia);
+  const showComissaoFreteDespesas = !isAbate && isConciliado && (isVenda || isCompra || isTransferencia);
   const showComissaoPrevConf = (isConfirmado) && (isCompra);
+
+  // Auto-computed dates for abate
+  const abateDataVendaAuto = dataVenda || format(new Date(), 'yyyy-MM-dd');
+  const abateDataEmbarqueAuto = data ? format(addDays(parseISO(data), -1), 'yyyy-MM-dd') : '';
+  const abateDataAbateAuto = data;
 
   // ===== BLOCKED VIEW =====
   if (bloqueado && (aba === 'entrada' || aba === 'saida' || aba === 'reclassificacao')) {
