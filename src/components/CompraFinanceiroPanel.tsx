@@ -68,6 +68,8 @@ export function CompraFinanceiroPanel({
   const [comissaoPct, setComissaoPct] = useState('');
 
   // Collapsible states — all closed by default
+  const [tipoCompraOpen, setTipoCompraOpen] = useState(false);
+  const [fornecedorOpen, setFornecedorOpen] = useState(false);
   const [precoBaseOpen, setPrecoBaseOpen] = useState(false);
   const [despesasOpen, setDespesasOpen] = useState(false);
   const [pagamentoOpen, setPagamentoOpen] = useState(false);
