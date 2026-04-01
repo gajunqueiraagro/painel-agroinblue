@@ -655,9 +655,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           : statusOp === 'previsto' ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-800 text-orange-800 dark:text-orange-300'
           : 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-800 text-green-800 dark:text-green-300'
         }`}>
-          {statusOp === 'conciliado' && 'Movimentação realizada e já considerada no rebanho real.'}
-          {statusOp === 'previsto' && 'Movimentação planejada. Entra apenas na meta/previsão.'}
-          {statusOp === 'confirmado' && 'Movimentação definida, mas ainda não efetivada no rebanho. Quando ocorrer de fato, alterar para conciliado.'}
+           {STATUS_DESCRIPTIONS[statusOp]}
         </div>
       </div>
 
