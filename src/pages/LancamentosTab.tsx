@@ -60,11 +60,21 @@ const ABA_CONFIG: { id: Aba; label: string; icon: React.ReactNode }[] = [
   { id: 'historico', label: 'Histórico', icon: <Clock className="h-4 w-4" /> },
 ];
 
-const STATUS_DESCRIPTIONS: Record<StatusOperacional, string> = {
-  conciliado: 'Realizado — movimentação concluída e considerada no rebanho real.',
-  previsto: 'Meta / Planejamento — entra apenas na previsão, não afeta o saldo real.',
-  confirmado: 'Utilizar quando os animais já foram escalados / venda fechada, mas o abate ainda não ocorreu. Quando o abate for concluído, atualizar os dados finais e alterar para Realizado.',
+const STATUS_DESCRIPTIONS_DEFAULT: Record<StatusOperacional, string> = {
+  previsto: 'Planejamento (meta). Não impacta o rebanho nem o financeiro real.',
+  confirmado: 'Operação definida, mas ainda não realizada. Quando concluída, alterar para Realizado.',
+  conciliado: 'Operação concluída. Impacta rebanho e financeiro real.',
 };
+
+const STATUS_DESCRIPTIONS_ABATE: Record<StatusOperacional, string> = {
+  previsto: 'Planejamento (meta). Não impacta o rebanho nem o financeiro real.',
+  confirmado: 'Venda fechada e animais escalados, mas o abate ainda não ocorreu. Os dados ainda são previsões operacionais e financeiras.',
+  conciliado: 'Abate concluído com dados reais de carcaça, bônus e descontos. Os valores refletem o resultado efetivo da operação.',
+};
+
+function getStatusDescription(tipo: TipoMovimentacao, status: StatusOperacional): string {
+  return tipo === 'abate' ? STATUS_DESCRIPTIONS_ABATE[status] : STATUS_DESCRIPTIONS_DEFAULT[status];
+}
 
 function getCamposFazenda(tipo: TipoMovimentacao, nomeFazenda: string) {
   switch (tipo) {
