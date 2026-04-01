@@ -32,6 +32,10 @@ interface Props {
   onNotaFiscalChange: (v: string) => void;
   /** After saving the lancamento, pass its ID here to enable financial generation */
   lancamentoId?: string;
+  /** 'create' = new purchase flow, 'update' = recalculate existing financial */
+  mode?: 'create' | 'update';
+  /** Called after financial records are successfully updated (in update mode) */
+  onFinanceiroUpdated?: () => void;
 }
 
 function fmt(v?: number, decimals = 2) {
