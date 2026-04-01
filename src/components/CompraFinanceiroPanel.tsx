@@ -85,7 +85,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
   const [pagamentoOpen, setPagamentoOpen] = useState(false);
 
   const [formaPag, setFormaPag] = useState<'avista' | 'prazo'>('avista');
-  const [qtdParcelas, setQtdParcelas] = useState('2');
+  const [qtdParcelas, setQtdParcelas] = useState('1');
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
 
   const [gerado, setGerado] = useState(false);
