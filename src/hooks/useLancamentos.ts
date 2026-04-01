@@ -230,8 +230,8 @@ export function useLancamentos() {
     doMigrate();
   }, [fazendaId, migrated, loadData]);
 
-  const adicionarLancamento = async (lancamento: Omit<Lancamento, 'id'>) => {
-    if (!fazendaId || fazendaId === '__global__') return;
+  const adicionarLancamento = async (lancamento: Omit<Lancamento, 'id'>): Promise<string | undefined> => {
+    if (!fazendaId || fazendaId === '__global__') return undefined;
 
     const insertData = {
       data: lancamento.data,
