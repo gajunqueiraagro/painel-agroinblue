@@ -243,18 +243,53 @@ export function CompraFinanceiroPanel({
 
     setGerando(true);
     try {
-      // Check duplicates
-      const { data: existing } = await supabase
-        .from('financeiro_lancamentos_v2')
-        .select('id')
-        .eq('movimentacao_rebanho_id', lancamentoId)
-        .eq('cancelado', false)
-        .limit(1);
+      // In update mode, cancel existing records first
+      if (mode === 'update') {
+        const { data: oldRecords } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .select('id')
+          .eq('movimentacao_rebanho_id', lancamentoId)
+          .eq('cancelado', false);
 
-      if (existing && existing.length > 0) {
-        toast.error('Lançamentos financeiros já foram gerados para esta movimentação.');
-        setGerado(true);
-        return;
+        const oldIds = (oldRecords || []).map(r => r.id);
+        if (oldIds.length > 0) {
+          const userId = (await supabase.auth.getUser()).data.user?.id;
+          await supabase
+            .from('financeiro_lancamentos_v2')
+            .update({
+              cancelado: true,
+              cancelado_em: new Date().toISOString(),
+              cancelado_por: userId || null,
+            })
+            .in('id', oldIds);
+
+          // Write audit log
+          await supabase.from('audit_log_movimentacoes').insert({
+            cliente_id: clienteAtual.id,
+            usuario_id: userId || null,
+            acao: 'recalculo_financeiro_compra',
+            movimentacao_id: lancamentoId,
+            financeiro_ids: oldIds,
+            detalhes: {
+              registros_cancelados: oldIds.length,
+              motivo: 'Recálculo financeiro da compra',
+            },
+          });
+        }
+      } else {
+        // In create mode, check duplicates
+        const { data: existing } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .select('id')
+          .eq('movimentacao_rebanho_id', lancamentoId)
+          .eq('cancelado', false)
+          .limit(1);
+
+        if (existing && existing.length > 0) {
+          toast.error('Lançamentos financeiros já foram gerados para esta movimentação.');
+          setGerado(true);
+          return;
+        }
       }
 
       const statusFin = statusOp === 'previsto' ? 'previsto' : 'confirmado';
