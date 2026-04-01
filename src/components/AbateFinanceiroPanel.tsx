@@ -30,6 +30,7 @@ interface Props {
   lancamentoId?: string;
   mode?: 'create' | 'update';
   onFinanceiroUpdated?: () => void;
+  statusOperacional?: 'previsto' | 'confirmado' | 'conciliado';
 }
 
 export function AbateFinanceiroPanel({
