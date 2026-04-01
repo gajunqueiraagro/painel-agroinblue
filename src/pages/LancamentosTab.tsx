@@ -404,7 +404,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // ===== FINANCIAL DETAILS PANEL (right column) =====
   const renderFinancialPanel = () => (
-    <div className="w-72 shrink-0 bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
+    <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
       <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
       <Separator />
 
