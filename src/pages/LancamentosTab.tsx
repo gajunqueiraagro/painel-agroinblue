@@ -27,6 +27,7 @@ import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 import { AbateExportDialog } from '@/components/AbateExportMenu';
+import { AbateFinanceiroPanel } from '@/components/AbateFinanceiroPanel';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useIntegerInput, useDecimalInput } from '@/hooks/useFormattedNumber';
 import { toast } from 'sonner';
