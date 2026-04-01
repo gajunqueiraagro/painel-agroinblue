@@ -121,7 +121,7 @@ function inferirEscopo(tipoOp: string | null, macro: string | null): string {
 // ── Column index mapping ──
 
 const REQUIRED_COLUMNS = [
-  'Tipo_Registro', 'AnoMes', 'Data_Ref', 'Conta', 'Fazenda',
+  'Tipo_Registro', 'AnoMes', 'Data_Ref', 'Conta', 'Conta_Destino', 'Fazenda',
   'Tipo', 'Grupo', 'Valor', 'Status', 'Produto',
   'Fornecedor', 'Macro_Custo', 'Grupo_Custo', 'Centro_Custo', 'Subcentro', 'Obs',
 ];
