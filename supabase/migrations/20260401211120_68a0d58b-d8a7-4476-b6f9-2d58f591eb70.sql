@@ -1,0 +1,1 @@
+ALTER TABLE public.lancamentos ADD COLUMN IF NOT EXISTS tipo_abate text;

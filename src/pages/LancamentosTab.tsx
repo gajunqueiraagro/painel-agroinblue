@@ -379,7 +379,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       if (!fazendaDestino) { toast.error('Informe o Frigorífico'); return; }
       if (isConfirmado || isConciliado) {
         if (!dataVenda && !format(new Date(), 'yyyy-MM-dd')) { toast.error('Informe a Data da Venda'); return; }
-        if (!tipoVenda) { toast.error('Selecione o Tipo de Venda'); return; }
+        if (!tipoVenda) { toast.error('Selecione a Comercialização'); return; }
+        if (!tipoPeso) { toast.error('Selecione o Tipo de Abate'); return; }
         if (!rendCarcaca || Number(rendCarcaca) <= 0) { toast.error('Informe o Rendimento de Carcaça (%)'); return; }
         if (!precoArroba || Number(precoArroba) <= 0) { toast.error('Informe o R$/@ (preço base)'); return; }
       }
@@ -641,9 +642,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               <span className="text-[10px] text-muted-foreground min-w-[90px]">Data Abate</span>
               <Input type="date" value={abateDataAbateAuto} readOnly className="h-7 text-[11px] flex-1 bg-muted cursor-not-allowed" />
             </div>
-            {/* Tipo de Venda */}
+            {/* Comercialização (ex Tipo de Venda) */}
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-muted-foreground min-w-[90px]">Tipo de Venda</span>
+              <span className="text-[10px] text-muted-foreground min-w-[90px]">Comercialização</span>
               <Select value={tipoVenda} onValueChange={setTipoVenda}>
                 <SelectTrigger className="h-7 text-[11px] flex-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                 <SelectContent>
@@ -651,6 +652,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   <SelectItem value="a_termo" className="text-[11px]">A termo</SelectItem>
                   <SelectItem value="spot" className="text-[11px]">Spot</SelectItem>
                   <SelectItem value="outro" className="text-[11px]">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {/* Tipo de Abate (Base de Pagamento) */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-muted-foreground min-w-[90px]">Tipo de Abate</span>
+              <Select value={tipoPeso} onValueChange={(v: 'vivo' | 'morto') => setTipoPeso(v)}>
+                <SelectTrigger className="h-7 text-[11px] flex-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="vivo" className="text-[11px]">Peso vivo</SelectItem>
+                  <SelectItem value="morto" className="text-[11px]">Peso morto</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1159,6 +1171,33 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
       )}
 
+      {/* Tipo de Abate — visible for ALL abate statuses */}
+      {isAbate && (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="font-bold text-[11px]">Tipo de Abate</Label>
+            <Select value={tipoPeso} onValueChange={(v: 'vivo' | 'morto') => setTipoPeso(v)}>
+              <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="vivo" className="text-[12px]">Peso vivo</SelectItem>
+                <SelectItem value="morto" className="text-[12px]">Peso morto</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="font-bold text-[11px]">Comercialização</Label>
+            <Select value={tipoVenda} onValueChange={setTipoVenda}>
+              <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="escala" className="text-[12px]">Escala</SelectItem>
+                <SelectItem value="a_termo" className="text-[12px]">A termo</SelectItem>
+                <SelectItem value="spot" className="text-[12px]">Spot</SelectItem>
+                <SelectItem value="outro" className="text-[12px]">Outro</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
       {editingAbateId && (
         <Button type="button" variant="outline" className="w-full h-9 text-[12px] font-bold mb-1" size="sm" onClick={() => {
           setEditingAbateId(null);

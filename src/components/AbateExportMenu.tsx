@@ -12,7 +12,7 @@ import { getStatus } from '@/lib/statusOperacional';
 import { useState } from 'react';
 import logoUrl from '@/assets/logo.png';
 
-const TIPO_VENDA_LABELS: Record<string, string> = {
+const COMERCIALIZACAO_LABELS: Record<string, string> = {
   escala: 'Escala',
   a_termo: 'A termo',
   spot: 'Spot',
@@ -79,7 +79,7 @@ function textoConfirmado(l: Lancamento, fazendaNome?: string): string {
     `Fazenda: ${fazendaNome || '-'}`,
     `Frigorifico: ${l.fazendaDestino || '-'}`,
     '',
-    `Tipo de Venda: ${TIPO_VENDA_LABELS[l.tipoVenda ?? ''] || '-'}`,
+    `Comercialização: ${COMERCIALIZACAO_LABELS[l.tipoVenda ?? ''] || '-'}`,
     `Tipo de Abate: ${TIPO_ABATE_LABELS[l.tipoPeso ?? ''] || '-'}`,
     '',
     `Data da Venda: ${fmtDate(l.dataVenda)}`,
@@ -121,7 +121,7 @@ function textoRealizado(l: Lancamento, fazendaNome?: string): string {
     `Fazenda: ${fazendaNome || '-'}`,
     `Frigorifico: ${l.fazendaDestino || '-'}`,
     '',
-    `Tipo de Venda: ${TIPO_VENDA_LABELS[l.tipoVenda ?? ''] || '-'}`,
+    `Comercialização: ${COMERCIALIZACAO_LABELS[l.tipoVenda ?? ''] || '-'}`,
     `Tipo de Abate: ${TIPO_ABATE_LABELS[l.tipoPeso ?? ''] || '-'}`,
     '',
     `Data da Venda: ${fmtDate(l.dataVenda)}`,
@@ -181,7 +181,7 @@ async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
   const bloco1: string[][] = [
     ['Fazenda', fazendaNome || '-'],
     ['Frigorífico', l.fazendaDestino || '-'],
-    ['Tipo de Venda', TIPO_VENDA_LABELS[l.tipoVenda ?? ''] || '-'],
+    ['Comercialização', COMERCIALIZACAO_LABELS[l.tipoVenda ?? ''] || '-'],
     ['Tipo de Abate', TIPO_ABATE_LABELS[l.tipoPeso ?? ''] || '-'],
     ['Data da Venda', fmtDate(l.dataVenda)],
     ['Data Embarque', fmtDate(l.dataEmbarque)],
@@ -259,7 +259,7 @@ async function pdfRealizado(l: Lancamento, fazendaNome?: string) {
   const bloco1: string[][] = [
     ['Fazenda', fazendaNome || '-'],
     ['Frigorifico', l.fazendaDestino || '-'],
-    ['Tipo de Venda', TIPO_VENDA_LABELS[l.tipoVenda ?? ''] || '-'],
+    ['Comercialização', COMERCIALIZACAO_LABELS[l.tipoVenda ?? ''] || '-'],
     ['Tipo de Abate', TIPO_ABATE_LABELS[l.tipoPeso ?? ''] || '-'],
     ['Data da Venda', fmtDate(l.dataVenda)],
     ['Data Embarque', fmtDate(l.dataEmbarque)],

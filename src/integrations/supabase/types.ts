@@ -2360,6 +2360,7 @@ export type Database = {
           quantidade: number
           status_operacional: string
           tipo: string
+          tipo_abate: string | null
           tipo_peso: string | null
           tipo_venda: string | null
           transferencia_par_id: string | null
@@ -2402,6 +2403,7 @@ export type Database = {
           quantidade: number
           status_operacional?: string
           tipo: string
+          tipo_abate?: string | null
           tipo_peso?: string | null
           tipo_venda?: string | null
           transferencia_par_id?: string | null
@@ -2444,6 +2446,7 @@ export type Database = {
           quantidade?: number
           status_operacional?: string
           tipo?: string
+          tipo_abate?: string | null
           tipo_peso?: string | null
           tipo_venda?: string | null
           transferencia_par_id?: string | null

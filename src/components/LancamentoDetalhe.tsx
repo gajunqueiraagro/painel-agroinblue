@@ -259,8 +259,14 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 )}
                 {isAbate && lancamento.tipoVenda && (
                   <div>
-                    <p className="text-[10px] text-muted-foreground">Tipo de Venda</p>
+                    <p className="text-[10px] text-muted-foreground">Comercialização</p>
                     <p className="font-bold text-foreground">{{ escala: 'Escala', a_termo: 'A termo', spot: 'Spot', outro: 'Outro' }[lancamento.tipoVenda] || lancamento.tipoVenda}</p>
+                  </div>
+                )}
+                {isAbate && lancamento.tipoPeso && (
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Tipo de Abate</p>
+                    <p className="font-bold text-foreground">{{ vivo: 'Peso vivo', morto: 'Peso morto' }[lancamento.tipoPeso] || lancamento.tipoPeso}</p>
                   </div>
                 )}
                 {/* Abate: financial summary */}
