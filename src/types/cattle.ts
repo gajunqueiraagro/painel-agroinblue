@@ -73,6 +73,11 @@ export interface Lancamento {
   notaFiscal?: string;
   tipoPeso?: 'vivo' | 'morto';
   statusOperacional?: 'previsto' | 'confirmado' | 'conciliado';
+  // Abate workflow fields
+  dataVenda?: string;
+  dataEmbarque?: string;
+  dataAbate?: string;
+  tipoVenda?: string;
   // Audit fields
   createdAt?: string;
   updatedAt?: string;
