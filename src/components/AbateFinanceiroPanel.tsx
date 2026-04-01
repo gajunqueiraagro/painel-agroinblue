@@ -211,10 +211,12 @@ export function AbateFinanceiroPanel({
           });
         });
       } else {
+        // Revenue = valorLiquido + totalDescontos (gross before deductions, since deductions are separate)
+        const valorReceita = totalDescontos > 0 ? valorLiquido + totalDescontos : valorLiquido;
         inserts.push({
           ...baseRecord,
           ano_mes: anoMes,
-          valor: valorLiquido,
+          valor: valorReceita,
           data_competencia: data,
           data_pagamento: data,
           descricao: abateLabel,
