@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { ChevronDown, ChevronUp, Info, AlertTriangle, CheckCircle, Plus } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
@@ -64,6 +65,7 @@ export function CompraFinanceiroPanel({
 
   const [gerado, setGerado] = useState(false);
   const [gerando, setGerando] = useState(false);
+  const [confirmUpdateOpen, setConfirmUpdateOpen] = useState(false);
   const [existingCount, setExistingCount] = useState(0);
   const [existingLoaded, setExistingLoaded] = useState(false);
 
@@ -280,6 +282,48 @@ export function CompraFinanceiroPanel({
     }
   };
 
+  // ===== VALIDAÇÕES =====
+  const validationErrors = useMemo(() => {
+    const errors: string[] = [];
+
+    // 1. Fornecedor obrigatório
+    if (!fornecedorId) {
+      errors.push('Selecione o fornecedor (quem você pagou) antes de gerar o financeiro.');
+    }
+
+    // 2. Valor base obrigatório
+    if (calc.valorBase <= 0) {
+      errors.push('Preencha o valor da compra antes de gerar.');
+    }
+
+    // 3. Validar parcelas (a prazo)
+    if (formaPag === 'prazo' && parcelas.length > 0) {
+      const somaParcelas = Math.round(parcelas.reduce((s, p) => s + p.valor, 0) * 100) / 100;
+      const valorBaseRound = Math.round(calc.valorBase * 100) / 100;
+      if (Math.abs(somaParcelas - valorBaseRound) > 0.01) {
+        errors.push(`A soma das parcelas (R$ ${fmt(somaParcelas)}) deve ser igual ao valor base da compra (R$ ${fmt(valorBaseRound)}).`);
+      }
+      parcelas.forEach((p, i) => {
+        if (!p.data) errors.push(`Parcela ${i + 1}: data obrigatória.`);
+        if (!p.valor || p.valor <= 0) errors.push(`Parcela ${i + 1}: valor deve ser maior que zero.`);
+      });
+    }
+
+    return errors;
+  }, [fornecedorId, calc.valorBase, formaPag, parcelas]);
+
+  const canGenerate = validationErrors.length === 0 && !!lancamentoId;
+
+  // ===== CONFIRMAÇÃO DE SUBSTITUIÇÃO (item 6) =====
+
+  const handleClickGerar = () => {
+    if (mode === 'update' && existingCount > 0) {
+      setConfirmUpdateOpen(true);
+    } else {
+      handleGerarFinanceiro();
+    }
+  };
+
   // ===== GERAÇÃO FINANCEIRA =====
   const handleGerarFinanceiro = async () => {
     if (!lancamentoId) {
@@ -287,8 +331,8 @@ export function CompraFinanceiroPanel({
       return;
     }
     if (!fazendaAtual || !clienteAtual) return;
-    if (calc.valorBase <= 0) {
-      toast.error('Preencha o valor da compra antes de gerar.');
+    if (validationErrors.length > 0) {
+      toast.error(validationErrors[0]);
       return;
     }
 
@@ -717,6 +761,18 @@ export function CompraFinanceiroPanel({
             )}
           </div>
 
+          {/* Validation errors */}
+          {validationErrors.length > 0 && !gerado && (
+            <div className="space-y-1 p-2 rounded-md border border-destructive/30 bg-destructive/5">
+              {validationErrors.map((err, i) => (
+                <div key={i} className="flex items-start gap-1 text-[10px] text-destructive">
+                  <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                  <span>{err}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {gerado ? (
             <div className="flex items-center gap-1.5 text-[11px] font-bold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/30 rounded-md p-2 border border-green-200 dark:border-green-800">
               <CheckCircle className="h-3.5 w-3.5" />
@@ -735,8 +791,8 @@ export function CompraFinanceiroPanel({
                 variant={mode === 'update' ? 'default' : 'outline'}
                 size="sm"
                 className="w-full h-8 text-[11px] font-bold"
-                disabled={!lancamentoId || gerando}
-                onClick={handleGerarFinanceiro}
+                disabled={!canGenerate || gerando}
+                onClick={handleClickGerar}
               >
                 {gerando
                   ? (mode === 'update' ? 'Atualizando...' : 'Gerando...')
@@ -746,6 +802,30 @@ export function CompraFinanceiroPanel({
           )}
         </div>
       )}
+
+      {/* Confirmation dialog for update (item 6) */}
+      <AlertDialog open={confirmUpdateOpen} onOpenChange={setConfirmUpdateOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar atualização financeira</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Esta compra possui <strong>{existingCount} lançamento(s) financeiro(s)</strong> vinculado(s).</p>
+              <p>Ao confirmar:</p>
+              <ul className="list-disc pl-4 space-y-1 text-[12px]">
+                <li>Os lançamentos atuais serão <strong>cancelados</strong></li>
+                <li>Novos lançamentos serão gerados com os valores atualizados</li>
+              </ul>
+              <p className="text-[11px] text-muted-foreground">Esta ação é registrada no log de auditoria.</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmUpdateOpen(false); handleGerarFinanceiro(); }}>
+              Confirmar e atualizar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

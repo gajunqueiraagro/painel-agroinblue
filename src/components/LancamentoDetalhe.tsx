@@ -385,6 +385,17 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                     ))}
                   </div>
                 </div>
+                {/* Warning: zootécnico changes impact financeiro (item 5) */}
+                {finRecords.length > 0 && (
+                  compraForm.quantidade !== lancamento.quantidade ||
+                  compraForm.pesoMedioKg !== lancamento.pesoMedioKg ||
+                  compraForm.categoria !== lancamento.categoria
+                ) && (
+                  <div className="flex items-center gap-1.5 text-[11px] p-2 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    <span>Alterações nos dados zootécnicos impactam o financeiro da compra.</span>
+                  </div>
+                )}
                 {/* Save zootécnico button */}
                 {!compraZooSaved ? (
                   <Button
