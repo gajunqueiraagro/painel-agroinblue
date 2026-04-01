@@ -2339,6 +2339,9 @@ export type Database = {
           created_at: string
           created_by: string | null
           data: string
+          data_abate: string | null
+          data_embarque: string | null
+          data_venda: string | null
           deducoes: number | null
           desconto_funrural: number | null
           desconto_qualidade: number | null
@@ -2358,6 +2361,7 @@ export type Database = {
           status_operacional: string
           tipo: string
           tipo_peso: string | null
+          tipo_venda: string | null
           transferencia_par_id: string | null
           updated_at: string
           updated_by: string | null
@@ -2377,6 +2381,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           data: string
+          data_abate?: string | null
+          data_embarque?: string | null
+          data_venda?: string | null
           deducoes?: number | null
           desconto_funrural?: number | null
           desconto_qualidade?: number | null
@@ -2396,6 +2403,7 @@ export type Database = {
           status_operacional?: string
           tipo: string
           tipo_peso?: string | null
+          tipo_venda?: string | null
           transferencia_par_id?: string | null
           updated_at?: string
           updated_by?: string | null
@@ -2415,6 +2423,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           data?: string
+          data_abate?: string | null
+          data_embarque?: string | null
+          data_venda?: string | null
           deducoes?: number | null
           desconto_funrural?: number | null
           desconto_qualidade?: number | null
@@ -2434,6 +2445,7 @@ export type Database = {
           status_operacional?: string
           tipo?: string
           tipo_peso?: string | null
+          tipo_venda?: string | null
           transferencia_par_id?: string | null
           updated_at?: string
           updated_by?: string | null
