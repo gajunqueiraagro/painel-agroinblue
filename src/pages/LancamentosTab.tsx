@@ -107,7 +107,7 @@ function fmt(v?: number, decimals = 2) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const nomeFazenda = fazendaAtual?.nome || '';
   const isAdministrativo = fazendaAtual?.tem_pecuaria === false;
