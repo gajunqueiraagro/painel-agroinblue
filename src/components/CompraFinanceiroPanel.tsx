@@ -761,6 +761,18 @@ export function CompraFinanceiroPanel({
             )}
           </div>
 
+          {/* Validation errors */}
+          {validationErrors.length > 0 && !gerado && (
+            <div className="space-y-1 p-2 rounded-md border border-destructive/30 bg-destructive/5">
+              {validationErrors.map((err, i) => (
+                <div key={i} className="flex items-start gap-1 text-[10px] text-destructive">
+                  <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                  <span>{err}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {gerado ? (
             <div className="flex items-center gap-1.5 text-[11px] font-bold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/30 rounded-md p-2 border border-green-200 dark:border-green-800">
               <CheckCircle className="h-3.5 w-3.5" />
@@ -779,8 +791,8 @@ export function CompraFinanceiroPanel({
                 variant={mode === 'update' ? 'default' : 'outline'}
                 size="sm"
                 className="w-full h-8 text-[11px] font-bold"
-                disabled={!lancamentoId || gerando}
-                onClick={handleGerarFinanceiro}
+                disabled={!canGenerate || gerando}
+                onClick={handleClickGerar}
               >
                 {gerando
                   ? (mode === 'update' ? 'Atualizando...' : 'Gerando...')
@@ -790,6 +802,30 @@ export function CompraFinanceiroPanel({
           )}
         </div>
       )}
+
+      {/* Confirmation dialog for update (item 6) */}
+      <AlertDialog open={confirmUpdateOpen} onOpenChange={setConfirmUpdateOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar atualização financeira</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Esta compra possui <strong>{existingCount} lançamento(s) financeiro(s)</strong> vinculado(s).</p>
+              <p>Ao confirmar:</p>
+              <ul className="list-disc pl-4 space-y-1 text-[12px]">
+                <li>Os lançamentos atuais serão <strong>cancelados</strong></li>
+                <li>Novos lançamentos serão gerados com os valores atualizados</li>
+              </ul>
+              <p className="text-[11px] text-muted-foreground">Esta ação é registrada no log de auditoria.</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmUpdateOpen(false); handleGerarFinanceiro(); }}>
+              Confirmar e atualizar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
