@@ -437,23 +437,33 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (editingAbateId) {
       // UPDATE existing lancamento
       onEditar(editingAbateId, lancamentoDados);
-      setEditingAbateId(null);
-      setLastSavedLancamentoId(null);
-      setQuantidade('');
-      setCategoria('');
-      setPesoKg('');
-      setFazendaOrigem(''); setFazendaDestino('');
-      setData(format(new Date(), 'yyyy-MM-dd'));
-      setObservacao('');
-      setStatusOp('conciliado');
-      resetFinancialFields();
-      toast.success('Abate atualizado com sucesso!');
+      if (isAbate && isConciliado) {
+        // Keep form open so user can generate/update financial records
+        setLastSavedLancamentoId(editingAbateId);
+        setEditingAbateId(null);
+        toast.success('Abate atualizado! Agora você pode gerar/atualizar os lançamentos financeiros.');
+      } else {
+        setEditingAbateId(null);
+        setLastSavedLancamentoId(null);
+        setQuantidade('');
+        setCategoria('');
+        setPesoKg('');
+        setFazendaOrigem(''); setFazendaDestino('');
+        setData(format(new Date(), 'yyyy-MM-dd'));
+        setObservacao('');
+        setStatusOp('conciliado');
+        resetFinancialFields();
+        toast.success('Abate atualizado com sucesso!');
+      }
     } else {
       const returnedId = await onAdicionar(lancamentoDados as Omit<Lancamento, 'id'>);
 
       if (isCompra && returnedId) {
         setLastSavedLancamentoId(returnedId);
         toast.success('Lançamento registrado! Agora você pode gerar os lançamentos financeiros.');
+      } else if (isAbate && isConciliado && returnedId) {
+        setLastSavedLancamentoId(returnedId);
+        toast.success('Abate registrado! Agora você pode gerar os lançamentos financeiros de receita.');
       } else {
         setLastSavedLancamentoId(null);
         setQuantidade('');
