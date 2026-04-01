@@ -197,7 +197,7 @@ export function CompraFinanceiroPanel({
       const subcentroCompra = isFemea ? 'COMPRAS ANIMAIS/FEMEAS' : 'COMPRAS ANIMAIS/MACHOS';
 
       // Base record with full classification (ano_mes will be overridden per entry)
-      const baseRecord = {
+      const baseRecord: Record<string, any> = {
         cliente_id: clienteAtual.id,
         fazenda_id: fazendaAtual.id,
         tipo_operacao: '2-Saídas',
@@ -208,6 +208,11 @@ export function CompraFinanceiroPanel({
         macro_custo: 'Investimento em Bovinos',
         centro_custo: 'Reposição de Bovinos',
       };
+
+      // Add favorecido_id if a fornecedor was selected
+      if (fornecedorId) {
+        baseRecord.favorecido_id = fornecedorId;
+      }
 
       if (formaPag === 'prazo' && parcelas.length > 0) {
         parcelas.forEach((p, i) => {
