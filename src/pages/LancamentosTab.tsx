@@ -871,6 +871,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-0.5 shrink-0">
+                  {l.tipo === 'abate' && (l.statusOperacional === 'confirmado' || l.statusOperacional === 'conciliado') && (
+                    <AbateExportDialog lancamento={l} fazendaNome={nomeFazenda} />
+                  )}
                   {(() => {
                     const cfg = getStatusBadge(l);
                     return <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${cfg.cls}`}>{cfg.label}</span>;
