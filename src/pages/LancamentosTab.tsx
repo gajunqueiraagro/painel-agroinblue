@@ -461,9 +461,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       if (isCompra && returnedId) {
         setLastSavedLancamentoId(returnedId);
         toast.success('Lançamento registrado! Agora você pode gerar os lançamentos financeiros.');
-      } else if (isAbate && isConciliado && returnedId) {
+      } else if (isAbate && (isConciliado || isConfirmado) && returnedId) {
         setLastSavedLancamentoId(returnedId);
-        toast.success('Abate registrado! Agora você pode gerar os lançamentos financeiros de receita.');
+        toast.success('Abate registrado! Agora você pode gerar os lançamentos financeiros.');
       } else {
         setLastSavedLancamentoId(null);
         setQuantidade('');
