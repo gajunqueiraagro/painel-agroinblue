@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Lancamento,
   CATEGORIAS,
@@ -17,10 +17,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Pencil, Trash2, RefreshCw } from 'lucide-react';
+import { Pencil, Trash2, RefreshCw, DollarSign, FileText } from 'lucide-react';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { STATUS_OPTIONS, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Props {
   lancamento: Lancamento;
@@ -45,6 +46,28 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const [checkingVinculos, setCheckingVinculos] = useState(false);
   const [financeiroSheetOpen, setFinanceiroSheetOpen] = useState(false);
   const [notaFiscalEdit, setNotaFiscalEdit] = useState(lancamento.notaFiscal || '');
+
+  // Financial records summary for purchases
+  interface FinResumo { id: string; descricao: string; valor: number; data_pagamento: string | null; cancelado: boolean; origem_tipo: string | null; }
+  const [finRecords, setFinRecords] = useState<FinResumo[]>([]);
+  const [finLoading, setFinLoading] = useState(false);
+
+  const isCompra = lancamento.tipo === 'compra';
+
+  useEffect(() => {
+    if (!isCompra || !open) return;
+    setFinLoading(true);
+    supabase
+      .from('financeiro_lancamentos_v2')
+      .select('id, descricao, valor, data_pagamento, cancelado, origem_tipo')
+      .eq('movimentacao_rebanho_id', lancamento.id)
+      .eq('cancelado', false)
+      .order('data_pagamento', { ascending: true })
+      .then(({ data }) => {
+        setFinRecords((data as FinResumo[]) || []);
+        setFinLoading(false);
+      });
+  }, [isCompra, open, lancamento.id, financeiroSheetOpen]);
 
   const tipoInfo = TODOS_TIPOS.find(t => t.value === lancamento.tipo);
   const catInfo = CATEGORIAS.find(c => c.value === lancamento.categoria);
@@ -209,17 +232,45 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 </>
               )}
             </div>
-            {/* Alterar financeiro — only for compra type */}
-            {lancamento.tipo === 'compra' && !isTransferenciaEntrada && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full mt-1 text-[11px]"
-                onClick={() => setFinanceiroSheetOpen(true)}
-              >
-                <RefreshCw className="h-3.5 w-3.5 mr-1" />
-                Alterar financeiro da compra
-              </Button>
+            {/* Resumo financeiro da compra */}
+            {isCompra && !isTransferenciaEntrada && (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-muted-foreground tracking-wide">
+                  <DollarSign className="h-3 w-3" /> Financeiro vinculado
+                </div>
+                {finLoading ? (
+                  <p className="text-[11px] text-muted-foreground">Carregando...</p>
+                ) : finRecords.length === 0 ? (
+                  <div className="bg-muted/50 rounded-md p-2 text-[11px] text-muted-foreground">
+                    Nenhum lançamento financeiro gerado para esta compra.
+                  </div>
+                ) : (
+                  <div className="bg-muted/30 rounded-md p-2 space-y-1">
+                    {finRecords.map(r => {
+                      const label = r.origem_tipo?.includes('frete') ? '🚚' : r.origem_tipo?.includes('comissao') ? '📋' : '💰';
+                      return (
+                        <div key={r.id} className="flex justify-between text-[10px]">
+                          <span className="text-muted-foreground truncate max-w-[60%]">{label} {r.descricao}</span>
+                          <span className="font-semibold shrink-0">R$ {r.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      );
+                    })}
+                    <div className="flex justify-between text-[11px] font-bold pt-1 border-t border-border/50">
+                      <span>Total</span>
+                      <span>R$ {finRecords.reduce((s, r) => s + r.valor, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-7 text-[11px]"
+                  onClick={() => setFinanceiroSheetOpen(true)}
+                >
+                  <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                  {finRecords.length > 0 ? 'Alterar financeiro da compra' : 'Gerar financeiro da compra'}
+                </Button>
+              </div>
             )}
           </div>
         </DialogContent>
@@ -229,7 +280,14 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       <Sheet open={financeiroSheetOpen} onOpenChange={setFinanceiroSheetOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader>
-            <SheetTitle className="text-sm">Alterar Financeiro da Compra</SheetTitle>
+            <SheetTitle className="text-sm">
+              {finRecords.length > 0 ? 'Alterar Financeiro da Compra' : 'Gerar Financeiro da Compra'}
+            </SheetTitle>
+            {finRecords.length > 0 && (
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Os {finRecords.length} lançamento(s) existente(s) serão cancelados e substituídos pelos novos valores.
+              </p>
+            )}
           </SheetHeader>
           <div className="mt-4">
             <CompraFinanceiroPanel
@@ -242,7 +300,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
               notaFiscal={notaFiscalEdit}
               onNotaFiscalChange={setNotaFiscalEdit}
               lancamentoId={lancamento.id}
-              mode="update"
+              mode={finRecords.length > 0 ? 'update' : 'create'}
               onFinanceiroUpdated={() => {
                 setFinanceiroSheetOpen(false);
               }}
