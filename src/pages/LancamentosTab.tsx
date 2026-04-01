@@ -366,10 +366,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setCategoria('');
       setPesoKg(tipo === 'nascimento' ? '30' : '');
       setFazendaOrigem(''); setFazendaDestino('');
+      setData(format(new Date(), 'yyyy-MM-dd'));
+      setObservacao('');
+      setStatusOp('conciliado');
       resetFinancialFields();
       toast.success('Lançamento registrado!');
     }
-    // For compra, keep fields so user can generate financial records
   };
 
   const tiposDisponiveis = aba === 'entrada' ? TIPOS_ENTRADA : TIPOS_SAIDA;
