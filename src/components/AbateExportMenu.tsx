@@ -12,7 +12,7 @@ import { getStatus } from '@/lib/statusOperacional';
 import { useState } from 'react';
 import logoUrl from '@/assets/logo.png';
 
-const TIPO_VENDA_LABELS: Record<string, string> = {
+const COMERCIALIZACAO_LABELS: Record<string, string> = {
   escala: 'Escala',
   a_termo: 'A termo',
   spot: 'Spot',

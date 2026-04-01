@@ -379,7 +379,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       if (!fazendaDestino) { toast.error('Informe o Frigorífico'); return; }
       if (isConfirmado || isConciliado) {
         if (!dataVenda && !format(new Date(), 'yyyy-MM-dd')) { toast.error('Informe a Data da Venda'); return; }
-        if (!tipoVenda) { toast.error('Selecione o Tipo de Venda'); return; }
+        if (!tipoVenda) { toast.error('Selecione a Comercialização'); return; }
+        if (!tipoPeso) { toast.error('Selecione o Tipo de Abate'); return; }
         if (!rendCarcaca || Number(rendCarcaca) <= 0) { toast.error('Informe o Rendimento de Carcaça (%)'); return; }
         if (!precoArroba || Number(precoArroba) <= 0) { toast.error('Informe o R$/@ (preço base)'); return; }
       }
