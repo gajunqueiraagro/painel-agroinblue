@@ -136,6 +136,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [mesFiltro, setMesFiltro] = useState('todos');
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
   const [statusOp, setStatusOp] = useState<StatusOperacional>('conciliado');
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const [motivoMorte, setMotivoMorte] = useState('');
   const [motivoMorteCustom, setMotivoMorteCustom] = useState('');
