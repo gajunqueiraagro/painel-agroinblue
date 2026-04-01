@@ -244,14 +244,28 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
       let hasError = false;
       const dataRef = parseDate(col(r, colMap, 'Data_Ref'));
       const status = str(col(r, colMap, 'Status'));
+      const contaDestino = str(col(r, colMap, 'Conta_Destino'));
 
       if (!anoMes) { erros.push({ linha: linhaNum, campo: 'AnoMes', mensagem: `${errPrefix} Competência inválida ou ausente`, aba: sheetName }); hasError = true; }
       if (!dataRef) { erros.push({ linha: linhaNum, campo: 'Data_Ref', mensagem: `${errPrefix} Data de referência ausente`, aba: sheetName }); hasError = true; }
-      if (!conta) { erros.push({ linha: linhaNum, campo: 'Conta', mensagem: `${errPrefix} Conta ausente`, aba: sheetName }); hasError = true; }
+      if (!conta) { erros.push({ linha: linhaNum, campo: 'Conta', mensagem: `${errPrefix} Conta (origem) ausente`, aba: sheetName }); hasError = true; }
       if (!tipo) { erros.push({ linha: linhaNum, campo: 'Tipo', mensagem: `${errPrefix} Tipo de operação ausente`, aba: sheetName }); hasError = true; }
       if (valor === null) { erros.push({ linha: linhaNum, campo: 'Valor', mensagem: `${errPrefix} Valor inválido ou ausente`, aba: sheetName }); hasError = true; }
       if (!status) { erros.push({ linha: linhaNum, campo: 'Status', mensagem: `${errPrefix} Status ausente`, aba: sheetName }); hasError = true; }
       if (!fazenda) { erros.push({ linha: linhaNum, campo: 'Fazenda', mensagem: `${errPrefix} Código da fazenda ausente`, aba: sheetName }); hasError = true; }
+
+      // ── Validação obrigatória para transferências ──
+      if (isTransferencia(tipo) && !hasError) {
+        if (!contaDestino) {
+          erros.push({ linha: linhaNum, campo: 'Conta_Destino', mensagem: `${errPrefix} Transferência sem conta destino. Preencha a coluna Conta_Destino`, aba: sheetName });
+          hasError = true;
+        }
+        if (conta && contaDestino && conta.toLowerCase().trim() === contaDestino.toLowerCase().trim()) {
+          erros.push({ linha: linhaNum, campo: 'Conta_Destino', mensagem: `${errPrefix} Conta origem e destino são iguais: "${conta}"`, aba: sheetName });
+          hasError = true;
+        }
+      }
+
       if (hasError) continue;
 
       const macro = str(col(r, colMap, 'Macro_Custo'));
@@ -269,7 +283,7 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
         centroCusto: str(col(r, colMap, 'Centro_Custo')),
         subcentro: str(col(r, colMap, 'Subcentro')),
         contaOrigem: conta,
-        contaDestino: null,
+        contaDestino: isTransferencia(tipo) ? contaDestino : null,
         fornecedor: str(col(r, colMap, 'Fornecedor')),
         produto: str(col(r, colMap, 'Produto')),
         obs: str(col(r, colMap, 'Obs')),
