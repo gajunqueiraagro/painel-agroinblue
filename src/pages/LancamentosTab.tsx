@@ -720,9 +720,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         <div className="col-span-4">
           <Label className="font-bold text-[11px]">Categoria</Label>
           <Select value={categoria} onValueChange={v => setCategoria(v as Categoria)}>
-            <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px]">{c.label}</SelectItem>)}
+            <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+            <SelectContent className="max-h-52 overflow-y-auto">
+              {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px] py-1.5">{c.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
