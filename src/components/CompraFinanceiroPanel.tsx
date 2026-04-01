@@ -576,14 +576,14 @@ export function CompraFinanceiroPanel({
         {calc.valorBase > 0 && (
           <div className="bg-muted/30 rounded px-2 py-1.5 space-y-px text-[10px]">
             {tipoPreco !== 'por_kg' && (
-              <div className="flex justify-between"><span className="text-muted-foreground">R$/kg</span><strong>R$ {fmt(calc.rKg, 4)}</strong></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">R$/kg</span><strong>{formatMoeda(calc.rKg)}</strong></div>
             )}
             {tipoPreco !== 'por_cab' && (
-              <div className="flex justify-between"><span className="text-muted-foreground">R$/cab.</span><strong>R$ {fmt(calc.rCab)}</strong></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">R$/cab.</span><strong>{formatMoeda(calc.rCab)}</strong></div>
             )}
             <div className="flex justify-between font-semibold">
               <span className="text-muted-foreground">Total base</span>
-              <span>R$ {fmt(calc.valorBase)}</span>
+              <span>{formatMoeda(calc.valorBase)}</span>
             </div>
           </div>
         )}
