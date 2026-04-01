@@ -28,6 +28,8 @@ import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
 import { CompraFinanceiroPanel, CompraFinanceiroPanelRef } from '@/components/CompraFinanceiroPanel';
 import { AbateExportDialog } from '@/components/AbateExportMenu';
 import { AbateFinanceiroPanel, AbateFinanceiroPanelRef } from '@/components/AbateFinanceiroPanel';
+import { VendaFinanceiroPanel, VendaFinanceiroPanelRef } from '@/components/VendaFinanceiroPanel';
+import { ConsumoFinanceiroPanel, ConsumoFinanceiroPanelRef } from '@/components/ConsumoFinanceiroPanel';
 import { ConfirmacaoRegistroDialog } from '@/components/ConfirmacaoRegistroDialog';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useIntegerInput, useDecimalInput } from '@/hooks/useFormattedNumber';
@@ -133,6 +135,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [editingAbateId, setEditingAbateId] = useState<string | null>(null);
   const compraFinanceiroRef = useRef<CompraFinanceiroPanelRef>(null);
   const abateFinanceiroRef = useRef<AbateFinanceiroPanelRef>(null);
+  const vendaFinanceiroRef = useRef<VendaFinanceiroPanelRef>(null);
+  const consumoFinanceiroRef = useRef<ConsumoFinanceiroPanelRef>(null);
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState('todos');
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
@@ -182,7 +186,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const isMorte = tipo === 'morte';
   const isCompra = tipo === 'compra';
   const isVenda = tipo === 'venda';
+  const isConsumo = tipo === 'consumo';
   const isTransferencia = tipo === 'transferencia_entrada' || tipo === 'transferencia_saida';
+  const hasFinancialImpact = !isNascimento && !isMorte && !isTransferencia;
 
   const usaPrecoArroba = isAbate;
   const usaPrecoKg = !isAbate && !isNascimento;
@@ -310,6 +316,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingAbateId(null);
     resetFinancialFields();
     compraFinanceiroRef.current?.resetForm();
+    vendaFinanceiroRef.current?.resetForm();
+    consumoFinanceiroRef.current?.resetForm();
   };
 
   // Load abate into form for editing
@@ -523,6 +531,30 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('conciliado');
           resetFinancialFields();
           toast.success('Abate registrado com financeiro!');
+        } else if (isVenda && returnedId) {
+          if (vendaFinanceiroRef.current && calc.valorLiquido > 0) {
+            await vendaFinanceiroRef.current.generateFinanceiro(returnedId);
+          }
+          vendaFinanceiroRef.current?.resetForm();
+          setLastSavedLancamentoId(null);
+          setQuantidade(''); setCategoria(''); setPesoKg('');
+          setFazendaOrigem(''); setFazendaDestino('');
+          setData(format(new Date(), 'yyyy-MM-dd'));
+          setObservacao(''); setStatusOp('conciliado');
+          resetFinancialFields();
+          toast.success('Venda registrada com sucesso!');
+        } else if (isConsumo && returnedId) {
+          if (consumoFinanceiroRef.current && calc.valorLiquido > 0) {
+            await consumoFinanceiroRef.current.generateFinanceiro(returnedId);
+          }
+          consumoFinanceiroRef.current?.resetForm();
+          setLastSavedLancamentoId(null);
+          setQuantidade(''); setCategoria(''); setPesoKg('');
+          setFazendaOrigem(''); setFazendaDestino('');
+          setData(format(new Date(), 'yyyy-MM-dd'));
+          setObservacao(''); setStatusOp('conciliado');
+          resetFinancialFields();
+          toast.success('Consumo registrado com sucesso!');
         } else {
           setLastSavedLancamentoId(null);
           setQuantidade(''); setCategoria('');
@@ -954,6 +986,105 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const renderFinancialPanel = () => {
     // For abate, use dedicated panel
     if (isAbate) return renderAbateFinancialPanel();
+
+    // Transferência: no financial impact
+    if (isTransferencia) {
+      return (
+        <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
+          <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
+          <Separator />
+          <div className="flex gap-2 items-start py-1">
+            <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+            <div className="text-[11px] text-muted-foreground leading-relaxed">
+              <p className="font-semibold mb-1">Transferência não gera lançamento financeiro.</p>
+              <ul className="space-y-0.5 list-disc list-inside text-[10px]">
+                <li>Movimentação interna entre fazendas</li>
+                <li>Não impacta fluxo de caixa</li>
+              </ul>
+            </div>
+          </div>
+          <Separator />
+          <Button type="button" className="w-full h-10 text-[13px] font-bold" onClick={handleRequestRegister} disabled={submitting}>
+            Registrar Transferência
+          </Button>
+        </div>
+      );
+    }
+
+    // Morte: no financial impact
+    if (isMorte) {
+      return (
+        <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
+          <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
+          <Separator />
+          <div className="flex gap-2 items-start py-1">
+            <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+            <div className="text-[11px] text-muted-foreground leading-relaxed">
+              <p className="font-semibold mb-1">Morte não gera lançamento financeiro.</p>
+              <ul className="space-y-0.5 list-disc list-inside text-[10px]">
+                <li>Impacta apenas o estoque de rebanho</li>
+                <li>Não possui valor monetário associado</li>
+              </ul>
+            </div>
+          </div>
+          <Separator />
+          <Button type="button" className="w-full h-10 text-[13px] font-bold" onClick={handleRequestRegister} disabled={submitting}>
+            Registrar Morte
+          </Button>
+        </div>
+      );
+    }
+
+    // Venda: use dedicated VendaFinanceiroPanel
+    if (isVenda) {
+      return (
+        <VendaFinanceiroPanel
+          ref={vendaFinanceiroRef}
+          quantidade={Number(quantidade) || 0}
+          pesoKg={Number(pesoKg) || 0}
+          categoria={categoria}
+          data={data}
+          destino={fazendaDestino}
+          notaFiscal={notaFiscal}
+          onNotaFiscalChange={setNotaFiscal}
+          statusOp={statusOp}
+          lancamentoId={lastSavedLancamentoId || undefined}
+          tipoVenda={tipoVenda}
+          onTipoVendaChange={setTipoVenda}
+          tipoPeso={tipoPeso}
+          onTipoPesoChange={setTipoPeso}
+          valorBruto={calc.valorBruto}
+          totalBonus={calc.totalBonus}
+          totalDescontos={calc.totalDescontos}
+          valorLiquido={calc.valorLiquido}
+          onRequestRegister={handleRequestRegister}
+          registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
+          submitting={submitting}
+        />
+      );
+    }
+
+    // Consumo: use dedicated ConsumoFinanceiroPanel
+    if (isConsumo) {
+      return (
+        <ConsumoFinanceiroPanel
+          ref={consumoFinanceiroRef}
+          quantidade={Number(quantidade) || 0}
+          pesoKg={Number(pesoKg) || 0}
+          categoria={categoria}
+          data={data}
+          notaFiscal={notaFiscal}
+          onNotaFiscalChange={setNotaFiscal}
+          statusOp={statusOp}
+          lancamentoId={lastSavedLancamentoId || undefined}
+          valorBruto={calc.valorBruto}
+          valorLiquido={calc.valorLiquido}
+          onRequestRegister={handleRequestRegister}
+          registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Consumo'}
+          submitting={submitting}
+        />
+      );
+    }
 
     return (
     <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
