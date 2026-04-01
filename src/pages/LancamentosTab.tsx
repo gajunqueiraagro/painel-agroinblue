@@ -298,29 +298,34 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     const valorTotalFinal = calc.valorLiquido > 0 ? calc.valorLiquido : undefined;
 
+    // For abate: auto-compute dates and convert R$/@ to absolute values
+    const abateDataVenda = isAbate ? (dataVenda || format(new Date(), 'yyyy-MM-dd')) : (dataVenda || undefined);
+    const abateDataEmbarque = isAbate && data ? format(addDays(parseISO(data), -1), 'yyyy-MM-dd') : (dataEmbarque || undefined);
+    const abateDataAbate = isAbate ? data : (dataAbate || undefined);
+
     const returnedId = await onAdicionar({
       data, tipo, quantidade: Number(quantidade), categoria: categoria as Categoria,
       fazendaOrigem: origemFinal, fazendaDestino: destinoFinal,
       pesoMedioKg: pesoKg ? Number(pesoKg) : undefined,
       pesoMedioArrobas: pesoKg ? kgToArrobas(Number(pesoKg)) : undefined,
       observacao: observacao || undefined,
-      pesoCarcacaKg: numOrUndef(pesoCarcacaKg),
+      pesoCarcacaKg: isAbate ? (calc.carcacaCalc > 0 ? calc.carcacaCalc : undefined) : numOrUndef(pesoCarcacaKg),
       precoArroba: numOrUndef(precoArroba) || undefined,
-      bonusPrecoce: numOrUndef(bonusPrecoce),
-      bonusQualidade: numOrUndef(bonusQualidade),
-      bonusListaTrace: numOrUndef(bonusListaTrace),
-      descontoQualidade: numOrUndef(descontoQualidade),
-      descontoFunrural: numOrUndef(descontoFunrural),
-      outrosDescontos: numOrUndef(outrosDescontos),
+      bonusPrecoce: isAbate ? (calc.bonusPrecoceTotal > 0 ? calc.bonusPrecoceTotal : undefined) : numOrUndef(bonusPrecoce),
+      bonusQualidade: isAbate ? (calc.bonusQualidadeTotal > 0 ? calc.bonusQualidadeTotal : undefined) : numOrUndef(bonusQualidade),
+      bonusListaTrace: isAbate ? (calc.bonusListaTraceTotal > 0 ? calc.bonusListaTraceTotal : undefined) : numOrUndef(bonusListaTrace),
+      descontoQualidade: isAbate ? (calc.descQualidadeTotal > 0 ? calc.descQualidadeTotal : undefined) : numOrUndef(descontoQualidade),
+      descontoFunrural: isAbate ? (calc.descFunruralTotal > 0 ? calc.descFunruralTotal : undefined) : numOrUndef(descontoFunrural),
+      outrosDescontos: isAbate ? (Number(outrosDescontos) || undefined) : numOrUndef(outrosDescontos),
       acrescimos: numOrUndef(bonus),
       deducoes: numOrUndef(descontos),
       valorTotal: valorTotalFinal,
-      notaFiscal: notaFiscal || undefined,
+      notaFiscal: isAbate && isConfirmado ? undefined : (notaFiscal || undefined),
       tipoPeso,
       statusOperacional: statusOp,
-      dataVenda: dataVenda || undefined,
-      dataEmbarque: dataEmbarque || undefined,
-      dataAbate: dataAbate || undefined,
+      dataVenda: abateDataVenda || undefined,
+      dataEmbarque: abateDataEmbarque || undefined,
+      dataAbate: abateDataAbate || undefined,
       tipoVenda: tipoVenda || undefined,
     });
 
