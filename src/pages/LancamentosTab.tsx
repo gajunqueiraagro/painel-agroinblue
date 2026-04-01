@@ -642,9 +642,19 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     </div>
   );
 
+  const currentTipoConfig = [...TIPOS_ENTRADA, ...TIPOS_SAIDA].find(t => t.value === tipo);
+  const currentTipoLabel = currentTipoConfig?.label || tipo;
+  const currentTipoIcon = currentTipoConfig?.icon || '';
+
   // ===== MAIN FORM (center) =====
   const renderForm = () => (
     <form onSubmit={handleSubmit} className="flex-1 bg-card rounded-md p-3 shadow-sm border space-y-2 self-start">
+
+      {/* Título da movimentação */}
+      <div className="flex items-center gap-2">
+        <span className="text-base">{currentTipoIcon}</span>
+        <h2 className="text-[15px] font-semibold text-foreground">{currentTipoLabel}</h2>
+      </div>
 
       {/* STATUS — selection + dynamic explanation */}
       <div className="space-y-1">
