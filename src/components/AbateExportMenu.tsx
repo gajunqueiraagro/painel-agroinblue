@@ -48,34 +48,37 @@ const TIPO_ABATE_LABELS: Record<string, string> = {
   morto: 'Peso Morto',
 };
 
-function calcArrobasTotaisPrev(l: Lancamento): number {
-  const peso = l.pesoMedioKg ?? 0;
-  const rend = l.pesoCarcacaKg && l.pesoMedioKg ? (l.pesoCarcacaKg / l.pesoMedioKg) : 0;
-  if (peso <= 0 || rend <= 0) return 0;
-  return (peso * rend / 15) * l.quantidade;
+/** Cálculos compartilhados para Abate Confirmado (tela, PDF, WhatsApp) */
+function calcConfirmado(l: Lancamento) {
+  const pesoVivo = l.pesoMedioKg ?? 0;
+  const rendFrac = pesoVivo > 0 && l.pesoCarcacaKg ? l.pesoCarcacaKg / pesoVivo : 0;
+  const pesoCarcaca = pesoVivo * rendFrac;
+  const arrobasCab = pesoCarcaca / 15;
+  const arrobasTotais = arrobasCab * l.quantidade;
+  const precoBase = l.precoArroba ?? 0;
+  const valorBruto = arrobasTotais * precoBase;
+  const bonusTotal = (l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0);
+  const descTotal = (l.descontoQualidade ?? 0) + (l.descontoFunrural ?? 0) + (l.outrosDescontos ?? 0);
+  const valorLiq = valorBruto + bonusTotal - descTotal;
+  const bonusArroba = arrobasTotais > 0 ? bonusTotal / arrobasTotais : 0;
+  const descArroba = arrobasTotais > 0 ? descTotal / arrobasTotais : 0;
+  const liqArroba = arrobasTotais > 0 ? valorLiq / arrobasTotais : 0;
+  const liqCabeca = l.quantidade > 0 ? valorLiq / l.quantidade : 0;
+  const liqKg = pesoVivo > 0 && l.quantidade > 0 ? valorLiq / (pesoVivo * l.quantidade) : 0;
+  return { pesoVivo, rendPct: rendFrac * 100, pesoCarcaca, arrobasCab, arrobasTotais, precoBase, valorBruto, bonusTotal, descTotal, bonusArroba, descArroba, valorLiq, liqArroba, liqCabeca, liqKg };
 }
 
 // ── Texto WhatsApp Confirmado ──
 function textoConfirmado(l: Lancamento, fazendaNome?: string): string {
   const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
-  const pesoVivo = l.pesoMedioKg ?? 0;
-  const rendPct = pesoVivo > 0 && l.pesoCarcacaKg ? (l.pesoCarcacaKg / pesoVivo) : 0;
-  const arrobasCab = (pesoVivo * rendPct) / 15;
-  const totalArrobas = arrobasCab * l.quantidade;
-  const precoBase = l.precoArroba ?? 0;
-  const valorBase = precoBase * totalArrobas;
-  const bonusTotal = (l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0);
-  const descTotal = (l.descontoQualidade ?? 0) + (l.descontoFunrural ?? 0) + (l.outrosDescontos ?? 0);
-  const bonusArroba = totalArrobas > 0 ? bonusTotal / totalArrobas : 0;
-  const descArroba = totalArrobas > 0 ? descTotal / totalArrobas : 0;
-  const valorLiq = valorBase + bonusTotal - descTotal;
-  const liqArroba = totalArrobas > 0 ? valorLiq / totalArrobas : 0;
+  const c = calcConfirmado(l);
 
   const lines: string[] = [
     'ESCALA DE ABATE - CONFIRMADO',
     '',
     `Fazenda: ${fazendaNome || '-'}`,
     `Frigorifico: ${l.fazendaDestino || '-'}`,
+    '',
     `Tipo de Venda: ${TIPO_VENDA_LABELS[l.tipoVenda ?? ''] || '-'}`,
     `Tipo de Abate: ${TIPO_ABATE_LABELS[l.tipoPeso ?? ''] || '-'}`,
     '',
@@ -84,21 +87,25 @@ function textoConfirmado(l: Lancamento, fazendaNome?: string): string {
     `Data Prev. Abate: ${fmtDate(l.dataAbate || l.data)}`,
     '',
     `Categoria: ${cat}`,
-    `Quantidade: ${l.quantidade} cab.`,
+    `Quantidade: ${l.quantidade} cabecas`,
     '',
-    `Peso Vivo: ${fmtValor(pesoVivo)} kg`,
-    `Rendimento: ${fmtValor(rendPct * 100)} %`,
-    `R$/@: ${formatMoeda(precoBase)}`,
+    `Peso Vivo Previsto: ${fmtValor(c.pesoVivo)} kg`,
     '',
-    `Arrobas/cab: ${fmtValor(arrobasCab)} @`,
-    `Arrobas totais: ${fmtValor(totalArrobas)} @`,
+    `R$/@ Negociado: ${formatMoeda(c.precoBase)}`,
+    '',
+    `Arrobas Estimadas: ${fmtValor(c.arrobasTotais)} @`,
     '',
   ];
-  if (bonusArroba > 0) lines.push(`Bonus R$/@: ${formatMoeda(bonusArroba)}`);
-  if (descArroba > 0) lines.push(`Descontos R$/@: ${formatMoeda(descArroba)}`);
+  if (c.bonusArroba > 0) lines.push(`Bonus Estimado: ${formatMoeda(c.bonusArroba)}/@`);
+  if (c.descArroba > 0) lines.push(`Descontos Estimados: ${formatMoeda(c.descArroba)}/@`);
+  if (c.bonusArroba > 0 || c.descArroba > 0) lines.push('');
   lines.push(
-    `Preco liquido R$/@: ${formatMoeda(liqArroba)}`,
-    `Valor liquido total: ${formatMoeda(valorLiq)}`,
+    `Preco Liquido Estimado: ${formatMoeda(c.liqArroba)}/@`,
+    '',
+    `Valor Liquido Estimado: ${formatMoeda(c.valorLiq)}`,
+    '',
+    'Observacao:',
+    'Os valores acima representam uma estimativa baseada nos parametros informados. O resultado final pode variar conforme rendimento, peso real, bonus e descontos efetivos no abate.',
   );
   return lines.join('\n');
 }
@@ -140,19 +147,8 @@ function textoRealizado(l: Lancamento, fazendaNome?: string): string {
 // ── PDF Confirmado ──
 async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
-  const totalArrobas = calcArrobasTotaisPrev(l);
-  const pesoVivo = l.pesoMedioKg ?? 0;
-  const rendPct = pesoVivo > 0 && l.pesoCarcacaKg ? (l.pesoCarcacaKg / pesoVivo) * 100 : 0;
-  const pesoCarcaca = pesoVivo * (rendPct / 100);
-  const arrobasCab = pesoCarcaca > 0 ? pesoCarcaca / 15 : 0;
-  const bonus = (l.bonusPrecoce ?? 0) + (l.bonusQualidade ?? 0) + (l.bonusListaTrace ?? 0);
-  const desc = (l.descontoQualidade ?? 0) + (l.descontoFunrural ?? 0) + (l.outrosDescontos ?? 0);
-  const precoBase = l.precoArroba ?? 0;
-  const precoLiqArroba = precoBase + bonus - desc;
-  const valorLiq = precoLiqArroba * totalArrobas;
-  const liqCabeca = l.quantidade > 0 ? valorLiq / l.quantidade : 0;
-  const liqKg = pesoVivo > 0 && l.quantidade > 0 ? valorLiq / (pesoVivo * l.quantidade) : 0;
+  const cat = CATEGORIAS.find(cc => cc.value === l.categoria)?.label ?? l.categoria;
+  const c = calcConfirmado(l);
 
   let y = 5;
   try {
@@ -180,37 +176,37 @@ async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
     ['Data Prev. Abate', fmtDate(l.dataAbate || l.data)],
     ['Categoria', cat],
     ['Quantidade', `${l.quantidade} cab.`],
-    ['Preço Negociado', `${formatMoeda(precoBase)} /@`],
+    ['Preço Negociado', `${formatMoeda(c.precoBase)} /@`],
   ];
   autoTable(doc, { ...tStyle, startY: y, head: [['DADOS CONFIRMADOS', '']], body: bloco1 });
 
   // BLOCO 2
   const y2 = ((doc as any).lastAutoTable?.finalY ?? y + 56) + 4;
   const bloco2: string[][] = [
-    ['Peso Vivo Estimado', `${fmtValor(pesoVivo)} kg`],
-    ['Rend. Carcaça', `${fmtValor(rendPct)} %`],
-    ['Peso Carcaça', `${fmtValor(pesoCarcaca)} kg`],
-    ['Arrobas por Cabeça', `${fmtValor(arrobasCab)} @`],
-    ['Arrobas Totais Estimadas', `${fmtValor(totalArrobas)} @`],
+    ['Peso Vivo Estimado', `${fmtValor(c.pesoVivo)} kg`],
+    ['Rend. Carcaça', `${fmtValor(c.rendPct)} %`],
+    ['Peso Carcaça', `${fmtValor(c.pesoCarcaca)} kg`],
+    ['Arrobas por Cabeça', `${fmtValor(c.arrobasCab)} @`],
+    ['Arrobas Totais Estimadas', `${fmtValor(c.arrobasTotais)} @`],
   ];
   autoTable(doc, { ...tStyle, startY: y2, head: [['PROJEÇÃO OPERACIONAL (EXPECTATIVA)', '']], body: bloco2 });
 
   // BLOCO 3
   const y3 = ((doc as any).lastAutoTable?.finalY ?? y2 + 36) + 4;
   const bloco3: string[][] = [
-    ['Bônus Estimado', `${formatMoeda(bonus)} /@`],
-    ['Descontos Estimados', `${formatMoeda(desc)} /@`],
-    ['Preço Líq. Estimado', `${formatMoeda(precoLiqArroba)} /@`],
-    ['Valor Líq. Estimado Total', formatMoeda(valorLiq)],
+    ['Bônus Estimado', `${formatMoeda(c.bonusArroba)} /@`],
+    ['Descontos Estimados', `${formatMoeda(c.descArroba)} /@`],
+    ['Preço Líq. Estimado', `${formatMoeda(c.liqArroba)} /@`],
+    ['Valor Líq. Estimado Total', formatMoeda(c.valorLiq)],
   ];
   autoTable(doc, { ...tStyle, startY: y3, head: [['PROJEÇÃO FINANCEIRA (EXPECTATIVA)', '']], body: bloco3 });
 
   // BLOCO 4
   const y4 = ((doc as any).lastAutoTable?.finalY ?? y3 + 36) + 4;
   const bloco4: string[][] = [
-    ['Líquido Estimado R$/@', formatMoeda(precoLiqArroba)],
-    ['Líquido Estimado / Cabeça', formatMoeda(liqCabeca)],
-    ['Líquido Estimado / kg Vivo', formatMoeda(liqKg)],
+    ['Líquido Estimado R$/@', formatMoeda(c.liqArroba)],
+    ['Líquido Estimado / Cabeça', formatMoeda(c.liqCabeca)],
+    ['Líquido Estimado / kg Vivo', formatMoeda(c.liqKg)],
   ];
   autoTable(doc, { ...tStyle, startY: y4, head: [['RESULTADO ESPERADO', '']], body: bloco4 });
 
