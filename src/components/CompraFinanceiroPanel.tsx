@@ -398,8 +398,28 @@ export function CompraFinanceiroPanel({
   const previstoInputClass = isPrevisto ? 'border-orange-400 text-orange-800 dark:text-orange-300' : '';
 
   return (
-    <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
-      <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
+    <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start relative">
+      {/* Overlay: block editing until movimentação is saved */}
+      {!lancamentoId && mode === 'create' && (
+        <div className="absolute inset-0 z-10 bg-background/70 backdrop-blur-[1px] rounded-md flex items-center justify-center p-4">
+          <div className="text-center space-y-1">
+            <AlertTriangle className="h-5 w-5 mx-auto text-muted-foreground" />
+            <p className="text-sm font-medium text-muted-foreground">
+              Registre a entrada primeiro para depois preencher o financeiro
+            </p>
+          </div>
+        </div>
+      )}
+
+      <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">
+        {mode === 'update' ? 'Atualizar Financeiro da Compra' : 'Detalhes Financeiros'}
+      </h3>
+      {mode === 'update' && existingCount > 0 && (
+        <div className="flex items-center gap-1.5 text-[11px] p-2 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          <span>{existingCount} lançamento(s) existente(s) serão cancelados e substituídos pelos novos valores.</span>
+        </div>
+      )}
       <Separator />
 
       {/* BLOCO 1 — Tipo de Compra */}
