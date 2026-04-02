@@ -1758,6 +1758,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             {renderForm()}
             {isCompra ? (
               <CompraFinanceiroPanel
+                key={`compra-${tipo}`}
                 ref={compraFinanceiroRef}
                 quantidade={Number(quantidade) || 0}
                 pesoKg={Number(pesoKg) || 0}
