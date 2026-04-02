@@ -483,7 +483,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                     <p className="text-[9px] text-muted-foreground">Saldo Extrato</p>
                     <div className="flex items-center gap-1">
                       <p className="text-xs font-bold">
-                        {card.saldoExtrato !== null ? `R$ ${fmtBRL(card.saldoExtrato)}` : '—'}
+                        {card.saldoExtrato !== null ? formatMoeda(card.saldoExtrato) : '—'}
                       </p>
                       {contaId !== '__all__' && canEditSaldoFinal(card.anoMes) && (
                         <button
