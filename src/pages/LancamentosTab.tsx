@@ -1805,23 +1805,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   submitting={submitting}
                   registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Compra'}
                 />
-                {/* Hidden CompraFinanceiroPanel for financial generation */}
-                <div className="hidden">
-                  <CompraFinanceiroPanel
-                    key={`compra-${tipo}`}
-                    ref={compraFinanceiroRef}
-                    quantidade={Number(quantidade) || 0}
-                    pesoKg={Number(pesoKg) || 0}
-                    data={data}
-                    categoria={categoria}
-                    statusOp={statusOp}
-                    fazendaOrigem={fazendaOrigem}
-                    notaFiscal={compraDetalhes?.notaFiscal || notaFiscal}
-                    onNotaFiscalChange={setNotaFiscal}
-                    fornecedorId={compraFornecedorId}
-                    lancamentoId={lastSavedLancamentoId || undefined}
-                  />
-                </div>
                 <CompraDetalhesDialog
                   open={compraDialogOpen}
                   onClose={() => setCompraDialogOpen(false)}
