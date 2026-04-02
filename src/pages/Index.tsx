@@ -422,7 +422,7 @@ const Index = () => {
       {activeTab === 'analise_entradas' && <AnaliseEntradasTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
       {activeTab === 'analise_saidas' && <AnaliseSaidasTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
       {activeTab === 'desfrute' && <DesfrunteTab lancamentos={isGlobal ? lancamentosVisiveis : lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} isGlobal={isGlobal} />}
-      {activeTab === 'cadastros' && <CadastrosTab />}
+      {activeTab === 'cadastros' && <CadastrosTab onTabChange={handleTabChange} />}
       {activeTab === 'chuvas' && <ChuvasTab />}
       {activeTab === 'fechamento' && (
         <FechamentoTab

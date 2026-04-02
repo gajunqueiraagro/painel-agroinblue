@@ -66,7 +66,7 @@ function LegacyLink({ label, tabId }: { label: string; tabId: string }) {
   );
 }
 
-export function CadastrosTab() {
+export function CadastrosTab({ onTabChange }: { onTabChange?: (tab: string) => void }) {
   const { fazendaAtual, isGlobal } = useFazenda();
   const { isAdmin } = useCliente();
   const [data, setData] = useState<CadastroData>(EMPTY);
