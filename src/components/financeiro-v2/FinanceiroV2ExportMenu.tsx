@@ -28,9 +28,8 @@ function fmtDate(d: string | null) {
   try { return format(parseISO(d), 'dd/MM/yyyy'); } catch { return d; }
 }
 
-function fmtBRL(v: number): string {
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+
+
 
 function buildRows(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[]) {
   return lancamentos.map(l => {

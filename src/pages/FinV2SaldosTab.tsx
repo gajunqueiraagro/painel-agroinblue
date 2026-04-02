@@ -48,10 +48,8 @@ interface ContaRef {
   codigo_conta: string | null;
 }
 
-/* ── helpers ── */
-function fmtBRL(v: number): string {
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+
+
 
 function prevAnoMes(am: string): string {
   const [y, m] = am.split('-').map(Number);

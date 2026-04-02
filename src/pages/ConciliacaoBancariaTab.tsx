@@ -71,10 +71,8 @@ interface MesCard {
   lancamentos: LancamentoResumo[];
 }
 
-/* ── Helpers ── */
-function fmtBRL(v: number): string {
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+
+
 
 function fmtDate(d: string | null) {
   if (!d) return '-';
