@@ -54,9 +54,9 @@ const SUB_ABA_LABELS: Record<SubAba, { label: string; icon: string }> = {
 
 type TableColumn = { key: string; width: number };
 
-const TABLE_HEAD_CELL = 'px-1 py-1 text-[8px] font-bold uppercase tracking-[0.02em] whitespace-nowrap';
-const TABLE_BODY_CELL = 'px-1 py-[3px] align-middle whitespace-nowrap';
-const TABLE_FOOT_CELL = 'px-1 py-[3px] whitespace-nowrap';
+const TABLE_HEAD_CELL = 'px-[3px] py-1 text-[8px] font-bold uppercase tracking-[0.02em] whitespace-nowrap';
+const TABLE_BODY_CELL = 'px-[3px] py-[3px] align-middle whitespace-nowrap overflow-hidden text-ellipsis';
+const TABLE_FOOT_CELL = 'px-[3px] py-[3px] whitespace-nowrap';
 
 /**
  * Tabela unificada de movimentações com indicadores econômicos.
@@ -113,20 +113,20 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
   // For global + single subTipo, use that tipo's header; for global + showTipo (todas), use generic "Fazenda"
   const globalColHeader = isGlobal ? (subTipo ? getFazendaColumnHeader(subTipo) : 'Fazenda') : '';
   const columns: TableColumn[] = [
-    { key: 'data', width: 52 },
-    ...(showTipo ? [{ key: 'tipo', width: 76 }] : []),
-    { key: 'qtd', width: 40 },
-    { key: 'categoria', width: 76 },
-    ...(showDestino ? [{ key: 'destino', width: 86 }] : []),
-    ...(isGlobal ? [{ key: 'fazenda', width: 108 }] : []),
-    { key: 'peso-vivo', width: 50 },
-    { key: 'peso-arroba', width: 44 },
-    { key: 'total', width: 72 },
-    { key: 'liq-arroba', width: 60 },
-    ...(showLiqKg ? [{ key: 'liq-kg', width: 60 }] : []),
-    { key: 'liq-cab', width: 60 },
-    { key: 'status', width: 78 },
-    { key: 'acao', width: 28 },
+    { key: 'data', width: 48 },
+    ...(showTipo ? [{ key: 'tipo', width: 64 }] : []),
+    { key: 'qtd', width: 34 },
+    { key: 'categoria', width: 62 },
+    ...(showDestino ? [{ key: 'destino', width: 74 }] : []),
+    ...(isGlobal ? [{ key: 'fazenda', width: 92 }] : []),
+    { key: 'peso-vivo', width: 44 },
+    { key: 'peso-arroba', width: 40 },
+    { key: 'total', width: 62 },
+    { key: 'liq-arroba', width: 54 },
+    ...(showLiqKg ? [{ key: 'liq-kg', width: 54 }] : []),
+    { key: 'liq-cab', width: 54 },
+    { key: 'status', width: 68 },
+    { key: 'acao', width: 24 },
   ];
   if (lancamentos.length === 0) return <p className="text-center text-muted-foreground py-6">Nenhum registro no período</p>;
 
@@ -233,19 +233,19 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
 function AbateTable({ lancamentos, onEdit, isGlobal, fazendaMap }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; isGlobal?: boolean; fazendaMap?: Map<string, string> }) {
   const fMap = fazendaMap || new Map<string, string>();
   const columns: TableColumn[] = [
-    { key: 'data', width: 52 },
-    { key: 'qtd', width: 40 },
-    { key: 'categoria', width: 74 },
-    { key: 'destino', width: 84 },
-    ...(isGlobal ? [{ key: 'origem', width: 102 }] : []),
-    { key: 'peso-vivo', width: 48 },
-    { key: 'rendimento', width: 48 },
-    { key: 'peso-arroba', width: 46 },
-    { key: 'total', width: 72 },
-    { key: 'liq-arroba', width: 60 },
-    { key: 'liq-cab', width: 60 },
-    { key: 'status', width: 78 },
-    { key: 'acao', width: 28 },
+    { key: 'data', width: 48 },
+    { key: 'qtd', width: 34 },
+    { key: 'categoria', width: 62 },
+    { key: 'destino', width: 70 },
+    ...(isGlobal ? [{ key: 'origem', width: 88 }] : []),
+    { key: 'peso-vivo', width: 44 },
+    { key: 'rendimento', width: 44 },
+    { key: 'peso-arroba', width: 40 },
+    { key: 'total', width: 62 },
+    { key: 'liq-arroba', width: 54 },
+    { key: 'liq-cab', width: 54 },
+    { key: 'status', width: 68 },
+    { key: 'acao', width: 24 },
   ];
   if (lancamentos.length === 0) return <p className="text-center text-muted-foreground py-6">Nenhum abate no período</p>;
 
