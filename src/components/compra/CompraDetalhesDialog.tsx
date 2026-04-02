@@ -272,11 +272,11 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
           {/* 4. Pagamento */}
           {sectionTitle(<CreditCard className="h-4 w-4 text-muted-foreground" />, 'Informações de Pagamento')}
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => { setFormaPag('avista'); setParcelas([]); }}
+            <button type="button" onClick={() => { setFormaPag('avista'); setParcelas([]); markDirty(); }}
               className={`h-9 rounded text-[12px] font-bold border-2 transition-all ${formaPag === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
               À vista
             </button>
-            <button type="button" onClick={() => { setFormaPag('prazo'); if (calc.valorBase > 0) setParcelas(gerarParcelas(Number(qtdParcelas) || 1, calc.valorBase)); }}
+            <button type="button" onClick={() => { setFormaPag('prazo'); markDirty(); if (calc.valorBase > 0) setParcelas(gerarParcelas(Number(qtdParcelas) || 1, calc.valorBase)); }}
               className={`h-9 rounded text-[12px] font-bold border-2 transition-all ${formaPag === 'prazo' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
               A prazo
             </button>
