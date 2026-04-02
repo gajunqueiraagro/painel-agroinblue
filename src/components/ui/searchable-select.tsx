@@ -121,9 +121,20 @@ export function SearchableSelect({
       return;
     }
     if (e.key === 'Tab') {
+      e.preventDefault();
       if (selectableItems[highlightIdx]) {
         handleSelect(selectableItems[highlightIdx].value);
+      } else {
+        setOpen(false);
+        setSearch('');
       }
+      // Return focus to trigger so Tab continues naturally from there
+      setTimeout(() => {
+        const trigger = containerRef.current?.querySelector('button') as HTMLButtonElement | null;
+        if (trigger) {
+          trigger.focus();
+        }
+      }, 0);
     }
   };
 
