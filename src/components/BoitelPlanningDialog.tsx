@@ -40,6 +40,14 @@ export interface BoitelData {
   // Comercialização
   precoVendaArroba: number;
   despesasAbate: number;
+  // Snapshot de resultados (calculados e salvos)
+  _faturamentoBruto?: number;
+  _faturamentoLiquido?: number;
+  _receitaProdutor?: number;
+  _custoTotal?: number;
+  _lucroTotal?: number;
+  // ID do boitel_operacoes (se já salvo)
+  _boitelId?: string;
 }
 
 interface Props {
