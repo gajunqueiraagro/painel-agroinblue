@@ -317,7 +317,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setNotaFiscal(''); setTipoPeso('vivo'); setObservacao('');
     setDataVenda(''); setDataEmbarque(''); setDataAbate(''); setTipoVenda('');
     setAbateFornecedorId('');
-    setCompraFornecedorId(''); setCompraOrigemSugestao(null); setCompraOrigemSugestaoDescartada(false);
+    setCompraFornecedorId('');
     setFormaPagamento('avista'); setParcelas([]); setQtdParcelas('1');
     setMotivoMorte(''); setMotivoMorteCustom('');
     setRendCarcaca(''); setFunruralPct('');
