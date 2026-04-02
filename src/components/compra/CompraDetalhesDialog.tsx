@@ -348,9 +348,9 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
         </div>
 
         {/* Footer fixo */}
-        <div className="flex justify-end gap-2 pt-3 border-t mt-2">
-          <Button variant="outline" onClick={tryClose}>Cancelar</Button>
-          <Button onClick={handleSave}>Salvar</Button>
+        <div className="flex justify-end gap-2 pt-2 border-t mt-1">
+          <Button variant="outline" size="sm" onClick={tryClose} className="h-7 text-[11px]">Cancelar</Button>
+          <Button size="sm" onClick={handleSave} className="h-7 text-[11px]">Salvar</Button>
         </div>
       </DialogContent>
     </Dialog>
