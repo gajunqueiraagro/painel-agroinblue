@@ -230,7 +230,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const calc = useMemo(() => {
     const qtd = Number(quantidade) || 0;
     const peso = Number(pesoKg) || 0;
-    const rend = Number(rendCarcaca) || 0;
+    // For abate with modal detalhes, source from abateDetalhes
+    const abRendCarcaca = isAbate && abateDetalhes ? Number(abateDetalhes.rendCarcaca) || 0 : Number(rendCarcaca) || 0;
+    const abPrecoArroba = isAbate && abateDetalhes ? Number(abateDetalhes.precoArroba) || 0 : Number(precoArroba) || 0;
+    const abBonusPrecoce = isAbate && abateDetalhes ? Number(abateDetalhes.bonusPrecoce) || 0 : Number(bonusPrecoce) || 0;
+    const abBonusQualidade = isAbate && abateDetalhes ? Number(abateDetalhes.bonusQualidade) || 0 : Number(bonusQualidade) || 0;
+    const abBonusListaTrace = isAbate && abateDetalhes ? Number(abateDetalhes.bonusListaTrace) || 0 : Number(bonusListaTrace) || 0;
+    const abDescQualidade = isAbate && abateDetalhes ? Number(abateDetalhes.descontoQualidade) || 0 : Number(descontoQualidade) || 0;
+    const abFunruralPct = isAbate && abateDetalhes ? Number(abateDetalhes.funruralPct) || 0 : Number(funruralPct) || 0;
+    const abFunruralReais = isAbate && abateDetalhes ? Number(abateDetalhes.funruralReais) || 0 : Number(funruralReais) || 0;
+    const abOutrosDescontos = isAbate && abateDetalhes ? Number(abateDetalhes.outrosDescontos) || 0 : Number(outrosDescontos) || 0;
+
+    const rend = abRendCarcaca;
     const carcacaCalc = isAbate && rend > 0 ? peso * rend / 100 : Number(pesoCarcacaKg) || 0;
     let pesoArroba = 0;
     if (isAbate) { pesoArroba = carcacaCalc > 0 ? carcacaCalc / 15 : 0; }
@@ -238,27 +249,23 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const totalArrobas = pesoArroba * qtd;
     const totalKg = peso * qtd;
     let valorBruto = 0;
-    if (usaPrecoArroba) { valorBruto = totalArrobas * (Number(precoArroba) || 0); }
+    if (usaPrecoArroba) { valorBruto = totalArrobas * abPrecoArroba; }
     else if (isVenda) {
-      // Venda normal: use vendaTipoPreco + vendaPrecoInput
       const vi = Number(vendaPrecoInput) || 0;
       if (vendaTipoPreco === 'por_kg') { valorBruto = totalKg * vi; }
       else if (vendaTipoPreco === 'por_cab') { valorBruto = qtd * vi; }
       else if (vendaTipoPreco === 'por_total') { valorBruto = vi; }
     }
     else if (usaPrecoKg) { valorBruto = totalKg * (Number(precoKg) || 0); }
-    // Abate: bonus/desconto inputs are R$/@ → multiply by totalArrobas
-    const bonusPrecoceTotal = isAbate ? (Number(bonusPrecoce) || 0) * totalArrobas : 0;
-    const bonusQualidadeTotal = isAbate ? (Number(bonusQualidade) || 0) * totalArrobas : 0;
-    const bonusListaTraceTotal = isAbate ? (Number(bonusListaTrace) || 0) * totalArrobas : 0;
-    // Venda em Pé: descontos use R$ values directly; Abate: R$/@ × totalArrobas
-    const descQualidadeTotal = isAbate ? (Number(descontoQualidade) || 0) * totalArrobas : (Number(descontoQualidade) || 0);
-    // Funrural: if manual R$ is filled, use it directly; otherwise calc from %
-    const funruralReaisVal = Number(funruralReais) || 0;
+    const bonusPrecoceTotal = isAbate ? abBonusPrecoce * totalArrobas : 0;
+    const bonusQualidadeTotal = isAbate ? abBonusQualidade * totalArrobas : 0;
+    const bonusListaTraceTotal = isAbate ? abBonusListaTrace * totalArrobas : 0;
+    const descQualidadeTotal = isAbate ? abDescQualidade * totalArrobas : (Number(descontoQualidade) || 0);
+    const funruralReaisVal = abFunruralReais;
     const descFunruralTotal = (isAbate || isVenda)
-      ? (funruralReaisVal > 0 ? funruralReaisVal : valorBruto * (Number(funruralPct) || 0) / 100)
+      ? (funruralReaisVal > 0 ? funruralReaisVal : valorBruto * abFunruralPct / 100)
       : 0;
-    const descOutrosTotal = (isAbate || isVenda) ? (Number(outrosDescontos) || 0) : 0;
+    const descOutrosTotal = (isAbate || isVenda) ? abOutrosDescontos : 0;
     const totalBonus = isAbate
       ? bonusPrecoceTotal + bonusQualidadeTotal + bonusListaTraceTotal
       : (Number(bonus) || 0);
