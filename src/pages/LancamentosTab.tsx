@@ -1428,7 +1428,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // ===== MAIN FORM (center) =====
   const renderForm = () => (
-    <div className={`flex-1 bg-card rounded-md p-3 shadow-sm border space-y-2 self-start ${editingAbateId ? 'ring-2 ring-primary' : ''}`}>
+    <div className={`flex-1 bg-card rounded-md p-3 shadow-sm border space-y-2 self-start overflow-visible ${editingAbateId ? 'ring-2 ring-primary' : ''}`}>
 
       {/* Editing banner */}
       {editingAbateId && (
@@ -1742,7 +1742,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       )}
 
       {/* === 3-COLUMN DESKTOP GRID === */}
-      <div className="grid grid-cols-[11rem_minmax(0,0.9fr)_21rem] gap-3 items-start">
+      <div className="grid grid-cols-[11rem_minmax(0,0.9fr)_21rem] gap-3 items-start overflow-visible">
         {/* Left: Navigation sidebar */}
         {renderSidebar()}
 
