@@ -203,6 +203,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
   const [qtdParcelas, setQtdParcelas] = useState('1');
 
+  useEffect(() => {
+    if (tipo === 'abate') {
+      console.log('[ABATE_DEBUG] novoFornecedorAbateOpen=', novoFornecedorAbateOpen);
+    }
+  }, [novoFornecedorAbateOpen, tipo]);
+
   const qtdInput = useIntegerInput(quantidade, setQuantidade);
   const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
 
