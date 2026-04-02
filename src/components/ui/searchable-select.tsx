@@ -156,7 +156,7 @@ export function SearchableSelect({
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-0.5 w-full min-w-[140px] rounded-md border bg-popover shadow-md">
+        <div className={cn("absolute z-50 w-full min-w-[140px] rounded-md border bg-popover shadow-md", openUp ? "bottom-full mb-0.5" : "top-full mt-0.5")}>
           <div className="px-0.5 pt-0.5 pb-0">
             <input
               ref={inputRef}
