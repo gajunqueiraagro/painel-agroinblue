@@ -149,21 +149,21 @@ export function SearchableSelect({
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-0.5 w-full min-w-[160px] rounded-md border bg-popover shadow-md">
-          <div className="p-1">
+        <div className="absolute z-50 mt-0.5 w-full min-w-[140px] rounded-md border bg-popover shadow-md">
+          <div className="px-0.5 pt-0.5 pb-0">
             <input
               ref={inputRef}
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder={placeholder}
-              className="w-full h-5 text-[10px] px-1.5 rounded border border-input bg-background outline-none focus:ring-1 focus:ring-ring"
+              className="w-full h-4 text-[9px] px-1 rounded border border-input bg-background outline-none focus:ring-1 focus:ring-ring"
               onKeyDown={handleKeyDown}
               autoCorrect="off"
               autoCapitalize="none"
               spellCheck={false}
             />
           </div>
-          <div ref={listRef} className="max-h-[180px] overflow-y-auto px-0.5 pb-0.5">
+          <div ref={listRef} className="max-h-[120px] overflow-y-auto px-0.5 pb-0.5">
             {selectableItems.map((o, idx) => (
               <button
                 key={o.value}
@@ -172,7 +172,7 @@ export function SearchableSelect({
                 onClick={() => handleSelect(o.value)}
                 onMouseEnter={() => setHighlightIdx(idx)}
                 className={cn(
-                  'w-full text-left px-1.5 py-[3px] text-[10px] rounded-sm cursor-pointer truncate',
+                  'w-full text-left px-1 py-[1.5px] text-[9px] leading-tight rounded-sm cursor-pointer truncate',
                   idx === highlightIdx && 'bg-accent text-accent-foreground',
                   idx !== highlightIdx && 'hover:bg-accent/50',
                   value === o.value && 'font-semibold',
@@ -182,7 +182,7 @@ export function SearchableSelect({
               </button>
             ))}
             {filtered.length === 0 && (
-              <div className="text-[10px] text-muted-foreground px-1.5 py-1">Nenhum resultado</div>
+              <div className="text-[9px] text-muted-foreground px-1 py-0.5">Nenhum resultado</div>
             )}
           </div>
         </div>
