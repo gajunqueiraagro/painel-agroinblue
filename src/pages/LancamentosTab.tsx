@@ -1112,6 +1112,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onFreteChange={setFrete}
           comissao={comissaoPct}
           onComissaoChange={setComissaoPct}
+          funruralReais={funruralReais}
+          onFunruralReaisChange={setFunruralReais}
+          comissaoVal={calc.comissaoVal}
+          freteVal={calc.freteVal}
           onRequestRegister={handleRequestRegister}
           registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
           submitting={submitting}
