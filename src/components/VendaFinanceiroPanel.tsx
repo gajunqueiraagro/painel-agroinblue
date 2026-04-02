@@ -17,6 +17,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 import { BoitelPlanningDialog, type BoitelData } from '@/components/BoitelPlanningDialog';
+import { salvarBoitelOperacao, vincularBoitelAoLancamento, gerarFinanceiroBoitel } from '@/hooks/useBoitelOperacoes';
 import type { StatusOperacional } from '@/lib/statusOperacional';
 
 interface Parcela {
