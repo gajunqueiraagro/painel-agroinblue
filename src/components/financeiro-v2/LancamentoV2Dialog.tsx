@@ -1087,7 +1087,7 @@ export function LancamentoV2Dialog({
                             </Button>
                           </div>
                           <span className="font-bold font-mono text-foreground">
-                            R$ {toBRL(recorrenciaTotal)}
+                            {formatMoeda(recorrenciaTotal)}
                           </span>
                         </div>
                       </div>
