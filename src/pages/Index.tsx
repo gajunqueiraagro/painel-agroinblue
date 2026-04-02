@@ -283,6 +283,8 @@ const Index = () => {
     analise_economica: () => setActiveTab('lancar_fin_hub'),
     visao_fin_hub: () => setActiveTab('lancar_fin_hub'),
     financeiro: () => setActiveTab('lancar_fin_hub'),
+    // Cadastros sub-screens
+    auditoria: () => setActiveTab('cadastros'),
   };
 
   const clienteNomeHeader = clientes.length > 1 ? (clienteAtual?.nome || '') : '';
