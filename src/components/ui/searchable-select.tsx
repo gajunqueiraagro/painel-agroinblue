@@ -80,6 +80,12 @@ export function SearchableSelect({
 
   const handleTriggerClick = () => {
     if (disabled) return;
+    // Determine if dropdown should open upward
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      setOpenUp(spaceBelow < 160);
+    }
     setOpen(true);
     setHighlightIdx(filtered.length > 0 ? 1 : 0);
     setTimeout(() => inputRef.current?.focus(), 0);
