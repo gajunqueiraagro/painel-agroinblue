@@ -33,7 +33,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     // Resumo sub-screens
     const resumoTabs: TabId[] = ['resumo', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute', 'operacao_hub', 'painel_consultor'];
     // Cadastros
-    const cadTabs: TabId[] = ['cadastros', 'acessos'];
+    const cadTabs: TabId[] = ['cadastros', 'acessos', 'auditoria'];
     if (lancarZooTabs.includes(tab)) return 'lancar_zoo_hub';
     if (lancarFinTabs.includes(tab)) return 'financeiro_v2_hub';
     if (zooTabs.includes(tab)) return 'visao_zoo_hub';
