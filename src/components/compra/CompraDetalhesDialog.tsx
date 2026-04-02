@@ -192,7 +192,7 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
 
           {/* 1. Tipo de Compra */}
           {sectionTitle(<ShoppingCart className="h-4 w-4 text-muted-foreground" />, 'Tipo de Compra')}
-          <Select value={tipoPreco} onValueChange={(v: TipoPrecoCompra) => { setTipoPreco(v); setPrecoKg(''); setPrecoCab(''); setValorTotal(''); }}>
+          <Select value={tipoPreco} onValueChange={(v: TipoPrecoCompra) => { setTipoPreco(v); setPrecoKg(''); setPrecoCab(''); setValorTotal(''); markDirty(); }}>
             <SelectTrigger className="h-9 text-[12px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="por_kg">Por kg</SelectItem>
