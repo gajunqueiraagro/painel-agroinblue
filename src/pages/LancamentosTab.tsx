@@ -198,6 +198,33 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       .then(({ data }) => { if (data) setAbateFornecedores(data); });
   }, [clienteAtual]);
 
+  // Auto-suggest fornecedor from fazendaOrigem for compra
+  useEffect(() => {
+    if (!isCompra || !fazendaOrigem?.trim() || compraOrigemSugestaoDescartada) {
+      setCompraOrigemSugestao(null);
+      return;
+    }
+    const nomeNorm = fazendaOrigem.trim().toLowerCase();
+    const match = abateFornecedores.find(f => f.nome.toLowerCase() === nomeNorm);
+    if (match) {
+      if (!compraFornecedorId) {
+        setCompraFornecedorId(match.id);
+        setCompraOrigemSugestao('encontrado');
+        setTimeout(() => setCompraOrigemSugestao(null), 3000);
+      } else {
+        setCompraOrigemSugestao(null);
+      }
+    } else if (fazendaOrigem.trim().length >= 3) {
+      setCompraOrigemSugestao('criar');
+    } else {
+      setCompraOrigemSugestao(null);
+    }
+  }, [fazendaOrigem, abateFornecedores, compraFornecedorId, compraOrigemSugestaoDescartada, isCompra]);
+
+  useEffect(() => {
+    setCompraOrigemSugestaoDescartada(false);
+  }, [fazendaOrigem]);
+
   const [formaPagamento, setFormaPagamento] = useState<'avista' | 'parcelado'>('avista');
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
   const [qtdParcelas, setQtdParcelas] = useState('1');
