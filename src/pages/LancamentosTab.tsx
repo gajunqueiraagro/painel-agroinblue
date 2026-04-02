@@ -28,6 +28,7 @@ import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
 import { CompraFinanceiroPanel, CompraFinanceiroPanelRef } from '@/components/CompraFinanceiroPanel';
 import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/components/compra/CompraDetalhesDialog';
 import { CompraResumoPanel } from '@/components/compra/CompraResumoPanel';
+import { gerarFinanceiroCompra } from '@/components/compra/gerarFinanceiroCompra';
 import { AbateExportDialog } from '@/components/AbateExportMenu';
 import { AbateFinanceiroPanel, AbateFinanceiroPanelRef } from '@/components/AbateFinanceiroPanel';
 import { SearchableSelect } from '@/components/ui/searchable-select';
