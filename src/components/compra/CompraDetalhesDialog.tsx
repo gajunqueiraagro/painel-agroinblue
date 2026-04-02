@@ -251,7 +251,7 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
             </div>
             <div>
               <Label className="text-[11px]">Comissão (%)</Label>
-              <Input type="number" value={comissaoPct} onChange={e => setComissaoPct(e.target.value)} placeholder="0" className="h-9 text-[12px]" />
+              <Input type="number" value={comissaoPct} onChange={e => { setComissaoPct(e.target.value); markDirty(); }} placeholder="0" className="h-9 text-[12px]" />
             </div>
           </div>
           {calc.comissaoVal > 0 && (
