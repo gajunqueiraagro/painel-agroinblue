@@ -83,6 +83,51 @@ export type Database = {
           },
         ]
       }
+      audit_log: {
+        Row: {
+          acao: string
+          cliente_id: string
+          created_at: string
+          dados_anteriores: Json | null
+          dados_novos: Json | null
+          fazenda_id: string | null
+          id: string
+          modulo: string
+          registro_id: string | null
+          resumo: string | null
+          tabela_origem: string
+          usuario_id: string | null
+        }
+        Insert: {
+          acao: string
+          cliente_id: string
+          created_at?: string
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          fazenda_id?: string | null
+          id?: string
+          modulo: string
+          registro_id?: string | null
+          resumo?: string | null
+          tabela_origem: string
+          usuario_id?: string | null
+        }
+        Update: {
+          acao?: string
+          cliente_id?: string
+          created_at?: string
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          fazenda_id?: string | null
+          id?: string
+          modulo?: string
+          registro_id?: string | null
+          resumo?: string | null
+          tabela_origem?: string
+          usuario_id?: string | null
+        }
+        Relationships: []
+      }
       audit_log_movimentacoes: {
         Row: {
           acao: string
@@ -3166,6 +3211,14 @@ export type Database = {
       }
     }
     Functions: {
+      audit_modulo_from_lancamento_tipo: {
+        Args: { p_tipo: string }
+        Returns: string
+      }
+      audit_resumo_lancamento: {
+        Args: { r: Database["public"]["Tables"]["lancamentos"]["Row"] }
+        Returns: string
+      }
       can_manage_financeiro_importacao_v2: {
         Args: { _cliente_id: string }
         Returns: boolean
