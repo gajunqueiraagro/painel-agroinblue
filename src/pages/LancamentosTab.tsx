@@ -215,13 +215,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const bonusPrecoceTotal = isAbate ? (Number(bonusPrecoce) || 0) * totalArrobas : 0;
     const bonusQualidadeTotal = isAbate ? (Number(bonusQualidade) || 0) * totalArrobas : 0;
     const bonusListaTraceTotal = isAbate ? (Number(bonusListaTrace) || 0) * totalArrobas : 0;
-    const descQualidadeTotal = isAbate ? (Number(descontoQualidade) || 0) * totalArrobas : 0;
-    const descFunruralTotal = isAbate ? valorBruto * (Number(funruralPct) || 0) / 100 : 0;
-    const descOutrosTotal = isAbate ? (Number(outrosDescontos) || 0) : 0;
+    // Venda em Pé: descontos use R$ values directly; Abate: R$/@ × totalArrobas
+    const descQualidadeTotal = isAbate ? (Number(descontoQualidade) || 0) * totalArrobas : (Number(descontoQualidade) || 0);
+    const descFunruralTotal = (isAbate || isVenda) ? valorBruto * (Number(funruralPct) || 0) / 100 : 0;
+    const descOutrosTotal = (isAbate || isVenda) ? (Number(outrosDescontos) || 0) : 0;
     const totalBonus = isAbate
       ? bonusPrecoceTotal + bonusQualidadeTotal + bonusListaTraceTotal
       : (Number(bonus) || 0);
-    const totalDescontos = isAbate
+    const totalDescontos = (isAbate || isVenda)
       ? descQualidadeTotal + descFunruralTotal + descOutrosTotal
       : (Number(descontos) || 0);
     const comissaoVal = isAbate ? 0 : valorBruto * (Number(comissaoPct) || 0) / 100;
