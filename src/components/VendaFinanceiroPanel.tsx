@@ -59,7 +59,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   quantidade, pesoKg, categoria, data, destino, notaFiscal, onNotaFiscalChange,
   statusOp, lancamentoId, mode = 'create', onFinanceiroUpdated,
   onRequestRegister, registerLabel, submitting: externalSubmitting,
-  tipoVenda, onTipoVendaChange, tipoPeso, onTipoPesoChange,
+  tipoPeso, onTipoPesoChange,
   valorBruto, totalBonus, totalDescontos, valorLiquido,
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
