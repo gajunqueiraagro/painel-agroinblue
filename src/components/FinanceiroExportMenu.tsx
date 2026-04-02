@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 import logoUrl from '@/assets/logo.png';
-import { fmtValor } from '@/lib/calculos/formatters';
+import { fmtValor, formatMoeda } from '@/lib/calculos/formatters';
 import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 
 // Load logo as base64 for jsPDF
@@ -67,9 +67,9 @@ function gerarTextoResumo(lancamentos: Lancamento[], subAba: SubAba, ano: string
       const cat = CATEGORIAS.find(ct => ct.value === l.categoria)?.label ?? l.categoria;
       totalValor += c.valorFinal;
       const nf = l.notaFiscal ? ` | NF: ${l.notaFiscal}` : '';
-      lines.push(`🔪 ${format(parseISO(l.data), 'dd/MM/yy')} | ${l.quantidade} ${cat} | Rend: ${c.rendimento ? fmtValor(c.rendimento, 1) + '%' : '-'} | R$ ${fmtValor(c.valorFinal)}${nf}`);
+      lines.push(`🔪 ${format(parseISO(l.data), 'dd/MM/yy')} | ${l.quantidade} ${cat} | Rend: ${c.rendimento ? fmtValor(c.rendimento, 1) + '%' : '-'} | ${formatMoeda(c.valorFinal)}${nf}`);
     });
-    lines.push(`\n💰 *Total: R$ ${fmtValor(totalValor)}*`);
+    lines.push(`\n💰 *Total: ${formatMoeda(totalValor)}*`);
   } else {
     let totalValor = 0;
     const emoji = subAba === 'compra' ? '🛒' : '💰';
@@ -79,9 +79,9 @@ function gerarTextoResumo(lancamentos: Lancamento[], subAba: SubAba, ano: string
       totalValor += c.valorFinal;
       const local = subAba === 'compra' ? l.fazendaOrigem : l.fazendaDestino;
       const nf = l.notaFiscal ? ` | NF: ${l.notaFiscal}` : '';
-      lines.push(`${emoji} ${format(parseISO(l.data), 'dd/MM/yy')} | ${l.quantidade} ${cat} | ${local || '-'} | R$ ${fmtValor(c.valorFinal)}${nf}`);
+      lines.push(`${emoji} ${format(parseISO(l.data), 'dd/MM/yy')} | ${l.quantidade} ${cat} | ${local || '-'} | ${formatMoeda(c.valorFinal)}${nf}`);
     });
-    lines.push(`\n💰 *Total: R$ ${fmtValor(totalValor)}*`);
+    lines.push(`\n💰 *Total: ${formatMoeda(totalValor)}*`);
   }
 
   return lines.join('\n');
@@ -107,12 +107,12 @@ function gerarTextoIndividual(l: Lancamento, fazendaNome?: string): string {
       `🥩 Peso carcaça: ${fmtValor(l.pesoCarcacaKg)} kg`,
       `📊 Rendimento: ${c.rendimento ? fmtValor(c.rendimento, 1) + '%' : '-'}`,
       `📐 Peso @: ${fmtValor(c.pesoArroba)} @`,
-      `💲 Preço/@: R$ ${fmtValor(l.precoArroba)}`,
+      `💲 Preço/@: ${formatMoeda(l.precoArroba)}`,
       ``,
-      `💰 *Valor Total: R$ ${fmtValor(c.valorFinal)}*`,
-      `📈 Líq/@: R$ ${fmtValor(c.liqArroba)}`,
-      `📈 Líq/cab: R$ ${fmtValor(c.liqCabeca)}`,
-      `📈 Líq/kg: R$ ${fmtValor(c.liqKg)}`,
+      `💰 *Valor Total: ${formatMoeda(c.valorFinal)}*`,
+      `📈 Líq/@: ${formatMoeda(c.liqArroba)}`,
+      `📈 Líq/cab: ${formatMoeda(c.liqCabeca)}`,
+      `📈 Líq/kg: ${formatMoeda(c.liqKg)}`,
     );
   } else {
     const tipoLabel = l.tipo === 'compra' ? 'Compra' : 'Venda em Pé';
@@ -129,12 +129,12 @@ function gerarTextoIndividual(l: Lancamento, fazendaNome?: string): string {
     lines.push(
       `⚖️ Peso vivo: ${fmtValor(l.pesoMedioKg)} kg`,
       `📐 Peso @: ${fmtValor(c.pesoArroba)} @`,
-      `💲 Preço/@: R$ ${fmtValor(l.precoArroba)}`,
+      `💲 Preço/@: ${formatMoeda(l.precoArroba)}`,
       ``,
-      `💰 *Valor Total: R$ ${fmtValor(c.valorFinal)}*`,
-      `📈 Líq/@: R$ ${fmtValor(c.liqArroba)}`,
-      `📈 Líq/cab: R$ ${fmtValor(c.liqCabeca)}`,
-      `📈 Líq/kg: R$ ${fmtValor(c.liqKg)}`,
+      `💰 *Valor Total: ${formatMoeda(c.valorFinal)}*`,
+      `📈 Líq/@: ${formatMoeda(c.liqArroba)}`,
+      `📈 Líq/cab: ${formatMoeda(c.liqCabeca)}`,
+      `📈 Líq/kg: ${formatMoeda(c.liqKg)}`,
     );
   }
 
@@ -248,31 +248,31 @@ async function gerarPDFIndividual(l: Lancamento, fazendaNome?: string) {
       ['Peso carcaça (kg)', fmtValor(l.pesoCarcacaKg)],
       ['Rendimento', c.rendimento ? fmtValor(c.rendimento, 1) + '%' : '-'],
       ['Peso em @ (por cab)', fmtValor(c.pesoArroba)],
-      ['Preço por @ (R$)', fmtValor(l.precoArroba)],
-      ['Bônus precoce', fmtValor(l.bonusPrecoce)],
-      ['Bônus qualidade', fmtValor(l.bonusQualidade)],
-      ['Bônus lista trace', fmtValor(l.bonusListaTrace)],
-      ['Desc. qualidade', fmtValor(l.descontoQualidade)],
-      ['Desc. funrural', fmtValor(l.descontoFunrural)],
-      ['Outros descontos', fmtValor(l.outrosDescontos)],
+      ['Preço por @', formatMoeda(l.precoArroba)],
+      ['Bônus precoce', formatMoeda(l.bonusPrecoce)],
+      ['Bônus qualidade', formatMoeda(l.bonusQualidade)],
+      ['Bônus lista trace', formatMoeda(l.bonusListaTrace)],
+      ['Desc. qualidade', formatMoeda(l.descontoQualidade)],
+      ['Desc. funrural', formatMoeda(l.descontoFunrural)],
+      ['Outros descontos', formatMoeda(l.outrosDescontos)],
       ['', ''],
-      ['VALOR TOTAL', `R$ ${fmtValor(c.valorFinal)}`],
-      ['Líquido por @', `R$ ${fmtValor(c.liqArroba)}`],
-      ['Líquido por cabeça', `R$ ${fmtValor(c.liqCabeca)}`],
-      ['Líquido por kg vivo', `R$ ${fmtValor(c.liqKg)}`],
+      ['VALOR TOTAL', formatMoeda(c.valorFinal)],
+      ['Líquido por @', formatMoeda(c.liqArroba)],
+      ['Líquido por cabeça', formatMoeda(c.liqCabeca)],
+      ['Líquido por kg vivo', formatMoeda(c.liqKg)],
     ];
   } else {
     detalhes = [
       ['Peso vivo (kg)', fmtValor(l.pesoMedioKg)],
       ['Peso em @ (por cab)', fmtValor(c.pesoArroba)],
-      ['Preço por @ (R$)', fmtValor(l.precoArroba)],
-      ['Acréscimos', fmtValor(l.acrescimos)],
-      ['Deduções', fmtValor(l.deducoes)],
+      ['Preço por @', formatMoeda(l.precoArroba)],
+      ['Acréscimos', formatMoeda(l.acrescimos)],
+      ['Deduções', formatMoeda(l.deducoes)],
       ['', ''],
-      ['VALOR TOTAL', `R$ ${fmtValor(c.valorFinal)}`],
-      ['Líquido por @', `R$ ${fmtValor(c.liqArroba)}`],
-      ['Líquido por cabeça', `R$ ${fmtValor(c.liqCabeca)}`],
-      ['Líquido por kg vivo', `R$ ${fmtValor(c.liqKg)}`],
+      ['VALOR TOTAL', formatMoeda(c.valorFinal)],
+      ['Líquido por @', formatMoeda(c.liqArroba)],
+      ['Líquido por cabeça', formatMoeda(c.liqCabeca)],
+      ['Líquido por kg vivo', formatMoeda(c.liqKg)],
     ];
   }
 

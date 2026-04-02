@@ -7,10 +7,7 @@ import { useContratos, Contrato, ContratoForm } from '@/hooks/useContratos';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { ContratoDialog } from '@/components/financeiro-v2/ContratoDialog';
-
-function toBRL(v: number): string {
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+import { formatMoeda } from '@/lib/calculos/formatters';
 
 function proxVencimento(c: Contrato): string {
   if (c.status !== 'ativo') return '-';
@@ -105,7 +102,7 @@ export function ContratosTab() {
                       <p className="text-sm font-semibold text-foreground truncate">{c.produto || 'Sem produto'}</p>
                       <p className="text-xs text-muted-foreground truncate">{fornecedor?.nome || 'Sem fornecedor'}</p>
                       <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
-                        <span className="font-mono font-bold text-foreground">R$ {toBRL(c.valor)}</span>
+                        <span className="font-mono font-bold text-foreground">{formatMoeda(c.valor)}</span>
                         <span>{c.frequencia}</span>
                         <span>Próx: {proxVencimento(c)}</span>
                       </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { formatMoeda } from '@/lib/calculos/formatters';
 import { STATUS_LABEL as CENTRAL_STATUS_LABEL } from '@/lib/statusOperacional';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Button } from '@/components/ui/button';
@@ -101,12 +102,8 @@ const STATUS_TEXT_COLORS: Record<string, string> = {
   conciliado: 'text-green-700 dark:text-green-400 font-bold',
 };
 
-function fmtBRL(v: number): string {
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 function fmtValor(v: number, sinal: number) {
-  const formatted = fmtBRL(Math.abs(v));
-  return sinal >= 0 ? `R$ ${formatted}` : `- R$ ${formatted}`;
+  return formatMoeda(Math.abs(v) * (sinal >= 0 ? 1 : -1));
 }
 function fmtDate(d: string | null) {
   if (!d) return '-';
@@ -667,8 +664,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           {/* Summary + actions */}
           <div className="flex items-center justify-between">
             <div className="flex gap-2 text-[10px]">
-              <span className="text-success font-bold">Ent: R$ {fmtBRL(totalEntradas)}</span>
-              <span className="text-destructive font-bold">Saí: R$ {fmtBRL(totalSaidas)}</span>
+              <span className="text-success font-bold">Ent: {formatMoeda(totalEntradas)}</span>
+              <span className="text-destructive font-bold">Saí: {formatMoeda(totalSaidas)}</span>
               <span className="text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
             </div>
             <div className="flex gap-1">

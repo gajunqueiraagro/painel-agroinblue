@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { formatMoeda } from '@/lib/calculos/formatters';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   CheckCircle2, AlertTriangle, XCircle, Pencil, ExternalLink,
@@ -70,10 +71,8 @@ interface MesCard {
   lancamentos: LancamentoResumo[];
 }
 
-/* ── Helpers ── */
-function fmtBRL(v: number): string {
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+
+
 
 function fmtDate(d: string | null) {
   if (!d) return '-';
@@ -430,7 +429,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                 <div className="ml-auto text-right">
                   <p className="text-[9px] text-muted-foreground">Saldo Calculado</p>
                   <p className={`text-xs font-bold ${card.saldoCalculado >= 0 ? 'text-foreground' : 'text-red-600'}`}>
-                    R$ {fmtBRL(card.saldoCalculado)}
+                    {formatMoeda(card.saldoCalculado)}
                   </p>
                 </div>
               </div>
@@ -439,31 +438,31 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 <div className="bg-background rounded-md p-2 border">
                   <p className="text-[9px] text-muted-foreground uppercase font-medium">Saldo Inicial</p>
-                  <p className="text-xs font-bold">R$ {fmtBRL(card.saldoInicial)}</p>
+                  <p className="text-xs font-bold">{formatMoeda(card.saldoInicial)}</p>
                 </div>
 
                 <div className="bg-background rounded-md p-2 border">
                   <p className="text-[9px] text-muted-foreground uppercase font-medium">Entradas</p>
-                  <p className="text-xs font-bold text-green-700 dark:text-green-400">R$ {fmtBRL(card.totalEntradas)}</p>
+                  <p className="text-xs font-bold text-green-700 dark:text-green-400">{formatMoeda(card.totalEntradas)}</p>
                   <div className="mt-1 space-y-0.5">
                     <p className="text-[8px] text-muted-foreground flex justify-between">
-                      <span>Terceiros</span><span>R$ {fmtBRL(card.entradasTerceiros)}</span>
+                      <span>Terceiros</span><span>{formatMoeda(card.entradasTerceiros)}</span>
                     </p>
                     <p className="text-[8px] text-muted-foreground flex justify-between">
-                      <span>Transferências</span><span>R$ {fmtBRL(card.transferenciasRecebidas)}</span>
+                      <span>Transferências</span><span>{formatMoeda(card.transferenciasRecebidas)}</span>
                     </p>
                   </div>
                 </div>
 
                 <div className="bg-background rounded-md p-2 border">
                   <p className="text-[9px] text-muted-foreground uppercase font-medium">Saídas</p>
-                  <p className="text-xs font-bold text-red-700 dark:text-red-400">R$ {fmtBRL(card.totalSaidas)}</p>
+                  <p className="text-xs font-bold text-red-700 dark:text-red-400">{formatMoeda(card.totalSaidas)}</p>
                   <div className="mt-1 space-y-0.5">
                     <p className="text-[8px] text-muted-foreground flex justify-between">
-                      <span>Terceiros</span><span>R$ {fmtBRL(card.saidasTerceiros)}</span>
+                      <span>Terceiros</span><span>{formatMoeda(card.saidasTerceiros)}</span>
                     </p>
                     <p className="text-[8px] text-muted-foreground flex justify-between">
-                      <span>Transferências</span><span>R$ {fmtBRL(card.transferenciasEnviadas)}</span>
+                      <span>Transferências</span><span>{formatMoeda(card.transferenciasEnviadas)}</span>
                     </p>
                   </div>
                 </div>
@@ -471,7 +470,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                 <div className="bg-background rounded-md p-2 border">
                   <p className="text-[9px] text-muted-foreground uppercase font-medium">Saldo Final Calculado</p>
                   <p className={`text-xs font-bold ${card.saldoCalculado >= 0 ? 'text-foreground' : 'text-red-600'}`}>
-                    R$ {fmtBRL(card.saldoCalculado)}
+                    {formatMoeda(card.saldoCalculado)}
                   </p>
                 </div>
               </div>
@@ -484,7 +483,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                     <p className="text-[9px] text-muted-foreground">Saldo Extrato</p>
                     <div className="flex items-center gap-1">
                       <p className="text-xs font-bold">
-                        {card.saldoExtrato !== null ? `R$ ${fmtBRL(card.saldoExtrato)}` : '—'}
+                        {card.saldoExtrato !== null ? formatMoeda(card.saldoExtrato) : '—'}
                       </p>
                       {contaId !== '__all__' && canEditSaldoFinal(card.anoMes) && (
                         <button
@@ -498,12 +497,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                   </div>
                   <div>
                     <p className="text-[9px] text-muted-foreground">Saldo Calculado</p>
-                    <p className="text-xs font-bold">R$ {fmtBRL(card.saldoCalculado)}</p>
+                    <p className="text-xs font-bold">{formatMoeda(card.saldoCalculado)}</p>
                   </div>
                   <div>
                     <p className="text-[9px] text-muted-foreground">Diferença</p>
                     <p className={`text-xs font-bold ${Math.abs(card.diferenca) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
-                      R$ {fmtBRL(card.diferenca)}
+                      {formatMoeda(card.diferenca)}
                     </p>
                   </div>
                 </div>
@@ -601,7 +600,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                                 <TableCell className="text-[9px] py-0.5 truncate max-w-[150px]">{l.descricao || '-'}</TableCell>
                                 <TableCell className="text-[9px] py-0.5 truncate max-w-[120px]">{fornNome || <span className="italic text-muted-foreground">n/c</span>}</TableCell>
                                 <TableCell className={`text-[9px] py-0.5 text-right font-medium tabular-nums whitespace-nowrap ${isEntrada ? 'text-green-700' : 'text-red-700'}`}>
-                                  {isEntrada ? '' : '- '}R$ {fmtBRL(Math.abs(l.valor))}
+                                  {formatMoeda(isEntrada ? Math.abs(l.valor) : -Math.abs(l.valor))}
                                 </TableCell>
                               </TableRow>
                             );

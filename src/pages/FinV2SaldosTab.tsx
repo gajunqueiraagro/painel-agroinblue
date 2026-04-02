@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { formatMoeda } from '@/lib/calculos/formatters';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -47,10 +48,8 @@ interface ContaRef {
   codigo_conta: string | null;
 }
 
-/* ── helpers ── */
-function fmtBRL(v: number): string {
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+
+
 
 function prevAnoMes(am: string): string {
   const [y, m] = am.split('-').map(Number);
@@ -472,7 +471,7 @@ export function FinV2SaldosTab() {
                 <CardContent className="p-2">
                   <p className="text-[10px] text-muted-foreground">{g.label}</p>
                   <p className={`text-sm font-semibold tabular-nums ${g.totalFinal >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                    R$ {fmtBRL(g.totalFinal)}
+                    {formatMoeda(g.totalFinal)}
                   </p>
                 </CardContent>
               </Card>
@@ -481,7 +480,7 @@ export function FinV2SaldosTab() {
               <CardContent className="p-2">
                 <p className="text-[10px] text-muted-foreground font-semibold">Total Geral</p>
                 <p className={`text-sm font-bold tabular-nums ${totalGeral >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                  R$ {fmtBRL(totalGeral)}
+                  {formatMoeda(totalGeral)}
                 </p>
               </CardContent>
             </Card>
@@ -530,11 +529,11 @@ export function FinV2SaldosTab() {
                           <TableCell className="text-right tabular-nums py-1">
                             <div className="flex items-center justify-end gap-1">
                               {isAuto && <Link2 className="h-3 w-3 text-emerald-500 shrink-0" />}
-                              R$ {fmtBRL(s.saldo_inicial)}
+                              {formatMoeda(s.saldo_inicial)}
                             </div>
                           </TableCell>
                           <TableCell className="text-right tabular-nums font-semibold py-1">
-                            R$ {fmtBRL(s.saldo_final)}
+                            {formatMoeda(s.saldo_final)}
                           </TableCell>
                           <TableCell className="text-center py-1">
                             <Tooltip>
@@ -563,7 +562,7 @@ export function FinV2SaldosTab() {
                                     <AlertTriangle className="h-3 w-3 text-amber-500" />
                                   </TooltipTrigger>
                                   <TooltipContent className="text-[10px] max-w-[200px]">
-                                    Inconsistência: diferença de R$ {fmtBRL(inconsistency)} entre saldo calculado e registrado
+                                    Inconsistência: diferença de {formatMoeda(inconsistency)} entre saldo calculado e registrado
                                   </TooltipContent>
                                 </Tooltip>
                               )}
@@ -733,7 +732,7 @@ export function FinV2SaldosTab() {
                 {autoSaldoInicial !== null && !overrideInicial && (
                   <p className="text-[10px] text-emerald-600 flex items-center gap-1">
                     <Link2 className="h-3 w-3" />
-                    Saldo inicial herdado automaticamente do mês anterior (R$ {fmtBRL(autoSaldoInicial)})
+                    Saldo inicial herdado automaticamente do mês anterior ({formatMoeda(autoSaldoInicial)})
                   </p>
                 )}
                 {autoSaldoInicial !== null && overrideInicial && (
@@ -819,7 +818,7 @@ export function FinV2SaldosTab() {
             <AlertDialogHeader>
               <AlertDialogTitle className="text-base">Atualizar saldo inicial do próximo mês?</AlertDialogTitle>
               <AlertDialogDescription className="text-sm">
-                Agora existe um saldo final diferente no mês anterior. Deseja atualizar o saldo inicial automaticamente com o valor de <strong>R$ {propagateConfirm ? fmtBRL(propagateConfirm.newValue) : ''}</strong>?
+                Agora existe um saldo final diferente no mês anterior. Deseja atualizar o saldo inicial automaticamente com o valor de <strong>{propagateConfirm ? formatMoeda(propagateConfirm.newValue) : ''}</strong>?
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

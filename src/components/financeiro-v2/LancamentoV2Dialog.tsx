@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { NovoFornecedorDialog } from './NovoFornecedorDialog';
+import { formatMoeda } from '@/lib/calculos/formatters';
 import { STATUS_LABEL } from '@/lib/statusOperacional';
 import { cn } from '@/lib/utils';
 
@@ -1032,13 +1033,13 @@ export function LancamentoV2Dialog({
                               ? "text-green-600 dark:text-green-400"
                               : "text-destructive"
                           )}>
-                            R$ {toBRL(parcelasTotal)}
+                            {formatMoeda(parcelasTotal)}
                           </span>
                         </div>
                         {Math.abs(parcelasTotal - Math.abs(valorNum)) >= 0.01 && (
                           <div className="px-3 py-1 bg-destructive/10 text-destructive text-[10px] flex items-center gap-1">
                             <AlertCircle className="h-3 w-3" />
-                            A soma das parcelas difere do valor total (R$ {toBRL(Math.abs(valorNum))})
+                            A soma das parcelas difere do valor total ({formatMoeda(Math.abs(valorNum))})
                           </div>
                         )}
                       </div>
@@ -1087,7 +1088,7 @@ export function LancamentoV2Dialog({
                             </Button>
                           </div>
                           <span className="font-bold font-mono text-foreground">
-                            R$ {toBRL(recorrenciaTotal)}
+                            {formatMoeda(recorrenciaTotal)}
                           </span>
                         </div>
                       </div>

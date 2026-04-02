@@ -8,6 +8,7 @@ import autoTable from 'jspdf-autotable';
 import { format, parseISO } from 'date-fns';
 import type { LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
+import { formatMoeda } from '@/lib/calculos/formatters';
 
 interface FornecedorMap {
   id: string;
@@ -27,9 +28,8 @@ function fmtDate(d: string | null) {
   try { return format(parseISO(d), 'dd/MM/yyyy'); } catch { return d; }
 }
 
-function fmtBRL(v: number): string {
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+
+
 
 function buildRows(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[]) {
   return lancamentos.map(l => {
@@ -41,7 +41,7 @@ function buildRows(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[]) {
       produto: l.descricao || '',
       fornecedor: forn,
       valor,
-      valorFmt: fmtBRL(Math.abs(l.valor)),
+      valorFmt: formatMoeda(Math.abs(l.valor)),
       nf: l.nota_fiscal || '',
       status: l.status_transacao || '',
       macro: l.macro_custo || '',
@@ -105,14 +105,14 @@ function exportPDF(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], a
   const head = [['Comp.', 'Pgto', 'Produto', 'Fornecedor', 'Valor', 'NF', 'Status']];
   const body = rows.map(r => [
     r.comp, r.pgto, r.produto, r.fornecedor,
-    (r.sinal >= 0 ? '' : '- ') + `R$ ${r.valorFmt}`,
+    formatMoeda(r.sinal >= 0 ? Math.abs(r.valor) : -Math.abs(r.valor)),
     r.nf, r.status,
   ]);
 
   const totalEnt = rows.filter(r => r.sinal > 0).reduce((s, r) => s + Math.abs(r.valor), 0);
   const totalSai = rows.filter(r => r.sinal < 0).reduce((s, r) => s + Math.abs(r.valor), 0);
-  body.push(['', '', '', 'ENTRADAS', `R$ ${fmtBRL(totalEnt)}`, '', '']);
-  body.push(['', '', '', 'SAÍDAS', `- R$ ${fmtBRL(totalSai)}`, '', '']);
+  body.push(['', '', '', 'ENTRADAS', formatMoeda(totalEnt), '', '']);
+  body.push(['', '', '', 'SAÍDAS', formatMoeda(-totalSai), '', '']);
 
   autoTable(doc, {
     startY: y,

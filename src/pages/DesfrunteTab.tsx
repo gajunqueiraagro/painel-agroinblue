@@ -11,7 +11,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TabId } from '@/components/BottomNav';
 import { MESES_NOMES, MESES_OPTIONS_ACUMULADO } from '@/lib/calculos/labels';
-import { fmtValor } from '@/lib/calculos/formatters';
+import { fmtValor, formatMoeda } from '@/lib/calculos/formatters';
 import {
   calcArrobasSafe,
   calcValorTotal,
@@ -355,7 +355,7 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
             <XAxis dataKey="mes" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
             <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-            <Tooltip content={<StandardTooltip formatter={(v) => typeof v === 'number' ? `R$ ${fmtValor(v)}` : '—'} />} />
+            <Tooltip content={<StandardTooltip formatter={(v) => typeof v === 'number' ? formatMoeda(v) : '—'} />} />
             <Legend />
             <Line type="monotone" dataKey={anoFiltro} stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
             <Line type="monotone" dataKey={anoAnterior} stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} strokeDasharray="5 5" />
@@ -371,7 +371,7 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
             <XAxis dataKey="mes" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
             <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
-            <Tooltip content={<StandardTooltip formatter={(v) => typeof v === 'number' ? `R$ ${fmtValor(v)}` : '—'} />} />
+            <Tooltip content={<StandardTooltip formatter={(v) => typeof v === 'number' ? formatMoeda(v) : '—'} />} />
             <Legend />
             <Line type="monotone" dataKey={anoFiltro} stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
             <Line type="monotone" dataKey={anoAnterior} stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} strokeDasharray="5 5" />
