@@ -24,6 +24,7 @@ export interface BoitelData {
   // Período
   dias: number;
   gmd: number;
+  rendimentoEntrada: number;
   rendimento: number;
   // Custos
   modalidadeCusto: 'diaria' | 'arroba' | 'parceria';
@@ -64,6 +65,7 @@ const defaultData: BoitelData = {
   custoOportunidade: 0,
   dias: 90,
   gmd: 0.800,
+  rendimentoEntrada: 50,
   rendimento: 52,
   modalidadeCusto: 'diaria',
   custoDiaria: 0,
@@ -115,7 +117,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
 
   const calc = useMemo(() => {
     const {
-      qtdCabecas, pesoInicial, quebraViagem, dias, gmd, rendimento,
+      qtdCabecas, pesoInicial, quebraViagem, dias, gmd, rendimentoEntrada, rendimento,
       modalidadeCusto, custoDiaria, custoArroba, percentualParceria, custosExtrasParceria,
       custoFrete, outrosCustos, custoOportunidade,
       custoNutricao, custoSanidade, custoNfAbate,
@@ -126,67 +128,74 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     const ganhoKg = gmd * dias;
     const pesoFinal = pesoLiqEntrada + ganhoKg;
 
-    const arrobasEntrada = (pesoLiqEntrada * rendimento / 100) / 15;
+    // Arrobas: entrada usa rendimento de entrada (padrão 50%), saída usa rendimento real
+    const arrobasEntrada = (pesoLiqEntrada * rendimentoEntrada / 100) / 15;
     const arrobasSaida = (pesoFinal * rendimento / 100) / 15;
     const arrobasProduzidas = (arrobasSaida - arrobasEntrada) * qtdCabecas;
     const arrobasTotalSaida = arrobasSaida * qtdCabecas;
 
-    const gmc = dias > 0 ? ((pesoFinal * rendimento / 100) - (pesoLiqEntrada * rendimento / 100)) / dias : 0;
+    // GMC (ganho médio de carcaça kg/dia)
+    const gmc = dias > 0 ? ((pesoFinal * rendimento / 100) - (pesoLiqEntrada * rendimentoEntrada / 100)) / dias : 0;
 
-    // Faturamento bruto abate
+    // ── FATURAMENTO ──
     const faturamentoBruto = arrobasTotalSaida * precoVendaArroba;
-
-    // Custos com abate (despesas + NF)
     const custosAbate = despesasAbate + custoNfAbate;
-
-    // Faturamento líquido
     const faturamentoLiquido = faturamentoBruto - custosAbate;
 
-    // Custo com diárias
+    // ── CUSTOS OPERACIONAIS ──
     let custoDiariaTotal = 0;
     if (modalidadeCusto === 'diaria') {
       custoDiariaTotal = custoDiaria * dias * qtdCabecas;
     } else if (modalidadeCusto === 'arroba') {
       custoDiariaTotal = custoArroba * arrobasProduzidas;
-    } else if (modalidadeCusto === 'parceria') {
-      // Em parceria: % das arrobas produzidas vai para o parceiro
-      const arrobasParceiro = arrobasProduzidas * (percentualParceria / 100);
-      custoDiariaTotal = arrobasParceiro * precoVendaArroba;
     }
+    // Parceria: não gera custo operacional — é divisão de receita
 
-    // Custos sanitários
     const custosSanitarios = custoSanidade;
-
-    // Outros custos (nutrição + outros + extras parceria + custo oportunidade)
-    const custoOportTotal = custoOportunidade * pesoLiqEntrada * qtdCabecas;
-    const outrosCustosTotal = outrosCustos + custoNutricao + custosExtrasParceria + custoOportTotal;
-
-    // Custos com frete
+    const outrosCustosTotal = outrosCustos + custoNutricao + custosExtrasParceria;
     const custosFreteTotal = custoFrete;
 
-    // Total de custos operacionais
-    const custoTotal = custoDiariaTotal + custosSanitarios + outrosCustosTotal + custosFreteTotal + custosAbate;
+    const custosOperacionais = custoDiariaTotal + custosSanitarios + outrosCustosTotal + custosFreteTotal;
 
-    // Lucro
-    const lucroTotal = faturamentoBruto - custoTotal;
+    // ── CUSTO DE OPORTUNIDADE (indicador econômico separado) ──
+    const custoOportTotal = custoOportunidade * pesoLiqEntrada * qtdCabecas;
+
+    // ── PARCERIA: divisão da receita ──
+    // Em parceria, a receita do produtor é apenas sua parte do faturamento líquido
+    let receitaProdutor = faturamentoLiquido;
+    let parceiroParte = 0;
+    if (modalidadeCusto === 'parceria') {
+      parceiroParte = faturamentoLiquido * (percentualParceria / 100);
+      receitaProdutor = faturamentoLiquido - parceiroParte;
+    }
+
+    // ── LUCRO ──
+    // Lucro = Receita do produtor - Custos operacionais
+    const lucroTotal = receitaProdutor - custosOperacionais;
+    const lucroComOportunidade = lucroTotal - custoOportTotal;
     const lucroPorCab = qtdCabecas > 0 ? lucroTotal / qtdCabecas : 0;
     const lucroPorArroba = arrobasProduzidas > 0 ? lucroTotal / arrobasProduzidas : 0;
     const ganhoTotalKg = ganhoKg * qtdCabecas;
     const lucroPorKg = ganhoTotalKg > 0 ? lucroTotal / ganhoTotalKg : 0;
 
-    const custoPorCab = qtdCabecas > 0 ? custoTotal / qtdCabecas : 0;
-    const custoPorArroba = arrobasProduzidas > 0 ? custoTotal / arrobasProduzidas : 0;
+    const custoPorCab = qtdCabecas > 0 ? custosOperacionais / qtdCabecas : 0;
+    const custoPorArroba = arrobasProduzidas > 0 ? custosOperacionais / arrobasProduzidas : 0;
 
     return {
       pesoLiqEntrada, ganhoKg, pesoFinal,
       arrobasEntrada, arrobasSaida, arrobasProduzidas, arrobasTotalSaida,
       gmc,
       faturamentoBruto, custosAbate, faturamentoLiquido,
+      parceiroParte, receitaProdutor,
       custoDiariaTotal, custosSanitarios, outrosCustosTotal, custosFreteTotal,
-      custoTotal, custoPorCab, custoPorArroba,
-      lucroTotal, lucroPorCab, lucroPorArroba, lucroPorKg,
+      custosOperacionais, custoOportTotal,
+      custoPorCab, custoPorArroba,
+      lucroTotal, lucroComOportunidade, lucroPorCab, lucroPorArroba, lucroPorKg,
     };
   }, [data]);
+
+
+
 
   const handleSave = () => { onSave(data); onClose(); };
   const isPositive = calc.lucroTotal > 0;
@@ -275,14 +284,18 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
 
               {/* PERÍODO */}
               <Section icon={<Calendar className="h-3.5 w-3.5" />} title="Período">
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <Field label="Dias confinamento">
                     <Input type="number" value={data.dias || ''} onChange={e => set('dias', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
                   </Field>
                   <Field label="GMD (kg/dia)">
                     <Input type="number" value={data.gmd || ''} onChange={e => set('gmd', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.001" />
                   </Field>
-                  <Field label="Rendimento carcaça (%)">
+                  <Field label="Rend. entrada (%)">
+                    <Input type="number" value={data.rendimentoEntrada || ''} onChange={e => set('rendimentoEntrada', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.5" />
+                    <span className="text-[8px] text-muted-foreground">Padrão: 50%</span>
+                  </Field>
+                  <Field label="Rend. saída (%)">
                     <Input type="number" value={data.rendimento || ''} onChange={e => set('rendimento', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.5" />
                   </Field>
                 </div>
@@ -365,32 +378,49 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <TrendingUp className="h-4 w-4" /> Resultado
               </h4>
 
-              {/* Faturamento */}
-              <ResultGroup label="Faturamento">
+              {/* DRE */}
+              <ResultGroup label="DRE Boitel">
                 <ResultRow label="Faturamento Bruto Abate" value={formatMoeda(calc.faturamentoBruto)} bold />
-                <ResultRow label="Custos com Abate" value={formatMoeda(calc.custosAbate)} className="text-destructive" />
-                <ResultRow label="Faturamento Líquido" value={formatMoeda(calc.faturamentoLiquido)} bold accent />
-              </ResultGroup>
-
-              <Separator />
-
-              {/* Custos detalhados */}
-              <ResultGroup label="Custos Operacionais">
-                <ResultRow label="Custo com Diárias" value={formatMoeda(calc.custoDiariaTotal)} className="text-destructive" />
-                <ResultRow label="Custos Sanitários" value={formatMoeda(calc.custosSanitarios)} className="text-destructive" />
-                <ResultRow label="Outros Custos" value={formatMoeda(calc.outrosCustosTotal)} className="text-destructive" />
-                <ResultRow label="Custos com Frete" value={formatMoeda(calc.custosFreteTotal)} className="text-destructive" />
+                <ResultRow label="(-) Custos com Abate" value={formatMoeda(calc.custosAbate)} className="text-destructive" />
+                <div className="border-t border-dashed my-0.5" />
+                <ResultRow label="= Faturamento Líquido" value={formatMoeda(calc.faturamentoLiquido)} bold accent />
+                {data.modalidadeCusto === 'parceria' && calc.parceiroParte > 0 && (
+                  <>
+                    <ResultRow label={`(-) Parceiro (${data.percentualParceria}%)`} value={formatMoeda(calc.parceiroParte)} className="text-destructive" />
+                    <ResultRow label="= Receita Produtor" value={formatMoeda(calc.receitaProdutor)} bold accent />
+                  </>
+                )}
+                <div className="border-t border-dashed my-0.5" />
+                <ResultRow label="(-) Custo com Diárias" value={formatMoeda(calc.custoDiariaTotal)} className="text-destructive" />
+                <ResultRow label="(-) Custos Sanitários" value={formatMoeda(calc.custosSanitarios)} className="text-destructive" />
+                <ResultRow label="(-) Outros Custos" value={formatMoeda(calc.outrosCustosTotal)} className="text-destructive" />
+                <ResultRow label="(-) Custos com Frete" value={formatMoeda(calc.custosFreteTotal)} className="text-destructive" />
               </ResultGroup>
 
               <Separator />
 
               {/* Lucro principal */}
               <div className={`rounded-md border-2 px-3 py-3 text-center ${isPositive ? 'bg-green-50 border-green-300 dark:bg-green-950/30 dark:border-green-700' : 'bg-destructive/5 border-destructive/20'}`}>
-                <span className="text-[9px] text-muted-foreground block uppercase font-bold">Lucro Líquido Total</span>
+                <span className="text-[9px] text-muted-foreground block uppercase font-bold">= Lucro Líquido Total</span>
                 <strong className={`text-[20px] ${isPositive ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>
                   {formatMoeda(calc.lucroTotal)}
                 </strong>
               </div>
+
+              {calc.custoOportTotal > 0 && (
+                <div className="bg-muted/50 rounded border px-2 py-1.5 text-[10px]">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Custo oportunidade</span>
+                    <span className="text-destructive font-medium">{formatMoeda(calc.custoOportTotal)}</span>
+                  </div>
+                  <div className="flex justify-between mt-0.5">
+                    <span className="text-muted-foreground">Lucro c/ oportunidade</span>
+                    <span className={`font-bold ${calc.lucroComOportunidade > 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>
+                      {formatMoeda(calc.lucroComOportunidade)}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-3 gap-2">
                 <ResultCard label="Lucro/cab" value={formatMoeda(calc.lucroPorCab)} positive={isPositive} />
