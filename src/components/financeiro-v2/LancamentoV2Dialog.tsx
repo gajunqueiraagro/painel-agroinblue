@@ -1032,7 +1032,7 @@ export function LancamentoV2Dialog({
                               ? "text-green-600 dark:text-green-400"
                               : "text-destructive"
                           )}>
-                            R$ {toBRL(parcelasTotal)}
+                            {formatMoeda(parcelasTotal)}
                           </span>
                         </div>
                         {Math.abs(parcelasTotal - Math.abs(valorNum)) >= 0.01 && (
