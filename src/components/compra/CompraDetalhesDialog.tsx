@@ -254,10 +254,33 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
               <Input type="number" value={comissaoPct} onChange={e => { setComissaoPct(e.target.value); markDirty(); }} placeholder="0" className="h-8 text-[11px] w-28" />
             </div>
           </div>
-          {calc.comissaoVal > 0 && (
-            <div className="flex justify-between text-[10px] px-1">
-              <span className="text-muted-foreground">Comissão (R$)</span>
-              <strong>{formatMoeda(calc.comissaoVal)}</strong>
+          {(calc.freteVal > 0 || calc.comissaoVal > 0) && (
+            <div className="bg-muted/30 rounded p-2 space-y-1 text-[10px]">
+              {calc.freteVal > 0 && (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Frete</span>
+                    <strong>{formatMoeda(calc.freteVal)}</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Frete/cab</span>
+                    <strong>{qtd > 0 ? formatMoeda(calc.freteVal / qtd) : '-'}</strong>
+                  </div>
+                </>
+              )}
+              {calc.comissaoVal > 0 && (
+                <>
+                  {calc.freteVal > 0 && <div className="border-t border-border/30 my-1" />}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Comissão</span>
+                    <strong>{formatMoeda(calc.comissaoVal)}</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Comissão/cab</span>
+                    <strong>{qtd > 0 ? formatMoeda(calc.comissaoVal / qtd) : '-'}</strong>
+                  </div>
+                </>
+              )}
             </div>
           )}
           {calc.totalDespesas > 0 && (
