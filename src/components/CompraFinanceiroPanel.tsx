@@ -458,7 +458,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       <Separator />
 
       {/* === BLOCO RECOLHÍVEL: Tipo de Compra === */}
-      <CollapsibleBlock title="Tipo de Compra" open={tipoCompraOpen} onOpenChange={setTipoCompraOpen}>
+      <CollapsibleBlock title="Tipo de Compra" open={tipoCompraOpen} onOpenChange={setTipoCompraOpen} summary={tipoPreco === 'por_kg' ? 'Por kg' : tipoPreco === 'por_cab' ? 'Por cab.' : 'Por total'}>
         <Select
           value={tipoPreco}
           onValueChange={(v: TipoPreco) => { setTipoPreco(v); setPrecoKg(''); setPrecoCab(''); setValorTotal(''); }}
