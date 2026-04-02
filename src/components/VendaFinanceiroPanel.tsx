@@ -400,7 +400,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
             <div className="bg-primary/5 rounded-md p-2 text-[10px] space-y-0.5 border border-primary/20">
               <div className="flex justify-between"><span className="text-muted-foreground">Dias</span><span className="font-semibold">{boitelData.dias}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">GMD</span><span className="font-semibold">{boitelData.gmd} kg/dia</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Tipo custo</span><span className="font-semibold capitalize">{boitelData.tipoCusto}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Custo/cab/dia</span><span className="font-semibold">{boitelData.custoDiaria ? `R$ ${boitelData.custoDiaria}` : '-'}</span></div>
             </div>
           )}
         </>
