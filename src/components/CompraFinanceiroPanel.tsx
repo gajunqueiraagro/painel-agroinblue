@@ -51,11 +51,14 @@ export interface CompraFinanceiroPanelRef {
   resetForm: () => void;
 }
 
-function CollapsibleBlock({ title, open, onOpenChange, children }: { title: string; open: boolean; onOpenChange: (v: boolean) => void; children: React.ReactNode }) {
+function CollapsibleBlock({ title, open, onOpenChange, children, summary }: { title: string; open: boolean; onOpenChange: (v: boolean) => void; children: React.ReactNode; summary?: string }) {
   return (
     <Collapsible open={open} onOpenChange={onOpenChange}>
-      <CollapsibleTrigger className="flex items-center justify-between w-full text-[10px] font-bold uppercase text-muted-foreground tracking-wide py-1 hover:text-foreground transition-colors">
-        {title}
+      <CollapsibleTrigger className="flex items-center justify-between w-full text-[10px] font-bold uppercase text-muted-foreground tracking-wide py-1 hover:text-foreground transition-colors group">
+        <div className="flex items-center">
+          {title}
+          {summary && <span className="text-[9px] italic text-muted-foreground ml-1 truncate max-w-[120px] font-normal normal-case">{summary}</span>}
+        </div>
         {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
       </CollapsibleTrigger>
       <CollapsibleContent className="space-y-1.5 pt-1">
@@ -455,7 +458,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       <Separator />
 
       {/* === BLOCO RECOLHÍVEL: Tipo de Compra === */}
-      <CollapsibleBlock title="Tipo de Compra" open={tipoCompraOpen} onOpenChange={setTipoCompraOpen}>
+      <CollapsibleBlock title="Tipo de Compra" open={tipoCompraOpen} onOpenChange={setTipoCompraOpen} summary={tipoPreco === 'por_kg' ? 'Por kg' : tipoPreco === 'por_cab' ? 'Por cab.' : 'Por total'}>
         <Select
           value={tipoPreco}
           onValueChange={(v: TipoPreco) => { setTipoPreco(v); setPrecoKg(''); setPrecoCab(''); setValorTotal(''); }}
@@ -474,7 +477,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       <Separator />
 
       {/* === BLOCO RECOLHÍVEL: Preço Base === */}
-      <CollapsibleBlock title="Preço Base" open={precoBaseOpen} onOpenChange={setPrecoBaseOpen}>
+      <CollapsibleBlock title="Preço Base" open={precoBaseOpen} onOpenChange={setPrecoBaseOpen} summary={calc.valorBase > 0 ? formatMoeda(calc.valorBase) : undefined}>
         {tipoPreco === 'por_kg' && (
           <div>
             <Label className="text-[10px]">R$/kg</Label>
@@ -513,7 +516,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       <Separator />
 
       {/* === BLOCO RECOLHÍVEL: Despesas Extras === */}
-      <CollapsibleBlock title="Despesas Extras" open={despesasOpen} onOpenChange={setDespesasOpen}>
+      <CollapsibleBlock title="Despesas Extras" open={despesasOpen} onOpenChange={setDespesasOpen} summary={calc.totalDespesas > 0 ? formatMoeda(calc.totalDespesas) : undefined}>
         <div className="grid grid-cols-2 gap-2">
           <div>
             <Label className="text-[10px]">Frete (R$)</Label>
@@ -541,7 +544,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       <Separator />
 
       {/* === BLOCO RECOLHÍVEL: Informações de Pagamento === */}
-      <CollapsibleBlock title="Informações de Pagamento" open={pagamentoOpen} onOpenChange={setPagamentoOpen}>
+      <CollapsibleBlock title="Informações de Pagamento" open={pagamentoOpen} onOpenChange={setPagamentoOpen} summary={formaPag === 'avista' ? 'À vista' : parcelas.length > 0 ? `${parcelas.length}x` : undefined}>
         <div>
           <Label className="text-[10px]">Nota Fiscal</Label>
           <Input value={notaFiscal} onChange={e => onNotaFiscalChange(e.target.value)} placeholder="Nº da nota" className="h-7 text-[11px]" />
