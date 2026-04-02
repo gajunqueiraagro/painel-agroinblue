@@ -489,7 +489,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         </CollapsibleContent>
       </Collapsible>
 
-      {/* Boitel section — unchanged */}
+      {/* Boitel section */}
       {hasTipoVendaSelecionado && isBoitel && (
         <>
           <Button
@@ -506,8 +506,8 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
               <div className="flex justify-between"><span className="text-muted-foreground">Boitel</span><span className="font-semibold">{boitelData.nomeBoitel || '-'}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Dias</span><span className="font-semibold">{boitelData.dias}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">GMD</span><span className="font-semibold">{boitelData.gmd} kg/dia</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Receita Produtor</span><span className="font-semibold text-primary">{boitelData._receitaProdutor ? formatMoeda(boitelData._receitaProdutor) : '-'}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Lucro Total</span><span className={`font-semibold ${(boitelData._lucroTotal || 0) > 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>{boitelData._lucroTotal ? formatMoeda(boitelData._lucroTotal) : '-'}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Lucro Líquido</span><span className={`font-semibold ${(boitelData._lucroTotal || 0) > 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>{boitelData._lucroTotal ? formatMoeda(boitelData._lucroTotal) : '-'}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Recebimento</span><span className="font-semibold">{boitelData.formaReceb === 'prazo' ? `A prazo (${boitelData.qtdParcelas}x)` : 'À vista'}</span></div>
             </div>
           )}
         </>
