@@ -112,7 +112,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
         ...initialData,
       });
     }
-  }, [open, initialData, quantidade, pesoKg, fazendaNome, destinoNome]);
+  }, [open, initialData, quantidade, pesoKg, fazendaNome, dataLancamento, destinoNome]);
 
   const set = useCallback(<K extends keyof BoitelData>(key: K, value: BoitelData[K]) => {
     setData(prev => ({ ...prev, [key]: value }));
