@@ -189,9 +189,14 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
     generateFinanceiro: async (extLancamentoId: string) => handleGerarFinanceiroInternal(extLancamentoId),
     getValidationErrors: () => validationErrors,
     getFornecedorId: () => fornecedorId,
-    getRecebimentoSnapshot: () => ({ formaReceb, parcelas }),
+    getRecebimentoSnapshot: () => {
+      if (tipoPeso === 'boitel' && boitelData) {
+        return { formaReceb: boitelData.formaReceb || 'avista', parcelas: boitelData.parcelas || [] };
+      }
+      return { formaReceb, parcelas };
+    },
     resetForm,
-  }), [fornecedorId, formaReceb, parcelas, resetForm, validationErrors]);
+  }), [fornecedorId, formaReceb, parcelas, resetForm, validationErrors, tipoPeso, boitelData]);
 
   const handleGerarFinanceiroInternal = async (targetLancamentoId: string): Promise<boolean> => {
     if (!targetLancamentoId) { toast.error('Salve o lançamento zootécnico primeiro.'); return false; }
@@ -489,7 +494,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         </CollapsibleContent>
       </Collapsible>
 
-      {/* Boitel section — unchanged */}
+      {/* Boitel section */}
       {hasTipoVendaSelecionado && isBoitel && (
         <>
           <Button
@@ -506,8 +511,8 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
               <div className="flex justify-between"><span className="text-muted-foreground">Boitel</span><span className="font-semibold">{boitelData.nomeBoitel || '-'}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Dias</span><span className="font-semibold">{boitelData.dias}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">GMD</span><span className="font-semibold">{boitelData.gmd} kg/dia</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Receita Produtor</span><span className="font-semibold text-primary">{boitelData._receitaProdutor ? formatMoeda(boitelData._receitaProdutor) : '-'}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Lucro Total</span><span className={`font-semibold ${(boitelData._lucroTotal || 0) > 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>{boitelData._lucroTotal ? formatMoeda(boitelData._lucroTotal) : '-'}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Lucro Líquido</span><span className={`font-semibold ${(boitelData._lucroTotal || 0) > 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>{boitelData._lucroTotal ? formatMoeda(boitelData._lucroTotal) : '-'}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Recebimento</span><span className="font-semibold">{boitelData.formaReceb === 'prazo' ? `A prazo (${boitelData.qtdParcelas}x)` : 'À vista'}</span></div>
             </div>
           )}
         </>
@@ -659,131 +664,90 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         </>
       )}
 
-      {/* ── BOITEL keeps original Descontos block ── */}
-      {isBoitel && (
+      {/* Boitel no longer shows DESCONTOS block here — handled inside BoitelPlanningDialog */}
+
+      {/* Informações de Recebimento — only for normal venda; boitel handles it inside its own dialog */}
+      {!isBoitel && (
         <>
+          <Separator />
           <Collapsible>
             <CollapsibleTrigger className="flex items-center justify-between w-full group">
-              <h4 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide">Descontos</h4>
+              <div className="flex items-center">
+                <h4 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide">Informações de Recebimento</h4>
+                {summaryBadge(recebLabel)}
+              </div>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-1.5 pt-1">
-              <div>
-                <Label className="text-[11px]">Funrural (%)</Label>
-                <Input type="number" value={funruralPct} onChange={e => onFunruralPctChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[11px]" />
-                {descFunruralTotal > 0 && (
-                  <span className="text-[10px] text-destructive">Funrural: -{formatMoeda(descFunruralTotal)}</span>
-                )}
-              </div>
-              <div>
-                <Label className="text-[11px]">Desconto Qualidade (R$)</Label>
-                <Input type="number" value={descontoQualidade} onChange={e => onDescontoQualidadeChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
-                {descQualidadeTotal > 0 && (
-                  <span className="text-[10px] text-destructive">Qualidade: -{formatMoeda(descQualidadeTotal)}</span>
-                )}
-              </div>
-              <div>
-                <Label className="text-[11px]">Outros Descontos (R$)</Label>
-                <Input type="number" value={outrosDescontos} onChange={e => onOutrosDescontosChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
+            <CollapsibleContent className="space-y-2 pt-2">
 
-          <Separator />
-
-          {valorBruto > 0 && (
-            <div className="bg-muted/30 rounded-md p-2 space-y-0.5 text-[10px]">
-              <div className="flex justify-between"><span className="text-muted-foreground">Valor bruto</span><span className="font-semibold">{formatMoeda(valorBruto)}</span></div>
-              {totalBonus > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Bônus</span><span className="font-semibold text-success">+{formatMoeda(totalBonus)}</span></div>}
-              {totalDescontos > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Descontos</span><span className="font-semibold text-destructive">-{formatMoeda(totalDescontos)}</span></div>}
-              <Separator className="my-1" />
-              <div className="flex justify-between font-bold text-[11px]"><span>Valor líquido</span><span className="text-primary">{formatMoeda(valorLiquido)}</span></div>
-            </div>
-          )}
-
-          <Separator />
-        </>
-      )}
-
-      <Separator />
-
-      {/* Informações de Recebimento */}
-      <Collapsible>
-        <CollapsibleTrigger className="flex items-center justify-between w-full group">
-          <div className="flex items-center">
-            <h4 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide">Informações de Recebimento</h4>
-            {summaryBadge(recebLabel)}
-          </div>
-          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-        </CollapsibleTrigger>
-        <CollapsibleContent className="space-y-2 pt-2">
-
-          <div className="space-y-1.5">
-            <h5 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide">Forma de Recebimento</h5>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button type="button" onClick={() => { setFormaReceb('avista'); setParcelas([]); }}
-                className={`h-8 rounded text-[12px] font-bold border-2 transition-all ${formaReceb === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
-                À vista
-              </button>
-              <button type="button" onClick={() => { setFormaReceb('prazo'); handleQtdParcelasChange(qtdParcelas); }}
-                className={`h-8 rounded text-[12px] font-bold border-2 transition-all ${formaReceb === 'prazo' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
-                A prazo
-              </button>
-            </div>
-          </div>
-
-          {formaReceb === 'prazo' && (
-            <div className="space-y-1.5">
-              <div>
-                <Label className="text-[11px]">Quantidade de parcelas</Label>
-                <Input type="number" min="1" max="48" value={qtdParcelas} onChange={e => handleQtdParcelasChange(e.target.value)} className="h-8 text-[12px]" />
-              </div>
-              {parcelas.map((p, i) => (
-                <div key={i} className="grid grid-cols-2 gap-1.5 bg-muted/30 rounded p-1.5">
-                  <div>
-                    <Label className="text-[10px]">Parcela {i + 1} - Data</Label>
-                    <Input type="date" value={p.data} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], data: e.target.value }; setParcelas(np); }} className="h-7 text-[11px]" />
-                  </div>
-                  <div>
-                    <Label className="text-[10px]">Valor (R$)</Label>
-                    <Input type="number" value={String(p.valor)} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], valor: Number(e.target.value) || 0 }; setParcelas(np); }} className="h-7 text-[11px]" />
-                  </div>
+              <div className="space-y-1.5">
+                <h5 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide">Forma de Recebimento</h5>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button type="button" onClick={() => { setFormaReceb('avista'); setParcelas([]); }}
+                    className={`h-8 rounded text-[12px] font-bold border-2 transition-all ${formaReceb === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
+                    À vista
+                  </button>
+                  <button type="button" onClick={() => { setFormaReceb('prazo'); handleQtdParcelasChange(qtdParcelas); }}
+                    className={`h-8 rounded text-[12px] font-bold border-2 transition-all ${formaReceb === 'prazo' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
+                    A prazo
+                  </button>
                 </div>
-              ))}
-              {parcelas.length > 0 && (
-                <div className="text-[10px] text-muted-foreground text-right">
-                  Soma parcelas: {formatMoeda(parcelas.reduce((s, p) => s + p.valor, 0))}
+              </div>
+
+              {formaReceb === 'prazo' && (
+                <div className="space-y-1.5">
+                  <div>
+                    <Label className="text-[11px]">Quantidade de parcelas</Label>
+                    <Input type="number" min="1" max="48" value={qtdParcelas} onChange={e => handleQtdParcelasChange(e.target.value)} className="h-8 text-[12px]" />
+                  </div>
+                  {parcelas.map((p, i) => (
+                    <div key={i} className="grid grid-cols-2 gap-1.5 bg-muted/30 rounded p-1.5">
+                      <div>
+                        <Label className="text-[10px]">Parcela {i + 1} - Data</Label>
+                        <Input type="date" value={p.data} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], data: e.target.value }; setParcelas(np); }} className="h-7 text-[11px]" />
+                      </div>
+                      <div>
+                        <Label className="text-[10px]">Valor (R$)</Label>
+                        <Input type="number" value={String(p.valor)} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], valor: Number(e.target.value) || 0 }; setParcelas(np); }} className="h-7 text-[11px]" />
+                      </div>
+                    </div>
+                  ))}
+                  {parcelas.length > 0 && (
+                    <div className="text-[10px] text-muted-foreground text-right">
+                      Soma parcelas: {formatMoeda(parcelas.reduce((s, p) => s + p.valor, 0))}
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
 
-          {validationErrors.length > 0 && (
-            <div className="bg-destructive/10 text-destructive text-[10px] rounded p-2 space-y-0.5">
-              {validationErrors.map((e, i) => (
-                <div key={i} className="flex gap-1 items-start">
-                  <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
-                  <span>{e}</span>
+              {validationErrors.length > 0 && (
+                <div className="bg-destructive/10 text-destructive text-[10px] rounded p-2 space-y-0.5">
+                  {validationErrors.map((e, i) => (
+                    <div key={i} className="flex gap-1 items-start">
+                      <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                      <span>{e}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
+              )}
 
-          {isPrevisto && (
-            <div className="flex items-center gap-2 text-[11px] text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/20 border border-orange-300 dark:border-orange-800 rounded p-2">
-              <Info className="h-4 w-4 shrink-0" />
-              <span>Status Previsto: financeiro previsto será gerado ao registrar.</span>
-            </div>
-          )}
+              {isPrevisto && (
+                <div className="flex items-center gap-2 text-[11px] text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/20 border border-orange-300 dark:border-orange-800 rounded p-2">
+                  <Info className="h-4 w-4 shrink-0" />
+                  <span>Status Previsto: financeiro previsto será gerado ao registrar.</span>
+                </div>
+              )}
 
-          {gerado && (
-            <div className="flex items-center gap-2 text-[11px] text-primary bg-primary/10 rounded p-2">
-              <CheckCircle className="h-4 w-4" />
-              <span className="font-semibold">Financeiro gerado ({existingCount > 0 ? existingCount : 1} registro{existingCount > 1 ? 's' : ''})</span>
-            </div>
-          )}
-        </CollapsibleContent>
-      </Collapsible>
+              {gerado && (
+                <div className="flex items-center gap-2 text-[11px] text-primary bg-primary/10 rounded p-2">
+                  <CheckCircle className="h-4 w-4" />
+                  <span className="font-semibold">Financeiro gerado ({existingCount > 0 ? existingCount : 1} registro{existingCount > 1 ? 's' : ''})</span>
+                </div>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
+        </>
+      )}
 
       {/* Register button */}
       <Separator />

@@ -7,6 +7,12 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calculos/formatters';
 import { TrendingUp, DollarSign, Calendar, Truck, Calculator, Info, ShoppingCart } from 'lucide-react';
+import { format, addDays, parseISO } from 'date-fns';
+
+interface Parcela {
+  data: string;
+  valor: number;
+}
 
 export interface BoitelData {
   qtdCabecas: number;
@@ -34,6 +40,11 @@ export interface BoitelData {
   custoNfAbate: number;
   precoVendaArroba: number;
   despesasAbate: number;
+  // Recebimento
+  formaReceb: 'avista' | 'prazo';
+  qtdParcelas: number;
+  parcelas: Parcela[];
+  // Snapshots
   _faturamentoBruto?: number;
   _faturamentoLiquido?: number;
   _receitaProdutor?: number;
@@ -80,6 +91,9 @@ const defaultData: BoitelData = {
   custoNfAbate: 0,
   precoVendaArroba: 0,
   despesasAbate: 0,
+  formaReceb: 'avista',
+  qtdParcelas: 1,
+  parcelas: [],
 };
 
 function fmtPeso(v: number) { return formatKg(v); }
@@ -118,6 +132,14 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     setData(prev => ({ ...prev, [key]: value }));
   }, []);
 
+  // Data de Abate = Data Envio + Dias
+  const dataAbate = useMemo(() => {
+    if (!data.dataEnvio || !data.dias) return '';
+    try {
+      return format(addDays(parseISO(data.dataEnvio), data.dias), 'dd/MM/yyyy');
+    } catch { return ''; }
+  }, [data.dataEnvio, data.dias]);
+
   const calc = useMemo(() => {
     const {
       qtdCabecas, pesoInicial, quebraViagem, dias, gmd, rendimentoEntrada, rendimento,
@@ -138,12 +160,10 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
 
     const gmc = dias > 0 ? ((pesoFinal * rendimento / 100) - (pesoLiqEntrada * rendimentoEntrada / 100)) / dias : 0;
 
-    // ── FATURAMENTO ──
     const faturamentoBrutoAbate = arrobasTotalSaida * precoVendaArroba;
     const custosAbate = despesasAbate + custoNfAbate;
     const faturamentoLiquido = faturamentoBrutoAbate - custosAbate;
 
-    // ── CUSTOS OPERACIONAIS ──
     let custoDiariaTotal = 0;
     if (modalidadeCusto === 'diaria') {
       custoDiariaTotal = custoDiaria * dias * qtdCabecas;
@@ -154,18 +174,13 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     const custosSanitarios = custoSanidade;
     const outrosCustosOp = outrosCustos;
     const custosFreteTotal = custoFrete;
-
     const custosOperacionais = custoDiariaTotal + custosSanitarios + outrosCustosOp + custosFreteTotal;
-
-    // Resultado com Boitel (antes do frete)
     const resultadoComBoitel = faturamentoLiquido - custoDiariaTotal - custosSanitarios - outrosCustosOp;
 
-    // ── CUSTO DE OPORTUNIDADE — usa pesoInicial (peso de saída da fazenda) ──
     const custoOportTotal = custoOportunidade * pesoInicial * qtdCabecas;
     const custoOportCab = qtdCabecas > 0 ? custoOportTotal / qtdCabecas : 0;
     const custoOportKg = pesoInicial > 0 ? custoOportCab / pesoInicial : 0;
 
-    // ── PARCERIA ──
     let receitaProdutor = faturamentoLiquido;
     let parceiroParte = 0;
     let parceiroArrobas = 0;
@@ -175,13 +190,10 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
       receitaProdutor = faturamentoLiquido - parceiroParte;
     }
 
-    // ── RESULTADO LÍQUIDO ──
     const resultadoLiquido = receitaProdutor - custosOperacionais;
     const resultadoLiqCab = qtdCabecas > 0 ? resultadoLiquido / qtdCabecas : 0;
-    // Resultado Líq./kg = resultado líq. por cabeça / peso inicial saída fazenda
     const resultadoLiqKg = pesoInicial > 0 ? resultadoLiqCab / pesoInicial : 0;
 
-    // ── VIABILIDADE COMPARADA ──
     const lucroViabilidade = resultadoLiquido - custoOportTotal;
     const lucroViabCab = qtdCabecas > 0 ? lucroViabilidade / qtdCabecas : 0;
     const lucroViabKg = pesoInicial > 0 ? lucroViabCab / pesoInicial : 0;
@@ -189,7 +201,6 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     const custoPorCab = qtdCabecas > 0 ? custosOperacionais / qtdCabecas : 0;
     const custoPorArrobaProduzida = arrobasProduzidas > 0 ? custosOperacionais / arrobasProduzidas : 0;
 
-    // per-head helper values
     const quebraCab = pesoInicial * (quebraViagem / 100);
     const custoDiariaCabPeriodo = custoDiaria * dias;
     const freteCab = qtdCabecas > 0 ? custoFrete / qtdCabecas : 0;
@@ -211,11 +222,56 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
       custoPorCab, custoPorArrobaProduzida,
       resultadoLiquido, resultadoLiqCab, resultadoLiqKg,
       lucroViabilidade, lucroViabCab, lucroViabKg,
-      // per-head helpers
       quebraCab, custoDiariaCabPeriodo, freteCab, sanidadeCab, outrosCab,
       precoVendaCab, despesasAbateCab, custoOportCabCalc,
     };
   }, [data]);
+
+  // Parcelas logic
+  const gerarParcelas = useCallback((numParcelas: number, baseDate: string, valorTotal: number): Parcela[] => {
+    const p: Parcela[] = [];
+    const vp = valorTotal / numParcelas;
+    for (let i = 0; i < numParcelas; i++) {
+      try {
+        const d = addDays(parseISO(baseDate || data.dataEnvio), 30 * (i + 1));
+        p.push({ data: format(d, 'yyyy-MM-dd'), valor: Math.round(vp * 100) / 100 });
+      } catch {
+        p.push({ data: '', valor: Math.round(vp * 100) / 100 });
+      }
+    }
+    if (p.length > 0) {
+      const rest = p.slice(0, -1).reduce((s, x) => s + x.valor, 0);
+      p[p.length - 1].valor = Math.round((valorTotal - rest) * 100) / 100;
+    }
+    return p;
+  }, [data.dataEnvio]);
+
+  const handleFormaRecebChange = (forma: 'avista' | 'prazo') => {
+    set('formaReceb', forma);
+    if (forma === 'avista') {
+      set('parcelas', []);
+    } else {
+      const n = data.qtdParcelas || 1;
+      const baseDate = data.dataEnvio || dataLancamento || '';
+      set('parcelas', gerarParcelas(n, baseDate, calc.receitaProdutor));
+    }
+  };
+
+  const handleQtdParcelasChange = (v: string) => {
+    const n = Math.max(1, Math.min(48, Number(v) || 1));
+    set('qtdParcelas', n);
+    const baseDate = data.dataEnvio || dataLancamento || '';
+    set('parcelas', gerarParcelas(n, baseDate, calc.receitaProdutor));
+  };
+
+  // Update parcelas when receitaProdutor changes
+  useEffect(() => {
+    if (data.formaReceb === 'prazo' && data.qtdParcelas > 0 && calc.receitaProdutor > 0) {
+      const baseDate = data.dataEnvio || dataLancamento || '';
+      const newParcelas = gerarParcelas(data.qtdParcelas, baseDate, calc.receitaProdutor);
+      setData(prev => ({ ...prev, parcelas: newParcelas }));
+    }
+  }, [calc.receitaProdutor, data.formaReceb, data.qtdParcelas]);
 
   const handleSave = () => {
     const dataWithSnapshot: BoitelData = {
@@ -264,7 +320,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
               </span>
             </div>
             <Separator />
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+            <div className="grid grid-cols-3 md:grid-cols-7 gap-2">
               <div>
                 <Label className="text-[9px] text-muted-foreground">Fazenda Origem</Label>
                 <div className="text-[11px] font-medium truncate">{data.fazendaOrigem || '-'}</div>
@@ -272,6 +328,11 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
               <Field label="Data Envio">
                 <Input type="date" value={data.dataEnvio} onChange={e => set('dataEnvio', e.target.value)} className="h-6 text-[11px]" />
               </Field>
+              <div>
+                <Label className="text-[9px] text-muted-foreground">Data de Abate</Label>
+                <div className="text-[11px] font-medium text-primary">{dataAbate || '-'}</div>
+                <HintBelow>Envio + {data.dias} dias</HintBelow>
+              </div>
               <Field label="Boitel / Destino">
                 <Input value={data.nomeBoitel} onChange={e => set('nomeBoitel', e.target.value)} className="h-6 text-[11px]" placeholder="Nome do boitel" />
               </Field>
@@ -398,6 +459,50 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                   </Field>
                 </div>
               </Section>
+
+              {/* FORMA DE RECEBIMENTO */}
+              <Section icon={<DollarSign className="h-3.5 w-3.5" />} title="Forma de Recebimento">
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button type="button" onClick={() => handleFormaRecebChange('avista')}
+                    className={`h-7 rounded text-[11px] font-bold border-2 transition-all ${data.formaReceb === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
+                    À vista
+                  </button>
+                  <button type="button" onClick={() => handleFormaRecebChange('prazo')}
+                    className={`h-7 rounded text-[11px] font-bold border-2 transition-all ${data.formaReceb === 'prazo' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
+                    A prazo
+                  </button>
+                </div>
+                {data.formaReceb === 'prazo' && (
+                  <div className="space-y-1.5 mt-1.5">
+                    <Field label="Quantidade de parcelas">
+                      <Input type="number" min="1" max="48" value={data.qtdParcelas} onChange={e => handleQtdParcelasChange(e.target.value)} className="h-7 text-[11px]" />
+                    </Field>
+                    {data.parcelas.map((p, i) => (
+                      <div key={i} className="grid grid-cols-2 gap-1.5 bg-muted/30 rounded p-1.5">
+                        <div>
+                          <Label className="text-[9px]">Parcela {i + 1} - Data</Label>
+                          <Input type="date" value={p.data} onChange={e => {
+                            const np = [...data.parcelas]; np[i] = { ...np[i], data: e.target.value };
+                            set('parcelas', np);
+                          }} className="h-6 text-[10px]" />
+                        </div>
+                        <div>
+                          <Label className="text-[9px]">Valor (R$)</Label>
+                          <Input type="number" value={String(p.valor)} onChange={e => {
+                            const np = [...data.parcelas]; np[i] = { ...np[i], valor: Number(e.target.value) || 0 };
+                            set('parcelas', np);
+                          }} className="h-6 text-[10px]" />
+                        </div>
+                      </div>
+                    ))}
+                    {data.parcelas.length > 0 && (
+                      <div className="text-[9px] text-muted-foreground text-right">
+                        Soma parcelas: {formatMoeda(data.parcelas.reduce((s, p) => s + p.valor, 0))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Section>
             </div>
 
             {/* ── COLUNA DIREITA: RESULTADO ── */}
@@ -420,10 +525,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <div className="border-t border-dashed my-0.5" />
                 <ResultRow label="= Faturamento Líquido" value={formatMoeda(calc.faturamentoLiquido)} bold accent />
                 {data.modalidadeCusto === 'parceria' && calc.parceiroParte > 0 && (
-                  <>
-                    <ResultRow label={`(-) Parceiro (${data.percentualParceria}% = ${fmtArr(calc.parceiroArrobas)})`} value={formatMoeda(calc.parceiroParte)} className="text-destructive" />
-                    <ResultRow label="= Receita Produtor" value={formatMoeda(calc.receitaProdutor)} bold accent />
-                  </>
+                  <ResultRow label={`(-) Parceiro (${data.percentualParceria}% = ${fmtArr(calc.parceiroArrobas)})`} value={formatMoeda(calc.parceiroParte)} className="text-destructive" />
                 )}
               </ResultGroup>
 
@@ -470,9 +572,9 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
 
               {/* BLOCO 6 — VIABILIDADE COMPARADA */}
               <ResultGroup label="Viabilidade Comparada ao dia do envio dos animais">
-                <ResultRow label="Lucro Total (R$)" value={formatMoeda(calc.lucroViabilidade)} bold className={calc.lucroViabilidade >= 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'} />
-                <ResultRow label="Lucro (R$/cabeça)" value={formatMoeda(calc.lucroViabCab)} className={calc.lucroViabCab >= 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'} />
-                <ResultRow label="Lucro (R$/kg)" value={formatMoeda(calc.lucroViabKg)} className={calc.lucroViabKg >= 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'} />
+                <ResultRow label="Lucro Líquido (R$)" value={formatMoeda(calc.lucroViabilidade)} bold className={calc.lucroViabilidade >= 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'} />
+                <ResultRow label="Lucro Líquido (R$/cabeça)" value={formatMoeda(calc.lucroViabCab)} className={calc.lucroViabCab >= 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'} />
+                <ResultRow label="Lucro Líquido (R$/kg)" value={formatMoeda(calc.lucroViabKg)} className={calc.lucroViabKg >= 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'} />
               </ResultGroup>
 
               {/* Actions */}
