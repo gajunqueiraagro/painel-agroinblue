@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -58,6 +59,8 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
   const [qtdParcelas, setQtdParcelas] = useState(initialData.qtdParcelas);
   const [parcelas, setParcelas] = useState(initialData.parcelas);
   const [notaFiscal, setNotaFiscal] = useState(initialData.notaFiscal);
+  const [dirty, setDirty] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
 
   // Reset when dialog opens with new data
   useEffect(() => {
@@ -72,8 +75,20 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
       setQtdParcelas(initialData.qtdParcelas);
       setParcelas(initialData.parcelas);
       setNotaFiscal(initialData.notaFiscal);
+      setDirty(false);
+      setConfirmClose(false);
     }
   }, [open, initialData]);
+
+  const markDirty = () => setDirty(true);
+
+  const tryClose = () => {
+    if (dirty) {
+      setConfirmClose(true);
+    } else {
+      onClose();
+    }
+  };
 
   const qtd = quantidade || 0;
   const peso = pesoKg || 0;
@@ -154,7 +169,8 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
   );
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) tryClose(); }}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base font-bold flex items-center gap-2">
@@ -176,7 +192,7 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
 
           {/* 1. Tipo de Compra */}
           {sectionTitle(<ShoppingCart className="h-4 w-4 text-muted-foreground" />, 'Tipo de Compra')}
-          <Select value={tipoPreco} onValueChange={(v: TipoPrecoCompra) => { setTipoPreco(v); setPrecoKg(''); setPrecoCab(''); setValorTotal(''); }}>
+          <Select value={tipoPreco} onValueChange={(v: TipoPrecoCompra) => { setTipoPreco(v); setPrecoKg(''); setPrecoCab(''); setValorTotal(''); markDirty(); }}>
             <SelectTrigger className="h-9 text-[12px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="por_kg">Por kg</SelectItem>
@@ -193,19 +209,19 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
             {tipoPreco === 'por_kg' && (
               <div>
                 <Label className="text-[11px]">R$/kg</Label>
-                <Input type="number" value={precoKg} onChange={e => setPrecoKg(e.target.value)} placeholder="0,00" className="h-9 text-[12px]" />
+                <Input type="number" value={precoKg} onChange={e => { setPrecoKg(e.target.value); markDirty(); }} placeholder="0,00" className="h-9 text-[12px]" />
               </div>
             )}
             {tipoPreco === 'por_cab' && (
               <div>
                 <Label className="text-[11px]">R$/cabeça</Label>
-                <Input type="number" value={precoCab} onChange={e => setPrecoCab(e.target.value)} placeholder="0,00" className="h-9 text-[12px]" />
+                <Input type="number" value={precoCab} onChange={e => { setPrecoCab(e.target.value); markDirty(); }} placeholder="0,00" className="h-9 text-[12px]" />
               </div>
             )}
             {tipoPreco === 'por_total' && (
               <div>
                 <Label className="text-[11px]">Valor total (R$)</Label>
-                <Input type="number" value={valorTotal} onChange={e => setValorTotal(e.target.value)} placeholder="0,00" className="h-9 text-[12px]" />
+                <Input type="number" value={valorTotal} onChange={e => { setValorTotal(e.target.value); markDirty(); }} placeholder="0,00" className="h-9 text-[12px]" />
               </div>
             )}
             {calc.valorBase > 0 && (
@@ -231,11 +247,11 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-[11px]">Frete (R$)</Label>
-              <Input type="number" value={frete} onChange={e => setFrete(e.target.value)} placeholder="0,00" className="h-9 text-[12px]" />
+              <Input type="number" value={frete} onChange={e => { setFrete(e.target.value); markDirty(); }} placeholder="0,00" className="h-9 text-[12px]" />
             </div>
             <div>
               <Label className="text-[11px]">Comissão (%)</Label>
-              <Input type="number" value={comissaoPct} onChange={e => setComissaoPct(e.target.value)} placeholder="0" className="h-9 text-[12px]" />
+              <Input type="number" value={comissaoPct} onChange={e => { setComissaoPct(e.target.value); markDirty(); }} placeholder="0" className="h-9 text-[12px]" />
             </div>
           </div>
           {calc.comissaoVal > 0 && (
@@ -256,11 +272,11 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
           {/* 4. Pagamento */}
           {sectionTitle(<CreditCard className="h-4 w-4 text-muted-foreground" />, 'Informações de Pagamento')}
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => { setFormaPag('avista'); setParcelas([]); }}
+            <button type="button" onClick={() => { setFormaPag('avista'); setParcelas([]); markDirty(); }}
               className={`h-9 rounded text-[12px] font-bold border-2 transition-all ${formaPag === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
               À vista
             </button>
-            <button type="button" onClick={() => { setFormaPag('prazo'); if (calc.valorBase > 0) setParcelas(gerarParcelas(Number(qtdParcelas) || 1, calc.valorBase)); }}
+            <button type="button" onClick={() => { setFormaPag('prazo'); markDirty(); if (calc.valorBase > 0) setParcelas(gerarParcelas(Number(qtdParcelas) || 1, calc.valorBase)); }}
               className={`h-9 rounded text-[12px] font-bold border-2 transition-all ${formaPag === 'prazo' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
               A prazo
             </button>
@@ -277,11 +293,11 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
                 <div key={i} className="grid grid-cols-2 gap-2 bg-muted/30 rounded p-2">
                   <div>
                     <Label className="text-[10px]">Parcela {i + 1}</Label>
-                    <Input type="date" value={p.data} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], data: e.target.value }; setParcelas(np); }} className="h-8 text-[11px]" />
+                    <Input type="date" value={p.data} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], data: e.target.value }; setParcelas(np); markDirty(); }} className="h-8 text-[11px]" />
                   </div>
                   <div>
                     <Label className="text-[10px]">R$</Label>
-                    <Input type="number" value={String(p.valor)} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], valor: Number(e.target.value) || 0 }; setParcelas(np); }} className="h-8 text-[11px]" />
+                    <Input type="number" value={String(p.valor)} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], valor: Number(e.target.value) || 0 }; setParcelas(np); markDirty(); }} className="h-8 text-[11px]" />
                   </div>
                 </div>
               ))}
@@ -297,7 +313,7 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
 
           {/* 5. Nota Fiscal */}
           {sectionTitle(<FileText className="h-4 w-4 text-muted-foreground" />, 'Nota Fiscal')}
-          <Input value={notaFiscal} onChange={e => setNotaFiscal(e.target.value)} placeholder="Nº da nota fiscal" className="h-9 text-[12px]" />
+          <Input value={notaFiscal} onChange={e => { setNotaFiscal(e.target.value); markDirty(); }} placeholder="Nº da nota fiscal" className="h-9 text-[12px]" />
 
           <Separator />
 
@@ -333,10 +349,28 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
 
         {/* Footer fixo */}
         <div className="flex justify-end gap-2 pt-3 border-t mt-2">
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button variant="outline" onClick={tryClose}>Cancelar</Button>
           <Button onClick={handleSave}>Salvar</Button>
         </div>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Deseja sair sem salvar?</AlertDialogTitle>
+          <AlertDialogDescription>
+            As alterações feitas nos detalhes da compra serão perdidas.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Continuar editando</AlertDialogCancel>
+          <AlertDialogAction onClick={() => { setConfirmClose(false); onClose(); }}>
+            Sair sem salvar
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
