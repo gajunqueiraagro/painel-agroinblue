@@ -189,9 +189,15 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
     generateFinanceiro: async (extLancamentoId: string) => handleGerarFinanceiroInternal(extLancamentoId),
     getValidationErrors: () => validationErrors,
     getFornecedorId: () => fornecedorId,
-    getRecebimentoSnapshot: () => ({ formaReceb, parcelas }),
+    getRecebimentoSnapshot: () => {
+      // For boitel, use recebimento from boitelData
+      if (isBoitel && boitelData) {
+        return { formaReceb: boitelData.formaReceb || 'avista', parcelas: boitelData.parcelas || [] };
+      }
+      return { formaReceb, parcelas };
+    },
     resetForm,
-  }), [fornecedorId, formaReceb, parcelas, resetForm, validationErrors]);
+  }), [fornecedorId, formaReceb, parcelas, resetForm, validationErrors, isBoitel, boitelData]);
 
   const handleGerarFinanceiroInternal = async (targetLancamentoId: string): Promise<boolean> => {
     if (!targetLancamentoId) { toast.error('Salve o lançamento zootécnico primeiro.'); return false; }
