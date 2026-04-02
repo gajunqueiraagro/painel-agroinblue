@@ -13,7 +13,7 @@ import { fmtValor } from '@/lib/calculos/formatters';
 import { MESES_OPTIONS } from '@/lib/calculos/labels';
 import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 
-type StatusFiltro = 'todos' | 'realizado' | 'previsto';
+type StatusFiltro = 'todos' | 'realizado' | 'programado' | 'previsto';
 
 interface Props {
   lancamentos: Lancamento[];
