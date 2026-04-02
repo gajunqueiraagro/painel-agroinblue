@@ -1125,10 +1125,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
       )}
 
-      <div>
-        <Label className="text-[11px]">Nota Fiscal</Label>
-        <Input value={notaFiscal} onChange={e => setNotaFiscal(e.target.value)} placeholder="Nº da nota" className="h-8 text-[12px]" />
-      </div>
+      {!isVenda && (
+        <div>
+          <Label className="text-[11px]">Nota Fiscal</Label>
+          <Input value={notaFiscal} onChange={e => setNotaFiscal(e.target.value)} placeholder="Nº da nota" className="h-8 text-[12px]" />
+        </div>
+      )}
 
       <Separator />
       <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Valor da Operação</h4>
