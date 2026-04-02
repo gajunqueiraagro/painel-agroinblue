@@ -319,27 +319,27 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
 
           {/* Totalizador */}
           {calc.valorBase > 0 && (
-            <div className="bg-primary/5 border border-primary/20 rounded-md p-3 space-y-1">
-              <div className="flex justify-between text-[12px]">
+            <div className="bg-primary/5 border border-primary/20 rounded p-2 space-y-0.5">
+              <div className="flex justify-between text-[11px]">
                 <span className="text-muted-foreground">Valor base</span>
                 <strong>{formatMoeda(calc.valorBase)}</strong>
               </div>
               {calc.totalDespesas > 0 && (
-                <div className="flex justify-between text-[12px]">
+                <div className="flex justify-between text-[11px]">
                   <span className="text-muted-foreground">Despesas</span>
                   <strong className="text-orange-600 dark:text-orange-400">+{formatMoeda(calc.totalDespesas)}</strong>
                 </div>
               )}
               <Separator />
-              <div className="flex justify-between text-[13px] font-bold">
+              <div className="flex justify-between text-[12px] font-bold">
                 <span>Total da compra</span>
                 <span className="text-primary">{formatMoeda(calc.liqTotal)}</span>
               </div>
-              <div className="flex justify-between text-[11px]">
+              <div className="flex justify-between text-[10px]">
                 <span className="text-muted-foreground">R$/kg líq.</span>
                 <strong>{formatMoeda(calc.liqKg)}</strong>
               </div>
-              <div className="flex justify-between text-[11px]">
+              <div className="flex justify-between text-[10px]">
                 <span className="text-muted-foreground">R$/cab. líq.</span>
                 <strong>{formatMoeda(calc.liqCab)}</strong>
               </div>
