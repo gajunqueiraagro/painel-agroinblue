@@ -25,7 +25,9 @@ import { ptBR } from 'date-fns/locale';
 import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, RefreshCw, Clock, Info } from 'lucide-react';
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
-import { CompraFinanceiroPanel, CompraFinanceiroPanelRef } from '@/components/CompraFinanceiroPanel';
+import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/components/compra/CompraDetalhesDialog';
+import { CompraResumoPanel } from '@/components/compra/CompraResumoPanel';
+import { gerarFinanceiroCompra } from '@/components/compra/gerarFinanceiroCompra';
 import { AbateExportDialog } from '@/components/AbateExportMenu';
 import { AbateFinanceiroPanel, AbateFinanceiroPanelRef } from '@/components/AbateFinanceiroPanel';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -138,7 +140,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [detalheId, setDetalheId] = useState<string | null>(null);
   const [lastSavedLancamentoId, setLastSavedLancamentoId] = useState<string | null>(null);
   const [editingAbateId, setEditingAbateId] = useState<string | null>(null);
-  const compraFinanceiroRef = useRef<CompraFinanceiroPanelRef>(null);
+  // compraFinanceiroRef removed — compra now uses modal + direct generation
   const abateFinanceiroRef = useRef<AbateFinanceiroPanelRef>(null);
   const vendaFinanceiroRef = useRef<VendaFinanceiroPanelRef>(null);
   const consumoFinanceiroRef = useRef<ConsumoFinanceiroPanelRef>(null);
@@ -148,6 +150,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [statusOp, setStatusOp] = useState<StatusOperacional>('conciliado');
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [compraDetalhes, setCompraDetalhes] = useState<CompraDetalhes | null>(null);
+  const [compraDialogOpen, setCompraDialogOpen] = useState(false);
 
   const [motivoMorte, setMotivoMorte] = useState('');
   const [motivoMorteCustom, setMotivoMorteCustom] = useState('');
@@ -355,8 +359,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingAbateId(null);
     setDetalheId(null);
     setFinanceiroOpen(false);
+    setCompraDetalhes(null);
+    setCompraDialogOpen(false);
     resetFinancialFields();
-    compraFinanceiroRef.current?.resetForm();
     vendaFinanceiroRef.current?.resetForm();
     consumoFinanceiroRef.current?.resetForm();
   };
@@ -486,17 +491,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     if (isCompra) {
       if (!compraFornecedorId) { toast.error('Selecione o fornecedor para continuar'); return; }
-      if (compraFinanceiroRef.current) {
-        const finErrors = compraFinanceiroRef.current.getValidationErrors();
-        const valorBaseVal = compraFinanceiroRef.current.getValorBase();
-
-        if (isConfirmado || isConciliado) {
-          if (valorBaseVal <= 0) { toast.error('Preencha o preço base antes de registrar a compra.'); return; }
-        }
-        if (finErrors.length > 0 && valorBaseVal > 0) {
-          toast.error(finErrors[0]);
-          return;
-        }
+      if (!compraDetalhes) { toast.error('Clique em "Completar Compra" para preencher os detalhes financeiros'); return; }
+      const valorBase = (() => {
+        const totalKg = (Number(quantidade) || 0) * (Number(pesoKg) || 0);
+        if (compraDetalhes.tipoPreco === 'por_kg') return totalKg * (Number(compraDetalhes.precoKg) || 0);
+        if (compraDetalhes.tipoPreco === 'por_cab') return (Number(quantidade) || 0) * (Number(compraDetalhes.precoCab) || 0);
+        return Number(compraDetalhes.valorTotal) || 0;
+      })();
+      if ((statusOp === 'confirmado' || statusOp === 'conciliado') && valorBase <= 0) {
+        toast.error('Preencha o preço base antes de registrar a compra.');
+        return;
       }
     }
 
@@ -586,10 +590,22 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         const returnedId = await onAdicionar(lancamentoDados as Omit<Lancamento, 'id'>);
 
         if (isCompra && returnedId) {
-          if (compraFinanceiroRef.current && compraFinanceiroRef.current.getValorBase() > 0) {
-            await compraFinanceiroRef.current.generateFinanceiro(returnedId);
+          if (compraDetalhes && fazendaAtual && clienteAtual) {
+            await gerarFinanceiroCompra({
+              compraDetalhes,
+              lancamentoId: returnedId,
+              clienteId: clienteAtual.id,
+              fazendaId: fazendaAtual.id,
+              quantidade: Number(quantidade) || 0,
+              pesoKg: Number(pesoKg) || 0,
+              data,
+              categoria,
+              statusOp,
+              fazendaOrigem,
+              fornecedorId: compraFornecedorId,
+            });
           }
-          compraFinanceiroRef.current?.resetForm();
+          setCompraDetalhes(null);
           setLastSavedLancamentoId(null);
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
@@ -683,14 +699,24 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       } else {
         result.formaPagamento = 'À vista';
       }
-    } else if (isCompra && compraFinanceiroRef.current) {
-      const valorBase = compraFinanceiroRef.current.getValorBase();
-      const tipoPrecoLabel = compraFinanceiroRef.current.getTipoPreco();
+    } else if (isCompra && compraDetalhes) {
+      const totalKgC = (Number(quantidade) || 0) * (Number(pesoKg) || 0);
+      let valorBase = 0;
+      if (compraDetalhes.tipoPreco === 'por_kg') valorBase = totalKgC * (Number(compraDetalhes.precoKg) || 0);
+      else if (compraDetalhes.tipoPreco === 'por_cab') valorBase = (Number(quantidade) || 0) * (Number(compraDetalhes.precoCab) || 0);
+      else valorBase = Number(compraDetalhes.valorTotal) || 0;
+      const tipoPrecoLabel = compraDetalhes.tipoPreco === 'por_kg' ? 'R$/kg' : compraDetalhes.tipoPreco === 'por_cab' ? 'R$/cab' : 'Total';
       result.precoBase = valorBase;
-      result.precoBaseLabel = tipoPrecoLabel === 'por_kg' ? 'R$/kg' : tipoPrecoLabel === 'por_cab' ? 'R$/cab' : 'Total';
+      result.precoBaseLabel = tipoPrecoLabel;
       result.totalBruto = valorBase;
       result.valorLiquido = valorBase;
       result.fornecedorOuFrigorifico = abateFornecedores.find(f => f.id === compraFornecedorId)?.nome || '';
+      if (compraDetalhes.formaPag === 'prazo' && compraDetalhes.parcelas.length > 0) {
+        result.formaPagamento = `A prazo (${compraDetalhes.parcelas.length}x)`;
+        result.parcelas = compraDetalhes.parcelas;
+      } else {
+        result.formaPagamento = 'À vista';
+      }
     } else {
       result.precoBase = Number(precoKg) || 0;
       result.precoBaseLabel = 'R$/kg';
@@ -1763,23 +1789,34 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <>
             {renderForm()}
             {isCompra ? (
-              <CompraFinanceiroPanel
-                key={`compra-${tipo}`}
-                ref={compraFinanceiroRef}
-                quantidade={Number(quantidade) || 0}
-                pesoKg={Number(pesoKg) || 0}
-                data={data}
-                categoria={categoria}
-                statusOp={statusOp}
-                fazendaOrigem={fazendaOrigem}
-                notaFiscal={notaFiscal}
-                onNotaFiscalChange={setNotaFiscal}
-                fornecedorId={compraFornecedorId}
-                lancamentoId={lastSavedLancamentoId || undefined}
-                onRequestRegister={handleRequestRegister}
-                registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Compra'}
-                submitting={submitting}
-              />
+              <>
+                <CompraResumoPanel
+                  quantidade={Number(quantidade) || 0}
+                  pesoKg={Number(pesoKg) || 0}
+                  categoria={categoria}
+                  fornecedorNome={abateFornecedores.find(f => f.id === compraFornecedorId)?.nome || ''}
+                  detalhes={compraDetalhes}
+                  detalhesPreenchidos={!!compraDetalhes}
+                  canOpenModal={!!(data && quantidade && Number(quantidade) > 0 && pesoKg && Number(pesoKg) > 0 && categoria)}
+                  onOpenModal={() => setCompraDialogOpen(true)}
+                  onRequestRegister={handleRequestRegister}
+                  submitting={submitting}
+                  registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Compra'}
+                />
+                <CompraDetalhesDialog
+                  open={compraDialogOpen}
+                  onClose={() => setCompraDialogOpen(false)}
+                  onSave={(det) => {
+                    setCompraDetalhes(det);
+                    setNotaFiscal(det.notaFiscal);
+                    setCompraDialogOpen(false);
+                  }}
+                  initialData={compraDetalhes || EMPTY_COMPRA_DETALHES}
+                  quantidade={Number(quantidade) || 0}
+                  pesoKg={Number(pesoKg) || 0}
+                  dataCompra={data}
+                />
+              </>
             ) : (
               renderFinancialPanel()
             )}
