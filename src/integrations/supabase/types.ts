@@ -161,6 +161,123 @@ export type Database = {
         }
         Relationships: []
       }
+      boitel_operacoes: {
+        Row: {
+          cliente_id: string
+          created_at: string
+          custo_arroba: number
+          custo_diaria: number
+          custo_frete: number
+          custo_nutricao: number
+          custo_sanidade: number
+          custo_total: number
+          custos_extras_parceria: number
+          data_envio: string | null
+          despesas_abate: number
+          dias: number
+          faturamento_bruto: number
+          faturamento_liquido: number
+          fazenda_destino_nome: string
+          fazenda_origem_id: string
+          gmd: number
+          id: string
+          lote: string | null
+          lucro_total: number
+          modalidade: string
+          numero_contrato: string | null
+          outros_custos: number
+          percentual_parceria: number
+          peso_inicial_kg: number
+          preco_venda_arroba: number
+          quantidade: number
+          receita_produtor: number
+          rendimento_entrada: number
+          rendimento_saida: number
+          updated_at: string
+        }
+        Insert: {
+          cliente_id: string
+          created_at?: string
+          custo_arroba?: number
+          custo_diaria?: number
+          custo_frete?: number
+          custo_nutricao?: number
+          custo_sanidade?: number
+          custo_total?: number
+          custos_extras_parceria?: number
+          data_envio?: string | null
+          despesas_abate?: number
+          dias?: number
+          faturamento_bruto?: number
+          faturamento_liquido?: number
+          fazenda_destino_nome?: string
+          fazenda_origem_id: string
+          gmd?: number
+          id?: string
+          lote?: string | null
+          lucro_total?: number
+          modalidade?: string
+          numero_contrato?: string | null
+          outros_custos?: number
+          percentual_parceria?: number
+          peso_inicial_kg?: number
+          preco_venda_arroba?: number
+          quantidade?: number
+          receita_produtor?: number
+          rendimento_entrada?: number
+          rendimento_saida?: number
+          updated_at?: string
+        }
+        Update: {
+          cliente_id?: string
+          created_at?: string
+          custo_arroba?: number
+          custo_diaria?: number
+          custo_frete?: number
+          custo_nutricao?: number
+          custo_sanidade?: number
+          custo_total?: number
+          custos_extras_parceria?: number
+          data_envio?: string | null
+          despesas_abate?: number
+          dias?: number
+          faturamento_bruto?: number
+          faturamento_liquido?: number
+          fazenda_destino_nome?: string
+          fazenda_origem_id?: string
+          gmd?: number
+          id?: string
+          lote?: string | null
+          lucro_total?: number
+          modalidade?: string
+          numero_contrato?: string | null
+          outros_custos?: number
+          percentual_parceria?: number
+          peso_inicial_kg?: number
+          preco_venda_arroba?: number
+          quantidade?: number
+          receita_produtor?: number
+          rendimento_entrada?: number
+          rendimento_saida?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "boitel_operacoes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boitel_operacoes_fazenda_origem_id_fkey"
+            columns: ["fazenda_origem_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categorias_rebanho: {
         Row: {
           codigo: string
@@ -1735,6 +1852,7 @@ export type Database = {
       financeiro_lancamentos_v2: {
         Row: {
           ano_mes: string
+          boitel_id: string | null
           cancelado: boolean
           cancelado_em: string | null
           cancelado_por: string | null
@@ -1777,6 +1895,7 @@ export type Database = {
         }
         Insert: {
           ano_mes: string
+          boitel_id?: string | null
           cancelado?: boolean
           cancelado_em?: string | null
           cancelado_por?: string | null
@@ -1819,6 +1938,7 @@ export type Database = {
         }
         Update: {
           ano_mes?: string
+          boitel_id?: string | null
           cancelado?: boolean
           cancelado_em?: string | null
           cancelado_por?: string | null
@@ -1860,6 +1980,13 @@ export type Database = {
           valor?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "financeiro_lancamentos_v2_boitel_id_fkey"
+            columns: ["boitel_id"]
+            isOneToOne: false
+            referencedRelation: "boitel_operacoes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "financeiro_lancamentos_v2_cliente_id_fkey"
             columns: ["cliente_id"]
@@ -2372,6 +2499,7 @@ export type Database = {
       lancamentos: {
         Row: {
           acrescimos: number | null
+          boitel_id: string | null
           bonus_lista_trace: number | null
           bonus_precoce: number | null
           bonus_qualidade: number | null
@@ -2415,6 +2543,7 @@ export type Database = {
         }
         Insert: {
           acrescimos?: number | null
+          boitel_id?: string | null
           bonus_lista_trace?: number | null
           bonus_precoce?: number | null
           bonus_qualidade?: number | null
@@ -2458,6 +2587,7 @@ export type Database = {
         }
         Update: {
           acrescimos?: number | null
+          boitel_id?: string | null
           bonus_lista_trace?: number | null
           bonus_precoce?: number | null
           bonus_qualidade?: number | null
@@ -2500,6 +2630,13 @@ export type Database = {
           valor_total?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "lancamentos_boitel_id_fkey"
+            columns: ["boitel_id"]
+            isOneToOne: false
+            referencedRelation: "boitel_operacoes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "lancamentos_cliente_id_fkey"
             columns: ["cliente_id"]
