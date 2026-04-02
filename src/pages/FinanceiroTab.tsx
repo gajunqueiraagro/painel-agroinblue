@@ -715,7 +715,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
         </div>
 
         {/* Summary panel */}
-        <div className="flex-[3] min-w-[200px] max-w-[280px] flex-shrink-0 hidden lg:block">
+        <div className="flex-[3] min-w-[180px] max-w-[260px] flex-shrink-0 hidden md:block">
           <ResumoLateral
             lancamentos={filtrados}
             subAba={subAba}
