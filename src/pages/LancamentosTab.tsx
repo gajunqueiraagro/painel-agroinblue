@@ -676,7 +676,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       result.precoBaseLabel = tipoPrecoLabel === 'por_kg' ? 'R$/kg' : tipoPrecoLabel === 'por_cab' ? 'R$/cab' : 'Total';
       result.totalBruto = valorBase;
       result.valorLiquido = valorBase;
-      result.fornecedorOuFrigorifico = fazendaOrigem;
+      result.fornecedorOuFrigorifico = abateFornecedores.find(f => f.id === compraFornecedorId)?.nome || fazendaOrigem;
     } else {
       result.precoBase = Number(precoKg) || 0;
       result.precoBaseLabel = 'R$/kg';
