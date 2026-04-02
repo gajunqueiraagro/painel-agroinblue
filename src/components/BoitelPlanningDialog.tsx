@@ -5,12 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calculos/formatters';
-import { TrendingUp, DollarSign, Calendar, Truck, Calculator, ChevronDown, Info, ShoppingCart } from 'lucide-react';
+import { TrendingUp, DollarSign, Calendar, Truck, Calculator, Info, ShoppingCart } from 'lucide-react';
 
 export interface BoitelData {
-  // Identificação
   qtdCabecas: number;
   pesoInicial: number;
   fazendaOrigem: string;
@@ -18,15 +16,12 @@ export interface BoitelData {
   lote: string;
   numeroContrato: string;
   dataEnvio: string;
-  // Entrada
   quebraViagem: number;
   custoOportunidade: number;
-  // Período
   dias: number;
   gmd: number;
   rendimentoEntrada: number;
   rendimento: number;
-  // Custos
   modalidadeCusto: 'diaria' | 'arroba' | 'parceria';
   custoDiaria: number;
   custoArroba: number;
@@ -37,16 +32,13 @@ export interface BoitelData {
   custoNutricao: number;
   custoSanidade: number;
   custoNfAbate: number;
-  // Comercialização
   precoVendaArroba: number;
   despesasAbate: number;
-  // Snapshot de resultados (calculados e salvos)
   _faturamentoBruto?: number;
   _faturamentoLiquido?: number;
   _receitaProdutor?: number;
   _custoTotal?: number;
   _lucroTotal?: number;
-  // ID do boitel_operacoes (se já salvo)
   _boitelId?: string;
 }
 
@@ -96,10 +88,17 @@ function fmtGmd(v: number) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' kg/dia';
 }
 function fmtArr(v: number) { return formatArroba(v); }
+function fmtPct1(v: number) {
+  if (v === null || v === undefined || isNaN(v)) return '-';
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+}
+function fmtPerCab(total: number, qtd: number) {
+  if (!qtd || qtd === 0) return '-';
+  return formatMoeda(total / qtd) + '/cab';
+}
 
 export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quantidade, pesoKg, fazendaNome, dataLancamento, destinoNome }: Props) {
   const [data, setData] = useState<BoitelData>({ ...defaultData });
-  const [showDetalhe, setShowDetalhe] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -108,29 +107,22 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
         qtdCabecas: quantidade || 0,
         pesoInicial: pesoKg || 0,
         fazendaOrigem: fazendaNome || '',
-        dataEnvio: dataLancamento || '',
         nomeBoitel: destinoNome || '',
         ...initialData,
       });
     }
-  }, [open, initialData, quantidade, pesoKg, fazendaNome, dataLancamento, destinoNome]);
+  }, [open, initialData, quantidade, pesoKg, fazendaNome, destinoNome]);
 
   const set = useCallback(<K extends keyof BoitelData>(key: K, value: BoitelData[K]) => {
     setData(prev => ({ ...prev, [key]: value }));
   }, []);
-
-  // Outros custos = soma automática dos subitens (apenas sanidade + custos extras parceria + outrosCustos manuais NÃO inclusos)
-  // Nutrição e NF Abate saem desse grupo
-  const outrosCustosCalculado = useMemo(() => {
-    return data.custoSanidade + data.custosExtrasParceria;
-  }, [data.custoSanidade, data.custosExtrasParceria]);
 
   const calc = useMemo(() => {
     const {
       qtdCabecas, pesoInicial, quebraViagem, dias, gmd, rendimentoEntrada, rendimento,
       modalidadeCusto, custoDiaria, custoArroba, percentualParceria,
       custoFrete, custoOportunidade,
-      custoSanidade,
+      custoSanidade, outrosCustos,
       precoVendaArroba, despesasAbate, custoNfAbate,
     } = data;
 
@@ -138,19 +130,17 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     const ganhoKg = gmd * dias;
     const pesoFinal = pesoLiqEntrada + ganhoKg;
 
-    // Arrobas: entrada usa rendimento de entrada (padrão 50%), saída usa rendimento real
     const arrobasEntrada = (pesoLiqEntrada * rendimentoEntrada / 100) / 15;
     const arrobasSaida = (pesoFinal * rendimento / 100) / 15;
     const arrobasProduzidas = (arrobasSaida - arrobasEntrada) * qtdCabecas;
     const arrobasTotalSaida = arrobasSaida * qtdCabecas;
 
-    // GMC (ganho médio de carcaça kg/dia)
     const gmc = dias > 0 ? ((pesoFinal * rendimento / 100) - (pesoLiqEntrada * rendimentoEntrada / 100)) / dias : 0;
 
     // ── FATURAMENTO ──
     const faturamentoBrutoAbate = arrobasTotalSaida * precoVendaArroba;
     const custosAbate = despesasAbate + custoNfAbate;
-    const faturamentoBruto = faturamentoBrutoAbate - custosAbate;
+    const faturamentoLiquido = faturamentoBrutoAbate - custosAbate;
 
     // ── CUSTOS OPERACIONAIS ──
     let custoDiariaTotal = 0;
@@ -161,63 +151,76 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     }
 
     const custosSanitarios = custoSanidade;
-    const outrosCustosOp = outrosCustosCalculado - custoSanidade; // Only non-sanidade extras
+    const outrosCustosOp = outrosCustos;
     const custosFreteTotal = custoFrete;
 
-    const custosOperacionais = custoDiariaTotal + custosSanitarios + (outrosCustosOp > 0 ? outrosCustosOp : 0) + custosFreteTotal;
+    const custosOperacionais = custoDiariaTotal + custosSanitarios + outrosCustosOp + custosFreteTotal;
 
     // Resultado com Boitel (antes do frete)
-    const resultadoComBoitel = faturamentoBruto - custoDiariaTotal - custosSanitarios - (outrosCustosOp > 0 ? outrosCustosOp : 0);
+    const resultadoComBoitel = faturamentoLiquido - custoDiariaTotal - custosSanitarios - outrosCustosOp;
 
-    // ── CUSTO DE OPORTUNIDADE ──
-    const custoOportTotal = custoOportunidade * pesoLiqEntrada * qtdCabecas;
+    // ── CUSTO DE OPORTUNIDADE — usa pesoInicial (peso de saída da fazenda) ──
+    const custoOportTotal = custoOportunidade * pesoInicial * qtdCabecas;
     const custoOportCab = qtdCabecas > 0 ? custoOportTotal / qtdCabecas : 0;
-    const ganhoTotalKg = ganhoKg * qtdCabecas;
-    const custoOportKg = ganhoTotalKg > 0 ? custoOportTotal / ganhoTotalKg : 0;
+    const custoOportKg = pesoInicial > 0 ? custoOportCab / pesoInicial : 0;
 
     // ── PARCERIA ──
-    let receitaProdutor = faturamentoBruto;
+    let receitaProdutor = faturamentoLiquido;
     let parceiroParte = 0;
     let parceiroArrobas = 0;
     if (modalidadeCusto === 'parceria') {
       parceiroArrobas = arrobasProduzidas * (percentualParceria / 100);
       parceiroParte = parceiroArrobas * precoVendaArroba;
-      receitaProdutor = faturamentoBruto - parceiroParte;
+      receitaProdutor = faturamentoLiquido - parceiroParte;
     }
 
     // ── RESULTADO LÍQUIDO ──
     const resultadoLiquido = receitaProdutor - custosOperacionais;
     const resultadoLiqCab = qtdCabecas > 0 ? resultadoLiquido / qtdCabecas : 0;
-    const resultadoLiqKg = ganhoTotalKg > 0 ? resultadoLiquido / ganhoTotalKg : 0;
+    // Resultado Líq./kg = resultado líq. por cabeça / peso inicial saída fazenda
+    const resultadoLiqKg = pesoInicial > 0 ? resultadoLiqCab / pesoInicial : 0;
 
     // ── VIABILIDADE COMPARADA ──
     const lucroViabilidade = resultadoLiquido - custoOportTotal;
     const lucroViabCab = qtdCabecas > 0 ? lucroViabilidade / qtdCabecas : 0;
-    const lucroViabKg = ganhoTotalKg > 0 ? lucroViabilidade / ganhoTotalKg : 0;
+    const lucroViabKg = pesoInicial > 0 ? lucroViabCab / pesoInicial : 0;
 
     const custoPorCab = qtdCabecas > 0 ? custosOperacionais / qtdCabecas : 0;
     const custoPorArrobaProduzida = arrobasProduzidas > 0 ? custosOperacionais / arrobasProduzidas : 0;
+
+    // per-head helper values
+    const quebraCab = pesoInicial * (quebraViagem / 100);
+    const custoDiariaCabPeriodo = custoDiaria * dias;
+    const freteCab = qtdCabecas > 0 ? custoFrete / qtdCabecas : 0;
+    const sanidadeCab = qtdCabecas > 0 ? custoSanidade / qtdCabecas : 0;
+    const outrosCab = qtdCabecas > 0 ? outrosCustos / qtdCabecas : 0;
+    const precoVendaCab = arrobasSaida * precoVendaArroba;
+    const despesasAbateCab = qtdCabecas > 0 ? despesasAbate / qtdCabecas : 0;
+    const custoOportCabCalc = custoOportunidade * pesoInicial;
 
     return {
       pesoLiqEntrada, ganhoKg, pesoFinal,
       arrobasEntrada, arrobasSaida, arrobasProduzidas, arrobasTotalSaida,
       gmc,
-      faturamentoBrutoAbate, custosAbate, faturamentoBruto,
+      faturamentoBrutoAbate, custosAbate, faturamentoLiquido,
       parceiroParte, parceiroArrobas, receitaProdutor,
-      custoDiariaTotal, custosSanitarios, outrosCustosOp: outrosCustosOp > 0 ? outrosCustosOp : 0,
+      custoDiariaTotal, custosSanitarios, outrosCustosOp,
       custosFreteTotal, custosOperacionais, resultadoComBoitel,
       custoOportTotal, custoOportCab, custoOportKg,
       custoPorCab, custoPorArrobaProduzida,
       resultadoLiquido, resultadoLiqCab, resultadoLiqKg,
       lucroViabilidade, lucroViabCab, lucroViabKg,
+      // per-head helpers
+      quebraCab, custoDiariaCabPeriodo, freteCab, sanidadeCab, outrosCab,
+      precoVendaCab, despesasAbateCab, custoOportCabCalc,
     };
-  }, [data, outrosCustosCalculado]);
+  }, [data]);
 
   const handleSave = () => {
     const dataWithSnapshot: BoitelData = {
       ...data,
       _faturamentoBruto: calc.faturamentoBrutoAbate,
-      _faturamentoLiquido: calc.faturamentoBruto,
+      _faturamentoLiquido: calc.faturamentoLiquido,
       _receitaProdutor: calc.receitaProdutor,
       _custoTotal: calc.custosOperacionais,
       _lucroTotal: calc.resultadoLiquido,
@@ -248,7 +251,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <strong className="text-[14px]">{data.qtdCabecas || '-'}</strong>
               </div>
               <div>
-                <span className="text-[10px] text-muted-foreground block">Peso inicial</span>
+                <span className="text-[10px] text-muted-foreground block">Peso inicial (saída fazenda)</span>
                 <strong className="text-[14px]">{fmtPeso(data.pesoInicial)}</strong>
               </div>
               <div>
@@ -265,10 +268,9 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <Label className="text-[9px] text-muted-foreground">Fazenda Origem</Label>
                 <div className="text-[11px] font-medium truncate">{data.fazendaOrigem || '-'}</div>
               </div>
-              <div>
-                <Label className="text-[9px] text-muted-foreground">Data Envio</Label>
-                <div className="text-[11px] font-medium">{data.dataEnvio || '-'}</div>
-              </div>
+              <Field label="Data Envio">
+                <Input type="date" value={data.dataEnvio} onChange={e => set('dataEnvio', e.target.value)} className="h-6 text-[11px]" />
+              </Field>
               <Field label="Boitel / Destino">
                 <Input value={data.nomeBoitel} onChange={e => set('nomeBoitel', e.target.value)} className="h-6 text-[11px]" placeholder="Nome do boitel" />
               </Field>
@@ -301,11 +303,12 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
               <Section icon={<Truck className="h-3.5 w-3.5" />} title="Entrada">
                 <div className="grid grid-cols-2 gap-2">
                   <Field label="Quebra de viagem (%)">
-                    <Input type="number" value={data.quebraViagem || ''} onChange={e => set('quebraViagem', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.5" />
+                    <Input type="number" value={data.quebraViagem || ''} onChange={e => set('quebraViagem', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.1" />
+                    <HintBelow>{fmtPct1(data.quebraViagem)} → {fmtPeso(calc.quebraCab)}/cab</HintBelow>
                   </Field>
                   <Field label="Custo oportunidade (R$/kg)">
                     <Input type="number" value={data.custoOportunidade || ''} onChange={e => set('custoOportunidade', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.01" />
-                    <span className="text-[8px] text-muted-foreground italic">Ref: preço de mercado da categoria</span>
+                    <HintBelow>{formatMoeda(data.custoOportunidade)}/kg → {formatMoeda(calc.custoOportCabCalc)}/cab</HintBelow>
                   </Field>
                 </div>
               </Section>
@@ -318,13 +321,15 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                   </Field>
                   <Field label="GMD (kg/dia)">
                     <Input type="number" value={data.gmd || ''} onChange={e => set('gmd', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.001" />
+                    <HintBelow>{fmtGmd(data.gmd)}</HintBelow>
                   </Field>
                   <Field label="Rend. entrada (%)">
-                    <Input type="number" value={data.rendimentoEntrada || ''} onChange={e => set('rendimentoEntrada', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.5" />
-                    <span className="text-[8px] text-muted-foreground">Padrão: 50%</span>
+                    <Input type="number" value={data.rendimentoEntrada || ''} onChange={e => set('rendimentoEntrada', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.1" />
+                    <HintBelow>{fmtPct1(data.rendimentoEntrada)}</HintBelow>
                   </Field>
                   <Field label="Rend. saída (%)">
-                    <Input type="number" value={data.rendimento || ''} onChange={e => set('rendimento', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.5" />
+                    <Input type="number" value={data.rendimento || ''} onChange={e => set('rendimento', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.1" />
+                    <HintBelow>{fmtPct1(data.rendimento)}</HintBelow>
                   </Field>
                 </div>
                 {(data.gmd > 0 && data.dias > 0) && (
@@ -342,6 +347,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                   {data.modalidadeCusto === 'diaria' && (
                     <Field label="R$/cab/dia">
                       <Input type="number" value={data.custoDiaria || ''} onChange={e => set('custoDiaria', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.01" />
+                      <HintBelow>Período: {formatMoeda(calc.custoDiariaCabPeriodo)}/cab</HintBelow>
                     </Field>
                   )}
                   {data.modalidadeCusto === 'arroba' && (
@@ -353,7 +359,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                     <>
                       <Field label="% do parceiro">
                         <Input type="number" value={data.percentualParceria || ''} onChange={e => set('percentualParceria', Number(e.target.value) || 0)} className="h-7 text-[11px]" min="0" max="100" />
-                        <span className="text-[9px] text-muted-foreground">Sua parte: {100 - (data.percentualParceria || 0)}%</span>
+                        <HintBelow>Sua parte: {100 - (data.percentualParceria || 0)}%</HintBelow>
                       </Field>
                       <Field label="Custos extras do acordo (R$)">
                         <Input type="number" value={data.custosExtrasParceria || ''} onChange={e => set('custosExtrasParceria', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
@@ -362,30 +368,17 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                   )}
                   <Field label="Frete (R$)">
                     <Input type="number" value={data.custoFrete || ''} onChange={e => set('custoFrete', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
+                    <HintBelow>{formatMoeda(calc.freteCab)}/cab</HintBelow>
+                  </Field>
+                  <Field label="Sanidade (R$)">
+                    <Input type="number" value={data.custoSanidade || ''} onChange={e => set('custoSanidade', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
+                    <HintBelow>{formatMoeda(calc.sanidadeCab)}/cab</HintBelow>
                   </Field>
                   <Field label="Outros custos (R$)">
-                    <Input
-                      type="text"
-                      value={formatMoeda(outrosCustosCalculado)}
-                      readOnly
-                      disabled
-                      className="h-7 text-[11px] bg-muted"
-                    />
-                    <span className="text-[8px] text-muted-foreground italic">Soma automática dos subitens abaixo</span>
+                    <Input type="number" value={data.outrosCustos || ''} onChange={e => set('outrosCustos', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
+                    <HintBelow>{formatMoeda(calc.outrosCab)}/cab</HintBelow>
                   </Field>
                 </div>
-
-                <Collapsible open={showDetalhe} onOpenChange={setShowDetalhe}>
-                  <CollapsibleTrigger className="flex items-center gap-1 text-[9px] text-primary hover:underline cursor-pointer mt-1">
-                    <ChevronDown className={`h-3 w-3 transition-transform ${showDetalhe ? 'rotate-180' : ''}`} />
-                    Ver detalhamento de custos
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="grid grid-cols-2 gap-2 pt-1.5">
-                    <Field label="Sanidade (R$)">
-                      <Input type="number" value={data.custoSanidade || ''} onChange={e => set('custoSanidade', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
-                    </Field>
-                  </CollapsibleContent>
-                </Collapsible>
               </Section>
 
               {/* COMERCIALIZAÇÃO */}
@@ -393,9 +386,11 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <div className="grid grid-cols-2 gap-2">
                   <Field label="Preço venda (R$/@)">
                     <Input type="number" value={data.precoVendaArroba || ''} onChange={e => set('precoVendaArroba', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.01" />
+                    <HintBelow>{formatMoeda(calc.precoVendaCab)}/cab</HintBelow>
                   </Field>
                   <Field label="Despesas abate (R$)">
                     <Input type="number" value={data.despesasAbate || ''} onChange={e => set('despesasAbate', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
+                    <HintBelow>{formatMoeda(calc.despesasAbateCab)}/cab</HintBelow>
                   </Field>
                   <Field label="NF Abate (R$)">
                     <Input type="number" value={data.custoNfAbate || ''} onChange={e => set('custoNfAbate', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
@@ -422,7 +417,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <ResultRow label="Faturamento Bruto Abate" value={formatMoeda(calc.faturamentoBrutoAbate)} bold />
                 <ResultRow label="(-) Custos com Abate" value={formatMoeda(calc.custosAbate)} className="text-destructive" />
                 <div className="border-t border-dashed my-0.5" />
-                <ResultRow label="= Faturamento Bruto" value={formatMoeda(calc.faturamentoBruto)} bold accent />
+                <ResultRow label="= Faturamento Líquido" value={formatMoeda(calc.faturamentoLiquido)} bold accent />
                 {data.modalidadeCusto === 'parceria' && calc.parceiroParte > 0 && (
                   <>
                     <ResultRow label={`(-) Parceiro (${data.percentualParceria}% = ${fmtArr(calc.parceiroArrobas)})`} value={formatMoeda(calc.parceiroParte)} className="text-destructive" />
@@ -511,6 +506,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </div>
   );
+}
+
+function HintBelow({ children }: { children: React.ReactNode }) {
+  return <span className="text-[8px] text-muted-foreground italic block mt-0.5">{children}</span>;
 }
 
 function ResultGroup({ label, children }: { label: string; children: React.ReactNode }) {
