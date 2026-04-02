@@ -8,6 +8,7 @@ import autoTable from 'jspdf-autotable';
 import { format, parseISO } from 'date-fns';
 import type { LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
+import { formatMoeda } from '@/lib/calculos/formatters';
 
 interface FornecedorMap {
   id: string;
