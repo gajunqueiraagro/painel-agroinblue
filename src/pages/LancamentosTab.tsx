@@ -1132,8 +1132,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // ===== FINANCIAL DETAILS PANEL (right column — non-abate) =====
   const renderFinancialPanel = () => {
-    // For abate, use dedicated panel
-    if (isAbate) return renderAbateFinancialPanel();
 
     // Transferência: no financial impact
     if (isTransferencia) {
