@@ -11,7 +11,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TabId } from '@/components/BottomNav';
 import { MESES_NOMES, MESES_OPTIONS_ACUMULADO } from '@/lib/calculos/labels';
-import { fmtValor, formatMoeda } from '@/lib/calculos/formatters';
+import { fmtValor, formatMoeda, formatPercent, formatArroba, formatCabecas } from '@/lib/calculos/formatters';
 import {
   calcArrobasSafe,
   calcValorTotal,
