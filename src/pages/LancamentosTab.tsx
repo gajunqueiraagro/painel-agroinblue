@@ -443,18 +443,19 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
     if (!pesoKg || Number(pesoKg) <= 0) { toast.error('Informe o Peso (kg)'); return; }
 
-    if (isCompra && compraFinanceiroRef.current) {
-      const finErrors = compraFinanceiroRef.current.getValidationErrors();
-      const valorBaseVal = compraFinanceiroRef.current.getValorBase();
-      const fornecedorVal = compraFinanceiroRef.current.getFornecedorId();
+    if (isCompra) {
+      if (!compraFornecedorId) { toast.error('Selecione o fornecedor para continuar'); return; }
+      if (compraFinanceiroRef.current) {
+        const finErrors = compraFinanceiroRef.current.getValidationErrors();
+        const valorBaseVal = compraFinanceiroRef.current.getValorBase();
 
-      if (isConfirmado || isConciliado) {
-        if (!fornecedorVal) { toast.error('Selecione o fornecedor antes de registrar a compra.'); return; }
-        if (valorBaseVal <= 0) { toast.error('Preencha o preço base antes de registrar a compra.'); return; }
-      }
-      if (finErrors.length > 0 && valorBaseVal > 0) {
-        toast.error(finErrors[0]);
-        return;
+        if (isConfirmado || isConciliado) {
+          if (valorBaseVal <= 0) { toast.error('Preencha o preço base antes de registrar a compra.'); return; }
+        }
+        if (finErrors.length > 0 && valorBaseVal > 0) {
+          toast.error(finErrors[0]);
+          return;
+        }
       }
     }
 
