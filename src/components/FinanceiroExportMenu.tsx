@@ -266,13 +266,13 @@ async function gerarPDFIndividual(l: Lancamento, fazendaNome?: string) {
       ['Peso vivo (kg)', fmtValor(l.pesoMedioKg)],
       ['Peso em @ (por cab)', fmtValor(c.pesoArroba)],
       ['Preço por @ (R$)', fmtValor(l.precoArroba)],
-      ['Acréscimos', fmtValor(l.acrescimos)],
-      ['Deduções', fmtValor(l.deducoes)],
+      ['Acréscimos', formatMoeda(l.acrescimos)],
+      ['Deduções', formatMoeda(l.deducoes)],
       ['', ''],
-      ['VALOR TOTAL', `${formatMoeda(c.valorFinal)}`],
-      ['Líquido por @', `${formatMoeda(c.liqArroba)}`],
-      ['Líquido por cabeça', `${formatMoeda(c.liqCabeca)}`],
-      ['Líquido por kg vivo', `${formatMoeda(c.liqKg)}`],
+      ['VALOR TOTAL', formatMoeda(c.valorFinal)],
+      ['Líquido por @', formatMoeda(c.liqArroba)],
+      ['Líquido por cabeça', formatMoeda(c.liqCabeca)],
+      ['Líquido por kg vivo', formatMoeda(c.liqKg)],
     ];
   }
 
