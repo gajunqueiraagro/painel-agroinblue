@@ -6,7 +6,7 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
-import { ChevronDown, CheckCircle, AlertTriangle, Info, Plus, Calculator } from 'lucide-react';
+import { ChevronDown, CheckCircle, AlertTriangle, Info, Calculator } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -14,8 +14,6 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { toast } from 'sonner';
 import { CATEGORIAS } from '@/types/cattle';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import { SearchableSelect } from '@/components/ui/searchable-select';
-import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 import { BoitelPlanningDialog, type BoitelData } from '@/components/BoitelPlanningDialog';
 import { salvarBoitelOperacao, vincularBoitelAoLancamento, gerarFinanceiroBoitel } from '@/hooks/useBoitelOperacoes';
 import type { StatusOperacional } from '@/lib/statusOperacional';
@@ -83,7 +81,7 @@ export interface VendaFinanceiroPanelRef {
 }
 
 export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(function VendaFinanceiroPanel({
-  quantidade, pesoKg, categoria, data, destino, fornecedorId, onFornecedorIdChange, fornecedores, onCreateFornecedor, notaFiscal, onNotaFiscalChange,
+  quantidade, pesoKg, categoria, data, destino, fornecedorId, notaFiscal, onNotaFiscalChange,
   statusOp, lancamentoId, mode = 'create', onFinanceiroUpdated,
   onRequestRegister, registerLabel, submitting: externalSubmitting,
   tipoPeso, onTipoPesoChange,
@@ -113,7 +111,6 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   const [existingCount, setExistingCount] = useState(0);
   const [existingLoaded, setExistingLoaded] = useState(false);
 
-  const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
   const [boitelOpen, setBoitelOpen] = useState(false);
   const [boitelData, setBoitelData] = useState<BoitelData | null>(null);
 
@@ -161,11 +158,6 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       }
     }
   }, [valorBruto, formaReceb, qtdParcelas, data, gerarParcelas]);
-
-  const handleNovoFornecedor = async (nome: string, cpfCnpj?: string) => {
-    await onCreateFornecedor(nome, cpfCnpj);
-    setNovoFornecedorOpen(false);
-  };
 
   const validationErrors = useMemo(() => {
     const errors: string[] = [];
@@ -452,7 +444,6 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
   // Summaries for collapsed headers
   const tipoVendaLabel = tipoPeso === 'desmama' ? 'Desmama' : tipoPeso === 'gado_adulto' ? 'Gado Adulto' : tipoPeso === 'boitel' ? 'Boitel' : '';
-  const compradorLabel = fornecedorId ? fornecedores.find(f => f.id === fornecedorId)?.nome || '' : '';
   const tipoPrecoLabel = vendaTipoPreco === 'por_kg' ? 'Por kg' : vendaTipoPreco === 'por_cab' ? 'Por cabeça' : 'Por total';
   const despesasComTotal = freteVal + comissaoVal + (Number(outrosDescontos) || 0);
   const deducoesTotal = descFunruralTotal;
@@ -521,34 +512,6 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           )}
         </>
       )}
-
-      <Separator />
-
-      {/* Comprador */}
-      <Collapsible>
-        <CollapsibleTrigger className="flex items-center justify-between w-full group">
-          <div className="flex items-center">
-            <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Comprador</h4>
-            {compradorLabel && summaryBadge(compradorLabel)}
-          </div>
-          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-        </CollapsibleTrigger>
-        <CollapsibleContent className="space-y-1.5 pt-1">
-          <SearchableSelect
-            options={fornecedores.map(f => ({ value: f.id, label: f.nome }))}
-            value={fornecedorId || '__all__'}
-            onValueChange={v => onFornecedorIdChange(v === '__all__' ? '' : v)}
-            placeholder="Selecione o comprador"
-            allLabel="Nenhum selecionado"
-            allValue="__all__"
-            className="h-7 text-[11px]"
-          />
-          <button type="button" onClick={() => setNovoFornecedorOpen(true)}
-            className="flex items-center gap-1 text-[10px] text-primary font-semibold hover:underline">
-            <Plus className="h-3 w-3" /> Novo comprador
-          </button>
-        </CollapsibleContent>
-      </Collapsible>
 
       <Separator />
 
@@ -832,12 +795,6 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       >
         {registerLabel || 'Registrar Venda'}
       </Button>
-
-      <NovoFornecedorDialog
-        open={novoFornecedorOpen}
-        onClose={() => setNovoFornecedorOpen(false)}
-        onSave={handleNovoFornecedor}
-      />
 
       <BoitelPlanningDialog
         open={boitelOpen}
