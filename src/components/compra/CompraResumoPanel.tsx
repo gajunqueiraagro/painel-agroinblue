@@ -107,7 +107,7 @@ export function CompraResumoPanel({
             {calc && calc.valorBase > 0 && (
               <>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Valor bruto</span>
+                  <span className="text-muted-foreground">Valor base</span>
                   <strong>{formatMoeda(calc.valorBase)}</strong>
                 </div>
                 {calc.totalDespesas > 0 && (
@@ -118,7 +118,7 @@ export function CompraResumoPanel({
                 )}
                 <Separator />
                 <div className="flex justify-between text-[12px] font-bold">
-                  <span>Total</span>
+                  <span>Total da compra</span>
                   <span className="text-primary">{formatMoeda(calc.liqTotal)}</span>
                 </div>
               </>
