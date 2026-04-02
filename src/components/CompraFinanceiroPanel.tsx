@@ -54,10 +54,10 @@ export interface CompraFinanceiroPanelRef {
 function CollapsibleBlock({ title, open, onOpenChange, children, summary }: { title: string; open: boolean; onOpenChange: (v: boolean) => void; children: React.ReactNode; summary?: string }) {
   return (
     <Collapsible open={open} onOpenChange={onOpenChange}>
-      <CollapsibleTrigger className="flex items-center justify-between w-full text-[10px] font-semibold uppercase text-foreground/70 tracking-wide py-1 hover:text-foreground transition-colors group">
-        <div className="flex items-center gap-1">
+      <CollapsibleTrigger className="flex items-center justify-between w-full text-[12px] font-semibold uppercase text-muted-foreground tracking-wide py-1 hover:text-foreground transition-colors group">
+        <div className="flex items-center gap-1.5">
           {title}
-          {summary && <span className="text-[9px] italic text-muted-foreground/70 truncate max-w-[120px] font-normal normal-case">{summary}</span>}
+          {summary && <span className="text-[11px] italic text-muted-foreground font-normal normal-case truncate max-w-[140px]">{summary}</span>}
         </div>
         {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
       </CollapsibleTrigger>
