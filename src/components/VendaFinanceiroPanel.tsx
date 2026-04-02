@@ -142,10 +142,20 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   const handleQtdParcelasChange = (v: string) => {
     setQtdParcelas(v);
     const n = Number(v);
-    if (n > 0 && valorLiquido > 0) {
+    if (n > 0) {
       setParcelas(gerarParcelas(n, data, valorLiquido));
     }
   };
+
+  // Regenerate parcelas when valorLiquido changes while in prazo mode
+  useEffect(() => {
+    if (formaReceb === 'prazo') {
+      const n = Number(qtdParcelas);
+      if (n > 0) {
+        setParcelas(gerarParcelas(n, data, valorLiquido));
+      }
+    }
+  }, [valorLiquido, formaReceb, qtdParcelas, data, gerarParcelas]);
 
   const handleNovoFornecedor = async (nome: string, cpfCnpj?: string) => {
     if (!clienteAtual || !fazendaAtual) return;
