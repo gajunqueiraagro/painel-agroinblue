@@ -26,6 +26,7 @@ interface Props {
   valorLiquido: number;
   totalDescontos?: number;
   frigorifico: string;
+  fornecedorId?: string;
   notaFiscal: string;
   onNotaFiscalChange: (v: string) => void;
   lancamentoId?: string;
@@ -41,7 +42,7 @@ export interface AbateFinanceiroPanelRef {
 
 export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(function AbateFinanceiroPanel({
   quantidade, categoria, data, valorLiquido, totalDescontos = 0, frigorifico,
-  notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated,
+  fornecedorId, notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated,
   statusOperacional = 'conciliado',
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
@@ -231,6 +232,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
         centro_custo: clasReceita.centro_custo,
         subcentro: clasReceita.subcentro,
         nota_fiscal: notaFiscal || undefined,
+        ...(fornecedorId ? { favorecido_id: fornecedorId } : {}),
       };
 
       if (formaReceb === 'prazo' && parcelas.length > 0) {

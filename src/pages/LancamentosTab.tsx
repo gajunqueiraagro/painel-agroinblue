@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronDown as CollapseIcon } from 'lucide-react';
+import { ChevronDown as CollapseIcon, Plus } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { format, parseISO, addDays } from 'date-fns';
@@ -28,10 +28,14 @@ import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
 import { CompraFinanceiroPanel, CompraFinanceiroPanelRef } from '@/components/CompraFinanceiroPanel';
 import { AbateExportDialog } from '@/components/AbateExportMenu';
 import { AbateFinanceiroPanel, AbateFinanceiroPanelRef } from '@/components/AbateFinanceiroPanel';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
+import { supabase } from '@/integrations/supabase/client';
 import { VendaFinanceiroPanel, VendaFinanceiroPanelRef } from '@/components/VendaFinanceiroPanel';
 import { ConsumoFinanceiroPanel, ConsumoFinanceiroPanelRef } from '@/components/ConsumoFinanceiroPanel';
 import { ConfirmacaoRegistroDialog } from '@/components/ConfirmacaoRegistroDialog';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useCliente } from '@/contexts/ClienteContext';
 import { useIntegerInput, useDecimalInput } from '@/hooks/useFormattedNumber';
 import { toast } from 'sonner';
 
@@ -113,6 +117,7 @@ function fmt(v?: number, decimals = 2) {
 
 export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
+  const { clienteAtual } = useCliente();
   const nomeFazenda = fazendaAtual?.nome || '';
   const isAdministrativo = fazendaAtual?.tem_pecuaria === false;
   const bloqueado = isGlobal || isAdministrativo;
@@ -170,6 +175,22 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [dataEmbarque, setDataEmbarque] = useState('');
   const [dataAbate, setDataAbate] = useState('');
   const [tipoVenda, setTipoVenda] = useState('');
+
+  // Abate fornecedor (frigorífico) state
+  const [abateFornecedorId, setAbateFornecedorId] = useState('');
+  const [abateFornecedores, setAbateFornecedores] = useState<{ id: string; nome: string }[]>([]);
+  const [novoFornecedorAbateOpen, setNovoFornecedorAbateOpen] = useState(false);
+
+  useEffect(() => {
+    if (!clienteAtual) return;
+    supabase
+      .from('financeiro_fornecedores')
+      .select('id, nome')
+      .eq('cliente_id', clienteAtual.id)
+      .eq('ativo', true)
+      .order('nome')
+      .then(({ data }) => { if (data) setAbateFornecedores(data); });
+  }, [clienteAtual]);
 
   const [formaPagamento, setFormaPagamento] = useState<'avista' | 'parcelado'>('avista');
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
@@ -302,6 +323,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setBonus(''); setDescontos(''); setComissaoPct(''); setFrete(''); setOutrasDespesas('');
     setNotaFiscal(''); setTipoPeso('vivo'); setObservacao('');
     setDataVenda(''); setDataEmbarque(''); setDataAbate(''); setTipoVenda('');
+    setAbateFornecedorId('');
     setFormaPagamento('avista'); setParcelas([]); setQtdParcelas('1');
     setMotivoMorte(''); setMotivoMorteCustom('');
     setRendCarcaca(''); setFunruralPct('');
@@ -401,7 +423,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (!data) { toast.error('Informe a data'); return; }
 
     if (isAbate) {
-      if (!fazendaDestino) { toast.error('Informe o Frigorífico'); return; }
+      if (!abateFornecedorId) { toast.error('Selecione o Frigorífico (Fornecedor) para continuar'); return; }
       if (isConfirmado || isConciliado) {
         if (!tipoVenda) { toast.error('Selecione a Comercialização'); return; }
         if (!tipoPeso) { toast.error('Selecione o Tipo de Abate'); return; }
@@ -441,6 +463,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     let destinoFinal = campos.destino?.show
       ? (campos.destino.auto ? campos.destino.value : fazendaDestino) || undefined
       : undefined;
+
+    // For abate, use fornecedor name as destino
+    if (isAbate && abateFornecedorId) {
+      const forn = abateFornecedores.find(f => f.id === abateFornecedorId);
+      if (forn) destinoFinal = forn.nome;
+    }
 
     if (isMorte) {
       destinoFinal = motivoMorte === '__custom__' ? motivoMorteCustom : motivoMorte || undefined;
@@ -587,7 +615,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const result: any = { tipoOperacao: label };
     
     if (isAbate) {
-      result.fornecedorOuFrigorifico = fazendaDestino;
+      const forn = abateFornecedores.find(f => f.id === abateFornecedorId);
+      result.fornecedorOuFrigorifico = forn?.nome || '';
       result.comercializacao = tipoVenda;
       result.tipoAbate = tipoPeso;
       result.rendCarcaca = Number(rendCarcaca) || 0;
@@ -960,7 +989,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           data={data}
           valorLiquido={calc.valorLiquido}
           totalDescontos={calc.totalDescontos}
-          frigorifico={fazendaDestino}
+          frigorifico={abateFornecedores.find(f => f.id === abateFornecedorId)?.nome || ''}
+          fornecedorId={abateFornecedorId || undefined}
           notaFiscal={notaFiscal}
           onNotaFiscalChange={setNotaFiscal}
           lancamentoId={editingAbateId || lastSavedLancamentoId || undefined}
@@ -1431,7 +1461,39 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               )}
             </div>
           )}
-          {campos.destino?.show && (
+          {/* For abate: custom Frigorífico select with SearchableSelect + novo fornecedor */}
+          {isAbate && (
+            <div>
+              <Label className="font-bold text-[11px]">Frigorífico (Fornecedor) *</Label>
+              <div className="flex items-center gap-1 mt-0.5">
+                <div className="flex-1">
+                  <SearchableSelect
+                    value={abateFornecedorId || '__all__'}
+                    onValueChange={(v) => setAbateFornecedorId(v === '__all__' ? '' : v)}
+                    options={abateFornecedores.map(f => ({ value: f.id, label: f.nome }))}
+                    placeholder="Selecione ou cadastre o frigorífico"
+                    allLabel="Nenhum selecionado"
+                    allValue="__all__"
+                    className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => setNovoFornecedorAbateOpen(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              {!abateFornecedorId && (
+                <p className="text-[10px] text-destructive mt-0.5">Selecione o Frigorífico (Fornecedor) para continuar</p>
+              )}
+            </div>
+          )}
+          {/* For non-abate types: keep original destino field */}
+          {!isAbate && campos.destino?.show && (
             <div>
               <Label className="font-bold text-[11px]">{campos.destino.label}</Label>
               {campos.destino.auto ? (
@@ -1604,10 +1666,31 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           categoria,
           pesoKg: Number(pesoKg) || 0,
           fazendaOrigem: campos.origem.show ? (campos.origem.auto ? campos.origem.value : fazendaOrigem) : undefined,
-          fazendaDestino: campos.destino?.show ? (campos.destino?.auto ? campos.destino?.value : fazendaDestino) : undefined,
+          fazendaDestino: isAbate ? (abateFornecedores.find(f => f.id === abateFornecedorId)?.nome || '') : (campos.destino?.show ? (campos.destino?.auto ? campos.destino?.value : fazendaDestino) : undefined),
           observacao,
         }}
         financeiros={getConfirmacaoFinanceiros()}
+      />
+
+      {/* Novo Fornecedor (Frigorífico) dialog for abate */}
+      <NovoFornecedorDialog
+        open={novoFornecedorAbateOpen}
+        onClose={() => setNovoFornecedorAbateOpen(false)}
+        onSave={async (nome, cpfCnpj) => {
+          if (!clienteAtual || !fazendaAtual) return;
+          const { data: rec, error } = await supabase
+            .from('financeiro_fornecedores')
+            .insert({ cliente_id: clienteAtual.id, fazenda_id: fazendaAtual.id, nome, cpf_cnpj: cpfCnpj || null })
+            .select('id, nome')
+            .single();
+          if (error) { toast.error('Erro ao salvar fornecedor'); return; }
+          if (rec) {
+            setAbateFornecedores(prev => [...prev, rec].sort((a, b) => a.nome.localeCompare(b.nome)));
+            setAbateFornecedorId(rec.id);
+            toast.success(`Fornecedor "${rec.nome}" criado e selecionado`);
+          }
+          setNovoFornecedorAbateOpen(false);
+        }}
       />
     </div>
   );
