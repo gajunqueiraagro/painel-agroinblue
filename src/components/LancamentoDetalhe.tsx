@@ -60,6 +60,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   interface FinResumo { id: string; descricao: string; valor: number; data_pagamento: string | null; cancelado: boolean; origem_tipo: string | null; }
   const [finRecords, setFinRecords] = useState<FinResumo[]>([]);
   const [finLoading, setFinLoading] = useState(false);
+  const [detalheFornecedorId, setDetalheFornecedorId] = useState('');
 
   const isCompra = lancamento.tipo === 'compra';
   const isAbate = lancamento.tipo === 'abate';
