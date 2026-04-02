@@ -133,12 +133,17 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
   }, []);
 
   // Data de Abate = Data Envio + Dias
-  const dataAbate = useMemo(() => {
+  const dataAbateISO = useMemo(() => {
     if (!data.dataEnvio || !data.dias) return '';
     try {
-      return format(addDays(parseISO(data.dataEnvio), data.dias), 'dd/MM/yyyy');
+      return format(addDays(parseISO(data.dataEnvio), data.dias), 'yyyy-MM-dd');
     } catch { return ''; }
   }, [data.dataEnvio, data.dias]);
+
+  const dataAbate = useMemo(() => {
+    if (!dataAbateISO) return '';
+    try { return format(parseISO(dataAbateISO), 'dd/MM/yyyy'); } catch { return ''; }
+  }, [dataAbateISO]);
 
   const calc = useMemo(() => {
     const {
@@ -151,11 +156,13 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
 
     const pesoLiqEntrada = pesoInicial * (1 - quebraViagem / 100);
     const ganhoKg = gmd * dias;
-    const pesoFinal = pesoLiqEntrada + ganhoKg;
+    const pesoFinal = pesoInicial + ganhoKg;
 
+    const arrobasEntradaFazenda = pesoInicial / 30;
     const arrobasEntrada = (pesoLiqEntrada * rendimentoEntrada / 100) / 15;
     const arrobasSaida = (pesoFinal * rendimento / 100) / 15;
-    const arrobasProduzidas = (arrobasSaida - arrobasEntrada) * qtdCabecas;
+    const arrobasProduzidasCab = arrobasSaida - arrobasEntradaFazenda;
+    const arrobasProduzidas = arrobasProduzidasCab * qtdCabecas;
     const arrobasTotalSaida = arrobasSaida * qtdCabecas;
 
     const gmc = dias > 0 ? ((pesoFinal * rendimento / 100) - (pesoLiqEntrada * rendimentoEntrada / 100)) / dias : 0;
@@ -176,6 +183,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     const custosFreteTotal = custoFrete;
     const custosOperacionais = custoDiariaTotal + custosSanitarios + outrosCustosOp + custosFreteTotal;
     const resultadoComBoitel = faturamentoLiquido - custoDiariaTotal - custosSanitarios - outrosCustosOp;
+    const totalOperacional = resultadoComBoitel - custosFreteTotal;
 
     const custoOportTotal = custoOportunidade * pesoInicial * qtdCabecas;
     const custoOportCab = qtdCabecas > 0 ? custoOportTotal / qtdCabecas : 0;
@@ -212,12 +220,12 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
 
     return {
       pesoLiqEntrada, ganhoKg, pesoFinal,
-      arrobasEntrada, arrobasSaida, arrobasProduzidas, arrobasTotalSaida,
+      arrobasEntradaFazenda, arrobasEntrada, arrobasSaida, arrobasProduzidasCab, arrobasProduzidas, arrobasTotalSaida,
       gmc,
       faturamentoBrutoAbate, custosAbate, faturamentoLiquido,
       parceiroParte, parceiroArrobas, receitaProdutor,
       custoDiariaTotal, custosSanitarios, outrosCustosOp,
-      custosFreteTotal, custosOperacionais, resultadoComBoitel,
+      custosFreteTotal, custosOperacionais, resultadoComBoitel, totalOperacional,
       custoOportTotal, custoOportCab, custoOportKg,
       custoPorCab, custoPorArrobaProduzida,
       resultadoLiquido, resultadoLiqCab, resultadoLiqKg,
@@ -228,12 +236,13 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
   }, [data]);
 
   // Parcelas logic
-  const gerarParcelas = useCallback((numParcelas: number, baseDate: string, valorTotal: number): Parcela[] => {
+  const gerarParcelas = useCallback((numParcelas: number, valorTotal: number): Parcela[] => {
+    const base = dataAbateISO || data.dataEnvio || '';
     const p: Parcela[] = [];
     const vp = valorTotal / numParcelas;
     for (let i = 0; i < numParcelas; i++) {
       try {
-        const d = addDays(parseISO(baseDate || data.dataEnvio), 30 * (i + 1));
+        const d = addDays(parseISO(base), 30 * (i + 1));
         p.push({ data: format(d, 'yyyy-MM-dd'), valor: Math.round(vp * 100) / 100 });
       } catch {
         p.push({ data: '', valor: Math.round(vp * 100) / 100 });
@@ -244,7 +253,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
       p[p.length - 1].valor = Math.round((valorTotal - rest) * 100) / 100;
     }
     return p;
-  }, [data.dataEnvio]);
+  }, [dataAbateISO, data.dataEnvio]);
 
   const handleFormaRecebChange = (forma: 'avista' | 'prazo') => {
     set('formaReceb', forma);
@@ -252,26 +261,23 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
       set('parcelas', []);
     } else {
       const n = data.qtdParcelas || 1;
-      const baseDate = data.dataEnvio || dataLancamento || '';
-      set('parcelas', gerarParcelas(n, baseDate, calc.receitaProdutor));
+      set('parcelas', gerarParcelas(n, calc.receitaProdutor));
     }
   };
 
   const handleQtdParcelasChange = (v: string) => {
     const n = Math.max(1, Math.min(48, Number(v) || 1));
     set('qtdParcelas', n);
-    const baseDate = data.dataEnvio || dataLancamento || '';
-    set('parcelas', gerarParcelas(n, baseDate, calc.receitaProdutor));
+    set('parcelas', gerarParcelas(n, calc.receitaProdutor));
   };
 
   // Update parcelas when receitaProdutor changes
   useEffect(() => {
     if (data.formaReceb === 'prazo' && data.qtdParcelas > 0 && calc.receitaProdutor > 0) {
-      const baseDate = data.dataEnvio || dataLancamento || '';
-      const newParcelas = gerarParcelas(data.qtdParcelas, baseDate, calc.receitaProdutor);
+      const newParcelas = gerarParcelas(data.qtdParcelas, calc.receitaProdutor);
       setData(prev => ({ ...prev, parcelas: newParcelas }));
     }
-  }, [calc.receitaProdutor, data.formaReceb, data.qtdParcelas]);
+  }, [calc.receitaProdutor, data.formaReceb, data.qtdParcelas, dataAbateISO]);
 
   const handleSave = () => {
     const dataWithSnapshot: BoitelData = {
@@ -540,7 +546,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <ResultRow label="= Resultado com Boitel" value={formatMoeda(calc.resultadoComBoitel)} bold accent />
                 <ResultRow label="(-) Custos com Frete" value={formatMoeda(calc.custosFreteTotal)} className="text-destructive" />
                 <div className="border-t border-dashed my-0.5" />
-                <ResultRow label="= Total Operacional" value={formatMoeda(calc.custosOperacionais)} className="text-destructive" bold />
+                <ResultRow label="= Total Operacional" value={formatMoeda(calc.totalOperacional)} bold accent />
                 <ResultRow label="Custo/@ produzida" value={formatMoeda(calc.custoPorArrobaProduzida)} className="text-destructive" />
                 <ResultRow label="Custo/cab" value={formatMoeda(calc.custoPorCab)} className="text-destructive" />
               </ResultGroup>
