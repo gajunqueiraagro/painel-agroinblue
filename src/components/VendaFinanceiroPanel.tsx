@@ -473,9 +473,11 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           </Button>
           {boitelData && (
             <div className="bg-primary/5 rounded-md p-2 text-[10px] space-y-0.5 border border-primary/20">
+              <div className="flex justify-between"><span className="text-muted-foreground">Boitel</span><span className="font-semibold">{boitelData.nomeBoitel || '-'}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Dias</span><span className="font-semibold">{boitelData.dias}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">GMD</span><span className="font-semibold">{boitelData.gmd} kg/dia</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Custo/cab/dia</span><span className="font-semibold">{boitelData.custoDiaria ? `R$ ${boitelData.custoDiaria}` : '-'}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Receita Produtor</span><span className="font-semibold text-primary">{boitelData._receitaProdutor ? formatMoeda(boitelData._receitaProdutor) : '-'}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Lucro Total</span><span className={`font-semibold ${(boitelData._lucroTotal || 0) > 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>{boitelData._lucroTotal ? formatMoeda(boitelData._lucroTotal) : '-'}</span></div>
             </div>
           )}
         </>
