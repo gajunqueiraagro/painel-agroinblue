@@ -410,7 +410,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   }
 
   return (
-    <div className="max-w-full mx-auto animate-fade-in pb-20">
+    <div className="flex flex-col h-[calc(100vh-120px)] max-w-full mx-auto animate-fade-in">
       {/* Drill-down header */}
       {(onBack || drillDownLabel) && (
         <div className="sticky top-0 z-30 bg-background border-b border-border/50 shadow-sm px-3 py-2 space-y-1.5">
