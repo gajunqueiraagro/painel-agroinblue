@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
+import { formatNum, formatMoeda, formatCabecas } from '@/lib/calculos/formatters';
 
 interface Props {
   snapshot: Record<string, any>;
