@@ -1,10 +1,10 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { getStatusBadge } from '@/lib/statusOperacional';
 import { Lancamento, CATEGORIAS } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { parseISO, format } from 'date-fns';
-import { DollarSign, Info, ArrowLeft, Filter } from 'lucide-react';
+import { DollarSign, Info, ArrowLeft, Filter, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { FinanceiroExportMenu } from '@/components/FinanceiroExportMenu';
 import { ChuvasTab } from './ChuvasTab';
@@ -14,6 +14,7 @@ import { MESES_OPTIONS } from '@/lib/calculos/labels';
 import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 
 type StatusFiltro = 'todos' | 'realizado' | 'programado' | 'previsto';
+type SortDir = 'asc' | 'desc' | null;
 
 interface Props {
   lancamentos: Lancamento[];
@@ -46,9 +47,9 @@ const SUB_ABA_LABELS: Record<SubAba, { label: string; icon: string }> = {
   morte: { label: 'Mortes', icon: '💀' },
 };
 
-const TABLE_HEAD_CELL = 'px-[3px] py-1 text-[8px] font-bold uppercase tracking-[0.02em] whitespace-nowrap';
+const TABLE_HEAD_CELL = 'px-[3px] py-1 text-[8px] font-bold uppercase tracking-[0.02em] whitespace-nowrap select-none';
 const TABLE_BODY_CELL = 'px-[3px] py-[3px] align-middle whitespace-nowrap overflow-hidden text-ellipsis';
-const TABLE_FOOT_CELL = 'px-[3px] py-[3px] whitespace-nowrap';
+const TABLE_FOOT_CELL = 'px-[3px] py-1.5 whitespace-nowrap text-[10px] font-bold';
 
 function getFazendaColumnHeader(tipo: string): string {
   switch (tipo) {
@@ -90,17 +91,41 @@ function getFazendaCellValue(l: Lancamento, fazendaMap: Map<string, string>): st
   }
 }
 
+/* ── Sortable header cell ── */
+function SortableHeader({ label, align, sortKey, currentKey, currentDir, onSort }: {
+  label: string; align: string; sortKey: string;
+  currentKey: string | null; currentDir: SortDir;
+  onSort: (key: string) => void;
+}) {
+  const active = currentKey === sortKey;
+  return (
+    <th
+      className={`${TABLE_HEAD_CELL} ${align} cursor-pointer hover:bg-primary-foreground/10 transition-colors`}
+      onClick={() => onSort(sortKey)}
+    >
+      <span className="inline-flex items-center gap-0.5">
+        {label}
+        {active && currentDir === 'asc' && <ArrowUp className="h-2.5 w-2.5 opacity-90" />}
+        {active && currentDir === 'desc' && <ArrowDown className="h-2.5 w-2.5 opacity-90" />}
+        {!active && <ArrowUpDown className="h-2 w-2 opacity-30" />}
+      </span>
+    </th>
+  );
+}
+
 /* ── Summary panel ── */
-function ResumoLateral({ lancamentos, subAba, anoFiltro, mesFiltro, statusFiltro }: {
+function ResumoLateral({ lancamentos, subAba, anoFiltro, mesFiltro, statusFiltro, categoriaFiltro }: {
   lancamentos: Lancamento[];
   subAba: SubAba;
   anoFiltro: string;
   mesFiltro: string;
   statusFiltro: StatusFiltro;
+  categoriaFiltro: string;
 }) {
   const statusLabel = statusFiltro === 'todos' ? 'Todos' : statusFiltro === 'realizado' ? 'Realizado' : statusFiltro === 'programado' ? 'Programado' : 'Previsto';
   const mesLabel = mesFiltro === 'todos' ? 'Todos' : (MESES_OPTIONS.find(m => m.value === mesFiltro)?.label || mesFiltro);
   const tipoLabel = SUB_ABA_LABELS[subAba]?.label || subAba;
+  const catLabel = categoriaFiltro === 'todas' ? 'Todas' : (CATEGORIAS.find(c => c.value === categoriaFiltro)?.label || categoriaFiltro);
 
   const stats = useMemo(() => {
     const totals = lancamentos.reduce((acc, l) => {
@@ -132,22 +157,30 @@ function ResumoLateral({ lancamentos, subAba, anoFiltro, mesFiltro, statusFiltro
   ];
 
   return (
-    <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
+    <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden sticky top-2">
       {/* Header */}
-      <div className="bg-primary px-4 py-3">
-        <h3 className="text-sm font-bold text-primary-foreground">{tipoLabel}</h3>
-        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-primary-foreground/80">
-          <span>Ano: <strong className="text-primary-foreground">{anoFiltro}</strong></span>
-          <span>Mês: <strong className="text-primary-foreground">{mesLabel}</strong></span>
-          <span>Status: <strong className="text-primary-foreground">{statusLabel}</strong></span>
+      <div className="bg-primary px-3 py-2.5">
+        <h3 className="text-[11px] font-bold text-primary-foreground tracking-wide uppercase">{tipoLabel}</h3>
+      </div>
+      {/* Filters applied */}
+      <div className="px-3 py-2 bg-muted/40 border-b border-border">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[9px]">
+          <div className="text-muted-foreground">Ano</div>
+          <div className="font-bold text-foreground">{anoFiltro}</div>
+          <div className="text-muted-foreground">Mês</div>
+          <div className="font-bold text-foreground">{mesLabel}</div>
+          <div className="text-muted-foreground">Categoria</div>
+          <div className="font-bold text-foreground">{catLabel}</div>
+          <div className="text-muted-foreground">Status</div>
+          <div className="font-bold text-foreground">{statusLabel}</div>
         </div>
       </div>
       {/* KPIs */}
-      <div className="divide-y divide-border">
+      <div className="px-3 py-2 space-y-1.5">
         {kpiItems.map((kpi) => (
-          <div key={kpi.label} className="flex items-center justify-between px-4 py-2">
-            <span className="text-[11px] text-muted-foreground">{kpi.label}</span>
-            <span className={`text-[12px] font-bold ${kpi.highlight ? 'text-primary text-[14px]' : 'text-foreground'}`}>
+          <div key={kpi.label} className="flex items-baseline justify-between">
+            <span className="text-[9px] text-muted-foreground uppercase tracking-wide">{kpi.label}</span>
+            <span className={`font-bold tabular-nums ${kpi.highlight ? 'text-[13px] text-primary' : 'text-[11px] text-foreground'}`}>
               {kpi.value}
             </span>
           </div>
@@ -155,6 +188,50 @@ function ResumoLateral({ lancamentos, subAba, anoFiltro, mesFiltro, statusFiltro
       </div>
     </div>
   );
+}
+
+/* ── Sort helper ── */
+function useSortableTable() {
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>(null);
+
+  const toggleSort = useCallback((key: string) => {
+    if (sortKey === key) {
+      if (sortDir === 'asc') setSortDir('desc');
+      else if (sortDir === 'desc') { setSortKey(null); setSortDir(null); }
+      else { setSortDir('asc'); }
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }, [sortKey, sortDir]);
+
+  const sortRows = useCallback((rows: { l: Lancamento; c: ReturnType<typeof calcIndicadoresLancamento> }[]) => {
+    if (!sortKey || !sortDir) return rows;
+    const sorted = [...rows].sort((a, b) => {
+      let va: number | string = 0;
+      let vb: number | string = 0;
+      switch (sortKey) {
+        case 'data': va = a.l.data; vb = b.l.data; break;
+        case 'qtd': va = a.l.quantidade; vb = b.l.quantidade; break;
+        case 'categoria': va = a.l.categoria; vb = b.l.categoria; break;
+        case 'destino': va = a.l.fazendaDestino || ''; vb = b.l.fazendaDestino || ''; break;
+        case 'pesoVivo': va = a.l.pesoMedioKg ?? 0; vb = b.l.pesoMedioKg ?? 0; break;
+        case 'rend': va = a.c.rendimento; vb = b.c.rendimento; break;
+        case 'pesoArroba': va = a.c.pesoArroba; vb = b.c.pesoArroba; break;
+        case 'total': va = a.c.valorFinal; vb = b.c.valorFinal; break;
+        case 'liqArroba': va = a.c.liqArroba; vb = b.c.liqArroba; break;
+        case 'liqKg': va = a.c.liqKg; vb = b.c.liqKg; break;
+        case 'liqCab': va = a.c.liqCabeca; vb = b.c.liqCabeca; break;
+        case 'status': va = a.l.statusOperacional || ''; vb = b.l.statusOperacional || ''; break;
+      }
+      if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb as string) : (vb as string).localeCompare(va);
+      return sortDir === 'asc' ? (va as number) - (vb as number) : (vb as number) - (va as number);
+    });
+    return sorted;
+  }, [sortKey, sortDir]);
+
+  return { sortKey, sortDir, toggleSort, sortRows };
 }
 
 /* ── Tables ── */
@@ -167,32 +244,40 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
   const fMap = fazendaMap || new Map<string, string>();
   const globalColHeader = isGlobal ? (subTipo ? getFazendaColumnHeader(subTipo) : 'Fazenda') : '';
 
+  const { sortKey, sortDir, toggleSort, sortRows } = useSortableTable();
+
+  const rows = useMemo(() => {
+    const base = lancamentos.map(l => ({ l, c: calcIndicadoresLancamento(l) }));
+    return sortRows(base);
+  }, [lancamentos, sortRows]);
+
   if (lancamentos.length === 0) return <p className="text-center text-muted-foreground py-6">Nenhum registro no período</p>;
+
+  const hp = { currentKey: sortKey, currentDir: sortDir, onSort: toggleSort };
 
   return (
     <table className="w-full table-auto border-collapse text-[10px]">
       <thead className="financeiro-table-head print:static">
         <tr className="border-b border-primary-foreground/15">
-          <th className={`${TABLE_HEAD_CELL} text-left`}>Data</th>
+          <SortableHeader label="Data" align="text-left" sortKey="data" {...hp} />
           {showTipo && <th className={`${TABLE_HEAD_CELL} text-left`}>Tipo</th>}
-          <th className={`${TABLE_HEAD_CELL} text-right`}>Qtd</th>
-          <th className={`${TABLE_HEAD_CELL} text-left`}>Categoria</th>
-          {showDestino && <th className={`${TABLE_HEAD_CELL} text-left`}>{isMorte ? 'Motivo' : 'Destino'}</th>}
+          <SortableHeader label="Qtd" align="text-right" sortKey="qtd" {...hp} />
+          <SortableHeader label="Categoria" align="text-left" sortKey="categoria" {...hp} />
+          {showDestino && <SortableHeader label={isMorte ? 'Motivo' : 'Destino'} align="text-left" sortKey="destino" {...hp} />}
           {isGlobal && <th className={`${TABLE_HEAD_CELL} text-left`}>{showTipo ? 'Fazenda' : globalColHeader}</th>}
-          <th className={`${TABLE_HEAD_CELL} text-right`}>P.Vivo</th>
-          <th className={`${TABLE_HEAD_CELL} text-right`}>P.@</th>
-          <th className={`${TABLE_HEAD_CELL} text-right`}>Total</th>
-          <th className={`${TABLE_HEAD_CELL} text-right`}>R$/líq @</th>
-          {showLiqKg && <th className={`${TABLE_HEAD_CELL} text-right`}>R$/Kg Líq</th>}
-          <th className={`${TABLE_HEAD_CELL} text-right`}>Líq/Cab</th>
-          <th className={`${TABLE_HEAD_CELL} text-center`}>Status</th>
+          <SortableHeader label="P.Vivo" align="text-right" sortKey="pesoVivo" {...hp} />
+          <SortableHeader label="P.@" align="text-right" sortKey="pesoArroba" {...hp} />
+          <SortableHeader label="Total" align="text-right" sortKey="total" {...hp} />
+          <SortableHeader label="R$/líq @" align="text-right" sortKey="liqArroba" {...hp} />
+          {showLiqKg && <SortableHeader label="R$/Kg Líq" align="text-right" sortKey="liqKg" {...hp} />}
+          <SortableHeader label="Líq/Cab" align="text-right" sortKey="liqCab" {...hp} />
+          <SortableHeader label="Status" align="text-center" sortKey="status" {...hp} />
           <th className={`${TABLE_HEAD_CELL} text-center w-6`}></th>
         </tr>
       </thead>
       <tbody className="bg-card">
-        {lancamentos.map(l => {
-          const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
-          const c = calcIndicadoresLancamento(l);
+        {rows.map(({ l, c }) => {
+          const cat = CATEGORIAS.find(ca => ca.value === l.categoria)?.label ?? l.categoria;
           const tipoInfo = SUB_ABA_LABELS[l.tipo as SubAba];
           return (
             <tr key={l.id} className="border-b border-border/70 leading-none hover:bg-muted/30">
@@ -238,8 +323,8 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
         const liqCabeca = totals.qtd > 0 ? totals.valorTotal / totals.qtd : 0;
         const liqKgTotal = totals.pesoVivoTotal > 0 ? totals.valorTotal / totals.pesoVivoTotal : 0;
         return (
-           <tfoot className="financeiro-table-foot print:static">
-            <tr className="border-t-2 border-primary/25 font-bold text-[10px]">
+           <tfoot>
+            <tr className="bg-primary text-primary-foreground">
               <td className={TABLE_FOOT_CELL}>TOTAL</td>
               {showTipo && <td className={TABLE_FOOT_CELL}></td>}
               <td className={`${TABLE_FOOT_CELL} text-right`}>{totals.qtd}</td>
@@ -247,8 +332,8 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
               {showDestino && <td className={TABLE_FOOT_CELL}></td>}
               {isGlobal && <td className={TABLE_FOOT_CELL}></td>}
               <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(pesoVivoMedio)}</td>
-              <td className={`${TABLE_FOOT_CELL} text-right text-muted-foreground`}>{fmtValor(arrobaMedio)}</td>
-              <td className={`${TABLE_FOOT_CELL} text-right text-primary`}>{fmtValor(totals.valorTotal)}</td>
+              <td className={`${TABLE_FOOT_CELL} text-right opacity-80`}>{fmtValor(arrobaMedio)}</td>
+              <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(totals.valorTotal)}</td>
               <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(liqArroba)}</td>
               {showLiqKg && <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(liqKgTotal)}</td>}
               <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(liqCabeca)}</td>
@@ -264,32 +349,39 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
 
 function AbateTable({ lancamentos, onEdit, isGlobal, fazendaMap }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; isGlobal?: boolean; fazendaMap?: Map<string, string> }) {
   const fMap = fazendaMap || new Map<string, string>();
+  const { sortKey, sortDir, toggleSort, sortRows } = useSortableTable();
+
+  const rows = useMemo(() => {
+    const base = lancamentos.map(l => ({ l, c: calcIndicadoresLancamento(l) }));
+    return sortRows(base);
+  }, [lancamentos, sortRows]);
 
   if (lancamentos.length === 0) return <p className="text-center text-muted-foreground py-6">Nenhum abate no período</p>;
+
+  const hp = { currentKey: sortKey, currentDir: sortDir, onSort: toggleSort };
 
   return (
     <table className="w-full table-auto border-collapse text-[10px]">
       <thead className="financeiro-table-head print:static">
         <tr className="border-b border-primary-foreground/15">
-          <th className={`${TABLE_HEAD_CELL} text-left`}>Data</th>
-          <th className={`${TABLE_HEAD_CELL} text-right`}>Qtd</th>
-          <th className={`${TABLE_HEAD_CELL} text-left`}>Categoria</th>
-          <th className={`${TABLE_HEAD_CELL} text-left`}>Destino</th>
+          <SortableHeader label="Data" align="text-left" sortKey="data" {...hp} />
+          <SortableHeader label="Qtd" align="text-right" sortKey="qtd" {...hp} />
+          <SortableHeader label="Categoria" align="text-left" sortKey="categoria" {...hp} />
+          <SortableHeader label="Destino" align="text-left" sortKey="destino" {...hp} />
           {isGlobal && <th className={`${TABLE_HEAD_CELL} text-left`}>Origem</th>}
-          <th className={`${TABLE_HEAD_CELL} text-right`}>P.Vivo</th>
-          <th className={`${TABLE_HEAD_CELL} text-right`}>Rend.</th>
-          <th className={`${TABLE_HEAD_CELL} text-right`}>P.@</th>
-          <th className={`${TABLE_HEAD_CELL} text-right`}>Total</th>
-          <th className={`${TABLE_HEAD_CELL} text-right`}>R$/líq @</th>
-          <th className={`${TABLE_HEAD_CELL} text-right`}>Líq/Cab</th>
-          <th className={`${TABLE_HEAD_CELL} text-center`}>Status</th>
+          <SortableHeader label="P.Vivo" align="text-right" sortKey="pesoVivo" {...hp} />
+          <SortableHeader label="Rend." align="text-right" sortKey="rend" {...hp} />
+          <SortableHeader label="P.@" align="text-right" sortKey="pesoArroba" {...hp} />
+          <SortableHeader label="Total" align="text-right" sortKey="total" {...hp} />
+          <SortableHeader label="R$/líq @" align="text-right" sortKey="liqArroba" {...hp} />
+          <SortableHeader label="Líq/Cab" align="text-right" sortKey="liqCab" {...hp} />
+          <SortableHeader label="Status" align="text-center" sortKey="status" {...hp} />
           <th className={`${TABLE_HEAD_CELL} text-center w-6`}></th>
         </tr>
       </thead>
       <tbody className="bg-card">
-        {lancamentos.map(l => {
-          const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
-          const c = calcIndicadoresLancamento(l);
+        {rows.map(({ l, c }) => {
+          const cat = CATEGORIAS.find(ca => ca.value === l.categoria)?.label ?? l.categoria;
           return (
             <tr key={l.id} className="border-b border-border/70 leading-none hover:bg-muted/30">
               <td className={`${TABLE_BODY_CELL} text-[9px]`}>{format(parseISO(l.data), 'dd/MM/yy')}</td>
@@ -334,17 +426,17 @@ function AbateTable({ lancamentos, onEdit, isGlobal, fazendaMap }: { lancamentos
         const liqArroba = totals.arrobasTotal > 0 ? totals.valorTotal / totals.arrobasTotal : 0;
         const liqCabeca = totals.qtd > 0 ? totals.valorTotal / totals.qtd : 0;
         return (
-          <tfoot className="financeiro-table-foot print:static">
-            <tr className="border-t-2 border-primary/25 font-bold text-[10px]">
+          <tfoot>
+            <tr className="bg-primary text-primary-foreground">
               <td className={TABLE_FOOT_CELL}>TOTAL</td>
               <td className={`${TABLE_FOOT_CELL} text-right`}>{totals.qtd}</td>
               <td className={TABLE_FOOT_CELL}></td>
               <td className={TABLE_FOOT_CELL}></td>
               {isGlobal && <td className={TABLE_FOOT_CELL}></td>}
               <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(pesoVivoMedio)}</td>
-              <td className={`${TABLE_FOOT_CELL} text-right text-muted-foreground`}>{rendMedio ? rendMedio.toFixed(1) + '%' : '-'}</td>
+              <td className={`${TABLE_FOOT_CELL} text-right opacity-80`}>{rendMedio ? rendMedio.toFixed(1) + '%' : '-'}</td>
               <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(arrobaMedio)}</td>
-              <td className={`${TABLE_FOOT_CELL} text-right text-primary`}>{fmtValor(totals.valorTotal)}</td>
+              <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(totals.valorTotal)}</td>
               <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(liqArroba)}</td>
               <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(liqCabeca)}</td>
               <td className={TABLE_FOOT_CELL}></td>
@@ -480,11 +572,11 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   }
 
   return (
-    <div className="flex h-[calc(100vh-120px)] w-full max-w-full flex-col animate-fade-in">
-      {/* ── Sticky top panel ── */}
-      <div className="financeiro-sticky-panel flex-none">
+    <div className="w-full max-w-full animate-fade-in pb-20">
+      {/* ── Top panel ── */}
+      <div className="bg-primary text-primary-foreground px-3 py-2 space-y-1.5">
         {(onBack || drillDownLabel) && (
-          <div className="space-y-1.5 border-b border-primary-foreground/10 px-3 py-2">
+          <div className="space-y-1.5 border-b border-primary-foreground/10 pb-2">
             {onBack && (
               <button
                 onClick={onBack}
@@ -502,116 +594,117 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
             )}
           </div>
         )}
-        <div className="space-y-1.5 px-3 py-2">
-          {/* Top tabs */}
-          <div className={`grid gap-0.5 rounded-md bg-card p-0.5 max-w-md ${modoMovimentacao ? 'grid-cols-2' : `grid-cols-${topTabs.length}`}`}>
-            {topTabs.map(t => (
+
+        {/* Top tabs */}
+        <div className={`grid gap-0.5 rounded-md bg-card p-0.5 max-w-md ${modoMovimentacao ? 'grid-cols-2' : `grid-cols-${topTabs.length}`}`}>
+          {topTabs.map(t => (
+            <button
+              key={t.id}
+              onClick={() => { setTopTab(t.id); if (t.id === 'entradas') setSubAba('nascimento'); if (t.id === 'saidas') setSubAba('abate'); }}
+              className={`${modoMovimentacao ? 'py-1 px-1.5 text-[11px]' : 'py-1 px-1 text-[11px]'} rounded font-bold transition-colors ${
+                topTab === t.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {t.icon} {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Sub-type tabs */}
+        {subTypes.length > 0 && (
+          <div className="flex gap-1 overflow-x-auto pb-0.5">
+            {subTypes.map(st => {
+              const info = SUB_ABA_LABELS[st];
+              return (
+                <button
+                  key={st}
+                  onClick={() => setSubAba(st)}
+                  className={`rounded-md border px-2 py-0.5 text-[10px] font-bold whitespace-nowrap transition-colors ${
+                    subAba === st ? 'border-primary-foreground bg-primary-foreground/15 text-primary-foreground shadow-sm' : 'border-primary-foreground/20 text-primary-foreground/60 hover:text-primary-foreground'
+                  }`}
+                >
+                  {info.icon} {info.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Filters row */}
+        <div className="flex flex-wrap items-center gap-1">
+          <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+            <SelectTrigger className="h-6 text-[10px] font-bold w-[68px] bg-card text-foreground border-border">
+              <SelectValue placeholder="Ano" />
+            </SelectTrigger>
+            <SelectContent side="bottom">
+              {anosDisponiveis.map(a => (
+                <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={mesFiltro} onValueChange={setMesFiltro}>
+            <SelectTrigger className="h-6 text-[10px] font-bold w-[110px] bg-card text-foreground border-border">
+              <SelectValue placeholder="Mês" />
+            </SelectTrigger>
+            <SelectContent side="bottom">
+              {MESES_OPTIONS.map(m => (
+                <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Category filter */}
+          <Select value={categoriaFiltro} onValueChange={setCategoriaFiltro}>
+            <SelectTrigger className="h-6 text-[10px] font-bold w-[100px] bg-card text-foreground border-border">
+              <SelectValue placeholder="Categoria" />
+            </SelectTrigger>
+            <SelectContent side="bottom">
+              <SelectItem value="todas" className="text-sm">Todas</SelectItem>
+              {categoriasDisponiveis.map(c => (
+                <SelectItem key={c.value} value={c.value} className="text-sm">{c.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Status filter buttons */}
+          <div className="flex gap-px rounded border border-primary-foreground/20 bg-primary-foreground/5 p-px">
+            {([
+              { value: 'realizado' as StatusFiltro, label: 'Realizado', activeClass: 'bg-success text-success-foreground' },
+              { value: 'programado' as StatusFiltro, label: 'Programado', activeClass: 'bg-secondary text-secondary-foreground' },
+              { value: 'previsto' as StatusFiltro, label: 'Previsto', activeClass: 'bg-warning text-warning-foreground' },
+            ]).map(s => (
               <button
-                key={t.id}
-                onClick={() => { setTopTab(t.id); if (t.id === 'entradas') setSubAba('nascimento'); if (t.id === 'saidas') setSubAba('abate'); }}
-                className={`${modoMovimentacao ? 'py-1 px-1.5 text-[11px]' : 'py-1 px-1 text-[11px]'} rounded font-bold transition-colors ${
-                  topTab === t.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                key={s.value}
+                onClick={() => setStatusFiltro(s.value === statusFiltro ? 'todos' : s.value)}
+                className={`px-2 py-px rounded text-[9px] font-bold transition-colors ${
+                  statusFiltro === s.value
+                    ? s.activeClass
+                    : 'text-primary-foreground/70 hover:bg-primary-foreground/10'
                 }`}
               >
-                {t.icon} {t.label}
+                {s.label}
               </button>
             ))}
           </div>
 
-          {/* Sub-type tabs */}
-          {subTypes.length > 0 && (
-            <div className="flex gap-1 overflow-x-auto pb-0.5">
-              {subTypes.map(st => {
-                const info = SUB_ABA_LABELS[st];
-                return (
-                  <button
-                    key={st}
-                    onClick={() => setSubAba(st)}
-                    className={`rounded-md border px-2 py-0.5 text-[10px] font-bold whitespace-nowrap transition-colors ${
-                      subAba === st ? 'border-primary bg-card text-primary shadow-sm' : 'border-border bg-card text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {info.icon} {info.label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Filters row */}
-          <div className="flex flex-wrap items-center gap-1">
-            <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-              <SelectTrigger className="h-6 text-[10px] font-bold w-[68px] bg-card text-foreground border-border">
-                <SelectValue placeholder="Ano" />
-              </SelectTrigger>
-              <SelectContent side="bottom">
-                {anosDisponiveis.map(a => (
-                  <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={mesFiltro} onValueChange={setMesFiltro}>
-              <SelectTrigger className="h-6 text-[10px] font-bold w-[110px] bg-card text-foreground border-border">
-                <SelectValue placeholder="Mês" />
-              </SelectTrigger>
-              <SelectContent side="bottom">
-                {MESES_OPTIONS.map(m => (
-                  <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Category filter */}
-            <Select value={categoriaFiltro} onValueChange={setCategoriaFiltro}>
-              <SelectTrigger className="h-6 text-[10px] font-bold w-[100px] bg-card text-foreground border-border">
-                <SelectValue placeholder="Categoria" />
-              </SelectTrigger>
-              <SelectContent side="bottom">
-                <SelectItem value="todas" className="text-sm">Todas</SelectItem>
-                {categoriasDisponiveis.map(c => (
-                  <SelectItem key={c.value} value={c.value} className="text-sm">{c.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Status filter buttons */}
-            <div className="flex gap-px rounded border border-border bg-card p-px">
-              {([
-                { value: 'realizado' as StatusFiltro, label: 'Realizado', activeClass: 'bg-success text-success-foreground' },
-                { value: 'programado' as StatusFiltro, label: 'Programado', activeClass: 'bg-secondary text-secondary-foreground' },
-                { value: 'previsto' as StatusFiltro, label: 'Previsto', activeClass: 'bg-warning text-warning-foreground' },
-              ]).map(s => (
-                <button
-                  key={s.value}
-                  onClick={() => setStatusFiltro(s.value === statusFiltro ? 'todos' : s.value)}
-                  className={`px-2 py-px rounded text-[9px] font-bold transition-colors ${
-                    statusFiltro === s.value
-                      ? s.activeClass
-                      : 'text-foreground hover:bg-muted'
-                  }`}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Export — always visible for financial types */}
-            {isFinancial && topTab !== 'todas' && (
+          {/* Export — always visible for financial types */}
+          {isFinancial && topTab !== 'todas' && (
+            <div className="[&_button]:text-foreground [&_button]:bg-card [&_button]:border-border [&_button]:font-bold">
               <FinanceiroExportMenu
                 lancamentos={filtrados}
                 subAba={subAba as 'abate' | 'compra' | 'venda'}
                 ano={anoFiltro}
                 fazendaNome={fazendaAtual?.nome}
               />
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* ── Content area: table (left ~70%) + summary panel (right ~30%) ── */}
-      <div className="flex flex-1 min-h-0 gap-3 px-2 pb-2 pt-1.5">
+      <div className="flex gap-3 px-2 pt-1.5 pb-4">
         {/* Table column */}
-        <div className="flex-[7] min-w-0 overflow-auto rounded-md border border-border/70 bg-card shadow-sm">
+        <div className="flex-[7] min-w-0 rounded-md border border-border/70 bg-card shadow-sm overflow-x-auto">
           {topTab === 'todas' ? (
             <UnifiedTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} showTipo isGlobal={isGlobal} fazendaMap={fazendaMap} />
           ) : subAba === 'abate' ? (
@@ -622,13 +715,14 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
         </div>
 
         {/* Summary panel */}
-        <div className="flex-[3] min-w-[220px] max-w-[320px] flex-shrink-0 hidden lg:block">
+        <div className="flex-[3] min-w-[200px] max-w-[280px] flex-shrink-0 hidden lg:block">
           <ResumoLateral
             lancamentos={filtrados}
             subAba={subAba}
             anoFiltro={anoFiltro}
             mesFiltro={mesFiltro}
             statusFiltro={statusFiltro}
+            categoriaFiltro={categoriaFiltro}
           />
         </div>
       </div>
