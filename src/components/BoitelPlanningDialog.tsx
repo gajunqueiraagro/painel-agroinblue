@@ -65,6 +65,7 @@ const defaultData: BoitelData = {
   custoOportunidade: 0,
   dias: 90,
   gmd: 0.800,
+  rendimentoEntrada: 50,
   rendimento: 52,
   modalidadeCusto: 'diaria',
   custoDiaria: 0,
