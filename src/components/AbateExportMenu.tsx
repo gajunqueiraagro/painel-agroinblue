@@ -6,7 +6,7 @@ import { parseISO, format } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
-import { formatMoeda, fmtValor } from '@/lib/calculos/formatters';
+import { formatMoeda, fmtValor, formatKg, formatArroba, formatPercent, formatCabecas } from '@/lib/calculos/formatters';
 
 import { getStatus } from '@/lib/statusOperacional';
 import { useState } from 'react';
@@ -87,13 +87,13 @@ function textoConfirmado(l: Lancamento, fazendaNome?: string): string {
     `Data do Abate: ${fmtDate(l.dataAbate || l.data)}`,
     '',
     `Categoria: ${cat}`,
-    `Quantidade: ${l.quantidade} cabecas`,
+    `Quantidade: ${formatCabecas(l.quantidade)}`,
     '',
-    `Peso Vivo Previsto: ${fmtValor(c.pesoVivo)} kg`,
+    `Peso Vivo Previsto: ${formatKg(c.pesoVivo)}`,
     '',
     `R$/@ Negociado: ${formatMoeda(c.precoBase)}`,
     '',
-    `Arrobas Estimadas: ${fmtValor(c.arrobasTotais)} @`,
+    `Arrobas Estimadas: ${formatArroba(c.arrobasTotais)}`,
     '',
   ];
   if (c.bonusArroba > 0) lines.push(`Bonus Estimado: ${formatMoeda(c.bonusArroba)}/@`);
@@ -129,14 +129,14 @@ function textoRealizado(l: Lancamento, fazendaNome?: string): string {
     `Data do Abate: ${fmtDate(l.dataAbate || l.data)}`,
     '',
     `Categoria: ${cat}`,
-    `Quantidade: ${l.quantidade} cabecas`,
+    `Quantidade: ${formatCabecas(l.quantidade)}`,
     '',
-    `Peso Vivo: ${fmtValor(c.pesoVivo)} kg`,
-    `Rendimento Carcaca: ${fmtValor(c.rendPct)}%`,
-    `Peso Carcaca: ${fmtValor(c.pesoCarcaca)} kg`,
+    `Peso Vivo: ${formatKg(c.pesoVivo)}`,
+    `Rendimento Carcaca: ${formatPercent(c.rendPct)}`,
+    `Peso Carcaca: ${formatKg(c.pesoCarcaca)}`,
     '',
-    `Arrobas por Cabeca: ${fmtValor(c.arrobasCab)} @`,
-    `Arrobas Totais: ${fmtValor(c.arrobasTotais)} @`,
+    `Arrobas por Cabeca: ${formatArroba(c.arrobasCab)}`,
+    `Arrobas Totais: ${formatArroba(c.arrobasTotais)}`,
     '',
     `R$/@ Base: ${formatMoeda(c.precoBase)}`,
     '',
@@ -187,7 +187,7 @@ async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
     ['Data Embarque', fmtDate(l.dataEmbarque)],
     ['Data do Abate', fmtDate(l.dataAbate || l.data)],
     ['Categoria', cat],
-    ['Quantidade', `${l.quantidade} cab.`],
+    ['Quantidade', formatCabecas(l.quantidade)],
     ['Preço Negociado', `${formatMoeda(c.precoBase)} /@`],
   ];
   autoTable(doc, { ...tStyle, startY: y, head: [['DADOS CONFIRMADOS', '']], body: bloco1 });
@@ -195,11 +195,11 @@ async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
   // BLOCO 2
   const y2 = ((doc as any).lastAutoTable?.finalY ?? y + 56) + 4;
   const bloco2: string[][] = [
-    ['Peso Vivo Estimado', `${fmtValor(c.pesoVivo)} kg`],
-    ['Rend. Carcaça', `${fmtValor(c.rendPct)} %`],
-    ['Peso Carcaça', `${fmtValor(c.pesoCarcaca)} kg`],
-    ['Arrobas por Cabeça', `${fmtValor(c.arrobasCab)} @`],
-    ['Arrobas Totais Estimadas', `${fmtValor(c.arrobasTotais)} @`],
+    ['Peso Vivo Estimado', formatKg(c.pesoVivo)],
+    ['Rend. Carcaça', formatPercent(c.rendPct)],
+    ['Peso Carcaça', formatKg(c.pesoCarcaca)],
+    ['Arrobas por Cabeça', formatArroba(c.arrobasCab)],
+    ['Arrobas Totais Estimadas', formatArroba(c.arrobasTotais)],
   ];
   autoTable(doc, { ...tStyle, startY: y2, head: [['PROJEÇÃO OPERACIONAL (EXPECTATIVA)', '']], body: bloco2 });
 
@@ -274,11 +274,11 @@ async function pdfRealizado(l: Lancamento, fazendaNome?: string) {
   // BLOCO 2 - Indicadores Zootecnicos
   const y2 = ((doc as any).lastAutoTable?.finalY ?? y + 56) + 4;
   const bloco2: string[][] = [
-    ['Peso Vivo', `${fmtValor(c.pesoVivo)} kg`],
-    ['Rend. Carcaca', `${fmtValor(c.rendPct)} %`],
-    ['Peso Carcaca', `${fmtValor(c.pesoCarcaca)} kg`],
-    ['Arrobas por Cabeca', `${fmtValor(c.arrobasCab)} @`],
-    ['Arrobas Totais', `${fmtValor(c.arrobasTotais)} @`],
+    ['Peso Vivo', formatKg(c.pesoVivo)],
+    ['Rend. Carcaca', formatPercent(c.rendPct)],
+    ['Peso Carcaca', formatKg(c.pesoCarcaca)],
+    ['Arrobas por Cabeca', formatArroba(c.arrobasCab)],
+    ['Arrobas Totais', formatArroba(c.arrobasTotais)],
   ];
   autoTable(doc, { ...tStyle, startY: y2, head: [['INDICADORES ZOOTECNICOS', '']], body: bloco2 });
 

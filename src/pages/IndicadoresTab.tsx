@@ -12,7 +12,7 @@ import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
-import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
+import { formatMoeda, formatNum, formatPercent, formatArroba, formatCabecas } from '@/lib/calculos/formatters';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { KpiCard } from '@/components/indicadores/KpiCard';
 import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';

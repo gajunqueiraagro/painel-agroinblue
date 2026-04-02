@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { formatMoeda } from '@/lib/calculos/formatters';
+import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
 import { TrendingUp, DollarSign, Calendar, Truck, Calculator, ChevronDown, Info, ShoppingCart, Tag } from 'lucide-react';
 
 export interface BoitelData {
@@ -90,16 +90,14 @@ const defaultData: BoitelData = {
 };
 
 function fmtPeso(v: number) {
-  if (!v || isNaN(v)) return '-';
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kg';
+  return formatKg(v);
 }
 function fmtGmd(v: number) {
   if (!v || isNaN(v)) return '-';
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' kg/dia';
 }
 function fmtArr(v: number) {
-  if (!v || isNaN(v)) return '-';
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' @';
+  return formatArroba(v);
 }
 
 export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quantidade, pesoKg, fazendaNome, dataLancamento }: Props) {

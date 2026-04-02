@@ -1,15 +1,11 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import type { FechamentoExecutivo } from '@/hooks/useFechamentoExecutivo';
+import { formatMoeda, formatNum, formatCabecas, formatArroba } from '@/lib/calculos/formatters';
 
-function fmt(v: number | undefined | null): string {
-  if (v === null || v === undefined || isNaN(v)) return '-';
-  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
+const fmt = formatMoeda;
 function fmtN(v: number | undefined | null, dec = 0): string {
-  if (v === null || v === undefined) return '-';
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  return formatNum(v ?? null, dec) ?? '-';
 }
 
 export function exportFechamentoExecutivoPdf(fechamento: FechamentoExecutivo) {
@@ -103,11 +99,11 @@ export function exportFechamentoExecutivoPdf(fechamento: FechamentoExecutivo) {
   // ═══ PAGE 3: Análise Zootécnica ═══
   newPage();
   addHeader('Análise Zootécnica');
-  addRow('Compras', `${fmtN(zoo.compras_cab)} cab`);
-  addRow('Vendas', `${fmtN(zoo.vendas_cab)} cab`);
-  addRow('Nascimentos', `${fmtN(zoo.nascimentos)} cab`);
-  addRow('Mortes', `${fmtN(zoo.mortes)} cab`);
-  addRow('Peso Médio Vendas', `${fmtN(zoo.peso_medio_vendas_arroba, 2)} @`);
+  addRow('Compras', formatCabecas(zoo.compras_cab));
+  addRow('Vendas', formatCabecas(zoo.vendas_cab));
+  addRow('Nascimentos', formatCabecas(zoo.nascimentos));
+  addRow('Mortes', formatCabecas(zoo.mortes));
+  addRow('Peso Médio Vendas', formatArroba(zoo.peso_medio_vendas_arroba));
   addRow('Valor Total Vendas', fmt(zoo.valor_total_vendas));
   addRow('Preço Médio Compra/cab', fmt(zoo.preco_medio_compra_cab));
   y += 4;

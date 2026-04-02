@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 import logoUrl from '@/assets/logo.png';
-import { fmtValor, formatMoeda } from '@/lib/calculos/formatters';
+import { fmtValor, formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calculos/formatters';
 import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 
 // Load logo as base64 for jsPDF
@@ -103,10 +103,10 @@ function gerarTextoIndividual(l: Lancamento, fazendaNome?: string): string {
     if (l.notaFiscal) lines.push(`📄 NF: ${l.notaFiscal}`);
     if (l.tipoPeso) lines.push(`📦 Tipo peso: ${l.tipoPeso === 'morto' ? 'Peso Morto' : 'Peso Vivo'}`);
     lines.push(
-      `⚖️ Peso vivo: ${fmtValor(l.pesoMedioKg)} kg`,
-      `🥩 Peso carcaça: ${fmtValor(l.pesoCarcacaKg)} kg`,
-      `📊 Rendimento: ${c.rendimento ? fmtValor(c.rendimento, 1) + '%' : '-'}`,
-      `📐 Peso @: ${fmtValor(c.pesoArroba)} @`,
+      `⚖️ Peso vivo: ${formatKg(l.pesoMedioKg)}`,
+      `🥩 Peso carcaça: ${formatKg(l.pesoCarcacaKg)}`,
+      `📊 Rendimento: ${c.rendimento ? formatPercent(c.rendimento) : '-'}`,
+      `📐 Peso @: ${formatArroba(c.pesoArroba)}`,
       `💲 Preço/@: ${formatMoeda(l.precoArroba)}`,
       ``,
       `💰 *Valor Total: ${formatMoeda(c.valorFinal)}*`,
@@ -127,8 +127,8 @@ function gerarTextoIndividual(l: Lancamento, fazendaNome?: string): string {
     );
     if (l.notaFiscal) lines.push(`📄 NF: ${l.notaFiscal}`);
     lines.push(
-      `⚖️ Peso vivo: ${fmtValor(l.pesoMedioKg)} kg`,
-      `📐 Peso @: ${fmtValor(c.pesoArroba)} @`,
+      `⚖️ Peso vivo: ${formatKg(l.pesoMedioKg)}`,
+      `📐 Peso @: ${formatArroba(c.pesoArroba)}`,
       `💲 Preço/@: ${formatMoeda(l.precoArroba)}`,
       ``,
       `💰 *Valor Total: ${formatMoeda(c.valorFinal)}*`,
