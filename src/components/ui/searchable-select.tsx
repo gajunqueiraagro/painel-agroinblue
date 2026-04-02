@@ -27,6 +27,7 @@ export function SearchableSelect({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [highlightIdx, setHighlightIdx] = useState(0);
+  const [openUp, setOpenUp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -79,6 +80,12 @@ export function SearchableSelect({
 
   const handleTriggerClick = () => {
     if (disabled) return;
+    // Determine if dropdown should open upward
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      setOpenUp(spaceBelow < 160);
+    }
     setOpen(true);
     setHighlightIdx(filtered.length > 0 ? 1 : 0);
     setTimeout(() => inputRef.current?.focus(), 0);
@@ -149,7 +156,7 @@ export function SearchableSelect({
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-0.5 w-full min-w-[140px] rounded-md border bg-popover shadow-md">
+        <div className={cn("absolute z-50 w-full min-w-[140px] rounded-md border bg-popover shadow-md", openUp ? "bottom-full mb-0.5" : "top-full mt-0.5")}>
           <div className="px-0.5 pt-0.5 pb-0">
             <input
               ref={inputRef}

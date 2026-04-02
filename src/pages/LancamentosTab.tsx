@@ -1554,7 +1554,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     placeholder="Selecione ou cadastre o frigorífico"
                     allLabel="Nenhum selecionado"
                     allValue="__all__"
-                    className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2"
+                    className="[&_button]:h-7 [&_button]:text-[11px] [&_button]:px-2"
                   />
                 </div>
                 <Button
@@ -1582,7 +1582,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     placeholder="Selecione ou cadastre o fornecedor"
                     allLabel="Nenhum selecionado"
                     allValue="__all__"
-                    className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2"
+                    className="[&_button]:h-7 [&_button]:text-[11px] [&_button]:px-2"
                   />
                 </div>
                 <Button
@@ -1615,7 +1615,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     placeholder="Selecione o comprador"
                     allLabel="Nenhum selecionado"
                     allValue="__all__"
-                    className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2"
+                    className="[&_button]:h-7 [&_button]:text-[11px] [&_button]:px-2"
                   />
                 </div>
                 <Button
