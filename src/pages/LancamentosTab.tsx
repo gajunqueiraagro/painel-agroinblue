@@ -343,14 +343,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setRendCarcaca(''); setFunruralPct(''); setFunruralReais('');
   };
 
-  const resetAllFields = (newTipo?: string) => {
-    setQuantidade(''); setCategoria('');
-    setPesoKg(newTipo === 'nascimento' ? '30' : '');
-    setFazendaOrigem(''); setFazendaDestino('');
-    setData(format(new Date(), 'yyyy-MM-dd'));
+  const resetAllFields = () => {
+    setQuantidade('');
+    setCategoria('');
+    setPesoKg('');
+    setFazendaOrigem('');
+    setFazendaDestino('');
+    setData('');
     setStatusOp('conciliado');
     setLastSavedLancamentoId(null);
     setEditingAbateId(null);
+    setDetalheId(null);
+    setFinanceiroOpen(false);
     resetFinancialFields();
     compraFinanceiroRef.current?.resetForm();
     vendaFinanceiroRef.current?.resetForm();

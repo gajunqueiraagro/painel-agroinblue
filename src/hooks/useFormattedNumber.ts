@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 /** Format integer with Brazilian thousand separator (1.000, 12.500) */
 function formatIntBR(value: string): string {
@@ -18,18 +18,16 @@ function formatDecBR(value: string, decimals: number): string {
   });
 }
 
-/** Parse a formatted BR string back to raw numeric string */
-function parseBR(value: string): string {
-  // Remove thousand separators (dots), replace comma with dot
-  return value.replace(/\./g, '').replace(',', '.');
-}
-
 /**
  * Hook for integer inputs (Qtd. Cabeças).
- * Returns display value (formatted) and raw value (numeric string for state).
+ * Keeps display value synchronized when raw state is reset externally.
  */
 export function useIntegerInput(rawValue: string, setRawValue: (v: string) => void) {
   const [displayValue, setDisplayValue] = useState(rawValue);
+
+  useEffect(() => {
+    setDisplayValue(rawValue);
+  }, [rawValue]);
 
   const onChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value.replace(/\D/g, '');
@@ -54,10 +52,14 @@ export function useIntegerInput(rawValue: string, setRawValue: (v: string) => vo
 
 /**
  * Hook for decimal inputs (Peso kg).
- * Returns display value (formatted) and raw value (numeric string for state).
+ * Keeps display value synchronized when raw state is reset externally.
  */
 export function useDecimalInput(rawValue: string, setRawValue: (v: string) => void, decimals = 2) {
   const [displayValue, setDisplayValue] = useState(rawValue);
+
+  useEffect(() => {
+    setDisplayValue(rawValue);
+  }, [rawValue]);
 
   const onChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
