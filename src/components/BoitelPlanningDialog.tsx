@@ -156,11 +156,13 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
 
     const pesoLiqEntrada = pesoInicial * (1 - quebraViagem / 100);
     const ganhoKg = gmd * dias;
-    const pesoFinal = pesoLiqEntrada + ganhoKg;
+    const pesoFinal = pesoInicial + ganhoKg;
 
+    const arrobasEntradaFazenda = pesoInicial / 30;
     const arrobasEntrada = (pesoLiqEntrada * rendimentoEntrada / 100) / 15;
     const arrobasSaida = (pesoFinal * rendimento / 100) / 15;
-    const arrobasProduzidas = (arrobasSaida - arrobasEntrada) * qtdCabecas;
+    const arrobasProduzidasCab = arrobasSaida - arrobasEntradaFazenda;
+    const arrobasProduzidas = arrobasProduzidasCab * qtdCabecas;
     const arrobasTotalSaida = arrobasSaida * qtdCabecas;
 
     const gmc = dias > 0 ? ((pesoFinal * rendimento / 100) - (pesoLiqEntrada * rendimentoEntrada / 100)) / dias : 0;
