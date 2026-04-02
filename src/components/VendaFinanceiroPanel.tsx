@@ -719,7 +719,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         <CollapsibleContent className="space-y-2 pt-2">
 
           <div className="space-y-1.5">
-            <h5 className="text-[10px] font-bold text-muted-foreground uppercase">Forma de Recebimento</h5>
+            <h5 className="text-[10px] font-semibold text-foreground/70 uppercase">Forma de Recebimento</h5>
             <div className="grid grid-cols-2 gap-1.5">
               <button type="button" onClick={() => { setFormaReceb('avista'); setParcelas([]); }}
                 className={`h-8 rounded text-[12px] font-bold border-2 transition-all ${formaReceb === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
