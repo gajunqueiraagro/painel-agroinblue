@@ -1185,6 +1185,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (isConsumo) {
       return (
         <ConsumoFinanceiroPanel
+          key={`consumo-${tipo}`}
           ref={consumoFinanceiroRef}
           quantidade={Number(quantidade) || 0}
           pesoKg={Number(pesoKg) || 0}
