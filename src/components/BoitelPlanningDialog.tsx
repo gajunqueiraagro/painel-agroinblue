@@ -24,6 +24,7 @@ export interface BoitelData {
   // Período
   dias: number;
   gmd: number;
+  rendimentoEntrada: number;
   rendimento: number;
   // Custos
   modalidadeCusto: 'diaria' | 'arroba' | 'parceria';
