@@ -274,11 +274,11 @@ async function pdfRealizado(l: Lancamento, fazendaNome?: string) {
   // BLOCO 2 - Indicadores Zootecnicos
   const y2 = ((doc as any).lastAutoTable?.finalY ?? y + 56) + 4;
   const bloco2: string[][] = [
-    ['Peso Vivo', `${fmtValor(c.pesoVivo)} kg`],
-    ['Rend. Carcaca', `${fmtValor(c.rendPct)} %`],
-    ['Peso Carcaca', `${fmtValor(c.pesoCarcaca)} kg`],
-    ['Arrobas por Cabeca', `${fmtValor(c.arrobasCab)} @`],
-    ['Arrobas Totais', `${fmtValor(c.arrobasTotais)} @`],
+    ['Peso Vivo', formatKg(c.pesoVivo)],
+    ['Rend. Carcaca', formatPercent(c.rendPct)],
+    ['Peso Carcaca', formatKg(c.pesoCarcaca)],
+    ['Arrobas por Cabeca', formatArroba(c.arrobasCab)],
+    ['Arrobas Totais', formatArroba(c.arrobasTotais)],
   ];
   autoTable(doc, { ...tStyle, startY: y2, head: [['INDICADORES ZOOTECNICOS', '']], body: bloco2 });
 
