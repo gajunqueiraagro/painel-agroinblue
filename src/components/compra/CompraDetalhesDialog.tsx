@@ -244,24 +244,24 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
 
           {/* 3. Despesas */}
           {sectionTitle(<Truck className="h-4 w-4 text-muted-foreground" />, 'Despesas Extras')}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="text-[11px]">Frete (R$)</Label>
-              <Input type="number" value={frete} onChange={e => { setFrete(e.target.value); markDirty(); }} placeholder="0,00" className="h-9 text-[12px]" />
+              <Label className="text-[10px]">Frete (R$)</Label>
+              <Input type="number" value={frete} onChange={e => { setFrete(e.target.value); markDirty(); }} placeholder="0,00" className="h-8 text-[11px] w-40" />
             </div>
             <div>
-              <Label className="text-[11px]">Comissão (%)</Label>
-              <Input type="number" value={comissaoPct} onChange={e => { setComissaoPct(e.target.value); markDirty(); }} placeholder="0" className="h-9 text-[12px]" />
+              <Label className="text-[10px]">Comissão (%)</Label>
+              <Input type="number" value={comissaoPct} onChange={e => { setComissaoPct(e.target.value); markDirty(); }} placeholder="0" className="h-8 text-[11px] w-28" />
             </div>
           </div>
           {calc.comissaoVal > 0 && (
-            <div className="flex justify-between text-[11px] px-1">
+            <div className="flex justify-between text-[10px] px-1">
               <span className="text-muted-foreground">Comissão (R$)</span>
               <strong>{formatMoeda(calc.comissaoVal)}</strong>
             </div>
           )}
           {calc.totalDespesas > 0 && (
-            <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded px-3 py-2 flex justify-between text-[11px] font-bold">
+            <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded px-2 py-1.5 flex justify-between text-[10px] font-bold">
               <span className="text-orange-700 dark:text-orange-400">Total despesas</span>
               <span className="text-orange-800 dark:text-orange-300">{formatMoeda(calc.totalDespesas)}</span>
             </div>
