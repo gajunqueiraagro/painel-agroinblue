@@ -178,8 +178,8 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
           const liqCabeca = totals.qtd > 0 ? totals.valorTotal / totals.qtd : 0;
           const liqKgTotal = totals.pesoVivoTotal > 0 ? totals.valorTotal / totals.pesoVivoTotal : 0;
           return (
-            <tfoot>
-              <tr className="border-t-2 border-primary/40 bg-muted/30 font-bold text-[10px]">
+             <tfoot className="sticky bottom-0 z-10">
+              <tr className="border-t-2 border-primary/40 bg-background font-bold text-[10px]">
                 <td className="px-1 py-[3px]">TOTAL</td>
                 {showTipo && <td className="px-1 py-[3px]"></td>}
                 <td className="px-1 py-[3px] text-right">{totals.qtd}</td>
@@ -275,8 +275,8 @@ function AbateTable({ lancamentos, onEdit, isGlobal, fazendaMap }: { lancamentos
           const liqArroba = totals.arrobasTotal > 0 ? totals.valorTotal / totals.arrobasTotal : 0;
           const liqCabeca = totals.qtd > 0 ? totals.valorTotal / totals.qtd : 0;
           return (
-            <tfoot>
-              <tr className="border-t-2 border-primary/40 bg-muted/30 font-bold text-[10px]">
+            <tfoot className="sticky bottom-0 z-10">
+              <tr className="border-t-2 border-primary/40 bg-background font-bold text-[10px]">
                 <td className="px-1 py-[3px]">TOTAL</td>
                 <td className="px-1 py-[3px] text-right">{totals.qtd}</td>
                 <td className="px-1 py-[3px]"></td>
@@ -410,10 +410,10 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   }
 
   return (
-    <div className="max-w-full mx-auto animate-fade-in pb-20">
+    <div className="flex flex-col h-[calc(100vh-120px)] max-w-full mx-auto animate-fade-in">
       {/* Drill-down header */}
       {(onBack || drillDownLabel) && (
-        <div className="sticky top-0 z-30 bg-background border-b border-border/50 shadow-sm px-3 py-2 space-y-1.5">
+        <div className="flex-none bg-background border-b border-border/50 shadow-sm px-3 py-2 space-y-1.5">
           {onBack && (
             <button
               onClick={onBack}
@@ -431,8 +431,8 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           )}
         </div>
       )}
-      {/* Sticky filter bar */}
-      <div className={`sticky ${onBack || drillDownLabel ? 'top-[60px]' : 'top-0'} z-20 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 space-y-1`}>
+      {/* Filter bar - fixed */}
+      <div className="flex-none bg-background border-b border-border/50 shadow-sm px-3 py-1.5 space-y-1 z-20">
       {/* Top tabs */}
       <div className={`grid gap-0.5 bg-muted rounded-md p-0.5 max-w-md ${modoMovimentacao ? 'grid-cols-2' : `grid-cols-${topTabs.length}`}`}>
         {topTabs.map(t => (
@@ -520,8 +520,8 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       </div>
       </div>
 
-      {/* Content */}
-      <div className="p-4 pt-2">
+      {/* Content - scrollable */}
+      <div className="flex-1 overflow-y-auto min-h-0 px-4 pt-2 pb-4">
       {topTab === 'todas' ? (
         <UnifiedTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} showTipo isGlobal={isGlobal} fazendaMap={fazendaMap} />
       ) : subAba === 'abate' ? (
