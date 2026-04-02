@@ -28,6 +28,8 @@ import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
 import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/components/compra/CompraDetalhesDialog';
 import { CompraResumoPanel } from '@/components/compra/CompraResumoPanel';
 import { gerarFinanceiroCompra } from '@/components/compra/gerarFinanceiroCompra';
+import { AbateDetalhesDialog, AbateDetalhes, EMPTY_ABATE_DETALHES } from '@/components/abate/AbateDetalhesDialog';
+import { AbateResumoPanel } from '@/components/abate/AbateResumoPanel';
 import { AbateExportDialog } from '@/components/AbateExportMenu';
 import { AbateFinanceiroPanel, AbateFinanceiroPanelRef } from '@/components/AbateFinanceiroPanel';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -152,6 +154,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [submitting, setSubmitting] = useState(false);
   const [compraDetalhes, setCompraDetalhes] = useState<CompraDetalhes | null>(null);
   const [compraDialogOpen, setCompraDialogOpen] = useState(false);
+  const [abateDetalhes, setAbateDetalhes] = useState<AbateDetalhes | null>(null);
+  const [abateDialogOpen, setAbateDialogOpen] = useState(false);
 
   const [motivoMorte, setMotivoMorte] = useState('');
   const [motivoMorteCustom, setMotivoMorteCustom] = useState('');
@@ -226,7 +230,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const calc = useMemo(() => {
     const qtd = Number(quantidade) || 0;
     const peso = Number(pesoKg) || 0;
-    const rend = Number(rendCarcaca) || 0;
+    // For abate with modal detalhes, source from abateDetalhes
+    const abRendCarcaca = isAbate && abateDetalhes ? Number(abateDetalhes.rendCarcaca) || 0 : Number(rendCarcaca) || 0;
+    const abPrecoArroba = isAbate && abateDetalhes ? Number(abateDetalhes.precoArroba) || 0 : Number(precoArroba) || 0;
+    const abBonusPrecoce = isAbate && abateDetalhes ? Number(abateDetalhes.bonusPrecoce) || 0 : Number(bonusPrecoce) || 0;
+    const abBonusQualidade = isAbate && abateDetalhes ? Number(abateDetalhes.bonusQualidade) || 0 : Number(bonusQualidade) || 0;
+    const abBonusListaTrace = isAbate && abateDetalhes ? Number(abateDetalhes.bonusListaTrace) || 0 : Number(bonusListaTrace) || 0;
+    const abDescQualidade = isAbate && abateDetalhes ? Number(abateDetalhes.descontoQualidade) || 0 : Number(descontoQualidade) || 0;
+    const abFunruralPct = isAbate && abateDetalhes ? Number(abateDetalhes.funruralPct) || 0 : Number(funruralPct) || 0;
+    const abFunruralReais = isAbate && abateDetalhes ? Number(abateDetalhes.funruralReais) || 0 : Number(funruralReais) || 0;
+    const abOutrosDescontos = isAbate && abateDetalhes ? Number(abateDetalhes.outrosDescontos) || 0 : Number(outrosDescontos) || 0;
+
+    const rend = abRendCarcaca;
     const carcacaCalc = isAbate && rend > 0 ? peso * rend / 100 : Number(pesoCarcacaKg) || 0;
     let pesoArroba = 0;
     if (isAbate) { pesoArroba = carcacaCalc > 0 ? carcacaCalc / 15 : 0; }
@@ -234,27 +249,23 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const totalArrobas = pesoArroba * qtd;
     const totalKg = peso * qtd;
     let valorBruto = 0;
-    if (usaPrecoArroba) { valorBruto = totalArrobas * (Number(precoArroba) || 0); }
+    if (usaPrecoArroba) { valorBruto = totalArrobas * abPrecoArroba; }
     else if (isVenda) {
-      // Venda normal: use vendaTipoPreco + vendaPrecoInput
       const vi = Number(vendaPrecoInput) || 0;
       if (vendaTipoPreco === 'por_kg') { valorBruto = totalKg * vi; }
       else if (vendaTipoPreco === 'por_cab') { valorBruto = qtd * vi; }
       else if (vendaTipoPreco === 'por_total') { valorBruto = vi; }
     }
     else if (usaPrecoKg) { valorBruto = totalKg * (Number(precoKg) || 0); }
-    // Abate: bonus/desconto inputs are R$/@ → multiply by totalArrobas
-    const bonusPrecoceTotal = isAbate ? (Number(bonusPrecoce) || 0) * totalArrobas : 0;
-    const bonusQualidadeTotal = isAbate ? (Number(bonusQualidade) || 0) * totalArrobas : 0;
-    const bonusListaTraceTotal = isAbate ? (Number(bonusListaTrace) || 0) * totalArrobas : 0;
-    // Venda em Pé: descontos use R$ values directly; Abate: R$/@ × totalArrobas
-    const descQualidadeTotal = isAbate ? (Number(descontoQualidade) || 0) * totalArrobas : (Number(descontoQualidade) || 0);
-    // Funrural: if manual R$ is filled, use it directly; otherwise calc from %
-    const funruralReaisVal = Number(funruralReais) || 0;
+    const bonusPrecoceTotal = isAbate ? abBonusPrecoce * totalArrobas : 0;
+    const bonusQualidadeTotal = isAbate ? abBonusQualidade * totalArrobas : 0;
+    const bonusListaTraceTotal = isAbate ? abBonusListaTrace * totalArrobas : 0;
+    const descQualidadeTotal = isAbate ? abDescQualidade * totalArrobas : (Number(descontoQualidade) || 0);
+    const funruralReaisVal = abFunruralReais;
     const descFunruralTotal = (isAbate || isVenda)
-      ? (funruralReaisVal > 0 ? funruralReaisVal : valorBruto * (Number(funruralPct) || 0) / 100)
+      ? (funruralReaisVal > 0 ? funruralReaisVal : valorBruto * abFunruralPct / 100)
       : 0;
-    const descOutrosTotal = (isAbate || isVenda) ? (Number(outrosDescontos) || 0) : 0;
+    const descOutrosTotal = (isAbate || isVenda) ? abOutrosDescontos : 0;
     const totalBonus = isAbate
       ? bonusPrecoceTotal + bonusQualidadeTotal + bonusListaTraceTotal
       : (Number(bonus) || 0);
@@ -361,6 +372,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setFinanceiroOpen(false);
     setCompraDetalhes(null);
     setCompraDialogOpen(false);
+    setAbateDetalhes(null);
+    setAbateDialogOpen(false);
     resetFinancialFields();
     vendaFinanceiroRef.current?.resetForm();
     consumoFinanceiroRef.current?.resetForm();
@@ -425,8 +438,39 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setFunruralPct('');
     }
 
-    // 7. Open financial panel and set editing mode
-    setFinanceiroOpen(true);
+    // 7. Build abateDetalhes for new modal flow
+    const rendCalc = l.pesoCarcacaKg && l.pesoMedioKg && l.pesoMedioKg > 0
+      ? String(((l.pesoCarcacaKg / l.pesoMedioKg) * 100).toFixed(2)) : '';
+    const funruralPctCalc = (() => {
+      if (l.descontoFunrural && l.descontoFunrural > 0 && totalArrobas > 0 && l.precoArroba) {
+        const vb = totalArrobas * l.precoArroba;
+        return vb > 0 ? String(((l.descontoFunrural / vb) * 100).toFixed(2)) : '';
+      }
+      return '';
+    })();
+
+    setAbateDetalhes({
+      dataVenda: l.dataVenda || '',
+      dataEmbarque: l.dataEmbarque || '',
+      dataAbate: l.dataAbate || l.data || '',
+      tipoVenda: l.tipoVenda || '',
+      tipoPeso: l.tipoPeso || 'vivo',
+      rendCarcaca: rendCalc,
+      precoArroba: l.precoArroba ? String(l.precoArroba) : '',
+      bonusPrecoce: toArroba(l.bonusPrecoce),
+      bonusQualidade: toArroba(l.bonusQualidade),
+      bonusListaTrace: toArroba(l.bonusListaTrace),
+      descontoQualidade: toArroba(l.descontoQualidade),
+      funruralPct: funruralPctCalc,
+      funruralReais: '',
+      outrosDescontos: l.outrosDescontos ? String(l.outrosDescontos) : '',
+      notaFiscal: l.notaFiscal || '',
+      formaReceb: 'avista',
+      qtdParcelas: '1',
+      parcelas: [],
+    });
+
+    // 8. Set editing mode
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
@@ -477,12 +521,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     if (isAbate) {
       if (!abateFornecedorId) { toast.error('Selecione o Frigorífico (Fornecedor) para continuar'); return; }
-      if (isConfirmado || isConciliado) {
-        if (!tipoVenda) { toast.error('Selecione a Comercialização'); return; }
-        if (!tipoPeso) { toast.error('Selecione o Tipo de Abate'); return; }
-        if (!rendCarcaca || Number(rendCarcaca) <= 0) { toast.error('Informe o Rendimento de Carcaça (%)'); return; }
-        if (!precoArroba || Number(precoArroba) <= 0) { toast.error('Informe o R$/@ (preço base)'); return; }
-      }
+      if (!abateDetalhes) { toast.error('Clique em "Completar Abate" para preencher os detalhes financeiros'); return; }
     }
     if (aba === 'saida' && !isAbate && !isMorte) {
       if (campos.destino?.show && !campos.destino.auto && !fazendaDestino) { toast.error('Informe o Destino'); return; }
@@ -529,9 +568,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     const valorTotalFinal = calc.valorLiquido > 0 ? calc.valorLiquido : undefined;
 
-    const abateDataVenda = isAbate ? (dataVenda || format(new Date(), 'yyyy-MM-dd')) : (dataVenda || undefined);
+    const abateDataVenda = isAbate ? (abateDetalhes?.dataVenda || dataVenda || format(new Date(), 'yyyy-MM-dd')) : (dataVenda || undefined);
     const abateDataEmbarque = isAbate && data ? format(addDays(parseISO(data), -1), 'yyyy-MM-dd') : (dataEmbarque || undefined);
     const abateDataAbate = isAbate ? data : (dataAbate || undefined);
+    const abTipoPeso = isAbate && abateDetalhes ? abateDetalhes.tipoPeso : tipoPeso;
+    const abTipoVenda = isAbate && abateDetalhes ? abateDetalhes.tipoVenda : tipoVenda;
+    const abNotaFiscal = isAbate && abateDetalhes ? abateDetalhes.notaFiscal : notaFiscal;
 
     const lancamentoDados: Partial<Omit<Lancamento, 'id'>> = {
       data, tipo, quantidade: Number(quantidade), categoria: categoria as Categoria,
@@ -540,23 +582,23 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       pesoMedioArrobas: pesoKg ? kgToArrobas(Number(pesoKg)) : undefined,
       observacao: observacao || undefined,
       pesoCarcacaKg: isAbate ? (calc.carcacaCalc > 0 ? calc.carcacaCalc : undefined) : numOrUndef(pesoCarcacaKg),
-      precoArroba: numOrUndef(precoArroba) || undefined,
+      precoArroba: isAbate && abateDetalhes ? (Number(abateDetalhes.precoArroba) || undefined) : (numOrUndef(precoArroba) || undefined),
       bonusPrecoce: isAbate ? (calc.bonusPrecoceTotal > 0 ? calc.bonusPrecoceTotal : undefined) : numOrUndef(bonusPrecoce),
       bonusQualidade: isAbate ? (calc.bonusQualidadeTotal > 0 ? calc.bonusQualidadeTotal : undefined) : numOrUndef(bonusQualidade),
       bonusListaTrace: isAbate ? (calc.bonusListaTraceTotal > 0 ? calc.bonusListaTraceTotal : undefined) : numOrUndef(bonusListaTrace),
       descontoQualidade: (isAbate || isVenda) ? (calc.descQualidadeTotal > 0 ? calc.descQualidadeTotal : undefined) : numOrUndef(descontoQualidade),
       descontoFunrural: (isAbate || isVenda) ? (calc.descFunruralTotal > 0 ? calc.descFunruralTotal : undefined) : numOrUndef(descontoFunrural),
-      outrosDescontos: (isAbate || isVenda) ? (Number(outrosDescontos) || undefined) : numOrUndef(outrosDescontos),
+      outrosDescontos: (isAbate || isVenda) ? (calc.descOutrosTotal > 0 ? calc.descOutrosTotal : undefined) : numOrUndef(outrosDescontos),
       acrescimos: numOrUndef(bonus),
       deducoes: numOrUndef(descontos),
       valorTotal: valorTotalFinal,
-      notaFiscal: isAbate && isConfirmado ? undefined : (notaFiscal || undefined),
-      tipoPeso,
+      notaFiscal: abNotaFiscal || undefined,
+      tipoPeso: abTipoPeso,
       statusOperacional: statusOp,
       dataVenda: abateDataVenda || undefined,
       dataEmbarque: abateDataEmbarque || undefined,
       dataAbate: abateDataAbate || undefined,
-      tipoVenda: tipoVenda || undefined,
+      tipoVenda: abTipoVenda || undefined,
     };
 
     setSubmitting(true);
@@ -1787,7 +1829,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <div className="col-span-2 self-start">{renderHistorico()}</div>
         ) : (
           <>
-            {renderForm()}
+             {renderForm()}
             {isCompra ? (
               <>
                 <CompraResumoPanel
@@ -1815,6 +1857,49 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   quantidade={Number(quantidade) || 0}
                   pesoKg={Number(pesoKg) || 0}
                   dataCompra={data}
+                />
+              </>
+            ) : isAbate ? (
+              <>
+                <AbateResumoPanel
+                  quantidade={Number(quantidade) || 0}
+                  pesoKg={Number(pesoKg) || 0}
+                  categoria={categoria}
+                  frigorificoNome={abateFornecedores.find(f => f.id === abateFornecedorId)?.nome || ''}
+                  detalhes={abateDetalhes}
+                  detalhesPreenchidos={!!abateDetalhes}
+                  canOpenModal={!!(data && quantidade && Number(quantidade) > 0 && pesoKg && Number(pesoKg) > 0 && categoria && abateFornecedorId)}
+                  onOpenModal={() => setAbateDialogOpen(true)}
+                  onRequestRegister={handleRequestRegister}
+                  submitting={submitting}
+                  registerLabel={editingAbateId ? 'Salvar Alterações do Abate' : 'Registrar Abate'}
+                />
+                <AbateDetalhesDialog
+                  open={abateDialogOpen}
+                  onClose={() => setAbateDialogOpen(false)}
+                  onSave={(det) => {
+                    setAbateDetalhes(det);
+                    setNotaFiscal(det.notaFiscal);
+                    setPrecoArroba(det.precoArroba);
+                    setRendCarcaca(det.rendCarcaca);
+                    setTipoPeso(det.tipoPeso);
+                    setTipoVenda(det.tipoVenda);
+                    setBonusPrecoce(det.bonusPrecoce);
+                    setBonusQualidade(det.bonusQualidade);
+                    setBonusListaTrace(det.bonusListaTrace);
+                    setDescontoQualidade(det.descontoQualidade);
+                    setFunruralPct(det.funruralPct);
+                    setFunruralReais(det.funruralReais);
+                    setOutrosDescontos(det.outrosDescontos);
+                    setDataVenda(det.dataVenda);
+                    setAbateDialogOpen(false);
+                  }}
+                  initialData={abateDetalhes || EMPTY_ABATE_DETALHES}
+                  quantidade={Number(quantidade) || 0}
+                  pesoKg={Number(pesoKg) || 0}
+                  categoria={categoria}
+                  dataAbate={data}
+                  statusOp={statusOp}
                 />
               </>
             ) : (
