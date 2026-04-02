@@ -105,7 +105,7 @@ function exportPDF(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], a
   const head = [['Comp.', 'Pgto', 'Produto', 'Fornecedor', 'Valor', 'NF', 'Status']];
   const body = rows.map(r => [
     r.comp, r.pgto, r.produto, r.fornecedor,
-    (r.sinal >= 0 ? '' : '- ') + `R$ ${r.valorFmt}`,
+    formatMoeda(r.sinal >= 0 ? Math.abs(r.valor) : -Math.abs(r.valor)),
     r.nf, r.status,
   ]);
 
