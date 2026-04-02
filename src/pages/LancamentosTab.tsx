@@ -1500,6 +1500,37 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               )}
             </div>
           )}
+          {/* For compra: fornecedor select same pattern as abate */}
+          {isCompra && (
+            <div>
+              <Label className="font-bold text-[11px]">Fornecedor (quem você pagou) *</Label>
+              <div className="flex items-center gap-1 mt-0.5">
+                <div className="flex-1">
+                  <SearchableSelect
+                    value={compraFornecedorId || '__all__'}
+                    onValueChange={(v) => setCompraFornecedorId(v === '__all__' ? '' : v)}
+                    options={abateFornecedores.map(f => ({ value: f.id, label: f.nome }))}
+                    placeholder="Selecione ou cadastre o fornecedor"
+                    allLabel="Nenhum selecionado"
+                    allValue="__all__"
+                    className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => setNovoFornecedorCompraOpen(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              {!compraFornecedorId && (
+                <p className="text-[10px] text-destructive mt-0.5">Selecione o fornecedor para continuar</p>
+              )}
+            </div>
+          )}
           {/* For non-abate types: keep original destino field */}
           {!isAbate && campos.destino?.show && (
             <div>
