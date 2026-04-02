@@ -194,19 +194,8 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     };
   }, [data]);
 
-    const custoPorCab = qtdCabecas > 0 ? custoTotal / qtdCabecas : 0;
-    const custoPorArroba = arrobasProduzidas > 0 ? custoTotal / arrobasProduzidas : 0;
 
-    return {
-      pesoLiqEntrada, ganhoKg, pesoFinal,
-      arrobasEntrada, arrobasSaida, arrobasProduzidas, arrobasTotalSaida,
-      gmc,
-      faturamentoBruto, custosAbate, faturamentoLiquido,
-      custoDiariaTotal, custosSanitarios, outrosCustosTotal, custosFreteTotal,
-      custoTotal, custoPorCab, custoPorArroba,
-      lucroTotal, lucroPorCab, lucroPorArroba, lucroPorKg,
-    };
-  }, [data]);
+
 
   const handleSave = () => { onSave(data); onClose(); };
   const isPositive = calc.lucroTotal > 0;
