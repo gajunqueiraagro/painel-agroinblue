@@ -455,6 +455,28 @@ export function CadastrosTab({ onTabChange }: { onTabChange?: (tab: string) => v
           </AccordionContent>
         </AccordionItem>
 
+        {/* Central de Auditoria */}
+        <AccordionItem value="auditoria" className="border rounded-lg">
+          <AccordionTrigger className="px-4 py-3 text-sm font-bold">
+            <span className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4" /> Central de Auditoria
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="px-4 pb-4">
+            <p className="text-xs text-muted-foreground mb-3">
+              Monitore todas as ações realizadas no sistema: criações, edições, cancelamentos e exclusões.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => onTabChange?.('auditoria')}
+            >
+              <ShieldCheck className="h-4 w-4 mr-1" /> Abrir Central de Auditoria
+            </Button>
+          </AccordionContent>
+        </AccordionItem>
+
         {/* Ajustes Finais — telas legadas */}
         <AccordionItem value="ajustes_finais" className="border rounded-lg border-dashed border-muted-foreground/30">
           <AccordionTrigger className="px-4 py-3 text-sm font-bold text-muted-foreground">
