@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Save, Plus, Trash2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import type { LancamentoV2Form, ContaBancariaV2, ClassificacaoItem } from '@/hooks/useFinanceiroV2';
+import { STATUS_LABEL as STATUS_LABEL_MAP } from '@/lib/statusOperacional';
 
 interface RowData {
   id: string;
