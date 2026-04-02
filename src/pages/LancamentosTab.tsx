@@ -829,7 +829,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     return (
       <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
-        <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
+        <h3 className="text-[11px] font-semibold uppercase text-foreground/80 tracking-wide">Detalhes Financeiros</h3>
         <Separator />
 
         {/* Datas da Operação — collapsible */}
@@ -1067,7 +1067,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (isTransferencia) {
       return (
         <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
-          <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
+           <h3 className="text-[11px] font-semibold uppercase text-foreground/80 tracking-wide">Detalhes Financeiros</h3>
           <Separator />
           <div className="flex gap-2 items-start py-1">
             <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
@@ -1091,7 +1091,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (isMorte) {
       return (
         <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
-          <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
+           <h3 className="text-[11px] font-semibold uppercase text-foreground/80 tracking-wide">Detalhes Financeiros</h3>
           <Separator />
           <div className="flex gap-2 items-start py-1">
             <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
@@ -1204,7 +1204,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     return (
     <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
-      <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
+      <h3 className="text-[11px] font-semibold uppercase text-foreground/80 tracking-wide">Detalhes Financeiros</h3>
       <Separator />
 
       {/* Nascimento: sem impacto financeiro */}

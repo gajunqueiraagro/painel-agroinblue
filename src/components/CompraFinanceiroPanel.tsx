@@ -54,10 +54,10 @@ export interface CompraFinanceiroPanelRef {
 function CollapsibleBlock({ title, open, onOpenChange, children, summary }: { title: string; open: boolean; onOpenChange: (v: boolean) => void; children: React.ReactNode; summary?: string }) {
   return (
     <Collapsible open={open} onOpenChange={onOpenChange}>
-      <CollapsibleTrigger className="flex items-center justify-between w-full text-[10px] font-bold uppercase text-muted-foreground tracking-wide py-1 hover:text-foreground transition-colors group">
-        <div className="flex items-center">
+      <CollapsibleTrigger className="flex items-center justify-between w-full text-[10px] font-semibold uppercase text-foreground/70 tracking-wide py-1 hover:text-foreground transition-colors group">
+        <div className="flex items-center gap-1">
           {title}
-          {summary && <span className="text-[9px] italic text-muted-foreground ml-1 truncate max-w-[120px] font-normal normal-case">{summary}</span>}
+          {summary && <span className="text-[9px] italic text-muted-foreground/70 truncate max-w-[120px] font-normal normal-case">{summary}</span>}
         </div>
         {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
       </CollapsibleTrigger>
@@ -443,7 +443,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
   return (
     <div className="bg-card rounded-md border shadow-sm p-2.5 space-y-1.5 self-start relative">
 
-      <h3 className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">
+      <h3 className="text-[11px] font-semibold uppercase text-foreground/80 tracking-wide">
         {mode === 'update' ? 'Atualizar Financeiro da Compra' : 'Detalhes Financeiros'}
       </h3>
       {mode === 'update' && existingCount > 0 && (

@@ -460,19 +460,19 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
     : funruralReais;
 
   const summaryBadge = (text: string) => (
-    <span className="text-[9px] italic text-muted-foreground ml-1 truncate max-w-[120px]">{text}</span>
+    <span className="text-[9px] italic text-muted-foreground/70 ml-1 truncate max-w-[120px]">{text}</span>
   );
 
   return (
     <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
-      <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros — Venda</h3>
+      <h3 className="text-[11px] font-semibold uppercase text-foreground/80 tracking-wide">Detalhes Financeiros — Venda</h3>
       <Separator />
 
       {/* 1. TIPO DE VENDA */}
       <Collapsible>
         <CollapsibleTrigger className="flex items-center justify-between w-full group">
           <div className="flex items-center">
-            <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Tipo de Venda</h4>
+            <h4 className="text-[10px] font-semibold text-foreground/70 uppercase">Tipo de Venda</h4>
             {tipoVendaLabel && summaryBadge(tipoVendaLabel)}
           </div>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
@@ -522,7 +522,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           <Collapsible>
             <CollapsibleTrigger className="flex items-center justify-between w-full group">
               <div className="flex items-center">
-                <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Tipo de Preço</h4>
+                <h4 className="text-[10px] font-semibold text-foreground/70 uppercase">Tipo de Preço</h4>
                 {summaryBadge(`${tipoPrecoLabel}${valorBruto > 0 ? ` · ${formatMoeda(valorBruto)}` : ''}`)}
               </div>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
@@ -569,7 +569,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           <Collapsible>
             <CollapsibleTrigger className="flex items-center justify-between w-full group">
               <div className="flex items-center">
-                <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Despesas Comerciais</h4>
+                <h4 className="text-[10px] font-semibold text-foreground/70 uppercase">Despesas Comerciais</h4>
                 {despesasComTotal > 0 && summaryBadge(formatMoeda(despesasComTotal))}
               </div>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
@@ -598,7 +598,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           <Collapsible>
             <CollapsibleTrigger className="flex items-center justify-between w-full group">
               <div className="flex items-center">
-                <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Deduções / Encargos</h4>
+                <h4 className="text-[10px] font-semibold text-foreground/70 uppercase">Deduções / Encargos</h4>
                 {deducoesTotal > 0 && summaryBadge(formatMoeda(deducoesTotal))}
               </div>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
@@ -664,7 +664,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         <>
           <Collapsible>
             <CollapsibleTrigger className="flex items-center justify-between w-full group">
-              <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Descontos</h4>
+              <h4 className="text-[10px] font-semibold text-foreground/70 uppercase">Descontos</h4>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1.5 pt-1">
@@ -711,7 +711,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       <Collapsible>
         <CollapsibleTrigger className="flex items-center justify-between w-full group">
           <div className="flex items-center">
-            <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Informações de Recebimento</h4>
+            <h4 className="text-[10px] font-semibold text-foreground/70 uppercase">Informações de Recebimento</h4>
             {summaryBadge(recebLabel)}
           </div>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
@@ -719,7 +719,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         <CollapsibleContent className="space-y-2 pt-2">
 
           <div className="space-y-1.5">
-            <h5 className="text-[10px] font-bold text-muted-foreground uppercase">Forma de Recebimento</h5>
+            <h5 className="text-[10px] font-semibold text-foreground/70 uppercase">Forma de Recebimento</h5>
             <div className="grid grid-cols-2 gap-1.5">
               <button type="button" onClick={() => { setFormaReceb('avista'); setParcelas([]); }}
                 className={`h-8 rounded text-[12px] font-bold border-2 transition-all ${formaReceb === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
