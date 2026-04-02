@@ -47,10 +47,10 @@ export function FechExecZootecnicoPage({ snapshot }: Props) {
           <CardTitle className="text-sm">Movimentação do Rebanho</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          <Row label="Compras" value={`+${formatNum(zoo.compras_cab ?? 0)} cab`} color="text-green-700" />
-          <Row label="Nascimentos" value={`+${formatNum(zoo.nascimentos ?? 0)} cab`} color="text-green-700" />
-          <Row label="Vendas" value={`-${formatNum(zoo.vendas_cab ?? 0)} cab`} color="text-red-700" />
-          <Row label="Mortes" value={`-${formatNum(zoo.mortes ?? 0)} cab`} color="text-red-700" />
+          <Row label="Compras" value={`+${formatCabecas(zoo.compras_cab ?? 0)}`} color="text-green-700" />
+          <Row label="Nascimentos" value={`+${formatCabecas(zoo.nascimentos ?? 0)}`} color="text-green-700" />
+          <Row label="Vendas" value={`-${formatCabecas(zoo.vendas_cab ?? 0)}`} color="text-red-700" />
+          <Row label="Mortes" value={`-${formatCabecas(zoo.mortes ?? 0)}`} color="text-red-700" />
         </CardContent>
       </Card>
     </div>

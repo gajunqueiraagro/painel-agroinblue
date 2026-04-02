@@ -127,8 +127,8 @@ function gerarTextoIndividual(l: Lancamento, fazendaNome?: string): string {
     );
     if (l.notaFiscal) lines.push(`📄 NF: ${l.notaFiscal}`);
     lines.push(
-      `⚖️ Peso vivo: ${fmtValor(l.pesoMedioKg)} kg`,
-      `📐 Peso @: ${fmtValor(c.pesoArroba)} @`,
+      `⚖️ Peso vivo: ${formatKg(l.pesoMedioKg)}`,
+      `📐 Peso @: ${formatArroba(c.pesoArroba)}`,
       `💲 Preço/@: ${formatMoeda(l.precoArroba)}`,
       ``,
       `💰 *Valor Total: ${formatMoeda(c.valorFinal)}*`,

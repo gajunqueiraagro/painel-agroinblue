@@ -147,13 +147,13 @@ function ResumoLateral({ lancamentos, subAba, anoFiltro, mesFiltro, statusFiltro
   }, [lancamentos]);
 
   const kpiItems: { label: string; value: string; highlight?: boolean }[] = [
-    { label: 'Qtde', value: `${stats.qtd} cab` },
-    { label: 'Peso médio', value: `${stats.pesoMedio.toFixed(2)} kg` },
-    ...(subAba === 'abate' ? [{ label: 'RC%', value: stats.rendMedio ? `${stats.rendMedio.toFixed(1)}%` : '-' }] : []),
-    { label: 'Peso @', value: `${stats.arrobaMedio.toFixed(2)} @` },
-    { label: 'Valor total', value: fmtValor(stats.valorTotal), highlight: true },
-    { label: 'R$/Líq @', value: fmtValor(stats.liqArroba) },
-    { label: 'Líq/Cab', value: fmtValor(stats.liqCabeca) },
+    { label: 'Qtde', value: formatCabecas(stats.qtd) },
+    { label: 'Peso médio', value: formatKg(stats.pesoMedio) },
+    ...(subAba === 'abate' ? [{ label: 'RC%', value: stats.rendMedio ? formatPercent(stats.rendMedio) : '-' }] : []),
+    { label: 'Peso @', value: formatArroba(stats.arrobaMedio) },
+    { label: 'Valor total', value: formatMoeda(stats.valorTotal), highlight: true },
+    { label: 'R$/Líq @', value: formatMoeda(stats.liqArroba) },
+    { label: 'Líq/Cab', value: formatMoeda(stats.liqCabeca) },
   ];
 
   return (
