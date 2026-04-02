@@ -1321,6 +1321,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       )}
       </>
       )}
+      </>
+      )}
 
       {/* Unified register button for non-abate operations */}
       {!(aba === 'entrada' && tipo === 'nascimento') && (
