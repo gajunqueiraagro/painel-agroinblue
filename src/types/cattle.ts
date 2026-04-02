@@ -71,7 +71,7 @@ export interface Lancamento {
   deducoes?: number;
   valorTotal?: number;
   notaFiscal?: string;
-  tipoPeso?: 'vivo' | 'morto';
+  tipoPeso?: string;
   statusOperacional?: 'previsto' | 'confirmado' | 'conciliado';
   // Abate workflow fields
   dataVenda?: string;

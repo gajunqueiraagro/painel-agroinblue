@@ -38,11 +38,9 @@ interface Props {
   onRequestRegister?: () => void;
   registerLabel?: string;
   submitting?: boolean;
-  // Comercialização and tipo venda fields (managed by parent for persistence)
-  tipoVenda: string;
-  onTipoVendaChange: (v: string) => void;
-  tipoPeso: 'vivo' | 'morto';
-  onTipoPesoChange: (v: 'vivo' | 'morto') => void;
+  // Tipo de venda field (managed by parent for persistence)
+  tipoPeso: string;
+  onTipoPesoChange: (v: string) => void;
   // Values from parent calc
   valorBruto: number;
   totalBonus: number;
@@ -61,7 +59,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   quantidade, pesoKg, categoria, data, destino, notaFiscal, onNotaFiscalChange,
   statusOp, lancamentoId, mode = 'create', onFinanceiroUpdated,
   onRequestRegister, registerLabel, submitting: externalSubmitting,
-  tipoVenda, onTipoVendaChange, tipoPeso, onTipoPesoChange,
+  tipoPeso, onTipoPesoChange,
   valorBruto, totalBonus, totalDescontos, valorLiquido,
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
@@ -357,37 +355,18 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros — Venda</h3>
       <Separator />
 
-      {/* Comercialização e Tipo */}
-      <Collapsible defaultOpen>
-        <CollapsibleTrigger className="flex items-center justify-between w-full group">
-          <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Comercialização</h4>
-          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-        </CollapsibleTrigger>
-        <CollapsibleContent className="space-y-1.5 pt-1">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground min-w-[90px]">Comercialização</span>
-            <Select value={tipoVenda} onValueChange={onTipoVendaChange}>
-              <SelectTrigger className="h-7 text-[11px] flex-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="escala" className="text-[11px]">Escala</SelectItem>
-                <SelectItem value="a_termo" className="text-[11px]">A termo</SelectItem>
-                <SelectItem value="spot" className="text-[11px]">Spot</SelectItem>
-                <SelectItem value="outro" className="text-[11px]">Outro</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground min-w-[90px]">Tipo de Venda</span>
-            <Select value={tipoPeso} onValueChange={(v: 'vivo' | 'morto') => onTipoPesoChange(v)}>
-              <SelectTrigger className="h-7 text-[11px] flex-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="vivo" className="text-[11px]">Peso vivo</SelectItem>
-                <SelectItem value="morto" className="text-[11px]">Peso morto</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
+      {/* Tipo de Venda */}
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] text-muted-foreground min-w-[90px]">Tipo de Venda</span>
+        <Select value={tipoPeso} onValueChange={(v: any) => onTipoPesoChange(v)}>
+          <SelectTrigger className="h-7 text-[11px] flex-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="desmama" className="text-[11px]">Desmama</SelectItem>
+            <SelectItem value="gado_adulto" className="text-[11px]">Gado Adulto</SelectItem>
+            <SelectItem value="boitel" className="text-[11px]">Boitel</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       <Separator />
 
@@ -434,10 +413,6 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-2 pt-2">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground min-w-[90px]">Nota Fiscal</span>
-            <Input value={notaFiscal} onChange={e => onNotaFiscalChange(e.target.value)} placeholder="Nº da nota" className="h-7 text-[11px] flex-1" />
-          </div>
 
           <div className="space-y-1.5">
             <h5 className="text-[10px] font-bold text-muted-foreground uppercase">Forma de Recebimento</h5>

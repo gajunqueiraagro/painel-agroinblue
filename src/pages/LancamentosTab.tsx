@@ -162,7 +162,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [frete, setFrete] = useState('');
   const [outrasDespesas, setOutrasDespesas] = useState('');
   const [notaFiscal, setNotaFiscal] = useState('');
-  const [tipoPeso, setTipoPeso] = useState<'vivo' | 'morto'>('vivo');
+  const [tipoPeso, setTipoPeso] = useState<string>('vivo');
   const [rendCarcaca, setRendCarcaca] = useState('');
   const [funruralPct, setFunruralPct] = useState('');
 
@@ -215,13 +215,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const bonusPrecoceTotal = isAbate ? (Number(bonusPrecoce) || 0) * totalArrobas : 0;
     const bonusQualidadeTotal = isAbate ? (Number(bonusQualidade) || 0) * totalArrobas : 0;
     const bonusListaTraceTotal = isAbate ? (Number(bonusListaTrace) || 0) * totalArrobas : 0;
-    const descQualidadeTotal = isAbate ? (Number(descontoQualidade) || 0) * totalArrobas : 0;
-    const descFunruralTotal = isAbate ? valorBruto * (Number(funruralPct) || 0) / 100 : 0;
-    const descOutrosTotal = isAbate ? (Number(outrosDescontos) || 0) : 0;
+    // Venda em Pé: descontos use R$ values directly; Abate: R$/@ × totalArrobas
+    const descQualidadeTotal = isAbate ? (Number(descontoQualidade) || 0) * totalArrobas : (Number(descontoQualidade) || 0);
+    const descFunruralTotal = (isAbate || isVenda) ? valorBruto * (Number(funruralPct) || 0) / 100 : 0;
+    const descOutrosTotal = (isAbate || isVenda) ? (Number(outrosDescontos) || 0) : 0;
     const totalBonus = isAbate
       ? bonusPrecoceTotal + bonusQualidadeTotal + bonusListaTraceTotal
       : (Number(bonus) || 0);
-    const totalDescontos = isAbate
+    const totalDescontos = (isAbate || isVenda)
       ? descQualidadeTotal + descFunruralTotal + descOutrosTotal
       : (Number(descontos) || 0);
     const comissaoVal = isAbate ? 0 : valorBruto * (Number(comissaoPct) || 0) / 100;
@@ -237,7 +238,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       carcacaCalc, bonusPrecoceTotal, bonusQualidadeTotal, bonusListaTraceTotal,
       descQualidadeTotal, descFunruralTotal, descOutrosTotal,
     };
-  }, [quantidade, pesoKg, pesoCarcacaKg, rendCarcaca, precoArroba, precoKg, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, funruralPct, outrosDescontos, bonus, descontos, comissaoPct, frete, outrasDespesas, isAbate, usaPrecoArroba, usaPrecoKg]);
+  }, [quantidade, pesoKg, pesoCarcacaKg, rendCarcaca, precoArroba, precoKg, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, funruralPct, outrosDescontos, bonus, descontos, comissaoPct, frete, outrasDespesas, isAbate, isVenda, usaPrecoArroba, usaPrecoKg]);
 
   const gerarParcelas = useCallback((numParcelas: number, baseDate: string, valorTotal: number) => {
     const p: Parcela[] = [];
@@ -462,9 +463,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       bonusPrecoce: isAbate ? (calc.bonusPrecoceTotal > 0 ? calc.bonusPrecoceTotal : undefined) : numOrUndef(bonusPrecoce),
       bonusQualidade: isAbate ? (calc.bonusQualidadeTotal > 0 ? calc.bonusQualidadeTotal : undefined) : numOrUndef(bonusQualidade),
       bonusListaTrace: isAbate ? (calc.bonusListaTraceTotal > 0 ? calc.bonusListaTraceTotal : undefined) : numOrUndef(bonusListaTrace),
-      descontoQualidade: isAbate ? (calc.descQualidadeTotal > 0 ? calc.descQualidadeTotal : undefined) : numOrUndef(descontoQualidade),
-      descontoFunrural: isAbate ? (calc.descFunruralTotal > 0 ? calc.descFunruralTotal : undefined) : numOrUndef(descontoFunrural),
-      outrosDescontos: isAbate ? (Number(outrosDescontos) || undefined) : numOrUndef(outrosDescontos),
+      descontoQualidade: (isAbate || isVenda) ? (calc.descQualidadeTotal > 0 ? calc.descQualidadeTotal : undefined) : numOrUndef(descontoQualidade),
+      descontoFunrural: (isAbate || isVenda) ? (calc.descFunruralTotal > 0 ? calc.descFunruralTotal : undefined) : numOrUndef(descontoFunrural),
+      outrosDescontos: (isAbate || isVenda) ? (Number(outrosDescontos) || undefined) : numOrUndef(outrosDescontos),
       acrescimos: numOrUndef(bonus),
       deducoes: numOrUndef(descontos),
       valorTotal: valorTotalFinal,
@@ -616,8 +617,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       result.precoBase = Number(precoKg) || 0;
       result.precoBaseLabel = 'R$/kg';
       result.totalBruto = calc.valorBruto;
-      result.totalBonus = Number(bonus) || 0;
-      result.totalDescontos = Number(descontos) || 0;
+      result.totalBonus = isVenda ? 0 : (Number(bonus) || 0);
+      result.totalDescontos = isVenda ? calc.totalDescontos : (Number(descontos) || 0);
       result.valorLiquido = calc.valorLiquido;
       if (formaPagamento === 'parcelado' && parcelas.length > 0) {
         result.formaPagamento = `A prazo (${parcelas.length}x)`;
@@ -1049,8 +1050,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onNotaFiscalChange={setNotaFiscal}
           statusOp={statusOp}
           lancamentoId={lastSavedLancamentoId || undefined}
-          tipoVenda={tipoVenda}
-          onTipoVendaChange={setTipoVenda}
           tipoPeso={tipoPeso}
           onTipoPesoChange={setTipoPeso}
           valorBruto={calc.valorBruto}
@@ -1126,10 +1125,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
       )}
 
-      <div>
-        <Label className="text-[11px]">Nota Fiscal</Label>
-        <Input value={notaFiscal} onChange={e => setNotaFiscal(e.target.value)} placeholder="Nº da nota" className="h-8 text-[12px]" />
-      </div>
+      {!isVenda && (
+        <div>
+          <Label className="text-[11px]">Nota Fiscal</Label>
+          <Input value={notaFiscal} onChange={e => setNotaFiscal(e.target.value)} placeholder="Nº da nota" className="h-8 text-[12px]" />
+        </div>
+      )}
 
       <Separator />
       <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Valor da Operação</h4>
@@ -1195,13 +1196,43 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </>
       )}
 
-      {/* Bonus/Descontos (non-abate) */}
+      {/* Bonus/Descontos */}
       <Separator />
-      <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Ajustes (R$)</h4>
-      <div className="space-y-1.5">
-        <div><Label className="text-[11px]">Bônus</Label><Input type="number" value={bonus} onChange={e => setBonus(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
-        <div><Label className="text-[11px]">Descontos</Label><Input type="number" value={descontos} onChange={e => setDescontos(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
-      </div>
+      {isVenda ? (
+        <>
+          <Collapsible>
+            <CollapsibleTrigger className="flex items-center justify-between w-full group">
+              <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Descontos</h4>
+              <CollapseIcon className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-1.5 pt-1">
+              <div>
+                <Label className="text-[11px]">Funrural (%)</Label>
+                <Input type="number" value={funruralPct} onChange={e => setFunruralPct(e.target.value)} placeholder="0,00" step="0.01" className={`h-8 text-[12px] ${previstoInputClass}`} />
+                {calc.descFunruralTotal > 0 && (
+                  <span className="text-[10px] text-destructive">Funrural: -{formatMoeda(calc.descFunruralTotal)}</span>
+                )}
+              </div>
+              <div>
+                <Label className="text-[11px]">Desconto Qualidade (R$)</Label>
+                <Input type="number" value={descontoQualidade} onChange={e => setDescontoQualidade(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${previstoInputClass}`} />
+              </div>
+              <div>
+                <Label className="text-[11px]">Outros Descontos (R$)</Label>
+                <Input type="number" value={outrosDescontos} onChange={e => setOutrosDescontos(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${previstoInputClass}`} />
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        </>
+      ) : (
+        <>
+          <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Ajustes (R$)</h4>
+          <div className="space-y-1.5">
+            <div><Label className="text-[11px]">Bônus</Label><Input type="number" value={bonus} onChange={e => setBonus(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
+            <div><Label className="text-[11px]">Descontos</Label><Input type="number" value={descontos} onChange={e => setDescontos(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
+          </div>
+        </>
+      )}
 
       {/* Valor líquido override */}
       <Separator />

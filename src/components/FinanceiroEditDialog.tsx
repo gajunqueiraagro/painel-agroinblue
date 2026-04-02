@@ -57,7 +57,7 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave, onDele
   const [acrescimos, setAcrescimos] = useState('');
   const [deducoes, setDeducoes] = useState('');
   const [notaFiscal, setNotaFiscal] = useState('');
-  const [tipoPeso, setTipoPeso] = useState<'vivo' | 'morto'>('vivo');
+  const [tipoPeso, setTipoPeso] = useState<string>('vivo');
 
   useEffect(() => {
     if (lancamento) {
@@ -372,7 +372,7 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave, onDele
           {isAbate && (
             <div>
               <Label className="text-xs">Tipo de Peso Negociado</Label>
-              <Select value={tipoPeso} onValueChange={(v: 'vivo' | 'morto') => setTipoPeso(v)}>
+              <Select value={tipoPeso} onValueChange={(v: string) => setTipoPeso(v)}>
                 <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>
