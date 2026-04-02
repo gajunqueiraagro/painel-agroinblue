@@ -477,7 +477,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       <Separator />
 
       {/* === BLOCO RECOLHÍVEL: Preço Base === */}
-      <CollapsibleBlock title="Preço Base" open={precoBaseOpen} onOpenChange={setPrecoBaseOpen}>
+      <CollapsibleBlock title="Preço Base" open={precoBaseOpen} onOpenChange={setPrecoBaseOpen} summary={calc.valorBase > 0 ? formatMoeda(calc.valorBase) : undefined}>
         {tipoPreco === 'por_kg' && (
           <div>
             <Label className="text-[10px]">R$/kg</Label>
