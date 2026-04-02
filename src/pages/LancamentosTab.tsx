@@ -1056,6 +1056,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           totalBonus={calc.totalBonus}
           totalDescontos={calc.totalDescontos}
           valorLiquido={calc.valorLiquido}
+          funruralPct={funruralPct}
+          onFunruralPctChange={setFunruralPct}
+          descontoQualidade={descontoQualidade}
+          onDescontoQualidadeChange={setDescontoQualidade}
+          outrosDescontos={outrosDescontos}
+          onOutrosDescontosChange={setOutrosDescontos}
+          descFunruralTotal={calc.descFunruralTotal}
+          descQualidadeTotal={calc.descQualidadeTotal}
           onRequestRegister={handleRequestRegister}
           registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
           submitting={submitting}
