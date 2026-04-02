@@ -41,7 +41,7 @@ function buildRows(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[]) {
       produto: l.descricao || '',
       fornecedor: forn,
       valor,
-      valorFmt: formatMoeda(Math.abs(l.valor)).replace('R$\u00a0', '').replace('R$ ', ''),
+      valorFmt: formatMoeda(Math.abs(l.valor)),
       nf: l.nota_fiscal || '',
       status: l.status_transacao || '',
       macro: l.macro_custo || '',
