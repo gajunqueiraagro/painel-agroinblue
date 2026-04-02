@@ -203,6 +203,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
   const [qtdParcelas, setQtdParcelas] = useState('1');
 
+  useEffect(() => {
+    if (tipo === 'abate') {
+      console.log('[ABATE_DEBUG] novoFornecedorAbateOpen=', novoFornecedorAbateOpen);
+    }
+  }, [novoFornecedorAbateOpen, tipo]);
+
   const qtdInput = useIntegerInput(quantidade, setQuantidade);
   const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
 
@@ -1388,7 +1394,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   variant="outline"
                   size="icon"
                   className="h-8 w-8 shrink-0"
-                  onClick={() => setNovoFornecedorAbateOpen(true)}
+                  onClick={() => {
+                    console.log('[ABATE_DEBUG] click + frigorifico');
+                    setNovoFornecedorAbateOpen(true);
+                  }}
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
