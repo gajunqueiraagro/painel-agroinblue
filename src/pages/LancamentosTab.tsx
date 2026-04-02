@@ -430,6 +430,36 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
   }, [abateParaEditar]);
 
+  useEffect(() => {
+    if (!clienteAtual?.id) {
+      setAbateFornecedores([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    supabase
+      .from('financeiro_fornecedores')
+      .select('id, nome')
+      .eq('cliente_id', clienteAtual.id)
+      .eq('ativo', true)
+      .order('nome')
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.error('Erro ao carregar fornecedores ativos', error);
+          setAbateFornecedores([]);
+          return;
+        }
+
+        setAbateFornecedores((data as { id: string; nome: string }[]) || []);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clienteAtual?.id]);
+
   // Validate form and open confirmation dialog
   const handleRequestRegister = () => {
     if (!quantidade || Number(quantidade) <= 0) { toast.error('Informe a quantidade'); return; }
