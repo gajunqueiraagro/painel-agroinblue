@@ -273,36 +273,36 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
           {sectionTitle(<CreditCard className="h-4 w-4 text-muted-foreground" />, 'Informações de Pagamento')}
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => { setFormaPag('avista'); setParcelas([]); markDirty(); }}
-              className={`h-9 rounded text-[12px] font-bold border-2 transition-all ${formaPag === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
+              className={`h-7 rounded text-[11px] font-bold border-2 transition-all ${formaPag === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
               À vista
             </button>
             <button type="button" onClick={() => { setFormaPag('prazo'); markDirty(); if (calc.valorBase > 0) setParcelas(gerarParcelas(Number(qtdParcelas) || 1, calc.valorBase)); }}
-              className={`h-9 rounded text-[12px] font-bold border-2 transition-all ${formaPag === 'prazo' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
+              className={`h-7 rounded text-[11px] font-bold border-2 transition-all ${formaPag === 'prazo' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
               A prazo
             </button>
           </div>
 
           {formaPag === 'prazo' && (
-            <div className="space-y-2">
-              <div className="w-32">
-                <Label className="text-[11px]">Nº de parcelas</Label>
-                <Input type="number" min="1" max="48" value={qtdParcelas} onChange={e => handleQtdParcChange(e.target.value)} className="h-9 text-[12px]" />
+            <div className="space-y-1.5">
+              <div className="w-24">
+                <Label className="text-[10px]">Nº de parcelas</Label>
+                <Input type="number" min="1" max="48" value={qtdParcelas} onChange={e => handleQtdParcChange(e.target.value)} className="h-7 text-[11px]" />
               </div>
-              <p className="text-[10px] text-muted-foreground">Parcelas calculadas sobre o valor base (sem frete/comissão)</p>
+              <p className="text-[9px] text-muted-foreground">Parcelas sobre o valor base (sem frete/comissão)</p>
               {parcelas.map((p, i) => (
-                <div key={i} className="grid grid-cols-2 gap-2 bg-muted/30 rounded p-2">
+                <div key={i} className="grid grid-cols-2 gap-2 bg-muted/30 rounded p-1.5">
                   <div>
-                    <Label className="text-[10px]">Parcela {i + 1}</Label>
-                    <Input type="date" value={p.data} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], data: e.target.value }; setParcelas(np); markDirty(); }} className="h-8 text-[11px]" />
+                    <Label className="text-[9px]">Parcela {i + 1}</Label>
+                    <Input type="date" value={p.data} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], data: e.target.value }; setParcelas(np); markDirty(); }} className="h-7 text-[10px]" />
                   </div>
                   <div>
-                    <Label className="text-[10px]">R$</Label>
-                    <Input type="number" value={String(p.valor)} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], valor: Number(e.target.value) || 0 }; setParcelas(np); markDirty(); }} className="h-8 text-[11px]" />
+                    <Label className="text-[9px]">R$</Label>
+                    <Input type="number" value={String(p.valor)} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], valor: Number(e.target.value) || 0 }; setParcelas(np); markDirty(); }} className="h-7 text-[10px]" />
                   </div>
                 </div>
               ))}
               {parcelas.length > 0 && (
-                <div className="text-[11px] text-muted-foreground text-right">
+                <div className="text-[10px] text-muted-foreground text-right">
                   Soma: {formatMoeda(parcelas.reduce((s, p) => s + p.valor, 0))}
                 </div>
               )}
