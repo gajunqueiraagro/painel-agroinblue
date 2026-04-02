@@ -443,7 +443,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
   return (
     <div className="bg-card rounded-md border shadow-sm p-2.5 space-y-1.5 self-start relative">
 
-      <h3 className="text-[11px] font-semibold uppercase text-foreground/80 tracking-wide">
+      <h3 className="text-[14px] font-semibold text-foreground">
         {mode === 'update' ? 'Atualizar Financeiro da Compra' : 'Detalhes Financeiros'}
       </h3>
       {mode === 'update' && existingCount > 0 && (

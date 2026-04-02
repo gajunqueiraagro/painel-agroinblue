@@ -472,7 +472,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       <Collapsible>
         <CollapsibleTrigger className="flex items-center justify-between w-full group">
           <div className="flex items-center">
-            <h4 className="text-[10px] font-semibold text-foreground/70 uppercase">Tipo de Venda</h4>
+            <h4 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide">Tipo de Venda</h4>
             {tipoVendaLabel && summaryBadge(tipoVendaLabel)}
           </div>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
