@@ -1742,7 +1742,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       )}
 
       {/* === 3-COLUMN DESKTOP GRID === */}
-      <div className="grid grid-cols-[11rem_minmax(0,0.9fr)_21rem] gap-3 items-start">
+      <div className="grid grid-cols-[11rem_minmax(0,0.9fr)_21rem] gap-3 items-start overflow-visible">
         {/* Left: Navigation sidebar */}
         {renderSidebar()}
 
