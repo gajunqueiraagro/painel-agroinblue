@@ -108,7 +108,7 @@ function getStatus(diferenca: number, saldoExtrato: number | null): MesCard['sta
 }
 
 const STATUS_CONFIG = {
-  conciliado: { label: 'Conciliado', color: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300', icon: CheckCircle2, iconColor: 'text-green-600' },
+  conciliado: { label: 'Realizado', color: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300', icon: CheckCircle2, iconColor: 'text-green-600' },
   atencao: { label: 'Atenção', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300', icon: AlertTriangle, iconColor: 'text-yellow-600' },
   nao_conciliado: { label: 'Não Conciliado', color: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300', icon: XCircle, iconColor: 'text-red-600' },
   pendente: { label: 'Pendente', color: 'bg-muted text-muted-foreground', icon: AlertTriangle, iconColor: 'text-muted-foreground' },

@@ -390,8 +390,8 @@ export function useStatusZootecnico(
       totalFazendasEsperadas: 1,
     });
     let descFin = '';
-    if (statusFin === 'fechado') descFin = 'Mês conciliado';
-    else if (statusFin === 'parcial') descFin = 'Parcialmente conciliado';
+    if (statusFin === 'fechado') descFin = 'Mês realizado';
+    else if (statusFin === 'parcial') descFin = 'Parcialmente realizado';
     else if (finTemLancamentos) descFin = 'Pendente de conciliação';
     else descFin = 'Sem lançamentos no período';
     pendencias.push({ id: 'financeiro', label: 'Conciliação do Financeiro', descricao: descFin, status: statusFin, resolverTab: 'fin_caixa' });
@@ -418,8 +418,8 @@ export function useStatusZootecnico(
       descPastos = 'Nenhum pasto cadastrado';
     } else if (statusPastosCalc === 'fechado') {
       descPastos = isGlobal
-        ? `${fazendasComPastos.filter(f => f.status === 'fechado').length}/${fazendasComPastos.length} fazenda(s) · conciliado`
-        : `${pastosFechados} fechado(s) · conciliado`;
+        ? `${fazendasComPastos.filter(f => f.status === 'fechado').length}/${fazendasComPastos.length} fazenda(s) · realizado`
+        : `${pastosFechados} fechado(s) · realizado`;
     } else if (statusPastosCalc === 'parcial') {
       if (totalFechados >= totalPastosGeral) {
         descPastos = `Pastos fechados · ${categoriasStatusResult.difTotalCabecas} cab divergente(s)`;

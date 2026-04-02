@@ -75,8 +75,8 @@ const ABA_CONFIG: { id: Aba; label: string; icon: React.ReactNode }[] = [
 
 const STATUS_DESCRIPTIONS_DEFAULT: Record<StatusOperacional, string> = {
   previsto: 'Planejamento (meta). Alimenta o fluxo de caixa previsto, sem impacto no financeiro real.',
-  confirmado: 'Operação definida, mas ainda não realizada. Quando concluída, alterar para Realizado.',
-  conciliado: 'Operação concluída. Impacta rebanho e financeiro real.',
+  confirmado: 'Operação já definida, ainda não executada. Quando concluída, alterar para Realizado.',
+  conciliado: 'Operação já realizada. Impacta rebanho e financeiro real.',
 };
 
 const STATUS_DESCRIPTIONS_ABATE: Record<StatusOperacional, string> = {

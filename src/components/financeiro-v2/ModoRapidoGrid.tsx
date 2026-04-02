@@ -35,6 +35,7 @@ interface Props {
 
 const TIPOS = ['1-Entradas', '2-Saídas', '3-Transferências'];
 const STATUS_LIST = ['previsto', 'agendado', 'confirmado', 'conciliado'];
+const STATUS_UI_LABEL: Record<string, string> = { previsto: 'Previsto', agendado: 'Agendado', confirmado: 'Programado', conciliado: 'Realizado' };
 
 const COLS = ['data_competencia', 'data_pagamento', 'tipo_operacao', 'conta_bancaria_id', 'descricao', 'valor', 'subcentro', 'status_transacao'] as const;
 type ColKey = typeof COLS[number];
@@ -368,7 +369,7 @@ export function ModoRapidoGrid({ fazendaId, contas, classificacoes, onSaveBatch,
                       onKeyDown={e => handleKeyDown(e, rowIdx, 7)}
                       className="w-full h-7 px-0.5 text-[11px] bg-transparent border border-transparent focus:border-primary/40 rounded outline-none"
                     >
-                      {STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+                      {STATUS_LIST.map(s => <option key={s} value={s}>{STATUS_UI_LABEL[s] || s}</option>)}
                     </select>
                   </td>
                   {/* Delete */}

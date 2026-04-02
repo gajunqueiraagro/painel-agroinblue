@@ -90,8 +90,8 @@ const MESES_LIST = [
 const STATUS_LABELS: Record<string, string> = {
   previsto: 'Previsto',
   agendado: 'Agendado',
-  confirmado: 'Confirmado',
-  conciliado: 'Conciliado',
+  confirmado: 'Programado',
+  conciliado: 'Realizado',
 };
 const STATUS_TEXT_COLORS: Record<string, string> = {
   previsto: 'text-orange-500',
@@ -557,8 +557,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                   <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
                   <SelectItem value="previsto" className={itemCls}>Previsto</SelectItem>
                   <SelectItem value="agendado" className={itemCls}>Agendado</SelectItem>
-                  <SelectItem value="confirmado" className={itemCls}>Confirmado</SelectItem>
-                  <SelectItem value="conciliado" className={itemCls}>Conciliado</SelectItem>
+                  <SelectItem value="confirmado" className={itemCls}>Programado</SelectItem>
+                  <SelectItem value="conciliado" className={itemCls}>Realizado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
