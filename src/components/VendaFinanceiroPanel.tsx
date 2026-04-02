@@ -6,7 +6,7 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
-import { ChevronDown, CheckCircle, AlertTriangle, Info, Plus } from 'lucide-react';
+import { ChevronDown, CheckCircle, AlertTriangle, Info, Plus, Calculator } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -16,6 +16,7 @@ import { CATEGORIAS } from '@/types/cattle';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
+import { BoitelPlanningDialog, type BoitelData } from '@/components/BoitelPlanningDialog';
 import type { StatusOperacional } from '@/lib/statusOperacional';
 
 interface Parcela {
@@ -95,6 +96,8 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   const [fornecedorId, setFornecedorId] = useState<string>('');
   const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
   const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
+  const [boitelOpen, setBoitelOpen] = useState(false);
+  const [boitelData, setBoitelData] = useState<BoitelData | null>(null);
 
   useEffect(() => {
     if (!clienteAtual) return;
@@ -381,6 +384,28 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         </Select>
       </div>
 
+      {/* Boitel button */}
+      {tipoPeso === 'boitel' && (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full h-9 text-[12px] font-bold gap-2 border-primary/30 text-primary hover:bg-primary/10"
+            onClick={() => setBoitelOpen(true)}
+          >
+            <Calculator className="h-4 w-4" />
+            {boitelData ? 'Editar Planejamento Boitel' : 'Abrir Planejamento Boitel'}
+          </Button>
+          {boitelData && (
+            <div className="bg-primary/5 rounded-md p-2 text-[10px] space-y-0.5 border border-primary/20">
+              <div className="flex justify-between"><span className="text-muted-foreground">Dias</span><span className="font-semibold">{boitelData.dias}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">GMD</span><span className="font-semibold">{boitelData.gmd} kg/dia</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Tipo custo</span><span className="font-semibold capitalize">{boitelData.tipoCusto}</span></div>
+            </div>
+          )}
+        </>
+      )}
+
       <Separator />
 
       {/* Fornecedor / Comprador */}
@@ -537,6 +562,15 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         open={novoFornecedorOpen}
         onClose={() => setNovoFornecedorOpen(false)}
         onSave={handleNovoFornecedor}
+      />
+
+      <BoitelPlanningDialog
+        open={boitelOpen}
+        onClose={() => setBoitelOpen(false)}
+        onSave={setBoitelData}
+        initialData={boitelData || undefined}
+        quantidade={quantidade}
+        pesoKg={pesoKg}
       />
     </div>
   );
