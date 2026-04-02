@@ -545,7 +545,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
             </div>
             <StatusBadge
               nivel={financeiro.status.nivel}
-              label={financeiro.status.nivel === 'fechado' ? 'Conciliado' : financeiro.status.nivel === 'parcial' ? 'Parcial' : 'Pendente'}
+              label={financeiro.status.nivel === 'fechado' ? 'Realizado' : financeiro.status.nivel === 'parcial' ? 'Parcial' : 'Pendente'}
             />
           </div>
 

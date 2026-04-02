@@ -418,8 +418,8 @@ export function useStatusZootecnico(
       descPastos = 'Nenhum pasto cadastrado';
     } else if (statusPastosCalc === 'fechado') {
       descPastos = isGlobal
-        ? `${fazendasComPastos.filter(f => f.status === 'fechado').length}/${fazendasComPastos.length} fazenda(s) · conciliado`
-        : `${pastosFechados} fechado(s) · conciliado`;
+        ? `${fazendasComPastos.filter(f => f.status === 'fechado').length}/${fazendasComPastos.length} fazenda(s) · realizado`
+        : `${pastosFechados} fechado(s) · realizado`;
     } else if (statusPastosCalc === 'parcial') {
       if (totalFechados >= totalPastosGeral) {
         descPastos = `Pastos fechados · ${categoriasStatusResult.difTotalCabecas} cab divergente(s)`;

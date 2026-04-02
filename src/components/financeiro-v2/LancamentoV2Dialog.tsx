@@ -38,8 +38,8 @@ const TIPOS_OPERACAO = [
 const STATUS_OPTIONS = [
   { value: 'previsto', label: 'Previsto' },
   { value: 'agendado', label: 'Agendado' },
-  { value: 'confirmado', label: 'Confirmado' },
-  { value: 'conciliado', label: 'Conciliado' },
+  { value: 'confirmado', label: 'Programado' },
+  { value: 'conciliado', label: 'Realizado' },
 ];
 
 function deriveStatus(dataPagamento: string): string {

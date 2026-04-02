@@ -557,8 +557,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                   <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
                   <SelectItem value="previsto" className={itemCls}>Previsto</SelectItem>
                   <SelectItem value="agendado" className={itemCls}>Agendado</SelectItem>
-                  <SelectItem value="confirmado" className={itemCls}>Confirmado</SelectItem>
-                  <SelectItem value="conciliado" className={itemCls}>Conciliado</SelectItem>
+                  <SelectItem value="confirmado" className={itemCls}>Programado</SelectItem>
+                  <SelectItem value="conciliado" className={itemCls}>Realizado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
