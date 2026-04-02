@@ -168,6 +168,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [outrasDespesas, setOutrasDespesas] = useState('');
   const [notaFiscal, setNotaFiscal] = useState('');
   const [tipoPeso, setTipoPeso] = useState<string>('vivo');
+  const [vendaTipoPreco, setVendaTipoPreco] = useState<string>('por_kg');
+  const [vendaPrecoInput, setVendaPrecoInput] = useState('');
   const [rendCarcaca, setRendCarcaca] = useState('');
   const [funruralPct, setFunruralPct] = useState('');
 
@@ -224,6 +226,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const totalKg = peso * qtd;
     let valorBruto = 0;
     if (usaPrecoArroba) { valorBruto = totalArrobas * (Number(precoArroba) || 0); }
+    else if (isVenda) {
+      // Venda normal: use vendaTipoPreco + vendaPrecoInput
+      const vi = Number(vendaPrecoInput) || 0;
+      if (vendaTipoPreco === 'por_kg') { valorBruto = totalKg * vi; }
+      else if (vendaTipoPreco === 'por_cab') { valorBruto = qtd * vi; }
+      else if (vendaTipoPreco === 'por_total') { valorBruto = vi; }
+    }
     else if (usaPrecoKg) { valorBruto = totalKg * (Number(precoKg) || 0); }
     // Abate: bonus/desconto inputs are R$/@ → multiply by totalArrobas
     const bonusPrecoceTotal = isAbate ? (Number(bonusPrecoce) || 0) * totalArrobas : 0;
@@ -252,7 +261,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       carcacaCalc, bonusPrecoceTotal, bonusQualidadeTotal, bonusListaTraceTotal,
       descQualidadeTotal, descFunruralTotal, descOutrosTotal,
     };
-  }, [quantidade, pesoKg, pesoCarcacaKg, rendCarcaca, precoArroba, precoKg, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, funruralPct, outrosDescontos, bonus, descontos, comissaoPct, frete, outrasDespesas, isAbate, isVenda, usaPrecoArroba, usaPrecoKg]);
+  }, [quantidade, pesoKg, pesoCarcacaKg, rendCarcaca, precoArroba, precoKg, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, funruralPct, outrosDescontos, bonus, descontos, comissaoPct, frete, outrasDespesas, isAbate, isVenda, usaPrecoArroba, usaPrecoKg, vendaTipoPreco, vendaPrecoInput]);
 
   const gerarParcelas = useCallback((numParcelas: number, baseDate: string, valorTotal: number) => {
     const p: Parcela[] = [];
@@ -315,6 +324,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setDescontoQualidade(''); setDescontoFunrural(''); setOutrosDescontos('');
     setBonus(''); setDescontos(''); setComissaoPct(''); setFrete(''); setOutrasDespesas('');
     setNotaFiscal(''); setTipoPeso('vivo'); setObservacao('');
+    setVendaTipoPreco('por_kg'); setVendaPrecoInput('');
     setDataVenda(''); setDataEmbarque(''); setDataAbate(''); setTipoVenda('');
     setAbateFornecedorId('');
     setCompraFornecedorId('');
@@ -1077,6 +1087,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           lancamentoId={lastSavedLancamentoId || undefined}
           tipoPeso={tipoPeso}
           onTipoPesoChange={setTipoPeso}
+          vendaTipoPreco={vendaTipoPreco}
+          onVendaTipoPrecoChange={setVendaTipoPreco}
+          vendaPrecoInput={vendaPrecoInput}
+          onVendaPrecoInputChange={setVendaPrecoInput}
           valorBruto={calc.valorBruto}
           totalBonus={calc.totalBonus}
           totalDescontos={calc.totalDescontos}
@@ -1089,6 +1103,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onOutrosDescontosChange={setOutrosDescontos}
           descFunruralTotal={calc.descFunruralTotal}
           descQualidadeTotal={calc.descQualidadeTotal}
+          frete={frete}
+          onFreteChange={setFrete}
+          comissao={comissaoPct}
+          onComissaoChange={setComissaoPct}
           onRequestRegister={handleRequestRegister}
           registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
           submitting={submitting}
@@ -1165,6 +1183,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
       )}
 
+      {!isVenda && (
+      <>
       <Separator />
       <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Valor da Operação</h4>
 
@@ -1298,6 +1318,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             </div>
           )}
         </div>
+      )}
+      </>
       )}
       </>
       )}

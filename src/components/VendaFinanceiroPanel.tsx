@@ -40,9 +40,14 @@ interface Props {
   onRequestRegister?: () => void;
   registerLabel?: string;
   submitting?: boolean;
-  // Tipo de venda field (managed by parent for persistence)
+  // Tipo de venda (desmama/gado_adulto/boitel)
   tipoPeso: string;
   onTipoPesoChange: (v: string) => void;
+  // Tipo de preço (por_kg/por_cab/por_total) — for normal venda only
+  vendaTipoPreco: string;
+  onVendaTipoPrecoChange: (v: string) => void;
+  vendaPrecoInput: string;
+  onVendaPrecoInputChange: (v: string) => void;
   // Values from parent calc
   valorBruto: number;
   totalBonus: number;
@@ -57,6 +62,11 @@ interface Props {
   onOutrosDescontosChange: (v: string) => void;
   descFunruralTotal: number;
   descQualidadeTotal: number;
+  // Frete/Comissão (managed by parent for calc)
+  frete: string;
+  onFreteChange: (v: string) => void;
+  comissao: string;
+  onComissaoChange: (v: string) => void;
 }
 
 export interface VendaFinanceiroPanelRef {
@@ -71,11 +81,13 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   statusOp, lancamentoId, mode = 'create', onFinanceiroUpdated,
   onRequestRegister, registerLabel, submitting: externalSubmitting,
   tipoPeso, onTipoPesoChange,
+  vendaTipoPreco, onVendaTipoPrecoChange, vendaPrecoInput, onVendaPrecoInputChange,
   valorBruto, totalBonus, totalDescontos, valorLiquido,
   funruralPct, onFunruralPctChange,
   descontoQualidade, onDescontoQualidadeChange,
   outrosDescontos, onOutrosDescontosChange,
   descFunruralTotal, descQualidadeTotal,
+  frete, onFreteChange, comissao, onComissaoChange,
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
@@ -459,12 +471,10 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros — Venda</h3>
       <Separator />
 
-      {/* Tipo de Venda / Tipo de Preço */}
+      {/* 1. TIPO DE VENDA — always visible */}
       <Collapsible defaultOpen>
         <CollapsibleTrigger className="flex items-center justify-between w-full group">
-          <h4 className="text-[10px] font-bold text-muted-foreground uppercase">
-            {isNormalVenda ? 'Tipo de Preço' : 'Tipo de Venda'}
-          </h4>
+          <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Tipo de Venda</h4>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
         </CollapsibleTrigger>
         <CollapsibleContent className="pt-1">
@@ -479,7 +489,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         </CollapsibleContent>
       </Collapsible>
 
-      {/* Boitel button */}
+      {/* Boitel section — unchanged */}
       {isBoitel && (
         <>
           <Button
@@ -505,7 +515,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
       <Separator />
 
-      {/* Fornecedor / Comprador */}
+      {/* Comprador */}
       <Collapsible>
         <CollapsibleTrigger className="flex items-center justify-between w-full group">
           <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Comprador</h4>
@@ -528,82 +538,154 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
       <Separator />
 
-      {/* PREÇO BASE — only for normal venda */}
-      {isNormalVenda && valorBruto > 0 && (
+      {/* ── NORMAL VENDA BLOCKS (Desmama / Gado Adulto) ── */}
+      {isNormalVenda && (
         <>
+          {/* 2. TIPO DE PREÇO */}
+          <Collapsible defaultOpen>
+            <CollapsibleTrigger className="flex items-center justify-between w-full group">
+              <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Tipo de Preço</h4>
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-1 space-y-1.5">
+              <div className="grid grid-cols-3 gap-1.5">
+                {(['por_kg', 'por_cab', 'por_total'] as const).map(tp => (
+                  <button key={tp} type="button"
+                    onClick={() => onVendaTipoPrecoChange(tp)}
+                    className={`h-8 rounded text-[11px] font-bold border-2 transition-all ${vendaTipoPreco === tp ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
+                    {tp === 'por_kg' ? 'Por kg' : tp === 'por_cab' ? 'Por cabeça' : 'Por total'}
+                  </button>
+                ))}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
+          <Separator />
+
+          {/* 3. PREÇO BASE */}
           <Collapsible defaultOpen>
             <CollapsibleTrigger className="flex items-center justify-between w-full group">
               <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Preço Base</h4>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </CollapsibleTrigger>
-            <CollapsibleContent className="pt-1">
-              <div className="bg-muted/30 rounded-md p-2 space-y-0.5 text-[10px]">
-                {quantidade > 0 && pesoKg > 0 && (
-                  <>
-                    <div className="flex justify-between"><span className="text-muted-foreground">R$/kg</span><span className="font-semibold">{formatMoeda(valorBruto / pesoKg)}</span></div>
+            <CollapsibleContent className="pt-1 space-y-1.5">
+              <div>
+                <Label className="text-[11px]">
+                  {vendaTipoPreco === 'por_kg' ? 'R$/kg' : vendaTipoPreco === 'por_cab' ? 'R$/cabeça' : 'Valor total (R$)'}
+                </Label>
+                <Input
+                  type="number"
+                  value={vendaPrecoInput}
+                  onChange={e => onVendaPrecoInputChange(e.target.value)}
+                  placeholder="0,00"
+                  className="h-7 text-[11px]"
+                />
+              </div>
+              {valorBruto > 0 && (
+                <div className="bg-muted/30 rounded-md p-2 space-y-0.5 text-[10px]">
+                  {quantidade > 0 && pesoKg > 0 && vendaTipoPreco !== 'por_kg' && (
+                    <div className="flex justify-between"><span className="text-muted-foreground">R$/kg</span><span className="font-semibold">{formatMoeda(valorBruto / (pesoKg * quantidade))}</span></div>
+                  )}
+                  {quantidade > 0 && vendaTipoPreco !== 'por_cab' && (
                     <div className="flex justify-between"><span className="text-muted-foreground">R$/cab</span><span className="font-semibold">{formatMoeda(valorBruto / quantidade)}</span></div>
-                  </>
+                  )}
+                  <div className="flex justify-between"><span className="text-muted-foreground">Total base</span><span className="font-semibold">{formatMoeda(valorBruto)}</span></div>
+                </div>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
+
+          <Separator />
+
+          {/* 4. DESPESAS EXTRAS */}
+          <Collapsible>
+            <CollapsibleTrigger className="flex items-center justify-between w-full group">
+              <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Despesas Extras</h4>
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-1.5 pt-1">
+              <div>
+                <Label className="text-[11px]">Funrural (%)</Label>
+                <Input type="number" value={funruralPct} onChange={e => onFunruralPctChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[11px]" />
+                {descFunruralTotal > 0 && (
+                  <span className="text-[10px] text-destructive">Funrural: -{formatMoeda(descFunruralTotal)}</span>
                 )}
-                <div className="flex justify-between"><span className="text-muted-foreground">Total base</span><span className="font-semibold">{formatMoeda(valorBruto)}</span></div>
+              </div>
+              <div>
+                <Label className="text-[11px]">Frete (R$)</Label>
+                <Input type="number" value={frete} onChange={e => onFreteChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
+              </div>
+              <div>
+                <Label className="text-[11px]">Comissão (R$)</Label>
+                <Input type="number" value={comissao} onChange={e => onComissaoChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
+              </div>
+              <div>
+                <Label className="text-[11px]">Outros custos extras (R$)</Label>
+                <Input type="number" value={outrosDescontos} onChange={e => onOutrosDescontosChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
               </div>
             </CollapsibleContent>
           </Collapsible>
+
+          <Separator />
+
+          {/* Resumo financeiro — normal */}
+          {valorBruto > 0 && (
+            <div className="bg-muted/30 rounded-md p-2 space-y-0.5 text-[10px]">
+              <div className="flex justify-between"><span className="text-muted-foreground">Valor bruto</span><span className="font-semibold">{formatMoeda(valorBruto)}</span></div>
+              {totalDescontos > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Despesas extras</span><span className="font-semibold text-destructive">-{formatMoeda(totalDescontos)}</span></div>}
+              <Separator className="my-1" />
+              <div className="flex justify-between font-bold text-[11px]"><span>Valor líquido</span><span className="text-primary">{formatMoeda(valorLiquido)}</span></div>
+            </div>
+          )}
+
           <Separator />
         </>
       )}
 
-      {/* DESPESAS EXTRAS (normal) / DESCONTOS (boitel keeps original) */}
-      <Collapsible>
-        <CollapsibleTrigger className="flex items-center justify-between w-full group">
-          <h4 className="text-[10px] font-bold text-muted-foreground uppercase">
-            {isNormalVenda ? 'Despesas Extras' : 'Descontos'}
-          </h4>
-          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-        </CollapsibleTrigger>
-        <CollapsibleContent className="space-y-1.5 pt-1">
-          <div>
-            <Label className="text-[11px]">{isNormalVenda ? 'Frete / Funrural (%)' : 'Funrural (%)'}</Label>
-            <Input type="number" value={funruralPct} onChange={e => onFunruralPctChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[11px]" />
-            {descFunruralTotal > 0 && (
-              <span className="text-[10px] text-destructive">Funrural: -{formatMoeda(descFunruralTotal)}</span>
-            )}
-          </div>
-          <div>
-            <Label className="text-[11px]">{isNormalVenda ? 'Comissão (R$)' : 'Desconto Qualidade (R$)'}</Label>
-            <Input type="number" value={descontoQualidade} onChange={e => onDescontoQualidadeChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
-            {descQualidadeTotal > 0 && (
-              <span className="text-[10px] text-destructive">{isNormalVenda ? 'Comissão' : 'Qualidade'}: -{formatMoeda(descQualidadeTotal)}</span>
-            )}
-          </div>
-          <div>
-            <Label className="text-[11px]">{isNormalVenda ? 'Outros custos extras (R$)' : 'Outros Descontos (R$)'}</Label>
-            <Input type="number" value={outrosDescontos} onChange={e => onOutrosDescontosChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
+      {/* ── BOITEL keeps original Descontos block ── */}
+      {isBoitel && (
+        <>
+          <Collapsible>
+            <CollapsibleTrigger className="flex items-center justify-between w-full group">
+              <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Descontos</h4>
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-1.5 pt-1">
+              <div>
+                <Label className="text-[11px]">Funrural (%)</Label>
+                <Input type="number" value={funruralPct} onChange={e => onFunruralPctChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[11px]" />
+                {descFunruralTotal > 0 && (
+                  <span className="text-[10px] text-destructive">Funrural: -{formatMoeda(descFunruralTotal)}</span>
+                )}
+              </div>
+              <div>
+                <Label className="text-[11px]">Desconto Qualidade (R$)</Label>
+                <Input type="number" value={descontoQualidade} onChange={e => onDescontoQualidadeChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
+                {descQualidadeTotal > 0 && (
+                  <span className="text-[10px] text-destructive">Qualidade: -{formatMoeda(descQualidadeTotal)}</span>
+                )}
+              </div>
+              <div>
+                <Label className="text-[11px]">Outros Descontos (R$)</Label>
+                <Input type="number" value={outrosDescontos} onChange={e => onOutrosDescontosChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
 
-      <Separator />
+          <Separator />
 
-      {/* Resumo financeiro */}
-      {isNormalVenda && valorBruto > 0 && (
-        <div className="bg-muted/30 rounded-md p-2 space-y-0.5 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">Valor bruto</span><span className="font-semibold">{formatMoeda(valorBruto)}</span></div>
-          {totalBonus > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Bônus</span><span className="font-semibold text-success">+{formatMoeda(totalBonus)}</span></div>}
-          {totalDescontos > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Despesas extras</span><span className="font-semibold text-destructive">-{formatMoeda(totalDescontos)}</span></div>}
-          <Separator className="my-1" />
-          <div className="flex justify-between font-bold text-[11px]"><span>Valor líquido</span><span className="text-primary">{formatMoeda(valorLiquido)}</span></div>
-        </div>
-      )}
+          {valorBruto > 0 && (
+            <div className="bg-muted/30 rounded-md p-2 space-y-0.5 text-[10px]">
+              <div className="flex justify-between"><span className="text-muted-foreground">Valor bruto</span><span className="font-semibold">{formatMoeda(valorBruto)}</span></div>
+              {totalBonus > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Bônus</span><span className="font-semibold text-success">+{formatMoeda(totalBonus)}</span></div>}
+              {totalDescontos > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Descontos</span><span className="font-semibold text-destructive">-{formatMoeda(totalDescontos)}</span></div>}
+              <Separator className="my-1" />
+              <div className="flex justify-between font-bold text-[11px]"><span>Valor líquido</span><span className="text-primary">{formatMoeda(valorLiquido)}</span></div>
+            </div>
+          )}
 
-      {/* Boitel keeps original summary */}
-      {isBoitel && valorBruto > 0 && (
-        <div className="bg-muted/30 rounded-md p-2 space-y-0.5 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">Valor bruto</span><span className="font-semibold">{formatMoeda(valorBruto)}</span></div>
-          {totalBonus > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Bônus</span><span className="font-semibold text-success">+{formatMoeda(totalBonus)}</span></div>}
-          {totalDescontos > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Descontos</span><span className="font-semibold text-destructive">-{formatMoeda(totalDescontos)}</span></div>}
-          <Separator className="my-1" />
-          <div className="flex justify-between font-bold text-[11px]"><span>Valor líquido</span><span className="text-primary">{formatMoeda(valorLiquido)}</span></div>
-        </div>
+          <Separator />
+        </>
       )}
 
       <Separator />
