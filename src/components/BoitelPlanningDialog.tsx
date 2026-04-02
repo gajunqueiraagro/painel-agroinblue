@@ -160,37 +160,43 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     // ── CUSTO DE OPORTUNIDADE (indicador econômico separado) ──
     const custoOportTotal = custoOportunidade * pesoLiqEntrada * qtdCabecas;
 
-    // ── PARCERIA: divisão da receita ──
-    // Em parceria, a receita do produtor é apenas sua parte do faturamento líquido
+    // ── PARCERIA: divisão por arrobas produzidas ──
     let receitaProdutor = faturamentoLiquido;
     let parceiroParte = 0;
+    let parceiroArrobas = 0;
     if (modalidadeCusto === 'parceria') {
-      parceiroParte = faturamentoLiquido * (percentualParceria / 100);
+      parceiroArrobas = arrobasProduzidas * (percentualParceria / 100);
+      parceiroParte = parceiroArrobas * precoVendaArroba;
       receitaProdutor = faturamentoLiquido - parceiroParte;
     }
 
     // ── LUCRO ──
-    // Lucro = Receita do produtor - Custos operacionais
     const lucroTotal = receitaProdutor - custosOperacionais;
     const lucroComOportunidade = lucroTotal - custoOportTotal;
     const lucroPorCab = qtdCabecas > 0 ? lucroTotal / qtdCabecas : 0;
-    const lucroPorArroba = arrobasProduzidas > 0 ? lucroTotal / arrobasProduzidas : 0;
+    const lucroPorArrobaProduzida = arrobasProduzidas > 0 ? lucroTotal / arrobasProduzidas : 0;
+    const lucroPorArrobaVendida = arrobasTotalSaida > 0 ? lucroTotal / arrobasTotalSaida : 0;
     const ganhoTotalKg = ganhoKg * qtdCabecas;
     const lucroPorKg = ganhoTotalKg > 0 ? lucroTotal / ganhoTotalKg : 0;
 
     const custoPorCab = qtdCabecas > 0 ? custosOperacionais / qtdCabecas : 0;
-    const custoPorArroba = arrobasProduzidas > 0 ? custosOperacionais / arrobasProduzidas : 0;
+    const custoPorArrobaProduzida = arrobasProduzidas > 0 ? custosOperacionais / arrobasProduzidas : 0;
+    const custoPorArrobaVendida = arrobasTotalSaida > 0 ? custosOperacionais / arrobasTotalSaida : 0;
+
+    // GMC em @/dia
+    const gmcArrobaDia = dias > 0 ? ((arrobasSaida - arrobasEntrada)) / dias : 0;
 
     return {
       pesoLiqEntrada, ganhoKg, pesoFinal,
       arrobasEntrada, arrobasSaida, arrobasProduzidas, arrobasTotalSaida,
-      gmc,
+      gmc, gmcArrobaDia,
       faturamentoBruto, custosAbate, faturamentoLiquido,
-      parceiroParte, receitaProdutor,
+      parceiroParte, parceiroArrobas, receitaProdutor,
       custoDiariaTotal, custosSanitarios, outrosCustosTotal, custosFreteTotal,
       custosOperacionais, custoOportTotal,
-      custoPorCab, custoPorArroba,
-      lucroTotal, lucroComOportunidade, lucroPorCab, lucroPorArroba, lucroPorKg,
+      custoPorCab, custoPorArrobaProduzida, custoPorArrobaVendida,
+      lucroTotal, lucroComOportunidade, lucroPorCab,
+      lucroPorArrobaProduzida, lucroPorArrobaVendida, lucroPorKg,
     };
   }, [data]);
 
