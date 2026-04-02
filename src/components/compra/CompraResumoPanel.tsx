@@ -160,7 +160,7 @@ export function CompraResumoPanel({
         type="button"
         className="w-full h-10 text-[13px] font-bold"
         onClick={onRequestRegister}
-        disabled={submitting}
+        disabled={submitting || !detalhesPreenchidos}
       >
         {submitting ? 'Registrando...' : (registerLabel || 'Registrar Compra')}
       </Button>

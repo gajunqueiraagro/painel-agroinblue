@@ -58,6 +58,8 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
   const [qtdParcelas, setQtdParcelas] = useState(initialData.qtdParcelas);
   const [parcelas, setParcelas] = useState(initialData.parcelas);
   const [notaFiscal, setNotaFiscal] = useState(initialData.notaFiscal);
+  const [dirty, setDirty] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
 
   // Reset when dialog opens with new data
   useEffect(() => {
@@ -72,8 +74,20 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
       setQtdParcelas(initialData.qtdParcelas);
       setParcelas(initialData.parcelas);
       setNotaFiscal(initialData.notaFiscal);
+      setDirty(false);
+      setConfirmClose(false);
     }
   }, [open, initialData]);
+
+  const markDirty = () => setDirty(true);
+
+  const tryClose = () => {
+    if (dirty) {
+      setConfirmClose(true);
+    } else {
+      onClose();
+    }
+  };
 
   const qtd = quantidade || 0;
   const peso = pesoKg || 0;
