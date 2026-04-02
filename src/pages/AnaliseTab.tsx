@@ -9,7 +9,7 @@ import { TabId } from '@/components/BottomNav';
 import { parseISO, format } from 'date-fns';
 import { calcSaldoMensalArray, calcSaldoPorCategoriaLegado } from '@/lib/calculos';
 import { MESES_NOMES } from '@/lib/calculos/labels';
-
+import { formatPercent, formatCabecas } from '@/lib/calculos/formatters';
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
