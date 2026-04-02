@@ -1483,8 +1483,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     className="flex-1 h-7 text-[11px] font-semibold"
                     onClick={() => {
                       setTipoPeso(opt.value);
-                      if (opt.value !== 'boitel') {
-                        setVendaDetalhes(prev => prev ? { ...prev, tipoVenda: opt.value } : prev);
+                      if (opt.value === 'desmama' || opt.value === 'gado_adulto') {
+                        setVendaDetalhes(prev => prev ? { ...prev, tipoVenda: opt.value as 'desmama' | 'gado_adulto' } : prev);
                       }
                     }}
                   >
