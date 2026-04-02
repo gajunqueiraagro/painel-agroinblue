@@ -70,6 +70,10 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   onRequestRegister, registerLabel, submitting: externalSubmitting,
   tipoPeso, onTipoPesoChange,
   valorBruto, totalBonus, totalDescontos, valorLiquido,
+  funruralPct, onFunruralPctChange,
+  descontoQualidade, onDescontoQualidadeChange,
+  outrosDescontos, onOutrosDescontosChange,
+  descFunruralTotal, descQualidadeTotal,
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
