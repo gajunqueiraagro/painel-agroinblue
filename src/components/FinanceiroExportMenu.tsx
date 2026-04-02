@@ -67,9 +67,9 @@ function gerarTextoResumo(lancamentos: Lancamento[], subAba: SubAba, ano: string
       const cat = CATEGORIAS.find(ct => ct.value === l.categoria)?.label ?? l.categoria;
       totalValor += c.valorFinal;
       const nf = l.notaFiscal ? ` | NF: ${l.notaFiscal}` : '';
-      lines.push(`🔪 ${format(parseISO(l.data), 'dd/MM/yy')} | ${l.quantidade} ${cat} | Rend: ${c.rendimento ? fmtValor(c.rendimento, 1) + '%' : '-'} | R$ ${fmtValor(c.valorFinal)}${nf}`);
+      lines.push(`🔪 ${format(parseISO(l.data), 'dd/MM/yy')} | ${l.quantidade} ${cat} | Rend: ${c.rendimento ? fmtValor(c.rendimento, 1) + '%' : '-'} | ${formatMoeda(c.valorFinal)}${nf}`);
     });
-    lines.push(`\n💰 *Total: R$ ${fmtValor(totalValor)}*`);
+    lines.push(`\n💰 *Total: ${formatMoeda(totalValor)}*`);
   } else {
     let totalValor = 0;
     const emoji = subAba === 'compra' ? '🛒' : '💰';
@@ -79,9 +79,9 @@ function gerarTextoResumo(lancamentos: Lancamento[], subAba: SubAba, ano: string
       totalValor += c.valorFinal;
       const local = subAba === 'compra' ? l.fazendaOrigem : l.fazendaDestino;
       const nf = l.notaFiscal ? ` | NF: ${l.notaFiscal}` : '';
-      lines.push(`${emoji} ${format(parseISO(l.data), 'dd/MM/yy')} | ${l.quantidade} ${cat} | ${local || '-'} | R$ ${fmtValor(c.valorFinal)}${nf}`);
+      lines.push(`${emoji} ${format(parseISO(l.data), 'dd/MM/yy')} | ${l.quantidade} ${cat} | ${local || '-'} | ${formatMoeda(c.valorFinal)}${nf}`);
     });
-    lines.push(`\n💰 *Total: R$ ${fmtValor(totalValor)}*`);
+    lines.push(`\n💰 *Total: ${formatMoeda(totalValor)}*`);
   }
 
   return lines.join('\n');
@@ -107,12 +107,12 @@ function gerarTextoIndividual(l: Lancamento, fazendaNome?: string): string {
       `🥩 Peso carcaça: ${fmtValor(l.pesoCarcacaKg)} kg`,
       `📊 Rendimento: ${c.rendimento ? fmtValor(c.rendimento, 1) + '%' : '-'}`,
       `📐 Peso @: ${fmtValor(c.pesoArroba)} @`,
-      `💲 Preço/@: R$ ${fmtValor(l.precoArroba)}`,
+      `💲 Preço/@: ${formatMoeda(l.precoArroba)}`,
       ``,
-      `💰 *Valor Total: R$ ${fmtValor(c.valorFinal)}*`,
-      `📈 Líq/@: R$ ${fmtValor(c.liqArroba)}`,
-      `📈 Líq/cab: R$ ${fmtValor(c.liqCabeca)}`,
-      `📈 Líq/kg: R$ ${fmtValor(c.liqKg)}`,
+      `💰 *Valor Total: ${formatMoeda(c.valorFinal)}*`,
+      `📈 Líq/@: ${formatMoeda(c.liqArroba)}`,
+      `📈 Líq/cab: ${formatMoeda(c.liqCabeca)}`,
+      `📈 Líq/kg: ${formatMoeda(c.liqKg)}`,
     );
   } else {
     const tipoLabel = l.tipo === 'compra' ? 'Compra' : 'Venda em Pé';
@@ -129,12 +129,12 @@ function gerarTextoIndividual(l: Lancamento, fazendaNome?: string): string {
     lines.push(
       `⚖️ Peso vivo: ${fmtValor(l.pesoMedioKg)} kg`,
       `📐 Peso @: ${fmtValor(c.pesoArroba)} @`,
-      `💲 Preço/@: R$ ${fmtValor(l.precoArroba)}`,
+      `💲 Preço/@: ${formatMoeda(l.precoArroba)}`,
       ``,
-      `💰 *Valor Total: R$ ${fmtValor(c.valorFinal)}*`,
-      `📈 Líq/@: R$ ${fmtValor(c.liqArroba)}`,
-      `📈 Líq/cab: R$ ${fmtValor(c.liqCabeca)}`,
-      `📈 Líq/kg: R$ ${fmtValor(c.liqKg)}`,
+      `💰 *Valor Total: ${formatMoeda(c.valorFinal)}*`,
+      `📈 Líq/@: ${formatMoeda(c.liqArroba)}`,
+      `📈 Líq/cab: ${formatMoeda(c.liqCabeca)}`,
+      `📈 Líq/kg: ${formatMoeda(c.liqKg)}`,
     );
   }
 
@@ -256,10 +256,10 @@ async function gerarPDFIndividual(l: Lancamento, fazendaNome?: string) {
       ['Desc. funrural', fmtValor(l.descontoFunrural)],
       ['Outros descontos', fmtValor(l.outrosDescontos)],
       ['', ''],
-      ['VALOR TOTAL', `R$ ${fmtValor(c.valorFinal)}`],
-      ['Líquido por @', `R$ ${fmtValor(c.liqArroba)}`],
-      ['Líquido por cabeça', `R$ ${fmtValor(c.liqCabeca)}`],
-      ['Líquido por kg vivo', `R$ ${fmtValor(c.liqKg)}`],
+      ['VALOR TOTAL', `${formatMoeda(c.valorFinal)}`],
+      ['Líquido por @', `${formatMoeda(c.liqArroba)}`],
+      ['Líquido por cabeça', `${formatMoeda(c.liqCabeca)}`],
+      ['Líquido por kg vivo', `${formatMoeda(c.liqKg)}`],
     ];
   } else {
     detalhes = [
@@ -269,10 +269,10 @@ async function gerarPDFIndividual(l: Lancamento, fazendaNome?: string) {
       ['Acréscimos', fmtValor(l.acrescimos)],
       ['Deduções', fmtValor(l.deducoes)],
       ['', ''],
-      ['VALOR TOTAL', `R$ ${fmtValor(c.valorFinal)}`],
-      ['Líquido por @', `R$ ${fmtValor(c.liqArroba)}`],
-      ['Líquido por cabeça', `R$ ${fmtValor(c.liqCabeca)}`],
-      ['Líquido por kg vivo', `R$ ${fmtValor(c.liqKg)}`],
+      ['VALOR TOTAL', `${formatMoeda(c.valorFinal)}`],
+      ['Líquido por @', `${formatMoeda(c.liqArroba)}`],
+      ['Líquido por cabeça', `${formatMoeda(c.liqCabeca)}`],
+      ['Líquido por kg vivo', `${formatMoeda(c.liqKg)}`],
     ];
   }
 
