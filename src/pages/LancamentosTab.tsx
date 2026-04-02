@@ -1829,7 +1829,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <div className="col-span-2 self-start">{renderHistorico()}</div>
         ) : (
           <>
-            {renderForm()}
+             {renderForm()}
             {isCompra ? (
               <>
                 <CompraResumoPanel
@@ -1857,6 +1857,49 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   quantidade={Number(quantidade) || 0}
                   pesoKg={Number(pesoKg) || 0}
                   dataCompra={data}
+                />
+              </>
+            ) : isAbate ? (
+              <>
+                <AbateResumoPanel
+                  quantidade={Number(quantidade) || 0}
+                  pesoKg={Number(pesoKg) || 0}
+                  categoria={categoria}
+                  frigorificoNome={abateFornecedores.find(f => f.id === abateFornecedorId)?.nome || ''}
+                  detalhes={abateDetalhes}
+                  detalhesPreenchidos={!!abateDetalhes}
+                  canOpenModal={!!(data && quantidade && Number(quantidade) > 0 && pesoKg && Number(pesoKg) > 0 && categoria && abateFornecedorId)}
+                  onOpenModal={() => setAbateDialogOpen(true)}
+                  onRequestRegister={handleRequestRegister}
+                  submitting={submitting}
+                  registerLabel={editingAbateId ? 'Salvar Alterações do Abate' : 'Registrar Abate'}
+                />
+                <AbateDetalhesDialog
+                  open={abateDialogOpen}
+                  onClose={() => setAbateDialogOpen(false)}
+                  onSave={(det) => {
+                    setAbateDetalhes(det);
+                    setNotaFiscal(det.notaFiscal);
+                    setPrecoArroba(det.precoArroba);
+                    setRendCarcaca(det.rendCarcaca);
+                    setTipoPeso(det.tipoPeso);
+                    setTipoVenda(det.tipoVenda);
+                    setBonusPrecoce(det.bonusPrecoce);
+                    setBonusQualidade(det.bonusQualidade);
+                    setBonusListaTrace(det.bonusListaTrace);
+                    setDescontoQualidade(det.descontoQualidade);
+                    setFunruralPct(det.funruralPct);
+                    setFunruralReais(det.funruralReais);
+                    setOutrosDescontos(det.outrosDescontos);
+                    setDataVenda(det.dataVenda);
+                    setAbateDialogOpen(false);
+                  }}
+                  initialData={abateDetalhes || EMPTY_ABATE_DETALHES}
+                  quantidade={Number(quantidade) || 0}
+                  pesoKg={Number(pesoKg) || 0}
+                  categoria={categoria}
+                  dataAbate={data}
+                  statusOp={statusOp}
                 />
               </>
             ) : (
