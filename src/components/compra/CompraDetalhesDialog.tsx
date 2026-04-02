@@ -221,7 +221,7 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
             {tipoPreco === 'por_total' && (
               <div>
                 <Label className="text-[11px]">Valor total (R$)</Label>
-                <Input type="number" value={valorTotal} onChange={e => setValorTotal(e.target.value)} placeholder="0,00" className="h-9 text-[12px]" />
+                <Input type="number" value={valorTotal} onChange={e => { setValorTotal(e.target.value); markDirty(); }} placeholder="0,00" className="h-9 text-[12px]" />
               </div>
             )}
             {calc.valorBase > 0 && (
