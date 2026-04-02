@@ -1482,9 +1482,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
-              {!abateFornecedorId && (
-                <p className="text-[10px] text-destructive mt-0.5">Selecione o Frigorífico (Fornecedor) para continuar</p>
-              )}
             </div>
           )}
           {/* For compra: fornecedor select same pattern as abate */}
