@@ -131,7 +131,7 @@ export function SearchableSelect({
   itemRefs.current = [];
 
   return (
-    <div ref={containerRef} className={cn('relative', className)}>
+    <div ref={containerRef} className={cn('relative min-w-0', className)}>
       <button
         type="button"
         onClick={handleTriggerClick}

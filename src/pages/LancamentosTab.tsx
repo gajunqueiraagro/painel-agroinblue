@@ -203,12 +203,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
   const [qtdParcelas, setQtdParcelas] = useState('1');
 
-  useEffect(() => {
-    if (tipo === 'abate') {
-      console.log('[ABATE_DEBUG] novoFornecedorAbateOpen=', novoFornecedorAbateOpen);
-    }
-  }, [novoFornecedorAbateOpen, tipo]);
-
   const qtdInput = useIntegerInput(quantidade, setQuantidade);
   const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
 
@@ -1375,10 +1369,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           )}
           {/* For abate: custom Frigorífico select with SearchableSelect + novo fornecedor */}
           {isAbate && (
-            <div>
+            <div className="min-w-0">
               <Label className="font-bold text-[11px]">Frigorífico (Fornecedor) *</Label>
               <div className="flex items-center gap-1 mt-0.5">
-                <div className="flex-1">
+                <div className="min-w-0 flex-1">
                   <SearchableSelect
                     value={abateFornecedorId || '__all__'}
                     onValueChange={(v) => setAbateFornecedorId(v === '__all__' ? '' : v)}
@@ -1393,11 +1387,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   type="button"
                   variant="outline"
                   size="icon"
-                  className="h-8 w-8 shrink-0"
-                  onClick={() => {
-                    console.log('[ABATE_DEBUG] click + frigorifico');
-                    setNovoFornecedorAbateOpen(true);
-                  }}
+                  className="relative z-10 h-8 w-8 shrink-0"
+                  aria-label="Novo frigorífico"
+                  onClick={() => setNovoFornecedorAbateOpen(true)}
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
