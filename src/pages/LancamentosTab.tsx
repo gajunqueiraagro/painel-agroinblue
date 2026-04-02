@@ -521,12 +521,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     if (isAbate) {
       if (!abateFornecedorId) { toast.error('Selecione o Frigorífico (Fornecedor) para continuar'); return; }
-      if (isConfirmado || isConciliado) {
-        if (!tipoVenda) { toast.error('Selecione a Comercialização'); return; }
-        if (!tipoPeso) { toast.error('Selecione o Tipo de Abate'); return; }
-        if (!rendCarcaca || Number(rendCarcaca) <= 0) { toast.error('Informe o Rendimento de Carcaça (%)'); return; }
-        if (!precoArroba || Number(precoArroba) <= 0) { toast.error('Informe o R$/@ (preço base)'); return; }
-      }
+      if (!abateDetalhes) { toast.error('Clique em "Completar Abate" para preencher os detalhes financeiros'); return; }
     }
     if (aba === 'saida' && !isAbate && !isMorte) {
       if (campos.destino?.show && !campos.destino.auto && !fazendaDestino) { toast.error('Informe o Destino'); return; }
