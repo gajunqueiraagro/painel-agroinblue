@@ -89,10 +89,10 @@ const MESES_LIST = [
 ];
 
 const STATUS_LABELS: Record<string, string> = {
-  previsto: 'Previsto',
+  previsto: CENTRAL_STATUS_LABEL.previsto,
   agendado: 'Agendado',
-  confirmado: 'Programado',
-  conciliado: 'Realizado',
+  confirmado: CENTRAL_STATUS_LABEL.confirmado,
+  conciliado: CENTRAL_STATUS_LABEL.conciliado,
 };
 const STATUS_TEXT_COLORS: Record<string, string> = {
   previsto: 'text-orange-500',
