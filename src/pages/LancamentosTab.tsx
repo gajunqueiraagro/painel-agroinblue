@@ -29,6 +29,8 @@ import { CompraResumoPanel } from '@/components/compra/CompraResumoPanel';
 import { gerarFinanceiroCompra } from '@/components/compra/gerarFinanceiroCompra';
 import { AbateDetalhesDialog, AbateDetalhes, EMPTY_ABATE_DETALHES } from '@/components/abate/AbateDetalhesDialog';
 import { AbateResumoPanel } from '@/components/abate/AbateResumoPanel';
+import { VendaDetalhesDialog, VendaDetalhes, EMPTY_VENDA_DETALHES } from '@/components/venda/VendaDetalhesDialog';
+import { VendaResumoPanel } from '@/components/venda/VendaResumoPanel';
 import { AbateExportDialog } from '@/components/AbateExportMenu';
 import { AbateFinanceiroPanel, AbateFinanceiroPanelRef } from '@/components/AbateFinanceiroPanel';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -155,6 +157,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [compraDialogOpen, setCompraDialogOpen] = useState(false);
   const [abateDetalhes, setAbateDetalhes] = useState<AbateDetalhes | null>(null);
   const [abateDialogOpen, setAbateDialogOpen] = useState(false);
+  const [vendaDetalhes, setVendaDetalhes] = useState<VendaDetalhes | null>(null);
+  const [vendaDialogOpen, setVendaDialogOpen] = useState(false);
 
   const [motivoMorte, setMotivoMorte] = useState('');
   const [motivoMorteCustom, setMotivoMorteCustom] = useState('');
@@ -240,6 +244,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const abFunruralReais = isAbate && abateDetalhes ? Number(abateDetalhes.funruralReais) || 0 : Number(funruralReais) || 0;
     const abOutrosDescontos = isAbate && abateDetalhes ? Number(abateDetalhes.outrosDescontos) || 0 : Number(outrosDescontos) || 0;
 
+    // For venda with modal detalhes (normal venda only), source from vendaDetalhes
+    const isVendaNormal = isVenda && vendaDetalhes && (vendaDetalhes.tipoVenda === 'desmama' || vendaDetalhes.tipoVenda === 'gado_adulto');
+
     const rend = abRendCarcaca;
     const carcacaCalc = isAbate && rend > 0 ? peso * rend / 100 : Number(pesoCarcacaKg) || 0;
     let pesoArroba = 0;
@@ -284,7 +291,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       carcacaCalc, bonusPrecoceTotal, bonusQualidadeTotal, bonusListaTraceTotal,
       descQualidadeTotal, descFunruralTotal, descOutrosTotal,
     };
-  }, [quantidade, pesoKg, pesoCarcacaKg, rendCarcaca, precoArroba, precoKg, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, funruralPct, funruralReais, outrosDescontos, bonus, descontos, comissaoPct, frete, outrasDespesas, isAbate, isVenda, usaPrecoArroba, usaPrecoKg, vendaTipoPreco, vendaPrecoInput]);
+  }, [quantidade, pesoKg, pesoCarcacaKg, rendCarcaca, precoArroba, precoKg, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, funruralPct, funruralReais, outrosDescontos, bonus, descontos, comissaoPct, frete, outrasDespesas, isAbate, isVenda, usaPrecoArroba, usaPrecoKg, vendaTipoPreco, vendaPrecoInput, vendaDetalhes, abateDetalhes]);
 
   const gerarParcelas = useCallback((numParcelas: number, baseDate: string, valorTotal: number) => {
     const p: Parcela[] = [];
@@ -355,6 +362,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setFormaPagamento('avista'); setParcelas([]); setQtdParcelas('1');
     setMotivoMorte(''); setMotivoMorteCustom('');
     setRendCarcaca(''); setFunruralPct(''); setFunruralReais('');
+    setVendaDetalhes(null);
   };
 
   const resetAllFields = () => {
@@ -1671,6 +1679,93 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     mode={editingAbateId ? 'update' : 'create'}
                     onFinanceiroUpdated={() => {}}
                     statusOperacional={statusOp}
+                  />
+                </div>
+              </>
+            ) : isVenda && tipoPeso !== 'boitel' ? (
+              <>
+                <VendaResumoPanel
+                  quantidade={Number(quantidade) || 0}
+                  pesoKg={Number(pesoKg) || 0}
+                  categoria={categoria}
+                  compradorNome={abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || ''}
+                  detalhes={vendaDetalhes}
+                  detalhesPreenchidos={!!vendaDetalhes}
+                  canOpenModal={!!(data && quantidade && Number(quantidade) > 0 && pesoKg && Number(pesoKg) > 0 && categoria && vendaDestinoFornecedorId)}
+                  onOpenModal={() => setVendaDialogOpen(true)}
+                  onRequestRegister={handleRequestRegister}
+                  submitting={submitting}
+                  registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
+                />
+                <VendaDetalhesDialog
+                  open={vendaDialogOpen}
+                  onClose={() => setVendaDialogOpen(false)}
+                  onSave={(det) => {
+                    setVendaDetalhes(det);
+                    setNotaFiscal(det.notaFiscal);
+                    setVendaTipoPreco(det.tipoPreco);
+                    setVendaPrecoInput(det.precoInput);
+                    setTipoPeso(det.tipoVenda);
+                    setFrete(det.frete);
+                    setComissaoPct(det.comissaoPct);
+                    setOutrosDescontos(det.outrosCustos);
+                    setFunruralPct(det.funruralPct);
+                    setFunruralReais(det.funruralReais);
+                    setVendaDialogOpen(false);
+                  }}
+                  initialData={vendaDetalhes || EMPTY_VENDA_DETALHES}
+                  quantidade={Number(quantidade) || 0}
+                  pesoKg={Number(pesoKg) || 0}
+                  categoria={categoria}
+                  dataVenda={data}
+                  compradorNome={abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || ''}
+                />
+                {/* Hidden panel for financeiro generation */}
+                <div className="hidden">
+                  <VendaFinanceiroPanel
+                    key={`venda-hidden-${tipo}`}
+                    ref={vendaFinanceiroRef}
+                    quantidade={Number(quantidade) || 0}
+                    pesoKg={Number(pesoKg) || 0}
+                    categoria={categoria}
+                    data={data}
+                    destino={fazendaDestino}
+                    fornecedorId={vendaDestinoFornecedorId}
+                    onFornecedorIdChange={() => {}}
+                    fornecedores={abateFornecedores}
+                    onCreateFornecedor={async () => {}}
+                    notaFiscal={notaFiscal}
+                    onNotaFiscalChange={setNotaFiscal}
+                    statusOp={statusOp}
+                    lancamentoId={lastSavedLancamentoId || undefined}
+                    tipoPeso={tipoPeso}
+                    onTipoPesoChange={() => {}}
+                    vendaTipoPreco={vendaTipoPreco}
+                    onVendaTipoPrecoChange={() => {}}
+                    vendaPrecoInput={vendaPrecoInput}
+                    onVendaPrecoInputChange={() => {}}
+                    valorBruto={calc.valorBruto}
+                    totalBonus={calc.totalBonus}
+                    totalDescontos={calc.totalDescontos}
+                    valorLiquido={calc.valorLiquido}
+                    funruralPct={funruralPct}
+                    onFunruralPctChange={() => {}}
+                    descontoQualidade={descontoQualidade}
+                    onDescontoQualidadeChange={() => {}}
+                    outrosDescontos={outrosDescontos}
+                    onOutrosDescontosChange={() => {}}
+                    descFunruralTotal={calc.descFunruralTotal}
+                    descQualidadeTotal={calc.descQualidadeTotal}
+                    frete={frete}
+                    onFreteChange={() => {}}
+                    comissao={comissaoPct}
+                    onComissaoChange={() => {}}
+                    funruralReais={funruralReais}
+                    onFunruralReaisChange={() => {}}
+                    comissaoVal={calc.comissaoVal}
+                    freteVal={calc.freteVal}
+                    onRequestRegister={() => {}}
+                    submitting={false}
                   />
                 </div>
               </>
