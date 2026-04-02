@@ -35,6 +35,7 @@ import { VendaFinanceiroPanel, VendaFinanceiroPanelRef } from '@/components/Vend
 import { ConsumoFinanceiroPanel, ConsumoFinanceiroPanelRef } from '@/components/ConsumoFinanceiroPanel';
 import { ConfirmacaoRegistroDialog } from '@/components/ConfirmacaoRegistroDialog';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useCliente } from '@/contexts/ClienteContext';
 import { useIntegerInput, useDecimalInput } from '@/hooks/useFormattedNumber';
 import { toast } from 'sonner';
 
