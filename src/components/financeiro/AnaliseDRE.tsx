@@ -469,7 +469,7 @@ export function DREAtividade({
         ))}
       </div>
 
-      <div className="text-[10px] text-muted-foreground">Regime de caixa · Data Pagamento · Conciliado</div>
+      <div className="text-[10px] text-muted-foreground">Regime de caixa · Data Pagamento · Realizado</div>
 
       {/* DRE Table */}
       <Card>
