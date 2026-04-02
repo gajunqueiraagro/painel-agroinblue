@@ -600,7 +600,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                                 <TableCell className="text-[9px] py-0.5 truncate max-w-[150px]">{l.descricao || '-'}</TableCell>
                                 <TableCell className="text-[9px] py-0.5 truncate max-w-[120px]">{fornNome || <span className="italic text-muted-foreground">n/c</span>}</TableCell>
                                 <TableCell className={`text-[9px] py-0.5 text-right font-medium tabular-nums whitespace-nowrap ${isEntrada ? 'text-green-700' : 'text-red-700'}`}>
-                                  {isEntrada ? '' : '- '}R$ {fmtBRL(Math.abs(l.valor))}
+                                  {formatMoeda(isEntrada ? Math.abs(l.valor) : -Math.abs(l.valor))}
                                 </TableCell>
                               </TableRow>
                             );

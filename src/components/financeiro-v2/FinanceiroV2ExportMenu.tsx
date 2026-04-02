@@ -111,8 +111,8 @@ function exportPDF(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], a
 
   const totalEnt = rows.filter(r => r.sinal > 0).reduce((s, r) => s + Math.abs(r.valor), 0);
   const totalSai = rows.filter(r => r.sinal < 0).reduce((s, r) => s + Math.abs(r.valor), 0);
-  body.push(['', '', '', 'ENTRADAS', `R$ ${fmtBRL(totalEnt)}`, '', '']);
-  body.push(['', '', '', 'SAÍDAS', `- R$ ${fmtBRL(totalSai)}`, '', '']);
+  body.push(['', '', '', 'ENTRADAS', formatMoeda(totalEnt), '', '']);
+  body.push(['', '', '', 'SAÍDAS', formatMoeda(-totalSai), '', '']);
 
   autoTable(doc, {
     startY: y,

@@ -818,7 +818,7 @@ export function FinV2SaldosTab() {
             <AlertDialogHeader>
               <AlertDialogTitle className="text-base">Atualizar saldo inicial do próximo mês?</AlertDialogTitle>
               <AlertDialogDescription className="text-sm">
-                Agora existe um saldo final diferente no mês anterior. Deseja atualizar o saldo inicial automaticamente com o valor de <strong>R$ {propagateConfirm ? fmtBRL(propagateConfirm.newValue) : ''}</strong>?
+                Agora existe um saldo final diferente no mês anterior. Deseja atualizar o saldo inicial automaticamente com o valor de <strong>{propagateConfirm ? formatMoeda(propagateConfirm.newValue) : ''}</strong>?
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
