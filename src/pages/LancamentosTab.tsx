@@ -1204,7 +1204,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     return (
     <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
-      <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros</h3>
+      <h3 className="text-[11px] font-semibold uppercase text-foreground/80 tracking-wide">Detalhes Financeiros</h3>
       <Separator />
 
       {/* Nascimento: sem impacto financeiro */}
