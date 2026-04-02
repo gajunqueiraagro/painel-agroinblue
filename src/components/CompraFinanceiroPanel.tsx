@@ -79,7 +79,6 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
   const [frete, setFrete] = useState('');
   const [comissaoPct, setComissaoPct] = useState('');
 
-  // Collapsible states — all closed by default
   const [tipoCompraOpen, setTipoCompraOpen] = useState(false);
   const [precoBaseOpen, setPrecoBaseOpen] = useState(false);
   const [despesasOpen, setDespesasOpen] = useState(false);
@@ -145,12 +144,6 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
           })));
         }
 
-        const favId = recs[0]?.favorecido_id;
-        if (favId && !fornecedorId) {
-          setFornecedorId(favId as string);
-          setFornecedorOpen(true);
-        }
-
         const nf = parcelaRecs[0]?.nota_fiscal;
         if (nf && !notaFiscal) {
           onNotaFiscalChange(nf as string);
@@ -158,66 +151,6 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
         }
       });
   }, [mode, lancamentoId]);
-
-  // Auto-suggest fornecedor based on fazendaOrigem
-  useEffect(() => {
-    if (!fazendaOrigem?.trim() || origemSugestaoDescartada) {
-      setOrigemSugestao(null);
-      return;
-    }
-    const nomeNorm = fazendaOrigem.trim().toLowerCase();
-    const match = fornecedores.find(f => f.nome.toLowerCase() === nomeNorm);
-    if (match) {
-      if (!fornecedorId) {
-        setFornecedorId(match.id);
-        setOrigemSugestao('encontrado');
-        setTimeout(() => setOrigemSugestao(null), 3000);
-      } else {
-        setOrigemSugestao(null);
-      }
-    } else if (fazendaOrigem.trim().length >= 3) {
-      setOrigemSugestao('criar');
-    } else {
-      setOrigemSugestao(null);
-    }
-  }, [fazendaOrigem, fornecedores, fornecedorId, origemSugestaoDescartada]);
-
-  useEffect(() => {
-    setOrigemSugestaoDescartada(false);
-  }, [fazendaOrigem]);
-
-  const handleCriarFornecedorFromOrigem = async () => {
-    if (!clienteAtual || !fazendaAtual || !fazendaOrigem?.trim()) return;
-    const nome = fazendaOrigem.trim();
-    const { data, error } = await supabase
-      .from('financeiro_fornecedores')
-      .insert({ cliente_id: clienteAtual.id, fazenda_id: fazendaAtual.id, nome })
-      .select('id, nome')
-      .single();
-    if (error) { toast.error('Erro ao criar fornecedor'); return; }
-    if (data) {
-      setFornecedores(prev => [...prev, data].sort((a, b) => a.nome.localeCompare(b.nome)));
-      setFornecedorId(data.id);
-      setOrigemSugestao(null);
-      toast.success(`Fornecedor "${data.nome}" criado e selecionado`);
-    }
-  };
-
-  const handleNovoFornecedor = async (nome: string, cpfCnpj?: string) => {
-    if (!clienteAtual || !fazendaAtual) return;
-    const { data, error } = await supabase
-      .from('financeiro_fornecedores')
-      .insert({ cliente_id: clienteAtual.id, fazenda_id: fazendaAtual.id, nome, cpf_cnpj: cpfCnpj || null })
-      .select('id, nome')
-      .single();
-    if (error) { toast.error('Erro ao salvar fornecedor'); return; }
-    if (data) {
-      setFornecedores(prev => [...prev, data].sort((a, b) => a.nome.localeCompare(b.nome)));
-      setFornecedorId(data.id);
-      toast.success(`Fornecedor "${data.nome}" criado e selecionado`);
-    }
-    setNovoFornecedorOpen(false);
-  };
 
   const qtd = quantidade || 0;
   const peso = pesoKg || 0;
@@ -277,7 +210,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
 
   const validationErrors = useMemo(() => {
     const errors: string[] = [];
-    if (!fornecedorId) errors.push('Selecione o fornecedor (quem você pagou) antes de gerar o financeiro.');
+    if (!fornecedorId) errors.push('Selecione o fornecedor para continuar.');
     if (calc.valorBase <= 0) errors.push('Preencha o valor da compra antes de gerar.');
     if (formaPag === 'prazo' && parcelas.length > 0) {
       const somaParcelas = Math.round(parcelas.reduce((s, p) => s + p.valor, 0) * 100) / 100;
@@ -295,7 +228,6 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
 
   const canGenerate = validationErrors.length === 0;
 
-  // Report validation to parent
   useEffect(() => {
     onValidationChange?.(validationErrors);
   }, [validationErrors, onValidationChange]);
@@ -365,7 +297,6 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       const isFemea = FEMEAS.includes(categoria);
       const subcentroCompra = isFemea ? 'COMPRAS ANIMAIS/FEMEAS' : 'COMPRAS ANIMAIS/MACHOS';
 
-      // Validar classificação no plano de contas real
       const subcentrosNecessarios = [subcentroCompra];
       if (calc.freteVal > 0) subcentrosNecessarios.push('FRETE COMPRA ANIMAIS');
       if (calc.comissaoVal > 0) subcentrosNecessarios.push('COMISSÃO COMPRA ANIMAIS');
@@ -380,7 +311,6 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
 
       const planoMap = new Map((planoContas || []).map(p => [p.subcentro, p]));
 
-      // Verificar se todos os subcentros necessários existem
       for (const sub of subcentrosNecessarios) {
         if (!planoMap.has(sub)) {
           toast.error(`Não foi encontrado mapeamento financeiro válido para "${sub}" no plano de classificação.`);
@@ -489,15 +419,12 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
     setPrecoKg(''); setPrecoCab(''); setValorTotal('');
     setFrete(''); setComissaoPct('');
     setFormaPag('avista'); setQtdParcelas('1'); setParcelas([]);
-    setFornecedorId('');
     setGerado(false); setGerando(false);
     setExistingCount(0); setExistingLoaded(false);
-    setOrigemSugestao(null); setOrigemSugestaoDescartada(false);
-    setTipoCompraOpen(false); setFornecedorOpen(false);
+    setTipoCompraOpen(false);
     setPrecoBaseOpen(false); setDespesasOpen(false); setPagamentoOpen(false);
   }, []);
 
-  // Expose imperative methods to parent
   useImperativeHandle(ref, () => ({
     generateFinanceiro: (id: string) => handleGerarFinanceiro(id),
     getValidationErrors: () => validationErrors,
@@ -546,46 +473,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
 
       <Separator />
 
-      {/* === BLOCO RECOLHÍVEL: Fornecedor === */}
-      <CollapsibleBlock title="Fornecedor (quem você pagou)" open={fornecedorOpen} onOpenChange={setFornecedorOpen}>
-        <div className="flex gap-1">
-          <div className="flex-1">
-            <SearchableSelect
-              value={fornecedorId}
-              onValueChange={setFornecedorId}
-              placeholder="Selecione o fornecedor"
-              options={fornecedores.map(f => ({ value: f.id, label: f.nome }))}
-            />
-          </div>
-          <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setNovoFornecedorOpen(true)}>
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-        {origemSugestao === 'encontrado' && (
-          <p className="text-[9px] text-green-600 flex items-center gap-1">
-            <CheckCircle className="h-2.5 w-2.5" /> Fornecedor selecionado automaticamente
-          </p>
-        )}
-        {origemSugestao === 'criar' && !fornecedorId && (
-          <div className="flex items-center gap-1 p-1 rounded border border-dashed border-muted-foreground/30 bg-muted/40">
-            <span className="text-[9px] text-muted-foreground flex-1">
-              Criar "<strong>{fazendaOrigem?.trim()}</strong>"?
-            </span>
-            <Button type="button" variant="outline" size="sm" className="h-5 text-[9px] px-1.5" onClick={handleCriarFornecedorFromOrigem}>
-              Criar
-            </Button>
-            <Button type="button" variant="ghost" size="sm" className="h-5 text-[9px] px-1" onClick={() => setOrigemSugestaoDescartada(true)}>
-              ✕
-            </Button>
-          </div>
-        )}
-      </CollapsibleBlock>
-
-      <NovoFornecedorDialog open={novoFornecedorOpen} onClose={() => setNovoFornecedorOpen(false)} onSave={handleNovoFornecedor} />
-
-      <Separator />
-
-      {/* === BLOCO RECOLHÍVEL 1: Preço Base === */}
+      {/* === BLOCO RECOLHÍVEL: Preço Base === */}
       <CollapsibleBlock title="Preço Base" open={precoBaseOpen} onOpenChange={setPrecoBaseOpen}>
         {tipoPreco === 'por_kg' && (
           <div>
@@ -624,7 +512,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
 
       <Separator />
 
-      {/* === BLOCO RECOLHÍVEL 2: Despesas Extras === */}
+      {/* === BLOCO RECOLHÍVEL: Despesas Extras === */}
       <CollapsibleBlock title="Despesas Extras" open={despesasOpen} onOpenChange={setDespesasOpen}>
         <div className="grid grid-cols-2 gap-2">
           <div>
@@ -652,9 +540,8 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
 
       <Separator />
 
-      {/* === BLOCO RECOLHÍVEL 3: Informações de Pagamento (inclui NF) === */}
+      {/* === BLOCO RECOLHÍVEL: Informações de Pagamento === */}
       <CollapsibleBlock title="Informações de Pagamento" open={pagamentoOpen} onOpenChange={setPagamentoOpen}>
-        {/* Nota Fiscal — agora dentro do pagamento */}
         <div>
           <Label className="text-[10px]">Nota Fiscal</Label>
           <Input value={notaFiscal} onChange={e => onNotaFiscalChange(e.target.value)} placeholder="Nº da nota" className="h-7 text-[11px]" />
@@ -701,7 +588,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
 
       <Separator />
 
-      {/* === Valor Líquido (sempre visível quando tem valor) === */}
+      {/* === Valor Líquido === */}
       {calc.valorBase > 0 && (
         <div className={`rounded-md px-2 py-1.5 ${isPrevisto ? 'bg-orange-200/50 dark:bg-orange-950/50' : 'bg-primary/10'}`}>
           <div className="flex justify-between text-[11px] font-bold">
