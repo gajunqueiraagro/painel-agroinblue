@@ -369,7 +369,7 @@ export function ModoRapidoGrid({ fazendaId, contas, classificacoes, onSaveBatch,
                       onKeyDown={e => handleKeyDown(e, rowIdx, 7)}
                       className="w-full h-7 px-0.5 text-[11px] bg-transparent border border-transparent focus:border-primary/40 rounded outline-none"
                     >
-                      {STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+                      {STATUS_LIST.map(s => <option key={s} value={s}>{STATUS_UI_LABEL[s] || s}</option>)}
                     </select>
                   </td>
                   {/* Delete */}

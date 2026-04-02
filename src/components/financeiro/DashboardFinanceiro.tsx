@@ -1134,7 +1134,7 @@ export function DashboardFinanceiro({
                     </TableBody>
                   </Table>
                   <div className="border-t mt-2 pt-2 text-[10px] text-muted-foreground">
-                    Total no período: {todosNoPeriodoMes.length} · Usados (Conciliado): {filtradosMes.length}
+                    Total no período: {todosNoPeriodoMes.length} · Usados (Realizado): {filtradosMes.length}
                   </div>
                 </CardContent>
               </Card>
