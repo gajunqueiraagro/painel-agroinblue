@@ -101,12 +101,8 @@ const STATUS_TEXT_COLORS: Record<string, string> = {
   conciliado: 'text-green-700 dark:text-green-400 font-bold',
 };
 
-function fmtBRL(v: number): string {
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 function fmtValor(v: number, sinal: number) {
-  const formatted = fmtBRL(Math.abs(v));
-  return sinal >= 0 ? `R$ ${formatted}` : `- R$ ${formatted}`;
+  return formatMoeda(Math.abs(v) * (sinal >= 0 ? 1 : -1));
 }
 function fmtDate(d: string | null) {
   if (!d) return '-';
