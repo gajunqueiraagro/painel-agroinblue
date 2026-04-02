@@ -46,6 +46,15 @@ interface Props {
   totalBonus: number;
   totalDescontos: number;
   valorLiquido: number;
+  // Discount fields (managed by parent for calc)
+  funruralPct: string;
+  onFunruralPctChange: (v: string) => void;
+  descontoQualidade: string;
+  onDescontoQualidadeChange: (v: string) => void;
+  outrosDescontos: string;
+  onOutrosDescontosChange: (v: string) => void;
+  descFunruralTotal: number;
+  descQualidadeTotal: number;
 }
 
 export interface VendaFinanceiroPanelRef {
@@ -61,6 +70,10 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   onRequestRegister, registerLabel, submitting: externalSubmitting,
   tipoPeso, onTipoPesoChange,
   valorBruto, totalBonus, totalDescontos, valorLiquido,
+  funruralPct, onFunruralPctChange,
+  descontoQualidade, onDescontoQualidadeChange,
+  outrosDescontos, onOutrosDescontosChange,
+  descFunruralTotal, descQualidadeTotal,
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
@@ -393,7 +406,35 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
       <Separator />
 
-      {/* Resumo de valores (read-only from parent calc) */}
+      {/* Descontos */}
+      <Collapsible>
+        <CollapsibleTrigger className="flex items-center justify-between w-full group">
+          <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Descontos</h4>
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-1.5 pt-1">
+          <div>
+            <Label className="text-[11px]">Funrural (%)</Label>
+            <Input type="number" value={funruralPct} onChange={e => onFunruralPctChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[11px]" />
+            {descFunruralTotal > 0 && (
+              <span className="text-[10px] text-destructive">Funrural: -{formatMoeda(descFunruralTotal)}</span>
+            )}
+          </div>
+          <div>
+            <Label className="text-[11px]">Desconto Qualidade (R$)</Label>
+            <Input type="number" value={descontoQualidade} onChange={e => onDescontoQualidadeChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
+            {descQualidadeTotal > 0 && (
+              <span className="text-[10px] text-destructive">Qualidade: -{formatMoeda(descQualidadeTotal)}</span>
+            )}
+          </div>
+          <div>
+            <Label className="text-[11px]">Outros Descontos (R$)</Label>
+            <Input type="number" value={outrosDescontos} onChange={e => onOutrosDescontosChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+
+      <Separator />
       {valorBruto > 0 && (
         <div className="bg-muted/30 rounded-md p-2 space-y-0.5 text-[10px]">
           <div className="flex justify-between"><span className="text-muted-foreground">Valor bruto</span><span className="font-semibold">{formatMoeda(valorBruto)}</span></div>
