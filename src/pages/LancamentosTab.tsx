@@ -464,6 +464,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       ? (campos.destino.auto ? campos.destino.value : fazendaDestino) || undefined
       : undefined;
 
+    // For abate, use fornecedor name as destino
+    if (isAbate && abateFornecedorId) {
+      const forn = abateFornecedores.find(f => f.id === abateFornecedorId);
+      if (forn) destinoFinal = forn.nome;
+    }
+
     if (isMorte) {
       destinoFinal = motivoMorte === '__custom__' ? motivoMorteCustom : motivoMorte || undefined;
     }
