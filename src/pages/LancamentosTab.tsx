@@ -226,6 +226,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const totalKg = peso * qtd;
     let valorBruto = 0;
     if (usaPrecoArroba) { valorBruto = totalArrobas * (Number(precoArroba) || 0); }
+    else if (isVenda) {
+      // Venda normal: use vendaTipoPreco + vendaPrecoInput
+      const vi = Number(vendaPrecoInput) || 0;
+      if (vendaTipoPreco === 'por_kg') { valorBruto = totalKg * vi; }
+      else if (vendaTipoPreco === 'por_cab') { valorBruto = qtd * vi; }
+      else if (vendaTipoPreco === 'por_total') { valorBruto = vi; }
+    }
     else if (usaPrecoKg) { valorBruto = totalKg * (Number(precoKg) || 0); }
     // Abate: bonus/desconto inputs are R$/@ → multiply by totalArrobas
     const bonusPrecoceTotal = isAbate ? (Number(bonusPrecoce) || 0) * totalArrobas : 0;
