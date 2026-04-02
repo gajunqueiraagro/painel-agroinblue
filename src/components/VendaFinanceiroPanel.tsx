@@ -608,7 +608,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
       <Separator />
 
-      {/* Informações de Pagamento */}
+      {/* Informações de Recebimento */}
       <Collapsible defaultOpen>
         <CollapsibleTrigger className="flex items-center justify-between w-full group">
           <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Informações de Recebimento</h4>
