@@ -183,6 +183,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     const custosFreteTotal = custoFrete;
     const custosOperacionais = custoDiariaTotal + custosSanitarios + outrosCustosOp + custosFreteTotal;
     const resultadoComBoitel = faturamentoLiquido - custoDiariaTotal - custosSanitarios - outrosCustosOp;
+    const totalOperacional = resultadoComBoitel - custosFreteTotal;
 
     const custoOportTotal = custoOportunidade * pesoInicial * qtdCabecas;
     const custoOportCab = qtdCabecas > 0 ? custoOportTotal / qtdCabecas : 0;
