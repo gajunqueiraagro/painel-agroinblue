@@ -384,6 +384,28 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         </Select>
       </div>
 
+      {/* Boitel button */}
+      {tipoPeso === 'boitel' && (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full h-9 text-[12px] font-bold gap-2 border-primary/30 text-primary hover:bg-primary/10"
+            onClick={() => setBoitelOpen(true)}
+          >
+            <Calculator className="h-4 w-4" />
+            {boitelData ? 'Editar Planejamento Boitel' : 'Abrir Planejamento Boitel'}
+          </Button>
+          {boitelData && (
+            <div className="bg-primary/5 rounded-md p-2 text-[10px] space-y-0.5 border border-primary/20">
+              <div className="flex justify-between"><span className="text-muted-foreground">Dias</span><span className="font-semibold">{boitelData.dias}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">GMD</span><span className="font-semibold">{boitelData.gmd} kg/dia</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Tipo custo</span><span className="font-semibold capitalize">{boitelData.tipoCusto}</span></div>
+            </div>
+          )}
+        </>
+      )}
+
       <Separator />
 
       {/* Fornecedor / Comprador */}
