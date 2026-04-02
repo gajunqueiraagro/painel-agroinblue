@@ -111,6 +111,7 @@ const TITLES: Record<TabId, string> = {
   contratos: 'Contratos / Recorrências',
   conciliacao_bancaria: 'Conciliação Bancária',
   painel_consultor: 'Painel do Consultor',
+  auditoria: 'Central de Auditoria',
 };
 
 const Index = () => {
