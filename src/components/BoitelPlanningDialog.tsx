@@ -117,7 +117,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
 
   const calc = useMemo(() => {
     const {
-      qtdCabecas, pesoInicial, quebraViagem, dias, gmd, rendimento,
+      qtdCabecas, pesoInicial, quebraViagem, dias, gmd, rendimentoEntrada, rendimento,
       modalidadeCusto, custoDiaria, custoArroba, percentualParceria, custosExtrasParceria,
       custoFrete, outrosCustos, custoOportunidade,
       custoNutricao, custoSanidade, custoNfAbate,
@@ -128,53 +128,71 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     const ganhoKg = gmd * dias;
     const pesoFinal = pesoLiqEntrada + ganhoKg;
 
-    const arrobasEntrada = (pesoLiqEntrada * rendimento / 100) / 15;
+    // Arrobas: entrada usa rendimento de entrada (padrão 50%), saída usa rendimento real
+    const arrobasEntrada = (pesoLiqEntrada * rendimentoEntrada / 100) / 15;
     const arrobasSaida = (pesoFinal * rendimento / 100) / 15;
     const arrobasProduzidas = (arrobasSaida - arrobasEntrada) * qtdCabecas;
     const arrobasTotalSaida = arrobasSaida * qtdCabecas;
 
-    const gmc = dias > 0 ? ((pesoFinal * rendimento / 100) - (pesoLiqEntrada * rendimento / 100)) / dias : 0;
+    // GMC (ganho médio de carcaça kg/dia)
+    const gmc = dias > 0 ? ((pesoFinal * rendimento / 100) - (pesoLiqEntrada * rendimentoEntrada / 100)) / dias : 0;
 
-    // Faturamento bruto abate
+    // ── FATURAMENTO ──
     const faturamentoBruto = arrobasTotalSaida * precoVendaArroba;
-
-    // Custos com abate (despesas + NF)
     const custosAbate = despesasAbate + custoNfAbate;
-
-    // Faturamento líquido
     const faturamentoLiquido = faturamentoBruto - custosAbate;
 
-    // Custo com diárias
+    // ── CUSTOS OPERACIONAIS ──
     let custoDiariaTotal = 0;
     if (modalidadeCusto === 'diaria') {
       custoDiariaTotal = custoDiaria * dias * qtdCabecas;
     } else if (modalidadeCusto === 'arroba') {
       custoDiariaTotal = custoArroba * arrobasProduzidas;
-    } else if (modalidadeCusto === 'parceria') {
-      // Em parceria: % das arrobas produzidas vai para o parceiro
-      const arrobasParceiro = arrobasProduzidas * (percentualParceria / 100);
-      custoDiariaTotal = arrobasParceiro * precoVendaArroba;
     }
+    // Parceria: não gera custo operacional — é divisão de receita
 
-    // Custos sanitários
     const custosSanitarios = custoSanidade;
-
-    // Outros custos (nutrição + outros + extras parceria + custo oportunidade)
-    const custoOportTotal = custoOportunidade * pesoLiqEntrada * qtdCabecas;
-    const outrosCustosTotal = outrosCustos + custoNutricao + custosExtrasParceria + custoOportTotal;
-
-    // Custos com frete
+    const outrosCustosTotal = outrosCustos + custoNutricao + custosExtrasParceria;
     const custosFreteTotal = custoFrete;
 
-    // Total de custos operacionais
-    const custoTotal = custoDiariaTotal + custosSanitarios + outrosCustosTotal + custosFreteTotal + custosAbate;
+    const custosOperacionais = custoDiariaTotal + custosSanitarios + outrosCustosTotal + custosFreteTotal;
 
-    // Lucro
-    const lucroTotal = faturamentoBruto - custoTotal;
+    // ── CUSTO DE OPORTUNIDADE (indicador econômico separado) ──
+    const custoOportTotal = custoOportunidade * pesoLiqEntrada * qtdCabecas;
+
+    // ── PARCERIA: divisão da receita ──
+    // Em parceria, a receita do produtor é apenas sua parte do faturamento líquido
+    let receitaProdutor = faturamentoLiquido;
+    let parceiroParte = 0;
+    if (modalidadeCusto === 'parceria') {
+      parceiroParte = faturamentoLiquido * (percentualParceria / 100);
+      receitaProdutor = faturamentoLiquido - parceiroParte;
+    }
+
+    // ── LUCRO ──
+    // Lucro = Receita do produtor - Custos operacionais
+    const lucroTotal = receitaProdutor - custosOperacionais;
+    const lucroComOportunidade = lucroTotal - custoOportTotal;
     const lucroPorCab = qtdCabecas > 0 ? lucroTotal / qtdCabecas : 0;
     const lucroPorArroba = arrobasProduzidas > 0 ? lucroTotal / arrobasProduzidas : 0;
     const ganhoTotalKg = ganhoKg * qtdCabecas;
     const lucroPorKg = ganhoTotalKg > 0 ? lucroTotal / ganhoTotalKg : 0;
+
+    const custoPorCab = qtdCabecas > 0 ? custosOperacionais / qtdCabecas : 0;
+    const custoPorArroba = arrobasProduzidas > 0 ? custosOperacionais / arrobasProduzidas : 0;
+
+    return {
+      pesoLiqEntrada, ganhoKg, pesoFinal,
+      arrobasEntrada, arrobasSaida, arrobasProduzidas, arrobasTotalSaida,
+      gmc,
+      faturamentoBruto, custosAbate, faturamentoLiquido,
+      parceiroParte, receitaProdutor,
+      custoDiariaTotal, custosSanitarios, outrosCustosTotal, custosFreteTotal,
+      custosOperacionais, custoOportTotal,
+      custoPorCab, custoPorArroba,
+      lucroTotal, lucroComOportunidade, lucroPorCab, lucroPorArroba, lucroPorKg,
+    };
+  }, [data]);
 
     const custoPorCab = qtdCabecas > 0 ? custoTotal / qtdCabecas : 0;
     const custoPorArroba = arrobasProduzidas > 0 ? custoTotal / arrobasProduzidas : 0;
