@@ -32,6 +32,7 @@ interface Props {
   fazendaOrigem: string;
   notaFiscal: string;
   onNotaFiscalChange: (v: string) => void;
+  fornecedorId: string;
   lancamentoId?: string;
   mode?: 'create' | 'update';
   onFinanceiroUpdated?: () => void;
