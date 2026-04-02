@@ -17,6 +17,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 import { BoitelPlanningDialog, type BoitelData } from '@/components/BoitelPlanningDialog';
+import { salvarBoitelOperacao, vincularBoitelAoLancamento, gerarFinanceiroBoitel } from '@/hooks/useBoitelOperacoes';
 import type { StatusOperacional } from '@/lib/statusOperacional';
 
 interface Parcela {
@@ -199,6 +200,82 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   const handleGerarFinanceiroInternal = async (targetLancamentoId: string): Promise<boolean> => {
     if (!targetLancamentoId) { toast.error('Salve o lançamento zootécnico primeiro.'); return false; }
     if (!fazendaAtual || !clienteAtual) return false;
+
+    // ── BOITEL FLOW ──
+    if (tipoPeso === 'boitel' && boitelData) {
+      setGerando(true);
+      try {
+        // 1. Salvar operação de boitel (snapshot)
+        const boitelOp = {
+          id: boitelData._boitelId,
+          cliente_id: clienteAtual.id,
+          fazenda_origem_id: fazendaAtual.id,
+          fazenda_destino_nome: boitelData.nomeBoitel || '',
+          lote: boitelData.lote || '',
+          numero_contrato: boitelData.numeroContrato || '',
+          data_envio: boitelData.dataEnvio || data,
+          quantidade: boitelData.qtdCabecas,
+          peso_inicial_kg: boitelData.pesoInicial,
+          modalidade: boitelData.modalidadeCusto,
+          dias: boitelData.dias,
+          gmd: boitelData.gmd,
+          rendimento_entrada: boitelData.rendimentoEntrada,
+          rendimento_saida: boitelData.rendimento,
+          custo_diaria: boitelData.custoDiaria,
+          custo_arroba: boitelData.custoArroba,
+          percentual_parceria: boitelData.percentualParceria,
+          custos_extras_parceria: boitelData.custosExtrasParceria,
+          custo_nutricao: boitelData.custoNutricao,
+          custo_sanidade: boitelData.custoSanidade,
+          custo_frete: boitelData.custoFrete,
+          outros_custos: boitelData.outrosCustos,
+          despesas_abate: boitelData.despesasAbate,
+          preco_venda_arroba: boitelData.precoVendaArroba,
+          faturamento_bruto: boitelData._faturamentoBruto || 0,
+          faturamento_liquido: boitelData._faturamentoLiquido || 0,
+          receita_produtor: boitelData._receitaProdutor || 0,
+          custo_total: boitelData._custoTotal || 0,
+          lucro_total: boitelData._lucroTotal || 0,
+        };
+
+        const boitelId = await salvarBoitelOperacao(boitelOp);
+        if (!boitelId) { setGerando(false); return false; }
+
+        // 2. Vincular boitel_id ao lançamento de rebanho
+        await vincularBoitelAoLancamento(targetLancamentoId, boitelId);
+
+        // Update local boitelData with ID for future edits
+        setBoitelData(prev => prev ? { ...prev, _boitelId: boitelId } : prev);
+
+        // 3. Gerar financeiro com regras de boitel (apenas caixa real)
+        const isUpdate = mode === 'update' || existingCount > 0;
+        const ok = await gerarFinanceiroBoitel(
+          { ...boitelOp, id: boitelId },
+          targetLancamentoId,
+          clienteAtual.id,
+          fazendaAtual.id,
+          data, // data de recebimento real (caixa)
+          {
+            fornecedorId: fornecedorId || undefined,
+            notaFiscal: notaFiscal || undefined,
+            isUpdate,
+          }
+        );
+
+        if (ok) {
+          setGerado(true);
+          if (mode === 'update' && onFinanceiroUpdated) onFinanceiroUpdated();
+        }
+        return ok;
+      } catch (err: any) {
+        toast.error('Erro no processamento do boitel: ' + (err.message || err));
+        return false;
+      } finally {
+        setGerando(false);
+      }
+    }
+
+    // ── VENDA NORMAL FLOW ──
     if (validationErrors.length > 0) { toast.error(validationErrors[0]); return false; }
 
     setGerando(true);
@@ -244,7 +321,6 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       // Determine subcentro for receita based on gender
       const FEMEAS = ['mamotes_f', 'desmama_f', 'novilhas', 'vacas'];
       const isFemea = FEMEAS.includes(categoria);
-      // Try specific vendas subcentros first, then fallback to general
       const subcentroCandidates = isFemea
         ? ['PEC/RECEITA/VENDAS EM PÉ/FEMEAS', 'PEC/RECEITA/VENDAS/FEMEAS', 'PEC/RECEITA/ABATES/FEMEAS']
         : ['PEC/RECEITA/VENDAS EM PÉ/MACHOS', 'PEC/RECEITA/VENDAS/MACHOS', 'PEC/RECEITA/ABATES/MACHOS'];
@@ -263,7 +339,6 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         return false;
       }
 
-      // Use first match (priority order is maintained by candidates array)
       const clasReceita = planoReceita.find(p => subcentroCandidates.indexOf(p.subcentro!) >= 0) || planoReceita[0];
       const statusFin = isPrevisto ? 'previsto' : 'confirmado';
 
@@ -398,9 +473,11 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           </Button>
           {boitelData && (
             <div className="bg-primary/5 rounded-md p-2 text-[10px] space-y-0.5 border border-primary/20">
+              <div className="flex justify-between"><span className="text-muted-foreground">Boitel</span><span className="font-semibold">{boitelData.nomeBoitel || '-'}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Dias</span><span className="font-semibold">{boitelData.dias}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">GMD</span><span className="font-semibold">{boitelData.gmd} kg/dia</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Custo/cab/dia</span><span className="font-semibold">{boitelData.custoDiaria ? `R$ ${boitelData.custoDiaria}` : '-'}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Receita Produtor</span><span className="font-semibold text-primary">{boitelData._receitaProdutor ? formatMoeda(boitelData._receitaProdutor) : '-'}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Lucro Total</span><span className={`font-semibold ${(boitelData._lucroTotal || 0) > 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>{boitelData._lucroTotal ? formatMoeda(boitelData._lucroTotal) : '-'}</span></div>
             </div>
           )}
         </>
