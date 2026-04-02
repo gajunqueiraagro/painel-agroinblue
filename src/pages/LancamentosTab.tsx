@@ -1461,7 +1461,39 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               )}
             </div>
           )}
-          {campos.destino?.show && (
+          {/* For abate: custom Frigorífico select with SearchableSelect + novo fornecedor */}
+          {isAbate && (
+            <div>
+              <Label className="font-bold text-[11px]">Frigorífico (Fornecedor) *</Label>
+              <div className="flex items-center gap-1 mt-0.5">
+                <div className="flex-1">
+                  <SearchableSelect
+                    value={abateFornecedorId || '__all__'}
+                    onValueChange={(v) => setAbateFornecedorId(v === '__all__' ? '' : v)}
+                    options={abateFornecedores.map(f => ({ value: f.id, label: f.nome }))}
+                    placeholder="Selecione ou cadastre o frigorífico"
+                    allLabel="Nenhum selecionado"
+                    allValue="__all__"
+                    className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => setNovoFornecedorAbateOpen(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              {!abateFornecedorId && (
+                <p className="text-[10px] text-destructive mt-0.5">Selecione o Frigorífico (Fornecedor) para continuar</p>
+              )}
+            </div>
+          )}
+          {/* For non-abate types: keep original destino field */}
+          {!isAbate && campos.destino?.show && (
             <div>
               <Label className="font-bold text-[11px]">{campos.destino.label}</Label>
               {campos.destino.auto ? (
