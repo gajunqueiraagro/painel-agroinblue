@@ -664,7 +664,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         <>
           <Collapsible>
             <CollapsibleTrigger className="flex items-center justify-between w-full group">
-              <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Descontos</h4>
+              <h4 className="text-[10px] font-semibold text-foreground/70 uppercase">Descontos</h4>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1.5 pt-1">
