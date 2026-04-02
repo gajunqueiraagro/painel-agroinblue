@@ -96,6 +96,8 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   const [fornecedorId, setFornecedorId] = useState<string>('');
   const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
   const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
+  const [boitelOpen, setBoitelOpen] = useState(false);
+  const [boitelData, setBoitelData] = useState<BoitelData | null>(null);
 
   useEffect(() => {
     if (!clienteAtual) return;
