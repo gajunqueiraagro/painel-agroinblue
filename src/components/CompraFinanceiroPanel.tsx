@@ -210,7 +210,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
 
   const validationErrors = useMemo(() => {
     const errors: string[] = [];
-    if (!fornecedorId) errors.push('Selecione o fornecedor para continuar.');
+    
     if (calc.valorBase <= 0) errors.push('Preencha o valor da compra antes de gerar.');
     if (formaPag === 'prazo' && parcelas.length > 0) {
       const somaParcelas = Math.round(parcelas.reduce((s, p) => s + p.valor, 0) * 100) / 100;
