@@ -284,14 +284,18 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
 
               {/* PERÍODO */}
               <Section icon={<Calendar className="h-3.5 w-3.5" />} title="Período">
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <Field label="Dias confinamento">
                     <Input type="number" value={data.dias || ''} onChange={e => set('dias', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
                   </Field>
                   <Field label="GMD (kg/dia)">
                     <Input type="number" value={data.gmd || ''} onChange={e => set('gmd', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.001" />
                   </Field>
-                  <Field label="Rendimento carcaça (%)">
+                  <Field label="Rend. entrada (%)">
+                    <Input type="number" value={data.rendimentoEntrada || ''} onChange={e => set('rendimentoEntrada', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.5" />
+                    <span className="text-[8px] text-muted-foreground">Padrão: 50%</span>
+                  </Field>
+                  <Field label="Rend. saída (%)">
                     <Input type="number" value={data.rendimento || ''} onChange={e => set('rendimento', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.5" />
                   </Field>
                 </div>
