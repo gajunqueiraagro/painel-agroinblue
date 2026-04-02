@@ -38,11 +38,9 @@ interface Props {
   onRequestRegister?: () => void;
   registerLabel?: string;
   submitting?: boolean;
-  // Comercialização and tipo venda fields (managed by parent for persistence)
-  tipoVenda: string;
-  onTipoVendaChange: (v: string) => void;
-  tipoPeso: 'vivo' | 'morto';
-  onTipoPesoChange: (v: 'vivo' | 'morto') => void;
+  // Tipo de venda field (managed by parent for persistence)
+  tipoPeso: string;
+  onTipoPesoChange: (v: string) => void;
   // Values from parent calc
   valorBruto: number;
   totalBonus: number;
