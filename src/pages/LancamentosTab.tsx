@@ -1465,6 +1465,35 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               </div>
             </div>
           )}
+          {/* Tipo de Venda selector for Venda em Pé */}
+          {isVenda && (
+            <div>
+              <Label className="font-bold text-[11px]">Tipo de Venda</Label>
+              <div className="flex gap-1 mt-0.5">
+                {[
+                  { value: 'desmama', label: 'Desmama' },
+                  { value: 'gado_adulto', label: 'Gado Adulto' },
+                  { value: 'boitel', label: 'Boitel' },
+                ].map(opt => (
+                  <Button
+                    key={opt.value}
+                    type="button"
+                    variant={tipoPeso === opt.value ? 'default' : 'outline'}
+                    size="sm"
+                    className="flex-1 h-7 text-[11px] font-semibold"
+                    onClick={() => {
+                      setTipoPeso(opt.value);
+                      if (opt.value !== 'boitel') {
+                        setVendaDetalhes(prev => prev ? { ...prev, tipoVenda: opt.value } : prev);
+                      }
+                    }}
+                  >
+                    {opt.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
           {/* For non-abate, non-compra, non-venda types: keep original destino field */}
           {!isAbate && !isCompra && !isVenda && campos.destino?.show && (
             <div>
