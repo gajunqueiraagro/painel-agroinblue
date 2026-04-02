@@ -9,7 +9,7 @@ import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { FinanceiroExportMenu } from '@/components/FinanceiroExportMenu';
 import { ChuvasTab } from './ChuvasTab';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { fmtValor } from '@/lib/calculos/formatters';
+import { fmtValor, formatMoeda, formatKg, formatArroba, formatPercent, formatCabecas } from '@/lib/calculos/formatters';
 import { MESES_OPTIONS } from '@/lib/calculos/labels';
 import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 
