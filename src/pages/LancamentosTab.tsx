@@ -172,6 +172,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [vendaPrecoInput, setVendaPrecoInput] = useState('');
   const [rendCarcaca, setRendCarcaca] = useState('');
   const [funruralPct, setFunruralPct] = useState('');
+  const [funruralReais, setFunruralReais] = useState('');
 
   const [dataVenda, setDataVenda] = useState('');
   const [dataEmbarque, setDataEmbarque] = useState('');
