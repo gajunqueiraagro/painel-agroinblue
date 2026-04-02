@@ -492,17 +492,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     if (isCompra) {
       if (!compraFornecedorId) { toast.error('Selecione o fornecedor para continuar'); return; }
-      if (compraFinanceiroRef.current) {
-        const finErrors = compraFinanceiroRef.current.getValidationErrors();
-        const valorBaseVal = compraFinanceiroRef.current.getValorBase();
-
-        if (isConfirmado || isConciliado) {
-          if (valorBaseVal <= 0) { toast.error('Preencha o preço base antes de registrar a compra.'); return; }
-        }
-        if (finErrors.length > 0 && valorBaseVal > 0) {
-          toast.error(finErrors[0]);
-          return;
-        }
+      if (!compraDetalhes) { toast.error('Clique em "Completar Compra" para preencher os detalhes financeiros'); return; }
+      const valorBase = (() => {
+        const totalKg = (Number(quantidade) || 0) * (Number(pesoKg) || 0);
+        if (compraDetalhes.tipoPreco === 'por_kg') return totalKg * (Number(compraDetalhes.precoKg) || 0);
+        if (compraDetalhes.tipoPreco === 'por_cab') return (Number(quantidade) || 0) * (Number(compraDetalhes.precoCab) || 0);
+        return Number(compraDetalhes.valorTotal) || 0;
+      })();
+      if ((statusOp === 'confirmado' || statusOp === 'conciliado') && valorBase <= 0) {
+        toast.error('Preencha o preço base antes de registrar a compra.');
+        return;
       }
     }
 
