@@ -349,10 +349,28 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
 
         {/* Footer fixo */}
         <div className="flex justify-end gap-2 pt-3 border-t mt-2">
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button variant="outline" onClick={tryClose}>Cancelar</Button>
           <Button onClick={handleSave}>Salvar</Button>
         </div>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Deseja sair sem salvar?</AlertDialogTitle>
+          <AlertDialogDescription>
+            As alterações feitas nos detalhes da compra serão perdidas.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Continuar editando</AlertDialogCancel>
+          <AlertDialogAction onClick={() => { setConfirmClose(false); onClose(); }}>
+            Sair sem salvar
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
