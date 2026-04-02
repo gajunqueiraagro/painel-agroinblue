@@ -522,7 +522,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           <Collapsible>
             <CollapsibleTrigger className="flex items-center justify-between w-full group">
               <div className="flex items-center">
-                <h4 className="text-[10px] font-semibold text-foreground/70 uppercase">Tipo de Preço</h4>
+                <h4 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide">Tipo de Preço</h4>
                 {summaryBadge(`${tipoPrecoLabel}${valorBruto > 0 ? ` · ${formatMoeda(valorBruto)}` : ''}`)}
               </div>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
@@ -569,7 +569,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           <Collapsible>
             <CollapsibleTrigger className="flex items-center justify-between w-full group">
               <div className="flex items-center">
-                <h4 className="text-[10px] font-semibold text-foreground/70 uppercase">Despesas Comerciais</h4>
+                <h4 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide">Despesas Comerciais</h4>
                 {despesasComTotal > 0 && summaryBadge(formatMoeda(despesasComTotal))}
               </div>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
@@ -598,7 +598,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           <Collapsible>
             <CollapsibleTrigger className="flex items-center justify-between w-full group">
               <div className="flex items-center">
-                <h4 className="text-[10px] font-semibold text-foreground/70 uppercase">Deduções / Encargos</h4>
+                <h4 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide">Deduções / Encargos</h4>
                 {deducoesTotal > 0 && summaryBadge(formatMoeda(deducoesTotal))}
               </div>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
@@ -664,7 +664,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         <>
           <Collapsible>
             <CollapsibleTrigger className="flex items-center justify-between w-full group">
-              <h4 className="text-[10px] font-semibold text-foreground/70 uppercase">Descontos</h4>
+              <h4 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide">Descontos</h4>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1.5 pt-1">
@@ -711,7 +711,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       <Collapsible>
         <CollapsibleTrigger className="flex items-center justify-between w-full group">
           <div className="flex items-center">
-            <h4 className="text-[10px] font-semibold text-foreground/70 uppercase">Informações de Recebimento</h4>
+            <h4 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide">Informações de Recebimento</h4>
             {summaryBadge(recebLabel)}
           </div>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
@@ -719,7 +719,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         <CollapsibleContent className="space-y-2 pt-2">
 
           <div className="space-y-1.5">
-            <h5 className="text-[10px] font-semibold text-foreground/70 uppercase">Forma de Recebimento</h5>
+            <h5 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide">Forma de Recebimento</h5>
             <div className="grid grid-cols-2 gap-1.5">
               <button type="button" onClick={() => { setFormaReceb('avista'); setParcelas([]); }}
                 className={`h-8 rounded text-[12px] font-bold border-2 transition-all ${formaReceb === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
