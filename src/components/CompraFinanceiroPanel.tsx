@@ -81,7 +81,6 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
 
   // Collapsible states — all closed by default
   const [tipoCompraOpen, setTipoCompraOpen] = useState(false);
-  const [fornecedorOpen, setFornecedorOpen] = useState(false);
   const [precoBaseOpen, setPrecoBaseOpen] = useState(false);
   const [despesasOpen, setDespesasOpen] = useState(false);
   const [pagamentoOpen, setPagamentoOpen] = useState(false);
@@ -95,26 +94,6 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
   const [confirmUpdateOpen, setConfirmUpdateOpen] = useState(false);
   const [existingCount, setExistingCount] = useState(0);
   const [existingLoaded, setExistingLoaded] = useState(false);
-
-  // Fornecedor state
-  const [fornecedorId, setFornecedorId] = useState<string>('');
-  const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
-  const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
-  const [origemSugestao, setOrigemSugestao] = useState<'encontrado' | 'criar' | null>(null);
-  const [origemSugestaoDescartada, setOrigemSugestaoDescartada] = useState(false);
-
-  useEffect(() => {
-    if (!clienteAtual) return;
-    supabase
-      .from('financeiro_fornecedores')
-      .select('id, nome')
-      .eq('cliente_id', clienteAtual.id)
-      .eq('ativo', true)
-      .order('nome')
-      .then(({ data }) => {
-        if (data) setFornecedores(data);
-      });
-  }, [clienteAtual]);
 
   // Load existing financial records in update mode
   useEffect(() => {
