@@ -92,7 +92,7 @@ function getCamposFazenda(tipo: TipoMovimentacao, nomeFazenda: string) {
     case 'nascimento':
       return { origem: { show: false }, destino: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Destino' } };
     case 'compra':
-      return { origem: { show: true, auto: false, label: 'Origem' }, destino: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Destino' } };
+      return { origem: { show: false }, destino: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Destino' } };
     case 'transferencia_entrada':
       return { origem: { show: true, auto: false, label: 'Origem', useSelect: true }, destino: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Destino' } };
     case 'abate':
@@ -184,46 +184,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // Compra fornecedor state
   const [compraFornecedorId, setCompraFornecedorId] = useState('');
   const [novoFornecedorCompraOpen, setNovoFornecedorCompraOpen] = useState(false);
-  const [compraOrigemSugestao, setCompraOrigemSugestao] = useState<'encontrado' | 'criar' | null>(null);
-  const [compraOrigemSugestaoDescartada, setCompraOrigemSugestaoDescartada] = useState(false);
-
-  useEffect(() => {
-    if (!clienteAtual) return;
-    supabase
-      .from('financeiro_fornecedores')
-      .select('id, nome')
-      .eq('cliente_id', clienteAtual.id)
-      .eq('ativo', true)
-      .order('nome')
-      .then(({ data }) => { if (data) setAbateFornecedores(data); });
-  }, [clienteAtual]);
-
-  // Auto-suggest fornecedor from fazendaOrigem for compra
-  useEffect(() => {
-    if (tipo !== 'compra' || !fazendaOrigem?.trim() || compraOrigemSugestaoDescartada) {
-      setCompraOrigemSugestao(null);
-      return;
-    }
-    const nomeNorm = fazendaOrigem.trim().toLowerCase();
-    const match = abateFornecedores.find(f => f.nome.toLowerCase() === nomeNorm);
-    if (match) {
-      if (!compraFornecedorId) {
-        setCompraFornecedorId(match.id);
-        setCompraOrigemSugestao('encontrado');
-        setTimeout(() => setCompraOrigemSugestao(null), 3000);
-      } else {
-        setCompraOrigemSugestao(null);
-      }
-    } else if (fazendaOrigem.trim().length >= 3) {
-      setCompraOrigemSugestao('criar');
-    } else {
-      setCompraOrigemSugestao(null);
-    }
-  }, [fazendaOrigem, abateFornecedores, compraFornecedorId, compraOrigemSugestaoDescartada, tipo]);
-
-  useEffect(() => {
-    setCompraOrigemSugestaoDescartada(false);
-  }, [fazendaOrigem]);
 
   const [formaPagamento, setFormaPagamento] = useState<'avista' | 'parcelado'>('avista');
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
@@ -357,7 +317,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setNotaFiscal(''); setTipoPeso('vivo'); setObservacao('');
     setDataVenda(''); setDataEmbarque(''); setDataAbate(''); setTipoVenda('');
     setAbateFornecedorId('');
-    setCompraFornecedorId(''); setCompraOrigemSugestao(null); setCompraOrigemSugestaoDescartada(false);
+    setCompraFornecedorId('');
     setFormaPagamento('avista'); setParcelas([]); setQtdParcelas('1');
     setMotivoMorte(''); setMotivoMorteCustom('');
     setRendCarcaca(''); setFunruralPct('');
@@ -676,7 +636,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       result.precoBaseLabel = tipoPrecoLabel === 'por_kg' ? 'R$/kg' : tipoPrecoLabel === 'por_cab' ? 'R$/cab' : 'Total';
       result.totalBruto = valorBase;
       result.valorLiquido = valorBase;
-      result.fornecedorOuFrigorifico = abateFornecedores.find(f => f.id === compraFornecedorId)?.nome || fazendaOrigem;
+      result.fornecedorOuFrigorifico = abateFornecedores.find(f => f.id === compraFornecedorId)?.nome || '';
     } else {
       result.precoBase = Number(precoKg) || 0;
       result.precoBaseLabel = 'R$/kg';
