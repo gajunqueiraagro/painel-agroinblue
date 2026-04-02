@@ -546,7 +546,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <ResultRow label="= Resultado com Boitel" value={formatMoeda(calc.resultadoComBoitel)} bold accent />
                 <ResultRow label="(-) Custos com Frete" value={formatMoeda(calc.custosFreteTotal)} className="text-destructive" />
                 <div className="border-t border-dashed my-0.5" />
-                <ResultRow label="= Total Operacional" value={formatMoeda(calc.custosOperacionais)} className="text-destructive" bold />
+                <ResultRow label="= Total Operacional" value={formatMoeda(calc.totalOperacional)} bold accent />
                 <ResultRow label="Custo/@ produzida" value={formatMoeda(calc.custoPorArrobaProduzida)} className="text-destructive" />
                 <ResultRow label="Custo/cab" value={formatMoeda(calc.custoPorCab)} className="text-destructive" />
               </ResultGroup>
