@@ -364,6 +364,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           // Status filter using statusOperacional
           const st = l.statusOperacional || 'conciliado';
           if (statusFiltro === 'realizado' && st !== 'conciliado') return false;
+          if (statusFiltro === 'programado' && st !== 'confirmado') return false;
           if (statusFiltro === 'previsto' && st !== 'previsto') return false;
           return true;
         } catch { return false; }
