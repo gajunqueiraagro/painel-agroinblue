@@ -659,51 +659,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         </>
       )}
 
-      {/* ── BOITEL keeps original Descontos block ── */}
-      {isBoitel && (
-        <>
-          <Collapsible>
-            <CollapsibleTrigger className="flex items-center justify-between w-full group">
-              <h4 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide">Descontos</h4>
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-1.5 pt-1">
-              <div>
-                <Label className="text-[11px]">Funrural (%)</Label>
-                <Input type="number" value={funruralPct} onChange={e => onFunruralPctChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[11px]" />
-                {descFunruralTotal > 0 && (
-                  <span className="text-[10px] text-destructive">Funrural: -{formatMoeda(descFunruralTotal)}</span>
-                )}
-              </div>
-              <div>
-                <Label className="text-[11px]">Desconto Qualidade (R$)</Label>
-                <Input type="number" value={descontoQualidade} onChange={e => onDescontoQualidadeChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
-                {descQualidadeTotal > 0 && (
-                  <span className="text-[10px] text-destructive">Qualidade: -{formatMoeda(descQualidadeTotal)}</span>
-                )}
-              </div>
-              <div>
-                <Label className="text-[11px]">Outros Descontos (R$)</Label>
-                <Input type="number" value={outrosDescontos} onChange={e => onOutrosDescontosChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-
-          <Separator />
-
-          {valorBruto > 0 && (
-            <div className="bg-muted/30 rounded-md p-2 space-y-0.5 text-[10px]">
-              <div className="flex justify-between"><span className="text-muted-foreground">Valor bruto</span><span className="font-semibold">{formatMoeda(valorBruto)}</span></div>
-              {totalBonus > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Bônus</span><span className="font-semibold text-success">+{formatMoeda(totalBonus)}</span></div>}
-              {totalDescontos > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Descontos</span><span className="font-semibold text-destructive">-{formatMoeda(totalDescontos)}</span></div>}
-              <Separator className="my-1" />
-              <div className="flex justify-between font-bold text-[11px]"><span>Valor líquido</span><span className="text-primary">{formatMoeda(valorLiquido)}</span></div>
-            </div>
-          )}
-
-          <Separator />
-        </>
-      )}
+      {/* Boitel no longer shows DESCONTOS block here — handled inside BoitelPlanningDialog */}
 
       <Separator />
 
