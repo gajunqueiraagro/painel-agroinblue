@@ -162,27 +162,27 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
   };
 
   const sectionTitle = (icon: React.ReactNode, title: string) => (
-    <div className="flex items-center gap-2 pt-1">
+    <div className="flex items-center gap-1.5 pt-0.5">
       {icon}
-      <h3 className="text-[13px] font-semibold text-foreground">{title}</h3>
+      <h3 className="text-[12px] font-semibold text-foreground">{title}</h3>
     </div>
   );
 
   return (
     <>
     <Dialog open={open} onOpenChange={(v) => { if (!v) tryClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-base font-bold flex items-center gap-2">
-            <ShoppingCart className="h-5 w-5 text-primary" />
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader className="pb-0">
+          <DialogTitle className="text-[13px] font-bold flex items-center gap-2">
+            <ShoppingCart className="h-4 w-4 text-primary" />
             Detalhes da Compra
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 pt-2">
+        <div className="space-y-2.5 pt-1">
 
           {/* Resumo operacional */}
-          <div className="bg-muted/30 rounded-md p-3 grid grid-cols-3 gap-3 text-[12px]">
+          <div className="bg-muted/30 rounded p-2 grid grid-cols-3 gap-2 text-[11px]">
             <div><span className="text-muted-foreground">Quantidade</span><p className="font-bold">{qtd} cab.</p></div>
             <div><span className="text-muted-foreground">Peso médio</span><p className="font-bold">{peso} kg</p></div>
             <div><span className="text-muted-foreground">Peso total</span><p className="font-bold">{totalKg.toLocaleString('pt-BR')} kg</p></div>
@@ -193,7 +193,7 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
           {/* 1. Tipo de Compra */}
           {sectionTitle(<ShoppingCart className="h-4 w-4 text-muted-foreground" />, 'Tipo de Compra')}
           <Select value={tipoPreco} onValueChange={(v: TipoPrecoCompra) => { setTipoPreco(v); setPrecoKg(''); setPrecoCab(''); setValorTotal(''); markDirty(); }}>
-            <SelectTrigger className="h-9 text-[12px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-8 text-[11px] w-48"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="por_kg">Por kg</SelectItem>
               <SelectItem value="por_cab">Por cabeça</SelectItem>
@@ -205,34 +205,34 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
 
           {/* 2. Preço Base */}
           {sectionTitle(<span className="text-muted-foreground text-sm">R$</span>, 'Preço Base')}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             {tipoPreco === 'por_kg' && (
               <div>
-                <Label className="text-[11px]">R$/kg</Label>
-                <Input type="number" value={precoKg} onChange={e => { setPrecoKg(e.target.value); markDirty(); }} placeholder="0,00" className="h-9 text-[12px]" />
+                <Label className="text-[10px]">R$/kg</Label>
+                <Input type="number" value={precoKg} onChange={e => { setPrecoKg(e.target.value); markDirty(); }} placeholder="0,00" className="h-8 text-[11px] w-40" />
               </div>
             )}
             {tipoPreco === 'por_cab' && (
               <div>
-                <Label className="text-[11px]">R$/cabeça</Label>
-                <Input type="number" value={precoCab} onChange={e => { setPrecoCab(e.target.value); markDirty(); }} placeholder="0,00" className="h-9 text-[12px]" />
+                <Label className="text-[10px]">R$/cabeça</Label>
+                <Input type="number" value={precoCab} onChange={e => { setPrecoCab(e.target.value); markDirty(); }} placeholder="0,00" className="h-8 text-[11px] w-40" />
               </div>
             )}
             {tipoPreco === 'por_total' && (
               <div>
-                <Label className="text-[11px]">Valor total (R$)</Label>
-                <Input type="number" value={valorTotal} onChange={e => { setValorTotal(e.target.value); markDirty(); }} placeholder="0,00" className="h-9 text-[12px]" />
+                <Label className="text-[10px]">Valor total (R$)</Label>
+                <Input type="number" value={valorTotal} onChange={e => { setValorTotal(e.target.value); markDirty(); }} placeholder="0,00" className="h-8 text-[11px] w-40" />
               </div>
             )}
             {calc.valorBase > 0 && (
-              <div className="bg-muted/30 rounded-md p-2.5 space-y-1 text-[11px]">
+              <div className="bg-muted/30 rounded p-2 space-y-0.5 text-[10px]">
                 {tipoPreco !== 'por_kg' && (
                   <div className="flex justify-between"><span className="text-muted-foreground">R$/kg</span><strong>{formatMoeda(calc.rKg)}</strong></div>
                 )}
                 {tipoPreco !== 'por_cab' && (
                   <div className="flex justify-between"><span className="text-muted-foreground">R$/cab.</span><strong>{formatMoeda(calc.rCab)}</strong></div>
                 )}
-                <div className="flex justify-between font-bold text-[12px]">
+                <div className="flex justify-between font-bold text-[11px]">
                   <span>Total base</span>
                   <span className="text-primary">{formatMoeda(calc.valorBase)}</span>
                 </div>
@@ -244,24 +244,24 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
 
           {/* 3. Despesas */}
           {sectionTitle(<Truck className="h-4 w-4 text-muted-foreground" />, 'Despesas Extras')}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="text-[11px]">Frete (R$)</Label>
-              <Input type="number" value={frete} onChange={e => { setFrete(e.target.value); markDirty(); }} placeholder="0,00" className="h-9 text-[12px]" />
+              <Label className="text-[10px]">Frete (R$)</Label>
+              <Input type="number" value={frete} onChange={e => { setFrete(e.target.value); markDirty(); }} placeholder="0,00" className="h-8 text-[11px] w-40" />
             </div>
             <div>
-              <Label className="text-[11px]">Comissão (%)</Label>
-              <Input type="number" value={comissaoPct} onChange={e => { setComissaoPct(e.target.value); markDirty(); }} placeholder="0" className="h-9 text-[12px]" />
+              <Label className="text-[10px]">Comissão (%)</Label>
+              <Input type="number" value={comissaoPct} onChange={e => { setComissaoPct(e.target.value); markDirty(); }} placeholder="0" className="h-8 text-[11px] w-28" />
             </div>
           </div>
           {calc.comissaoVal > 0 && (
-            <div className="flex justify-between text-[11px] px-1">
+            <div className="flex justify-between text-[10px] px-1">
               <span className="text-muted-foreground">Comissão (R$)</span>
               <strong>{formatMoeda(calc.comissaoVal)}</strong>
             </div>
           )}
           {calc.totalDespesas > 0 && (
-            <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded px-3 py-2 flex justify-between text-[11px] font-bold">
+            <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded px-2 py-1.5 flex justify-between text-[10px] font-bold">
               <span className="text-orange-700 dark:text-orange-400">Total despesas</span>
               <span className="text-orange-800 dark:text-orange-300">{formatMoeda(calc.totalDespesas)}</span>
             </div>
@@ -273,36 +273,36 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
           {sectionTitle(<CreditCard className="h-4 w-4 text-muted-foreground" />, 'Informações de Pagamento')}
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => { setFormaPag('avista'); setParcelas([]); markDirty(); }}
-              className={`h-9 rounded text-[12px] font-bold border-2 transition-all ${formaPag === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
+              className={`h-7 rounded text-[11px] font-bold border-2 transition-all ${formaPag === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
               À vista
             </button>
             <button type="button" onClick={() => { setFormaPag('prazo'); markDirty(); if (calc.valorBase > 0) setParcelas(gerarParcelas(Number(qtdParcelas) || 1, calc.valorBase)); }}
-              className={`h-9 rounded text-[12px] font-bold border-2 transition-all ${formaPag === 'prazo' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
+              className={`h-7 rounded text-[11px] font-bold border-2 transition-all ${formaPag === 'prazo' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
               A prazo
             </button>
           </div>
 
           {formaPag === 'prazo' && (
-            <div className="space-y-2">
-              <div className="w-32">
-                <Label className="text-[11px]">Nº de parcelas</Label>
-                <Input type="number" min="1" max="48" value={qtdParcelas} onChange={e => handleQtdParcChange(e.target.value)} className="h-9 text-[12px]" />
+            <div className="space-y-1.5">
+              <div className="w-24">
+                <Label className="text-[10px]">Nº de parcelas</Label>
+                <Input type="number" min="1" max="48" value={qtdParcelas} onChange={e => handleQtdParcChange(e.target.value)} className="h-7 text-[11px]" />
               </div>
-              <p className="text-[10px] text-muted-foreground">Parcelas calculadas sobre o valor base (sem frete/comissão)</p>
+              <p className="text-[9px] text-muted-foreground">Parcelas sobre o valor base (sem frete/comissão)</p>
               {parcelas.map((p, i) => (
-                <div key={i} className="grid grid-cols-2 gap-2 bg-muted/30 rounded p-2">
+                <div key={i} className="grid grid-cols-2 gap-2 bg-muted/30 rounded p-1.5">
                   <div>
-                    <Label className="text-[10px]">Parcela {i + 1}</Label>
-                    <Input type="date" value={p.data} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], data: e.target.value }; setParcelas(np); markDirty(); }} className="h-8 text-[11px]" />
+                    <Label className="text-[9px]">Parcela {i + 1}</Label>
+                    <Input type="date" value={p.data} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], data: e.target.value }; setParcelas(np); markDirty(); }} className="h-7 text-[10px]" />
                   </div>
                   <div>
-                    <Label className="text-[10px]">R$</Label>
-                    <Input type="number" value={String(p.valor)} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], valor: Number(e.target.value) || 0 }; setParcelas(np); markDirty(); }} className="h-8 text-[11px]" />
+                    <Label className="text-[9px]">R$</Label>
+                    <Input type="number" value={String(p.valor)} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], valor: Number(e.target.value) || 0 }; setParcelas(np); markDirty(); }} className="h-7 text-[10px]" />
                   </div>
                 </div>
               ))}
               {parcelas.length > 0 && (
-                <div className="text-[11px] text-muted-foreground text-right">
+                <div className="text-[10px] text-muted-foreground text-right">
                   Soma: {formatMoeda(parcelas.reduce((s, p) => s + p.valor, 0))}
                 </div>
               )}
@@ -313,33 +313,33 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
 
           {/* 5. Nota Fiscal */}
           {sectionTitle(<FileText className="h-4 w-4 text-muted-foreground" />, 'Nota Fiscal')}
-          <Input value={notaFiscal} onChange={e => { setNotaFiscal(e.target.value); markDirty(); }} placeholder="Nº da nota fiscal" className="h-9 text-[12px]" />
+          <Input value={notaFiscal} onChange={e => { setNotaFiscal(e.target.value); markDirty(); }} placeholder="Nº da nota fiscal" className="h-8 text-[11px] w-48" />
 
           <Separator />
 
           {/* Totalizador */}
           {calc.valorBase > 0 && (
-            <div className="bg-primary/5 border border-primary/20 rounded-md p-3 space-y-1">
-              <div className="flex justify-between text-[12px]">
+            <div className="bg-primary/5 border border-primary/20 rounded p-2 space-y-0.5">
+              <div className="flex justify-between text-[11px]">
                 <span className="text-muted-foreground">Valor base</span>
                 <strong>{formatMoeda(calc.valorBase)}</strong>
               </div>
               {calc.totalDespesas > 0 && (
-                <div className="flex justify-between text-[12px]">
+                <div className="flex justify-between text-[11px]">
                   <span className="text-muted-foreground">Despesas</span>
                   <strong className="text-orange-600 dark:text-orange-400">+{formatMoeda(calc.totalDespesas)}</strong>
                 </div>
               )}
               <Separator />
-              <div className="flex justify-between text-[13px] font-bold">
+              <div className="flex justify-between text-[12px] font-bold">
                 <span>Total da compra</span>
                 <span className="text-primary">{formatMoeda(calc.liqTotal)}</span>
               </div>
-              <div className="flex justify-between text-[11px]">
+              <div className="flex justify-between text-[10px]">
                 <span className="text-muted-foreground">R$/kg líq.</span>
                 <strong>{formatMoeda(calc.liqKg)}</strong>
               </div>
-              <div className="flex justify-between text-[11px]">
+              <div className="flex justify-between text-[10px]">
                 <span className="text-muted-foreground">R$/cab. líq.</span>
                 <strong>{formatMoeda(calc.liqCab)}</strong>
               </div>
@@ -348,9 +348,9 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
         </div>
 
         {/* Footer fixo */}
-        <div className="flex justify-end gap-2 pt-3 border-t mt-2">
-          <Button variant="outline" onClick={tryClose}>Cancelar</Button>
-          <Button onClick={handleSave}>Salvar</Button>
+        <div className="flex justify-end gap-2 pt-2 border-t mt-1">
+          <Button variant="outline" size="sm" onClick={tryClose} className="h-7 text-[11px]">Cancelar</Button>
+          <Button size="sm" onClick={handleSave} className="h-7 text-[11px]">Salvar</Button>
         </div>
       </DialogContent>
     </Dialog>
