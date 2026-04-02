@@ -544,7 +544,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       <Separator />
 
       {/* === BLOCO RECOLHÍVEL: Informações de Pagamento === */}
-      <CollapsibleBlock title="Informações de Pagamento" open={pagamentoOpen} onOpenChange={setPagamentoOpen}>
+      <CollapsibleBlock title="Informações de Pagamento" open={pagamentoOpen} onOpenChange={setPagamentoOpen} summary={formaPag === 'avista' ? 'À vista' : parcelas.length > 0 ? `${parcelas.length}x` : undefined}>
         <div>
           <Label className="text-[10px]">Nota Fiscal</Label>
           <Input value={notaFiscal} onChange={e => onNotaFiscalChange(e.target.value)} placeholder="Nº da nota" className="h-7 text-[11px]" />
