@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { formatMoeda } from '@/lib/calculos/formatters';
+import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
 import { TrendingUp, DollarSign, Calendar, Truck, Calculator, ChevronDown, Info, ShoppingCart, Tag } from 'lucide-react';
 
 export interface BoitelData {
