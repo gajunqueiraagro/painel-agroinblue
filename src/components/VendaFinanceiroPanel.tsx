@@ -597,7 +597,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
           <Separator />
 
-          {/* 4. DESPESAS EXTRAS */}
+          {/* 4. DESPESAS EXTRAS — same layout as Compra */}
           <Collapsible>
             <CollapsibleTrigger className="flex items-center justify-between w-full group">
               <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Despesas Extras</h4>
@@ -611,13 +611,15 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
                   <span className="text-[10px] text-destructive">Funrural: -{formatMoeda(descFunruralTotal)}</span>
                 )}
               </div>
-              <div>
-                <Label className="text-[11px]">Frete (R$)</Label>
-                <Input type="number" value={frete} onChange={e => onFreteChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
-              </div>
-              <div>
-                <Label className="text-[11px]">Comissão (R$)</Label>
-                <Input type="number" value={comissao} onChange={e => onComissaoChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-[10px]">Frete (R$)</Label>
+                  <Input type="number" value={frete} onChange={e => onFreteChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Comissão (%)</Label>
+                  <Input type="number" value={comissao} onChange={e => onComissaoChange(e.target.value)} placeholder="0" className="h-7 text-[11px]" />
+                </div>
               </div>
               <div>
                 <Label className="text-[11px]">Outros custos extras (R$)</Label>
