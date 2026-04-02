@@ -1049,8 +1049,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onNotaFiscalChange={setNotaFiscal}
           statusOp={statusOp}
           lancamentoId={lastSavedLancamentoId || undefined}
-          tipoVenda={tipoVenda}
-          onTipoVendaChange={setTipoVenda}
           tipoPeso={tipoPeso}
           onTipoPesoChange={setTipoPeso}
           valorBruto={calc.valorBruto}
