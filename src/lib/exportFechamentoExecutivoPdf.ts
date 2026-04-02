@@ -1,15 +1,11 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import type { FechamentoExecutivo } from '@/hooks/useFechamentoExecutivo';
+import { formatMoeda, formatNum, formatCabecas, formatArroba } from '@/lib/calculos/formatters';
 
-function fmt(v: number | undefined | null): string {
-  if (v === null || v === undefined || isNaN(v)) return '-';
-  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
+const fmt = formatMoeda;
 function fmtN(v: number | undefined | null, dec = 0): string {
-  if (v === null || v === undefined) return '-';
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  return formatNum(v ?? null, dec) ?? '-';
 }
 
 export function exportFechamentoExecutivoPdf(fechamento: FechamentoExecutivo) {
