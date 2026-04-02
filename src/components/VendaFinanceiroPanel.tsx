@@ -597,20 +597,13 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
           <Separator />
 
-          {/* 4. DESPESAS EXTRAS — same layout as Compra */}
+          {/* 4. DESPESAS COMERCIAIS — Frete + Comissão, igual Compra */}
           <Collapsible>
             <CollapsibleTrigger className="flex items-center justify-between w-full group">
-              <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Despesas Extras</h4>
+              <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Despesas Comerciais</h4>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1.5 pt-1">
-              <div>
-                <Label className="text-[11px]">Funrural (%)</Label>
-                <Input type="number" value={funruralPct} onChange={e => onFunruralPctChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[11px]" />
-                {descFunruralTotal > 0 && (
-                  <span className="text-[10px] text-destructive">Funrural: -{formatMoeda(descFunruralTotal)}</span>
-                )}
-              </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-[10px]">Frete (R$)</Label>
@@ -624,6 +617,28 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
               <div>
                 <Label className="text-[11px]">Outros custos extras (R$)</Label>
                 <Input type="number" value={outrosDescontos} onChange={e => onOutrosDescontosChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
+          <Separator />
+
+          {/* 5. DEDUÇÕES / ENCARGOS — Funrural separado */}
+          <Collapsible>
+            <CollapsibleTrigger className="flex items-center justify-between w-full group">
+              <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Deduções / Encargos</h4>
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-1.5 pt-1">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-[10px]">Funrural (%)</Label>
+                  <Input type="number" value={funruralPct} onChange={e => onFunruralPctChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[11px]" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Funrural (R$)</Label>
+                  <Input type="number" value={descFunruralTotal.toFixed(2)} readOnly disabled className="h-7 text-[11px] bg-muted/40" />
+                </div>
               </div>
             </CollapsibleContent>
           </Collapsible>
