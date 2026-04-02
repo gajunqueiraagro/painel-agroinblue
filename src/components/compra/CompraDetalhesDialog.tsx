@@ -162,27 +162,27 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
   };
 
   const sectionTitle = (icon: React.ReactNode, title: string) => (
-    <div className="flex items-center gap-2 pt-1">
+    <div className="flex items-center gap-1.5 pt-0.5">
       {icon}
-      <h3 className="text-[13px] font-semibold text-foreground">{title}</h3>
+      <h3 className="text-[12px] font-semibold text-foreground">{title}</h3>
     </div>
   );
 
   return (
     <>
     <Dialog open={open} onOpenChange={(v) => { if (!v) tryClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-base font-bold flex items-center gap-2">
-            <ShoppingCart className="h-5 w-5 text-primary" />
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader className="pb-0">
+          <DialogTitle className="text-[13px] font-bold flex items-center gap-2">
+            <ShoppingCart className="h-4 w-4 text-primary" />
             Detalhes da Compra
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 pt-2">
+        <div className="space-y-2.5 pt-1">
 
           {/* Resumo operacional */}
-          <div className="bg-muted/30 rounded-md p-3 grid grid-cols-3 gap-3 text-[12px]">
+          <div className="bg-muted/30 rounded p-2 grid grid-cols-3 gap-2 text-[11px]">
             <div><span className="text-muted-foreground">Quantidade</span><p className="font-bold">{qtd} cab.</p></div>
             <div><span className="text-muted-foreground">Peso médio</span><p className="font-bold">{peso} kg</p></div>
             <div><span className="text-muted-foreground">Peso total</span><p className="font-bold">{totalKg.toLocaleString('pt-BR')} kg</p></div>
