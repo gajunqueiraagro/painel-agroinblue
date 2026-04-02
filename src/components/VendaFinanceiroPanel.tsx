@@ -563,6 +563,15 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         onClose={() => setNovoFornecedorOpen(false)}
         onSave={handleNovoFornecedor}
       />
+
+      <BoitelPlanningDialog
+        open={boitelOpen}
+        onClose={() => setBoitelOpen(false)}
+        onSave={setBoitelData}
+        initialData={boitelData || undefined}
+        quantidade={quantidade}
+        pesoKg={pesoKg}
+      />
     </div>
   );
 });
