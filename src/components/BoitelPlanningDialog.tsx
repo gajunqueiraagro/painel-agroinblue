@@ -133,12 +133,17 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
   }, []);
 
   // Data de Abate = Data Envio + Dias
-  const dataAbate = useMemo(() => {
+  const dataAbateISO = useMemo(() => {
     if (!data.dataEnvio || !data.dias) return '';
     try {
-      return format(addDays(parseISO(data.dataEnvio), data.dias), 'dd/MM/yyyy');
+      return format(addDays(parseISO(data.dataEnvio), data.dias), 'yyyy-MM-dd');
     } catch { return ''; }
   }, [data.dataEnvio, data.dias]);
+
+  const dataAbate = useMemo(() => {
+    if (!dataAbateISO) return '';
+    try { return format(parseISO(dataAbateISO), 'dd/MM/yyyy'); } catch { return ''; }
+  }, [dataAbateISO]);
 
   const calc = useMemo(() => {
     const {
