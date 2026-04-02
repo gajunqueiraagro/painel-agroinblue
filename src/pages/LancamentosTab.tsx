@@ -1193,13 +1193,43 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </>
       )}
 
-      {/* Bonus/Descontos (non-abate) */}
+      {/* Bonus/Descontos */}
       <Separator />
-      <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Ajustes (R$)</h4>
-      <div className="space-y-1.5">
-        <div><Label className="text-[11px]">Bônus</Label><Input type="number" value={bonus} onChange={e => setBonus(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
-        <div><Label className="text-[11px]">Descontos</Label><Input type="number" value={descontos} onChange={e => setDescontos(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
-      </div>
+      {isVenda ? (
+        <>
+          <Collapsible>
+            <CollapsibleTrigger className="flex items-center justify-between w-full group">
+              <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Descontos</h4>
+              <CollapseIcon className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-1.5 pt-1">
+              <div>
+                <Label className="text-[11px]">Funrural (%)</Label>
+                <Input type="number" value={funruralPct} onChange={e => setFunruralPct(e.target.value)} placeholder="0,00" step="0.01" className={`h-8 text-[12px] ${previstoInputClass}`} />
+                {calc.descFunruralTotal > 0 && (
+                  <span className="text-[10px] text-destructive">Funrural: -{formatMoeda(calc.descFunruralTotal)}</span>
+                )}
+              </div>
+              <div>
+                <Label className="text-[11px]">Desconto Qualidade (R$)</Label>
+                <Input type="number" value={descontoQualidade} onChange={e => setDescontoQualidade(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${previstoInputClass}`} />
+              </div>
+              <div>
+                <Label className="text-[11px]">Outros Descontos (R$)</Label>
+                <Input type="number" value={outrosDescontos} onChange={e => setOutrosDescontos(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${previstoInputClass}`} />
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        </>
+      ) : (
+        <>
+          <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Ajustes (R$)</h4>
+          <div className="space-y-1.5">
+            <div><Label className="text-[11px]">Bônus</Label><Input type="number" value={bonus} onChange={e => setBonus(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
+            <div><Label className="text-[11px]">Descontos</Label><Input type="number" value={descontos} onChange={e => setDescontos(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
+          </div>
+        </>
+      )}
 
       {/* Valor líquido override */}
       <Separator />
