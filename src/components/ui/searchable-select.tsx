@@ -121,9 +121,20 @@ export function SearchableSelect({
       return;
     }
     if (e.key === 'Tab') {
+      e.preventDefault();
       if (selectableItems[highlightIdx]) {
         handleSelect(selectableItems[highlightIdx].value);
+      } else {
+        setOpen(false);
+        setSearch('');
       }
+      // Return focus to trigger so Tab continues naturally from there
+      setTimeout(() => {
+        const trigger = containerRef.current?.querySelector('button') as HTMLButtonElement | null;
+        if (trigger) {
+          trigger.focus();
+        }
+      }, 0);
     }
   };
 
@@ -134,11 +145,18 @@ export function SearchableSelect({
     <div ref={containerRef} className={cn('relative min-w-0', className)}>
       <button
         type="button"
+        tabIndex={disabled ? -1 : 0}
         onClick={handleTriggerClick}
+        onKeyDown={(e) => {
+          if (!open && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            handleTriggerClick();
+          }
+        }}
         disabled={disabled}
         className={cn(
           'flex h-6 w-full items-center justify-between rounded-md border border-input bg-background px-1.5 text-[10px] ring-offset-background',
-          'focus:outline-none focus:ring-1 focus:ring-ring',
+          'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
           disabled && 'opacity-50 cursor-not-allowed',
         )}
       >
