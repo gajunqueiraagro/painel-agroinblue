@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 import logoUrl from '@/assets/logo.png';
-import { fmtValor } from '@/lib/calculos/formatters';
+import { fmtValor, formatMoeda } from '@/lib/calculos/formatters';
 import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 
 // Load logo as base64 for jsPDF
