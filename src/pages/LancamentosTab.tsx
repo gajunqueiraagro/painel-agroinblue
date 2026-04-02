@@ -117,6 +117,7 @@ function fmt(v?: number, decimals = 2) {
 
 export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
+  const { clienteAtual } = useCliente();
   const nomeFazenda = fazendaAtual?.nome || '';
   const isAdministrativo = fazendaAtual?.tem_pecuaria === false;
   const bloqueado = isGlobal || isAdministrativo;
