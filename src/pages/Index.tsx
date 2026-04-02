@@ -47,6 +47,7 @@ import { FinV2SaldosTab } from './FinV2SaldosTab';
 import { ContratosTab } from './ContratosTab';
 import { ConciliacaoBancariaTab } from './ConciliacaoBancariaTab';
 import { ClienteSelector } from '@/components/ClienteSelector';
+import { AuditoriaTab } from './AuditoriaTab';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { SyncStatus } from '@/components/SyncStatus';
 import { useLancamentos } from '@/hooks/useLancamentos';
