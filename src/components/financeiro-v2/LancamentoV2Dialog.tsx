@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { NovoFornecedorDialog } from './NovoFornecedorDialog';
+import { STATUS_LABEL } from '@/lib/statusOperacional';
 import { cn } from '@/lib/utils';
 
 interface Props {
