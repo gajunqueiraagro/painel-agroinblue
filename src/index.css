@@ -144,15 +144,6 @@
   z-index: 30;
 }
 
-.financeiro-table-head::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: hsl(var(--primary));
-  opacity: 1;
-  z-index: -1;
-}
-
 .financeiro-table-head th {
   background: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
