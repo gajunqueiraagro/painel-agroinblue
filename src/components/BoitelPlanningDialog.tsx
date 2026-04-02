@@ -7,25 +7,36 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import { TrendingUp, DollarSign, Calendar, Truck, Calculator, ChevronDown, Info, ShoppingCart } from 'lucide-react';
+import { TrendingUp, DollarSign, Calendar, Truck, Calculator, ChevronDown, Info, ShoppingCart, Tag } from 'lucide-react';
 
 export interface BoitelData {
+  // Identificação
   qtdCabecas: number;
   pesoInicial: number;
+  fazendaOrigem: string;
+  nomeBoitel: string;
+  lote: string;
+  numeroContrato: string;
+  dataEnvio: string;
+  // Entrada
   quebraViagem: number;
   custoOportunidade: number;
+  // Período
   dias: number;
   gmd: number;
   rendimento: number;
+  // Custos
   modalidadeCusto: 'diaria' | 'arroba' | 'parceria';
   custoDiaria: number;
   custoArroba: number;
   percentualParceria: number;
+  custosExtrasParceria: number;
   custoFrete: number;
   outrosCustos: number;
   custoNutricao: number;
   custoSanidade: number;
   custoNfAbate: number;
+  // Comercialização
   precoVendaArroba: number;
   despesasAbate: number;
 }
@@ -37,11 +48,18 @@ interface Props {
   initialData?: Partial<BoitelData>;
   quantidade?: number;
   pesoKg?: number;
+  fazendaNome?: string;
+  dataLancamento?: string;
 }
 
 const defaultData: BoitelData = {
   qtdCabecas: 0,
   pesoInicial: 0,
+  fazendaOrigem: '',
+  nomeBoitel: '',
+  lote: '',
+  numeroContrato: '',
+  dataEnvio: '',
   quebraViagem: 3,
   custoOportunidade: 0,
   dias: 90,
@@ -51,6 +69,7 @@ const defaultData: BoitelData = {
   custoDiaria: 0,
   custoArroba: 0,
   percentualParceria: 50,
+  custosExtrasParceria: 0,
   custoFrete: 0,
   outrosCustos: 0,
   custoNutricao: 0,
@@ -73,7 +92,7 @@ function fmtArr(v: number) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' @';
 }
 
-export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quantidade, pesoKg }: Props) {
+export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quantidade, pesoKg, fazendaNome, dataLancamento }: Props) {
   const [data, setData] = useState<BoitelData>({ ...defaultData });
   const [showDetalhe, setShowDetalhe] = useState(false);
 
@@ -83,10 +102,12 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
         ...defaultData,
         qtdCabecas: quantidade || 0,
         pesoInicial: pesoKg || 0,
+        fazendaOrigem: fazendaNome || '',
+        dataEnvio: dataLancamento || '',
         ...initialData,
       });
     }
-  }, [open, initialData, quantidade, pesoKg]);
+  }, [open, initialData, quantidade, pesoKg, fazendaNome, dataLancamento]);
 
   const set = useCallback(<K extends keyof BoitelData>(key: K, value: BoitelData[K]) => {
     setData(prev => ({ ...prev, [key]: value }));
@@ -95,7 +116,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
   const calc = useMemo(() => {
     const {
       qtdCabecas, pesoInicial, quebraViagem, dias, gmd, rendimento,
-      modalidadeCusto, custoDiaria, custoArroba, percentualParceria,
+      modalidadeCusto, custoDiaria, custoArroba, percentualParceria, custosExtrasParceria,
       custoFrete, outrosCustos, custoOportunidade,
       custoNutricao, custoSanidade, custoNfAbate,
       precoVendaArroba, despesasAbate,
@@ -110,45 +131,59 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     const arrobasProduzidas = (arrobasSaida - arrobasEntrada) * qtdCabecas;
     const arrobasTotalSaida = arrobasSaida * qtdCabecas;
 
-    // GMC (ganho médio de carcaça kg/dia)
     const gmc = dias > 0 ? ((pesoFinal * rendimento / 100) - (pesoLiqEntrada * rendimento / 100)) / dias : 0;
 
-    // Custos
-    let custoOperacional = 0;
+    // Faturamento bruto abate
+    const faturamentoBruto = arrobasTotalSaida * precoVendaArroba;
+
+    // Custos com abate (despesas + NF)
+    const custosAbate = despesasAbate + custoNfAbate;
+
+    // Faturamento líquido
+    const faturamentoLiquido = faturamentoBruto - custosAbate;
+
+    // Custo com diárias
+    let custoDiariaTotal = 0;
     if (modalidadeCusto === 'diaria') {
-      custoOperacional = custoDiaria * dias * qtdCabecas;
+      custoDiariaTotal = custoDiaria * dias * qtdCabecas;
     } else if (modalidadeCusto === 'arroba') {
-      custoOperacional = custoArroba * arrobasProduzidas;
+      custoDiariaTotal = custoArroba * arrobasProduzidas;
     } else if (modalidadeCusto === 'parceria') {
-      custoOperacional = 0;
+      // Em parceria: % das arrobas produzidas vai para o parceiro
+      const arrobasParceiro = arrobasProduzidas * (percentualParceria / 100);
+      custoDiariaTotal = arrobasParceiro * precoVendaArroba;
     }
 
-    const custoDetalhe = custoNutricao + custoSanidade + custoNfAbate;
-    const custoOportTotal = custoOportunidade * pesoLiqEntrada * qtdCabecas;
-    const custoTotal = custoOperacional + custoFrete + outrosCustos + custoDetalhe + custoOportTotal + despesasAbate;
-    const custoPorCab = qtdCabecas > 0 ? custoTotal / qtdCabecas : 0;
-    const custoPorArroba = arrobasProduzidas > 0 ? custoTotal / arrobasProduzidas : 0;
+    // Custos sanitários
+    const custosSanitarios = custoSanidade;
 
-    // Receita
-    const arrobasReceita = modalidadeCusto === 'parceria'
-      ? arrobasProduzidas * (1 - percentualParceria / 100)
-      : arrobasTotalSaida;
-    const receitaTotal = arrobasReceita * precoVendaArroba;
-    const receitaPorCab = qtdCabecas > 0 ? receitaTotal / qtdCabecas : 0;
+    // Outros custos (nutrição + outros + extras parceria + custo oportunidade)
+    const custoOportTotal = custoOportunidade * pesoLiqEntrada * qtdCabecas;
+    const outrosCustosTotal = outrosCustos + custoNutricao + custosExtrasParceria + custoOportTotal;
+
+    // Custos com frete
+    const custosFreteTotal = custoFrete;
+
+    // Total de custos operacionais
+    const custoTotal = custoDiariaTotal + custosSanitarios + outrosCustosTotal + custosFreteTotal + custosAbate;
 
     // Lucro
-    const lucroTotal = receitaTotal - custoTotal;
+    const lucroTotal = faturamentoBruto - custoTotal;
     const lucroPorCab = qtdCabecas > 0 ? lucroTotal / qtdCabecas : 0;
     const lucroPorArroba = arrobasProduzidas > 0 ? lucroTotal / arrobasProduzidas : 0;
     const ganhoTotalKg = ganhoKg * qtdCabecas;
     const lucroPorKg = ganhoTotalKg > 0 ? lucroTotal / ganhoTotalKg : 0;
 
+    const custoPorCab = qtdCabecas > 0 ? custoTotal / qtdCabecas : 0;
+    const custoPorArroba = arrobasProduzidas > 0 ? custoTotal / arrobasProduzidas : 0;
+
     return {
       pesoLiqEntrada, ganhoKg, pesoFinal,
       arrobasEntrada, arrobasSaida, arrobasProduzidas, arrobasTotalSaida,
       gmc,
+      faturamentoBruto, custosAbate, faturamentoLiquido,
+      custoDiariaTotal, custosSanitarios, outrosCustosTotal, custosFreteTotal,
       custoTotal, custoPorCab, custoPorArroba,
-      receitaTotal, receitaPorCab,
       lucroTotal, lucroPorCab, lucroPorArroba, lucroPorKg,
     };
   }, [data]);
@@ -168,27 +203,59 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
 
         <div className="px-5 pb-5 space-y-3">
 
-          {/* CABEÇALHO */}
-          <div className="flex items-center gap-6 bg-muted/40 rounded-md px-4 py-2 border">
-            <div>
-              <span className="text-[10px] text-muted-foreground block">Cabeças</span>
-              <strong className="text-[14px]">{data.qtdCabecas || '-'}</strong>
+          {/* CABEÇALHO — Identificação */}
+          <div className="bg-muted/40 rounded-md px-4 py-2.5 border space-y-2">
+            <div className="flex items-center gap-6">
+              <div>
+                <span className="text-[10px] text-muted-foreground block">Cabeças</span>
+                <strong className="text-[14px]">{data.qtdCabecas || '-'}</strong>
+              </div>
+              <div>
+                <span className="text-[10px] text-muted-foreground block">Peso inicial</span>
+                <strong className="text-[14px]">{fmtPeso(data.pesoInicial)}</strong>
+              </div>
+              <div>
+                <span className="text-[10px] text-muted-foreground block">Peso líq. entrada</span>
+                <strong className="text-[14px] text-primary">{fmtPeso(calc.pesoLiqEntrada)}</strong>
+              </div>
+              <span className="text-[9px] text-muted-foreground ml-auto flex items-center gap-1">
+                <Info className="h-3 w-3" /> Peso base para cálculo: saída da fazenda
+              </span>
             </div>
-            <div>
-              <span className="text-[10px] text-muted-foreground block">Peso inicial</span>
-              <strong className="text-[14px]">{fmtPeso(data.pesoInicial)}</strong>
+            <Separator />
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+              <div>
+                <Label className="text-[9px] text-muted-foreground">Fazenda Origem</Label>
+                <div className="text-[11px] font-medium truncate">{data.fazendaOrigem || '-'}</div>
+              </div>
+              <div>
+                <Label className="text-[9px] text-muted-foreground">Data Envio</Label>
+                <div className="text-[11px] font-medium">{data.dataEnvio || '-'}</div>
+              </div>
+              <Field label="Boitel / Destino">
+                <Input value={data.nomeBoitel} onChange={e => set('nomeBoitel', e.target.value)} className="h-6 text-[11px]" placeholder="Nome do boitel" />
+              </Field>
+              <Field label="Modalidade">
+                <Select value={data.modalidadeCusto} onValueChange={(v: any) => set('modalidadeCusto', v)}>
+                  <SelectTrigger className="h-6 text-[10px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="diaria" className="text-[11px]">Diária</SelectItem>
+                    <SelectItem value="arroba" className="text-[11px]">Arroba</SelectItem>
+                    <SelectItem value="parceria" className="text-[11px]">Parceria</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Lote">
+                <Input value={data.lote} onChange={e => set('lote', e.target.value)} className="h-6 text-[11px]" placeholder="Lote" />
+              </Field>
+              <Field label="Nº Contrato / Baia">
+                <Input value={data.numeroContrato} onChange={e => set('numeroContrato', e.target.value)} className="h-6 text-[11px]" placeholder="Contrato" />
+              </Field>
             </div>
-            <div>
-              <span className="text-[10px] text-muted-foreground block">Peso líq. entrada</span>
-              <strong className="text-[14px] text-primary">{fmtPeso(calc.pesoLiqEntrada)}</strong>
-            </div>
-            <span className="text-[9px] text-muted-foreground ml-auto flex items-center gap-1">
-              <Info className="h-3 w-3" /> Peso base para cálculo: saída da fazenda
-            </span>
           </div>
 
           {/* 2 COLUNAS: INPUT | RESULTADO */}
-          <div className="grid grid-cols-[1fr_340px] gap-4">
+          <div className="grid grid-cols-[1fr_320px] gap-4">
 
             {/* ── COLUNA ESQUERDA: INPUTS ── */}
             <div className="space-y-3">
@@ -231,18 +298,6 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
               {/* CUSTOS */}
               <Section icon={<DollarSign className="h-3.5 w-3.5" />} title="Custos">
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="col-span-2">
-                    <Label className="text-[10px]">Modalidade</Label>
-                    <Select value={data.modalidadeCusto} onValueChange={(v: any) => set('modalidadeCusto', v)}>
-                      <SelectTrigger className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="diaria" className="text-[11px]">Diária (R$/cab/dia)</SelectItem>
-                        <SelectItem value="arroba" className="text-[11px]">Arroba Produzida (R$/@)</SelectItem>
-                        <SelectItem value="parceria" className="text-[11px]">Parceria (%)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
                   {data.modalidadeCusto === 'diaria' && (
                     <Field label="R$/cab/dia">
                       <Input type="number" value={data.custoDiaria || ''} onChange={e => set('custoDiaria', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.01" />
@@ -254,12 +309,16 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                     </Field>
                   )}
                   {data.modalidadeCusto === 'parceria' && (
-                    <Field label="% do parceiro">
-                      <Input type="number" value={data.percentualParceria || ''} onChange={e => set('percentualParceria', Number(e.target.value) || 0)} className="h-7 text-[11px]" min="0" max="100" />
-                      <span className="text-[9px] text-muted-foreground">Sua parte: {100 - (data.percentualParceria || 0)}%</span>
-                    </Field>
+                    <>
+                      <Field label="% do parceiro">
+                        <Input type="number" value={data.percentualParceria || ''} onChange={e => set('percentualParceria', Number(e.target.value) || 0)} className="h-7 text-[11px]" min="0" max="100" />
+                        <span className="text-[9px] text-muted-foreground">Sua parte: {100 - (data.percentualParceria || 0)}%</span>
+                      </Field>
+                      <Field label="Custos extras do acordo (R$)">
+                        <Input type="number" value={data.custosExtrasParceria || ''} onChange={e => set('custosExtrasParceria', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
+                      </Field>
+                    </>
                   )}
-
                   <Field label="Frete (R$)">
                     <Input type="number" value={data.custoFrete || ''} onChange={e => set('custoFrete', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
                   </Field>
@@ -301,31 +360,33 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
             </div>
 
             {/* ── COLUNA DIREITA: RESULTADO ── */}
-            <div className="bg-primary/5 rounded-lg border-2 border-primary/20 p-4 space-y-3 h-fit sticky top-0">
+            <div className="bg-primary/5 rounded-lg border-2 border-primary/20 p-4 space-y-2.5 h-fit sticky top-0">
               <h4 className="text-[12px] font-bold uppercase text-primary flex items-center gap-1.5">
                 <TrendingUp className="h-4 w-4" /> Resultado
               </h4>
 
-              {/* Receita */}
-              <ResultGroup label="Receita">
-                <ResultRow label="Receita/cab" value={formatMoeda(calc.receitaPorCab)} />
-                <ResultRow label="Receita total" value={formatMoeda(calc.receitaTotal)} bold />
+              {/* Faturamento */}
+              <ResultGroup label="Faturamento">
+                <ResultRow label="Faturamento Bruto Abate" value={formatMoeda(calc.faturamentoBruto)} bold />
+                <ResultRow label="Custos com Abate" value={formatMoeda(calc.custosAbate)} className="text-destructive" />
+                <ResultRow label="Faturamento Líquido" value={formatMoeda(calc.faturamentoLiquido)} bold accent />
               </ResultGroup>
 
               <Separator />
 
-              {/* Custos */}
-              <ResultGroup label="Custos">
-                <ResultRow label="Custo total" value={formatMoeda(calc.custoTotal)} className="text-destructive" bold />
-                <ResultRow label="Custo/cab" value={formatMoeda(calc.custoPorCab)} className="text-destructive" />
-                <ResultRow label="Custo/@" value={formatMoeda(calc.custoPorArroba)} className="text-destructive" />
+              {/* Custos detalhados */}
+              <ResultGroup label="Custos Operacionais">
+                <ResultRow label="Custo com Diárias" value={formatMoeda(calc.custoDiariaTotal)} className="text-destructive" />
+                <ResultRow label="Custos Sanitários" value={formatMoeda(calc.custosSanitarios)} className="text-destructive" />
+                <ResultRow label="Outros Custos" value={formatMoeda(calc.outrosCustosTotal)} className="text-destructive" />
+                <ResultRow label="Custos com Frete" value={formatMoeda(calc.custosFreteTotal)} className="text-destructive" />
               </ResultGroup>
 
               <Separator />
 
-              {/* Resultado principal */}
+              {/* Lucro principal */}
               <div className={`rounded-md border-2 px-3 py-3 text-center ${isPositive ? 'bg-green-50 border-green-300 dark:bg-green-950/30 dark:border-green-700' : 'bg-destructive/5 border-destructive/20'}`}>
-                <span className="text-[9px] text-muted-foreground block uppercase font-bold">Lucro líquido total</span>
+                <span className="text-[9px] text-muted-foreground block uppercase font-bold">Lucro Líquido Total</span>
                 <strong className={`text-[20px] ${isPositive ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>
                   {formatMoeda(calc.lucroTotal)}
                 </strong>
@@ -334,7 +395,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
               <div className="grid grid-cols-3 gap-2">
                 <ResultCard label="Lucro/cab" value={formatMoeda(calc.lucroPorCab)} positive={isPositive} />
                 <ResultCard label="Lucro/@" value={formatMoeda(calc.lucroPorArroba)} positive={isPositive} />
-                <ResultCard label="Lucro/kg" value={formatMoeda(calc.lucroPorKg)} positive={isPositive} />
+                <ResultCard label="Lucro/kg vivo" value={formatMoeda(calc.lucroPorKg)} positive={isPositive} />
               </div>
 
               <Separator />
@@ -345,7 +406,8 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <ResultRow label="GMC" value={fmtGmd(calc.gmc)} />
                 <ResultRow label="@ produzidas" value={fmtArr(calc.arrobasProduzidas)} />
                 <ResultRow label="@ total saída" value={fmtArr(calc.arrobasTotalSaida)} />
-                <ResultRow label="Custo/cab/dia" value={data.custoDiaria > 0 ? formatMoeda(data.custoDiaria) : '-'} />
+                <ResultRow label="Custo/cab" value={formatMoeda(calc.custoPorCab)} />
+                <ResultRow label="Custo/@" value={formatMoeda(calc.custoPorArroba)} />
               </ResultGroup>
 
               {/* Actions */}
@@ -384,18 +446,18 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function ResultGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-1">
+    <div className="space-y-0.5">
       <span className="text-[9px] font-bold uppercase text-muted-foreground">{label}</span>
       {children}
     </div>
   );
 }
 
-function ResultRow({ label, value, className = '', bold }: { label: string; value: string; className?: string; bold?: boolean }) {
+function ResultRow({ label, value, className = '', bold, accent }: { label: string; value: string; className?: string; bold?: boolean; accent?: boolean }) {
   return (
     <div className="flex justify-between text-[11px]">
       <span className="text-muted-foreground">{label}</span>
-      <span className={`${bold ? 'font-bold' : 'font-medium'} ${className}`}>{value}</span>
+      <span className={`${bold ? 'font-bold' : 'font-medium'} ${accent ? 'text-primary' : ''} ${className}`}>{value}</span>
     </div>
   );
 }
