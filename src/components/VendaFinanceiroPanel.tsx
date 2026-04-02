@@ -803,6 +803,9 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         initialData={boitelData || undefined}
         quantidade={quantidade}
         pesoKg={pesoKg}
+        fazendaNome={fazendaAtual?.nome}
+        dataLancamento={data}
+        destinoNome={destino}
       />
     </div>
   );
