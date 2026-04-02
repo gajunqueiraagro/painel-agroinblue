@@ -181,6 +181,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [abateFornecedores, setAbateFornecedores] = useState<{ id: string; nome: string }[]>([]);
   const [novoFornecedorAbateOpen, setNovoFornecedorAbateOpen] = useState(false);
 
+  // Compra fornecedor state
+  const [compraFornecedorId, setCompraFornecedorId] = useState('');
+  const [novoFornecedorCompraOpen, setNovoFornecedorCompraOpen] = useState(false);
+  const [compraOrigemSugestao, setCompraOrigemSugestao] = useState<'encontrado' | 'criar' | null>(null);
+  const [compraOrigemSugestaoDescartada, setCompraOrigemSugestaoDescartada] = useState(false);
+
   useEffect(() => {
     if (!clienteAtual) return;
     supabase
