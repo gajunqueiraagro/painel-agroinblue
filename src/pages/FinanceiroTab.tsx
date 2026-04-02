@@ -178,8 +178,8 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
           const liqCabeca = totals.qtd > 0 ? totals.valorTotal / totals.qtd : 0;
           const liqKgTotal = totals.pesoVivoTotal > 0 ? totals.valorTotal / totals.pesoVivoTotal : 0;
           return (
-            <tfoot>
-              <tr className="border-t-2 border-primary/40 bg-muted/30 font-bold text-[10px]">
+             <tfoot className="sticky bottom-0 z-10">
+              <tr className="border-t-2 border-primary/40 bg-background font-bold text-[10px]">
                 <td className="px-1 py-[3px]">TOTAL</td>
                 {showTipo && <td className="px-1 py-[3px]"></td>}
                 <td className="px-1 py-[3px] text-right">{totals.qtd}</td>
