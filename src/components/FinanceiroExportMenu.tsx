@@ -265,7 +265,7 @@ async function gerarPDFIndividual(l: Lancamento, fazendaNome?: string) {
     detalhes = [
       ['Peso vivo (kg)', fmtValor(l.pesoMedioKg)],
       ['Peso em @ (por cab)', fmtValor(c.pesoArroba)],
-      ['Preço por @ (R$)', fmtValor(l.precoArroba)],
+      ['Preço por @', formatMoeda(l.precoArroba)],
       ['Acréscimos', formatMoeda(l.acrescimos)],
       ['Deduções', formatMoeda(l.deducoes)],
       ['', ''],
