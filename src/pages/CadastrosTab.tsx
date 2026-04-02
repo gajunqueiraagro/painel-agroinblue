@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Save, FileText, Share2, Pencil, Trash2, MapPin, Tag, Users, Building2 } from 'lucide-react';
+import { Save, FileText, Share2, Pencil, Trash2, MapPin, Tag, Users, Building2, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import logoUrl from '@/assets/logo.png';
