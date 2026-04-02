@@ -141,7 +141,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [detalheId, setDetalheId] = useState<string | null>(null);
   const [lastSavedLancamentoId, setLastSavedLancamentoId] = useState<string | null>(null);
   const [editingAbateId, setEditingAbateId] = useState<string | null>(null);
-  const compraFinanceiroRef = useRef<CompraFinanceiroPanelRef>(null);
+  // compraFinanceiroRef removed — compra now uses modal + direct generation
   const abateFinanceiroRef = useRef<AbateFinanceiroPanelRef>(null);
   const vendaFinanceiroRef = useRef<VendaFinanceiroPanelRef>(null);
   const consumoFinanceiroRef = useRef<ConsumoFinanceiroPanelRef>(null);
