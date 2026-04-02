@@ -617,8 +617,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       result.precoBase = Number(precoKg) || 0;
       result.precoBaseLabel = 'R$/kg';
       result.totalBruto = calc.valorBruto;
-      result.totalBonus = Number(bonus) || 0;
-      result.totalDescontos = Number(descontos) || 0;
+      result.totalBonus = isVenda ? 0 : (Number(bonus) || 0);
+      result.totalDescontos = isVenda ? calc.totalDescontos : (Number(descontos) || 0);
       result.valorLiquido = calc.valorLiquido;
       if (formaPagamento === 'parcelado' && parcelas.length > 0) {
         result.formaPagamento = `A prazo (${parcelas.length}x)`;
