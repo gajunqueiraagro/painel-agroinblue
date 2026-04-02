@@ -663,8 +663,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           {/* Summary + actions */}
           <div className="flex items-center justify-between">
             <div className="flex gap-2 text-[10px]">
-              <span className="text-success font-bold">Ent: R$ {fmtBRL(totalEntradas)}</span>
-              <span className="text-destructive font-bold">Saí: R$ {fmtBRL(totalSaidas)}</span>
+              <span className="text-success font-bold">Ent: {formatMoeda(totalEntradas)}</span>
+              <span className="text-destructive font-bold">Saí: {formatMoeda(totalSaidas)}</span>
               <span className="text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
             </div>
             <div className="flex gap-1">

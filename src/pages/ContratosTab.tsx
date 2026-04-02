@@ -102,7 +102,7 @@ export function ContratosTab() {
                       <p className="text-sm font-semibold text-foreground truncate">{c.produto || 'Sem produto'}</p>
                       <p className="text-xs text-muted-foreground truncate">{fornecedor?.nome || 'Sem fornecedor'}</p>
                       <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
-                        <span className="font-mono font-bold text-foreground">R$ {toBRL(c.valor)}</span>
+                        <span className="font-mono font-bold text-foreground">{formatMoeda(c.valor)}</span>
                         <span>{c.frequencia}</span>
                         <span>Próx: {proxVencimento(c)}</span>
                       </div>
