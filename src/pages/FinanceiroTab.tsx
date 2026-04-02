@@ -20,17 +20,11 @@ interface Props {
   onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
   onRemover: (id: string) => void;
   subAbaInicial?: SubAba;
-  /** Modo compacto para aba Movimentações: sem "Todas"/"Chuvas", filtros menores, header sticky */
   modoMovimentacao?: boolean;
-  /** Filtro de ano inicial (quando vem de drill-down) */
   filtroAnoInicial?: string;
-  /** Filtro de mês inicial (quando vem de drill-down) — formato '01'-'12' ou 'todos' */
   filtroMesInicial?: string;
-  /** Callback para voltar à tela anterior (drill-down) */
   onBack?: () => void;
-  /** Label do filtro aplicado (drill-down) */
   drillDownLabel?: string;
-  /** Callback para editar abate no formulário completo (navega para LancamentosTab) */
   onEditarAbate?: (lancamento: Lancamento) => void;
 }
 
@@ -52,17 +46,10 @@ const SUB_ABA_LABELS: Record<SubAba, { label: string; icon: string }> = {
   morte: { label: 'Mortes', icon: '💀' },
 };
 
-type TableColumn = { key: string; width: number };
-
 const TABLE_HEAD_CELL = 'px-[3px] py-1 text-[8px] font-bold uppercase tracking-[0.02em] whitespace-nowrap';
 const TABLE_BODY_CELL = 'px-[3px] py-[3px] align-middle whitespace-nowrap overflow-hidden text-ellipsis';
 const TABLE_FOOT_CELL = 'px-[3px] py-[3px] whitespace-nowrap';
 
-/**
- * Tabela unificada de movimentações com indicadores econômicos.
- * NOTA: Lógica econômica/competência do rebanho — não é módulo financeiro de caixa.
- */
-/** Returns the contextual column header for fazenda info based on tipo */
 function getFazendaColumnHeader(tipo: string): string {
   switch (tipo) {
     case 'nascimento': return 'Destino';
@@ -77,7 +64,6 @@ function getFazendaColumnHeader(tipo: string): string {
   }
 }
 
-/** Returns fazenda cell value based on tipo */
 function getFazendaCellValue(l: Lancamento, fazendaMap: Map<string, string>): string {
   const fazNome = l.fazendaId ? (fazendaMap.get(l.fazendaId) || '') : '';
   switch (l.tipo) {
@@ -104,245 +90,270 @@ function getFazendaCellValue(l: Lancamento, fazendaMap: Map<string, string>): st
   }
 }
 
+/* ── Summary panel ── */
+function ResumoLateral({ lancamentos, subAba, anoFiltro, mesFiltro, statusFiltro }: {
+  lancamentos: Lancamento[];
+  subAba: SubAba;
+  anoFiltro: string;
+  mesFiltro: string;
+  statusFiltro: StatusFiltro;
+}) {
+  const statusLabel = statusFiltro === 'todos' ? 'Todos' : statusFiltro === 'realizado' ? 'Realizado' : statusFiltro === 'programado' ? 'Programado' : 'Previsto';
+  const mesLabel = mesFiltro === 'todos' ? 'Todos' : (MESES_OPTIONS.find(m => m.value === mesFiltro)?.label || mesFiltro);
+  const tipoLabel = SUB_ABA_LABELS[subAba]?.label || subAba;
+
+  const stats = useMemo(() => {
+    const totals = lancamentos.reduce((acc, l) => {
+      const c = calcIndicadoresLancamento(l);
+      acc.qtd += l.quantidade;
+      acc.pesoVivoTotal += (l.pesoMedioKg ?? 0) * l.quantidade;
+      acc.arrobasTotal += c.pesoTotalArrobas;
+      acc.valorTotal += c.valorFinal;
+      acc.rendSum += c.rendimento * l.quantidade;
+      return acc;
+    }, { qtd: 0, pesoVivoTotal: 0, arrobasTotal: 0, valorTotal: 0, rendSum: 0 });
+
+    const pesoMedio = totals.qtd > 0 ? totals.pesoVivoTotal / totals.qtd : 0;
+    const arrobaMedio = totals.qtd > 0 ? totals.arrobasTotal / totals.qtd : 0;
+    const rendMedio = totals.qtd > 0 ? totals.rendSum / totals.qtd : 0;
+    const liqArroba = totals.arrobasTotal > 0 ? totals.valorTotal / totals.arrobasTotal : 0;
+    const liqCabeca = totals.qtd > 0 ? totals.valorTotal / totals.qtd : 0;
+    return { ...totals, pesoMedio, arrobaMedio, rendMedio, liqArroba, liqCabeca };
+  }, [lancamentos]);
+
+  const kpiItems: { label: string; value: string; highlight?: boolean }[] = [
+    { label: 'Qtde', value: `${stats.qtd} cab` },
+    { label: 'Peso médio', value: `${stats.pesoMedio.toFixed(2)} kg` },
+    ...(subAba === 'abate' ? [{ label: 'RC%', value: stats.rendMedio ? `${stats.rendMedio.toFixed(1)}%` : '-' }] : []),
+    { label: 'Peso @', value: `${stats.arrobaMedio.toFixed(2)} @` },
+    { label: 'Valor total', value: fmtValor(stats.valorTotal), highlight: true },
+    { label: 'R$/Líq @', value: fmtValor(stats.liqArroba) },
+    { label: 'Líq/Cab', value: fmtValor(stats.liqCabeca) },
+  ];
+
+  return (
+    <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="bg-primary px-4 py-3">
+        <h3 className="text-sm font-bold text-primary-foreground">{tipoLabel}</h3>
+        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-primary-foreground/80">
+          <span>Ano: <strong className="text-primary-foreground">{anoFiltro}</strong></span>
+          <span>Mês: <strong className="text-primary-foreground">{mesLabel}</strong></span>
+          <span>Status: <strong className="text-primary-foreground">{statusLabel}</strong></span>
+        </div>
+      </div>
+      {/* KPIs */}
+      <div className="divide-y divide-border">
+        {kpiItems.map((kpi) => (
+          <div key={kpi.label} className="flex items-center justify-between px-4 py-2">
+            <span className="text-[11px] text-muted-foreground">{kpi.label}</span>
+            <span className={`text-[12px] font-bold ${kpi.highlight ? 'text-primary text-[14px]' : 'text-foreground'}`}>
+              {kpi.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── Tables ── */
+
 function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazendaMap }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; showTipo?: boolean; subTipo?: string; isGlobal?: boolean; fazendaMap?: Map<string, string> }) {
   const TIPOS_COM_DESTINO = ['venda', 'transferencia_entrada', 'transferencia_saida', 'consumo', 'morte'];
   const showDestino = !isGlobal && (showTipo ? true : (subTipo ? TIPOS_COM_DESTINO.includes(subTipo) : false));
   const isMorte = subTipo === 'morte';
   const showLiqKg = showTipo ? true : (subTipo ? TIPOS_COM_DESTINO.includes(subTipo) : false);
   const fMap = fazendaMap || new Map<string, string>();
-  // For global + single subTipo, use that tipo's header; for global + showTipo (todas), use generic "Fazenda"
   const globalColHeader = isGlobal ? (subTipo ? getFazendaColumnHeader(subTipo) : 'Fazenda') : '';
-  const columns: TableColumn[] = [
-    { key: 'data', width: 48 },
-    ...(showTipo ? [{ key: 'tipo', width: 64 }] : []),
-    { key: 'qtd', width: 34 },
-    { key: 'categoria', width: 62 },
-    ...(showDestino ? [{ key: 'destino', width: 74 }] : []),
-    ...(isGlobal ? [{ key: 'fazenda', width: 92 }] : []),
-    { key: 'peso-vivo', width: 44 },
-    { key: 'peso-arroba', width: 40 },
-    { key: 'total', width: 62 },
-    { key: 'liq-arroba', width: 54 },
-    ...(showLiqKg ? [{ key: 'liq-kg', width: 54 }] : []),
-    { key: 'liq-cab', width: 54 },
-    { key: 'status', width: 68 },
-    { key: 'acao', width: 24 },
-  ];
+
   if (lancamentos.length === 0) return <p className="text-center text-muted-foreground py-6">Nenhum registro no período</p>;
 
   return (
-    <div>
-      <table className="financeiro-listagem-table text-[10px]">
-        <colgroup>
-          {columns.map((column) => (
-            <col key={column.key} style={{ width: `${column.width}px` }} />
-          ))}
-        </colgroup>
-        <thead className="financeiro-table-head print:static">
-          <tr className="border-b border-primary-foreground/15">
-            <th className={`${TABLE_HEAD_CELL} text-left`}>Data</th>
-            {showTipo && <th className={`${TABLE_HEAD_CELL} text-left`}>Tipo</th>}
-            <th className={`${TABLE_HEAD_CELL} text-right`}>Qtd</th>
-            <th className={`${TABLE_HEAD_CELL} text-left`}>Categoria</th>
-            {showDestino && <th className={`${TABLE_HEAD_CELL} text-left`}>{isMorte ? 'Motivo' : 'Destino'}</th>}
-            {isGlobal && <th className={`${TABLE_HEAD_CELL} text-left`}>{showTipo ? 'Fazenda' : globalColHeader}</th>}
-            <th className={`${TABLE_HEAD_CELL} text-right`}>P.Vivo</th>
-            <th className={`${TABLE_HEAD_CELL} text-right`}>P.@</th>
-            <th className={`${TABLE_HEAD_CELL} text-right`}>Total</th>
-            <th className={`${TABLE_HEAD_CELL} text-right`}>R$/líq @</th>
-            {showLiqKg && <th className={`${TABLE_HEAD_CELL} text-right`}>R$/Kg Líq</th>}
-            <th className={`${TABLE_HEAD_CELL} text-right`}>Líq/Cab</th>
-            <th className={`${TABLE_HEAD_CELL} text-center`}>Status</th>
-            <th className={`${TABLE_HEAD_CELL} text-center`}></th>
-          </tr>
-        </thead>
-        <tbody className="bg-card">
-          {lancamentos.map(l => {
-            const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
-            const c = calcIndicadoresLancamento(l);
-            const tipoInfo = SUB_ABA_LABELS[l.tipo as SubAba];
-            return (
-              <tr key={l.id} className="border-b border-border/70 leading-none hover:bg-muted/30">
-                <td className={`${TABLE_BODY_CELL} text-[9px]`}>{format(parseISO(l.data), 'dd/MM/yy')}</td>
-                {showTipo && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{tipoInfo?.icon} {tipoInfo?.label || l.tipo}</td>}
-                <td className={`${TABLE_BODY_CELL} text-right font-bold text-[9px]`}>{l.quantidade}</td>
-                <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{cat}</td>
-                {showDestino && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{(l.tipo === 'morte' ? l.fazendaDestino : (l.fazendaDestino || l.fazendaOrigem)) || '-'}</td>}
-                {isGlobal && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{showTipo ? (fMap.get(l.fazendaId || '') || '-') : getFazendaCellValue(l, fMap)}</td>}
-                <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
-                <td className={`${TABLE_BODY_CELL} text-right text-[9px] text-muted-foreground`}>{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
-                <td className={`${TABLE_BODY_CELL} text-right font-bold text-[9px] text-primary`}>{fmtValor(c.valorFinal)}</td>
-                <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(c.liqArroba)}</td>
-                {showLiqKg && <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(c.liqKg)}</td>}
-                <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(c.liqCabeca)}</td>
-                <td className={`${TABLE_BODY_CELL} text-center`}>
-                  {(() => {
-                    const cfg = getStatusBadge(l);
-                    return <span className={`inline-flex max-w-full items-center justify-center truncate rounded px-1 py-px text-[8px] font-bold ${cfg.cls}`}>{cfg.label}</span>;
-                  })()}
-                </td>
-                <td className={`${TABLE_BODY_CELL} text-center`}>
-                  <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => onEdit(l)}>
-                    <Info className="h-2.5 w-2.5" />
-                  </Button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-        {lancamentos.length > 1 && (() => {
-           const totals = lancamentos.reduce((acc, l) => {
-            const c = calcIndicadoresLancamento(l);
-            acc.qtd += l.quantidade;
-            acc.pesoVivoTotal += (l.pesoMedioKg ?? 0) * l.quantidade;
-            acc.arrobasTotal += c.pesoTotalArrobas;
-            acc.valorTotal += c.valorFinal;
-            return acc;
-          }, { qtd: 0, pesoVivoTotal: 0, arrobasTotal: 0, valorTotal: 0 });
-          const pesoVivoMedio = totals.qtd > 0 ? totals.pesoVivoTotal / totals.qtd : 0;
-          const arrobaMedio = totals.qtd > 0 ? totals.arrobasTotal / totals.qtd : 0;
-          const liqArroba = totals.arrobasTotal > 0 ? totals.valorTotal / totals.arrobasTotal : 0;
-          const liqCabeca = totals.qtd > 0 ? totals.valorTotal / totals.qtd : 0;
-          const liqKgTotal = totals.pesoVivoTotal > 0 ? totals.valorTotal / totals.pesoVivoTotal : 0;
+    <table className="w-full table-auto border-collapse text-[10px]">
+      <thead className="financeiro-table-head print:static">
+        <tr className="border-b border-primary-foreground/15">
+          <th className={`${TABLE_HEAD_CELL} text-left`}>Data</th>
+          {showTipo && <th className={`${TABLE_HEAD_CELL} text-left`}>Tipo</th>}
+          <th className={`${TABLE_HEAD_CELL} text-right`}>Qtd</th>
+          <th className={`${TABLE_HEAD_CELL} text-left`}>Categoria</th>
+          {showDestino && <th className={`${TABLE_HEAD_CELL} text-left`}>{isMorte ? 'Motivo' : 'Destino'}</th>}
+          {isGlobal && <th className={`${TABLE_HEAD_CELL} text-left`}>{showTipo ? 'Fazenda' : globalColHeader}</th>}
+          <th className={`${TABLE_HEAD_CELL} text-right`}>P.Vivo</th>
+          <th className={`${TABLE_HEAD_CELL} text-right`}>P.@</th>
+          <th className={`${TABLE_HEAD_CELL} text-right`}>Total</th>
+          <th className={`${TABLE_HEAD_CELL} text-right`}>R$/líq @</th>
+          {showLiqKg && <th className={`${TABLE_HEAD_CELL} text-right`}>R$/Kg Líq</th>}
+          <th className={`${TABLE_HEAD_CELL} text-right`}>Líq/Cab</th>
+          <th className={`${TABLE_HEAD_CELL} text-center`}>Status</th>
+          <th className={`${TABLE_HEAD_CELL} text-center w-6`}></th>
+        </tr>
+      </thead>
+      <tbody className="bg-card">
+        {lancamentos.map(l => {
+          const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
+          const c = calcIndicadoresLancamento(l);
+          const tipoInfo = SUB_ABA_LABELS[l.tipo as SubAba];
           return (
-             <tfoot className="financeiro-table-foot print:static">
-              <tr className="border-t-2 border-primary/25 bg-card font-bold text-[10px]">
-                <td className={TABLE_FOOT_CELL}>TOTAL</td>
-                {showTipo && <td className={TABLE_FOOT_CELL}></td>}
-                <td className={`${TABLE_FOOT_CELL} text-right`}>{totals.qtd}</td>
-                <td className={TABLE_FOOT_CELL}></td>
-                {showDestino && <td className={TABLE_FOOT_CELL}></td>}
-                {isGlobal && <td className={TABLE_FOOT_CELL}></td>}
-                <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(pesoVivoMedio)}</td>
-                <td className={`${TABLE_FOOT_CELL} text-right text-muted-foreground`}>{fmtValor(arrobaMedio)}</td>
-                <td className={`${TABLE_FOOT_CELL} text-right text-primary`}>{fmtValor(totals.valorTotal)}</td>
-                <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(liqArroba)}</td>
-                {showLiqKg && <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(liqKgTotal)}</td>}
-                <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(liqCabeca)}</td>
-                <td className={TABLE_FOOT_CELL}></td>
-                <td className={TABLE_FOOT_CELL}></td>
-              </tr>
-            </tfoot>
+            <tr key={l.id} className="border-b border-border/70 leading-none hover:bg-muted/30">
+              <td className={`${TABLE_BODY_CELL} text-[9px]`}>{format(parseISO(l.data), 'dd/MM/yy')}</td>
+              {showTipo && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{tipoInfo?.icon} {tipoInfo?.label || l.tipo}</td>}
+              <td className={`${TABLE_BODY_CELL} text-right font-bold text-[9px]`}>{l.quantidade}</td>
+              <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{cat}</td>
+              {showDestino && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{(l.tipo === 'morte' ? l.fazendaDestino : (l.fazendaDestino || l.fazendaOrigem)) || '-'}</td>}
+              {isGlobal && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{showTipo ? (fMap.get(l.fazendaId || '') || '-') : getFazendaCellValue(l, fMap)}</td>}
+              <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
+              <td className={`${TABLE_BODY_CELL} text-right text-[9px] text-muted-foreground`}>{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
+              <td className={`${TABLE_BODY_CELL} text-right font-bold text-[9px] text-primary`}>{fmtValor(c.valorFinal)}</td>
+              <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(c.liqArroba)}</td>
+              {showLiqKg && <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(c.liqKg)}</td>}
+              <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(c.liqCabeca)}</td>
+              <td className={`${TABLE_BODY_CELL} text-center`}>
+                {(() => {
+                  const cfg = getStatusBadge(l);
+                  return <span className={`inline-flex max-w-full items-center justify-center truncate rounded px-1 py-px text-[8px] font-bold ${cfg.cls}`}>{cfg.label}</span>;
+                })()}
+              </td>
+              <td className={`${TABLE_BODY_CELL} text-center`}>
+                <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => onEdit(l)}>
+                  <Info className="h-2.5 w-2.5" />
+                </Button>
+              </td>
+            </tr>
           );
-        })()}
-      </table>
-    </div>
+        })}
+      </tbody>
+      {lancamentos.length > 1 && (() => {
+         const totals = lancamentos.reduce((acc, l) => {
+          const c = calcIndicadoresLancamento(l);
+          acc.qtd += l.quantidade;
+          acc.pesoVivoTotal += (l.pesoMedioKg ?? 0) * l.quantidade;
+          acc.arrobasTotal += c.pesoTotalArrobas;
+          acc.valorTotal += c.valorFinal;
+          return acc;
+        }, { qtd: 0, pesoVivoTotal: 0, arrobasTotal: 0, valorTotal: 0 });
+        const pesoVivoMedio = totals.qtd > 0 ? totals.pesoVivoTotal / totals.qtd : 0;
+        const arrobaMedio = totals.qtd > 0 ? totals.arrobasTotal / totals.qtd : 0;
+        const liqArroba = totals.arrobasTotal > 0 ? totals.valorTotal / totals.arrobasTotal : 0;
+        const liqCabeca = totals.qtd > 0 ? totals.valorTotal / totals.qtd : 0;
+        const liqKgTotal = totals.pesoVivoTotal > 0 ? totals.valorTotal / totals.pesoVivoTotal : 0;
+        return (
+           <tfoot className="financeiro-table-foot print:static">
+            <tr className="border-t-2 border-primary/25 font-bold text-[10px]">
+              <td className={TABLE_FOOT_CELL}>TOTAL</td>
+              {showTipo && <td className={TABLE_FOOT_CELL}></td>}
+              <td className={`${TABLE_FOOT_CELL} text-right`}>{totals.qtd}</td>
+              <td className={TABLE_FOOT_CELL}></td>
+              {showDestino && <td className={TABLE_FOOT_CELL}></td>}
+              {isGlobal && <td className={TABLE_FOOT_CELL}></td>}
+              <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(pesoVivoMedio)}</td>
+              <td className={`${TABLE_FOOT_CELL} text-right text-muted-foreground`}>{fmtValor(arrobaMedio)}</td>
+              <td className={`${TABLE_FOOT_CELL} text-right text-primary`}>{fmtValor(totals.valorTotal)}</td>
+              <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(liqArroba)}</td>
+              {showLiqKg && <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(liqKgTotal)}</td>}
+              <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(liqCabeca)}</td>
+              <td className={TABLE_FOOT_CELL}></td>
+              <td className={TABLE_FOOT_CELL}></td>
+            </tr>
+          </tfoot>
+        );
+      })()}
+    </table>
   );
 }
 
 function AbateTable({ lancamentos, onEdit, isGlobal, fazendaMap }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; isGlobal?: boolean; fazendaMap?: Map<string, string> }) {
   const fMap = fazendaMap || new Map<string, string>();
-  const columns: TableColumn[] = [
-    { key: 'data', width: 48 },
-    { key: 'qtd', width: 34 },
-    { key: 'categoria', width: 62 },
-    { key: 'destino', width: 70 },
-    ...(isGlobal ? [{ key: 'origem', width: 88 }] : []),
-    { key: 'peso-vivo', width: 44 },
-    { key: 'rendimento', width: 44 },
-    { key: 'peso-arroba', width: 40 },
-    { key: 'total', width: 62 },
-    { key: 'liq-arroba', width: 54 },
-    { key: 'liq-cab', width: 54 },
-    { key: 'status', width: 68 },
-    { key: 'acao', width: 24 },
-  ];
+
   if (lancamentos.length === 0) return <p className="text-center text-muted-foreground py-6">Nenhum abate no período</p>;
 
   return (
-    <div>
-      <table className="financeiro-listagem-table text-[10px]">
-        <colgroup>
-          {columns.map((column) => (
-            <col key={column.key} style={{ width: `${column.width}px` }} />
-          ))}
-        </colgroup>
-        <thead className="financeiro-table-head print:static">
-          <tr className="border-b border-primary-foreground/15">
-            <th className={`${TABLE_HEAD_CELL} text-left`}>Data</th>
-            <th className={`${TABLE_HEAD_CELL} text-right`}>Qtd</th>
-            <th className={`${TABLE_HEAD_CELL} text-left`}>Categoria</th>
-            <th className={`${TABLE_HEAD_CELL} text-left`}>Destino</th>
-            {isGlobal && <th className={`${TABLE_HEAD_CELL} text-left`}>Origem</th>}
-            <th className={`${TABLE_HEAD_CELL} text-right`}>P.Vivo</th>
-            <th className={`${TABLE_HEAD_CELL} text-right`}>Rend.</th>
-            <th className={`${TABLE_HEAD_CELL} text-right`}>P.@</th>
-            <th className={`${TABLE_HEAD_CELL} text-right`}>Total</th>
-            <th className={`${TABLE_HEAD_CELL} text-right`}>R$/líq @</th>
-            <th className={`${TABLE_HEAD_CELL} text-right`}>Líq/Cab</th>
-            <th className={`${TABLE_HEAD_CELL} text-center`}>Status</th>
-            <th className={`${TABLE_HEAD_CELL} text-center`}></th>
-          </tr>
-        </thead>
-        <tbody className="bg-card">
-          {lancamentos.map(l => {
-            const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
-            const c = calcIndicadoresLancamento(l);
-            return (
-              <tr key={l.id} className="border-b border-border/70 leading-none hover:bg-muted/30">
-                <td className={`${TABLE_BODY_CELL} text-[9px]`}>{format(parseISO(l.data), 'dd/MM/yy')}</td>
-                <td className={`${TABLE_BODY_CELL} text-right font-bold text-[9px]`}>{l.quantidade}</td>
-                <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{cat}</td>
-                <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{l.fazendaDestino || '-'}</td>
-                {isGlobal && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{fMap.get(l.fazendaId || '') || '-'}</td>}
-                <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
-                <td className={`${TABLE_BODY_CELL} text-right text-[9px] text-muted-foreground`}>{c.rendimento ? c.rendimento.toFixed(1) + '%' : '-'}</td>
-                <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
-                <td className={`${TABLE_BODY_CELL} text-right font-bold text-[9px] text-primary`}>{fmtValor(c.valorFinal)}</td>
-                <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(c.liqArroba)}</td>
-                <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(c.liqCabeca)}</td>
-                <td className={`${TABLE_BODY_CELL} text-center`}>
-                  {(() => {
-                    const cfg = getStatusBadge(l);
-                    return <span className={`inline-flex max-w-full items-center justify-center truncate rounded px-1 py-px text-[8px] font-bold ${cfg.cls}`}>{cfg.label}</span>;
-                  })()}
-                </td>
-                <td className={`${TABLE_BODY_CELL} text-center`}>
-                  <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => onEdit(l)}>
-                    <Info className="h-2.5 w-2.5" />
-                  </Button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-        {lancamentos.length > 1 && (() => {
-          const totals = lancamentos.reduce((acc, l) => {
-            const c = calcIndicadoresLancamento(l);
-            acc.qtd += l.quantidade;
-            acc.pesoVivoTotal += (l.pesoMedioKg ?? 0) * l.quantidade;
-            acc.arrobasTotal += c.pesoTotalArrobas;
-            acc.valorTotal += c.valorFinal;
-            acc.rendSum += c.rendimento * l.quantidade;
-            return acc;
-          }, { qtd: 0, pesoVivoTotal: 0, arrobasTotal: 0, valorTotal: 0, rendSum: 0 });
-          const pesoVivoMedio = totals.qtd > 0 ? totals.pesoVivoTotal / totals.qtd : 0;
-          const arrobaMedio = totals.qtd > 0 ? totals.arrobasTotal / totals.qtd : 0;
-          const rendMedio = totals.qtd > 0 ? totals.rendSum / totals.qtd : 0;
-          const liqArroba = totals.arrobasTotal > 0 ? totals.valorTotal / totals.arrobasTotal : 0;
-          const liqCabeca = totals.qtd > 0 ? totals.valorTotal / totals.qtd : 0;
+    <table className="w-full table-auto border-collapse text-[10px]">
+      <thead className="financeiro-table-head print:static">
+        <tr className="border-b border-primary-foreground/15">
+          <th className={`${TABLE_HEAD_CELL} text-left`}>Data</th>
+          <th className={`${TABLE_HEAD_CELL} text-right`}>Qtd</th>
+          <th className={`${TABLE_HEAD_CELL} text-left`}>Categoria</th>
+          <th className={`${TABLE_HEAD_CELL} text-left`}>Destino</th>
+          {isGlobal && <th className={`${TABLE_HEAD_CELL} text-left`}>Origem</th>}
+          <th className={`${TABLE_HEAD_CELL} text-right`}>P.Vivo</th>
+          <th className={`${TABLE_HEAD_CELL} text-right`}>Rend.</th>
+          <th className={`${TABLE_HEAD_CELL} text-right`}>P.@</th>
+          <th className={`${TABLE_HEAD_CELL} text-right`}>Total</th>
+          <th className={`${TABLE_HEAD_CELL} text-right`}>R$/líq @</th>
+          <th className={`${TABLE_HEAD_CELL} text-right`}>Líq/Cab</th>
+          <th className={`${TABLE_HEAD_CELL} text-center`}>Status</th>
+          <th className={`${TABLE_HEAD_CELL} text-center w-6`}></th>
+        </tr>
+      </thead>
+      <tbody className="bg-card">
+        {lancamentos.map(l => {
+          const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
+          const c = calcIndicadoresLancamento(l);
           return (
-            <tfoot className="financeiro-table-foot print:static">
-              <tr className="border-t-2 border-primary/25 bg-card font-bold text-[10px]">
-                <td className={TABLE_FOOT_CELL}>TOTAL</td>
-                <td className={`${TABLE_FOOT_CELL} text-right`}>{totals.qtd}</td>
-                <td className={TABLE_FOOT_CELL}></td>
-                <td className={TABLE_FOOT_CELL}></td>
-                {isGlobal && <td className={TABLE_FOOT_CELL}></td>}
-                <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(pesoVivoMedio)}</td>
-                <td className={`${TABLE_FOOT_CELL} text-right text-muted-foreground`}>{rendMedio ? rendMedio.toFixed(1) + '%' : '-'}</td>
-                <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(arrobaMedio)}</td>
-                <td className={`${TABLE_FOOT_CELL} text-right text-primary`}>{fmtValor(totals.valorTotal)}</td>
-                <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(liqArroba)}</td>
-                <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(liqCabeca)}</td>
-                <td className={TABLE_FOOT_CELL}></td>
-                <td className={TABLE_FOOT_CELL}></td>
-              </tr>
-            </tfoot>
+            <tr key={l.id} className="border-b border-border/70 leading-none hover:bg-muted/30">
+              <td className={`${TABLE_BODY_CELL} text-[9px]`}>{format(parseISO(l.data), 'dd/MM/yy')}</td>
+              <td className={`${TABLE_BODY_CELL} text-right font-bold text-[9px]`}>{l.quantidade}</td>
+              <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{cat}</td>
+              <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{l.fazendaDestino || '-'}</td>
+              {isGlobal && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{fMap.get(l.fazendaId || '') || '-'}</td>}
+              <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
+              <td className={`${TABLE_BODY_CELL} text-right text-[9px] text-muted-foreground`}>{c.rendimento ? c.rendimento.toFixed(1) + '%' : '-'}</td>
+              <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
+              <td className={`${TABLE_BODY_CELL} text-right font-bold text-[9px] text-primary`}>{fmtValor(c.valorFinal)}</td>
+              <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(c.liqArroba)}</td>
+              <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(c.liqCabeca)}</td>
+              <td className={`${TABLE_BODY_CELL} text-center`}>
+                {(() => {
+                  const cfg = getStatusBadge(l);
+                  return <span className={`inline-flex max-w-full items-center justify-center truncate rounded px-1 py-px text-[8px] font-bold ${cfg.cls}`}>{cfg.label}</span>;
+                })()}
+              </td>
+              <td className={`${TABLE_BODY_CELL} text-center`}>
+                <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => onEdit(l)}>
+                  <Info className="h-2.5 w-2.5" />
+                </Button>
+              </td>
+            </tr>
           );
-        })()}
-      </table>
-    </div>
+        })}
+      </tbody>
+      {lancamentos.length > 1 && (() => {
+        const totals = lancamentos.reduce((acc, l) => {
+          const c = calcIndicadoresLancamento(l);
+          acc.qtd += l.quantidade;
+          acc.pesoVivoTotal += (l.pesoMedioKg ?? 0) * l.quantidade;
+          acc.arrobasTotal += c.pesoTotalArrobas;
+          acc.valorTotal += c.valorFinal;
+          acc.rendSum += c.rendimento * l.quantidade;
+          return acc;
+        }, { qtd: 0, pesoVivoTotal: 0, arrobasTotal: 0, valorTotal: 0, rendSum: 0 });
+        const pesoVivoMedio = totals.qtd > 0 ? totals.pesoVivoTotal / totals.qtd : 0;
+        const arrobaMedio = totals.qtd > 0 ? totals.arrobasTotal / totals.qtd : 0;
+        const rendMedio = totals.qtd > 0 ? totals.rendSum / totals.qtd : 0;
+        const liqArroba = totals.arrobasTotal > 0 ? totals.valorTotal / totals.arrobasTotal : 0;
+        const liqCabeca = totals.qtd > 0 ? totals.valorTotal / totals.qtd : 0;
+        return (
+          <tfoot className="financeiro-table-foot print:static">
+            <tr className="border-t-2 border-primary/25 font-bold text-[10px]">
+              <td className={TABLE_FOOT_CELL}>TOTAL</td>
+              <td className={`${TABLE_FOOT_CELL} text-right`}>{totals.qtd}</td>
+              <td className={TABLE_FOOT_CELL}></td>
+              <td className={TABLE_FOOT_CELL}></td>
+              {isGlobal && <td className={TABLE_FOOT_CELL}></td>}
+              <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(pesoVivoMedio)}</td>
+              <td className={`${TABLE_FOOT_CELL} text-right text-muted-foreground`}>{rendMedio ? rendMedio.toFixed(1) + '%' : '-'}</td>
+              <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(arrobaMedio)}</td>
+              <td className={`${TABLE_FOOT_CELL} text-right text-primary`}>{fmtValor(totals.valorTotal)}</td>
+              <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(liqArroba)}</td>
+              <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(liqCabeca)}</td>
+              <td className={TABLE_FOOT_CELL}></td>
+              <td className={TABLE_FOOT_CELL}></td>
+            </tr>
+          </tfoot>
+        );
+      })()}
+    </table>
   );
 }
 
@@ -385,6 +396,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState(filtroMesInicial || 'todos');
   const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>('todos');
+  const [categoriaFiltro, setCategoriaFiltro] = useState('todas');
 
   useEffect(() => {
     if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
@@ -408,16 +420,28 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           if (format(d, 'yyyy') !== anoFiltro) return false;
           if (mesFiltro !== 'todos' && format(d, 'MM') !== mesFiltro) return false;
           if (!tiposFilter.includes(l.tipo)) return false;
-          // Status filter using statusOperacional
           const st = l.statusOperacional || 'conciliado';
           if (statusFiltro === 'realizado' && st !== 'conciliado') return false;
           if (statusFiltro === 'programado' && st !== 'confirmado') return false;
           if (statusFiltro === 'previsto' && st !== 'previsto') return false;
+          if (categoriaFiltro !== 'todas' && l.categoria !== categoriaFiltro) return false;
           return true;
         } catch { return false; }
       })
       .sort((a, b) => a.data.localeCompare(b.data));
-  }, [lancamentos, anoFiltro, mesFiltro, topTab, subAba, statusFiltro]);
+  }, [lancamentos, anoFiltro, mesFiltro, topTab, subAba, statusFiltro, categoriaFiltro]);
+
+  /* Categories available in current type */
+  const categoriasDisponiveis = useMemo(() => {
+    let tiposFilter: string[] = [];
+    if (topTab === 'todas') tiposFilter = [...ENTRY_TYPES, ...EXIT_TYPES];
+    else tiposFilter = [subAba];
+    const cats = new Set<string>();
+    lancamentos.forEach(l => {
+      if (tiposFilter.includes(l.tipo)) cats.add(l.categoria);
+    });
+    return CATEGORIAS.filter(c => cats.has(c.value));
+  }, [lancamentos, topTab, subAba]);
 
   const isFinancial = FINANCIAL_TYPES.includes(subAba);
 
@@ -435,7 +459,6 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   if (topTab === 'chuvas') {
     return (
       <div className="animate-fade-in pb-20">
-        {/* Top tabs */}
         <div className="p-4 pb-0">
           <div className={`grid gap-0.5 bg-muted rounded-md p-0.5 max-w-md grid-cols-${topTabs.length}`}>
             {topTabs.map(t => (
@@ -458,128 +481,159 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
   return (
     <div className="flex h-[calc(100vh-120px)] w-full max-w-full flex-col animate-fade-in">
+      {/* ── Sticky top panel ── */}
       <div className="financeiro-sticky-panel flex-none">
-      {(onBack || drillDownLabel) && (
-        <div className="space-y-1.5 border-b border-primary-foreground/10 px-3 py-2">
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="flex items-center gap-1.5 text-xs font-bold text-primary-foreground transition-opacity hover:opacity-80"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Voltar
-            </button>
-          )}
-          {drillDownLabel && (
-            <div className="flex w-fit items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-bold text-foreground">
-              <Filter className="h-3 w-3 text-primary" />
-              {drillDownLabel}
-            </div>
-          )}
-        </div>
-      )}
-      <div className="space-y-1.5 px-3 py-2">
-      {/* Top tabs */}
-      <div className={`grid gap-0.5 rounded-md bg-card p-0.5 max-w-md ${modoMovimentacao ? 'grid-cols-2' : `grid-cols-${topTabs.length}`}`}>
-        {topTabs.map(t => (
-          <button
-            key={t.id}
-            onClick={() => { setTopTab(t.id); if (t.id === 'entradas') setSubAba('nascimento'); if (t.id === 'saidas') setSubAba('abate'); }}
-            className={`${modoMovimentacao ? 'py-1 px-1.5 text-[11px]' : 'py-1 px-1 text-[11px]'} rounded font-bold transition-colors ${
-              topTab === t.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {t.icon} {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Sub-type tabs + Filters in one row when possible */}
-      {subTypes.length > 0 && (
-        <div className="flex gap-1 overflow-x-auto pb-0.5">
-          {subTypes.map(st => {
-            const info = SUB_ABA_LABELS[st];
-            return (
+        {(onBack || drillDownLabel) && (
+          <div className="space-y-1.5 border-b border-primary-foreground/10 px-3 py-2">
+            {onBack && (
               <button
-                key={st}
-                onClick={() => setSubAba(st)}
-                className={`rounded-md border px-2 py-0.5 text-[10px] font-bold whitespace-nowrap transition-colors ${
-                  subAba === st ? 'border-primary bg-card text-primary shadow-sm' : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                onClick={onBack}
+                className="flex items-center gap-1.5 text-xs font-bold text-primary-foreground transition-opacity hover:opacity-80"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Voltar
+              </button>
+            )}
+            {drillDownLabel && (
+              <div className="flex w-fit items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-bold text-foreground">
+                <Filter className="h-3 w-3 text-primary" />
+                {drillDownLabel}
+              </div>
+            )}
+          </div>
+        )}
+        <div className="space-y-1.5 px-3 py-2">
+          {/* Top tabs */}
+          <div className={`grid gap-0.5 rounded-md bg-card p-0.5 max-w-md ${modoMovimentacao ? 'grid-cols-2' : `grid-cols-${topTabs.length}`}`}>
+            {topTabs.map(t => (
+              <button
+                key={t.id}
+                onClick={() => { setTopTab(t.id); if (t.id === 'entradas') setSubAba('nascimento'); if (t.id === 'saidas') setSubAba('abate'); }}
+                className={`${modoMovimentacao ? 'py-1 px-1.5 text-[11px]' : 'py-1 px-1 text-[11px]'} rounded font-bold transition-colors ${
+                  topTab === t.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {info.icon} {info.label}
+                {t.icon} {t.label}
               </button>
-            );
-          })}
-        </div>
-      )}
+            ))}
+          </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-1">
-        <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-          <SelectTrigger className="h-6 text-[10px] font-bold w-[68px]">
-            <SelectValue placeholder="Ano" />
-          </SelectTrigger>
-          <SelectContent side="bottom">
-            {anosDisponiveis.map(a => (
-              <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={mesFiltro} onValueChange={setMesFiltro}>
-          <SelectTrigger className="h-6 text-[10px] font-bold w-[110px]">
-            <SelectValue placeholder="Mês" />
-          </SelectTrigger>
-          <SelectContent side="bottom">
-            {MESES_OPTIONS.map(m => (
-              <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="flex gap-px rounded bg-card p-px">
-          {([
-            { value: 'realizado', label: 'Realizado', activeClass: 'bg-green-700 text-white' },
-            { value: 'programado', label: 'Programado', activeClass: 'bg-blue-500 text-white' },
-            { value: 'previsto', label: 'Previsto', activeClass: 'bg-orange-500 text-white' },
-          ] as { value: StatusFiltro; label: string; activeClass: string }[]).map(s => (
-            <button
-              key={s.value}
-              onClick={() => setStatusFiltro(s.value === statusFiltro ? 'todos' : s.value)}
-              className={`px-2 py-px rounded text-[9px] font-bold transition-colors ${
-                statusFiltro === s.value
-                  ? s.activeClass
-                  : 'text-muted-foreground'
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
+          {/* Sub-type tabs */}
+          {subTypes.length > 0 && (
+            <div className="flex gap-1 overflow-x-auto pb-0.5">
+              {subTypes.map(st => {
+                const info = SUB_ABA_LABELS[st];
+                return (
+                  <button
+                    key={st}
+                    onClick={() => setSubAba(st)}
+                    className={`rounded-md border px-2 py-0.5 text-[10px] font-bold whitespace-nowrap transition-colors ${
+                      subAba === st ? 'border-primary bg-card text-primary shadow-sm' : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {info.icon} {info.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Filters row */}
+          <div className="flex flex-wrap items-center gap-1">
+            <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+              <SelectTrigger className="h-6 text-[10px] font-bold w-[68px] bg-card text-foreground border-border">
+                <SelectValue placeholder="Ano" />
+              </SelectTrigger>
+              <SelectContent side="bottom">
+                {anosDisponiveis.map(a => (
+                  <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={mesFiltro} onValueChange={setMesFiltro}>
+              <SelectTrigger className="h-6 text-[10px] font-bold w-[110px] bg-card text-foreground border-border">
+                <SelectValue placeholder="Mês" />
+              </SelectTrigger>
+              <SelectContent side="bottom">
+                {MESES_OPTIONS.map(m => (
+                  <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Category filter */}
+            <Select value={categoriaFiltro} onValueChange={setCategoriaFiltro}>
+              <SelectTrigger className="h-6 text-[10px] font-bold w-[100px] bg-card text-foreground border-border">
+                <SelectValue placeholder="Categoria" />
+              </SelectTrigger>
+              <SelectContent side="bottom">
+                <SelectItem value="todas" className="text-sm">Todas</SelectItem>
+                {categoriasDisponiveis.map(c => (
+                  <SelectItem key={c.value} value={c.value} className="text-sm">{c.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Status filter buttons */}
+            <div className="flex gap-px rounded border border-border bg-card p-px">
+              {([
+                { value: 'realizado' as StatusFiltro, label: 'Realizado', activeClass: 'bg-success text-success-foreground' },
+                { value: 'programado' as StatusFiltro, label: 'Programado', activeClass: 'bg-secondary text-secondary-foreground' },
+                { value: 'previsto' as StatusFiltro, label: 'Previsto', activeClass: 'bg-warning text-warning-foreground' },
+              ]).map(s => (
+                <button
+                  key={s.value}
+                  onClick={() => setStatusFiltro(s.value === statusFiltro ? 'todos' : s.value)}
+                  className={`px-2 py-px rounded text-[9px] font-bold transition-colors ${
+                    statusFiltro === s.value
+                      ? s.activeClass
+                      : 'text-foreground hover:bg-muted'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Export — always visible for financial types */}
+            {isFinancial && topTab !== 'todas' && (
+              <FinanceiroExportMenu
+                lancamentos={filtrados}
+                subAba={subAba as 'abate' | 'compra' | 'venda'}
+                ano={anoFiltro}
+                fazendaNome={fazendaAtual?.nome}
+              />
+            )}
+          </div>
         </div>
-        {isFinancial && topTab !== 'todas' && (
-          <FinanceiroExportMenu
+      </div>
+
+      {/* ── Content area: table (left ~70%) + summary panel (right ~30%) ── */}
+      <div className="flex flex-1 min-h-0 gap-3 px-2 pb-2 pt-1.5">
+        {/* Table column */}
+        <div className="flex-[7] min-w-0 overflow-auto rounded-md border border-border/70 bg-card shadow-sm">
+          {topTab === 'todas' ? (
+            <UnifiedTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} showTipo isGlobal={isGlobal} fazendaMap={fazendaMap} />
+          ) : subAba === 'abate' ? (
+            <AbateTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} isGlobal={isGlobal} fazendaMap={fazendaMap} />
+          ) : (
+            <UnifiedTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} subTipo={subAba} isGlobal={isGlobal} fazendaMap={fazendaMap} />
+          )}
+        </div>
+
+        {/* Summary panel */}
+        <div className="flex-[3] min-w-[220px] max-w-[320px] flex-shrink-0 hidden lg:block">
+          <ResumoLateral
             lancamentos={filtrados}
-            subAba={subAba as 'abate' | 'compra' | 'venda'}
-            ano={anoFiltro}
-            fazendaNome={fazendaAtual?.nome}
+            subAba={subAba}
+            anoFiltro={anoFiltro}
+            mesFiltro={mesFiltro}
+            statusFiltro={statusFiltro}
           />
-        )}
-      </div>
-      </div>
+        </div>
       </div>
 
-      {/* Content - scrollable */}
-      <div className="financeiro-scroll-shell flex-1 min-h-0 px-2 pb-2 pt-1.5">
-      <div className="h-full overflow-auto rounded-md border border-border/70 bg-card shadow-sm">
-        {topTab === 'todas' ? (
-          <UnifiedTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} showTipo isGlobal={isGlobal} fazendaMap={fazendaMap} />
-        ) : subAba === 'abate' ? (
-          <AbateTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} isGlobal={isGlobal} fazendaMap={fazendaMap} />
-        ) : (
-          <UnifiedTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} subTipo={subAba} isGlobal={isGlobal} fazendaMap={fazendaMap} />
-        )}
-      </div>
-
-      {/* Detail + Edit via LancamentoDetalhe */}
+      {/* Detail modal */}
       {(() => {
         const lancamentoDetalhe = detalheId ? lancamentos.find(l => l.id === detalheId) : null;
         return lancamentoDetalhe ? (
@@ -593,7 +647,6 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           />
         ) : null;
       })()}
-      </div>
     </div>
   );
 }
