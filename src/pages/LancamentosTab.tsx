@@ -154,6 +154,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [submitting, setSubmitting] = useState(false);
   const [compraDetalhes, setCompraDetalhes] = useState<CompraDetalhes | null>(null);
   const [compraDialogOpen, setCompraDialogOpen] = useState(false);
+  const [abateDetalhes, setAbateDetalhes] = useState<AbateDetalhes | null>(null);
+  const [abateDialogOpen, setAbateDialogOpen] = useState(false);
 
   const [motivoMorte, setMotivoMorte] = useState('');
   const [motivoMorteCustom, setMotivoMorteCustom] = useState('');
