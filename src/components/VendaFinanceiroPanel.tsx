@@ -686,7 +686,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
           <Separator />
         </>
-      )
+      )}
 
       <Separator />
 
