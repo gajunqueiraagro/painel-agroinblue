@@ -56,7 +56,7 @@ interface Props {
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
-import { STATUS_OPTIONS, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
+import { STATUS_LABEL, STATUS_OPTIONS, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
 
 const MOTIVOS_MORTE = [
   'Raio', 'Picada de cobra', 'Doença respiratória', 'Tristeza parasitária',
@@ -1481,9 +1481,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide shrink-0">Status</span>
           <div className="grid grid-cols-3 gap-1 flex-1">
             {([
-              { value: 'conciliado' as StatusOperacional, label: 'Realizado', dot: 'bg-green-600', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
-              { value: 'confirmado' as StatusOperacional, label: 'Programado', dot: 'bg-blue-500', activeBorder: 'border-blue-400', activeBg: 'bg-blue-50 dark:bg-blue-950/30' },
-              { value: 'previsto' as StatusOperacional, label: 'Previsto', dot: 'bg-orange-500', activeBorder: 'border-orange-400', activeBg: 'bg-orange-50 dark:bg-orange-950/30' },
+              { value: 'conciliado' as StatusOperacional, label: STATUS_LABEL.conciliado, dot: 'bg-green-600', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
+              { value: 'confirmado' as StatusOperacional, label: STATUS_LABEL.confirmado, dot: 'bg-blue-500', activeBorder: 'border-blue-400', activeBg: 'bg-blue-50 dark:bg-blue-950/30' },
+              { value: 'previsto' as StatusOperacional, label: STATUS_LABEL.previsto, dot: 'bg-orange-500', activeBorder: 'border-orange-400', activeBg: 'bg-orange-50 dark:bg-orange-950/30' },
             ]).map(s => {
               const selected = statusOp === s.value;
               return (

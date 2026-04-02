@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { NovoFornecedorDialog } from './NovoFornecedorDialog';
+import { STATUS_LABEL } from '@/lib/statusOperacional';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -36,10 +37,10 @@ const TIPOS_OPERACAO = [
 ];
 
 const STATUS_OPTIONS = [
-  { value: 'previsto', label: 'Previsto' },
+  { value: 'previsto', label: STATUS_LABEL.previsto },
   { value: 'agendado', label: 'Agendado' },
-  { value: 'confirmado', label: 'Programado' },
-  { value: 'conciliado', label: 'Realizado' },
+  { value: 'confirmado', label: STATUS_LABEL.confirmado },
+  { value: 'conciliado', label: STATUS_LABEL.conciliado },
 ];
 
 function deriveStatus(dataPagamento: string): string {
