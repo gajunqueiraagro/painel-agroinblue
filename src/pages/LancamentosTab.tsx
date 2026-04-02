@@ -343,14 +343,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setRendCarcaca(''); setFunruralPct(''); setFunruralReais('');
   };
 
-  const resetAllFields = (newTipo?: string) => {
-    setQuantidade(''); setCategoria('');
-    setPesoKg(newTipo === 'nascimento' ? '30' : '');
-    setFazendaOrigem(''); setFazendaDestino('');
-    setData(format(new Date(), 'yyyy-MM-dd'));
+  const resetAllFields = () => {
+    setQuantidade('');
+    setCategoria('');
+    setPesoKg('');
+    setFazendaOrigem('');
+    setFazendaDestino('');
+    setData('');
     setStatusOp('conciliado');
     setLastSavedLancamentoId(null);
     setEditingAbateId(null);
+    setDetalheId(null);
+    setFinanceiroOpen(false);
     resetFinancialFields();
     compraFinanceiroRef.current?.resetForm();
     vendaFinanceiroRef.current?.resetForm();
@@ -732,7 +736,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           {/* Sidebar nav */}
           <div className="w-48 shrink-0 space-y-1">
             {ABA_CONFIG.map(a => (
-              <button key={a.id} onClick={() => { const t = a.id === 'entrada' ? 'nascimento' : 'abate'; setAba(a.id); setTipo(t as TipoMovimentacao); resetAllFields(t); }}
+              <button key={a.id} onClick={() => { const t = a.id === 'entrada' ? 'nascimento' : 'abate'; setAba(a.id); setTipo(t as TipoMovimentacao); resetAllFields(); }}
                 className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-md text-[12px] font-bold transition-all ${aba === a.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/60'}`}>
                 {a.icon} {a.label}
               </button>
@@ -768,13 +772,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       <div className="shrink-0 space-y-2">
         {/* Entradas */}
         <div>
-          <button onClick={() => { setAba('entrada'); setTipo('nascimento'); resetAllFields('nascimento'); }} className={parentCls(aba === 'entrada')}>
+          <button onClick={() => { setAba('entrada'); setTipo('nascimento'); resetAllFields(); }} className={parentCls(aba === 'entrada')}>
             <LogIn className="h-3.5 w-3.5" /> Entradas
           </button>
           <div className={childWrap}>
             {TIPOS_ENTRADA.map(t => (
               <button key={t.value} type="button"
-                onClick={() => { setAba('entrada'); setTipo(t.value); resetAllFields(t.value); }}
+                onClick={() => { setAba('entrada'); setTipo(t.value); resetAllFields(); }}
                 className={childCls(aba === 'entrada' && tipo === t.value)}>
                 <span className="text-[12px]">{t.icon}</span> {t.label}
               </button>
@@ -784,13 +788,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
         {/* Saídas */}
         <div>
-          <button onClick={() => { setAba('saida'); setTipo('abate'); resetAllFields('abate'); }} className={parentCls(aba === 'saida')}>
+          <button onClick={() => { setAba('saida'); setTipo('abate'); resetAllFields(); }} className={parentCls(aba === 'saida')}>
             <LogOut className="h-3.5 w-3.5" /> Saídas
           </button>
           <div className={childWrap}>
             {TIPOS_SAIDA.map(t => (
               <button key={t.value} type="button"
-                onClick={() => { setAba('saida'); setTipo(t.value); resetAllFields(t.value); }}
+                onClick={() => { setAba('saida'); setTipo(t.value); resetAllFields(); }}
                 className={childCls(aba === 'saida' && tipo === t.value)}>
                 <span className="text-[12px]">{t.icon}</span> {t.label}
               </button>
