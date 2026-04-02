@@ -1803,6 +1803,28 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setNovoFornecedorCompraOpen(false);
         }}
       />
+
+      {/* Novo Fornecedor dialog for venda destino */}
+      <NovoFornecedorDialog
+        open={novoFornecedorVendaOpen}
+        onClose={() => setNovoFornecedorVendaOpen(false)}
+        onSave={async (nome, cpfCnpj) => {
+          if (!clienteAtual || !fazendaAtual) return;
+          const { data: rec, error } = await supabase
+            .from('financeiro_fornecedores')
+            .insert({ cliente_id: clienteAtual.id, fazenda_id: fazendaAtual.id, nome, cpf_cnpj: cpfCnpj || null })
+            .select('id, nome')
+            .single();
+          if (error) { toast.error('Erro ao salvar fornecedor'); return; }
+          if (rec) {
+            setAbateFornecedores(prev => [...prev, rec].sort((a, b) => a.nome.localeCompare(b.nome)));
+            setVendaDestinoFornecedorId(rec.id);
+            setFazendaDestino(rec.nome);
+            toast.success(`Fornecedor "${rec.nome}" criado e selecionado`);
+          }
+          setNovoFornecedorVendaOpen(false);
+        }}
+      />
     </div>
   );
 }
