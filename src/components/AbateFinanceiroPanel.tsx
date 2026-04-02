@@ -232,6 +232,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
         centro_custo: clasReceita.centro_custo,
         subcentro: clasReceita.subcentro,
         nota_fiscal: notaFiscal || undefined,
+        ...(fornecedorId ? { favorecido_id: fornecedorId } : {}),
       };
 
       if (formaReceb === 'prazo' && parcelas.length > 0) {

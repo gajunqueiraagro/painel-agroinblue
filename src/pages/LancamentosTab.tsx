@@ -989,7 +989,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           data={data}
           valorLiquido={calc.valorLiquido}
           totalDescontos={calc.totalDescontos}
-          frigorifico={fazendaDestino}
+          frigorifico={abateFornecedores.find(f => f.id === abateFornecedorId)?.nome || ''}
+          fornecedorId={abateFornecedorId || undefined}
           notaFiscal={notaFiscal}
           onNotaFiscalChange={setNotaFiscal}
           lancamentoId={editingAbateId || lastSavedLancamentoId || undefined}
