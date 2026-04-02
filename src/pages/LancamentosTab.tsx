@@ -1666,7 +1666,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           categoria,
           pesoKg: Number(pesoKg) || 0,
           fazendaOrigem: campos.origem.show ? (campos.origem.auto ? campos.origem.value : fazendaOrigem) : undefined,
-          fazendaDestino: campos.destino?.show ? (campos.destino?.auto ? campos.destino?.value : fazendaDestino) : undefined,
+          fazendaDestino: isAbate ? (abateFornecedores.find(f => f.id === abateFornecedorId)?.nome || '') : (campos.destino?.show ? (campos.destino?.auto ? campos.destino?.value : fazendaDestino) : undefined),
           observacao,
         }}
         financeiros={getConfirmacaoFinanceiros()}
