@@ -92,7 +92,7 @@ function getCamposFazenda(tipo: TipoMovimentacao, nomeFazenda: string) {
     case 'nascimento':
       return { origem: { show: false }, destino: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Destino' } };
     case 'compra':
-      return { origem: { show: true, auto: false, label: 'Origem' }, destino: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Destino' } };
+      return { origem: { show: false }, destino: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Destino' } };
     case 'transferencia_entrada':
       return { origem: { show: true, auto: false, label: 'Origem', useSelect: true }, destino: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Destino' } };
     case 'abate':
