@@ -697,14 +697,24 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       } else {
         result.formaPagamento = 'À vista';
       }
-    } else if (isCompra && compraFinanceiroRef.current) {
-      const valorBase = compraFinanceiroRef.current.getValorBase();
-      const tipoPrecoLabel = compraFinanceiroRef.current.getTipoPreco();
+    } else if (isCompra && compraDetalhes) {
+      const totalKgC = (Number(quantidade) || 0) * (Number(pesoKg) || 0);
+      let valorBase = 0;
+      if (compraDetalhes.tipoPreco === 'por_kg') valorBase = totalKgC * (Number(compraDetalhes.precoKg) || 0);
+      else if (compraDetalhes.tipoPreco === 'por_cab') valorBase = (Number(quantidade) || 0) * (Number(compraDetalhes.precoCab) || 0);
+      else valorBase = Number(compraDetalhes.valorTotal) || 0;
+      const tipoPrecoLabel = compraDetalhes.tipoPreco === 'por_kg' ? 'R$/kg' : compraDetalhes.tipoPreco === 'por_cab' ? 'R$/cab' : 'Total';
       result.precoBase = valorBase;
-      result.precoBaseLabel = tipoPrecoLabel === 'por_kg' ? 'R$/kg' : tipoPrecoLabel === 'por_cab' ? 'R$/cab' : 'Total';
+      result.precoBaseLabel = tipoPrecoLabel;
       result.totalBruto = valorBase;
       result.valorLiquido = valorBase;
       result.fornecedorOuFrigorifico = abateFornecedores.find(f => f.id === compraFornecedorId)?.nome || '';
+      if (compraDetalhes.formaPag === 'prazo' && compraDetalhes.parcelas.length > 0) {
+        result.formaPagamento = `A prazo (${compraDetalhes.parcelas.length}x)`;
+        result.parcelas = compraDetalhes.parcelas;
+      } else {
+        result.formaPagamento = 'À vista';
+      }
     } else {
       result.precoBase = Number(precoKg) || 0;
       result.precoBaseLabel = 'R$/kg';
