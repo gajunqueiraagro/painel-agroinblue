@@ -181,6 +181,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [abateFornecedores, setAbateFornecedores] = useState<{ id: string; nome: string }[]>([]);
   const [novoFornecedorAbateOpen, setNovoFornecedorAbateOpen] = useState(false);
 
+  // Compra fornecedor state
+  const [compraFornecedorId, setCompraFornecedorId] = useState('');
+  const [novoFornecedorCompraOpen, setNovoFornecedorCompraOpen] = useState(false);
+  const [compraOrigemSugestao, setCompraOrigemSugestao] = useState<'encontrado' | 'criar' | null>(null);
+  const [compraOrigemSugestaoDescartada, setCompraOrigemSugestaoDescartada] = useState(false);
+
   useEffect(() => {
     if (!clienteAtual) return;
     supabase
@@ -191,6 +197,33 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       .order('nome')
       .then(({ data }) => { if (data) setAbateFornecedores(data); });
   }, [clienteAtual]);
+
+  // Auto-suggest fornecedor from fazendaOrigem for compra
+  useEffect(() => {
+    if (tipo !== 'compra' || !fazendaOrigem?.trim() || compraOrigemSugestaoDescartada) {
+      setCompraOrigemSugestao(null);
+      return;
+    }
+    const nomeNorm = fazendaOrigem.trim().toLowerCase();
+    const match = abateFornecedores.find(f => f.nome.toLowerCase() === nomeNorm);
+    if (match) {
+      if (!compraFornecedorId) {
+        setCompraFornecedorId(match.id);
+        setCompraOrigemSugestao('encontrado');
+        setTimeout(() => setCompraOrigemSugestao(null), 3000);
+      } else {
+        setCompraOrigemSugestao(null);
+      }
+    } else if (fazendaOrigem.trim().length >= 3) {
+      setCompraOrigemSugestao('criar');
+    } else {
+      setCompraOrigemSugestao(null);
+    }
+  }, [fazendaOrigem, abateFornecedores, compraFornecedorId, compraOrigemSugestaoDescartada, tipo]);
+
+  useEffect(() => {
+    setCompraOrigemSugestaoDescartada(false);
+  }, [fazendaOrigem]);
 
   const [formaPagamento, setFormaPagamento] = useState<'avista' | 'parcelado'>('avista');
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
@@ -324,6 +357,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setNotaFiscal(''); setTipoPeso('vivo'); setObservacao('');
     setDataVenda(''); setDataEmbarque(''); setDataAbate(''); setTipoVenda('');
     setAbateFornecedorId('');
+    setCompraFornecedorId(''); setCompraOrigemSugestao(null); setCompraOrigemSugestaoDescartada(false);
     setFormaPagamento('avista'); setParcelas([]); setQtdParcelas('1');
     setMotivoMorte(''); setMotivoMorteCustom('');
     setRendCarcaca(''); setFunruralPct('');
@@ -436,18 +470,19 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
     if (!pesoKg || Number(pesoKg) <= 0) { toast.error('Informe o Peso (kg)'); return; }
 
-    if (isCompra && compraFinanceiroRef.current) {
-      const finErrors = compraFinanceiroRef.current.getValidationErrors();
-      const valorBaseVal = compraFinanceiroRef.current.getValorBase();
-      const fornecedorVal = compraFinanceiroRef.current.getFornecedorId();
+    if (isCompra) {
+      if (!compraFornecedorId) { toast.error('Selecione o fornecedor para continuar'); return; }
+      if (compraFinanceiroRef.current) {
+        const finErrors = compraFinanceiroRef.current.getValidationErrors();
+        const valorBaseVal = compraFinanceiroRef.current.getValorBase();
 
-      if (isConfirmado || isConciliado) {
-        if (!fornecedorVal) { toast.error('Selecione o fornecedor antes de registrar a compra.'); return; }
-        if (valorBaseVal <= 0) { toast.error('Preencha o preço base antes de registrar a compra.'); return; }
-      }
-      if (finErrors.length > 0 && valorBaseVal > 0) {
-        toast.error(finErrors[0]);
-        return;
+        if (isConfirmado || isConciliado) {
+          if (valorBaseVal <= 0) { toast.error('Preencha o preço base antes de registrar a compra.'); return; }
+        }
+        if (finErrors.length > 0 && valorBaseVal > 0) {
+          toast.error(finErrors[0]);
+          return;
+        }
       }
     }
 
@@ -641,7 +676,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       result.precoBaseLabel = tipoPrecoLabel === 'por_kg' ? 'R$/kg' : tipoPrecoLabel === 'por_cab' ? 'R$/cab' : 'Total';
       result.totalBruto = valorBase;
       result.valorLiquido = valorBase;
-      result.fornecedorOuFrigorifico = fazendaOrigem;
+      result.fornecedorOuFrigorifico = abateFornecedores.find(f => f.id === compraFornecedorId)?.nome || fazendaOrigem;
     } else {
       result.precoBase = Number(precoKg) || 0;
       result.precoBaseLabel = 'R$/kg';
@@ -1492,6 +1527,37 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               )}
             </div>
           )}
+          {/* For compra: fornecedor select same pattern as abate */}
+          {isCompra && (
+            <div>
+              <Label className="font-bold text-[11px]">Fornecedor (quem você pagou) *</Label>
+              <div className="flex items-center gap-1 mt-0.5">
+                <div className="flex-1">
+                  <SearchableSelect
+                    value={compraFornecedorId || '__all__'}
+                    onValueChange={(v) => setCompraFornecedorId(v === '__all__' ? '' : v)}
+                    options={abateFornecedores.map(f => ({ value: f.id, label: f.nome }))}
+                    placeholder="Selecione ou cadastre o fornecedor"
+                    allLabel="Nenhum selecionado"
+                    allValue="__all__"
+                    className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => setNovoFornecedorCompraOpen(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              {!compraFornecedorId && (
+                <p className="text-[10px] text-destructive mt-0.5">Selecione o fornecedor para continuar</p>
+              )}
+            </div>
+          )}
           {/* For non-abate types: keep original destino field */}
           {!isAbate && campos.destino?.show && (
             <div>
@@ -1629,6 +1695,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 fazendaOrigem={fazendaOrigem}
                 notaFiscal={notaFiscal}
                 onNotaFiscalChange={setNotaFiscal}
+                fornecedorId={compraFornecedorId}
                 lancamentoId={lastSavedLancamentoId || undefined}
                 onRequestRegister={handleRequestRegister}
                 registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Compra'}
@@ -1690,6 +1757,27 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             toast.success(`Fornecedor "${rec.nome}" criado e selecionado`);
           }
           setNovoFornecedorAbateOpen(false);
+        }}
+      />
+
+      {/* Novo Fornecedor dialog for compra */}
+      <NovoFornecedorDialog
+        open={novoFornecedorCompraOpen}
+        onClose={() => setNovoFornecedorCompraOpen(false)}
+        onSave={async (nome, cpfCnpj) => {
+          if (!clienteAtual || !fazendaAtual) return;
+          const { data: rec, error } = await supabase
+            .from('financeiro_fornecedores')
+            .insert({ cliente_id: clienteAtual.id, fazenda_id: fazendaAtual.id, nome, cpf_cnpj: cpfCnpj || null })
+            .select('id, nome')
+            .single();
+          if (error) { toast.error('Erro ao salvar fornecedor'); return; }
+          if (rec) {
+            setAbateFornecedores(prev => [...prev, rec].sort((a, b) => a.nome.localeCompare(b.nome)));
+            setCompraFornecedorId(rec.id);
+            toast.success(`Fornecedor "${rec.nome}" criado e selecionado`);
+          }
+          setNovoFornecedorCompraOpen(false);
         }}
       />
     </div>

@@ -60,6 +60,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   interface FinResumo { id: string; descricao: string; valor: number; data_pagamento: string | null; cancelado: boolean; origem_tipo: string | null; }
   const [finRecords, setFinRecords] = useState<FinResumo[]>([]);
   const [finLoading, setFinLoading] = useState(false);
+  const [detalheFornecedorId, setDetalheFornecedorId] = useState('');
 
   const isCompra = lancamento.tipo === 'compra';
   const isAbate = lancamento.tipo === 'abate';
@@ -69,15 +70,17 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     setFinLoading(true);
     supabase
       .from('financeiro_lancamentos_v2')
-      .select('id, descricao, valor, data_pagamento, cancelado, origem_tipo')
+      .select('id, descricao, valor, data_pagamento, cancelado, origem_tipo, favorecido_id')
       .eq('movimentacao_rebanho_id', lancamento.id)
       .eq('cancelado', false)
       .order('data_pagamento', { ascending: true })
       .then(({ data }) => {
         setFinRecords((data as FinResumo[]) || []);
         setFinLoading(false);
+        const favId = (data as any[])?.[0]?.favorecido_id;
+        if (favId && !detalheFornecedorId) setDetalheFornecedorId(favId);
       });
-  }, [isCompra, lancamento.id]);
+  }, [isCompra, lancamento.id, detalheFornecedorId]);
 
   useEffect(() => {
     if (open) loadFinRecords();
@@ -546,6 +549,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                   fazendaOrigem={compraZooSaved ? (compraForm.fazendaOrigem || '') : (lancamento.fazendaOrigem || '')}
                   notaFiscal={notaFiscalEdit}
                   onNotaFiscalChange={setNotaFiscalEdit}
+                  fornecedorId={detalheFornecedorId}
                   lancamentoId={lancamento.id}
                   mode="update"
                   onFinanceiroUpdated={() => {
