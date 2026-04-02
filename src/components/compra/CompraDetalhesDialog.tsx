@@ -209,7 +209,7 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
             {tipoPreco === 'por_kg' && (
               <div>
                 <Label className="text-[11px]">R$/kg</Label>
-                <Input type="number" value={precoKg} onChange={e => setPrecoKg(e.target.value)} placeholder="0,00" className="h-9 text-[12px]" />
+                <Input type="number" value={precoKg} onChange={e => { setPrecoKg(e.target.value); markDirty(); }} placeholder="0,00" className="h-9 text-[12px]" />
               </div>
             )}
             {tipoPreco === 'por_cab' && (
