@@ -415,10 +415,6 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-2 pt-2">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground min-w-[90px]">Nota Fiscal</span>
-            <Input value={notaFiscal} onChange={e => onNotaFiscalChange(e.target.value)} placeholder="Nº da nota" className="h-7 text-[11px] flex-1" />
-          </div>
 
           <div className="space-y-1.5">
             <h5 className="text-[10px] font-bold text-muted-foreground uppercase">Forma de Recebimento</h5>
