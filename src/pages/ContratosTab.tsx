@@ -7,10 +7,7 @@ import { useContratos, Contrato, ContratoForm } from '@/hooks/useContratos';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { ContratoDialog } from '@/components/financeiro-v2/ContratoDialog';
-
-function toBRL(v: number): string {
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+import { formatMoeda } from '@/lib/calculos/formatters';
 
 function proxVencimento(c: Contrato): string {
   if (c.status !== 'ativo') return '-';
