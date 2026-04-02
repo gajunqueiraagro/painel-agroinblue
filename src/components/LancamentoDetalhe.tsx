@@ -546,6 +546,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                   fazendaOrigem={compraZooSaved ? (compraForm.fazendaOrigem || '') : (lancamento.fazendaOrigem || '')}
                   notaFiscal={notaFiscalEdit}
                   onNotaFiscalChange={setNotaFiscalEdit}
+                  fornecedorId={detalheFornecedorId}
                   lancamentoId={lancamento.id}
                   mode="update"
                   onFinanceiroUpdated={() => {
