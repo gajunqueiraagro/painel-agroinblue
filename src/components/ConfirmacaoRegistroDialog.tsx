@@ -6,6 +6,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CheckCircle, ArrowLeft } from 'lucide-react';
+import { STATUS_LABEL } from '@/lib/statusOperacional';
 
 interface DadosOperacionais {
   status: string;
