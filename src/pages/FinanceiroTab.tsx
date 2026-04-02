@@ -520,8 +520,8 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       </div>
       </div>
 
-      {/* Content */}
-      <div className="p-4 pt-2">
+      {/* Content - scrollable */}
+      <div className="flex-1 overflow-y-auto min-h-0 px-4 pt-2 pb-4">
       {topTab === 'todas' ? (
         <UnifiedTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} showTipo isGlobal={isGlobal} fazendaMap={fazendaMap} />
       ) : subAba === 'abate' ? (
