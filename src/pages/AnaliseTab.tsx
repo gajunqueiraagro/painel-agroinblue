@@ -156,7 +156,7 @@ export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange, isGlobal 
               formatter={(value: string) => {
                 const item = porCategoria.find(c => c.name === value);
                 const pct = item && totalRebanho > 0 ? formatPercent((item.value / totalRebanho) * 100) : '0,0%';
-                return `${value} ${pct}%`;
+                return `${value} ${pct}`;
               }}
               wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
             />
