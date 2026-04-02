@@ -107,6 +107,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
         qtdCabecas: quantidade || 0,
         pesoInicial: pesoKg || 0,
         fazendaOrigem: fazendaNome || '',
+        dataEnvio: dataLancamento || '',
         nomeBoitel: destinoNome || '',
         ...initialData,
       });
