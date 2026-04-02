@@ -211,7 +211,19 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
 
 
 
-  const handleSave = () => { onSave(data); onClose(); };
+  const handleSave = () => {
+    // Attach snapshot results to data before passing to parent
+    const dataWithSnapshot: BoitelData = {
+      ...data,
+      _faturamentoBruto: calc.faturamentoBruto,
+      _faturamentoLiquido: calc.faturamentoLiquido,
+      _receitaProdutor: calc.receitaProdutor,
+      _custoTotal: calc.custosOperacionais,
+      _lucroTotal: calc.lucroTotal,
+    };
+    onSave(dataWithSnapshot);
+    onClose();
+  };
   const isPositive = calc.lucroTotal > 0;
 
   return (
