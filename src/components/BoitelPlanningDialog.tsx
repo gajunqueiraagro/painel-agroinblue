@@ -236,12 +236,13 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
   }, [data]);
 
   // Parcelas logic
-  const gerarParcelas = useCallback((numParcelas: number, baseDate: string, valorTotal: number): Parcela[] => {
+  const gerarParcelas = useCallback((numParcelas: number, valorTotal: number): Parcela[] => {
+    const base = dataAbateISO || data.dataEnvio || '';
     const p: Parcela[] = [];
     const vp = valorTotal / numParcelas;
     for (let i = 0; i < numParcelas; i++) {
       try {
-        const d = addDays(parseISO(baseDate || data.dataEnvio), 30 * (i + 1));
+        const d = addDays(parseISO(base), 30 * (i + 1));
         p.push({ data: format(d, 'yyyy-MM-dd'), valor: Math.round(vp * 100) / 100 });
       } catch {
         p.push({ data: '', valor: Math.round(vp * 100) / 100 });
@@ -252,7 +253,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
       p[p.length - 1].valor = Math.round((valorTotal - rest) * 100) / 100;
     }
     return p;
-  }, [data.dataEnvio]);
+  }, [dataAbateISO, data.dataEnvio]);
 
   const handleFormaRecebChange = (forma: 'avista' | 'prazo') => {
     set('formaReceb', forma);
