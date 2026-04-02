@@ -1469,29 +1469,22 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           {isVenda && (
             <div>
               <Label className="font-bold text-[11px]">Tipo de Venda</Label>
-              <div className="flex gap-1 mt-0.5">
-                {[
-                  { value: 'desmama', label: 'Desmama' },
-                  { value: 'gado_adulto', label: 'Gado Adulto' },
-                  { value: 'boitel', label: 'Boitel' },
-                ].map(opt => (
-                  <Button
-                    key={opt.value}
-                    type="button"
-                    variant={tipoPeso === opt.value ? 'default' : 'outline'}
-                    size="sm"
-                    className="flex-1 h-7 text-[11px] font-semibold"
-                    onClick={() => {
-                      setTipoPeso(opt.value);
-                      if (opt.value === 'desmama' || opt.value === 'gado_adulto') {
-                        setVendaDetalhes(prev => prev ? { ...prev, tipoVenda: opt.value as 'desmama' | 'gado_adulto' } : prev);
-                      }
-                    }}
-                  >
-                    {opt.label}
-                  </Button>
-                ))}
-              </div>
+              <Select
+                value={tipoPeso}
+                onValueChange={(v) => {
+                  setTipoPeso(v);
+                  if (v === 'desmama' || v === 'gado_adulto') {
+                    setVendaDetalhes(prev => prev ? { ...prev, tipoVenda: v as 'desmama' | 'gado_adulto' } : prev);
+                  }
+                }}
+              >
+                <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="desmama" className="text-[12px]">Desmama</SelectItem>
+                  <SelectItem value="gado_adulto" className="text-[12px]">Gado Adulto</SelectItem>
+                  <SelectItem value="boitel" className="text-[12px]">Boitel</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           )}
           {/* For non-abate, non-compra, non-venda types: keep original destino field */}
