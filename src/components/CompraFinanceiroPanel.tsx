@@ -516,7 +516,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       <Separator />
 
       {/* === BLOCO RECOLHÍVEL: Despesas Extras === */}
-      <CollapsibleBlock title="Despesas Extras" open={despesasOpen} onOpenChange={setDespesasOpen}>
+      <CollapsibleBlock title="Despesas Extras" open={despesasOpen} onOpenChange={setDespesasOpen} summary={calc.totalDespesas > 0 ? formatMoeda(calc.totalDespesas) : undefined}>
         <div className="grid grid-cols-2 gap-2">
           <div>
             <Label className="text-[10px]">Frete (R$)</Label>
