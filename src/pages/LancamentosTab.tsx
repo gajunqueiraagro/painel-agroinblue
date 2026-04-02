@@ -176,6 +176,22 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [dataAbate, setDataAbate] = useState('');
   const [tipoVenda, setTipoVenda] = useState('');
 
+  // Abate fornecedor (frigorífico) state
+  const [abateFornecedorId, setAbateFornecedorId] = useState('');
+  const [abateFornecedores, setAbateFornecedores] = useState<{ id: string; nome: string }[]>([]);
+  const [novoFornecedorAbateOpen, setNovoFornecedorAbateOpen] = useState(false);
+
+  useEffect(() => {
+    if (!clienteAtual) return;
+    supabase
+      .from('financeiro_fornecedores')
+      .select('id, nome')
+      .eq('cliente_id', clienteAtual.id)
+      .eq('ativo', true)
+      .order('nome')
+      .then(({ data }) => { if (data) setAbateFornecedores(data); });
+  }, [clienteAtual]);
+
   const [formaPagamento, setFormaPagamento] = useState<'avista' | 'parcelado'>('avista');
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
   const [qtdParcelas, setQtdParcelas] = useState('1');
