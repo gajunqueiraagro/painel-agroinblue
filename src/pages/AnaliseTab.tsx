@@ -9,7 +9,7 @@ import { TabId } from '@/components/BottomNav';
 import { parseISO, format } from 'date-fns';
 import { calcSaldoMensalArray, calcSaldoPorCategoriaLegado } from '@/lib/calculos';
 import { MESES_NOMES } from '@/lib/calculos/labels';
-
+import { formatPercent, formatCabecas } from '@/lib/calculos/formatters';
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
@@ -150,13 +150,13 @@ export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange, isGlobal 
                 <Cell key={i} fill={COLORS[i % COLORS.length]} />
               ))}
             </Pie>
-            <Tooltip content={<StandardTooltip formatter={(v) => typeof v === 'number' ? `${v} cab. (${totalRebanho > 0 ? ((v / totalRebanho) * 100).toFixed(1) : 0}%)` : '—'} />} />
+            <Tooltip content={<StandardTooltip formatter={(v) => typeof v === 'number' ? `${formatCabecas(v)} (${totalRebanho > 0 ? formatPercent((v / totalRebanho) * 100) : '0,0%'})` : '—'} />} />
             <Legend
               verticalAlign="bottom"
               formatter={(value: string) => {
                 const item = porCategoria.find(c => c.name === value);
-                const pct = item && totalRebanho > 0 ? ((item.value / totalRebanho) * 100).toFixed(0) : 0;
-                return `${value} ${pct}%`;
+                const pct = item && totalRebanho > 0 ? formatPercent((item.value / totalRebanho) * 100) : '0,0%';
+                return `${value} ${pct}`;
               }}
               wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
             />

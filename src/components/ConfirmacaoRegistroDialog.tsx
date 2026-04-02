@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { CATEGORIAS } from '@/types/cattle';
-import { formatMoeda } from '@/lib/calculos/formatters';
+import { formatMoeda, formatArroba } from '@/lib/calculos/formatters';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CheckCircle, ArrowLeft } from 'lucide-react';
@@ -157,7 +157,7 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
             {financeiros.totalArrobas && financeiros.totalArrobas > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Total Arrobas</span>
-                <strong>{financeiros.totalArrobas.toFixed(2)} @</strong>
+                <strong>{formatArroba(financeiros.totalArrobas)}</strong>
               </div>
             )}
             {financeiros.precoBase && financeiros.precoBase > 0 && (
