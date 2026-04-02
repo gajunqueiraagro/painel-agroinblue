@@ -1038,7 +1038,7 @@ export function LancamentoV2Dialog({
                         {Math.abs(parcelasTotal - Math.abs(valorNum)) >= 0.01 && (
                           <div className="px-3 py-1 bg-destructive/10 text-destructive text-[10px] flex items-center gap-1">
                             <AlertCircle className="h-3 w-3" />
-                            A soma das parcelas difere do valor total (R$ {toBRL(Math.abs(valorNum))})
+                            A soma das parcelas difere do valor total ({formatMoeda(Math.abs(valorNum))})
                           </div>
                         )}
                       </div>
