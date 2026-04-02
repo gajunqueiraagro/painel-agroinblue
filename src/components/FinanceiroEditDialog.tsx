@@ -372,7 +372,7 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave, onDele
           {isAbate && (
             <div>
               <Label className="text-xs">Tipo de Peso Negociado</Label>
-              <Select value={tipoPeso} onValueChange={(v: 'vivo' | 'morto') => setTipoPeso(v)}>
+              <Select value={tipoPeso} onValueChange={(v: string) => setTipoPeso(v)}>
                 <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>
