@@ -6,7 +6,7 @@ import { parseISO, format } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
-import { formatMoeda, fmtValor } from '@/lib/calculos/formatters';
+import { formatMoeda, fmtValor, formatKg, formatArroba, formatPercent, formatCabecas } from '@/lib/calculos/formatters';
 
 import { getStatus } from '@/lib/statusOperacional';
 import { useState } from 'react';
