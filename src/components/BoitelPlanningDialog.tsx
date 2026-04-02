@@ -384,66 +384,78 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <TrendingUp className="h-4 w-4" /> Resultado
               </h4>
 
-              {/* DRE */}
-              <ResultGroup label="DRE Boitel">
+              {/* ── RECEITA ── */}
+              <ResultGroup label="Receita">
                 <ResultRow label="Faturamento Bruto Abate" value={formatMoeda(calc.faturamentoBruto)} bold />
                 <ResultRow label="(-) Custos com Abate" value={formatMoeda(calc.custosAbate)} className="text-destructive" />
                 <div className="border-t border-dashed my-0.5" />
                 <ResultRow label="= Faturamento Líquido" value={formatMoeda(calc.faturamentoLiquido)} bold accent />
                 {data.modalidadeCusto === 'parceria' && calc.parceiroParte > 0 && (
                   <>
-                    <ResultRow label={`(-) Parceiro (${data.percentualParceria}%)`} value={formatMoeda(calc.parceiroParte)} className="text-destructive" />
+                    <ResultRow label={`(-) Parceiro (${data.percentualParceria}% = ${fmtArr(calc.parceiroArrobas)})`} value={formatMoeda(calc.parceiroParte)} className="text-destructive" />
                     <ResultRow label="= Receita Produtor" value={formatMoeda(calc.receitaProdutor)} bold accent />
                   </>
                 )}
-                <div className="border-t border-dashed my-0.5" />
-                <ResultRow label="(-) Custo com Diárias" value={formatMoeda(calc.custoDiariaTotal)} className="text-destructive" />
-                <ResultRow label="(-) Custos Sanitários" value={formatMoeda(calc.custosSanitarios)} className="text-destructive" />
-                <ResultRow label="(-) Outros Custos" value={formatMoeda(calc.outrosCustosTotal)} className="text-destructive" />
-                <ResultRow label="(-) Custos com Frete" value={formatMoeda(calc.custosFreteTotal)} className="text-destructive" />
               </ResultGroup>
 
               <Separator />
 
-              {/* Lucro principal */}
-              <div className={`rounded-md border-2 px-3 py-3 text-center ${isPositive ? 'bg-green-50 border-green-300 dark:bg-green-950/30 dark:border-green-700' : 'bg-destructive/5 border-destructive/20'}`}>
-                <span className="text-[9px] text-muted-foreground block uppercase font-bold">= Lucro Líquido Total</span>
-                <strong className={`text-[20px] ${isPositive ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>
-                  {formatMoeda(calc.lucroTotal)}
-                </strong>
-              </div>
+              {/* ── OPERACIONAL ── */}
+              <ResultGroup label="Operacional">
+                <ResultRow label="(-) Custo com Diárias" value={formatMoeda(calc.custoDiariaTotal)} className="text-destructive" />
+                <ResultRow label="(-) Custos Sanitários" value={formatMoeda(calc.custosSanitarios)} className="text-destructive" />
+                <ResultRow label="(-) Outros Custos" value={formatMoeda(calc.outrosCustosTotal)} className="text-destructive" />
+                <ResultRow label="(-) Custos com Frete" value={formatMoeda(calc.custosFreteTotal)} className="text-destructive" />
+                <div className="border-t border-dashed my-0.5" />
+                <ResultRow label="Total Operacional" value={formatMoeda(calc.custosOperacionais)} className="text-destructive" bold />
+                <ResultRow label="Custo/@ produzida" value={formatMoeda(calc.custoPorArrobaProduzida)} className="text-destructive" />
+                <ResultRow label="Custo/@ vendida" value={formatMoeda(calc.custoPorArrobaVendida)} className="text-destructive" />
+                <ResultRow label="Custo/cab" value={formatMoeda(calc.custoPorCab)} className="text-destructive" />
+              </ResultGroup>
 
-              {calc.custoOportTotal > 0 && (
-                <div className="bg-muted/50 rounded border px-2 py-1.5 text-[10px]">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Custo oportunidade</span>
-                    <span className="text-destructive font-medium">{formatMoeda(calc.custoOportTotal)}</span>
-                  </div>
-                  <div className="flex justify-between mt-0.5">
-                    <span className="text-muted-foreground">Lucro c/ oportunidade</span>
-                    <span className={`font-bold ${calc.lucroComOportunidade > 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>
-                      {formatMoeda(calc.lucroComOportunidade)}
-                    </span>
-                  </div>
+              <Separator />
+
+              {/* ── RESULTADO ── */}
+              <ResultGroup label="Resultado">
+                <div className={`rounded-md border-2 px-3 py-3 text-center ${isPositive ? 'bg-green-50 border-green-300 dark:bg-green-950/30 dark:border-green-700' : 'bg-destructive/5 border-destructive/20'}`}>
+                  <span className="text-[9px] text-muted-foreground block uppercase font-bold">= Lucro Líquido Total</span>
+                  <strong className={`text-[20px] ${isPositive ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>
+                    {formatMoeda(calc.lucroTotal)}
+                  </strong>
                 </div>
-              )}
 
-              <div className="grid grid-cols-3 gap-2">
-                <ResultCard label="Lucro/cab" value={formatMoeda(calc.lucroPorCab)} positive={isPositive} />
-                <ResultCard label="Lucro/@" value={formatMoeda(calc.lucroPorArroba)} positive={isPositive} />
-                <ResultCard label="Lucro/kg vivo" value={formatMoeda(calc.lucroPorKg)} positive={isPositive} />
-              </div>
+                {calc.custoOportTotal > 0 && (
+                  <div className="bg-muted/50 rounded border px-2 py-1.5 text-[10px]">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Custo oportunidade</span>
+                      <span className="text-destructive font-medium">{formatMoeda(calc.custoOportTotal)}</span>
+                    </div>
+                    <div className="flex justify-between mt-0.5">
+                      <span className="text-muted-foreground">Lucro c/ oportunidade</span>
+                      <span className={`font-bold ${calc.lucroComOportunidade > 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>
+                        {formatMoeda(calc.lucroComOportunidade)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2">
+                  <ResultCard label="Lucro/cab" value={formatMoeda(calc.lucroPorCab)} positive={isPositive} />
+                  <ResultCard label="Lucro/kg vivo" value={formatMoeda(calc.lucroPorKg)} positive={isPositive} />
+                  <ResultCard label="Lucro/@ produzida" value={formatMoeda(calc.lucroPorArrobaProduzida)} positive={isPositive} />
+                  <ResultCard label="Lucro/@ vendida" value={formatMoeda(calc.lucroPorArrobaVendida)} positive={isPositive} />
+                </div>
+              </ResultGroup>
 
               <Separator />
 
               {/* Indicadores */}
               <ResultGroup label="Indicadores">
                 <ResultRow label="GMD" value={fmtGmd(data.gmd)} />
-                <ResultRow label="GMC" value={fmtGmd(calc.gmc)} />
+                <ResultRow label="GMC (kg carcaça/dia)" value={fmtGmd(calc.gmc)} />
+                <ResultRow label="GMC (@/dia)" value={calc.gmcArrobaDia > 0 ? calc.gmcArrobaDia.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) + ' @/dia' : '-'} />
                 <ResultRow label="@ produzidas" value={fmtArr(calc.arrobasProduzidas)} />
                 <ResultRow label="@ total saída" value={fmtArr(calc.arrobasTotalSaida)} />
-                <ResultRow label="Custo/cab" value={formatMoeda(calc.custoPorCab)} />
-                <ResultRow label="Custo/@" value={formatMoeda(calc.custoPorArroba)} />
               </ResultGroup>
 
               {/* Actions */}
