@@ -40,20 +40,16 @@ interface Props {
   onRequestRegister?: () => void;
   registerLabel?: string;
   submitting?: boolean;
-  // Tipo de venda (desmama/gado_adulto/boitel)
   tipoPeso: string;
   onTipoPesoChange: (v: string) => void;
-  // Tipo de preço (por_kg/por_cab/por_total) — for normal venda only
   vendaTipoPreco: string;
   onVendaTipoPrecoChange: (v: string) => void;
   vendaPrecoInput: string;
   onVendaPrecoInputChange: (v: string) => void;
-  // Values from parent calc
   valorBruto: number;
   totalBonus: number;
   totalDescontos: number;
   valorLiquido: number;
-  // Discount fields (managed by parent for calc)
   funruralPct: string;
   onFunruralPctChange: (v: string) => void;
   descontoQualidade: string;
@@ -62,11 +58,16 @@ interface Props {
   onOutrosDescontosChange: (v: string) => void;
   descFunruralTotal: number;
   descQualidadeTotal: number;
-  // Frete/Comissão (managed by parent for calc)
   frete: string;
   onFreteChange: (v: string) => void;
   comissao: string;
   onComissaoChange: (v: string) => void;
+  // Funrural R$ manual input
+  funruralReais: string;
+  onFunruralReaisChange: (v: string) => void;
+  // Calculation values for resumo
+  comissaoVal: number;
+  freteVal: number;
 }
 
 export interface VendaFinanceiroPanelRef {
@@ -88,6 +89,8 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   outrosDescontos, onOutrosDescontosChange,
   descFunruralTotal, descQualidadeTotal,
   frete, onFreteChange, comissao, onComissaoChange,
+  funruralReais, onFunruralReaisChange,
+  comissaoVal, freteVal,
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
@@ -105,7 +108,6 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   const [existingCount, setExistingCount] = useState(0);
   const [existingLoaded, setExistingLoaded] = useState(false);
 
-  // Fornecedor state
   const [fornecedorId, setFornecedorId] = useState<string>('');
   const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
   const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
@@ -159,7 +161,6 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
     }
   };
 
-  // Regenerate parcelas when valorLiquido changes while in prazo mode
   useEffect(() => {
     if (formaReceb === 'prazo') {
       const n = Number(qtdParcelas);
@@ -227,7 +228,6 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
     if (tipoPeso === 'boitel' && boitelData) {
       setGerando(true);
       try {
-        // 1. Salvar operação de boitel (snapshot)
         const boitelOp = {
           id: boitelData._boitelId,
           cliente_id: clienteAtual.id,
@@ -263,20 +263,16 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         const boitelId = await salvarBoitelOperacao(boitelOp);
         if (!boitelId) { setGerando(false); return false; }
 
-        // 2. Vincular boitel_id ao lançamento de rebanho
         await vincularBoitelAoLancamento(targetLancamentoId, boitelId);
-
-        // Update local boitelData with ID for future edits
         setBoitelData(prev => prev ? { ...prev, _boitelId: boitelId } : prev);
 
-        // 3. Gerar financeiro com regras de boitel (apenas caixa real)
         const isUpdate = mode === 'update' || existingCount > 0;
         const ok = await gerarFinanceiroBoitel(
           { ...boitelOp, id: boitelId },
           targetLancamentoId,
           clienteAtual.id,
           fazendaAtual.id,
-          data, // data de recebimento real (caixa)
+          data,
           {
             fornecedorId: fornecedorId || undefined,
             notaFiscal: notaFiscal || undefined,
@@ -302,7 +298,6 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
     setGerando(true);
     try {
-      // Cancel existing in update mode
       if (mode === 'update') {
         const { data: old } = await supabase
           .from('financeiro_lancamentos_v2')
@@ -340,7 +335,6 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       const anoMes = data.slice(0, 7);
       const inserts: any[] = [];
 
-      // Determine subcentro for receita based on gender
       const FEMEAS = ['mamotes_f', 'desmama_f', 'novilhas', 'vacas'];
       const isFemea = FEMEAS.includes(categoria);
       const subcentroCandidates = isFemea
@@ -407,7 +401,6 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         });
       }
 
-      // Generate deduction for discounts
       if (totalDescontos > 0) {
         const subcentroDeducao = 'PEC/NOTAS COM ABATES E VENDAS EM PÉ';
         const { data: planoDeducao } = await supabase
@@ -466,15 +459,34 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   const isBoitel = tipoPeso === 'boitel';
   const isNormalVenda = !isBoitel;
 
+  // Summaries for collapsed headers
+  const tipoVendaLabel = tipoPeso === 'desmama' ? 'Desmama' : tipoPeso === 'gado_adulto' ? 'Gado Adulto' : 'Boitel';
+  const compradorLabel = fornecedorId ? fornecedores.find(f => f.id === fornecedorId)?.nome || '' : '';
+  const tipoPrecoLabel = vendaTipoPreco === 'por_kg' ? 'Por kg' : vendaTipoPreco === 'por_cab' ? 'Por cabeça' : 'Por total';
+  const despesasComTotal = freteVal + comissaoVal + (Number(outrosDescontos) || 0);
+  const deducoesTotal = descFunruralTotal;
+  const recebLabel = formaReceb === 'avista' ? 'À vista' : `A prazo (${parcelas.length}x)`;
+
+  // Funrural mode: if user typed R$ manually, disable %; if typed %, disable R$
+  const funruralPctFilled = !!funruralPct && Number(funruralPct) > 0;
+  const funruralReaisFilled = !!funruralReais && Number(funruralReais) > 0;
+
+  const summaryBadge = (text: string) => (
+    <span className="text-[9px] italic text-muted-foreground ml-1 truncate max-w-[120px]">{text}</span>
+  );
+
   return (
     <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
       <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros — Venda</h3>
       <Separator />
 
-      {/* 1. TIPO DE VENDA — always visible */}
-      <Collapsible defaultOpen>
+      {/* 1. TIPO DE VENDA */}
+      <Collapsible>
         <CollapsibleTrigger className="flex items-center justify-between w-full group">
-          <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Tipo de Venda</h4>
+          <div className="flex items-center">
+            <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Tipo de Venda</h4>
+            {summaryBadge(tipoVendaLabel)}
+          </div>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
         </CollapsibleTrigger>
         <CollapsibleContent className="pt-1">
@@ -518,7 +530,10 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       {/* Comprador */}
       <Collapsible>
         <CollapsibleTrigger className="flex items-center justify-between w-full group">
-          <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Comprador</h4>
+          <div className="flex items-center">
+            <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Comprador</h4>
+            {compradorLabel && summaryBadge(compradorLabel)}
+          </div>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-1.5 pt-1">
@@ -541,10 +556,13 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       {/* ── NORMAL VENDA BLOCKS (Desmama / Gado Adulto) ── */}
       {isNormalVenda && (
         <>
-          {/* 2. TIPO DE PREÇO */}
-          <Collapsible defaultOpen>
+          {/* TIPO DE PREÇO + PREÇO BASE — unified block */}
+          <Collapsible>
             <CollapsibleTrigger className="flex items-center justify-between w-full group">
-              <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Tipo de Preço</h4>
+              <div className="flex items-center">
+                <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Tipo de Preço</h4>
+                {summaryBadge(`${tipoPrecoLabel}${valorBruto > 0 ? ` · ${formatMoeda(valorBruto)}` : ''}`)}
+              </div>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-1 space-y-1.5">
@@ -553,22 +571,10 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
                   <button key={tp} type="button"
                     onClick={() => onVendaTipoPrecoChange(tp)}
                     className={`h-8 rounded text-[11px] font-bold border-2 transition-all ${vendaTipoPreco === tp ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
-                    {tp === 'por_kg' ? 'Por kg' : tp === 'por_cab' ? 'Por cabeça' : 'Por total'}
+                    {tp === 'por_kg' ? 'Por kg' : tp === 'por_cab' ? 'R$/cabeça' : 'Por total'}
                   </button>
                 ))}
               </div>
-            </CollapsibleContent>
-          </Collapsible>
-
-          <Separator />
-
-          {/* 3. PREÇO BASE */}
-          <Collapsible defaultOpen>
-            <CollapsibleTrigger className="flex items-center justify-between w-full group">
-              <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Preço Base</h4>
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="pt-1 space-y-1.5">
               <div>
                 <Label className="text-[11px]">
                   {vendaTipoPreco === 'por_kg' ? 'R$/kg' : vendaTipoPreco === 'por_cab' ? 'R$/cabeça' : 'Valor total (R$)'}
@@ -597,10 +603,13 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
           <Separator />
 
-          {/* 4. DESPESAS COMERCIAIS — Frete + Comissão, igual Compra */}
+          {/* DESPESAS COMERCIAIS */}
           <Collapsible>
             <CollapsibleTrigger className="flex items-center justify-between w-full group">
-              <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Despesas Comerciais</h4>
+              <div className="flex items-center">
+                <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Despesas Comerciais</h4>
+                {despesasComTotal > 0 && summaryBadge(formatMoeda(despesasComTotal))}
+              </div>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1.5 pt-1">
@@ -615,7 +624,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
                 </div>
               </div>
               <div>
-                <Label className="text-[11px]">Outros custos extras (R$)</Label>
+                <Label className="text-[10px]">Outros custos extras (R$)</Label>
                 <Input type="number" value={outrosDescontos} onChange={e => onOutrosDescontosChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
               </div>
             </CollapsibleContent>
@@ -623,23 +632,49 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
           <Separator />
 
-          {/* 5. DEDUÇÕES / ENCARGOS — Funrural separado */}
+          {/* DEDUÇÕES / ENCARGOS — Funrural with mutual exclusion */}
           <Collapsible>
             <CollapsibleTrigger className="flex items-center justify-between w-full group">
-              <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Deduções / Encargos</h4>
+              <div className="flex items-center">
+                <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Deduções / Encargos</h4>
+                {deducoesTotal > 0 && summaryBadge(formatMoeda(deducoesTotal))}
+              </div>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1.5 pt-1">
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-[10px]">Funrural (%)</Label>
-                  <Input type="number" value={funruralPct} onChange={e => onFunruralPctChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[11px]" />
+                  <Input
+                    type="number"
+                    value={funruralPct}
+                    onChange={e => {
+                      onFunruralPctChange(e.target.value);
+                      if (e.target.value && Number(e.target.value) > 0) onFunruralReaisChange('');
+                    }}
+                    placeholder="0,00"
+                    step="0.01"
+                    className="h-7 text-[11px]"
+                    disabled={funruralReaisFilled}
+                  />
                 </div>
                 <div>
                   <Label className="text-[10px]">Funrural (R$)</Label>
-                  <Input type="number" value={descFunruralTotal.toFixed(2)} readOnly disabled className="h-7 text-[11px] bg-muted/40" />
+                  <Input
+                    type="number"
+                    value={funruralReaisFilled ? funruralReais : (descFunruralTotal > 0 ? descFunruralTotal.toFixed(2) : '')}
+                    onChange={e => {
+                      onFunruralReaisChange(e.target.value);
+                      if (e.target.value && Number(e.target.value) > 0) onFunruralPctChange('');
+                    }}
+                    placeholder="0,00"
+                    className={`h-7 text-[11px] ${funruralPctFilled ? 'bg-muted/40' : ''}`}
+                    disabled={funruralPctFilled}
+                    readOnly={funruralPctFilled}
+                  />
                 </div>
               </div>
+              <p className="text-[9px] text-muted-foreground">Informe em % ou R$ — o outro será calculado automaticamente.</p>
             </CollapsibleContent>
           </Collapsible>
 
@@ -649,7 +684,10 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           {valorBruto > 0 && (
             <div className="bg-muted/30 rounded-md p-2 space-y-0.5 text-[10px]">
               <div className="flex justify-between"><span className="text-muted-foreground">Valor bruto</span><span className="font-semibold">{formatMoeda(valorBruto)}</span></div>
-              {totalDescontos > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Despesas extras</span><span className="font-semibold text-destructive">-{formatMoeda(totalDescontos)}</span></div>}
+              {freteVal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Frete</span><span className="font-semibold text-destructive">-{formatMoeda(freteVal)}</span></div>}
+              {comissaoVal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Comissão</span><span className="font-semibold text-destructive">-{formatMoeda(comissaoVal)}</span></div>}
+              {(Number(outrosDescontos) || 0) > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Outros custos</span><span className="font-semibold text-destructive">-{formatMoeda(Number(outrosDescontos) || 0)}</span></div>}
+              {descFunruralTotal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Funrural</span><span className="font-semibold text-destructive">-{formatMoeda(descFunruralTotal)}</span></div>}
               <Separator className="my-1" />
               <div className="flex justify-between font-bold text-[11px]"><span>Valor líquido</span><span className="text-primary">{formatMoeda(valorLiquido)}</span></div>
             </div>
@@ -708,9 +746,12 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       <Separator />
 
       {/* Informações de Recebimento */}
-      <Collapsible defaultOpen>
+      <Collapsible>
         <CollapsibleTrigger className="flex items-center justify-between w-full group">
-          <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Informações de Recebimento</h4>
+          <div className="flex items-center">
+            <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Informações de Recebimento</h4>
+            {summaryBadge(recebLabel)}
+          </div>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-2 pt-2">

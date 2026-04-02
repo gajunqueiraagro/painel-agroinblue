@@ -172,6 +172,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [vendaPrecoInput, setVendaPrecoInput] = useState('');
   const [rendCarcaca, setRendCarcaca] = useState('');
   const [funruralPct, setFunruralPct] = useState('');
+  const [funruralReais, setFunruralReais] = useState('');
 
   const [dataVenda, setDataVenda] = useState('');
   const [dataEmbarque, setDataEmbarque] = useState('');
@@ -186,6 +187,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // Compra fornecedor state
   const [compraFornecedorId, setCompraFornecedorId] = useState('');
   const [novoFornecedorCompraOpen, setNovoFornecedorCompraOpen] = useState(false);
+
+  // Venda destino fornecedor state
+  const [vendaDestinoFornecedorId, setVendaDestinoFornecedorId] = useState('');
+  const [novoFornecedorVendaOpen, setNovoFornecedorVendaOpen] = useState(false);
 
   const [formaPagamento, setFormaPagamento] = useState<'avista' | 'parcelado'>('avista');
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
@@ -240,7 +245,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const bonusListaTraceTotal = isAbate ? (Number(bonusListaTrace) || 0) * totalArrobas : 0;
     // Venda em Pé: descontos use R$ values directly; Abate: R$/@ × totalArrobas
     const descQualidadeTotal = isAbate ? (Number(descontoQualidade) || 0) * totalArrobas : (Number(descontoQualidade) || 0);
-    const descFunruralTotal = (isAbate || isVenda) ? valorBruto * (Number(funruralPct) || 0) / 100 : 0;
+    // Funrural: if manual R$ is filled, use it directly; otherwise calc from %
+    const funruralReaisVal = Number(funruralReais) || 0;
+    const descFunruralTotal = (isAbate || isVenda)
+      ? (funruralReaisVal > 0 ? funruralReaisVal : valorBruto * (Number(funruralPct) || 0) / 100)
+      : 0;
     const descOutrosTotal = (isAbate || isVenda) ? (Number(outrosDescontos) || 0) : 0;
     const totalBonus = isAbate
       ? bonusPrecoceTotal + bonusQualidadeTotal + bonusListaTraceTotal
@@ -261,7 +270,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       carcacaCalc, bonusPrecoceTotal, bonusQualidadeTotal, bonusListaTraceTotal,
       descQualidadeTotal, descFunruralTotal, descOutrosTotal,
     };
-  }, [quantidade, pesoKg, pesoCarcacaKg, rendCarcaca, precoArroba, precoKg, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, funruralPct, outrosDescontos, bonus, descontos, comissaoPct, frete, outrasDespesas, isAbate, isVenda, usaPrecoArroba, usaPrecoKg, vendaTipoPreco, vendaPrecoInput]);
+  }, [quantidade, pesoKg, pesoCarcacaKg, rendCarcaca, precoArroba, precoKg, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, funruralPct, funruralReais, outrosDescontos, bonus, descontos, comissaoPct, frete, outrasDespesas, isAbate, isVenda, usaPrecoArroba, usaPrecoKg, vendaTipoPreco, vendaPrecoInput]);
 
   const gerarParcelas = useCallback((numParcelas: number, baseDate: string, valorTotal: number) => {
     const p: Parcela[] = [];
@@ -328,9 +337,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setDataVenda(''); setDataEmbarque(''); setDataAbate(''); setTipoVenda('');
     setAbateFornecedorId('');
     setCompraFornecedorId('');
+    setVendaDestinoFornecedorId('');
     setFormaPagamento('avista'); setParcelas([]); setQtdParcelas('1');
     setMotivoMorte(''); setMotivoMorteCustom('');
-    setRendCarcaca(''); setFunruralPct('');
+    setRendCarcaca(''); setFunruralPct(''); setFunruralReais('');
   };
 
   const resetAllFields = (newTipo?: string) => {
@@ -1107,6 +1117,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onFreteChange={setFrete}
           comissao={comissaoPct}
           onComissaoChange={setComissaoPct}
+          funruralReais={funruralReais}
+          onFunruralReaisChange={setFunruralReais}
+          comissaoVal={calc.comissaoVal}
+          freteVal={calc.freteVal}
           onRequestRegister={handleRequestRegister}
           registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
           submitting={submitting}
@@ -1534,8 +1548,41 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               </div>
             </div>
           )}
-          {/* For non-abate types: keep original destino field */}
-          {!isAbate && campos.destino?.show && (
+          {/* For venda: use SearchableSelect for Destino (comprador) */}
+          {isVenda && campos.destino?.show && (
+            <div>
+              <Label className="font-bold text-[11px]">Destino (Comprador)</Label>
+              <div className="flex items-center gap-1 mt-0.5">
+                <div className="flex-1">
+                  <SearchableSelect
+                    value={vendaDestinoFornecedorId || '__all__'}
+                    onValueChange={(v) => {
+                      const id = v === '__all__' ? '' : v;
+                      setVendaDestinoFornecedorId(id);
+                      const nome = abateFornecedores.find(f => f.id === id)?.nome || '';
+                      setFazendaDestino(nome);
+                    }}
+                    options={abateFornecedores.map(f => ({ value: f.id, label: f.nome }))}
+                    placeholder="Selecione o comprador"
+                    allLabel="Nenhum selecionado"
+                    allValue="__all__"
+                    className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => setNovoFornecedorVendaOpen(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+          {/* For non-abate, non-compra, non-venda types: keep original destino field */}
+          {!isAbate && !isCompra && !isVenda && campos.destino?.show && (
             <div>
               <Label className="font-bold text-[11px]">{campos.destino.label}</Label>
               {campos.destino.auto ? (
@@ -1754,6 +1801,28 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             toast.success(`Fornecedor "${rec.nome}" criado e selecionado`);
           }
           setNovoFornecedorCompraOpen(false);
+        }}
+      />
+
+      {/* Novo Fornecedor dialog for venda destino */}
+      <NovoFornecedorDialog
+        open={novoFornecedorVendaOpen}
+        onClose={() => setNovoFornecedorVendaOpen(false)}
+        onSave={async (nome, cpfCnpj) => {
+          if (!clienteAtual || !fazendaAtual) return;
+          const { data: rec, error } = await supabase
+            .from('financeiro_fornecedores')
+            .insert({ cliente_id: clienteAtual.id, fazenda_id: fazendaAtual.id, nome, cpf_cnpj: cpfCnpj || null })
+            .select('id, nome')
+            .single();
+          if (error) { toast.error('Erro ao salvar fornecedor'); return; }
+          if (rec) {
+            setAbateFornecedores(prev => [...prev, rec].sort((a, b) => a.nome.localeCompare(b.nome)));
+            setVendaDestinoFornecedorId(rec.id);
+            setFazendaDestino(rec.nome);
+            toast.success(`Fornecedor "${rec.nome}" criado e selecionado`);
+          }
+          setNovoFornecedorVendaOpen(false);
         }}
       />
     </div>
