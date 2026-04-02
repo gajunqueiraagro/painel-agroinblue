@@ -42,7 +42,7 @@ export interface AbateFinanceiroPanelRef {
 
 export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(function AbateFinanceiroPanel({
   quantidade, categoria, data, valorLiquido, totalDescontos = 0, frigorifico,
-  notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated,
+  fornecedorId, notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated,
   statusOperacional = 'conciliado',
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
