@@ -70,15 +70,17 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     setFinLoading(true);
     supabase
       .from('financeiro_lancamentos_v2')
-      .select('id, descricao, valor, data_pagamento, cancelado, origem_tipo')
+      .select('id, descricao, valor, data_pagamento, cancelado, origem_tipo, favorecido_id')
       .eq('movimentacao_rebanho_id', lancamento.id)
       .eq('cancelado', false)
       .order('data_pagamento', { ascending: true })
       .then(({ data }) => {
         setFinRecords((data as FinResumo[]) || []);
         setFinLoading(false);
+        const favId = (data as any[])?.[0]?.favorecido_id;
+        if (favId && !detalheFornecedorId) setDetalheFornecedorId(favId);
       });
-  }, [isCompra, lancamento.id]);
+  }, [isCompra, lancamento.id, detalheFornecedorId]);
 
   useEffect(() => {
     if (open) loadFinRecords();
