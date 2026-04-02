@@ -188,6 +188,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [compraFornecedorId, setCompraFornecedorId] = useState('');
   const [novoFornecedorCompraOpen, setNovoFornecedorCompraOpen] = useState(false);
 
+  // Venda destino fornecedor state
+  const [vendaDestinoFornecedorId, setVendaDestinoFornecedorId] = useState('');
+  const [novoFornecedorVendaOpen, setNovoFornecedorVendaOpen] = useState(false);
+
   const [formaPagamento, setFormaPagamento] = useState<'avista' | 'parcelado'>('avista');
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
   const [qtdParcelas, setQtdParcelas] = useState('1');
