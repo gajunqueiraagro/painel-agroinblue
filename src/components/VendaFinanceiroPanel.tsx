@@ -40,9 +40,14 @@ interface Props {
   onRequestRegister?: () => void;
   registerLabel?: string;
   submitting?: boolean;
-  // Tipo de venda field (managed by parent for persistence)
+  // Tipo de venda (desmama/gado_adulto/boitel)
   tipoPeso: string;
   onTipoPesoChange: (v: string) => void;
+  // Tipo de preço (por_kg/por_cab/por_total) — for normal venda only
+  vendaTipoPreco: string;
+  onVendaTipoPrecoChange: (v: string) => void;
+  vendaPrecoInput: string;
+  onVendaPrecoInputChange: (v: string) => void;
   // Values from parent calc
   valorBruto: number;
   totalBonus: number;
@@ -57,6 +62,11 @@ interface Props {
   onOutrosDescontosChange: (v: string) => void;
   descFunruralTotal: number;
   descQualidadeTotal: number;
+  // Frete/Comissão (managed by parent for calc)
+  frete: string;
+  onFreteChange: (v: string) => void;
+  comissao: string;
+  onComissaoChange: (v: string) => void;
 }
 
 export interface VendaFinanceiroPanelRef {
