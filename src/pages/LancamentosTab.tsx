@@ -1548,8 +1548,41 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               </div>
             </div>
           )}
-          {/* For non-abate types: keep original destino field */}
-          {!isAbate && campos.destino?.show && (
+          {/* For venda: use SearchableSelect for Destino (comprador) */}
+          {isVenda && campos.destino?.show && (
+            <div>
+              <Label className="font-bold text-[11px]">Destino (Comprador)</Label>
+              <div className="flex items-center gap-1 mt-0.5">
+                <div className="flex-1">
+                  <SearchableSelect
+                    value={vendaDestinoFornecedorId || '__all__'}
+                    onValueChange={(v) => {
+                      const id = v === '__all__' ? '' : v;
+                      setVendaDestinoFornecedorId(id);
+                      const nome = abateFornecedores.find(f => f.id === id)?.nome || '';
+                      setFazendaDestino(nome);
+                    }}
+                    options={abateFornecedores.map(f => ({ value: f.id, label: f.nome }))}
+                    placeholder="Selecione o comprador"
+                    allLabel="Nenhum selecionado"
+                    allValue="__all__"
+                    className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => setNovoFornecedorVendaOpen(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+          {/* For non-abate, non-compra, non-venda types: keep original destino field */}
+          {!isAbate && !isCompra && !isVenda && campos.destino?.show && (
             <div>
               <Label className="font-bold text-[11px]">{campos.destino.label}</Label>
               {campos.destino.auto ? (
