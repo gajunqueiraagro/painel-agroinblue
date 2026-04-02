@@ -26,6 +26,7 @@ interface Props {
   valorLiquido: number;
   totalDescontos?: number;
   frigorifico: string;
+  fornecedorId?: string;
   notaFiscal: string;
   onNotaFiscalChange: (v: string) => void;
   lancamentoId?: string;

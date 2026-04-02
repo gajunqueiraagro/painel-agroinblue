@@ -615,7 +615,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const result: any = { tipoOperacao: label };
     
     if (isAbate) {
-      result.fornecedorOuFrigorifico = fazendaDestino;
+      const forn = abateFornecedores.find(f => f.id === abateFornecedorId);
+      result.fornecedorOuFrigorifico = forn?.nome || '';
       result.comercializacao = tipoVenda;
       result.tipoAbate = tipoPeso;
       result.rendCarcaca = Number(rendCarcaca) || 0;
