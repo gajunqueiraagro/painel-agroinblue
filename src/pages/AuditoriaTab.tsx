@@ -306,7 +306,7 @@ export function AuditoriaTab() {
             <AlertTriangle className="h-8 w-8 mx-auto text-muted-foreground/50 mb-2" />
             <p className="text-sm text-muted-foreground">Nenhum registro encontrado</p>
             <p className="text-xs text-muted-foreground/70 mt-1">
-              Os eventos serão registrados automaticamente a partir de agora.
+              As ações nas tabelas auditadas (lançamentos zootécnicos, financeiro V2 e chuvas) já estão sendo registradas automaticamente.
             </p>
           </div>
         ) : (
