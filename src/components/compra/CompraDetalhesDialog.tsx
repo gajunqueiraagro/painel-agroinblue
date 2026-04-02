@@ -293,11 +293,11 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
                 <div key={i} className="grid grid-cols-2 gap-2 bg-muted/30 rounded p-2">
                   <div>
                     <Label className="text-[10px]">Parcela {i + 1}</Label>
-                    <Input type="date" value={p.data} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], data: e.target.value }; setParcelas(np); }} className="h-8 text-[11px]" />
+                    <Input type="date" value={p.data} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], data: e.target.value }; setParcelas(np); markDirty(); }} className="h-8 text-[11px]" />
                   </div>
                   <div>
                     <Label className="text-[10px]">R$</Label>
-                    <Input type="number" value={String(p.valor)} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], valor: Number(e.target.value) || 0 }; setParcelas(np); }} className="h-8 text-[11px]" />
+                    <Input type="number" value={String(p.valor)} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], valor: Number(e.target.value) || 0 }; setParcelas(np); markDirty(); }} className="h-8 text-[11px]" />
                   </div>
                 </div>
               ))}
