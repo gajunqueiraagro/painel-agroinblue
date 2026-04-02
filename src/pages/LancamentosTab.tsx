@@ -1637,6 +1637,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 fazendaOrigem={fazendaOrigem}
                 notaFiscal={notaFiscal}
                 onNotaFiscalChange={setNotaFiscal}
+                fornecedorId={compraFornecedorId}
                 lancamentoId={lastSavedLancamentoId || undefined}
                 onRequestRegister={handleRequestRegister}
                 registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Compra'}
