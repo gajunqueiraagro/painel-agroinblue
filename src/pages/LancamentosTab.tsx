@@ -591,10 +591,19 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         const returnedId = await onAdicionar(lancamentoDados as Omit<Lancamento, 'id'>);
 
         if (isCompra && returnedId) {
-          if (compraFinanceiroRef.current && compraFinanceiroRef.current.getValorBase() > 0) {
-            await compraFinanceiroRef.current.generateFinanceiro(returnedId);
+          // Feed compraDetalhes into CompraFinanceiroPanel ref and generate
+          if (compraFinanceiroRef.current && compraDetalhes) {
+            const totalKg = (Number(quantidade) || 0) * (Number(pesoKg) || 0);
+            let valorBase = 0;
+            if (compraDetalhes.tipoPreco === 'por_kg') valorBase = totalKg * (Number(compraDetalhes.precoKg) || 0);
+            else if (compraDetalhes.tipoPreco === 'por_cab') valorBase = (Number(quantidade) || 0) * (Number(compraDetalhes.precoCab) || 0);
+            else valorBase = Number(compraDetalhes.valorTotal) || 0;
+            if (valorBase > 0) {
+              await compraFinanceiroRef.current.generateFinanceiro(returnedId);
+            }
           }
           compraFinanceiroRef.current?.resetForm();
+          setCompraDetalhes(null);
           setLastSavedLancamentoId(null);
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
