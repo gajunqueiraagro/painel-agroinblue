@@ -57,7 +57,7 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave, onDele
   const [acrescimos, setAcrescimos] = useState('');
   const [deducoes, setDeducoes] = useState('');
   const [notaFiscal, setNotaFiscal] = useState('');
-  const [tipoPeso, setTipoPeso] = useState<'vivo' | 'morto'>('vivo');
+  const [tipoPeso, setTipoPeso] = useState<string>('vivo');
 
   useEffect(() => {
     if (lancamento) {
