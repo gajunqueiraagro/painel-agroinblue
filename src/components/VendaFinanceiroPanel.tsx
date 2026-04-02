@@ -451,26 +451,36 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
     }
   };
 
+  const isBoitel = tipoPeso === 'boitel';
+  const isNormalVenda = !isBoitel;
+
   return (
     <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
       <h3 className="text-[11px] font-bold uppercase text-muted-foreground tracking-wide">Detalhes Financeiros — Venda</h3>
       <Separator />
 
-      {/* Tipo de Venda */}
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] text-muted-foreground min-w-[90px]">Tipo de Venda</span>
-        <Select value={tipoPeso} onValueChange={(v: any) => onTipoPesoChange(v)}>
-          <SelectTrigger className="h-7 text-[11px] flex-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="desmama" className="text-[11px]">Desmama</SelectItem>
-            <SelectItem value="gado_adulto" className="text-[11px]">Gado Adulto</SelectItem>
-            <SelectItem value="boitel" className="text-[11px]">Boitel</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      {/* Tipo de Venda / Tipo de Preço */}
+      <Collapsible defaultOpen>
+        <CollapsibleTrigger className="flex items-center justify-between w-full group">
+          <h4 className="text-[10px] font-bold text-muted-foreground uppercase">
+            {isNormalVenda ? 'Tipo de Preço' : 'Tipo de Venda'}
+          </h4>
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-1">
+          <Select value={tipoPeso} onValueChange={(v: any) => onTipoPesoChange(v)}>
+            <SelectTrigger className="h-7 text-[11px] w-full"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="desmama" className="text-[11px]">Desmama</SelectItem>
+              <SelectItem value="gado_adulto" className="text-[11px]">Gado Adulto</SelectItem>
+              <SelectItem value="boitel" className="text-[11px]">Boitel</SelectItem>
+            </SelectContent>
+          </Select>
+        </CollapsibleContent>
+      </Collapsible>
 
       {/* Boitel button */}
-      {tipoPeso === 'boitel' && (
+      {isBoitel && (
         <>
           <Button
             type="button"
@@ -518,36 +528,75 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
       <Separator />
 
-      {/* Descontos */}
+      {/* PREÇO BASE — only for normal venda */}
+      {isNormalVenda && valorBruto > 0 && (
+        <>
+          <Collapsible defaultOpen>
+            <CollapsibleTrigger className="flex items-center justify-between w-full group">
+              <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Preço Base</h4>
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-1">
+              <div className="bg-muted/30 rounded-md p-2 space-y-0.5 text-[10px]">
+                {quantidade > 0 && pesoKg > 0 && (
+                  <>
+                    <div className="flex justify-between"><span className="text-muted-foreground">R$/kg</span><span className="font-semibold">{formatMoeda(valorBruto / pesoKg)}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">R$/cab</span><span className="font-semibold">{formatMoeda(valorBruto / quantidade)}</span></div>
+                  </>
+                )}
+                <div className="flex justify-between"><span className="text-muted-foreground">Total base</span><span className="font-semibold">{formatMoeda(valorBruto)}</span></div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+          <Separator />
+        </>
+      )}
+
+      {/* DESPESAS EXTRAS (normal) / DESCONTOS (boitel keeps original) */}
       <Collapsible>
         <CollapsibleTrigger className="flex items-center justify-between w-full group">
-          <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Descontos</h4>
+          <h4 className="text-[10px] font-bold text-muted-foreground uppercase">
+            {isNormalVenda ? 'Despesas Extras' : 'Descontos'}
+          </h4>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-1.5 pt-1">
           <div>
-            <Label className="text-[11px]">Funrural (%)</Label>
+            <Label className="text-[11px]">{isNormalVenda ? 'Frete / Funrural (%)' : 'Funrural (%)'}</Label>
             <Input type="number" value={funruralPct} onChange={e => onFunruralPctChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[11px]" />
             {descFunruralTotal > 0 && (
               <span className="text-[10px] text-destructive">Funrural: -{formatMoeda(descFunruralTotal)}</span>
             )}
           </div>
           <div>
-            <Label className="text-[11px]">Desconto Qualidade (R$)</Label>
+            <Label className="text-[11px]">{isNormalVenda ? 'Comissão (R$)' : 'Desconto Qualidade (R$)'}</Label>
             <Input type="number" value={descontoQualidade} onChange={e => onDescontoQualidadeChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
             {descQualidadeTotal > 0 && (
-              <span className="text-[10px] text-destructive">Qualidade: -{formatMoeda(descQualidadeTotal)}</span>
+              <span className="text-[10px] text-destructive">{isNormalVenda ? 'Comissão' : 'Qualidade'}: -{formatMoeda(descQualidadeTotal)}</span>
             )}
           </div>
           <div>
-            <Label className="text-[11px]">Outros Descontos (R$)</Label>
+            <Label className="text-[11px]">{isNormalVenda ? 'Outros custos extras (R$)' : 'Outros Descontos (R$)'}</Label>
             <Input type="number" value={outrosDescontos} onChange={e => onOutrosDescontosChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
           </div>
         </CollapsibleContent>
       </Collapsible>
 
       <Separator />
-      {valorBruto > 0 && (
+
+      {/* Resumo financeiro */}
+      {isNormalVenda && valorBruto > 0 && (
+        <div className="bg-muted/30 rounded-md p-2 space-y-0.5 text-[10px]">
+          <div className="flex justify-between"><span className="text-muted-foreground">Valor bruto</span><span className="font-semibold">{formatMoeda(valorBruto)}</span></div>
+          {totalBonus > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Bônus</span><span className="font-semibold text-success">+{formatMoeda(totalBonus)}</span></div>}
+          {totalDescontos > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Despesas extras</span><span className="font-semibold text-destructive">-{formatMoeda(totalDescontos)}</span></div>}
+          <Separator className="my-1" />
+          <div className="flex justify-between font-bold text-[11px]"><span>Valor líquido</span><span className="text-primary">{formatMoeda(valorLiquido)}</span></div>
+        </div>
+      )}
+
+      {/* Boitel keeps original summary */}
+      {isBoitel && valorBruto > 0 && (
         <div className="bg-muted/30 rounded-md p-2 space-y-0.5 text-[10px]">
           <div className="flex justify-between"><span className="text-muted-foreground">Valor bruto</span><span className="font-semibold">{formatMoeda(valorBruto)}</span></div>
           {totalBonus > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Bônus</span><span className="font-semibold text-success">+{formatMoeda(totalBonus)}</span></div>}
@@ -559,7 +608,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
       <Separator />
 
-      {/* Informações de Pagamento */}
+      {/* Informações de Recebimento */}
       <Collapsible defaultOpen>
         <CollapsibleTrigger className="flex items-center justify-between w-full group">
           <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Informações de Recebimento</h4>
