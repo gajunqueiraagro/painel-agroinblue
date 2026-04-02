@@ -423,7 +423,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (!data) { toast.error('Informe a data'); return; }
 
     if (isAbate) {
-      if (!fazendaDestino) { toast.error('Informe o Frigorífico'); return; }
+      if (!abateFornecedorId) { toast.error('Selecione o Frigorífico (Fornecedor) para continuar'); return; }
       if (isConfirmado || isConciliado) {
         if (!tipoVenda) { toast.error('Selecione a Comercialização'); return; }
         if (!tipoPeso) { toast.error('Selecione o Tipo de Abate'); return; }
