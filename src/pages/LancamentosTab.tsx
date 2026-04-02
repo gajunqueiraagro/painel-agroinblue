@@ -200,7 +200,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Auto-suggest fornecedor from fazendaOrigem for compra
   useEffect(() => {
-    if (!isCompra || !fazendaOrigem?.trim() || compraOrigemSugestaoDescartada) {
+    if (tipo !== 'compra' || !fazendaOrigem?.trim() || compraOrigemSugestaoDescartada) {
       setCompraOrigemSugestao(null);
       return;
     }
