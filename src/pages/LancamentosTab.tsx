@@ -1115,6 +1115,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (isVenda) {
       return (
         <VendaFinanceiroPanel
+          key={`venda-${tipo}`}
           ref={vendaFinanceiroRef}
           quantidade={Number(quantidade) || 0}
           pesoKg={Number(pesoKg) || 0}
@@ -1184,6 +1185,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (isConsumo) {
       return (
         <ConsumoFinanceiroPanel
+          key={`consumo-${tipo}`}
           ref={consumoFinanceiroRef}
           quantidade={Number(quantidade) || 0}
           pesoKg={Number(pesoKg) || 0}
@@ -1758,6 +1760,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             {renderForm()}
             {isCompra ? (
               <CompraFinanceiroPanel
+                key={`compra-${tipo}`}
                 ref={compraFinanceiroRef}
                 quantidade={Number(quantidade) || 0}
                 pesoKg={Number(pesoKg) || 0}
