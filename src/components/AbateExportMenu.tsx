@@ -87,13 +87,13 @@ function textoConfirmado(l: Lancamento, fazendaNome?: string): string {
     `Data do Abate: ${fmtDate(l.dataAbate || l.data)}`,
     '',
     `Categoria: ${cat}`,
-    `Quantidade: ${l.quantidade} cabecas`,
+    `Quantidade: ${formatCabecas(l.quantidade)}`,
     '',
-    `Peso Vivo Previsto: ${fmtValor(c.pesoVivo)} kg`,
+    `Peso Vivo Previsto: ${formatKg(c.pesoVivo)}`,
     '',
     `R$/@ Negociado: ${formatMoeda(c.precoBase)}`,
     '',
-    `Arrobas Estimadas: ${fmtValor(c.arrobasTotais)} @`,
+    `Arrobas Estimadas: ${formatArroba(c.arrobasTotais)}`,
     '',
   ];
   if (c.bonusArroba > 0) lines.push(`Bonus Estimado: ${formatMoeda(c.bonusArroba)}/@`);
