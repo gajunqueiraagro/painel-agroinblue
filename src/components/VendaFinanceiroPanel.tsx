@@ -46,6 +46,15 @@ interface Props {
   totalBonus: number;
   totalDescontos: number;
   valorLiquido: number;
+  // Discount fields (managed by parent for calc)
+  funruralPct: string;
+  onFunruralPctChange: (v: string) => void;
+  descontoQualidade: string;
+  onDescontoQualidadeChange: (v: string) => void;
+  outrosDescontos: string;
+  onOutrosDescontosChange: (v: string) => void;
+  descFunruralTotal: number;
+  descQualidadeTotal: number;
 }
 
 export interface VendaFinanceiroPanelRef {
