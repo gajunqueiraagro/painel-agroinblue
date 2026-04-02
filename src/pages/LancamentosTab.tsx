@@ -219,7 +219,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     } else {
       setCompraOrigemSugestao(null);
     }
-  }, [fazendaOrigem, abateFornecedores, compraFornecedorId, compraOrigemSugestaoDescartada, isCompra]);
+  }, [fazendaOrigem, abateFornecedores, compraFornecedorId, compraOrigemSugestaoDescartada, tipo]);
 
   useEffect(() => {
     setCompraOrigemSugestaoDescartada(false);
