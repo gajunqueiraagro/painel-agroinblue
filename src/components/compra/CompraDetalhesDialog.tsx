@@ -313,7 +313,7 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
 
           {/* 5. Nota Fiscal */}
           {sectionTitle(<FileText className="h-4 w-4 text-muted-foreground" />, 'Nota Fiscal')}
-          <Input value={notaFiscal} onChange={e => setNotaFiscal(e.target.value)} placeholder="Nº da nota fiscal" className="h-9 text-[12px]" />
+          <Input value={notaFiscal} onChange={e => { setNotaFiscal(e.target.value); markDirty(); }} placeholder="Nº da nota fiscal" className="h-9 text-[12px]" />
 
           <Separator />
 
