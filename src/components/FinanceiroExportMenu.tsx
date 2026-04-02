@@ -103,10 +103,10 @@ function gerarTextoIndividual(l: Lancamento, fazendaNome?: string): string {
     if (l.notaFiscal) lines.push(`📄 NF: ${l.notaFiscal}`);
     if (l.tipoPeso) lines.push(`📦 Tipo peso: ${l.tipoPeso === 'morto' ? 'Peso Morto' : 'Peso Vivo'}`);
     lines.push(
-      `⚖️ Peso vivo: ${fmtValor(l.pesoMedioKg)} kg`,
-      `🥩 Peso carcaça: ${fmtValor(l.pesoCarcacaKg)} kg`,
-      `📊 Rendimento: ${c.rendimento ? fmtValor(c.rendimento, 1) + '%' : '-'}`,
-      `📐 Peso @: ${fmtValor(c.pesoArroba)} @`,
+      `⚖️ Peso vivo: ${formatKg(l.pesoMedioKg)}`,
+      `🥩 Peso carcaça: ${formatKg(l.pesoCarcacaKg)}`,
+      `📊 Rendimento: ${c.rendimento ? formatPercent(c.rendimento) : '-'}`,
+      `📐 Peso @: ${formatArroba(c.pesoArroba)}`,
       `💲 Preço/@: ${formatMoeda(l.precoArroba)}`,
       ``,
       `💰 *Valor Total: ${formatMoeda(c.valorFinal)}*`,
