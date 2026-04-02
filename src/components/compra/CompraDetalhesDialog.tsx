@@ -169,7 +169,8 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
   );
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) tryClose(); }}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base font-bold flex items-center gap-2">
