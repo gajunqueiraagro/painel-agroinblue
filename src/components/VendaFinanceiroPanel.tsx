@@ -81,11 +81,13 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   statusOp, lancamentoId, mode = 'create', onFinanceiroUpdated,
   onRequestRegister, registerLabel, submitting: externalSubmitting,
   tipoPeso, onTipoPesoChange,
+  vendaTipoPreco, onVendaTipoPrecoChange, vendaPrecoInput, onVendaPrecoInputChange,
   valorBruto, totalBonus, totalDescontos, valorLiquido,
   funruralPct, onFunruralPctChange,
   descontoQualidade, onDescontoQualidadeChange,
   outrosDescontos, onOutrosDescontosChange,
   descFunruralTotal, descQualidadeTotal,
+  frete, onFreteChange, comissao, onComissaoChange,
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
