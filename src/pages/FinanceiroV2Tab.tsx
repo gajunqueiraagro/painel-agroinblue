@@ -556,10 +556,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 <SelectTrigger className={selCls}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
-                  <SelectItem value="previsto" className={itemCls}>Previsto</SelectItem>
+                  <SelectItem value="previsto" className={itemCls}>{CENTRAL_STATUS_LABEL.previsto}</SelectItem>
                   <SelectItem value="agendado" className={itemCls}>Agendado</SelectItem>
-                  <SelectItem value="confirmado" className={itemCls}>Programado</SelectItem>
-                  <SelectItem value="conciliado" className={itemCls}>Realizado</SelectItem>
+                  <SelectItem value="confirmado" className={itemCls}>{CENTRAL_STATUS_LABEL.confirmado}</SelectItem>
+                  <SelectItem value="conciliado" className={itemCls}>{CENTRAL_STATUS_LABEL.conciliado}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
