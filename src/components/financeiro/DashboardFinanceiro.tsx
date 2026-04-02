@@ -923,7 +923,7 @@ export function DashboardFinanceiro({
       )}
 
       <div className="text-[10px] text-muted-foreground bg-muted rounded-md px-2.5 py-1.5">
-        Filtros: Status = Conciliado · Base = Data Pagamento · Entradas = 1-* · Saídas = 2-*
+        Filtros: Status = Realizado · Base = Data Pagamento · Entradas = 1-* · Saídas = 2-*
       </div>
 
       {/* ================================================================= */}
