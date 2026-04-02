@@ -1557,7 +1557,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
       {/* Row 2: Fazenda Origem / Destino + Observação */}
       {(campos.origem.show || campos.destino?.show) ? (
-        <div className={`grid gap-2 ${campos.destino?.show ? 'grid-cols-3' : 'grid-cols-2'}`}>
+        <div className={`grid gap-2 ${campos.origem.show && campos.destino?.show ? 'grid-cols-3' : 'grid-cols-2'}`}>
           {campos.origem.show && (
             <div>
               <Label className="font-bold text-[11px]">{campos.origem.label}</Label>
