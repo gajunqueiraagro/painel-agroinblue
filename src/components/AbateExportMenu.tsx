@@ -187,7 +187,7 @@ async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
     ['Data Embarque', fmtDate(l.dataEmbarque)],
     ['Data do Abate', fmtDate(l.dataAbate || l.data)],
     ['Categoria', cat],
-    ['Quantidade', `${l.quantidade} cab.`],
+    ['Quantidade', formatCabecas(l.quantidade)],
     ['Preço Negociado', `${formatMoeda(c.precoBase)} /@`],
   ];
   autoTable(doc, { ...tStyle, startY: y, head: [['DADOS CONFIRMADOS', '']], body: bloco1 });
@@ -195,11 +195,11 @@ async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
   // BLOCO 2
   const y2 = ((doc as any).lastAutoTable?.finalY ?? y + 56) + 4;
   const bloco2: string[][] = [
-    ['Peso Vivo Estimado', `${fmtValor(c.pesoVivo)} kg`],
-    ['Rend. Carcaça', `${fmtValor(c.rendPct)} %`],
-    ['Peso Carcaça', `${fmtValor(c.pesoCarcaca)} kg`],
-    ['Arrobas por Cabeça', `${fmtValor(c.arrobasCab)} @`],
-    ['Arrobas Totais Estimadas', `${fmtValor(c.arrobasTotais)} @`],
+    ['Peso Vivo Estimado', formatKg(c.pesoVivo)],
+    ['Rend. Carcaça', formatPercent(c.rendPct)],
+    ['Peso Carcaça', formatKg(c.pesoCarcaca)],
+    ['Arrobas por Cabeça', formatArroba(c.arrobasCab)],
+    ['Arrobas Totais Estimadas', formatArroba(c.arrobasTotais)],
   ];
   autoTable(doc, { ...tStyle, startY: y2, head: [['PROJEÇÃO OPERACIONAL (EXPECTATIVA)', '']], body: bloco2 });
 
