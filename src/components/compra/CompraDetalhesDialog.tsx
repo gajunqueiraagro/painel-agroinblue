@@ -205,34 +205,34 @@ export function CompraDetalhesDialog({ open, onClose, onSave, initialData, quant
 
           {/* 2. Preço Base */}
           {sectionTitle(<span className="text-muted-foreground text-sm">R$</span>, 'Preço Base')}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             {tipoPreco === 'por_kg' && (
               <div>
-                <Label className="text-[11px]">R$/kg</Label>
-                <Input type="number" value={precoKg} onChange={e => { setPrecoKg(e.target.value); markDirty(); }} placeholder="0,00" className="h-9 text-[12px]" />
+                <Label className="text-[10px]">R$/kg</Label>
+                <Input type="number" value={precoKg} onChange={e => { setPrecoKg(e.target.value); markDirty(); }} placeholder="0,00" className="h-8 text-[11px] w-40" />
               </div>
             )}
             {tipoPreco === 'por_cab' && (
               <div>
-                <Label className="text-[11px]">R$/cabeça</Label>
-                <Input type="number" value={precoCab} onChange={e => { setPrecoCab(e.target.value); markDirty(); }} placeholder="0,00" className="h-9 text-[12px]" />
+                <Label className="text-[10px]">R$/cabeça</Label>
+                <Input type="number" value={precoCab} onChange={e => { setPrecoCab(e.target.value); markDirty(); }} placeholder="0,00" className="h-8 text-[11px] w-40" />
               </div>
             )}
             {tipoPreco === 'por_total' && (
               <div>
-                <Label className="text-[11px]">Valor total (R$)</Label>
-                <Input type="number" value={valorTotal} onChange={e => { setValorTotal(e.target.value); markDirty(); }} placeholder="0,00" className="h-9 text-[12px]" />
+                <Label className="text-[10px]">Valor total (R$)</Label>
+                <Input type="number" value={valorTotal} onChange={e => { setValorTotal(e.target.value); markDirty(); }} placeholder="0,00" className="h-8 text-[11px] w-40" />
               </div>
             )}
             {calc.valorBase > 0 && (
-              <div className="bg-muted/30 rounded-md p-2.5 space-y-1 text-[11px]">
+              <div className="bg-muted/30 rounded p-2 space-y-0.5 text-[10px]">
                 {tipoPreco !== 'por_kg' && (
                   <div className="flex justify-between"><span className="text-muted-foreground">R$/kg</span><strong>{formatMoeda(calc.rKg)}</strong></div>
                 )}
                 {tipoPreco !== 'por_cab' && (
                   <div className="flex justify-between"><span className="text-muted-foreground">R$/cab.</span><strong>{formatMoeda(calc.rCab)}</strong></div>
                 )}
-                <div className="flex justify-between font-bold text-[12px]">
+                <div className="flex justify-between font-bold text-[11px]">
                   <span>Total base</span>
                   <span className="text-primary">{formatMoeda(calc.valorBase)}</span>
                 </div>
