@@ -1086,6 +1086,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           lancamentoId={lastSavedLancamentoId || undefined}
           tipoPeso={tipoPeso}
           onTipoPesoChange={setTipoPeso}
+          vendaTipoPreco={vendaTipoPreco}
+          onVendaTipoPrecoChange={setVendaTipoPreco}
+          vendaPrecoInput={vendaPrecoInput}
+          onVendaPrecoInputChange={setVendaPrecoInput}
           valorBruto={calc.valorBruto}
           totalBonus={calc.totalBonus}
           totalDescontos={calc.totalDescontos}
@@ -1098,6 +1102,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onOutrosDescontosChange={setOutrosDescontos}
           descFunruralTotal={calc.descFunruralTotal}
           descQualidadeTotal={calc.descQualidadeTotal}
+          frete={frete}
+          onFreteChange={setFrete}
+          comissao={comissaoPct}
+          onComissaoChange={setComissaoPct}
           onRequestRegister={handleRequestRegister}
           registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
           submitting={submitting}
