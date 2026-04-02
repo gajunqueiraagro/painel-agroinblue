@@ -335,7 +335,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setCompraFornecedorId('');
     setFormaPagamento('avista'); setParcelas([]); setQtdParcelas('1');
     setMotivoMorte(''); setMotivoMorteCustom('');
-    setRendCarcaca(''); setFunruralPct('');
+    setRendCarcaca(''); setFunruralPct(''); setFunruralReais('');
   };
 
   const resetAllFields = (newTipo?: string) => {
