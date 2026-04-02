@@ -1428,7 +1428,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // ===== MAIN FORM (center) =====
   const renderForm = () => (
-    <div className={`flex-1 bg-card rounded-md p-3 shadow-sm border space-y-2 self-start ${editingAbateId ? 'ring-2 ring-primary' : ''}`}>
+    <div className={`flex-1 bg-card rounded-md p-3 shadow-sm border space-y-2 self-start overflow-visible ${editingAbateId ? 'ring-2 ring-primary' : ''}`}>
 
       {/* Editing banner */}
       {editingAbateId && (
