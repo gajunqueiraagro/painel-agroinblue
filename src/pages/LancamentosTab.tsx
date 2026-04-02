@@ -1901,6 +1901,25 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   dataAbate={data}
                   statusOp={statusOp}
                 />
+                {/* Hidden panel for financeiro generation */}
+                <div className="hidden">
+                  <AbateFinanceiroPanel
+                    ref={abateFinanceiroRef}
+                    quantidade={Number(quantidade) || 0}
+                    categoria={categoria}
+                    data={data}
+                    valorLiquido={calc.valorLiquido}
+                    totalDescontos={calc.totalDescontos}
+                    frigorifico={abateFornecedores.find(f => f.id === abateFornecedorId)?.nome || ''}
+                    fornecedorId={abateFornecedorId || undefined}
+                    notaFiscal={notaFiscal}
+                    onNotaFiscalChange={setNotaFiscal}
+                    lancamentoId={editingAbateId || lastSavedLancamentoId || undefined}
+                    mode={editingAbateId ? 'update' : 'create'}
+                    onFinanceiroUpdated={() => {}}
+                    statusOperacional={statusOp}
+                  />
+                </div>
               </>
             ) : (
               renderFinancialPanel()
