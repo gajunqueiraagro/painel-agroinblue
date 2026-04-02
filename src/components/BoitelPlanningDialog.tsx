@@ -220,12 +220,12 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
 
     return {
       pesoLiqEntrada, ganhoKg, pesoFinal,
-      arrobasEntrada, arrobasSaida, arrobasProduzidas, arrobasTotalSaida,
+      arrobasEntradaFazenda, arrobasEntrada, arrobasSaida, arrobasProduzidasCab, arrobasProduzidas, arrobasTotalSaida,
       gmc,
       faturamentoBrutoAbate, custosAbate, faturamentoLiquido,
       parceiroParte, parceiroArrobas, receitaProdutor,
       custoDiariaTotal, custosSanitarios, outrosCustosOp,
-      custosFreteTotal, custosOperacionais, resultadoComBoitel,
+      custosFreteTotal, custosOperacionais, resultadoComBoitel, totalOperacional,
       custoOportTotal, custoOportCab, custoOportKg,
       custoPorCab, custoPorArrobaProduzida,
       resultadoLiquido, resultadoLiqCab, resultadoLiqKg,
