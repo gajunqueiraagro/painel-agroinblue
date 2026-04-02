@@ -13,7 +13,7 @@ import { fmtValor } from '@/lib/calculos/formatters';
 import { MESES_OPTIONS } from '@/lib/calculos/labels';
 import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 
-type StatusFiltro = 'todos' | 'realizado' | 'previsto';
+type StatusFiltro = 'todos' | 'realizado' | 'programado' | 'previsto';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -364,6 +364,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           // Status filter using statusOperacional
           const st = l.statusOperacional || 'conciliado';
           if (statusFiltro === 'realizado' && st !== 'conciliado') return false;
+          if (statusFiltro === 'programado' && st !== 'confirmado') return false;
           if (statusFiltro === 'previsto' && st !== 'previsto') return false;
           return true;
         } catch { return false; }
@@ -491,16 +492,16 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
         </Select>
         <div className="flex gap-px bg-muted rounded p-px">
           {([
-            { value: 'realizado', label: 'Realizado' },
-            { value: 'previsto', label: 'Previsto' },
-          ] as { value: StatusFiltro; label: string }[]).map(s => (
+            { value: 'realizado', label: 'Realizado', activeClass: 'bg-green-700 text-white' },
+            { value: 'programado', label: 'Programado', activeClass: 'bg-blue-500 text-white' },
+            { value: 'previsto', label: 'Previsto', activeClass: 'bg-orange-500 text-white' },
+          ] as { value: StatusFiltro; label: string; activeClass: string }[]).map(s => (
             <button
               key={s.value}
               onClick={() => setStatusFiltro(s.value === statusFiltro ? 'todos' : s.value)}
               className={`px-2 py-px rounded text-[9px] font-bold transition-colors ${
                 statusFiltro === s.value
-                  ? s.value === 'realizado' ? 'bg-green-700 text-white'
-                    : 'bg-orange-500 text-white'
+                  ? s.activeClass
                   : 'text-muted-foreground'
               }`}
             >
