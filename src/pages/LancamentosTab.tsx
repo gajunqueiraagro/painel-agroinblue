@@ -1682,6 +1682,93 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   />
                 </div>
               </>
+            ) : isVenda && tipoPeso !== 'boitel' ? (
+              <>
+                <VendaResumoPanel
+                  quantidade={Number(quantidade) || 0}
+                  pesoKg={Number(pesoKg) || 0}
+                  categoria={categoria}
+                  compradorNome={abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || ''}
+                  detalhes={vendaDetalhes}
+                  detalhesPreenchidos={!!vendaDetalhes}
+                  canOpenModal={!!(data && quantidade && Number(quantidade) > 0 && pesoKg && Number(pesoKg) > 0 && categoria && vendaDestinoFornecedorId)}
+                  onOpenModal={() => setVendaDialogOpen(true)}
+                  onRequestRegister={handleRequestRegister}
+                  submitting={submitting}
+                  registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
+                />
+                <VendaDetalhesDialog
+                  open={vendaDialogOpen}
+                  onClose={() => setVendaDialogOpen(false)}
+                  onSave={(det) => {
+                    setVendaDetalhes(det);
+                    setNotaFiscal(det.notaFiscal);
+                    setVendaTipoPreco(det.tipoPreco);
+                    setVendaPrecoInput(det.precoInput);
+                    setTipoPeso(det.tipoVenda);
+                    setFrete(det.frete);
+                    setComissaoPct(det.comissaoPct);
+                    setOutrosDescontos(det.outrosCustos);
+                    setFunruralPct(det.funruralPct);
+                    setFunruralReais(det.funruralReais);
+                    setVendaDialogOpen(false);
+                  }}
+                  initialData={vendaDetalhes || EMPTY_VENDA_DETALHES}
+                  quantidade={Number(quantidade) || 0}
+                  pesoKg={Number(pesoKg) || 0}
+                  categoria={categoria}
+                  dataVenda={data}
+                  compradorNome={abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || ''}
+                />
+                {/* Hidden panel for financeiro generation */}
+                <div className="hidden">
+                  <VendaFinanceiroPanel
+                    key={`venda-hidden-${tipo}`}
+                    ref={vendaFinanceiroRef}
+                    quantidade={Number(quantidade) || 0}
+                    pesoKg={Number(pesoKg) || 0}
+                    categoria={categoria}
+                    data={data}
+                    destino={fazendaDestino}
+                    fornecedorId={vendaDestinoFornecedorId}
+                    onFornecedorIdChange={() => {}}
+                    fornecedores={abateFornecedores}
+                    onCreateFornecedor={async () => {}}
+                    notaFiscal={notaFiscal}
+                    onNotaFiscalChange={setNotaFiscal}
+                    statusOp={statusOp}
+                    lancamentoId={lastSavedLancamentoId || undefined}
+                    tipoPeso={tipoPeso}
+                    onTipoPesoChange={() => {}}
+                    vendaTipoPreco={vendaTipoPreco}
+                    onVendaTipoPrecoChange={() => {}}
+                    vendaPrecoInput={vendaPrecoInput}
+                    onVendaPrecoInputChange={() => {}}
+                    valorBruto={calc.valorBruto}
+                    totalBonus={calc.totalBonus}
+                    totalDescontos={calc.totalDescontos}
+                    valorLiquido={calc.valorLiquido}
+                    funruralPct={funruralPct}
+                    onFunruralPctChange={() => {}}
+                    descontoQualidade={descontoQualidade}
+                    onDescontoQualidadeChange={() => {}}
+                    outrosDescontos={outrosDescontos}
+                    onOutrosDescontosChange={() => {}}
+                    descFunruralTotal={calc.descFunruralTotal}
+                    descQualidadeTotal={calc.descQualidadeTotal}
+                    frete={frete}
+                    onFreteChange={() => {}}
+                    comissao={comissaoPct}
+                    onComissaoChange={() => {}}
+                    funruralReais={funruralReais}
+                    onFunruralReaisChange={() => {}}
+                    comissaoVal={calc.comissaoVal}
+                    freteVal={calc.freteVal}
+                    onRequestRegister={() => {}}
+                    submitting={false}
+                  />
+                </div>
+              </>
             ) : (
               renderFinancialPanel()
             )}
