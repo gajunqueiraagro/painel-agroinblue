@@ -36,10 +36,10 @@ const TIPOS_OPERACAO = [
 ];
 
 const STATUS_OPTIONS = [
-  { value: 'previsto', label: 'Previsto' },
+  { value: 'previsto', label: STATUS_LABEL.previsto },
   { value: 'agendado', label: 'Agendado' },
-  { value: 'confirmado', label: 'Programado' },
-  { value: 'conciliado', label: 'Realizado' },
+  { value: 'confirmado', label: STATUS_LABEL.confirmado },
+  { value: 'conciliado', label: STATUS_LABEL.conciliado },
 ];
 
 function deriveStatus(dataPagamento: string): string {

@@ -48,9 +48,9 @@ interface Props {
 }
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
-  conciliado: { label: 'Realizado', cls: 'bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400' },
-  confirmado: { label: 'Programado', cls: 'bg-blue-100 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400' },
-  previsto: { label: 'Previsto', cls: 'bg-orange-100 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400' },
+  conciliado: { label: STATUS_LABEL.conciliado, cls: 'bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400' },
+  confirmado: { label: STATUS_LABEL.confirmado, cls: 'bg-blue-100 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400' },
+  previsto: { label: STATUS_LABEL.previsto, cls: 'bg-orange-100 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400' },
 };
 
 function fmtDate(d?: string) {
