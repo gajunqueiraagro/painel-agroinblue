@@ -431,8 +431,39 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setFunruralPct('');
     }
 
-    // 7. Open financial panel and set editing mode
-    setFinanceiroOpen(true);
+    // 7. Build abateDetalhes for new modal flow
+    const rendCalc = l.pesoCarcacaKg && l.pesoMedioKg && l.pesoMedioKg > 0
+      ? String(((l.pesoCarcacaKg / l.pesoMedioKg) * 100).toFixed(2)) : '';
+    const funruralPctCalc = (() => {
+      if (l.descontoFunrural && l.descontoFunrural > 0 && totalArrobas > 0 && l.precoArroba) {
+        const vb = totalArrobas * l.precoArroba;
+        return vb > 0 ? String(((l.descontoFunrural / vb) * 100).toFixed(2)) : '';
+      }
+      return '';
+    })();
+
+    setAbateDetalhes({
+      dataVenda: l.dataVenda || '',
+      dataEmbarque: l.dataEmbarque || '',
+      dataAbate: l.dataAbate || l.data || '',
+      tipoVenda: l.tipoVenda || '',
+      tipoPeso: l.tipoPeso || 'vivo',
+      rendCarcaca: rendCalc,
+      precoArroba: l.precoArroba ? String(l.precoArroba) : '',
+      bonusPrecoce: toArroba(l.bonusPrecoce),
+      bonusQualidade: toArroba(l.bonusQualidade),
+      bonusListaTrace: toArroba(l.bonusListaTrace),
+      descontoQualidade: toArroba(l.descontoQualidade),
+      funruralPct: funruralPctCalc,
+      funruralReais: '',
+      outrosDescontos: l.outrosDescontos ? String(l.outrosDescontos) : '',
+      notaFiscal: l.notaFiscal || '',
+      formaReceb: 'avista',
+      qtdParcelas: '1',
+      parcelas: [],
+    });
+
+    // 8. Set editing mode
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
