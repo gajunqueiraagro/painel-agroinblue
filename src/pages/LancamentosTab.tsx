@@ -1443,34 +1443,34 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         <h2 className="text-[15px] font-semibold text-foreground">{editingAbateId ? 'Editar Abate' : currentTipoLabel}</h2>
       </div>
 
-      {/* STATUS — selection + dynamic explanation */}
+      {/* STATUS — inline label + cards + explanation below */}
       <div className="space-y-1">
-        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Status</span>
-        {/* Row 1: selection cards */}
-        <div className="grid grid-cols-3 gap-1.5">
-          {([
-            { value: 'conciliado' as StatusOperacional, label: 'Realizado', dot: 'bg-green-600', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
-            { value: 'confirmado' as StatusOperacional, label: 'Confirmado', dot: 'bg-blue-500', activeBorder: 'border-blue-400', activeBg: 'bg-blue-50 dark:bg-blue-950/30' },
-            { value: 'previsto' as StatusOperacional, label: 'Previsto', dot: 'bg-orange-500', activeBorder: 'border-orange-400', activeBg: 'bg-orange-50 dark:bg-orange-950/30' },
-          ]).map(s => {
-            const selected = statusOp === s.value;
-            return (
-              <button
-                key={s.value}
-                type="button"
-                onClick={() => setStatusOp(s.value)}
-                className={`flex items-center justify-center gap-1.5 h-8 rounded-md border transition-all ${
-                  selected ? `${s.activeBg} ${s.activeBorder}` : 'border-border bg-muted/10 hover:bg-muted/30'
-                }`}
-              >
-                <span className={`w-2 h-2 rounded-full shrink-0 ${selected ? s.dot : 'border border-muted-foreground/40 bg-transparent'}`} />
-                <span className={`text-[11px] font-bold ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>{s.label}</span>
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide shrink-0">Status</span>
+          <div className="grid grid-cols-3 gap-1 flex-1">
+            {([
+              { value: 'conciliado' as StatusOperacional, label: 'Realizado', dot: 'bg-green-600', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
+              { value: 'confirmado' as StatusOperacional, label: 'Confirmado', dot: 'bg-blue-500', activeBorder: 'border-blue-400', activeBg: 'bg-blue-50 dark:bg-blue-950/30' },
+              { value: 'previsto' as StatusOperacional, label: 'Previsto', dot: 'bg-orange-500', activeBorder: 'border-orange-400', activeBg: 'bg-orange-50 dark:bg-orange-950/30' },
+            ]).map(s => {
+              const selected = statusOp === s.value;
+              return (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => setStatusOp(s.value)}
+                  className={`flex items-center justify-center gap-1 h-6 rounded-md border transition-all ${
+                    selected ? `${s.activeBg} ${s.activeBorder}` : 'border-border bg-muted/10 hover:bg-muted/30'
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selected ? s.dot : 'border border-muted-foreground/40 bg-transparent'}`} />
+                  <span className={`text-[10px] font-bold ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>{s.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-        {/* Row 2: dynamic explanation card */}
-        <div className={`rounded-md border px-3 py-1.5 text-[10px] leading-snug ${
+        <div className={`rounded-md border px-2 py-1 text-[9px] leading-snug ${
           statusOp === 'conciliado' ? 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-800 text-green-800 dark:text-green-300'
           : statusOp === 'previsto' ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-800 text-orange-800 dark:text-orange-300'
           : 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-300'
