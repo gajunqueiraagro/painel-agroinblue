@@ -31,6 +31,10 @@ interface Props {
   categoria: string;
   data: string;
   destino: string;
+  fornecedorId: string;
+  onFornecedorIdChange: (id: string) => void;
+  fornecedores: { id: string; nome: string }[];
+  onCreateFornecedor: (nome: string, cpfCnpj?: string) => Promise<void>;
   notaFiscal: string;
   onNotaFiscalChange: (v: string) => void;
   statusOp: StatusOperacional;
@@ -74,11 +78,12 @@ export interface VendaFinanceiroPanelRef {
   generateFinanceiro: (lancamentoId: string) => Promise<boolean>;
   getValidationErrors: () => string[];
   getFornecedorId: () => string;
+  getRecebimentoSnapshot: () => { formaReceb: 'avista' | 'prazo'; parcelas: Parcela[] };
   resetForm: () => void;
 }
 
 export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(function VendaFinanceiroPanel({
-  quantidade, pesoKg, categoria, data, destino, notaFiscal, onNotaFiscalChange,
+  quantidade, pesoKg, categoria, data, destino, fornecedorId, onFornecedorIdChange, fornecedores, onCreateFornecedor, notaFiscal, onNotaFiscalChange,
   statusOp, lancamentoId, mode = 'create', onFinanceiroUpdated,
   onRequestRegister, registerLabel, submitting: externalSubmitting,
   tipoPeso, onTipoPesoChange,
@@ -108,22 +113,9 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   const [existingCount, setExistingCount] = useState(0);
   const [existingLoaded, setExistingLoaded] = useState(false);
 
-  const [fornecedorId, setFornecedorId] = useState<string>('');
-  const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
   const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
   const [boitelOpen, setBoitelOpen] = useState(false);
   const [boitelData, setBoitelData] = useState<BoitelData | null>(null);
-
-  useEffect(() => {
-    if (!clienteAtual) return;
-    supabase
-      .from('financeiro_fornecedores')
-      .select('id, nome')
-      .eq('cliente_id', clienteAtual.id)
-      .eq('ativo', true)
-      .order('nome')
-      .then(({ data }) => { if (data) setFornecedores(data); });
-  }, [clienteAtual]);
 
   useEffect(() => {
     if (!lancamentoId || existingLoaded) return;
@@ -157,7 +149,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
     setQtdParcelas(v);
     const n = Number(v);
     if (n > 0) {
-      setParcelas(gerarParcelas(n, data, valorLiquido));
+      setParcelas(gerarParcelas(n, data, valorBruto));
     }
   };
 
@@ -165,24 +157,13 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
     if (formaReceb === 'prazo') {
       const n = Number(qtdParcelas);
       if (n > 0) {
-        setParcelas(gerarParcelas(n, data, valorLiquido));
+        setParcelas(gerarParcelas(n, data, valorBruto));
       }
     }
-  }, [valorLiquido, formaReceb, qtdParcelas, data, gerarParcelas]);
+  }, [valorBruto, formaReceb, qtdParcelas, data, gerarParcelas]);
 
   const handleNovoFornecedor = async (nome: string, cpfCnpj?: string) => {
-    if (!clienteAtual || !fazendaAtual) return;
-    const { data: rec, error } = await supabase
-      .from('financeiro_fornecedores')
-      .insert({ cliente_id: clienteAtual.id, fazenda_id: fazendaAtual.id, nome, cpf_cnpj: cpfCnpj || null })
-      .select('id, nome')
-      .single();
-    if (error) { toast.error('Erro ao salvar fornecedor'); return; }
-    if (rec) {
-      setFornecedores(prev => [...prev, rec].sort((a, b) => a.nome.localeCompare(b.nome)));
-      setFornecedorId(rec.id);
-      toast.success(`Fornecedor "${rec.nome}" criado e selecionado`);
-    }
+    await onCreateFornecedor(nome, cpfCnpj);
     setNovoFornecedorOpen(false);
   };
 
@@ -191,9 +172,9 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
     if (valorLiquido <= 0 && valorBruto <= 0) errors.push('Valor da venda deve ser maior que zero.');
     if (formaReceb === 'prazo' && parcelas.length > 0) {
       const soma = Math.round(parcelas.reduce((s, p) => s + p.valor, 0) * 100) / 100;
-      const ref = Math.round(valorLiquido * 100) / 100;
+      const ref = Math.round(valorBruto * 100) / 100;
       if (Math.abs(soma - ref) > 0.01) {
-        errors.push(`A soma das parcelas (${formatMoeda(soma)}) deve ser igual ao valor líquido (${formatMoeda(ref)}).`);
+        errors.push(`A soma das parcelas (${formatMoeda(soma)}) deve ser igual ao valor bruto (${formatMoeda(ref)}).`);
       }
       parcelas.forEach((p, i) => {
         if (!p.data) errors.push(`Parcela ${i + 1}: data obrigatória.`);
@@ -204,7 +185,6 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   }, [valorLiquido, valorBruto, formaReceb, parcelas]);
 
   const resetForm = useCallback(() => {
-    setFornecedorId('');
     setFormaReceb('avista');
     setParcelas([]);
     setQtdParcelas('1');
@@ -217,8 +197,9 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
     generateFinanceiro: async (extLancamentoId: string) => handleGerarFinanceiroInternal(extLancamentoId),
     getValidationErrors: () => validationErrors,
     getFornecedorId: () => fornecedorId,
+    getRecebimentoSnapshot: () => ({ formaReceb, parcelas }),
     resetForm,
-  }));
+  }), [fornecedorId, formaReceb, parcelas, resetForm, validationErrors]);
 
   const handleGerarFinanceiroInternal = async (targetLancamentoId: string): Promise<boolean> => {
     if (!targetLancamentoId) { toast.error('Salve o lançamento zootécnico primeiro.'); return false; }
@@ -388,11 +369,10 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           });
         });
       } else {
-        const valorReceita = totalDescontos > 0 ? valorLiquido + totalDescontos : valorLiquido;
         inserts.push({
           ...baseRecord,
           ano_mes: anoMes,
-          valor: valorReceita,
+          valor: valorBruto,
           data_competencia: data,
           data_pagamento: data,
           descricao: vendaLabel,
@@ -401,7 +381,15 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         });
       }
 
-      if (totalDescontos > 0) {
+      const saidasSeparadas = [
+        { descricao: 'Frete', origemTipo: 'venda:frete', valor: freteVal },
+        { descricao: 'Comissão', origemTipo: 'venda:comissao', valor: comissaoVal },
+        { descricao: 'Funrural', origemTipo: 'venda:funrural', valor: descFunruralTotal },
+        { descricao: 'Desconto Qualidade', origemTipo: 'venda:desconto_qualidade', valor: descQualidadeTotal },
+        { descricao: 'Outros Custos', origemTipo: 'venda:outros_custos', valor: Number(outrosDescontos) || 0 },
+      ].filter(item => item.valor > 0);
+
+      if (saidasSeparadas.length > 0) {
         const subcentroDeducao = 'PEC/NOTAS COM ABATES E VENDAS EM PÉ';
         const { data: planoDeducao } = await supabase
           .from('financeiro_plano_contas')
@@ -419,25 +407,27 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         }
 
         const clasDed = planoDeducao[0];
-        inserts.push({
-          cliente_id: clienteAtual.id,
-          fazenda_id: fazendaAtual.id,
-          tipo_operacao: '2-Saídas',
-          sinal: -1,
-          status_transacao: statusFin,
-          origem_lancamento: 'movimentacao_rebanho',
-          movimentacao_rebanho_id: targetLancamentoId,
-          macro_custo: clasDed.macro_custo,
-          centro_custo: clasDed.centro_custo,
-          subcentro: clasDed.subcentro,
-          nota_fiscal: notaFiscal || undefined,
-          ano_mes: anoMes,
-          valor: totalDescontos,
-          data_competencia: data,
-          data_pagamento: data,
-          descricao: `Dedução ${vendaLabel}${destino ? ` | ${destino}` : ''}`,
-          historico: destino ? `Comprador: ${destino}` : undefined,
-          origem_tipo: 'venda:deducao',
+        saidasSeparadas.forEach(item => {
+          inserts.push({
+            cliente_id: clienteAtual.id,
+            fazenda_id: fazendaAtual.id,
+            tipo_operacao: '2-Saídas',
+            sinal: -1,
+            status_transacao: statusFin,
+            origem_lancamento: 'movimentacao_rebanho',
+            movimentacao_rebanho_id: targetLancamentoId,
+            macro_custo: clasDed.macro_custo,
+            centro_custo: clasDed.centro_custo,
+            subcentro: clasDed.subcentro,
+            nota_fiscal: notaFiscal || undefined,
+            ano_mes: anoMes,
+            valor: item.valor,
+            data_competencia: data,
+            data_pagamento: data,
+            descricao: `${item.descricao} ${vendaLabel}${destino ? ` | ${destino}` : ''}`,
+            historico: destino ? `Comprador: ${destino}` : undefined,
+            origem_tipo: item.origemTipo,
+          });
         });
       }
 
@@ -456,11 +446,12 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
     }
   };
 
+  const hasTipoVendaSelecionado = ['desmama', 'gado_adulto', 'boitel'].includes(tipoPeso);
   const isBoitel = tipoPeso === 'boitel';
-  const isNormalVenda = !isBoitel;
+  const isNormalVenda = tipoPeso === 'desmama' || tipoPeso === 'gado_adulto';
 
   // Summaries for collapsed headers
-  const tipoVendaLabel = tipoPeso === 'desmama' ? 'Desmama' : tipoPeso === 'gado_adulto' ? 'Gado Adulto' : 'Boitel';
+  const tipoVendaLabel = tipoPeso === 'desmama' ? 'Desmama' : tipoPeso === 'gado_adulto' ? 'Gado Adulto' : tipoPeso === 'boitel' ? 'Boitel' : '';
   const compradorLabel = fornecedorId ? fornecedores.find(f => f.id === fornecedorId)?.nome || '' : '';
   const tipoPrecoLabel = vendaTipoPreco === 'por_kg' ? 'Por kg' : vendaTipoPreco === 'por_cab' ? 'Por cabeça' : 'Por total';
   const despesasComTotal = freteVal + comissaoVal + (Number(outrosDescontos) || 0);
@@ -470,6 +461,12 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   // Funrural mode: if user typed R$ manually, disable %; if typed %, disable R$
   const funruralPctFilled = !!funruralPct && Number(funruralPct) > 0;
   const funruralReaisFilled = !!funruralReais && Number(funruralReais) > 0;
+  const funruralPctCalculado = funruralReaisFilled && valorBruto > 0
+    ? ((Number(funruralReais) / valorBruto) * 100).toFixed(2)
+    : funruralPct;
+  const funruralReaisCalculado = funruralPctFilled
+    ? (descFunruralTotal > 0 ? descFunruralTotal.toFixed(2) : '')
+    : funruralReais;
 
   const summaryBadge = (text: string) => (
     <span className="text-[9px] italic text-muted-foreground ml-1 truncate max-w-[120px]">{text}</span>
@@ -485,12 +482,12 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         <CollapsibleTrigger className="flex items-center justify-between w-full group">
           <div className="flex items-center">
             <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Tipo de Venda</h4>
-            {summaryBadge(tipoVendaLabel)}
+            {tipoVendaLabel && summaryBadge(tipoVendaLabel)}
           </div>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
         </CollapsibleTrigger>
         <CollapsibleContent className="pt-1">
-          <Select value={tipoPeso} onValueChange={(v: any) => onTipoPesoChange(v)}>
+          <Select value={tipoPeso || undefined} onValueChange={(v: any) => onTipoPesoChange(v)}>
             <SelectTrigger className="h-7 text-[11px] w-full"><SelectValue placeholder="Selecione..." /></SelectTrigger>
             <SelectContent>
               <SelectItem value="desmama" className="text-[11px]">Desmama</SelectItem>
@@ -502,7 +499,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       </Collapsible>
 
       {/* Boitel section — unchanged */}
-      {isBoitel && (
+      {hasTipoVendaSelecionado && isBoitel && (
         <>
           <Button
             type="button"
@@ -539,9 +536,11 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         <CollapsibleContent className="space-y-1.5 pt-1">
           <SearchableSelect
             options={fornecedores.map(f => ({ value: f.id, label: f.nome }))}
-            value={fornecedorId}
-            onValueChange={setFornecedorId}
+            value={fornecedorId || '__all__'}
+            onValueChange={v => onFornecedorIdChange(v === '__all__' ? '' : v)}
             placeholder="Selecione o comprador"
+            allLabel="Nenhum selecionado"
+            allValue="__all__"
             className="h-7 text-[11px]"
           />
           <button type="button" onClick={() => setNovoFornecedorOpen(true)}
@@ -647,7 +646,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
                   <Label className="text-[10px]">Funrural (%)</Label>
                   <Input
                     type="number"
-                    value={funruralPct}
+                    value={funruralPctCalculado}
                     onChange={e => {
                       onFunruralPctChange(e.target.value);
                       if (e.target.value && Number(e.target.value) > 0) onFunruralReaisChange('');
@@ -662,7 +661,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
                   <Label className="text-[10px]">Funrural (R$)</Label>
                   <Input
                     type="number"
-                    value={funruralReaisFilled ? funruralReais : (descFunruralTotal > 0 ? descFunruralTotal.toFixed(2) : '')}
+                    value={funruralReaisCalculado}
                     onChange={e => {
                       onFunruralReaisChange(e.target.value);
                       if (e.target.value && Number(e.target.value) > 0) onFunruralPctChange('');
