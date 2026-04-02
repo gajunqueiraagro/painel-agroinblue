@@ -90,16 +90,14 @@ const defaultData: BoitelData = {
 };
 
 function fmtPeso(v: number) {
-  if (!v || isNaN(v)) return '-';
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kg';
+  return formatKg(v);
 }
 function fmtGmd(v: number) {
   if (!v || isNaN(v)) return '-';
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' kg/dia';
 }
 function fmtArr(v: number) {
-  if (!v || isNaN(v)) return '-';
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' @';
+  return formatArroba(v);
 }
 
 export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quantidade, pesoKg, fazendaNome, dataLancamento }: Props) {
