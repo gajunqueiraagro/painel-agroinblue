@@ -1510,9 +1510,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
-              {!compraFornecedorId && (
-                <p className="text-[10px] text-destructive mt-0.5">Selecione o fornecedor para continuar</p>
-              )}
             </div>
           )}
           {/* For non-abate types: keep original destino field */}
