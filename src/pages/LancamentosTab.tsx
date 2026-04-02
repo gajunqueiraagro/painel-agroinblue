@@ -1490,7 +1490,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           {/* For compra: fornecedor select same pattern as abate */}
           {isCompra && (
             <div>
-              <Label className="font-bold text-[11px]">Fornecedor (quem você pagou) *</Label>
+              <Label className="font-bold text-[11px]">Fornecedor *</Label>
               <div className="flex items-center gap-1 mt-0.5">
                 <div className="flex-1">
                   <SearchableSelect
