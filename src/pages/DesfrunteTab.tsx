@@ -257,16 +257,16 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">% Desfrute (cab.)</p>
           <p className="text-xl font-extrabold text-foreground">
-            {desfruteCab !== null ? desfruteCab.toFixed(1) : '0.0'}%
+            {desfruteCab !== null ? formatPercent(desfruteCab) : '0,0%'}
           </p>
-          <p className="text-[10px] text-muted-foreground">{totalCab} / {saldoInicialAno} cab.</p>
+          <p className="text-[10px] text-muted-foreground">{formatCabecas(totalCab)} / {formatCabecas(saldoInicialAno)}</p>
         </div>
         <div className="bg-card rounded-lg p-3 text-center shadow-sm border">
           <p className="text-xs text-muted-foreground font-semibold">% Desfrute (@)</p>
           <p className="text-xl font-extrabold text-foreground">
-            {desfruteArrobas !== null ? desfruteArrobas.toFixed(1) : '0.0'}%
+            {desfruteArrobas !== null ? formatPercent(desfruteArrobas) : '0,0%'}
           </p>
-          <p className="text-[10px] text-muted-foreground">{fmtValor(totalArrobas)} / {fmtValor(arrobasInicioAno)} @</p>
+          <p className="text-[10px] text-muted-foreground">{formatArroba(totalArrobas)} / {formatArroba(arrobasInicioAno)}</p>
         </div>
       </div>
 

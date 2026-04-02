@@ -157,7 +157,7 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
             {financeiros.totalArrobas && financeiros.totalArrobas > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Total Arrobas</span>
-                <strong>{financeiros.totalArrobas.toFixed(2)} @</strong>
+                <strong>{formatArroba(financeiros.totalArrobas)}</strong>
               </div>
             )}
             {financeiros.precoBase && financeiros.precoBase > 0 && (
