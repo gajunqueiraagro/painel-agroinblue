@@ -26,6 +26,8 @@ import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, Ref
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
 import { CompraFinanceiroPanel, CompraFinanceiroPanelRef } from '@/components/CompraFinanceiroPanel';
+import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/components/compra/CompraDetalhesDialog';
+import { CompraResumoPanel } from '@/components/compra/CompraResumoPanel';
 import { AbateExportDialog } from '@/components/AbateExportMenu';
 import { AbateFinanceiroPanel, AbateFinanceiroPanelRef } from '@/components/AbateFinanceiroPanel';
 import { SearchableSelect } from '@/components/ui/searchable-select';
