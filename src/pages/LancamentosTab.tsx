@@ -56,7 +56,7 @@ interface Props {
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
-import { STATUS_OPTIONS, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
+import { STATUS_LABEL, STATUS_OPTIONS, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
 
 const MOTIVOS_MORTE = [
   'Raio', 'Picada de cobra', 'Doença respiratória', 'Tristeza parasitária',
