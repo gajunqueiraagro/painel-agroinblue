@@ -47,6 +47,7 @@ import { FinV2SaldosTab } from './FinV2SaldosTab';
 import { ContratosTab } from './ContratosTab';
 import { ConciliacaoBancariaTab } from './ConciliacaoBancariaTab';
 import { ClienteSelector } from '@/components/ClienteSelector';
+import { AuditoriaTab } from './AuditoriaTab';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { SyncStatus } from '@/components/SyncStatus';
 import { useLancamentos } from '@/hooks/useLancamentos';
@@ -111,6 +112,7 @@ const TITLES: Record<TabId, string> = {
   contratos: 'Contratos / Recorrências',
   conciliacao_bancaria: 'Conciliação Bancária',
   painel_consultor: 'Painel do Consultor',
+  auditoria: 'Central de Auditoria',
 };
 
 const Index = () => {
@@ -281,6 +283,8 @@ const Index = () => {
     analise_economica: () => setActiveTab('lancar_fin_hub'),
     visao_fin_hub: () => setActiveTab('lancar_fin_hub'),
     financeiro: () => setActiveTab('lancar_fin_hub'),
+    // Cadastros sub-screens
+    auditoria: () => setActiveTab('cadastros'),
   };
 
   const clienteNomeHeader = clientes.length > 1 ? (clienteAtual?.nome || '') : '';
@@ -420,7 +424,7 @@ const Index = () => {
       {activeTab === 'analise_entradas' && <AnaliseEntradasTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
       {activeTab === 'analise_saidas' && <AnaliseSaidasTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} />}
       {activeTab === 'desfrute' && <DesfrunteTab lancamentos={isGlobal ? lancamentosVisiveis : lancamentos} saldosIniciais={saldosIniciais} onTabChange={handleTabChange} isGlobal={isGlobal} />}
-      {activeTab === 'cadastros' && <CadastrosTab />}
+      {activeTab === 'cadastros' && <CadastrosTab onTabChange={handleTabChange} />}
       {activeTab === 'chuvas' && <ChuvasTab />}
       {activeTab === 'fechamento' && (
         <FechamentoTab
@@ -519,6 +523,7 @@ const Index = () => {
           }}
         />
       )}
+      {activeTab === 'auditoria' && <AuditoriaTab />}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>

@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Save, FileText, Share2, Pencil, Trash2, MapPin, Tag, Users, Building2 } from 'lucide-react';
+import { Save, FileText, Share2, Pencil, Trash2, MapPin, Tag, Users, Building2, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import logoUrl from '@/assets/logo.png';
@@ -66,7 +66,7 @@ function LegacyLink({ label, tabId }: { label: string; tabId: string }) {
   );
 }
 
-export function CadastrosTab() {
+export function CadastrosTab({ onTabChange }: { onTabChange?: (tab: string) => void }) {
   const { fazendaAtual, isGlobal } = useFazenda();
   const { isAdmin } = useCliente();
   const [data, setData] = useState<CadastroData>(EMPTY);
@@ -452,6 +452,28 @@ export function CadastrosTab() {
           </AccordionTrigger>
           <AccordionContent className="px-0 pb-0">
             <AcessosTab />
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Central de Auditoria */}
+        <AccordionItem value="auditoria" className="border rounded-lg">
+          <AccordionTrigger className="px-4 py-3 text-sm font-bold">
+            <span className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4" /> Central de Auditoria
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="px-4 pb-4">
+            <p className="text-xs text-muted-foreground mb-3">
+              Monitore todas as ações realizadas no sistema: criações, edições, cancelamentos e exclusões.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => onTabChange?.('auditoria')}
+            >
+              <ShieldCheck className="h-4 w-4 mr-1" /> Abrir Central de Auditoria
+            </Button>
           </AccordionContent>
         </AccordionItem>
 
