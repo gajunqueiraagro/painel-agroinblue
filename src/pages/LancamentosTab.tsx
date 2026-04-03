@@ -321,6 +321,23 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     });
   }, [isAbate, abateDetalhes, quantidade, pesoKg]);
 
+  // Transferência Saída — unified calc (single source of truth)
+  const transferenciaCalc = useMemo(() => {
+    if (!isTransferenciaSaida) return null;
+    return buildTransferenciaCalculation({
+      quantidade: Number(quantidade) || 0,
+      pesoKg: Number(pesoKg) || 0,
+      categoria,
+      fazendaOrigem: campos.origem.auto ? (campos.origem as any).value || '' : fazendaOrigem,
+      fazendaDestino,
+      data,
+      statusOperacional: statusOp,
+      observacao,
+      precoReferenciaArroba: transferenciaDetalhes?.precoReferenciaArroba || undefined,
+      precoReferenciaCabeca: transferenciaDetalhes?.precoReferenciaCabeca || undefined,
+    });
+  }, [isTransferenciaSaida, quantidade, pesoKg, categoria, fazendaOrigem, fazendaDestino, data, statusOp, observacao, transferenciaDetalhes, campos]);
+
   const calc = useMemo(() => {
     const qtd = Number(quantidade) || 0;
     const peso = Number(pesoKg) || 0;
