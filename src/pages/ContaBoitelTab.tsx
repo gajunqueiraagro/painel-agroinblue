@@ -47,6 +47,7 @@ interface FinLancamento {
   origem_tipo: string | null;
   status_transacao: string | null;
   cancelado: boolean;
+  grupo_geracao_id: string | null;
 }
 
 interface Props {
@@ -99,7 +100,7 @@ export function ContaBoitelTab({ onBack }: Props) {
   async function loadLancamentos(boitelId: string) {
     const { data } = await supabase
       .from('financeiro_lancamentos_v2')
-      .select('id, data_competencia, data_pagamento, descricao, valor, sinal, tipo_operacao, origem_tipo, status_transacao, cancelado')
+      .select('id, data_competencia, data_pagamento, descricao, valor, sinal, tipo_operacao, origem_tipo, status_transacao, cancelado, grupo_geracao_id')
       .eq('boitel_id', boitelId)
       .eq('cancelado', false)
       .order('data_pagamento', { ascending: true });
@@ -407,6 +408,13 @@ export function ContaBoitelTab({ onBack }: Props) {
                             )}
                             <span className="text-xs font-medium text-foreground truncate">
                               {l.descricao || ORIGEM_LABELS[l.origem_tipo || ''] || 'Lançamento'}
+                            </span>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
+                              l.grupo_geracao_id
+                                ? 'bg-secondary text-secondary-foreground'
+                                : 'bg-accent text-accent-foreground'
+                            }`}>
+                              {l.grupo_geracao_id ? 'Simulador' : 'Manual'}
                             </span>
                           </div>
                           <p className="text-[10px] text-muted-foreground ml-[18px]">
