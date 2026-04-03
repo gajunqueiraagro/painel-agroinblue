@@ -1554,7 +1554,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('conciliado');
           resetFinancialFields();
           toast.success('Consumo registrado com sucesso!');
-        } else {
+        } else if (returnedId) {
           setLastSavedLancamentoId(null);
           setQuantidade(''); setCategoria('');
           setPesoKg(tipo === 'nascimento' ? '30' : '');
@@ -1563,6 +1563,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('conciliado');
           resetFinancialFields();
           toast.success('Lançamento registrado!');
+        } else if (!returnedId) {
+          toast.error('Erro ao salvar lançamento. Verifique os dados e tente novamente.');
         }
       }
     } finally {
