@@ -213,7 +213,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <TB a={!data.possuiAdiantamento} o={() => { set('possuiAdiantamento', false); set('valorAdiantamentoDiarias', 0); set('valorAdiantamentoSanitario', 0); set('valorAdiantamentoOutros', 0); set('valorTotalAntecipado', 0); set('pctAdiantamentoDiarias', 0); set('dataAdiantamento', ''); set('adiantamentoObservacao', ''); }}>Não</TB>
               </div>
               {data.possuiAdiantamento && (
-                <div className="bg-blue-50/60 dark:bg-blue-950/20 rounded border border-blue-200 dark:border-blue-800 p-1 space-y-0.5">
+                <div className="bg-blue-50 dark:bg-blue-950/40 rounded border border-blue-300 dark:border-blue-700 p-1 space-y-0.5">
                   <div className="grid grid-cols-2 gap-1">
                     <F label="Data"><I type="date" value={data.dataAdiantamento} onChange={e => set('dataAdiantamento', e.target.value)} /></F>
                     <F label="% diárias"><IP value={data.pctAdiantamentoDiarias} onChange={v => set('pctAdiantamentoDiarias', v)} step="0.1" /></F>
@@ -223,7 +223,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                     <F label="Sanitário R$"><IM value={data.valorAdiantamentoSanitario} onChange={v => set('valorAdiantamentoSanitario', v)} /></F>
                     <F label="Outros R$"><IM value={data.valorAdiantamentoOutros} onChange={v => set('valorAdiantamentoOutros', v)} /></F>
                   </div>
-                  <div className="flex justify-between text-[8px] bg-blue-100/60 dark:bg-blue-900/30 rounded px-1.5 py-0.5 border border-blue-300 dark:border-blue-700">
+                  <div className="flex justify-between text-[8px] bg-blue-100 dark:bg-blue-900/50 rounded px-1.5 py-0.5 border border-blue-400 dark:border-blue-600">
                     <span className="font-bold text-blue-800 dark:text-blue-300">Total</span>
                     <span className="font-bold text-blue-800 dark:text-blue-300 tabular-nums">R$ {fmtR$(data.valorTotalAntecipado)}</span>
                   </div>
@@ -280,7 +280,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                   <F label="Parcelas"><I type="number" min="1" max="48" value={data.qtdParcelas} onChange={e => handleQtdP(e.target.value)} /></F>
                   <div className="max-h-[120px] overflow-y-auto space-y-0.5">
                     {data.parcelas.map((p, i) => (
-                      <div key={i} className="grid grid-cols-2 gap-1 bg-muted/20 rounded px-1 py-0.5">
+                      <div key={i} className="grid grid-cols-2 gap-1 bg-muted/40 rounded px-1 py-0.5">
                         <div><Label className="text-[7px]">P{i + 1}</Label><I type="date" value={p.data} onChange={e => { const np = [...data.parcelas]; np[i] = { ...np[i], data: e.target.value }; set('parcelas', np); }} /></div>
                         <div><Label className="text-[7px]">R$</Label><IM value={p.valor} onChange={v => { const np = [...data.parcelas]; np[i] = { ...np[i], valor: v }; set('parcelas', np); }} /></div>
                       </div>
@@ -292,7 +292,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
             </div>
 
             {/* COL 4 — RESULTADO + COMPARATIVO */}
-            <div className="bg-muted/20 rounded-lg border p-1.5 space-y-0.5 lg:sticky lg:top-0 h-fit">
+            <div className="bg-muted/40 rounded-lg border border-border p-1.5 space-y-0.5 lg:sticky lg:top-0 h-fit">
               <h3 className="text-[9px] font-black uppercase tracking-wide text-foreground mb-0.5">Resultado</h3>
 
               <CSection title="Indicadores" defaultOpen>
@@ -376,15 +376,15 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
 function HI({ l, v }: { l: string; v: string }) {
   return <div className="flex gap-1.5"><span className="text-slate-400">{l}</span><strong className="tabular-nums text-white">{v}</strong></div>;
 }
-function ST({ children }: { children: React.ReactNode }) { return <h3 className="text-[9px] font-bold uppercase text-slate-700 dark:text-slate-300 tracking-wide border-b border-slate-300 dark:border-slate-600 pb-0.5">{children}</h3>; }
-function F({ label, children }: { label: string; children: React.ReactNode }) { return <div><Label className="text-[7px] leading-none text-muted-foreground">{label}</Label>{children}</div>; }
-function I(props: React.ComponentProps<typeof Input>) { return <Input {...props} className={`h-5 text-[9px] tabular-nums text-right bg-background ${props.className || ''}`} />; }
-function CV({ children }: { children: React.ReactNode }) { return <div className="h-5 flex items-center px-1.5 rounded bg-muted/50 border text-[9px] font-medium tabular-nums">{children}</div>; }
+function ST({ children }: { children: React.ReactNode }) { return <h3 className="text-[9px] font-bold uppercase text-slate-800 dark:text-slate-200 tracking-wide border-b border-slate-400 dark:border-slate-500 pb-0.5">{children}</h3>; }
+function F({ label, children }: { label: string; children: React.ReactNode }) { return <div><Label className="text-[7px] leading-none font-semibold text-foreground/70">{label}</Label>{children}</div>; }
+function I(props: React.ComponentProps<typeof Input>) { return <Input {...props} className={`h-5 text-[9px] tabular-nums text-right bg-background border-border shadow-sm ${props.className || ''}`} />; }
+function CV({ children }: { children: React.ReactNode }) { return <div className="h-5 flex items-center px-1.5 rounded bg-muted/60 border border-border text-[9px] font-semibold tabular-nums text-foreground">{children}</div>; }
 function TB({ a, o, children, full }: { a: boolean; o: () => void; children: React.ReactNode; full?: boolean }) {
   return <button type="button" onClick={o} className={`h-5 px-2 rounded text-[8px] font-bold border transition-all ${full ? 'w-full' : ''} ${a ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}>{children}</button>;
 }
 function RR({ l, v, b, accent, c = '' }: { l: string; v: string; b?: boolean; accent?: boolean; c?: string }) {
-  return <div className="flex justify-between text-[8px] leading-snug"><span className="text-muted-foreground">{l}</span><span className={`tabular-nums ${b ? 'font-bold' : 'font-medium'} ${accent ? 'text-primary' : ''} ${c}`}>{v}</span></div>;
+  return <div className="flex justify-between text-[8px] leading-snug"><span className="text-foreground/60 font-medium">{l}</span><span className={`tabular-nums ${b ? 'font-bold' : 'font-semibold'} ${accent ? 'text-primary' : ''} ${c}`}>{v}</span></div>;
 }
 function DL() { return <div className="border-t border-dashed my-0.5" />; }
 
@@ -393,7 +393,7 @@ function IM({ value, onChange, step }: { value: number; onChange: (v: number) =>
   const [display, setDisplay] = useState(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
   const [focused, setFocused] = useState(false);
   useEffect(() => { if (!focused) setDisplay(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''); }, [value, focused]);
-  return <Input className="h-5 text-[9px] tabular-nums text-right bg-background" value={display}
+  return <Input className="h-5 text-[9px] tabular-nums text-right bg-background border-border shadow-sm" value={display}
     onChange={e => { setDisplay(e.target.value); }}
     onFocus={() => { setFocused(true); setDisplay(value ? String(value) : ''); }}
     onBlur={() => { const clean = display.replace(/\./g, '').replace(',', '.'); const n = parseFloat(clean); onChange(isNaN(n) ? 0 : n); setFocused(false); }}
@@ -405,7 +405,7 @@ function IP({ value, onChange, decimals = 2, step }: { value: number; onChange: 
   const [display, setDisplay] = useState(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + '%' : '');
   const [focused, setFocused] = useState(false);
   useEffect(() => { if (!focused) setDisplay(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + '%' : ''); }, [value, focused, decimals]);
-  return <Input className="h-5 text-[9px] tabular-nums text-right bg-background" value={display}
+  return <Input className="h-5 text-[9px] tabular-nums text-right bg-background border-border shadow-sm" value={display}
     onChange={e => { setDisplay(e.target.value); }}
     onFocus={() => { setFocused(true); setDisplay(value ? String(value) : ''); }}
     onBlur={() => { const clean = display.replace(/%/g, '').replace(/\./g, '').replace(',', '.').trim(); const n = parseFloat(clean); onChange(isNaN(n) ? 0 : n); setFocused(false); }}
