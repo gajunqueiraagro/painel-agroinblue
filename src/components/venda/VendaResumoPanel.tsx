@@ -20,13 +20,14 @@ interface Props {
   registerLabel?: string;
   /** Whether Boitel mode is active (shows different flow) */
   isBoitel?: boolean;
+  onCancelEdit?: () => void;
 }
 
 export function VendaResumoPanel({
   quantidade, pesoKg, categoria, compradorNome,
   detalhes, detalhesPreenchidos, canOpenModal,
   onOpenModal, onRequestRegister, submitting, registerLabel,
-  isBoitel,
+  isBoitel, onCancelEdit,
 }: Props) {
   const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria || '-';
   const totalKg = (quantidade || 0) * (pesoKg || 0);
