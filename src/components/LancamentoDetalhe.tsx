@@ -335,6 +335,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                   <Separator className="my-0.5" />
                   {(() => {
                     const snap = lancamento.detalhesSnapshot as any;
+                    const isBoitelSnap = snap?.type === 'venda_boitel';
                     const vc = snap?._tipo === 'venda' ? snap : snap;
                     return (
                       <>
