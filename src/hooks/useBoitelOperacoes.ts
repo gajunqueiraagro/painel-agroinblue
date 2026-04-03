@@ -133,11 +133,14 @@ export async function gerarFinanceiroBoitel(
   const userId = (await supabase.auth.getUser()).data.user?.id;
   const grupoId = crypto.randomUUID();
 
-  // IDEMPOTENTE: sempre cancela TODOS os lançamentos anteriores deste boitel (sem filtrar cancelado)
+  // IDEMPOTENTE: cancela apenas lançamentos AUTOMÁTICOS (grupo_geracao_id preenchido)
+  // Preserva lançamentos manuais da Conta Boitel
   const { data: old } = await supabase
     .from('financeiro_lancamentos_v2')
     .select('id')
-    .eq('boitel_id', op.id);
+    .eq('boitel_id', op.id)
+    .eq('origem_lancamento', 'boitel')
+    .not('grupo_geracao_id', 'is', null);
   const oldIds = (old || []).map(r => r.id);
   if (oldIds.length > 0) {
     await supabase.from('financeiro_lancamentos_v2')
