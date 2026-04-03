@@ -152,10 +152,15 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
   const qtd = quantidade || 0;
   const peso = pesoKg || 0;
 
+  // Peso carcaça kg state for bidirectional
+  const [pesoCarcacaKg, setPesoCarcacaKg] = useState('');
+
   // Core calculations
   const calc = useMemo(() => {
     const rend = Number(rendCarcaca) || 0;
-    const carcacaCalc = rend > 0 ? peso * rend / 100 : 0;
+    const pcKgManual = Number(pesoCarcacaKg) || 0;
+    const carcacaCalc = pcKgManual > 0 ? pcKgManual : (rend > 0 ? peso * rend / 100 : 0);
+    const rendCalc = pcKgManual > 0 && peso > 0 ? (pcKgManual / peso) * 100 : rend;
     const pesoArrobaCab = carcacaCalc > 0 ? carcacaCalc / 15 : 0;
     const totalArrobas = pesoArrobaCab * qtd;
     const totalKg = peso * qtd;
@@ -203,13 +208,13 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
     const liqKg = totalKg > 0 ? valorLiquido / totalKg : 0;
 
     return {
-      carcacaCalc, pesoArrobaCab, totalArrobas, totalKg, valorBase,
+      carcacaCalc, rendCalc, pesoArrobaCab, totalArrobas, totalKg, valorBase,
       funruralTotal, valorBruto,
       bonusPrecoceTotal, bonusQualidadeTotal, bonusListaTraceTotal, totalBonus,
       descQualidadeTotal, descOutrosTotal, totalDescontos,
       valorLiquido, liqArroba, liqCabeca, liqKg,
     };
-  }, [peso, qtd, rendCarcaca, precoArroba, bonusPrecoce, bonusPrecoceReais, bonusQualidade, bonusQualidadeReais, bonusListaTrace, bonusListaTraceReais, descontoQualidade, descontoQualidadeReais, outrosDescontos, outrosDescontosArroba, funruralPct, funruralReais]);
+  }, [peso, qtd, rendCarcaca, pesoCarcacaKg, precoArroba, bonusPrecoce, bonusPrecoceReais, bonusQualidade, bonusQualidadeReais, bonusListaTrace, bonusListaTraceReais, descontoQualidade, descontoQualidadeReais, outrosDescontos, outrosDescontosArroba, funruralPct, funruralReais]);
 
   // Auto-compute dates
   const dataVendaAuto = dataVenda || format(new Date(), 'yyyy-MM-dd');
