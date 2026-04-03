@@ -1900,28 +1900,32 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
       <Separator />
 
-      {/* Row 1: Data | Qtd | Peso | Categoria */}
-      <div className="grid grid-cols-12 gap-2">
-        <div className="col-span-3">
-          <Label className={`font-bold text-[11px] ${previstoLabelClass}`}>{isAbate ? 'Data do Abate' : 'Data'}</Label>
-          <Input tabIndex={1} type="date" value={data} onChange={e => setData(e.target.value)} className={`mt-0.5 h-8 text-[12px] ${previstoInputClass}`} />
+      {/* Row 1: Data | Qtd | Peso | Categoria | Obs */}
+      <div className="grid grid-cols-[7rem_5.5rem_6rem_9rem_minmax(0,1fr)] gap-2">
+        <div>
+          <Label className={`font-bold text-[11px] ${previstoLabelClass}`}>{isAbate ? 'Data Abate' : 'Data'}</Label>
+          <Input tabIndex={1} type="date" value={data} onChange={e => setData(e.target.value)} className={`mt-0.5 h-7 text-[11px] ${previstoInputClass}`} />
         </div>
-        <div className="col-span-2">
+        <div>
           <Label className={`font-bold text-[11px] ${previstoLabelClass}`}>Qtd. Cab.</Label>
-          <Input tabIndex={2} type="text" inputMode="numeric" value={qtdInput.displayValue} onChange={qtdInput.onChange} onBlur={qtdInput.onBlur} onFocus={qtdInput.onFocus} placeholder="0" className={`mt-0.5 h-8 text-[12px] text-center font-bold ${previstoInputClass}`} />
+          <Input tabIndex={2} type="text" inputMode="numeric" value={qtdInput.displayValue} onChange={qtdInput.onChange} onBlur={qtdInput.onBlur} onFocus={qtdInput.onFocus} placeholder="0" className={`mt-0.5 h-7 text-[11px] text-right font-bold tabular-nums ${previstoInputClass}`} />
         </div>
-        <div className="col-span-3">
+        <div>
           <Label className={`font-bold text-[11px] ${previstoLabelClass}`}>Peso (kg)</Label>
-          <Input tabIndex={3} type="text" inputMode="decimal" value={pesoInput.displayValue} onChange={pesoInput.onChange} onBlur={pesoInput.onBlur} onFocus={pesoInput.onFocus} placeholder="0,00" className={`mt-0.5 h-8 text-[12px] ${previstoInputClass}`} />
+          <Input tabIndex={3} type="text" inputMode="decimal" value={pesoInput.displayValue} onChange={pesoInput.onChange} onBlur={pesoInput.onBlur} onFocus={pesoInput.onFocus} placeholder="0,00" className={`mt-0.5 h-7 text-[11px] text-right tabular-nums ${previstoInputClass}`} />
         </div>
-        <div className="col-span-4">
+        <div>
           <Label className="font-bold text-[11px]">Categoria</Label>
           <Select value={categoria} onValueChange={v => setCategoria(v as Categoria)}>
-            <SelectTrigger tabIndex={4} className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+            <SelectTrigger tabIndex={4} className="mt-0.5 h-7 text-[11px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
             <SelectContent className="max-h-52 overflow-y-auto">
-              {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px] py-1.5">{c.label}</SelectItem>)}
+              {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1.5">{c.label}</SelectItem>)}
             </SelectContent>
           </Select>
+        </div>
+        <div>
+          <Label className="font-bold text-[11px]">Obs.</Label>
+          <Input tabIndex={5} value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Opcional" className="mt-0.5 h-7 text-[11px]" />
         </div>
       </div>
 
