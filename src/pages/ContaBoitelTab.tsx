@@ -47,6 +47,7 @@ interface FinLancamento {
   origem_tipo: string | null;
   status_transacao: string | null;
   cancelado: boolean;
+  grupo_geracao_id: string | null;
 }
 
 interface Props {
