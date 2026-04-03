@@ -282,7 +282,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                     {data.parcelas.map((p, i) => (
                       <div key={i} className="grid grid-cols-2 gap-1 bg-muted/20 rounded px-1 py-0.5">
                         <div><Label className="text-[7px]">P{i + 1}</Label><I type="date" value={p.data} onChange={e => { const np = [...data.parcelas]; np[i] = { ...np[i], data: e.target.value }; set('parcelas', np); }} /></div>
-                        <div><Label className="text-[7px]">R$</Label><I type="number" value={String(p.valor)} onChange={e => { const np = [...data.parcelas]; np[i] = { ...np[i], valor: +e.target.value || 0 }; set('parcelas', np); }} /></div>
+                        <div><Label className="text-[7px]">R$</Label><IM value={p.valor} onChange={v => { const np = [...data.parcelas]; np[i] = { ...np[i], valor: v }; set('parcelas', np); }} /></div>
                       </div>
                     ))}
                   </div>
