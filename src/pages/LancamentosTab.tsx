@@ -1267,7 +1267,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       destinoFinal = motivoMorte === '__custom__' ? motivoMorteCustom : motivoMorte || undefined;
     }
 
-    const valorTotalFinal = calc.valorLiquido > 0 ? calc.valorLiquido : undefined;
+    // For Boitel venda, use lucroTotal from boitel engine as the grid TOTAL
+    const isBoitelVenda = isVenda && tipoPeso === 'boitel';
+    const boitelLucro = boitelDataForResumo?._lucroTotal || 0;
+    const valorTotalFinal = isBoitelVenda
+      ? (boitelLucro > 0 ? boitelLucro : undefined)
+      : (calc.valorLiquido > 0 ? calc.valorLiquido : undefined);
 
     const abateDataVenda = isAbate ? (abateDetalhes?.dataVenda || dataVenda || format(new Date(), 'yyyy-MM-dd')) : (dataVenda || undefined);
     const abateDataEmbarque = isAbate && data ? format(addDays(parseISO(data), -1), 'yyyy-MM-dd') : (dataEmbarque || undefined);
