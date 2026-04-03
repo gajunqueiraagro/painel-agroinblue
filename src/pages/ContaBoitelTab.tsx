@@ -315,10 +315,10 @@ export function ContaBoitelTab({ onBack }: Props) {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-base font-bold text-foreground">
-                    {selected.lote || selected.fazenda_destino_nome}
+                    {selected.lote_codigo || selected.boitel_destino}
                   </h2>
                   <p className="text-[10px] text-muted-foreground">
-                    {selected.quantidade} cab · {selected.dias} dias · Contrato: {selected.numero_contrato || '-'}
+                    {selected.quantidade_cab} cab · {selected.dias} dias · Contrato: {selected.contrato_baia || '-'}
                   </p>
                 </div>
                 <Button variant="ghost" size="sm" className="h-7 text-[11px]" onClick={() => { setSelected(null); setLancamentos([]); }}>
