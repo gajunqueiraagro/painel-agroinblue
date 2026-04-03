@@ -11,6 +11,7 @@ import { CATEGORIAS } from '@/types/cattle';
 import { Calendar, Tag, Award, TrendingDown, CreditCard, FileText, Shield } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 import type { StatusOperacional } from '@/lib/statusOperacional';
+import { getStatusBadge } from '@/lib/statusOperacional';
 
 export interface AbateDetalhes {
   dataVenda: string;
