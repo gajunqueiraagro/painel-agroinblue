@@ -277,6 +277,10 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
             {/* COL 3 — RECEBIMENTO */}
             <div className="space-y-1">
               <ST>Recebimento</ST>
+              <div className="flex justify-between text-[8px] bg-muted/50 rounded px-1.5 py-0.5 border border-border mb-0.5">
+                <span className="font-semibold text-foreground/70">Saldo a receber</span>
+                <span className="font-bold tabular-nums text-primary">R$ {fmtR$(saldoReceber)}</span>
+              </div>
               <div className="grid grid-cols-2 gap-1">
                 <TB a={data.formaReceb === 'avista'} o={() => handleForma('avista')} full>À vista</TB>
                 <TB a={data.formaReceb === 'prazo'} o={() => handleForma('prazo')} full>A prazo</TB>
