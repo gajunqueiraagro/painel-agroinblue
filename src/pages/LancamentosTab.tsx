@@ -867,9 +867,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     // 4. Check for snapshot first (PRIORITY 1)
     const vendaSnap = l.detalhesSnapshot;
     if (vendaSnap && vendaSnap.type === 'venda_boitel') {
-      // Boitel: restore tipoPeso to 'boitel', no vendaDetalhes needed
       setTipoPeso('boitel');
-      // The VendaFinanceiroPanel will load boitelData from the boitel_id linkage
+      // Store snapshot boitelData for rehydration via initialBoitelData prop
+      if (vendaSnap.boitelSnapshot) {
+        setBoitelDataForResumo(vendaSnap.boitelSnapshot as any);
+      }
       console.log('[Venda Edit] Rehydrating Boitel from snapshot', vendaSnap);
     } else if (vendaSnap && vendaSnap.type === 'venda') {
       const tv = vendaSnap.tipoVenda || 'gado_adulto';
