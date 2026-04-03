@@ -388,6 +388,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     consumoFinanceiroRef.current?.resetForm();
   };
 
+  const handleCancelEdit = useCallback(() => {
+    setEditingAbateId(null);
+    setQuantidade(''); setCategoria(''); setPesoKg('');
+    setFazendaOrigem(''); setFazendaDestino('');
+    setData(format(new Date(), 'yyyy-MM-dd'));
+    setObservacao(''); setStatusOp('conciliado');
+    resetFinancialFields();
+  }, []);
+
   // Load abate into form for editing
   const loadAbateForEdit = useCallback((l: Lancamento) => {
     // 1. Set tab & type
@@ -509,17 +518,27 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setStatusOp((l.statusOperacional as StatusOperacional) || 'conciliado');
     setNotaFiscal(l.notaFiscal || '');
 
-    // 3. Tipo de venda (desmama / gado_adulto / boitel)
-    const tv = l.tipoPeso || 'gado_adulto';
-    setTipoPeso(tv);
+    // 3. Tipo de venda from tipoVenda field (desmama / gado_adulto / boitel)
+    const tv = l.tipoVenda || 'gado_adulto';
+    setTipoPeso(tv); // tipoPeso state holds the tipoVenda selector value for venda
 
-    // 4. Try to find the fornecedor by name (fazendaDestino)
+    // 4. Tipo de preço from tipoPeso field (por_kg / por_cab / por_total)
+    // New convention: tipoPeso stores tipoPreco for vendas
+    let tipoPreco: 'por_kg' | 'por_cab' | 'por_total' = 'por_kg';
+    if (l.tipoPeso === 'por_kg' || l.tipoPeso === 'por_cab' || l.tipoPeso === 'por_total') {
+      tipoPreco = l.tipoPeso as 'por_kg' | 'por_cab' | 'por_total';
+    }
+    
+    // 5. Price input from precoArroba field
+    const precoInput = l.precoArroba ? String(l.precoArroba) : '';
+
+    // 6. Try to find the fornecedor by name (fazendaDestino)
     if (l.fazendaDestino) {
       const forn = abateFornecedores.find(f => f.nome === l.fazendaDestino);
       if (forn) setVendaDestinoFornecedorId(forn.id);
     }
 
-    // 5. Query financial records to reconstruct frete, comissão, parcelas
+    // 7. Query financial records to reconstruct frete, comissão, parcelas
     let freteVal = '';
     let comissaoVal = '';
     let formaReceb: 'avista' | 'prazo' = 'avista';
@@ -534,14 +553,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         .order('data_pagamento', { ascending: true });
 
       if (finRecs && finRecs.length > 0) {
-        // Extract frete
         const freteRec = finRecs.find(r => r.origem_tipo === 'venda:frete');
         if (freteRec) freteVal = String(freteRec.valor);
 
-        // Extract comissão — reverse-calc percentage from value
         const comissaoRec = finRecs.find(r => r.origem_tipo === 'venda:comissao');
 
-        // Extract parcelas (receita entries)
         const parcelaRecs = finRecs.filter(r => r.origem_tipo === 'venda:parcela');
         if (parcelaRecs.length > 1) {
           formaReceb = 'prazo';
@@ -551,14 +567,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           }));
         } else if (parcelaRecs.length === 1) {
           const p = parcelaRecs[0];
-          // If payment date differs from competence date, it's a prazo with 1 parcela
           if (p.data_pagamento && p.data_pagamento !== l.data) {
             formaReceb = 'prazo';
             parcelasArr = [{ data: p.data_pagamento, valor: p.valor }];
           }
         }
 
-        // Reverse-calc comissão percentage
         if (comissaoRec) {
           const totalBruto = parcelaRecs.reduce((s, r) => s + r.valor, 0);
           if (totalBruto > 0) {
@@ -570,33 +584,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       console.warn('Erro ao carregar financeiro da venda para edição:', err);
     }
 
-    // 6. Determine tipoPreco from lancamento data
-    // precoArroba field stores the price input value; determine type from context
-    const qtd = l.quantidade || 0;
-    const peso = l.pesoMedioKg || 0;
-    const totalKg = qtd * peso;
-    const storedPreco = l.precoArroba || 0;
-    let tipoPreco: 'por_kg' | 'por_cab' | 'por_total' = 'por_kg';
-    let precoInput = storedPreco ? String(storedPreco) : '';
-
-    // Try to infer tipoPreco from the stored price and valorTotal
-    if (storedPreco > 0 && l.valorTotal && qtd > 0) {
-      const brutoFromKg = totalKg * storedPreco;
-      const brutoFromCab = qtd * storedPreco;
-      // Add back deductions to get original bruto
-      const deductions = (l.descontoFunrural || 0) + (l.outrosDescontos || 0) + (l.descontoQualidade || 0);
-      const estimatedBruto = (l.valorTotal || 0) + deductions + (Number(freteVal) || 0) + (Number(comissaoVal) > 0 ? ((l.valorTotal || 0) + deductions) * Number(comissaoVal) / 100 : 0);
-      
-      if (Math.abs(brutoFromKg - estimatedBruto) < 1) {
-        tipoPreco = 'por_kg';
-      } else if (Math.abs(brutoFromCab - estimatedBruto) < 1) {
-        tipoPreco = 'por_cab';
-      } else if (Math.abs(storedPreco - estimatedBruto) < 1) {
-        tipoPreco = 'por_total';
-      }
-    }
-
-    // 7. Build vendaDetalhes with all data
+    // 8. Build vendaDetalhes with all data
     const vendaDet: VendaDetalhes = {
       tipoVenda: (tv === 'desmama' || tv === 'gado_adulto') ? tv as 'desmama' | 'gado_adulto' : 'gado_adulto',
       tipoPreco,
@@ -612,13 +600,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       parcelas: parcelasArr,
     };
 
-    // Reverse-calc funrural
+    // 9. Reverse-calc funrural
     if (l.descontoFunrural && l.descontoFunrural > 0) {
-      // Check if it looks like a percentage-based deduction
-      const estimatedBruto = totalKg * storedPreco;
+      const qtd = l.quantidade || 0;
+      const peso = l.pesoMedioKg || 0;
+      const totalKgCalc = qtd * peso;
+      const storedPreco = l.precoArroba || 0;
+      
+      // Calculate estimated bruto based on tipoPreco
+      let estimatedBruto = 0;
+      if (tipoPreco === 'por_kg') estimatedBruto = totalKgCalc * storedPreco;
+      else if (tipoPreco === 'por_cab') estimatedBruto = qtd * storedPreco;
+      else if (tipoPreco === 'por_total') estimatedBruto = storedPreco;
+
       if (estimatedBruto > 0) {
         const pct = (l.descontoFunrural / estimatedBruto) * 100;
-        // Common funrural percentages: 1.5%, 2.05%, etc.
         if (pct > 0.5 && pct < 10) {
           vendaDet.funruralPct = String(pct.toFixed(2));
         } else {
@@ -639,7 +635,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setOutrosDescontos(vendaDet.outrosCustos);
     setDescontoQualidade(l.descontoQualidade ? String(l.descontoQualidade) : '');
 
-    // 8. Set editing mode (reuse editingAbateId for all types)
+    // 10. Set editing mode
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
@@ -744,6 +740,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const abTipoVenda = isAbate && abateDetalhes ? abateDetalhes.tipoVenda : tipoVenda;
     const abNotaFiscal = isAbate && abateDetalhes ? abateDetalhes.notaFiscal : notaFiscal;
 
+    // For venda: save precoInput to precoArroba, tipoPreco to tipoPeso, tipoVenda to tipoVenda
+    const vendaPrecoArrobaFinal = isVenda && vendaDetalhes
+      ? (Number(vendaPrecoInput) || undefined)
+      : (isAbate && abateDetalhes ? (Number(abateDetalhes.precoArroba) || undefined) : (numOrUndef(precoArroba) || undefined));
+    const tipoPesoFinal = isVenda ? vendaTipoPreco : abTipoPeso;
+    const tipoVendaFinal = isVenda ? tipoPeso : abTipoVenda; // tipoPeso state holds desmama/gado_adulto/boitel for venda
+
     const lancamentoDados: Partial<Omit<Lancamento, 'id'>> = {
       data, tipo, quantidade: Number(quantidade), categoria: categoria as Categoria,
       fazendaOrigem: origemFinal, fazendaDestino: destinoFinal,
@@ -751,7 +754,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       pesoMedioArrobas: pesoKg ? kgToArrobas(Number(pesoKg)) : undefined,
       observacao: observacao || undefined,
       pesoCarcacaKg: isAbate ? (calc.carcacaCalc > 0 ? calc.carcacaCalc : undefined) : numOrUndef(pesoCarcacaKg),
-      precoArroba: isAbate && abateDetalhes ? (Number(abateDetalhes.precoArroba) || undefined) : (numOrUndef(precoArroba) || undefined),
+      precoArroba: vendaPrecoArrobaFinal,
       bonusPrecoce: isAbate ? (calc.bonusPrecoceTotal > 0 ? calc.bonusPrecoceTotal : undefined) : numOrUndef(bonusPrecoce),
       bonusQualidade: isAbate ? (calc.bonusQualidadeTotal > 0 ? calc.bonusQualidadeTotal : undefined) : numOrUndef(bonusQualidade),
       bonusListaTrace: isAbate ? (calc.bonusListaTraceTotal > 0 ? calc.bonusListaTraceTotal : undefined) : numOrUndef(bonusListaTrace),
@@ -762,12 +765,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       deducoes: numOrUndef(descontos),
       valorTotal: valorTotalFinal,
       notaFiscal: abNotaFiscal || undefined,
-      tipoPeso: abTipoPeso,
+      tipoPeso: tipoPesoFinal,
       statusOperacional: statusOp,
       dataVenda: abateDataVenda || undefined,
       dataEmbarque: abateDataEmbarque || undefined,
       dataAbate: abateDataAbate || undefined,
-      tipoVenda: abTipoVenda || undefined,
+      tipoVenda: tipoVendaFinal || undefined,
     };
 
     setSubmitting(true);
@@ -1008,29 +1011,38 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   }
 
   // ===== LEFT SIDEBAR NAV =====
+  const isEditing = !!editingAbateId;
   const renderSidebar = () => {
     const parentCls = (active: boolean) =>
       `w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[13px] font-bold transition-all ${
+        isEditing && !active ? 'opacity-40 cursor-not-allowed' :
         active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/60'
       }`;
     const childCls = (active: boolean) =>
       `w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] font-semibold transition-all ${
+        isEditing && !active ? 'opacity-40 cursor-not-allowed' :
         active ? 'bg-primary/15 text-foreground border border-primary/40' : 'text-muted-foreground hover:bg-muted/40 border border-transparent'
       }`;
     const childWrap = "ml-3 mt-0.5 border-l-2 border-primary/30 pl-1.5 space-y-0.5";
+
+    const handleNavClick = (cb: () => void) => {
+      if (isEditing) return; // Block navigation during edit
+      cb();
+    };
 
     return (
       <div className="shrink-0 space-y-2">
         {/* Entradas */}
         <div>
-          <button onClick={() => { setAba('entrada'); setTipo('nascimento'); resetAllFields(); }} className={parentCls(aba === 'entrada')}>
+          <button onClick={() => handleNavClick(() => { setAba('entrada'); setTipo('nascimento'); resetAllFields(); })} className={parentCls(aba === 'entrada')} disabled={isEditing && aba !== 'entrada'}>
             <LogIn className="h-3.5 w-3.5" /> Entradas
           </button>
           <div className={childWrap}>
             {TIPOS_ENTRADA.map(t => (
               <button key={t.value} type="button"
-                onClick={() => { setAba('entrada'); setTipo(t.value); resetAllFields(); }}
-                className={childCls(aba === 'entrada' && tipo === t.value)}>
+                onClick={() => handleNavClick(() => { setAba('entrada'); setTipo(t.value); resetAllFields(); })}
+                className={childCls(aba === 'entrada' && tipo === t.value)}
+                disabled={isEditing && !(aba === 'entrada' && tipo === t.value)}>
                 <span className="text-[12px]">{t.icon}</span> {t.label}
               </button>
             ))}
@@ -1039,14 +1051,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
         {/* Saídas */}
         <div>
-          <button onClick={() => { setAba('saida'); setTipo('abate'); resetAllFields(); }} className={parentCls(aba === 'saida')}>
+          <button onClick={() => handleNavClick(() => { setAba('saida'); setTipo('abate'); resetAllFields(); })} className={parentCls(aba === 'saida')} disabled={isEditing && aba !== 'saida'}>
             <LogOut className="h-3.5 w-3.5" /> Saídas
           </button>
           <div className={childWrap}>
             {TIPOS_SAIDA.map(t => (
               <button key={t.value} type="button"
-                onClick={() => { setAba('saida'); setTipo(t.value); resetAllFields(); }}
-                className={childCls(aba === 'saida' && tipo === t.value)}>
+                onClick={() => handleNavClick(() => { setAba('saida'); setTipo(t.value); resetAllFields(); })}
+                className={childCls(aba === 'saida' && tipo === t.value)}
+                disabled={isEditing && !(aba === 'saida' && tipo === t.value)}>
                 <span className="text-[12px]">{t.icon}</span> {t.label}
               </button>
             ))}
@@ -1054,12 +1067,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
 
         {/* Evoluir Categoria Animal */}
-        <button onClick={() => setAba('reclassificacao')} className={parentCls(aba === 'reclassificacao')}>
+        <button onClick={() => handleNavClick(() => setAba('reclassificacao'))} className={parentCls(aba === 'reclassificacao')} disabled={isEditing && aba !== 'reclassificacao'}>
           <RefreshCw className="h-3.5 w-3.5" /> Evoluir Categoria
         </button>
 
         {/* Histórico */}
-        <button onClick={() => setAba('historico')} className={parentCls(aba === 'historico')}>
+        <button onClick={() => handleNavClick(() => setAba('historico'))} className={parentCls(aba === 'historico')} disabled={isEditing && aba !== 'historico'}>
           <Clock className="h-3.5 w-3.5" /> Histórico
         </button>
       </div>
@@ -1691,18 +1704,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
       )}
 
-      {editingAbateId && (
-        <Button type="button" variant="outline" className="w-full h-9 text-[12px] font-bold mb-1" size="sm" onClick={() => {
-          setEditingAbateId(null);
-          setQuantidade(''); setCategoria(''); setPesoKg('');
-          setFazendaOrigem(''); setFazendaDestino('');
-          setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('conciliado');
-          resetFinancialFields();
-        }}>
-          Cancelar Edição
-        </Button>
-      )}
     </div>
   );
 
@@ -1803,6 +1804,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   onRequestRegister={handleRequestRegister}
                   submitting={submitting}
                   registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Compra'}
+                  onCancelEdit={editingAbateId ? handleCancelEdit : undefined}
                 />
                 <CompraDetalhesDialog
                   open={compraDialogOpen}
@@ -1832,6 +1834,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   onRequestRegister={handleRequestRegister}
                   submitting={submitting}
                   registerLabel={editingAbateId ? 'Salvar Alterações do Abate' : 'Registrar Abate'}
+                  onCancelEdit={editingAbateId ? handleCancelEdit : undefined}
                 />
                 <AbateDetalhesDialog
                   open={abateDialogOpen}
@@ -1894,6 +1897,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   onRequestRegister={handleRequestRegister}
                   submitting={submitting}
                   registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
+                  onCancelEdit={editingAbateId ? handleCancelEdit : undefined}
                 />
                 <VendaDetalhesDialog
                   open={vendaDialogOpen}

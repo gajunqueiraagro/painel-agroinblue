@@ -20,13 +20,14 @@ interface Props {
   registerLabel?: string;
   /** Whether Boitel mode is active (shows different flow) */
   isBoitel?: boolean;
+  onCancelEdit?: () => void;
 }
 
 export function VendaResumoPanel({
   quantidade, pesoKg, categoria, compradorNome,
   detalhes, detalhesPreenchidos, canOpenModal,
   onOpenModal, onRequestRegister, submitting, registerLabel,
-  isBoitel,
+  isBoitel, onCancelEdit,
 }: Props) {
   const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria || '-';
   const totalKg = (quantidade || 0) * (pesoKg || 0);
@@ -183,15 +184,27 @@ export function VendaResumoPanel({
 
       <Separator />
 
-      {/* Botão final de registro */}
-      <Button
-        type="button"
-        className="w-full h-10 text-[13px] font-bold"
-        onClick={onRequestRegister}
-        disabled={submitting || !detalhesPreenchidos}
-      >
-        {submitting ? 'Registrando...' : (registerLabel || 'Registrar Venda')}
-      </Button>
+      {/* Action buttons */}
+      <div className="space-y-1.5">
+        {onCancelEdit && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full h-9 text-[12px] font-bold"
+            onClick={onCancelEdit}
+          >
+            Cancelar Edição
+          </Button>
+        )}
+        <Button
+          type="button"
+          className="w-full h-10 text-[13px] font-bold"
+          onClick={onRequestRegister}
+          disabled={submitting || !detalhesPreenchidos}
+        >
+          {submitting ? 'Registrando...' : (registerLabel || 'Registrar Venda')}
+        </Button>
+      </div>
     </div>
   );
 }

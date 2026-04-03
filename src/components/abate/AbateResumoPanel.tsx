@@ -18,12 +18,13 @@ interface Props {
   onRequestRegister: () => void;
   submitting: boolean;
   registerLabel?: string;
+  onCancelEdit?: () => void;
 }
 
 export function AbateResumoPanel({
   quantidade, pesoKg, categoria, frigorificoNome,
   detalhes, detalhesPreenchidos, canOpenModal,
-  onOpenModal, onRequestRegister, submitting, registerLabel,
+  onOpenModal, onRequestRegister, submitting, registerLabel, onCancelEdit,
 }: Props) {
   const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria || '-';
 
@@ -183,15 +184,27 @@ export function AbateResumoPanel({
 
       <Separator />
 
-      {/* Botão final de registro */}
-      <Button
-        type="button"
-        className="w-full h-10 text-[13px] font-bold"
-        onClick={onRequestRegister}
-        disabled={submitting || !detalhesPreenchidos}
-      >
-        {submitting ? 'Registrando...' : (registerLabel || 'Registrar Abate')}
-      </Button>
+      {/* Action buttons */}
+      <div className="space-y-1.5">
+        {onCancelEdit && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full h-9 text-[12px] font-bold"
+            onClick={onCancelEdit}
+          >
+            Cancelar Edição
+          </Button>
+        )}
+        <Button
+          type="button"
+          className="w-full h-10 text-[13px] font-bold"
+          onClick={onRequestRegister}
+          disabled={submitting || !detalhesPreenchidos}
+        >
+          {submitting ? 'Registrando...' : (registerLabel || 'Registrar Abate')}
+        </Button>
+      </div>
     </div>
   );
 }
