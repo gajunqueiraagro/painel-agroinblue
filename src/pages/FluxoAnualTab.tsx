@@ -39,6 +39,22 @@ interface Props {
 
 export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onNavigateToValorRebanho, onSetSaldo, onNavigateToReclass }: Props) {
   const [drilldownMonth, setDrilldownMonth] = useState<string | null>(null);
+  const { pastos } = usePastos();
+
+  const areaProdutiva = useMemo(
+    () => calcAreaProdutivaPecuaria(pastos),
+    [pastos],
+  );
+
+  // Lotação UA/ha por mês
+  const lotacaoMes = useMemo(() => {
+    const result: Record<string, number | null> = {};
+    const dados_ = calcFluxoAnual(saldosIniciais, lancamentos.filter(l => {
+      const cenario = statusFiltro === 'realizado' ? 'realizado' : 'meta';
+      return true; // will be computed from dados below
+    }), Number(anoFiltro), true);
+    return result;
+  }, []);
 
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<number>();
