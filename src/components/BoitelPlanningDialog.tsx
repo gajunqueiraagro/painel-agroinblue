@@ -5,8 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calculos/formatters';
-import { TrendingUp, DollarSign, Calendar, Truck, Calculator, Info, ShoppingCart } from 'lucide-react';
+import { Calculator, Info } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 
 interface Parcela {
@@ -40,11 +41,9 @@ export interface BoitelData {
   custoNfAbate: number;
   precoVendaArroba: number;
   despesasAbate: number;
-  // Recebimento
   formaReceb: 'avista' | 'prazo';
   qtdParcelas: number;
   parcelas: Parcela[];
-  // Adiantamento
   possuiAdiantamento: boolean;
   dataAdiantamento: string;
   pctAdiantamentoDiarias: number;
@@ -53,7 +52,6 @@ export interface BoitelData {
   valorAdiantamentoOutros: number;
   valorTotalAntecipado: number;
   adiantamentoObservacao: string;
-  // Snapshots
   _faturamentoBruto?: number;
   _faturamentoLiquido?: number;
   _receitaProdutor?: number;
@@ -123,10 +121,6 @@ function fmtPct1(v: number) {
   if (v === null || v === undefined || isNaN(v)) return '-';
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
 }
-function fmtPerCab(total: number, qtd: number) {
-  if (!qtd || qtd === 0) return '-';
-  return formatMoeda(total / qtd) + '/cab';
-}
 
 export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quantidade, pesoKg, fazendaNome, dataLancamento, destinoNome }: Props) {
   const [data, setData] = useState<BoitelData>({ ...defaultData });
@@ -149,12 +143,9 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     setData(prev => ({ ...prev, [key]: value }));
   }, []);
 
-  // Data de Abate = Data Envio + Dias
   const dataAbateISO = useMemo(() => {
     if (!data.dataEnvio || !data.dias) return '';
-    try {
-      return format(addDays(parseISO(data.dataEnvio), data.dias), 'yyyy-MM-dd');
-    } catch { return ''; }
+    try { return format(addDays(parseISO(data.dataEnvio), data.dias), 'yyyy-MM-dd'); } catch { return ''; }
   }, [data.dataEnvio, data.dias]);
 
   const dataAbate = useMemo(() => {
@@ -252,7 +243,6 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     };
   }, [data]);
 
-  // Parcelas logic
   const gerarParcelas = useCallback((numParcelas: number, valorTotal: number): Parcela[] => {
     const base = dataAbateISO || data.dataEnvio || '';
     const p: Parcela[] = [];
@@ -290,11 +280,8 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     set('parcelas', gerarParcelas(n, base));
   };
 
-  // Base de parcelamento = resultadoComBoitel - parceiroParte (exclui frete da base)
-  // Se houver adiantamento, desconta do saldo a receber
   const baseParcelamento = (calc.resultadoComBoitel - calc.parceiroParte) - (data.possuiAdiantamento ? data.valorTotalAntecipado : 0);
 
-  // Auto-calc valorTotalAntecipado
   useEffect(() => {
     if (data.possuiAdiantamento) {
       const total = data.valorAdiantamentoDiarias + data.valorAdiantamentoSanitario + data.valorAdiantamentoOutros;
@@ -304,7 +291,6 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     }
   }, [data.possuiAdiantamento, data.valorAdiantamentoDiarias, data.valorAdiantamentoSanitario, data.valorAdiantamentoOutros]);
 
-  // Auto-calc adiantamento diárias from percentage
   useEffect(() => {
     if (data.possuiAdiantamento && data.pctAdiantamentoDiarias > 0) {
       const valDiarias = Math.round(calc.custoDiariaTotal * data.pctAdiantamentoDiarias / 100 * 100) / 100;
@@ -314,7 +300,6 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     }
   }, [data.possuiAdiantamento, data.pctAdiantamentoDiarias, calc.custoDiariaTotal]);
 
-  // Update parcelas when base changes
   useEffect(() => {
     if (data.formaReceb === 'prazo' && data.qtdParcelas > 0 && baseParcelamento > 0) {
       const newParcelas = gerarParcelas(data.qtdParcelas, baseParcelamento);
@@ -339,422 +324,474 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto p-0">
-        <DialogHeader className="px-5 pt-4 pb-0">
-          <DialogTitle className="text-[14px] font-bold flex items-center gap-2">
+      <DialogContent className="max-w-[96vw] w-[1400px] max-h-[94vh] overflow-hidden p-0 flex flex-col">
+        <DialogHeader className="px-4 pt-3 pb-0 shrink-0">
+          <DialogTitle className="text-[13px] font-bold flex items-center gap-2">
             <Calculator className="h-4 w-4 text-primary" />
             Simulador Boitel
           </DialogTitle>
         </DialogHeader>
 
-        <div className="px-5 pb-5 space-y-3">
+        <TooltipProvider delayDuration={200}>
+          <div className="flex-1 overflow-hidden px-4 pb-3 pt-2">
+            <div className="grid grid-cols-[1fr_1fr_1fr_20rem] gap-3 h-full">
 
-          {/* CABEÇALHO — Identificação */}
-          <div className="bg-muted/40 rounded-md px-4 py-2.5 border space-y-2">
-            <div className="flex items-center gap-6">
-              <div>
-                <span className="text-[10px] text-muted-foreground block">Cabeças</span>
-                <strong className="text-[14px]">{data.qtdCabecas || '-'}</strong>
-              </div>
-              <div>
-                <span className="text-[10px] text-muted-foreground block">Peso inicial (saída fazenda)</span>
-                <strong className="text-[14px]">{fmtPeso(data.pesoInicial)}</strong>
-              </div>
-              <div>
-                <span className="text-[10px] text-muted-foreground block">Peso líq. entrada</span>
-                <strong className="text-[14px] text-primary">{fmtPeso(calc.pesoLiqEntrada)}</strong>
-              </div>
-              <span className="text-[9px] text-muted-foreground ml-auto flex items-center gap-1">
-                <Info className="h-3 w-3" /> Peso base para cálculo: saída da fazenda
-              </span>
-            </div>
-            <Separator />
-            <div className="grid grid-cols-3 md:grid-cols-7 gap-2">
-              <div>
-                <Label className="text-[9px] text-muted-foreground">Fazenda Origem</Label>
-                <div className="text-[11px] font-medium truncate">{data.fazendaOrigem || '-'}</div>
-              </div>
-              <Field label="Data Envio">
-                <Input type="date" value={data.dataEnvio} onChange={e => set('dataEnvio', e.target.value)} className="h-6 text-[11px]" />
-              </Field>
-              <div>
-                <Label className="text-[9px] text-muted-foreground">Data de Abate</Label>
-                <div className="text-[11px] font-medium text-primary">{dataAbate || '-'}</div>
-                <HintBelow>Envio + {data.dias} dias</HintBelow>
-              </div>
-              <Field label="Boitel / Destino">
-                <Input value={data.nomeBoitel} onChange={e => set('nomeBoitel', e.target.value)} className="h-6 text-[11px]" placeholder="Nome do boitel" />
-              </Field>
-              <Field label="Modalidade">
-                <Select value={data.modalidadeCusto} onValueChange={(v: any) => set('modalidadeCusto', v)}>
-                  <SelectTrigger className="h-6 text-[10px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="diaria" className="text-[11px]">Diária</SelectItem>
-                    <SelectItem value="arroba" className="text-[11px]">Arroba</SelectItem>
-                    <SelectItem value="parceria" className="text-[11px]">Parceria</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Lote">
-                <Input value={data.lote} onChange={e => set('lote', e.target.value)} className="h-6 text-[11px]" placeholder="Lote" />
-              </Field>
-              <Field label="Nº Contrato / Baia">
-                <Input value={data.numeroContrato} onChange={e => set('numeroContrato', e.target.value)} className="h-6 text-[11px]" placeholder="Contrato" />
-              </Field>
-            </div>
-          </div>
+              {/* ═══════════════════════════════════════════════════
+                  COLUNA 1 — DADOS BASE
+                  ═══════════════════════════════════════════════════ */}
+              <div className="space-y-2.5 overflow-y-auto pr-1 pb-2" style={{ maxHeight: 'calc(94vh - 80px)' }}>
+                <ColTitle>Dados Base</ColTitle>
 
-          {/* 2 COLUNAS: INPUT | RESULTADO */}
-          <div className="grid grid-cols-[1fr_320px] gap-4">
-
-            {/* ── COLUNA ESQUERDA: INPUTS ── */}
-            <div className="space-y-3">
-
-              {/* ENTRADA */}
-              <Section icon={<Truck className="h-3.5 w-3.5" />} title="Entrada">
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label="Quebra de viagem (%)">
-                    <Input type="number" value={data.quebraViagem || ''} onChange={e => set('quebraViagem', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.1" />
-                    <HintBelow>{fmtPct1(data.quebraViagem)} → {fmtPeso(calc.quebraCab)}/cab</HintBelow>
-                  </Field>
-                  <Field label="Custo oportunidade (R$/kg)">
-                    <Input type="number" value={data.custoOportunidade || ''} onChange={e => set('custoOportunidade', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.01" />
-                    <HintBelow>{formatMoeda(data.custoOportunidade)}/kg → {formatMoeda(calc.custoOportCabCalc)}/cab</HintBelow>
-                  </Field>
+                {/* Linha 1: Cabeças | Peso inicial | Peso líq entrada */}
+                <div className="grid grid-cols-3 gap-1.5">
+                  <F label="Cabeças">
+                    <Inp type="number" value={data.qtdCabecas || ''} onChange={e => set('qtdCabecas', Number(e.target.value) || 0)} />
+                  </F>
+                  <F label="Peso inicial (kg)">
+                    <Inp type="number" value={data.pesoInicial || ''} onChange={e => set('pesoInicial', Number(e.target.value) || 0)} />
+                  </F>
+                  <F label="Peso líq. entrada">
+                    <CalcVal>{fmtPeso(calc.pesoLiqEntrada)}</CalcVal>
+                    <Hint>Após quebra de {fmtPct1(data.quebraViagem)}</Hint>
+                  </F>
                 </div>
-              </Section>
 
-              {/* PERÍODO */}
-              <Section icon={<Calendar className="h-3.5 w-3.5" />} title="Período">
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label="Dias confinamento">
-                    <Input type="number" value={data.dias || ''} onChange={e => set('dias', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
-                  </Field>
-                  <Field label="GMD (kg/dia)">
-                    <Input type="number" value={data.gmd || ''} onChange={e => set('gmd', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.001" />
-                    <HintBelow>{fmtGmd(data.gmd)}</HintBelow>
-                  </Field>
-                  <Field label="Rend. entrada (%)">
-                    <Input type="number" value={data.rendimentoEntrada || ''} onChange={e => set('rendimentoEntrada', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.1" />
-                    <HintBelow>{fmtPct1(data.rendimentoEntrada)}</HintBelow>
-                  </Field>
-                  <Field label="Rend. saída (%)">
-                    <Input type="number" value={data.rendimento || ''} onChange={e => set('rendimento', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.1" />
-                    <HintBelow>{fmtPct1(data.rendimento)}</HintBelow>
-                  </Field>
+                {/* Linha 2: Fazenda origem */}
+                <F label="Fazenda origem">
+                  <CalcVal className="text-[11px]">{data.fazendaOrigem || '-'}</CalcVal>
+                </F>
+
+                {/* Linha 3: Data envio | Data abate */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  <F label="Data envio">
+                    <Inp type="date" value={data.dataEnvio} onChange={e => set('dataEnvio', e.target.value)} />
+                  </F>
+                  <F label="Data de abate">
+                    <CalcVal className="text-primary">{dataAbate || '-'}</CalcVal>
+                    <Hint>Envio + {data.dias} dias</Hint>
+                  </F>
                 </div>
-                {(data.gmd > 0 && data.dias > 0) && (
-                  <div className="flex gap-4 text-[10px] text-muted-foreground mt-1">
-                    <span>Peso final: <strong className="text-foreground">{fmtPeso(calc.pesoFinal)}</strong></span>
-                    <span>@/cab: <strong className="text-foreground">{fmtArr(calc.arrobasSaida)}</strong></span>
-                    <span>Ganho: <strong className="text-foreground">{fmtPeso(calc.ganhoKg)}</strong></span>
+
+                {/* Linha 4: Boitel/Destino | Modalidade */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  <F label="Boitel / Destino">
+                    <Inp value={data.nomeBoitel} onChange={e => set('nomeBoitel', e.target.value)} placeholder="Nome" />
+                  </F>
+                  <F label="Modalidade">
+                    <Select value={data.modalidadeCusto} onValueChange={(v: any) => set('modalidadeCusto', v)}>
+                      <SelectTrigger className="h-7 text-[10px]"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="diaria" className="text-[11px]">Diária</SelectItem>
+                        <SelectItem value="arroba" className="text-[11px]">Arroba</SelectItem>
+                        <SelectItem value="parceria" className="text-[11px]">Parceria</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </F>
+                </div>
+
+                {/* Linha 5: Lote | Nº contrato */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  <F label="Lote">
+                    <Inp value={data.lote} onChange={e => set('lote', e.target.value)} placeholder="Lote" />
+                  </F>
+                  <F label="Nº Contrato / Baia">
+                    <Inp value={data.numeroContrato} onChange={e => set('numeroContrato', e.target.value)} placeholder="Contrato" />
+                  </F>
+                </div>
+
+                {/* ADIANTAMENTO */}
+                <Separator className="my-1" />
+                <ColSubtitle>Adiantamento ao Boitel</ColSubtitle>
+                <div className="flex items-center gap-2">
+                  <Label className="text-[9px]">Pagamento antecipado?</Label>
+                  <ToggleBtn active={data.possuiAdiantamento} onClick={() => set('possuiAdiantamento', true)}>Sim</ToggleBtn>
+                  <ToggleBtn active={!data.possuiAdiantamento} onClick={() => {
+                    set('possuiAdiantamento', false);
+                    set('valorAdiantamentoDiarias', 0); set('valorAdiantamentoSanitario', 0);
+                    set('valorAdiantamentoOutros', 0); set('valorTotalAntecipado', 0);
+                    set('pctAdiantamentoDiarias', 0); set('dataAdiantamento', ''); set('adiantamentoObservacao', '');
+                  }}>Não</ToggleBtn>
+                </div>
+                {data.possuiAdiantamento && (
+                  <div className="space-y-1.5 bg-muted/30 rounded p-2 border">
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <F label="Data adiantamento">
+                        <Inp type="date" value={data.dataAdiantamento} onChange={e => set('dataAdiantamento', e.target.value)} />
+                      </F>
+                      <F label="% sobre diárias">
+                        <Inp type="number" value={data.pctAdiantamentoDiarias || ''} onChange={e => set('pctAdiantamentoDiarias', Number(e.target.value) || 0)} step="1" min="0" max="100" />
+                        <Hint>Total diárias: {formatMoeda(calc.custoDiariaTotal)}</Hint>
+                      </F>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <F label="Diárias (R$)">
+                        <Inp type="number" value={data.valorAdiantamentoDiarias || ''} onChange={e => { set('valorAdiantamentoDiarias', Number(e.target.value) || 0); set('pctAdiantamentoDiarias', 0); }} />
+                      </F>
+                      <F label="Sanitário (R$)">
+                        <Inp type="number" value={data.valorAdiantamentoSanitario || ''} onChange={e => set('valorAdiantamentoSanitario', Number(e.target.value) || 0)} />
+                      </F>
+                      <F label="Outros (R$)">
+                        <Inp type="number" value={data.valorAdiantamentoOutros || ''} onChange={e => set('valorAdiantamentoOutros', Number(e.target.value) || 0)} />
+                      </F>
+                    </div>
+                    <div className="flex justify-between items-center bg-primary/5 rounded px-2 py-1 border border-primary/20">
+                      <span className="text-[9px] font-bold">Total Antecipado</span>
+                      <span className="text-[11px] font-bold text-primary tabular-nums">{formatMoeda(data.valorTotalAntecipado)}</span>
+                    </div>
+                    <F label="Observação">
+                      <Inp value={data.adiantamentoObservacao} onChange={e => set('adiantamentoObservacao', e.target.value)} placeholder="Ex: 30% diárias + sanitário" />
+                    </F>
                   </div>
                 )}
-              </Section>
+              </div>
 
-              {/* CUSTOS */}
-              <Section icon={<DollarSign className="h-3.5 w-3.5" />} title="Custos">
-                <div className="grid grid-cols-2 gap-2">
+              {/* ═══════════════════════════════════════════════════
+                  COLUNA 2 — DESEMPENHO
+                  ═══════════════════════════════════════════════════ */}
+              <div className="space-y-2.5 overflow-y-auto pr-1 pb-2" style={{ maxHeight: 'calc(94vh - 80px)' }}>
+                <ColTitle>Desempenho</ColTitle>
+
+                {/* Linha 1: Quebra viagem | Custo oportunidade */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  <F label="Quebra viagem (%)">
+                    <Inp type="number" value={data.quebraViagem || ''} onChange={e => set('quebraViagem', Number(e.target.value) || 0)} step="0.1" />
+                    <Hint>{fmtPeso(calc.quebraCab)}/cab</Hint>
+                  </F>
+                  <F label="Custo oport. (R$/kg)">
+                    <Inp type="number" value={data.custoOportunidade || ''} onChange={e => set('custoOportunidade', Number(e.target.value) || 0)} step="0.01" />
+                    <Hint>{formatMoeda(calc.custoOportCabCalc)}/cab</Hint>
+                  </F>
+                </div>
+
+                {/* Linha 2: Dias | GMD */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  <F label="Dias confinamento">
+                    <Inp type="number" value={data.dias || ''} onChange={e => set('dias', Number(e.target.value) || 0)} />
+                  </F>
+                  <F label="GMD (kg/dia)">
+                    <Inp type="number" value={data.gmd || ''} onChange={e => set('gmd', Number(e.target.value) || 0)} step="0.001" />
+                  </F>
+                </div>
+
+                {/* Linha 3: Rendimentos */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  <F label="Rend. entrada (%)">
+                    <Inp type="number" value={data.rendimentoEntrada || ''} onChange={e => set('rendimentoEntrada', Number(e.target.value) || 0)} step="0.1" />
+                  </F>
+                  <F label="Rend. saída (%)">
+                    <Inp type="number" value={data.rendimento || ''} onChange={e => set('rendimento', Number(e.target.value) || 0)} step="0.1" />
+                  </F>
+                </div>
+
+                {/* Linha 4: Calculados (info) */}
+                <div className="bg-muted/40 rounded border p-2 space-y-1">
+                  <span className="text-[8px] uppercase font-bold text-muted-foreground">Resultados calculados</span>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <InfoVal label="Peso final" value={fmtPeso(calc.pesoFinal)} tip="Peso inicial + (GMD × Dias)" />
+                    <InfoVal label="@ produzidas" value={fmtArr(calc.arrobasProduzidas)} tip="(@saída - @entrada) × cabeças" />
+                    <InfoVal label="Ganho/cab" value={fmtPeso(calc.ganhoKg)} tip="GMD × Dias" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 mt-1">
+                    <InfoVal label="GMC (carcaça/dia)" value={fmtGmd(calc.gmc)} tip="(Carcaça saída - Carcaça entrada) / Dias" />
+                    <InfoVal label="@ saída/cab" value={fmtArr(calc.arrobasSaida)} tip="(Peso final × Rend. saída) / 15" />
+                  </div>
+                </div>
+              </div>
+
+              {/* ═══════════════════════════════════════════════════
+                  COLUNA 3 — CUSTOS + VENDA
+                  ═══════════════════════════════════════════════════ */}
+              <div className="space-y-2.5 overflow-y-auto pr-1 pb-2" style={{ maxHeight: 'calc(94vh - 80px)' }}>
+                <ColTitle>Custos + Venda</ColTitle>
+
+                {/* BLOCO CUSTOS */}
+                <ColSubtitle>Custos</ColSubtitle>
+                <div className="grid grid-cols-2 gap-1.5">
                   {data.modalidadeCusto === 'diaria' && (
-                    <Field label="R$/cab/dia">
-                      <Input type="number" value={data.custoDiaria || ''} onChange={e => set('custoDiaria', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.01" />
-                      <HintBelow>Período: {formatMoeda(calc.custoDiariaCabPeriodo)}/cab</HintBelow>
-                    </Field>
+                    <F label="R$/cab/dia">
+                      <Inp type="number" value={data.custoDiaria || ''} onChange={e => set('custoDiaria', Number(e.target.value) || 0)} step="0.01" />
+                      <Hint>{formatMoeda(calc.custoDiariaCabPeriodo)}/cab período</Hint>
+                    </F>
                   )}
                   {data.modalidadeCusto === 'arroba' && (
-                    <Field label="R$/@ produzida">
-                      <Input type="number" value={data.custoArroba || ''} onChange={e => set('custoArroba', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
-                    </Field>
+                    <F label="R$/@ produzida">
+                      <Inp type="number" value={data.custoArroba || ''} onChange={e => set('custoArroba', Number(e.target.value) || 0)} />
+                    </F>
                   )}
                   {data.modalidadeCusto === 'parceria' && (
                     <>
-                      <Field label="% do parceiro">
-                        <Input type="number" value={data.percentualParceria || ''} onChange={e => set('percentualParceria', Number(e.target.value) || 0)} className="h-7 text-[11px]" min="0" max="100" />
-                        <HintBelow>Sua parte: {100 - (data.percentualParceria || 0)}%</HintBelow>
-                      </Field>
-                      <Field label="Custos extras do acordo (R$)">
-                        <Input type="number" value={data.custosExtrasParceria || ''} onChange={e => set('custosExtrasParceria', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
-                      </Field>
+                      <F label="% do parceiro">
+                        <Inp type="number" value={data.percentualParceria || ''} onChange={e => set('percentualParceria', Number(e.target.value) || 0)} min="0" max="100" />
+                        <Hint>Sua parte: {100 - (data.percentualParceria || 0)}%</Hint>
+                      </F>
+                      <F label="Custos extras (R$)">
+                        <Inp type="number" value={data.custosExtrasParceria || ''} onChange={e => set('custosExtrasParceria', Number(e.target.value) || 0)} />
+                      </F>
                     </>
                   )}
-                  <Field label="Frete (R$)">
-                    <Input type="number" value={data.custoFrete || ''} onChange={e => set('custoFrete', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
-                    <HintBelow>{formatMoeda(calc.freteCab)}/cab</HintBelow>
-                  </Field>
-                  <Field label="Sanidade (R$)">
-                    <Input type="number" value={data.custoSanidade || ''} onChange={e => set('custoSanidade', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
-                    <HintBelow>{formatMoeda(calc.sanidadeCab)}/cab</HintBelow>
-                  </Field>
-                  <Field label="Outros custos (R$)">
-                    <Input type="number" value={data.outrosCustos || ''} onChange={e => set('outrosCustos', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
-                    <HintBelow>{formatMoeda(calc.outrosCab)}/cab</HintBelow>
-                  </Field>
+                  <F label="Frete (R$)">
+                    <Inp type="number" value={data.custoFrete || ''} onChange={e => set('custoFrete', Number(e.target.value) || 0)} />
+                    <Hint>{formatMoeda(calc.freteCab)}/cab</Hint>
+                  </F>
                 </div>
-              </Section>
-
-              {/* COMERCIALIZAÇÃO */}
-              <Section icon={<ShoppingCart className="h-3.5 w-3.5" />} title="Comercialização">
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label="Preço venda (R$/@)">
-                    <Input type="number" value={data.precoVendaArroba || ''} onChange={e => set('precoVendaArroba', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="0.01" />
-                    <HintBelow>{formatMoeda(calc.precoVendaCab)}/cab</HintBelow>
-                  </Field>
-                  <Field label="Despesas abate (R$)">
-                    <Input type="number" value={data.despesasAbate || ''} onChange={e => set('despesasAbate', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
-                    <HintBelow>{formatMoeda(calc.despesasAbateCab)}/cab</HintBelow>
-                  </Field>
-                  <Field label="NF Abate (R$)">
-                    <Input type="number" value={data.custoNfAbate || ''} onChange={e => set('custoNfAbate', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
-                  </Field>
-                </div>
-              </Section>
-
-              {/* FORMA DE RECEBIMENTO */}
-              <Section icon={<DollarSign className="h-3.5 w-3.5" />} title="Forma de Recebimento">
                 <div className="grid grid-cols-2 gap-1.5">
-                  <button type="button" onClick={() => handleFormaRecebChange('avista')}
-                    className={`h-7 rounded text-[11px] font-bold border-2 transition-all ${data.formaReceb === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
-                    À vista
-                  </button>
-                  <button type="button" onClick={() => handleFormaRecebChange('prazo')}
-                    className={`h-7 rounded text-[11px] font-bold border-2 transition-all ${data.formaReceb === 'prazo' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
-                    A prazo
-                  </button>
+                  <F label="Sanidade (R$)">
+                    <Inp type="number" value={data.custoSanidade || ''} onChange={e => set('custoSanidade', Number(e.target.value) || 0)} />
+                    <Hint>{formatMoeda(calc.sanidadeCab)}/cab</Hint>
+                  </F>
+                  <F label="Outros custos (R$)">
+                    <Inp type="number" value={data.outrosCustos || ''} onChange={e => set('outrosCustos', Number(e.target.value) || 0)} />
+                    <Hint>{formatMoeda(calc.outrosCab)}/cab</Hint>
+                  </F>
+                </div>
+
+                {/* BLOCO COMERCIALIZAÇÃO */}
+                <Separator className="my-1" />
+                <ColSubtitle>Comercialização</ColSubtitle>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <F label="Preço venda (R$/@)">
+                    <Inp type="number" value={data.precoVendaArroba || ''} onChange={e => set('precoVendaArroba', Number(e.target.value) || 0)} step="0.01" />
+                    <Hint>{formatMoeda(calc.precoVendaCab)}/cab</Hint>
+                  </F>
+                  <F label="Despesas abate (R$)">
+                    <Inp type="number" value={data.despesasAbate || ''} onChange={e => set('despesasAbate', Number(e.target.value) || 0)} />
+                    <Hint>{formatMoeda(calc.despesasAbateCab)}/cab</Hint>
+                  </F>
+                </div>
+                <F label="NF Abate (R$)">
+                  <Inp type="number" value={data.custoNfAbate || ''} onChange={e => set('custoNfAbate', Number(e.target.value) || 0)} />
+                </F>
+
+                {/* BLOCO RECEBIMENTO */}
+                <Separator className="my-1" />
+                <ColSubtitle>Recebimento</ColSubtitle>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <ToggleBtn active={data.formaReceb === 'avista'} onClick={() => handleFormaRecebChange('avista')} full>À vista</ToggleBtn>
+                  <ToggleBtn active={data.formaReceb === 'prazo'} onClick={() => handleFormaRecebChange('prazo')} full>A prazo</ToggleBtn>
                 </div>
                 {data.formaReceb === 'prazo' && (
-                  <div className="space-y-1.5 mt-1.5">
-                    <Field label="Quantidade de parcelas">
-                      <Input type="number" min="1" max="48" value={data.qtdParcelas} onChange={e => handleQtdParcelasChange(e.target.value)} className="h-7 text-[11px]" />
-                    </Field>
+                  <div className="space-y-1.5">
+                    <F label="Qtd. parcelas">
+                      <Inp type="number" min="1" max="48" value={data.qtdParcelas} onChange={e => handleQtdParcelasChange(e.target.value)} />
+                    </F>
                     {data.parcelas.map((p, i) => (
                       <div key={i} className="grid grid-cols-2 gap-1.5 bg-muted/30 rounded p-1.5">
                         <div>
-                          <Label className="text-[9px]">Parcela {i + 1} - Data</Label>
-                          <Input type="date" value={p.data} onChange={e => {
+                          <Label className="text-[8px]">Parcela {i + 1}</Label>
+                          <Inp type="date" value={p.data} onChange={e => {
                             const np = [...data.parcelas]; np[i] = { ...np[i], data: e.target.value };
                             set('parcelas', np);
-                          }} className="h-6 text-[10px]" />
+                          }} />
                         </div>
                         <div>
-                          <Label className="text-[9px]">Valor (R$)</Label>
-                          <Input type="number" value={String(p.valor)} onChange={e => {
+                          <Label className="text-[8px]">Valor</Label>
+                          <Inp type="number" value={String(p.valor)} onChange={e => {
                             const np = [...data.parcelas]; np[i] = { ...np[i], valor: Number(e.target.value) || 0 };
                             set('parcelas', np);
-                          }} className="h-6 text-[10px]" />
+                          }} />
                         </div>
                       </div>
                     ))}
-                    <div className="text-[9px] text-muted-foreground space-y-0.5">
-                      <div className="text-right">Base parcelas (Resultado c/ Boitel): {formatMoeda(baseParcelamento)}</div>
+                    <div className="text-[8px] text-muted-foreground text-right space-y-0.5">
+                      <div>Base: {formatMoeda(baseParcelamento)}</div>
                       {data.parcelas.length > 0 && (
-                        <div className="text-right">
-                          Soma parcelas: {formatMoeda(data.parcelas.reduce((s, p) => s + p.valor, 0))}
-                        </div>
+                        <div>Soma: {formatMoeda(data.parcelas.reduce((s, p) => s + p.valor, 0))}</div>
                       )}
                     </div>
                   </div>
                 )}
-              </Section>
+              </div>
 
-              {/* ADIANTAMENTOS */}
-              <Section icon={<DollarSign className="h-3.5 w-3.5" />} title="Adiantamento ao Boitel">
-                <div className="flex items-center gap-2 mb-1">
-                  <Label className="text-[10px]">Possui pagamento antecipado?</Label>
-                  <div className="flex gap-1">
-                    <button type="button" onClick={() => set('possuiAdiantamento', true)}
-                      className={`h-6 px-3 rounded text-[10px] font-bold border-2 transition-all ${data.possuiAdiantamento ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
-                      Sim
-                    </button>
-                    <button type="button" onClick={() => {
-                      set('possuiAdiantamento', false);
-                      set('valorAdiantamentoDiarias', 0);
-                      set('valorAdiantamentoSanitario', 0);
-                      set('valorAdiantamentoOutros', 0);
-                      set('valorTotalAntecipado', 0);
-                      set('pctAdiantamentoDiarias', 0);
-                      set('dataAdiantamento', '');
-                      set('adiantamentoObservacao', '');
-                    }}
-                      className={`h-6 px-3 rounded text-[10px] font-bold border-2 transition-all ${!data.possuiAdiantamento ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
-                      Não
-                    </button>
-                  </div>
-                </div>
-                {data.possuiAdiantamento && (
-                  <div className="space-y-2 bg-muted/30 rounded p-2 border">
-                    <div className="grid grid-cols-2 gap-2">
-                      <Field label="Data do adiantamento">
-                        <Input type="date" value={data.dataAdiantamento} onChange={e => set('dataAdiantamento', e.target.value)} className="h-7 text-[11px]" />
-                      </Field>
-                      <Field label="% adiantado sobre diárias">
-                        <Input type="number" value={data.pctAdiantamentoDiarias || ''} onChange={e => set('pctAdiantamentoDiarias', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="1" min="0" max="100" />
-                        <HintBelow>Total diárias: {formatMoeda(calc.custoDiariaTotal)}</HintBelow>
-                      </Field>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <Field label="Diárias antecipadas (R$)">
-                        <Input type="number" value={data.valorAdiantamentoDiarias || ''} onChange={e => {
-                          set('valorAdiantamentoDiarias', Number(e.target.value) || 0);
-                          set('pctAdiantamentoDiarias', 0); // manual override clears %
-                        }} className="h-7 text-[11px]" />
-                      </Field>
-                      <Field label="Sanitário antecipado (R$)">
-                        <Input type="number" value={data.valorAdiantamentoSanitario || ''} onChange={e => set('valorAdiantamentoSanitario', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
-                      </Field>
-                      <Field label="Outros antecipados (R$)">
-                        <Input type="number" value={data.valorAdiantamentoOutros || ''} onChange={e => set('valorAdiantamentoOutros', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
-                      </Field>
-                    </div>
-                    <div className="flex justify-between items-center bg-primary/5 rounded px-2 py-1 border border-primary/20">
-                      <span className="text-[10px] font-bold">Total Antecipado</span>
-                      <span className="text-[12px] font-bold text-primary">{formatMoeda(data.valorTotalAntecipado)}</span>
-                    </div>
-                    <Field label="Observação">
-                      <Input value={data.adiantamentoObservacao} onChange={e => set('adiantamentoObservacao', e.target.value)} className="h-7 text-[11px]" placeholder="Ex: 30% diárias + sanitário pago na entrada" />
-                    </Field>
-                  </div>
+              {/* ═══════════════════════════════════════════════════
+                  COLUNA 4 — RESUMO FIXO (STICKY)
+                  ═══════════════════════════════════════════════════ */}
+              <div className="bg-muted/30 rounded-lg border p-3 space-y-2 overflow-y-auto text-[10px]" style={{ maxHeight: 'calc(94vh - 80px)' }}>
+                <ColTitle>Resumo</ColTitle>
+
+                {/* INDICADORES */}
+                <RGroup label="Indicadores">
+                  <RRow label="GMD" value={fmtGmd(data.gmd)} tip="Ganho médio diário" />
+                  <RRow label="GMC" value={fmtGmd(calc.gmc)} tip="Ganho médio carcaça/dia" />
+                  <RRow label="@ produzidas" value={fmtArr(calc.arrobasProduzidas)} tip="(@saída - @entrada) × cab" />
+                  <RRow label="Custo/@" value={formatMoeda(calc.custoPorArrobaProduzida)} tip="Custos operacionais / @ produzidas" cls="text-destructive" />
+                </RGroup>
+
+                <Separator />
+
+                {/* RECEITA */}
+                <RGroup label="Receita">
+                  <RRow label="Faturamento Bruto" value={formatMoeda(calc.faturamentoBrutoAbate)} bold tip="@ total saída × Preço/@" />
+                  <RRow label="(-) Custos Abate" value={formatMoeda(calc.custosAbate)} cls="text-destructive" />
+                  <DashedLine />
+                  <RRow label="= Faturamento Líquido" value={formatMoeda(calc.faturamentoLiquido)} bold accent />
+                  {data.modalidadeCusto === 'parceria' && calc.parceiroParte > 0 && (
+                    <RRow label={`(-) Parceiro ${data.percentualParceria}%`} value={formatMoeda(calc.parceiroParte)} cls="text-destructive" />
+                  )}
+                </RGroup>
+
+                <Separator />
+
+                {/* OPERACIONAL */}
+                <RGroup label="Operacional">
+                  <RRow label="(-) Diárias" value={formatMoeda(calc.custoDiariaTotal)} cls="text-destructive" />
+                  <RRow label="(-) Sanidade" value={formatMoeda(calc.custosSanitarios)} cls="text-destructive" />
+                  <RRow label="(-) Outros" value={formatMoeda(calc.outrosCustosOp)} cls="text-destructive" />
+                  <DashedLine />
+                  <RRow label="= Resultado c/ Boitel" value={formatMoeda(calc.resultadoComBoitel)} bold accent />
+                  <RRow label="(-) Frete" value={formatMoeda(calc.custosFreteTotal)} cls="text-destructive" />
+                  <DashedLine />
+                  <RRow label="= Total Operacional" value={formatMoeda(calc.totalOperacional)} bold accent />
+                </RGroup>
+
+                {/* CONCILIAÇÃO */}
+                {data.possuiAdiantamento && data.valorTotalAntecipado > 0 && (
+                  <>
+                    <Separator />
+                    <RGroup label="Conciliação Financeira">
+                      <RRow label="Resultado c/ Boitel" value={formatMoeda(calc.resultadoComBoitel)} bold />
+                      <RRow label="(+) Adiantamento pago" value={formatMoeda(data.valorTotalAntecipado)} cls="text-destructive" />
+                      <DashedLine />
+                      <RRow label="= Saldo a receber" value={formatMoeda(calc.resultadoComBoitel - data.valorTotalAntecipado)} bold accent />
+                      <RRow label="(-) Frete" value={formatMoeda(calc.custosFreteTotal)} cls="text-destructive" />
+                      <DashedLine />
+                      <RRow label="= Saldo líquido final" value={formatMoeda(calc.resultadoComBoitel - data.valorTotalAntecipado - calc.custosFreteTotal)} bold accent />
+                    </RGroup>
+                  </>
                 )}
-              </Section>
-            </div>
 
-            {/* ── COLUNA DIREITA: RESULTADO ── */}
-            <div className="bg-muted/30 rounded-lg border p-3 space-y-2 h-fit sticky top-0 text-[11px]">
+                <Separator />
 
-              {/* BLOCO 1 — INDICADORES */}
-              <ResultGroup label="Indicadores">
-                <ResultRow label="GMD" value={fmtGmd(data.gmd)} />
-                <ResultRow label="GMC (kg carcaça/dia)" value={fmtGmd(calc.gmc)} />
-                <ResultRow label="@ produzidas" value={fmtArr(calc.arrobasProduzidas)} />
-                <ResultRow label="Custo por @ Produzida" value={formatMoeda(calc.custoPorArrobaProduzida)} />
-              </ResultGroup>
-
-              <Separator />
-
-              {/* BLOCO 2 — RECEITA */}
-              <ResultGroup label="Receita">
-                <ResultRow label="Faturamento Bruto Abate" value={formatMoeda(calc.faturamentoBrutoAbate)} bold />
-                <ResultRow label="(-) Custos com Abate" value={formatMoeda(calc.custosAbate)} className="text-destructive" />
-                <div className="border-t border-dashed my-0.5" />
-                <ResultRow label="= Faturamento Líquido" value={formatMoeda(calc.faturamentoLiquido)} bold accent />
-                {data.modalidadeCusto === 'parceria' && calc.parceiroParte > 0 && (
-                  <ResultRow label={`(-) Parceiro (${data.percentualParceria}% = ${fmtArr(calc.parceiroArrobas)})`} value={formatMoeda(calc.parceiroParte)} className="text-destructive" />
-                )}
-              </ResultGroup>
-
-              <Separator />
-
-              {/* BLOCO 3 — OPERACIONAL */}
-              <ResultGroup label="Operacional">
-                <ResultRow label="(-) Custo com Diárias" value={formatMoeda(calc.custoDiariaTotal)} className="text-destructive" />
-                <ResultRow label="(-) Custos Sanitários" value={formatMoeda(calc.custosSanitarios)} className="text-destructive" />
-                <ResultRow label="(-) Outros Custos" value={formatMoeda(calc.outrosCustosOp)} className="text-destructive" />
-                <div className="border-t border-dashed my-0.5" />
-                <ResultRow label="= Resultado com Boitel" value={formatMoeda(calc.resultadoComBoitel)} bold accent />
-                <ResultRow label="(-) Custos com Frete" value={formatMoeda(calc.custosFreteTotal)} className="text-destructive" />
-                <div className="border-t border-dashed my-0.5" />
-                <ResultRow label="= Total Operacional" value={formatMoeda(calc.totalOperacional)} bold accent />
-                <ResultRow label="Custo/@ produzida" value={formatMoeda(calc.custoPorArrobaProduzida)} className="text-destructive" />
-                <ResultRow label="Custo/cab" value={formatMoeda(calc.custoPorCab)} className="text-destructive" />
-              </ResultGroup>
-
-              {/* BLOCO ADIANTAMENTO — Conciliação */}
-              {data.possuiAdiantamento && data.valorTotalAntecipado > 0 && (
-                <>
-                  <Separator />
-                  <ResultGroup label="Conciliação Financeira">
-                    <ResultRow label="Resultado com Boitel" value={formatMoeda(calc.resultadoComBoitel)} bold />
-                    <ResultRow label="(-) Adiantamento já pago" value={formatMoeda(data.valorTotalAntecipado)} className="text-destructive" />
-                    <div className="border-t border-dashed my-0.5" />
-                    <ResultRow label="= Saldo a receber" value={formatMoeda(calc.resultadoComBoitel - data.valorTotalAntecipado)} bold accent />
-                    <ResultRow label="(-) Frete" value={formatMoeda(calc.custosFreteTotal)} className="text-destructive" />
-                    <div className="border-t border-dashed my-0.5" />
-                    <ResultRow label="= Saldo líquido final" value={formatMoeda(calc.resultadoComBoitel - data.valorTotalAntecipado - calc.custosFreteTotal)} bold accent />
-                  </ResultGroup>
-                </>
-              )}
-
-              <Separator />
-              <ResultGroup label="Resultado Líquido por Gado Magro">
-                <div className={`rounded border px-2.5 py-2 text-center ${isPositive ? 'bg-green-50/80 border-green-200 dark:bg-green-950/20 dark:border-green-800' : 'bg-destructive/5 border-destructive/20'}`}>
-                  <span className="text-[8px] text-muted-foreground block uppercase font-bold">Total</span>
-                  <strong className={`text-[16px] ${isPositive ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>
+                {/* RESULTADO FINAL — DESTAQUE */}
+                <div className={`rounded border px-3 py-2.5 text-center ${isPositive ? 'bg-green-50/80 border-green-200 dark:bg-green-950/20 dark:border-green-800' : 'bg-destructive/5 border-destructive/20'}`}>
+                  <span className="text-[8px] text-muted-foreground block uppercase font-bold tracking-wide">Total Operacional</span>
+                  <strong className={`text-[15px] tabular-nums ${isPositive ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>
+                    {formatMoeda(calc.totalOperacional)}
+                  </strong>
+                  <Separator className="my-1.5" />
+                  <span className="text-[8px] text-muted-foreground block uppercase font-bold tracking-wide">Resultado Líquido</span>
+                  <strong className={`text-[15px] tabular-nums ${isPositive ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>
                     {formatMoeda(calc.resultadoLiquido)}
                   </strong>
+                  <div className="flex justify-between text-[9px] mt-1 text-muted-foreground">
+                    <span>/cab: <strong className="text-foreground tabular-nums">{formatMoeda(calc.resultadoLiqCab)}</strong></span>
+                    <span>/kg: <strong className="text-foreground tabular-nums">{formatMoeda(calc.resultadoLiqKg)}</strong></span>
+                  </div>
                 </div>
-                <ResultRow label="Resultado Líq. / cabeça" value={formatMoeda(calc.resultadoLiqCab)} bold />
-                <ResultRow label="Resultado Líq. / kg" value={formatMoeda(calc.resultadoLiqKg)} bold />
-              </ResultGroup>
 
-              <Separator />
+                {/* CUSTO OPORTUNIDADE */}
+                <RGroup label="Custo Oportunidade">
+                  <RRow label="Total" value={formatMoeda(calc.custoOportTotal)} cls="text-destructive" />
+                  <RRow label="/cab" value={formatMoeda(calc.custoOportCab)} cls="text-destructive" />
+                </RGroup>
 
-              {/* BLOCO 5 — CUSTO OPORTUNIDADE */}
-              <ResultGroup label="Custo Oportunidade">
-                <ResultRow label="Custo oportunidade Total" value={formatMoeda(calc.custoOportTotal)} className="text-destructive" />
-                <ResultRow label="Custo oportunidade (R$/cabeça)" value={formatMoeda(calc.custoOportCab)} className="text-destructive" />
-                <ResultRow label="Custo oportunidade (R$/kg)" value={formatMoeda(calc.custoOportKg)} className="text-destructive" />
-              </ResultGroup>
+                <Separator />
+                <RGroup label="Viabilidade Comparada">
+                  <RRow label="Lucro Líquido" value={formatMoeda(calc.lucroViabilidade)} bold cls={calc.lucroViabilidade >= 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'} />
+                  <RRow label="/cab" value={formatMoeda(calc.lucroViabCab)} cls={calc.lucroViabCab >= 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'} />
+                  <RRow label="/kg" value={formatMoeda(calc.lucroViabKg)} cls={calc.lucroViabKg >= 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'} />
+                </RGroup>
 
-              <Separator />
-
-              {/* BLOCO 6 — VIABILIDADE COMPARADA */}
-              <ResultGroup label="Viabilidade Comparada ao dia do envio dos animais">
-                <ResultRow label="Lucro Líquido (R$)" value={formatMoeda(calc.lucroViabilidade)} bold className={calc.lucroViabilidade >= 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'} />
-                <ResultRow label="Lucro Líquido (R$/cabeça)" value={formatMoeda(calc.lucroViabCab)} className={calc.lucroViabCab >= 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'} />
-                <ResultRow label="Lucro Líquido (R$/kg)" value={formatMoeda(calc.lucroViabKg)} className={calc.lucroViabKg >= 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'} />
-              </ResultGroup>
-
-              {/* Actions */}
-              <div className="flex gap-2 pt-1">
-                <Button variant="outline" size="sm" onClick={onClose} className="flex-1 text-[11px]">Cancelar</Button>
-                <Button size="sm" onClick={handleSave} className="flex-1 font-bold text-[11px]">Salvar Planejamento</Button>
+                {/* ACTIONS */}
+                <div className="flex gap-2 pt-2">
+                  <Button variant="outline" size="sm" onClick={onClose} className="flex-1 text-[10px] h-7">Cancelar</Button>
+                  <Button size="sm" onClick={handleSave} className="flex-1 font-bold text-[10px] h-7">Salvar</Button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </TooltipProvider>
       </DialogContent>
     </Dialog>
   );
 }
 
-/* ── Sub-components ── */
+/* ══════════════════════════════════════════════════════════════
+   SUB-COMPONENTS
+   ══════════════════════════════════════════════════════════════ */
 
-function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <h4 className="text-[11px] font-bold uppercase text-muted-foreground flex items-center gap-1">{icon} {title}</h4>
-      <Separator />
-      {children}
-    </div>
-  );
+function ColTitle({ children }: { children: React.ReactNode }) {
+  return <h3 className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide border-b pb-1">{children}</h3>;
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function ColSubtitle({ children }: { children: React.ReactNode }) {
+  return <span className="text-[9px] font-bold uppercase text-muted-foreground flex items-center gap-1">{children}</span>;
+}
+
+function F({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <Label className="text-[10px]">{label}</Label>
+      <Label className="text-[9px] leading-tight">{label}</Label>
       {children}
     </div>
   );
 }
 
-function HintBelow({ children }: { children: React.ReactNode }) {
+function Inp(props: React.ComponentProps<typeof Input>) {
+  return <Input {...props} className={`h-7 text-[11px] tabular-nums text-right ${props.className || ''}`} />;
+}
+
+function Hint({ children }: { children: React.ReactNode }) {
   return <span className="text-[8px] text-muted-foreground italic block mt-0.5">{children}</span>;
 }
 
-function ResultGroup({ label, children }: { label: string; children: React.ReactNode }) {
+function CalcVal({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className="space-y-0.5">
-      <span className="text-[9px] font-bold uppercase text-muted-foreground">{label}</span>
+    <div className={`h-7 flex items-center px-2 rounded bg-muted/50 border text-[11px] font-medium tabular-nums ${className}`}>
       {children}
     </div>
   );
 }
 
-function ResultRow({ label, value, className = '', bold, accent }: { label: string; value: string; className?: string; bold?: boolean; accent?: boolean }) {
-  return (
-    <div className="flex justify-between text-[11px]">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={`${bold ? 'font-bold' : 'font-medium'} ${accent ? 'text-primary' : ''} ${className}`}>{value}</span>
+function InfoVal({ label, value, tip }: { label: string; value: string; tip?: string }) {
+  const content = (
+    <div className="text-center">
+      <span className="text-[8px] text-muted-foreground block">{label}</span>
+      <strong className="text-[11px] tabular-nums text-foreground">{value}</strong>
     </div>
   );
+  if (!tip) return content;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild><div className="cursor-help">{content}</div></TooltipTrigger>
+      <TooltipContent side="top" className="text-[10px] max-w-[200px]">{tip}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function ToggleBtn({ active, onClick, children, full }: { active: boolean; onClick: () => void; children: React.ReactNode; full?: boolean }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={`h-6 px-3 rounded text-[10px] font-bold border-2 transition-all ${full ? 'w-full' : ''} ${active ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}>
+      {children}
+    </button>
+  );
+}
+
+function RGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-0.5">
+      <span className="text-[8px] font-bold uppercase text-muted-foreground tracking-wide">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+function RRow({ label, value, bold, accent, cls = '', tip }: { label: string; value: string; bold?: boolean; accent?: boolean; cls?: string; tip?: string }) {
+  const row = (
+    <div className="flex justify-between text-[10px]">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={`tabular-nums ${bold ? 'font-bold' : 'font-medium'} ${accent ? 'text-primary' : ''} ${cls}`}>{value}</span>
+    </div>
+  );
+  if (!tip) return row;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild><div className="cursor-help">{row}</div></TooltipTrigger>
+      <TooltipContent side="left" className="text-[10px] max-w-[220px]">{tip}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function DashedLine() {
+  return <div className="border-t border-dashed my-0.5" />;
 }
