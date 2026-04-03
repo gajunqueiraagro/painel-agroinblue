@@ -576,14 +576,45 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
 
     // Fornecedor: priority 1 = snapshot (id/nome), 2 = lançamento, 3 = financeiro vinculado
+    console.log('[EDIT-FORN] loadAbateForEdit called', {
+      snapFornecedorId: snap?.fornecedorId,
+      snapFornecedorNome: snap?.fornecedorNome,
+      fazendaDestino: l.fazendaDestino,
+      fornecedoresCount: abateFornecedores.length,
+      fornecedoresNames: abateFornecedores.map(f => f.nome).slice(0, 10),
+    });
+
     const matchedFornecedor = matchFornecedor(abateFornecedores, {
       id: snap?.fornecedorId,
       nome: snap?.fornecedorNome || l.fazendaDestino,
     });
 
+    console.log('[EDIT-FORN] matchResult:', matchedFornecedor?.id, matchedFornecedor?.nome);
+
     if (matchedFornecedor) {
       setAbateFornecedorId(matchedFornecedor.id);
     } else {
+      // Try fetching directly from DB by ID if snapshot has fornecedorId
+      const directFornecedorId = snap?.fornecedorId;
+      if (directFornecedorId) {
+        supabase
+          .from('financeiro_fornecedores')
+          .select('id, nome, nome_normalizado, aliases')
+          .eq('id', directFornecedorId)
+          .maybeSingle()
+          .then(({ data: forn }) => {
+            if (forn) {
+              console.log('[EDIT-FORN] Found fornecedor directly from DB:', forn.nome);
+              setAbateFornecedores(prev => {
+                if (prev.some(f => f.id === forn.id)) return prev;
+                return [...prev, { id: forn.id, nome: forn.nome, nomeNormalizado: forn.nome_normalizado, aliases: forn.aliases as string[] | null }].sort((a, b) => a.nome.localeCompare(b.nome));
+              });
+              setAbateFornecedorId(forn.id);
+            }
+          });
+      }
+
+      // Also try via financeiro vinculado
       supabase
         .from('financeiro_lancamentos_v2')
         .select('favorecido_id')
@@ -591,12 +622,31 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         .not('favorecido_id', 'is', null)
         .limit(1)
         .then(({ data: finRecs }) => {
-          const matchedFromFinanceiro = matchFornecedor(abateFornecedores, {
-            id: finRecs?.[0]?.favorecido_id,
-            nome: snap?.fornecedorNome || l.fazendaDestino,
-          });
-          if (matchedFromFinanceiro) {
-            setAbateFornecedorId(matchedFromFinanceiro.id);
+          if (finRecs?.[0]?.favorecido_id) {
+            const matchedFromFinanceiro = matchFornecedor(abateFornecedores, {
+              id: finRecs[0].favorecido_id,
+              nome: snap?.fornecedorNome || l.fazendaDestino,
+            });
+            if (matchedFromFinanceiro) {
+              setAbateFornecedorId(matchedFromFinanceiro.id);
+            } else {
+              // Fetch the fornecedor directly
+              supabase
+                .from('financeiro_fornecedores')
+                .select('id, nome, nome_normalizado, aliases')
+                .eq('id', finRecs[0].favorecido_id)
+                .maybeSingle()
+                .then(({ data: forn }) => {
+                  if (forn) {
+                    console.log('[EDIT-FORN] Found fornecedor from financeiro:', forn.nome);
+                    setAbateFornecedores(prev => {
+                      if (prev.some(f => f.id === forn.id)) return prev;
+                      return [...prev, { id: forn.id, nome: forn.nome, nomeNormalizado: forn.nome_normalizado, aliases: forn.aliases as string[] | null }].sort((a, b) => a.nome.localeCompare(b.nome));
+                    });
+                    setAbateFornecedorId(forn.id);
+                  }
+                });
+            }
           }
         });
     }
