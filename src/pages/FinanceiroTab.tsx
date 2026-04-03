@@ -24,11 +24,12 @@ interface Props {
   modoMovimentacao?: boolean;
   filtroAnoInicial?: string;
   filtroMesInicial?: string;
+  filtroStatusInicial?: string;
   onBack?: () => void;
   drillDownLabel?: string;
-  onEditarAbate?: (lancamento: Lancamento) => void;
-  onEditarVenda?: (lancamento: Lancamento) => void;
-  onEditarCompra?: (lancamento: Lancamento) => void;
+  onEditarAbate?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
+  onEditarVenda?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
+  onEditarCompra?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
 }
 
 export type SubAba = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
