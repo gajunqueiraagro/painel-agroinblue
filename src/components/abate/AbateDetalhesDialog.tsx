@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { Calendar, Tag, Award, TrendingDown, CreditCard, FileText, Shield } from
 import { format, addDays, parseISO } from 'date-fns';
 import type { StatusOperacional } from '@/lib/statusOperacional';
 import { getStatusBadge } from '@/lib/statusOperacional';
+import { buildAbateCalculation, type AbateCalculation } from '@/lib/calculos/abate';
 
 export interface AbateDetalhes {
   dataVenda: string;
