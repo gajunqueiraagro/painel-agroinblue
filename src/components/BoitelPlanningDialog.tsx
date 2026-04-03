@@ -235,16 +235,16 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
             <div className="space-y-1">
               <ST>Desempenho</ST>
               <div className="grid grid-cols-2 gap-1">
-                <F label="Quebra viagem %"><I type="number" value={data.quebraViagem || ''} onChange={e => set('quebraViagem', +e.target.value || 0)} step="0.1" /></F>
-                <F label="Custo oport. R$/kg"><I type="number" value={data.custoOportunidade || ''} onChange={e => set('custoOportunidade', +e.target.value || 0)} step="0.01" /></F>
+                <F label="Quebra viagem %"><IP value={data.quebraViagem} onChange={v => set('quebraViagem', v)} step="0.1" /></F>
+                <F label="Custo oport. R$/kg"><IM value={data.custoOportunidade} onChange={v => set('custoOportunidade', v)} step="0.01" /></F>
               </div>
               <div className="grid grid-cols-2 gap-1">
                 <F label="Dias confinamento"><I type="number" value={data.dias || ''} onChange={e => set('dias', +e.target.value || 0)} /></F>
                 <F label="GMD kg/dia"><I type="number" value={data.gmd || ''} onChange={e => set('gmd', +e.target.value || 0)} step="0.001" /></F>
               </div>
               <div className="grid grid-cols-2 gap-1">
-                <F label="Rend. entrada %"><I type="number" value={data.rendimentoEntrada || ''} onChange={e => set('rendimentoEntrada', +e.target.value || 0)} step="0.01" /></F>
-                <F label="Rend. saída %"><I type="number" value={data.rendimento || ''} onChange={e => set('rendimento', +e.target.value || 0)} step="0.01" /></F>
+                <F label="Rend. entrada %"><IP value={data.rendimentoEntrada} onChange={v => set('rendimentoEntrada', v)} step="0.01" /></F>
+                <F label="Rend. saída %"><IP value={data.rendimento} onChange={v => set('rendimento', v)} step="0.01" /></F>
               </div>
 
               <Separator className="!my-0.5" />
