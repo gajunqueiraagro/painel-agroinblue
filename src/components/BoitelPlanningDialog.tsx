@@ -216,12 +216,12 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <div className="bg-blue-50/60 dark:bg-blue-950/20 rounded border border-blue-200 dark:border-blue-800 p-1 space-y-0.5">
                   <div className="grid grid-cols-2 gap-1">
                     <F label="Data"><I type="date" value={data.dataAdiantamento} onChange={e => set('dataAdiantamento', e.target.value)} /></F>
-                    <F label="% diárias"><I type="number" value={data.pctAdiantamentoDiarias || ''} onChange={e => set('pctAdiantamentoDiarias', +e.target.value || 0)} step="0.1" /></F>
+                    <F label="% diárias"><IP value={data.pctAdiantamentoDiarias} onChange={v => set('pctAdiantamentoDiarias', v)} step="0.1" /></F>
                   </div>
                   <div className="grid grid-cols-3 gap-1">
-                    <F label="Diárias R$"><I type="number" value={data.valorAdiantamentoDiarias || ''} onChange={e => { set('valorAdiantamentoDiarias', +e.target.value || 0); set('pctAdiantamentoDiarias', 0); }} /></F>
-                    <F label="Sanitário R$"><I type="number" value={data.valorAdiantamentoSanitario || ''} onChange={e => set('valorAdiantamentoSanitario', +e.target.value || 0)} /></F>
-                    <F label="Outros R$"><I type="number" value={data.valorAdiantamentoOutros || ''} onChange={e => set('valorAdiantamentoOutros', +e.target.value || 0)} /></F>
+                    <F label="Diárias R$"><IM value={data.valorAdiantamentoDiarias} onChange={v => { set('valorAdiantamentoDiarias', v); set('pctAdiantamentoDiarias', 0); }} /></F>
+                    <F label="Sanitário R$"><IM value={data.valorAdiantamentoSanitario} onChange={v => set('valorAdiantamentoSanitario', v)} /></F>
+                    <F label="Outros R$"><IM value={data.valorAdiantamentoOutros} onChange={v => set('valorAdiantamentoOutros', v)} /></F>
                   </div>
                   <div className="flex justify-between text-[8px] bg-blue-100/60 dark:bg-blue-900/30 rounded px-1.5 py-0.5 border border-blue-300 dark:border-blue-700">
                     <span className="font-bold text-blue-800 dark:text-blue-300">Total</span>
