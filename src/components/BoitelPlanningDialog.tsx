@@ -384,6 +384,9 @@ function HI({ l, v }: { l: string; v: string }) {
 }
 function ST({ children }: { children: React.ReactNode }) { return <h3 className="text-[9px] font-bold uppercase text-slate-800 dark:text-slate-200 tracking-wide border-b border-slate-400 dark:border-slate-500 pb-0.5">{children}</h3>; }
 function F({ label, children }: { label: string; children: React.ReactNode }) { return <div><Label className="text-[7px] leading-none font-semibold text-foreground/70">{label}</Label>{children}</div>; }
+function FH({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return <div><Label className="text-[7px] leading-none font-semibold text-foreground/70">{label}</Label>{children}{hint && <span className="text-[6px] text-muted-foreground leading-none block mt-0.5">{hint}</span>}</div>;
+}
 function I(props: React.ComponentProps<typeof Input>) { return <Input {...props} className={`h-5 text-[9px] tabular-nums text-right bg-background border-border shadow-sm ${props.className || ''}`} />; }
 function CV({ children }: { children: React.ReactNode }) { return <div className="h-5 flex items-center px-1.5 rounded bg-muted/60 border border-border text-[9px] font-semibold tabular-nums text-foreground">{children}</div>; }
 function TB({ a, o, children, full }: { a: boolean; o: () => void; children: React.ReactNode; full?: boolean }) {
@@ -394,27 +397,47 @@ function RR({ l, v, b, accent, c = '' }: { l: string; v: string; b?: boolean; ac
 }
 function DL() { return <div className="border-t border-dashed my-0.5" />; }
 
-/** Formatted monetary input: shows 0.000,00 on blur, raw number on focus */
-function IM({ value, onChange, step }: { value: number; onChange: (v: number) => void; step?: string }) {
-  const [display, setDisplay] = useState(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+/** Formatted monetary input — on focus shows raw with comma, on blur formats pt-BR */
+function IM({ value, onChange, step, decimals = 2 }: { value: number; onChange: (v: number) => void; step?: string; decimals?: number }) {
+  const fmt = (v: number) => v ? v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) : '';
+  const [display, setDisplay] = useState(fmt(value));
   const [focused, setFocused] = useState(false);
-  useEffect(() => { if (!focused) setDisplay(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''); }, [value, focused]);
+  useEffect(() => { if (!focused) setDisplay(fmt(value)); }, [value, focused, decimals]);
   return <Input className="h-5 text-[9px] tabular-nums text-right bg-background border-border shadow-sm" value={display}
     onChange={e => { setDisplay(e.target.value); }}
-    onFocus={() => { setFocused(true); setDisplay(value ? String(value) : ''); }}
-    onBlur={() => { const clean = display.replace(/\./g, '').replace(',', '.'); const n = parseFloat(clean); onChange(isNaN(n) ? 0 : n); setFocused(false); }}
+    onFocus={() => {
+      setFocused(true);
+      setDisplay(value ? value.toFixed(decimals).replace('.', ',') : '');
+    }}
+    onBlur={() => {
+      let clean = display.trim();
+      if (clean.includes(',')) { clean = clean.replace(/\./g, '').replace(',', '.'); }
+      const n = parseFloat(clean);
+      onChange(isNaN(n) ? 0 : Math.round(n * Math.pow(10, decimals)) / Math.pow(10, decimals));
+      setFocused(false);
+    }}
     inputMode="decimal" step={step} />;
 }
 
-/** Formatted percentage input: shows 00,00% on blur */
+/** Formatted percentage input — on focus shows raw with comma */
 function IP({ value, onChange, decimals = 2, step }: { value: number; onChange: (v: number) => void; decimals?: number; step?: string }) {
-  const [display, setDisplay] = useState(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + '%' : '');
+  const fmt = (v: number) => v ? v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + '%' : '';
+  const [display, setDisplay] = useState(fmt(value));
   const [focused, setFocused] = useState(false);
-  useEffect(() => { if (!focused) setDisplay(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + '%' : ''); }, [value, focused, decimals]);
+  useEffect(() => { if (!focused) setDisplay(fmt(value)); }, [value, focused, decimals]);
   return <Input className="h-5 text-[9px] tabular-nums text-right bg-background border-border shadow-sm" value={display}
     onChange={e => { setDisplay(e.target.value); }}
-    onFocus={() => { setFocused(true); setDisplay(value ? String(value) : ''); }}
-    onBlur={() => { const clean = display.replace(/%/g, '').replace(/\./g, '').replace(',', '.').trim(); const n = parseFloat(clean); onChange(isNaN(n) ? 0 : n); setFocused(false); }}
+    onFocus={() => {
+      setFocused(true);
+      setDisplay(value ? value.toFixed(decimals).replace('.', ',') : '');
+    }}
+    onBlur={() => {
+      let clean = display.replace(/%/g, '').trim();
+      if (clean.includes(',')) { clean = clean.replace(/\./g, '').replace(',', '.'); }
+      const n = parseFloat(clean);
+      onChange(isNaN(n) ? 0 : Math.round(n * Math.pow(10, decimals)) / Math.pow(10, decimals));
+      setFocused(false);
+    }}
     inputMode="decimal" step={step} />;
 }
 
