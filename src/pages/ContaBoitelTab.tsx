@@ -141,7 +141,9 @@ export function ContaBoitelTab({ onBack }: Props) {
       .filter(l => l.origem_tipo === 'boitel:custo_frete' || (l.origem_tipo === 'boitel:custo' && l.descricao?.toLowerCase().includes('frete')))
       .reduce((s, l) => s + l.valor, 0);
 
-    const saldoLiquidoEsperado = selected.receita_produtor - adiantPagos - adiantRecebidos - (selected.custo_frete || 0);
+    // Adiantamento pago ao boitel é devolvido na liquidação → soma ao saldo a receber
+    const saldoAReceberBoitel = selected.receita_produtor + adiantPagos;
+    const saldoLiquidoEsperado = saldoAReceberBoitel - adiantRecebidos - (selected.custo_frete || 0);
 
     const totalRealizado = lancamentos
       .filter(l => l.status_transacao === 'conciliado' || l.status_transacao === 'confirmado')
@@ -152,7 +154,7 @@ export function ContaBoitelTab({ onBack }: Props) {
 
     const gap = totalRealizado - saldoLiquidoEsperado;
 
-    return { adiantPagos, adiantRecebidos, custoFrete, saldoLiquidoEsperado, totalRealizado, totalEntradas, totalSaidas, gap };
+    return { adiantPagos, adiantRecebidos, custoFrete, saldoAReceberBoitel, saldoLiquidoEsperado, totalRealizado, totalEntradas, totalSaidas, gap };
   }, [selected, lancamentos]);
 
   async function handleNovoLancamento() {
@@ -337,20 +339,24 @@ export function ContaBoitelTab({ onBack }: Props) {
                     <span className="font-bold text-primary">{fmt(selected.receita_produtor)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">(-) Adiantamentos pagos ao boitel</span>
-                    <span className="text-destructive">{fmt(conciliacao.adiantPagos)}</span>
+                    <span className="text-muted-foreground">(+) Adiantamento pago ao boitel</span>
+                    <span className="text-primary">{fmt(conciliacao.adiantPagos)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground font-semibold">= Saldo a receber do boitel</span>
+                    <span className="font-bold">{fmt(conciliacao.saldoAReceberBoitel)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">(-) Adiantamentos recebidos</span>
                     <span className="text-muted-foreground">{fmt(conciliacao.adiantRecebidos)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">(-) Frete</span>
+                    <span className="text-muted-foreground">(-) Frete pago fora</span>
                     <span className="text-destructive">{fmt(selected.custo_frete || 0)}</span>
                   </div>
                   <hr className="border-border" />
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground font-semibold">Saldo líquido esperado</span>
+                    <span className="text-muted-foreground font-semibold">Saldo líquido final de caixa</span>
                     <span className="font-bold">{fmt(conciliacao.saldoLiquidoEsperado)}</span>
                   </div>
                   <div className="flex justify-between">

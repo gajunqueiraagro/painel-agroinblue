@@ -196,8 +196,10 @@ export async function gerarFinanceiroBoitel(
   }
 
   // 1. RECEITA
+  // Adiantamento pago ao boitel é devolvido na liquidação final,
+  // então o valor a receber do boitel = receita_produtor + adiantamento
   const valorReceitaLiquida = temAdiantamento
-    ? op.receita_produtor - op.valor_total_antecipado
+    ? op.receita_produtor + op.valor_total_antecipado
     : op.receita_produtor;
 
   const parcelas = options?.parcelas || [];
@@ -248,7 +250,7 @@ export async function gerarFinanceiroBoitel(
       data_competencia: dataRecebimento,
       data_pagamento: dataRecebimento,
       descricao: descBase,
-      historico: `Boitel: ${op.fazenda_destino_nome} | Lote: ${op.lote || '-'} | Contrato: ${op.numero_contrato || '-'}${temAdiantamento ? ' | Adiantamento descontado: R$ ' + op.valor_total_antecipado.toFixed(2) : ''}`,
+      historico: `Boitel: ${op.fazenda_destino_nome} | Lote: ${op.lote || '-'} | Contrato: ${op.numero_contrato || '-'}${temAdiantamento ? ' | Adiantamento devolvido na liquidação: R$ ' + op.valor_total_antecipado.toFixed(2) : ''}`,
       origem_tipo: 'boitel:receita',
     });
   }
