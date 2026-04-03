@@ -77,6 +77,7 @@ export interface VendaFinanceiroPanelRef {
   getValidationErrors: () => string[];
   getFornecedorId: () => string;
   getRecebimentoSnapshot: () => { formaReceb: 'avista' | 'prazo'; parcelas: Parcela[] };
+  getBoitelData: () => BoitelData | null;
   resetForm: () => void;
 }
 
