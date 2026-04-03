@@ -68,17 +68,26 @@ Deno.serve(async (req) => {
       .eq("origem_lancamento", "boitel");
     if (e1) throw new Error("[Etapa 1 - financeiro_lancamentos_v2] " + e1.message);
 
-    // === STEP 2: Limpar boitel_lote_id em lancamentos (zootécnico) ===
+    // === STEP 2: Limpar boitel_lote_id e boitel_id (legado) em lancamentos ===
     let lancLimpos = 0;
     if (loteIds.length > 0) {
       const { count: c0, error: e0 } = await supabaseAdmin
         .from("lancamentos")
-        .update({ boitel_lote_id: null } as any)
+        .update({ boitel_lote_id: null, boitel_id: null } as any)
         .in("boitel_lote_id", loteIds)
         .select("id", { count: "exact", head: true });
-      if (e0) throw new Error("[Etapa 2 - limpar lancamentos.boitel_lote_id] " + e0.message);
+      if (e0) throw new Error("[Etapa 2a - limpar lancamentos.boitel_lote_id] " + e0.message);
       lancLimpos = c0 || 0;
     }
+
+    // Also clean orphan boitel_id references not linked via boitel_lote_id
+    const { count: legacyLimpos, error: eLeg } = await supabaseAdmin
+      .from("lancamentos")
+      .update({ boitel_id: null } as any)
+      .not("boitel_id", "is", null)
+      .eq("cliente_id", cliente_id)
+      .select("id", { count: "exact", head: true });
+    if (eLeg) throw new Error("[Etapa 2b - limpar lancamentos.boitel_id legado] " + eLeg.message);
 
     // === STEP 3: boitel_adiantamentos (FK → boitel_lotes) ===
     let adiantCount = 0;
@@ -127,18 +136,32 @@ Deno.serve(async (req) => {
       .eq("cliente_id", cliente_id);
     if (e6) throw new Error("[Etapa 7 - boitel_operacoes legado] " + e6.message);
 
-    return json({
-      ok: true,
-      resumo: {
-        financeiros_removidos: finCount || 0,
-        lancamentos_limpos: lancLimpos,
-        adiantamentos_removidos: adiantCount,
-        historicos_removidos: histCount,
-        planejamentos_removidos: planCount,
-        lotes_removidos: loteCount || 0,
-        operacoes_legadas_removidas: opCount || 0,
-      },
+    const resumo = {
+      financeiros_removidos: finCount || 0,
+      lancamentos_limpos: lancLimpos,
+      lancamentos_legado_limpos: legacyLimpos || 0,
+      adiantamentos_removidos: adiantCount,
+      historicos_removidos: histCount,
+      planejamentos_removidos: planCount,
+      lotes_removidos: loteCount || 0,
+      operacoes_legadas_removidas: opCount || 0,
+    };
+
+    // === STEP 8: Audit log ===
+    await supabaseAdmin.from("audit_log").insert({
+      cliente_id,
+      fazenda_id: null,
+      usuario_id: user.id,
+      modulo: "boitel",
+      acao: "reset_teste",
+      tabela_origem: "boitel_lotes",
+      registro_id: null,
+      resumo: `Reset Boitel: ${resumo.lotes_removidos} lotes, ${resumo.financeiros_removidos} financeiros, ${resumo.planejamentos_removidos} planejamentos removidos`,
+      dados_anteriores: null,
+      dados_novos: resumo as any,
     });
+
+    return json({ ok: true, resumo });
   } catch (err) {
     return json({ error: (err as Error).message }, 500);
   }
