@@ -524,6 +524,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setMotivoMorte(''); setMotivoMorteCustom('');
     setRendCarcaca(''); setFunruralPct(''); setFunruralReais('');
     setVendaDetalhes(null);
+    setBoitelDataForResumo(null);
     pendingFornecedorMatch.current = null;
   };
 
