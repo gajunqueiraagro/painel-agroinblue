@@ -328,7 +328,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       quantidade: Number(quantidade) || 0,
       pesoKg: Number(pesoKg) || 0,
       categoria,
-      fazendaOrigem: campos.origem.auto ? (campos.origem as any).value || '' : fazendaOrigem,
+      fazendaOrigem: nomeFazenda || fazendaOrigem,
       fazendaDestino,
       data,
       statusOperacional: statusOp,
@@ -336,7 +336,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       precoReferenciaArroba: transferenciaDetalhes?.precoReferenciaArroba || undefined,
       precoReferenciaCabeca: transferenciaDetalhes?.precoReferenciaCabeca || undefined,
     });
-  }, [isTransferenciaSaida, quantidade, pesoKg, categoria, fazendaOrigem, fazendaDestino, data, statusOp, observacao, transferenciaDetalhes, campos]);
+  }, [isTransferenciaSaida, quantidade, pesoKg, categoria, fazendaOrigem, fazendaDestino, data, statusOp, observacao, transferenciaDetalhes, nomeFazenda]);
 
   const calc = useMemo(() => {
     const qtd = Number(quantidade) || 0;
