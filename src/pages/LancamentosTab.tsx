@@ -986,9 +986,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       dataAbate: abateDataAbate || undefined,
       tipoVenda: tipoVendaFinal || undefined,
       detalhesSnapshot: (() => {
-        if (isCompra && compraDetalhes) return { type: 'compra', ...compraDetalhes };
+        if (isCompra && compraDetalhes) return { type: 'compra', ...compraDetalhes, fornecedorId: compraFornecedorId || undefined };
         if (isAbate && abateDetalhes) return { type: 'abate', ...abateDetalhes, fornecedorId: abateFornecedorId || undefined };
-        if (isVenda && vendaDetalhes) return { type: 'venda', ...vendaDetalhes, tipoPreco: vendaTipoPreco, precoInput: vendaPrecoInput };
+        if (isVenda && vendaDetalhes) return { type: 'venda', ...vendaDetalhes, tipoPreco: vendaTipoPreco, precoInput: vendaPrecoInput, fornecedorId: vendaDestinoFornecedorId || undefined };
         return undefined;
       })(),
     };
