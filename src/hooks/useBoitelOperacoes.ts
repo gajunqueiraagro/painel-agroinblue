@@ -183,8 +183,8 @@ export async function gerarFinanceiroBoitel(
 
   // Buscar plano de contas para receita de venda com boitel
   const subcentroCandidates = [
-    'PEC/RECEITA/VENDAS COM BOITEL',
-    'PEC/RECEITA/VENDAS EM PÉ/MACHOS',
+    'PEC/RECEITA/VENDAS/BOITEL',
+    'PEC/RECEITA/VENDAS/MACHOS ADULTOS',
     'PEC/RECEITA/VENDAS/MACHOS',
   ];
 
@@ -197,9 +197,11 @@ export async function gerarFinanceiroBoitel(
     .in('subcentro', subcentroCandidates);
 
   if (!planoReceita || planoReceita.length === 0) {
+    console.error('[Boitel Financeiro] Mapeamento de receita não encontrado.', { clienteId, subcentroCandidates });
     toast.error(`Mapeamento financeiro não encontrado para receita de Boitel. Subcentros buscados: ${subcentroCandidates.join(', ')}. Cadastre no Plano de Contas.`);
     return false;
   }
+  console.log('[Boitel Financeiro] Receita mapeada:', { subcentro: planoReceita[0].subcentro, macro: planoReceita[0].macro_custo, centro: planoReceita[0].centro_custo });
 
   const clasReceita = planoReceita[0];
   const inserts: any[] = [];
@@ -230,9 +232,9 @@ export async function gerarFinanceiroBoitel(
 
   // 2. SAÍDAS: apenas custos pagos diretamente (frete, sanidade, outros)
   const custosDiretos = [
-    { valor: op.custo_frete, label: 'Frete Boitel', subcentroHint: 'PEC/CUSTEIO/FRETE' },
-    { valor: op.custo_sanidade, label: 'Sanidade Boitel', subcentroHint: 'PEC/CUSTEIO/SANITARIO' },
-    { valor: op.outros_custos + op.custo_nutricao + op.custos_extras_parceria, label: 'Outros Custos Boitel', subcentroHint: 'PEC/CUSTEIO/OUTROS' },
+    { valor: op.custo_frete, label: 'Frete Boitel', subcentroHint: 'FRETE' },
+    { valor: op.custo_sanidade, label: 'Sanidade Boitel', subcentroHint: 'SANIDADE' },
+    { valor: op.outros_custos + op.custo_nutricao + op.custos_extras_parceria, label: 'Outros Custos Boitel', subcentroHint: 'OUTROS' },
   ];
 
   for (const custo of custosDiretos) {
@@ -245,11 +247,12 @@ export async function gerarFinanceiroBoitel(
       .eq('cliente_id', clienteId)
       .eq('ativo', true)
       .eq('tipo_operacao', '2-Saídas')
-      .ilike('subcentro', `%${custo.subcentroHint.split('/').pop()}%`)
+      .ilike('subcentro', `%${custo.subcentroHint}%`)
       .limit(1);
 
     // If no specific mapping found, use a generic custeio produtivo
     const clasSaida = planoSaida?.[0];
+    console.log(`[Boitel Financeiro] Saída "${custo.label}": hint="${custo.subcentroHint}", encontrado=${!!clasSaida}`, clasSaida || 'buscando fallback...');
     if (!clasSaida) {
       // Try generic fallback
       const { data: fallback } = await supabase
