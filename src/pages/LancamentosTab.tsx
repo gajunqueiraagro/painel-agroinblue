@@ -1342,14 +1342,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       {/* Editing banner */}
       {editingAbateId && (
         <div className="bg-primary/10 border border-primary/30 rounded-md px-3 py-1.5 text-[11px] font-bold text-primary">
-          Editando abate #{editingAbateId.slice(0, 8)}
+          Editando {tipo === 'venda' ? 'venda' : tipo === 'abate' ? 'abate' : 'registro'} #{editingAbateId.slice(0, 8)}
         </div>
       )}
 
       {/* Título da movimentação */}
       <div className="flex items-center gap-2">
         <span className="text-base">{currentTipoIcon}</span>
-        <h2 className="text-[15px] font-semibold text-foreground">{editingAbateId ? 'Editar Abate' : currentTipoLabel}</h2>
+        <h2 className="text-[15px] font-semibold text-foreground">{editingAbateId ? (tipo === 'venda' ? 'Editar Venda' : tipo === 'abate' ? 'Editar Abate' : 'Editar Registro') : currentTipoLabel}</h2>
       </div>
 
       {/* STATUS — inline label + cards + explanation below */}
