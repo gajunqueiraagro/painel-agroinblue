@@ -628,7 +628,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, [abateFornecedores]);
+  }, [abateFornecedores, aba, anoFiltro, mesFiltro, onReturnFromEdit]);
 
   // Auto-load abate for editing when navigated from another tab
   useEffect(() => {
