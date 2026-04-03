@@ -1,0 +1,1 @@
+ALTER TABLE public.financeiro_lancamentos_v2 ADD COLUMN IF NOT EXISTS grupo_geracao_id uuid;
