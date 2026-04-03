@@ -1030,6 +1030,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('conciliado');
           resetFinancialFields();
           toast.success('Abate atualizado com financeiro!');
+          onReturnFromEdit?.();
         } else if (isVenda && calc.valorLiquido > 0) {
           // Auto-generate/update financeiro for venda
           if (vendaFinanceiroRef.current) {
