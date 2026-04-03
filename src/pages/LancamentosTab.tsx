@@ -493,7 +493,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   }, [abateParaEditar]);
 
   // Load venda into form for editing
-  const loadVendaForEdit = useCallback((l: Lancamento) => {
+  const loadVendaForEdit = useCallback(async (l: Lancamento) => {
     // 1. Set tab & type
     setAba('saida');
     setTipo('venda');
@@ -519,27 +519,113 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       if (forn) setVendaDestinoFornecedorId(forn.id);
     }
 
-    // 5. Build vendaDetalhes from stored lancamento data
+    // 5. Query financial records to reconstruct frete, comissão, parcelas
+    let freteVal = '';
+    let comissaoVal = '';
+    let formaReceb: 'avista' | 'prazo' = 'avista';
+    let parcelasArr: { data: string; valor: number }[] = [];
+
+    try {
+      const { data: finRecs } = await supabase
+        .from('financeiro_lancamentos_v2')
+        .select('origem_tipo, valor, data_pagamento, descricao, sinal')
+        .eq('movimentacao_rebanho_id', l.id)
+        .eq('cancelado', false)
+        .order('data_pagamento', { ascending: true });
+
+      if (finRecs && finRecs.length > 0) {
+        // Extract frete
+        const freteRec = finRecs.find(r => r.origem_tipo === 'venda:frete');
+        if (freteRec) freteVal = String(freteRec.valor);
+
+        // Extract comissão — reverse-calc percentage from value
+        const comissaoRec = finRecs.find(r => r.origem_tipo === 'venda:comissao');
+
+        // Extract parcelas (receita entries)
+        const parcelaRecs = finRecs.filter(r => r.origem_tipo === 'venda:parcela');
+        if (parcelaRecs.length > 1) {
+          formaReceb = 'prazo';
+          parcelasArr = parcelaRecs.map(p => ({
+            data: p.data_pagamento || l.data,
+            valor: p.valor,
+          }));
+        } else if (parcelaRecs.length === 1) {
+          const p = parcelaRecs[0];
+          // If payment date differs from competence date, it's a prazo with 1 parcela
+          if (p.data_pagamento && p.data_pagamento !== l.data) {
+            formaReceb = 'prazo';
+            parcelasArr = [{ data: p.data_pagamento, valor: p.valor }];
+          }
+        }
+
+        // Reverse-calc comissão percentage
+        if (comissaoRec) {
+          const totalBruto = parcelaRecs.reduce((s, r) => s + r.valor, 0);
+          if (totalBruto > 0) {
+            comissaoVal = String(((comissaoRec.valor / totalBruto) * 100).toFixed(2));
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar financeiro da venda para edição:', err);
+    }
+
+    // 6. Determine tipoPreco from lancamento data
+    // precoArroba field stores the price input value; determine type from context
+    const qtd = l.quantidade || 0;
+    const peso = l.pesoMedioKg || 0;
+    const totalKg = qtd * peso;
+    const storedPreco = l.precoArroba || 0;
+    let tipoPreco: 'por_kg' | 'por_cab' | 'por_total' = 'por_kg';
+    let precoInput = storedPreco ? String(storedPreco) : '';
+
+    // Try to infer tipoPreco from the stored price and valorTotal
+    if (storedPreco > 0 && l.valorTotal && qtd > 0) {
+      const brutoFromKg = totalKg * storedPreco;
+      const brutoFromCab = qtd * storedPreco;
+      // Add back deductions to get original bruto
+      const deductions = (l.descontoFunrural || 0) + (l.outrosDescontos || 0) + (l.descontoQualidade || 0);
+      const estimatedBruto = (l.valorTotal || 0) + deductions + (Number(freteVal) || 0) + (Number(comissaoVal) > 0 ? ((l.valorTotal || 0) + deductions) * Number(comissaoVal) / 100 : 0);
+      
+      if (Math.abs(brutoFromKg - estimatedBruto) < 1) {
+        tipoPreco = 'por_kg';
+      } else if (Math.abs(brutoFromCab - estimatedBruto) < 1) {
+        tipoPreco = 'por_cab';
+      } else if (Math.abs(storedPreco - estimatedBruto) < 1) {
+        tipoPreco = 'por_total';
+      }
+    }
+
+    // 7. Build vendaDetalhes with all data
     const vendaDet: VendaDetalhes = {
       tipoVenda: (tv === 'desmama' || tv === 'gado_adulto') ? tv as 'desmama' | 'gado_adulto' : 'gado_adulto',
-      tipoPreco: 'por_kg',
-      precoInput: l.precoArroba ? String(l.precoArroba) : '',
-      frete: '',
-      comissaoPct: '',
+      tipoPreco,
+      precoInput,
+      frete: freteVal,
+      comissaoPct: comissaoVal,
       outrosCustos: l.outrosDescontos ? String(l.outrosDescontos) : '',
       funruralPct: '',
       funruralReais: '',
       notaFiscal: l.notaFiscal || '',
-      formaReceb: 'avista',
-      qtdParcelas: '1',
-      parcelas: [],
+      formaReceb,
+      qtdParcelas: parcelasArr.length > 0 ? String(parcelasArr.length) : '1',
+      parcelas: parcelasArr,
     };
 
-    // Reverse-calc funrural percentage if available
-    if (l.descontoFunrural && l.descontoFunrural > 0 && l.valorTotal) {
-      const valorBruto = (l.valorTotal || 0) + (l.descontoFunrural || 0) + (l.outrosDescontos || 0);
-      if (valorBruto > 0) {
-        vendaDet.funruralPct = String(((l.descontoFunrural / valorBruto) * 100).toFixed(2));
+    // Reverse-calc funrural
+    if (l.descontoFunrural && l.descontoFunrural > 0) {
+      // Check if it looks like a percentage-based deduction
+      const estimatedBruto = totalKg * storedPreco;
+      if (estimatedBruto > 0) {
+        const pct = (l.descontoFunrural / estimatedBruto) * 100;
+        // Common funrural percentages: 1.5%, 2.05%, etc.
+        if (pct > 0.5 && pct < 10) {
+          vendaDet.funruralPct = String(pct.toFixed(2));
+        } else {
+          vendaDet.funruralReais = String(l.descontoFunrural);
+        }
+      } else {
+        vendaDet.funruralReais = String(l.descontoFunrural);
       }
     }
 
@@ -551,12 +637,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setFrete(vendaDet.frete);
     setComissaoPct(vendaDet.comissaoPct);
     setOutrosDescontos(vendaDet.outrosCustos);
+    setDescontoQualidade(l.descontoQualidade ? String(l.descontoQualidade) : '');
 
-    // 6. Set editing mode (reuse editingAbateId for all types)
+    // 8. Set editing mode (reuse editingAbateId for all types)
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, [abateFornecedores]);
+  }, [abateFornecedores, clienteAtual, fazendaAtual]);
 
   // Auto-load venda for editing when navigated from another tab
   useEffect(() => {
