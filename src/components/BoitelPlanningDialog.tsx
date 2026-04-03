@@ -280,7 +280,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                   <F label="Parcelas"><I type="number" min="1" max="48" value={data.qtdParcelas} onChange={e => handleQtdP(e.target.value)} /></F>
                   <div className="max-h-[120px] overflow-y-auto space-y-0.5">
                     {data.parcelas.map((p, i) => (
-                      <div key={i} className="grid grid-cols-2 gap-1 bg-muted/20 rounded px-1 py-0.5">
+                      <div key={i} className="grid grid-cols-2 gap-1 bg-muted/40 rounded px-1 py-0.5">
                         <div><Label className="text-[7px]">P{i + 1}</Label><I type="date" value={p.data} onChange={e => { const np = [...data.parcelas]; np[i] = { ...np[i], data: e.target.value }; set('parcelas', np); }} /></div>
                         <div><Label className="text-[7px]">R$</Label><IM value={p.valor} onChange={v => { const np = [...data.parcelas]; np[i] = { ...np[i], valor: v }; set('parcelas', np); }} /></div>
                       </div>
