@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,9 +58,22 @@ function fmtDate(iso: string) { if (!iso) return '-'; try { return format(parseI
 
 export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quantidade, pesoKg, fazendaNome, dataLancamento, destinoNome }: Props) {
   const [data, setData] = useState<BoitelData>({ ...defaultData });
+  const wasOpenRef = useRef(false);
 
   useEffect(() => {
-    if (open) setData({ ...defaultData, qtdCabecas: quantidade || 0, pesoInicial: pesoKg || 0, fazendaOrigem: fazendaNome || '', dataEnvio: dataLancamento || '', nomeBoitel: destinoNome || '', ...initialData });
+    if (open && !wasOpenRef.current) {
+      setData({
+        ...defaultData,
+        qtdCabecas: quantidade || 0,
+        pesoInicial: pesoKg || 0,
+        fazendaOrigem: fazendaNome || '',
+        dataEnvio: dataLancamento || '',
+        nomeBoitel: destinoNome || '',
+        ...initialData,
+      });
+    }
+
+    wasOpenRef.current = open;
   }, [open, initialData, quantidade, pesoKg, fazendaNome, dataLancamento, destinoNome]);
 
   const set = useCallback(<K extends keyof BoitelData>(key: K, value: BoitelData[K]) => { setData(prev => ({ ...prev, [key]: value })); }, []);
