@@ -211,6 +211,10 @@ const Index = () => {
       setVendaParaEditar(null);
       setCompraParaEditar(null);
       setEditOriginTab(null);
+      setEditOriginSubAba(undefined);
+      setEditOriginStatusFiltro(undefined);
+      setEditOriginAnoFiltro(undefined);
+      setEditOriginMesFiltro(undefined);
     }
     if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
     setActiveTab(tab);
