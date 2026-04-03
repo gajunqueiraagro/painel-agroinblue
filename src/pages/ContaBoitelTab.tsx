@@ -100,7 +100,7 @@ export function ContaBoitelTab({ onBack }: Props) {
   async function loadLancamentos(boitelId: string) {
     const { data } = await supabase
       .from('financeiro_lancamentos_v2')
-      .select('id, data_competencia, data_pagamento, descricao, valor, sinal, tipo_operacao, origem_tipo, status_transacao, cancelado')
+      .select('id, data_competencia, data_pagamento, descricao, valor, sinal, tipo_operacao, origem_tipo, status_transacao, cancelado, grupo_geracao_id')
       .eq('boitel_id', boitelId)
       .eq('cancelado', false)
       .order('data_pagamento', { ascending: true });
