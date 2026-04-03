@@ -242,6 +242,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [tipoPeso, setTipoPeso] = useState<string>('vivo');
   const [vendaTipoPreco, setVendaTipoPreco] = useState<string>('por_kg');
   const [vendaPrecoInput, setVendaPrecoInput] = useState('');
+  const [boitelDataForResumo, setBoitelDataForResumo] = useState<import('@/components/BoitelPlanningDialog').BoitelData | null>(null);
   const [rendCarcaca, setRendCarcaca] = useState('');
   const [funruralPct, setFunruralPct] = useState('');
   const [funruralReais, setFunruralReais] = useState('');
@@ -523,6 +524,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setMotivoMorte(''); setMotivoMorteCustom('');
     setRendCarcaca(''); setFunruralPct(''); setFunruralReais('');
     setVendaDetalhes(null);
+    setBoitelDataForResumo(null);
     pendingFornecedorMatch.current = null;
   };
 
@@ -865,9 +867,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     // 4. Check for snapshot first (PRIORITY 1)
     const vendaSnap = l.detalhesSnapshot;
     if (vendaSnap && vendaSnap.type === 'venda_boitel') {
-      // Boitel: restore tipoPeso to 'boitel', no vendaDetalhes needed
       setTipoPeso('boitel');
-      // The VendaFinanceiroPanel will load boitelData from the boitel_id linkage
+      // Store snapshot boitelData for rehydration via initialBoitelData prop
+      if (vendaSnap.boitelSnapshot) {
+        setBoitelDataForResumo(vendaSnap.boitelSnapshot as any);
+      }
       console.log('[Venda Edit] Rehydrating Boitel from snapshot', vendaSnap);
     } else if (vendaSnap && vendaSnap.type === 'venda') {
       const tv = vendaSnap.tipoVenda || 'gado_adulto';
@@ -1318,8 +1322,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           };
         }
         if (isVenda && tipoPeso === 'boitel') {
-          // Boitel: snapshot from VendaFinanceiroPanel's boitelData (via ref)
+          // Boitel: full snapshot including ALL boitelData fields for rehydration
           const recebSnap = vendaFinanceiroRef.current?.getRecebimentoSnapshot?.();
+          const bd = vendaFinanceiroRef.current?.getBoitelData?.();
           return {
             type: 'venda_boitel',
             tipoVenda: 'boitel',
@@ -1330,6 +1335,42 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             statusOperacional: statusOp,
             formaReceb: recebSnap?.formaReceb || 'avista',
             parcelas: recebSnap?.parcelas || [],
+            fornecedorId: vendaDestinoFornecedorId || undefined,
+            fornecedorNome: abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || undefined,
+            // Full boitel data for rehydration
+            boitelSnapshot: bd ? {
+              nomeBoitel: bd.nomeBoitel,
+              lote: bd.lote,
+              numeroContrato: bd.numeroContrato,
+              dataEnvio: bd.dataEnvio,
+              quebraViagem: bd.quebraViagem,
+              custoOportunidade: bd.custoOportunidade,
+              dias: bd.dias,
+              gmd: bd.gmd,
+              rendimentoEntrada: bd.rendimentoEntrada,
+              rendimento: bd.rendimento,
+              modalidadeCusto: bd.modalidadeCusto,
+              custoDiaria: bd.custoDiaria,
+              custoArroba: bd.custoArroba,
+              percentualParceria: bd.percentualParceria,
+              custosExtrasParceria: bd.custosExtrasParceria,
+              custoFrete: bd.custoFrete,
+              outrosCustos: bd.outrosCustos,
+              custoNutricao: bd.custoNutricao,
+              custoSanidade: bd.custoSanidade,
+              custoNfAbate: bd.custoNfAbate,
+              precoVendaArroba: bd.precoVendaArroba,
+              despesasAbate: bd.despesasAbate,
+              formaReceb: bd.formaReceb,
+              qtdParcelas: bd.qtdParcelas,
+              parcelas: bd.parcelas,
+              _faturamentoBruto: bd._faturamentoBruto,
+              _faturamentoLiquido: bd._faturamentoLiquido,
+              _receitaProdutor: bd._receitaProdutor,
+              _custoTotal: bd._custoTotal,
+              _lucroTotal: bd._lucroTotal,
+              _boitelId: bd._boitelId,
+            } : undefined,
           };
         }
         if (isVenda && vendaDetalhes) {
@@ -1863,6 +1904,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onRequestRegister={handleRequestRegister}
           registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
           submitting={submitting}
+          onBoitelDataChange={setBoitelDataForResumo}
+          initialBoitelData={boitelDataForResumo}
         />
       );
     }
@@ -2529,7 +2572,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   />
                 </div>
               </>
-            ) : isVenda && tipoPeso !== 'boitel' ? (
+            ) : isVenda ? (
               <>
                 <VendaResumoPanel
                   quantidade={Number(quantidade) || 0}
@@ -2537,7 +2580,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   categoria={categoria}
                   compradorNome={abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || ''}
                   detalhes={vendaDetalhes}
-                  detalhesPreenchidos={!!vendaDetalhes}
+                  detalhesPreenchidos={!!vendaDetalhes || (tipoPeso === 'boitel' && !!boitelDataForResumo)}
                   canOpenModal={!!(data && quantidade && Number(quantidade) > 0 && pesoKg && Number(pesoKg) > 0 && categoria && vendaDestinoFornecedorId)}
                   onOpenModal={() => setVendaDialogOpen(true)}
                   onRequestRegister={handleRequestRegister}
@@ -2545,6 +2588,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
                   onCancelEdit={editingAbateId ? handleCancelEdit : undefined}
                   calculation={vendaCalc}
+                  isBoitel={tipoPeso === 'boitel'}
+                  boitelData={boitelDataForResumo}
                 />
                 <VendaDetalhesDialog
                   open={vendaDialogOpen}
@@ -2616,6 +2661,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     freteVal={calc.freteVal}
                     onRequestRegister={() => {}}
                     submitting={false}
+                    onBoitelDataChange={setBoitelDataForResumo}
+                    initialBoitelData={boitelDataForResumo}
                   />
                 </div>
               </>

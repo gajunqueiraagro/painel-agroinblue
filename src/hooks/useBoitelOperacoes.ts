@@ -146,6 +146,8 @@ export async function gerarFinanceiroBoitel(
     fornecedorId?: string;
     notaFiscal?: string;
     isUpdate?: boolean;
+    parcelas?: { data: string; valor: number }[];
+    formaReceb?: 'avista' | 'prazo';
   }
 ): Promise<boolean> {
   // Guard: receita_produtor deve ser > 0
@@ -155,7 +157,6 @@ export async function gerarFinanceiroBoitel(
   }
 
   const userId = (await supabase.auth.getUser()).data.user?.id;
-  const anoMes = dataRecebimento.slice(0, 7);
 
   // Se update, cancelar lançamentos antigos
   if (options?.isUpdate) {
@@ -169,7 +170,6 @@ export async function gerarFinanceiroBoitel(
       await supabase.from('financeiro_lancamentos_v2')
         .update({ cancelado: true, cancelado_em: new Date().toISOString(), cancelado_por: userId || null })
         .in('id', oldIds);
-      // Audit
       await supabase.from('audit_log_movimentacoes').insert({
         cliente_id: clienteId,
         usuario_id: userId || null,
@@ -201,46 +201,75 @@ export async function gerarFinanceiroBoitel(
     toast.error(`Mapeamento financeiro não encontrado para receita de Boitel. Subcentros buscados: ${subcentroCandidates.join(', ')}. Cadastre no Plano de Contas.`);
     return false;
   }
-  console.log('[Boitel Financeiro] Receita mapeada:', { subcentro: planoReceita[0].subcentro, macro: planoReceita[0].macro_custo, centro: planoReceita[0].centro_custo });
 
   const clasReceita = planoReceita[0];
   const inserts: any[] = [];
+  const descBase = `Venda ${op.quantidade} cab - Boitel`;
 
-  // 1. RECEITA: valor = receita_produtor (caixa real recebido)
-  inserts.push({
-    cliente_id: clienteId,
-    fazenda_id: fazendaId,
-    tipo_operacao: '1-Entradas',
-    sinal: 1,
-    status_transacao: 'confirmado',
-    origem_lancamento: 'boitel',
-    movimentacao_rebanho_id: lancamentoId,
-    boitel_id: op.id,
-    macro_custo: clasReceita.macro_custo,
-    centro_custo: clasReceita.centro_custo,
-    subcentro: clasReceita.subcentro,
-    nota_fiscal: options?.notaFiscal || null,
-    favorecido_id: options?.fornecedorId || null,
-    ano_mes: anoMes,
-    valor: op.receita_produtor,
-    data_competencia: dataRecebimento,
-    data_pagamento: dataRecebimento,
-    descricao: `Venda Pecuária - Boitel | ${op.fazenda_destino_nome} | ${op.quantidade} cab`,
-    historico: `Boitel: ${op.fazenda_destino_nome} | Lote: ${op.lote || '-'} | Contrato: ${op.numero_contrato || '-'}`,
-    origem_tipo: 'boitel:receita',
-  });
+  // 1. RECEITA: usar parcelas se a prazo, senão à vista
+  const parcelas = options?.parcelas || [];
+  const isPrazo = options?.formaReceb === 'prazo' && parcelas.length > 0;
+
+  if (isPrazo) {
+    parcelas.forEach((p, i) => {
+      inserts.push({
+        cliente_id: clienteId,
+        fazenda_id: fazendaId,
+        tipo_operacao: '1-Entradas',
+        sinal: 1,
+        status_transacao: 'confirmado',
+        origem_lancamento: 'boitel',
+        movimentacao_rebanho_id: lancamentoId,
+        boitel_id: op.id,
+        macro_custo: clasReceita.macro_custo,
+        centro_custo: clasReceita.centro_custo,
+        subcentro: clasReceita.subcentro,
+        nota_fiscal: options?.notaFiscal || null,
+        favorecido_id: options?.fornecedorId || null,
+        ano_mes: p.data.slice(0, 7),
+        valor: p.valor,
+        data_competencia: dataRecebimento,
+        data_pagamento: p.data,
+        descricao: `${descBase} - Parcela ${i + 1}/${parcelas.length}`,
+        historico: `Boitel: ${op.fazenda_destino_nome} | Lote: ${op.lote || '-'} | Contrato: ${op.numero_contrato || '-'}`,
+        origem_tipo: 'boitel:receita',
+      });
+    });
+  } else {
+    inserts.push({
+      cliente_id: clienteId,
+      fazenda_id: fazendaId,
+      tipo_operacao: '1-Entradas',
+      sinal: 1,
+      status_transacao: 'confirmado',
+      origem_lancamento: 'boitel',
+      movimentacao_rebanho_id: lancamentoId,
+      boitel_id: op.id,
+      macro_custo: clasReceita.macro_custo,
+      centro_custo: clasReceita.centro_custo,
+      subcentro: clasReceita.subcentro,
+      nota_fiscal: options?.notaFiscal || null,
+      favorecido_id: options?.fornecedorId || null,
+      ano_mes: dataRecebimento.slice(0, 7),
+      valor: op.receita_produtor,
+      data_competencia: dataRecebimento,
+      data_pagamento: dataRecebimento,
+      descricao: descBase,
+      historico: `Boitel: ${op.fazenda_destino_nome} | Lote: ${op.lote || '-'} | Contrato: ${op.numero_contrato || '-'}`,
+      origem_tipo: 'boitel:receita',
+    });
+  }
 
   // 2. SAÍDAS: apenas custos pagos diretamente (frete, sanidade, outros)
   const custosDiretos = [
-    { valor: op.custo_frete, label: 'Frete Boitel', subcentroHint: 'FRETE' },
-    { valor: op.custo_sanidade, label: 'Sanidade Boitel', subcentroHint: 'SANIDADE' },
-    { valor: op.outros_custos + op.custo_nutricao + op.custos_extras_parceria, label: 'Outros Custos Boitel', subcentroHint: 'OUTROS' },
+    { valor: op.custo_frete, label: `Frete - ${descBase}`, subcentroHint: 'FRETE' },
+    { valor: op.custo_sanidade, label: `Sanidade - ${descBase}`, subcentroHint: 'SANIDADE' },
+    { valor: op.outros_custos + op.custo_nutricao + op.custos_extras_parceria, label: `Outros Custos - ${descBase}`, subcentroHint: 'OUTROS' },
   ];
 
   for (const custo of custosDiretos) {
     if (custo.valor <= 0) continue;
 
-    // Try to find matching plan account for saída
     const { data: planoSaida } = await supabase
       .from('financeiro_plano_contas')
       .select('id, macro_custo, centro_custo, subcentro')
@@ -250,11 +279,8 @@ export async function gerarFinanceiroBoitel(
       .ilike('subcentro', `%${custo.subcentroHint}%`)
       .limit(1);
 
-    // If no specific mapping found, use a generic custeio produtivo
-    const clasSaida = planoSaida?.[0];
-    console.log(`[Boitel Financeiro] Saída "${custo.label}": hint="${custo.subcentroHint}", encontrado=${!!clasSaida}`, clasSaida || 'buscando fallback...');
-    if (!clasSaida) {
-      // Try generic fallback
+    let cls = planoSaida?.[0];
+    if (!cls) {
       const { data: fallback } = await supabase
         .from('financeiro_plano_contas')
         .select('id, macro_custo, centro_custo, subcentro')
@@ -263,48 +289,29 @@ export async function gerarFinanceiroBoitel(
         .eq('tipo_operacao', '2-Saídas')
         .ilike('macro_custo', '%custeio%')
         .limit(1);
-      if (!fallback || fallback.length === 0) continue; // Skip if no mapping at all
-      const fb = fallback[0];
-      inserts.push({
-        cliente_id: clienteId,
-        fazenda_id: fazendaId,
-        tipo_operacao: '2-Saídas',
-        sinal: -1,
-        status_transacao: 'confirmado',
-        origem_lancamento: 'boitel',
-        movimentacao_rebanho_id: lancamentoId,
-        boitel_id: op.id,
-        macro_custo: fb.macro_custo,
-        centro_custo: fb.centro_custo,
-        subcentro: fb.subcentro,
-        ano_mes: anoMes,
-        valor: custo.valor,
-        data_competencia: dataRecebimento,
-        data_pagamento: dataRecebimento,
-        descricao: `${custo.label} | ${op.fazenda_destino_nome}`,
-        origem_tipo: 'boitel:custo',
-      });
-    } else {
-      inserts.push({
-        cliente_id: clienteId,
-        fazenda_id: fazendaId,
-        tipo_operacao: '2-Saídas',
-        sinal: -1,
-        status_transacao: 'confirmado',
-        origem_lancamento: 'boitel',
-        movimentacao_rebanho_id: lancamentoId,
-        boitel_id: op.id,
-        macro_custo: clasSaida.macro_custo,
-        centro_custo: clasSaida.centro_custo,
-        subcentro: clasSaida.subcentro,
-        ano_mes: anoMes,
-        valor: custo.valor,
-        data_competencia: dataRecebimento,
-        data_pagamento: dataRecebimento,
-        descricao: `${custo.label} | ${op.fazenda_destino_nome}`,
-        origem_tipo: 'boitel:custo',
-      });
+      if (!fallback || fallback.length === 0) continue;
+      cls = fallback[0];
     }
+
+    inserts.push({
+      cliente_id: clienteId,
+      fazenda_id: fazendaId,
+      tipo_operacao: '2-Saídas',
+      sinal: -1,
+      status_transacao: 'confirmado',
+      origem_lancamento: 'boitel',
+      movimentacao_rebanho_id: lancamentoId,
+      boitel_id: op.id,
+      macro_custo: cls.macro_custo,
+      centro_custo: cls.centro_custo,
+      subcentro: cls.subcentro,
+      ano_mes: dataRecebimento.slice(0, 7),
+      valor: custo.valor,
+      data_competencia: dataRecebimento,
+      data_pagamento: dataRecebimento,
+      descricao: custo.label,
+      origem_tipo: 'boitel:custo',
+    });
   }
 
   const { error } = await supabase.from('financeiro_lancamentos_v2').insert(inserts);
