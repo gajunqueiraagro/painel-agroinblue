@@ -1901,7 +1901,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       <Separator />
 
       {/* Row 1: Data | Qtd | Peso | Categoria | Obs */}
-      <div className="grid grid-cols-[7rem_5.5rem_6rem_9rem_minmax(0,1fr)] gap-2">
+      <div className="grid grid-cols-[1.2fr_0.8fr_1fr_1.5fr_2.5fr] gap-2">
         <div>
           <Label className={`font-bold text-[11px] ${previstoLabelClass}`}>{isAbate ? 'Data Abate' : 'Data'}</Label>
           <Input tabIndex={1} type="date" value={data} onChange={e => setData(e.target.value)} className={`mt-0.5 h-7 text-[11px] ${previstoInputClass}`} />
