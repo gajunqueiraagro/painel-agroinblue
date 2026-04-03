@@ -509,17 +509,27 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setStatusOp((l.statusOperacional as StatusOperacional) || 'conciliado');
     setNotaFiscal(l.notaFiscal || '');
 
-    // 3. Tipo de venda (desmama / gado_adulto / boitel)
-    const tv = l.tipoPeso || 'gado_adulto';
-    setTipoPeso(tv);
+    // 3. Tipo de venda from tipoVenda field (desmama / gado_adulto / boitel)
+    const tv = l.tipoVenda || 'gado_adulto';
+    setTipoPeso(tv); // tipoPeso state holds the tipoVenda selector value for venda
 
-    // 4. Try to find the fornecedor by name (fazendaDestino)
+    // 4. Tipo de preço from tipoPeso field (por_kg / por_cab / por_total)
+    // New convention: tipoPeso stores tipoPreco for vendas
+    let tipoPreco: 'por_kg' | 'por_cab' | 'por_total' = 'por_kg';
+    if (l.tipoPeso === 'por_kg' || l.tipoPeso === 'por_cab' || l.tipoPeso === 'por_total') {
+      tipoPreco = l.tipoPeso as 'por_kg' | 'por_cab' | 'por_total';
+    }
+    
+    // 5. Price input from precoArroba field
+    const precoInput = l.precoArroba ? String(l.precoArroba) : '';
+
+    // 6. Try to find the fornecedor by name (fazendaDestino)
     if (l.fazendaDestino) {
       const forn = abateFornecedores.find(f => f.nome === l.fazendaDestino);
       if (forn) setVendaDestinoFornecedorId(forn.id);
     }
 
-    // 5. Query financial records to reconstruct frete, comissão, parcelas
+    // 7. Query financial records to reconstruct frete, comissão, parcelas
     let freteVal = '';
     let comissaoVal = '';
     let formaReceb: 'avista' | 'prazo' = 'avista';
@@ -534,14 +544,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         .order('data_pagamento', { ascending: true });
 
       if (finRecs && finRecs.length > 0) {
-        // Extract frete
         const freteRec = finRecs.find(r => r.origem_tipo === 'venda:frete');
         if (freteRec) freteVal = String(freteRec.valor);
 
-        // Extract comissão — reverse-calc percentage from value
         const comissaoRec = finRecs.find(r => r.origem_tipo === 'venda:comissao');
 
-        // Extract parcelas (receita entries)
         const parcelaRecs = finRecs.filter(r => r.origem_tipo === 'venda:parcela');
         if (parcelaRecs.length > 1) {
           formaReceb = 'prazo';
@@ -551,14 +558,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           }));
         } else if (parcelaRecs.length === 1) {
           const p = parcelaRecs[0];
-          // If payment date differs from competence date, it's a prazo with 1 parcela
           if (p.data_pagamento && p.data_pagamento !== l.data) {
             formaReceb = 'prazo';
             parcelasArr = [{ data: p.data_pagamento, valor: p.valor }];
           }
         }
 
-        // Reverse-calc comissão percentage
         if (comissaoRec) {
           const totalBruto = parcelaRecs.reduce((s, r) => s + r.valor, 0);
           if (totalBruto > 0) {
@@ -570,33 +575,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       console.warn('Erro ao carregar financeiro da venda para edição:', err);
     }
 
-    // 6. Determine tipoPreco from lancamento data
-    // precoArroba field stores the price input value; determine type from context
-    const qtd = l.quantidade || 0;
-    const peso = l.pesoMedioKg || 0;
-    const totalKg = qtd * peso;
-    const storedPreco = l.precoArroba || 0;
-    let tipoPreco: 'por_kg' | 'por_cab' | 'por_total' = 'por_kg';
-    let precoInput = storedPreco ? String(storedPreco) : '';
-
-    // Try to infer tipoPreco from the stored price and valorTotal
-    if (storedPreco > 0 && l.valorTotal && qtd > 0) {
-      const brutoFromKg = totalKg * storedPreco;
-      const brutoFromCab = qtd * storedPreco;
-      // Add back deductions to get original bruto
-      const deductions = (l.descontoFunrural || 0) + (l.outrosDescontos || 0) + (l.descontoQualidade || 0);
-      const estimatedBruto = (l.valorTotal || 0) + deductions + (Number(freteVal) || 0) + (Number(comissaoVal) > 0 ? ((l.valorTotal || 0) + deductions) * Number(comissaoVal) / 100 : 0);
-      
-      if (Math.abs(brutoFromKg - estimatedBruto) < 1) {
-        tipoPreco = 'por_kg';
-      } else if (Math.abs(brutoFromCab - estimatedBruto) < 1) {
-        tipoPreco = 'por_cab';
-      } else if (Math.abs(storedPreco - estimatedBruto) < 1) {
-        tipoPreco = 'por_total';
-      }
-    }
-
-    // 7. Build vendaDetalhes with all data
+    // 8. Build vendaDetalhes with all data
     const vendaDet: VendaDetalhes = {
       tipoVenda: (tv === 'desmama' || tv === 'gado_adulto') ? tv as 'desmama' | 'gado_adulto' : 'gado_adulto',
       tipoPreco,
@@ -612,13 +591,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       parcelas: parcelasArr,
     };
 
-    // Reverse-calc funrural
+    // 9. Reverse-calc funrural
     if (l.descontoFunrural && l.descontoFunrural > 0) {
-      // Check if it looks like a percentage-based deduction
-      const estimatedBruto = totalKg * storedPreco;
+      const qtd = l.quantidade || 0;
+      const peso = l.pesoMedioKg || 0;
+      const totalKgCalc = qtd * peso;
+      const storedPreco = l.precoArroba || 0;
+      
+      // Calculate estimated bruto based on tipoPreco
+      let estimatedBruto = 0;
+      if (tipoPreco === 'por_kg') estimatedBruto = totalKgCalc * storedPreco;
+      else if (tipoPreco === 'por_cab') estimatedBruto = qtd * storedPreco;
+      else if (tipoPreco === 'por_total') estimatedBruto = storedPreco;
+
       if (estimatedBruto > 0) {
         const pct = (l.descontoFunrural / estimatedBruto) * 100;
-        // Common funrural percentages: 1.5%, 2.05%, etc.
         if (pct > 0.5 && pct < 10) {
           vendaDet.funruralPct = String(pct.toFixed(2));
         } else {
@@ -639,7 +626,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setOutrosDescontos(vendaDet.outrosCustos);
     setDescontoQualidade(l.descontoQualidade ? String(l.descontoQualidade) : '');
 
-    // 8. Set editing mode (reuse editingAbateId for all types)
+    // 10. Set editing mode
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
