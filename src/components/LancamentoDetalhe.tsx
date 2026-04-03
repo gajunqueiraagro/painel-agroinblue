@@ -69,6 +69,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const isCompra = lancamento.tipo === 'compra';
   const isAbate = lancamento.tipo === 'abate';
   const isVenda = lancamento.tipo === 'venda';
+  const isTransferenciaSaida = lancamento.tipo === 'transferencia_saida';
 
   const loadFinRecords = useCallback(() => {
     if (!isCompra) return;
@@ -346,6 +347,49 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                   </div>
                 </>
               ) : null}
+
+              {/* ── Transferência Saída: bloco econômico do snapshot ── */}
+              {isTransferenciaSaida && (() => {
+                const snap = lancamento.detalhesSnapshot as any;
+                if (!snap || snap._tipo !== 'transferencia_saida') return null;
+                const temPreco = snap.temPrecoReferencia;
+                return (
+                  <>
+                    <Separator className="my-0.5" />
+                    <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-[11px]">
+                      {snap.pesoTotalKg > 0 && <Row label="Peso Total" value={formatKg(snap.pesoTotalKg)} />}
+                      {snap.totalArrobas > 0 && <Row label="Total @" value={formatArroba(snap.totalArrobas)} />}
+                      {snap.arrobasCab > 0 && <Row label="@/cab" value={formatArroba(snap.arrobasCab)} />}
+                    </div>
+                    {temPreco && (
+                      <>
+                        <Separator className="my-0.5" />
+                        <p className="text-[8px] text-muted-foreground font-semibold uppercase tracking-wider">Referência Econômica (gerencial)</p>
+                        <div className="space-y-0.5 text-[10px]">
+                          {snap.precoReferenciaArroba > 0 && (
+                            <div className="flex justify-between"><span className="text-muted-foreground">R$/@ ref.</span><strong className="tabular-nums">{formatMoeda(snap.precoReferenciaArroba)}</strong></div>
+                          )}
+                          {snap.precoReferenciaCabeca > 0 && (
+                            <div className="flex justify-between"><span className="text-muted-foreground">R$/cab ref.</span><strong className="tabular-nums">{formatMoeda(snap.precoReferenciaCabeca)}</strong></div>
+                          )}
+                          {snap.precoReferenciaKg > 0 && (
+                            <div className="flex justify-between"><span className="text-muted-foreground">R$/kg ref.</span><strong className="tabular-nums">{formatMoeda(snap.precoReferenciaKg)}</strong></div>
+                          )}
+                        </div>
+                        <div className="bg-primary/10 rounded px-2.5 py-1.5 flex items-center justify-between">
+                          <span className="text-[10px] text-muted-foreground font-medium">Valor Econômico do Lote</span>
+                          <span className="font-extrabold text-primary text-base tabular-nums">{formatMoeda(snap.valorEconomicoLote)}</span>
+                        </div>
+                      </>
+                    )}
+                    {!temPreco && (
+                      <div className="bg-muted/30 rounded px-2 py-1 text-[9px] text-muted-foreground">
+                        Sem preço de referência informado.
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               {/* Abate share buttons */}
               {isAbate && <AbateShareButtons lancamento={lancamento} fazendaNome={nomeFazenda} />}
