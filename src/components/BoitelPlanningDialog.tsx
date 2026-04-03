@@ -417,7 +417,14 @@ function IM({ value, onChange, step, decimals = 2 }: { value: number; onChange: 
   const [focused, setFocused] = useState(false);
   useEffect(() => { if (!focused) setDisplay(fmt(value)); }, [value, focused, decimals]);
   return <Input className="h-5 text-[9px] tabular-nums text-right bg-background border-border shadow-sm" value={display}
-    onChange={e => { setDisplay(e.target.value); }}
+    onChange={e => {
+      const next = e.target.value;
+      setDisplay(next);
+      let clean = next.trim();
+      if (clean.includes(',')) clean = clean.replace(/\./g, '').replace(',', '.');
+      const n = parseFloat(clean);
+      onChange(isNaN(n) ? 0 : Math.round(n * Math.pow(10, decimals)) / Math.pow(10, decimals));
+    }}
     onFocus={() => {
       setFocused(true);
       setDisplay(value ? value.toFixed(decimals).replace('.', ',') : '');
@@ -439,7 +446,14 @@ function IP({ value, onChange, decimals = 2, step }: { value: number; onChange: 
   const [focused, setFocused] = useState(false);
   useEffect(() => { if (!focused) setDisplay(fmt(value)); }, [value, focused, decimals]);
   return <Input className="h-5 text-[9px] tabular-nums text-right bg-background border-border shadow-sm" value={display}
-    onChange={e => { setDisplay(e.target.value); }}
+    onChange={e => {
+      const next = e.target.value;
+      setDisplay(next);
+      let clean = next.replace(/%/g, '').trim();
+      if (clean.includes(',')) clean = clean.replace(/\./g, '').replace(',', '.');
+      const n = parseFloat(clean);
+      onChange(isNaN(n) ? 0 : Math.round(n * Math.pow(10, decimals)) / Math.pow(10, decimals));
+    }}
     onFocus={() => {
       setFocused(true);
       setDisplay(value ? value.toFixed(decimals).replace('.', ',') : '');
