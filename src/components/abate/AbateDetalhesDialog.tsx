@@ -395,7 +395,10 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
           <div className="grid grid-cols-3 gap-2">
             <div>
               <Label className="text-[10px]">R$/@ (Preço Base)</Label>
-              <Input type="number" value={precoArroba} onChange={e => { setPrecoArroba(e.target.value); markDirty(); }} placeholder="0,00" className="h-7 text-[10px] text-right tabular-nums" step="0.01" />
+              <div className="relative">
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">R$</span>
+                <Input type="number" value={precoArroba} onChange={e => { setPrecoArroba(e.target.value); markDirty(); }} placeholder="0,00" className="h-7 text-[10px] text-right tabular-nums pl-7" step="0.01" />
+              </div>
             </div>
             <div>
               <Label className="text-[10px]">Tipo de Abate</Label>
@@ -421,16 +424,26 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             </div>
           </div>
 
-          {/* Desempenho do Abate */}
+          {/* Desempenho do Abate — 3 cols, bidirectional */}
           <h4 className="text-[10px] font-semibold text-muted-foreground pt-1">Desempenho do Abate</h4>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <div>
               <Label className="text-[10px]">{usePrev ? 'Rend. Carcaça Prev. (%)' : 'Rend. Carcaça (%)'}</Label>
-              <Input type="number" value={rendCarcaca} onChange={e => { setRendCarcaca(e.target.value); markDirty(); }} placeholder="0,00" step="0.01" className="h-7 text-[10px] text-right tabular-nums" />
+              <div className="relative">
+                <Input type="number" value={rendCarcaca} onChange={e => { setRendCarcaca(e.target.value); setPesoCarcacaKg(''); markDirty(); }} placeholder="0,00" step="0.01" className="h-7 text-[10px] text-right tabular-nums pr-6" />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">%</span>
+              </div>
             </div>
             <div>
               <Label className="text-[10px]">Peso Carcaça (kg)</Label>
-              <Input type="text" readOnly value={calc.carcacaCalc > 0 ? `${calc.carcacaCalc.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg` : '-'} className="h-7 text-[10px] text-right tabular-nums bg-muted cursor-not-allowed" />
+              <div className="relative">
+                <Input type="number" value={pesoCarcacaKg || (calc.carcacaCalc > 0 ? String(Math.round(calc.carcacaCalc * 100) / 100) : '')} onChange={e => { setPesoCarcacaKg(e.target.value); const v = Number(e.target.value) || 0; if (v > 0 && peso > 0) setRendCarcaca(String(Math.round((v / peso) * 10000) / 100)); markDirty(); }} placeholder="0,00" step="0.01" className="h-7 text-[10px] text-right tabular-nums pr-6" />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">kg</span>
+              </div>
+            </div>
+            <div>
+              <Label className="text-[10px]">Peso Carcaça (@)</Label>
+              <Input type="text" readOnly value={calc.pesoArrobaCab > 0 ? formatArroba(calc.pesoArrobaCab) : '-'} className="h-7 text-[10px] text-right tabular-nums bg-muted cursor-not-allowed" />
             </div>
           </div>
 
