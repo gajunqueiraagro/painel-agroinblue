@@ -213,7 +213,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <TB a={!data.possuiAdiantamento} o={() => { set('possuiAdiantamento', false); set('valorAdiantamentoDiarias', 0); set('valorAdiantamentoSanitario', 0); set('valorAdiantamentoOutros', 0); set('valorTotalAntecipado', 0); set('pctAdiantamentoDiarias', 0); set('dataAdiantamento', ''); set('adiantamentoObservacao', ''); }}>Não</TB>
               </div>
               {data.possuiAdiantamento && (
-                <div className="bg-blue-50/60 dark:bg-blue-950/20 rounded border border-blue-200 dark:border-blue-800 p-1 space-y-0.5">
+                <div className="bg-blue-50 dark:bg-blue-950/40 rounded border border-blue-300 dark:border-blue-700 p-1 space-y-0.5">
                   <div className="grid grid-cols-2 gap-1">
                     <F label="Data"><I type="date" value={data.dataAdiantamento} onChange={e => set('dataAdiantamento', e.target.value)} /></F>
                     <F label="% diárias"><IP value={data.pctAdiantamentoDiarias} onChange={v => set('pctAdiantamentoDiarias', v)} step="0.1" /></F>
