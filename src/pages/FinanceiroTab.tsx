@@ -496,7 +496,8 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   useEffect(() => {
     if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
     if (filtroMesInicial) setMesFiltro(filtroMesInicial);
-  }, [filtroAnoInicial, filtroMesInicial]);
+    if (filtroStatusInicial) setStatusFiltro(filtroStatusInicial as StatusFiltro);
+  }, [filtroAnoInicial, filtroMesInicial, filtroStatusInicial]);
 
   const filtrados = useMemo(() => {
     let tiposFilter: string[] = [];
