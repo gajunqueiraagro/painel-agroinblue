@@ -1516,6 +1516,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       } else {
         result.formaPagamento = 'À vista';
       }
+    } else if (isTransferenciaSaida) {
+      // Economic (managerial) — no financial impact
+      const tc = transferenciaCalc;
+      if (tc && tc.temPrecoReferencia) {
+        result.precoBase = tc.precoReferenciaArroba;
+        result.precoBaseLabel = 'R$/@ (ref. econômica)';
+        result.totalBruto = tc.valorEconomicoLote;
+        result.valorLiquido = tc.valorEconomicoLote;
+        result.totalArrobas = tc.totalArrobas;
+      }
+      // No payment info — transferência doesn't generate financial entries
     } else {
       result.precoBase = Number(precoKg) || 0;
       result.precoBaseLabel = 'R$/kg';
