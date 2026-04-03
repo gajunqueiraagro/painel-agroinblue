@@ -18,12 +18,13 @@ interface Props {
   onRequestRegister: () => void;
   submitting: boolean;
   registerLabel?: string;
+  onCancelEdit?: () => void;
 }
 
 export function CompraResumoPanel({
   quantidade, pesoKg, categoria, fornecedorNome,
   detalhes, detalhesPreenchidos, canOpenModal,
-  onOpenModal, onRequestRegister, submitting, registerLabel,
+  onOpenModal, onRequestRegister, submitting, registerLabel, onCancelEdit,
 }: Props) {
   const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria || '-';
   const totalKg = (quantidade || 0) * (pesoKg || 0);
