@@ -136,7 +136,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
   const handleSave = () => { onSave({ ...data, _faturamentoBruto: calc.fba, _faturamentoLiquido: calc.fLiq, _receitaProdutor: calc.rProd, _custoTotal: calc.cOp, _lucroTotal: calc.rLiq }); onClose(); };
 
   const pos = calc.rLiq > 0;
-  const saldoReceber = calc.fba - calc.custoTotalBoitel + data.valorTotalAntecipado;
+  const saldoReceber = saldoReceberBase;
 
   // Comparativo oportunidade
   const diffTotal = calc.rLiq - calc.coT;
