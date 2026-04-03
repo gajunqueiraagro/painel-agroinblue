@@ -1949,9 +1949,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       {/* Row 2: Origem + Fornecedor/Destino principal (prioridade visual) + extras */}
       {(campos.origem.show || campos.destino?.show) && (
         <div className={`grid gap-2 ${
-          isVenda ? 'grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_9rem]' :
-          campos.origem.show ? 'grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]' :
-          'grid-cols-1'
+          isVenda ? 'grid-cols-[minmax(0,1fr)_minmax(0,2fr)_8rem]' :
+          campos.origem.show ? 'grid-cols-[minmax(0,1fr)_minmax(0,2fr)]' :
+          'grid-cols-[minmax(0,1fr)_minmax(0,2fr)]'
         }`}>
           {campos.origem.show && (
             <div>
