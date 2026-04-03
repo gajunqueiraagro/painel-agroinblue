@@ -1318,8 +1318,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           };
         }
         if (isVenda && tipoPeso === 'boitel') {
-          // Boitel: snapshot from VendaFinanceiroPanel's boitelData (via ref)
+          // Boitel: full snapshot including ALL boitelData fields for rehydration
           const recebSnap = vendaFinanceiroRef.current?.getRecebimentoSnapshot?.();
+          const bd = vendaFinanceiroRef.current?.getBoitelData?.();
           return {
             type: 'venda_boitel',
             tipoVenda: 'boitel',
@@ -1330,6 +1331,42 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             statusOperacional: statusOp,
             formaReceb: recebSnap?.formaReceb || 'avista',
             parcelas: recebSnap?.parcelas || [],
+            fornecedorId: vendaDestinoFornecedorId || undefined,
+            fornecedorNome: abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || undefined,
+            // Full boitel data for rehydration
+            boitelSnapshot: bd ? {
+              nomeBoitel: bd.nomeBoitel,
+              lote: bd.lote,
+              numeroContrato: bd.numeroContrato,
+              dataEnvio: bd.dataEnvio,
+              quebraViagem: bd.quebraViagem,
+              custoOportunidade: bd.custoOportunidade,
+              dias: bd.dias,
+              gmd: bd.gmd,
+              rendimentoEntrada: bd.rendimentoEntrada,
+              rendimento: bd.rendimento,
+              modalidadeCusto: bd.modalidadeCusto,
+              custoDiaria: bd.custoDiaria,
+              custoArroba: bd.custoArroba,
+              percentualParceria: bd.percentualParceria,
+              custosExtrasParceria: bd.custosExtrasParceria,
+              custoFrete: bd.custoFrete,
+              outrosCustos: bd.outrosCustos,
+              custoNutricao: bd.custoNutricao,
+              custoSanidade: bd.custoSanidade,
+              custoNfAbate: bd.custoNfAbate,
+              precoVendaArroba: bd.precoVendaArroba,
+              despesasAbate: bd.despesasAbate,
+              formaReceb: bd.formaReceb,
+              qtdParcelas: bd.qtdParcelas,
+              parcelas: bd.parcelas,
+              _faturamentoBruto: bd._faturamentoBruto,
+              _faturamentoLiquido: bd._faturamentoLiquido,
+              _receitaProdutor: bd._receitaProdutor,
+              _custoTotal: bd._custoTotal,
+              _lucroTotal: bd._lucroTotal,
+              _boitelId: bd._boitelId,
+            } : undefined,
           };
         }
         if (isVenda && vendaDetalhes) {

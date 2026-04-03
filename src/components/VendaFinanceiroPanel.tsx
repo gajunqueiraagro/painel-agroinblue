@@ -320,6 +320,8 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
             fornecedorId: fornecedorId || undefined,
             notaFiscal: notaFiscal || undefined,
             isUpdate,
+            formaReceb: boitelData.formaReceb || 'avista',
+            parcelas: boitelData.parcelas || [],
           }
         );
 
