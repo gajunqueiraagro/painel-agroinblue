@@ -1469,8 +1469,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Abate registrado com financeiro!');
         } else if (isVenda && returnedId) {
-          if (vendaFinanceiroRef.current && (calc.valorLiquido > 0 || tipoPeso === 'boitel')) {
-            await vendaFinanceiroRef.current.generateFinanceiro(returnedId);
+          const isBoitel = tipoPeso === 'boitel';
+          console.log('[Save Flow] Venda detectada', { isBoitel, valorLiquido: calc.valorLiquido, temRef: !!vendaFinanceiroRef.current });
+          if (vendaFinanceiroRef.current && (calc.valorLiquido > 0 || isBoitel)) {
+            const finResult = await vendaFinanceiroRef.current.generateFinanceiro(returnedId);
+            console.log('[Save Flow] generateFinanceiro resultado:', finResult);
           }
           vendaFinanceiroRef.current?.resetForm();
           setLastSavedLancamentoId(null);
