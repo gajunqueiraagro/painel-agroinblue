@@ -286,7 +286,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                       </div>
                     ))}
                   </div>
-                  <div className="text-[7px] text-muted-foreground text-right">Base: {formatMoeda(basePar)}</div>
+                  <div className="text-[7px] text-muted-foreground text-right">Base: R$ {fmtR$(basePar)}</div>
                 </div>
               )}
             </div>
