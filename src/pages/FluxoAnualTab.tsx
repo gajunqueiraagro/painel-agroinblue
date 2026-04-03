@@ -224,7 +224,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                   </td>
                 );
               })}
-              <td className="px-1.5 py-1 text-center font-extrabold text-foreground tabular-nums bg-primary/20">
+              <td className="px-1.5 py-1 text-center font-extrabold text-foreground tabular-nums bg-primary/20 border-l border-border/60">
                 {fmtNum(dados.saldoFinalAno)}
               </td>
             </tr>
