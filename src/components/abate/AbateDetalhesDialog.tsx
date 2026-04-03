@@ -387,14 +387,10 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
 
           {/* BLOCO 2 — Preço Base & Rendimento */}
           {sectionTitle(<Tag className="h-4 w-4 text-muted-foreground" />, 'Comercialização')}
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <div>
               <Label className="text-[10px]">R$/@ (Preço Base)</Label>
               <Input type="number" value={precoArroba} onChange={e => { setPrecoArroba(e.target.value); markDirty(); }} placeholder="0,00" className="h-7 text-[10px] text-right tabular-nums" step="0.01" />
-            </div>
-            <div>
-              <Label className="text-[10px]">{usePrev ? 'Rend. Carcaça Prev. (%)' : 'Rend. Carcaça (%)'}</Label>
-              <Input type="number" value={rendCarcaca} onChange={e => { setRendCarcaca(e.target.value); markDirty(); }} placeholder="0,00" step="0.01" className="h-7 text-[10px] text-right tabular-nums" />
             </div>
             <div>
               <Label className="text-[10px]">Tipo de Abate</Label>
@@ -420,10 +416,22 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             </div>
           </div>
 
+          {/* Desempenho do Abate */}
+          <h4 className="text-[10px] font-semibold text-muted-foreground pt-1">Desempenho do Abate</h4>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-[10px]">{usePrev ? 'Rend. Carcaça Prev. (%)' : 'Rend. Carcaça (%)'}</Label>
+              <Input type="number" value={rendCarcaca} onChange={e => { setRendCarcaca(e.target.value); markDirty(); }} placeholder="0,00" step="0.01" className="h-7 text-[10px] text-right tabular-nums" />
+            </div>
+            <div>
+              <Label className="text-[10px]">Peso Carcaça (kg)</Label>
+              <Input type="text" readOnly value={calc.carcacaCalc > 0 ? `${calc.carcacaCalc.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg` : '-'} className="h-7 text-[10px] text-right tabular-nums bg-muted cursor-not-allowed" />
+            </div>
+          </div>
+
           {/* Indicadores calculados inline */}
           {calc.valorBase > 0 && (
-            <div className="bg-muted/30 rounded p-2 grid grid-cols-4 gap-x-3 text-[10px]">
-              <div><span className="text-muted-foreground">Peso Carcaça</span><p className="font-bold">{formatKg(calc.carcacaCalc)}</p></div>
+            <div className="bg-muted/30 rounded p-2 grid grid-cols-3 gap-x-3 text-[10px]">
               <div><span className="text-muted-foreground">@/cab</span><p className="font-bold">{formatArroba(calc.pesoArrobaCab)}</p></div>
               <div><span className="text-muted-foreground">Total Arrobas</span><p className="font-bold">{formatArroba(calc.totalArrobas)}</p></div>
               <div><span className="text-muted-foreground">Valor Base</span><p className="font-bold text-primary">{formatMoeda(calc.valorBase)}</p></div>
