@@ -261,23 +261,28 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
       set('parcelas', []);
     } else {
       const n = data.qtdParcelas || 1;
-      set('parcelas', gerarParcelas(n, calc.receitaProdutor));
+      const base = calc.resultadoComBoitel - calc.parceiroParte;
+      set('parcelas', gerarParcelas(n, base));
     }
   };
 
   const handleQtdParcelasChange = (v: string) => {
     const n = Math.max(1, Math.min(48, Number(v) || 1));
     set('qtdParcelas', n);
-    set('parcelas', gerarParcelas(n, calc.receitaProdutor));
+    const base = calc.resultadoComBoitel - calc.parceiroParte;
+    set('parcelas', gerarParcelas(n, base));
   };
 
-  // Update parcelas when receitaProdutor changes
+  // Base de parcelamento = resultadoComBoitel - parceiroParte (exclui frete da base)
+  const baseParcelamento = calc.resultadoComBoitel - calc.parceiroParte;
+
+  // Update parcelas when base changes
   useEffect(() => {
-    if (data.formaReceb === 'prazo' && data.qtdParcelas > 0 && calc.receitaProdutor > 0) {
-      const newParcelas = gerarParcelas(data.qtdParcelas, calc.receitaProdutor);
+    if (data.formaReceb === 'prazo' && data.qtdParcelas > 0 && baseParcelamento > 0) {
+      const newParcelas = gerarParcelas(data.qtdParcelas, baseParcelamento);
       setData(prev => ({ ...prev, parcelas: newParcelas }));
     }
-  }, [calc.receitaProdutor, data.formaReceb, data.qtdParcelas, dataAbateISO]);
+  }, [baseParcelamento, data.formaReceb, data.qtdParcelas, dataAbateISO]);
 
   const handleSave = () => {
     const dataWithSnapshot: BoitelData = {
@@ -501,11 +506,14 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                         </div>
                       </div>
                     ))}
-                    {data.parcelas.length > 0 && (
-                      <div className="text-[9px] text-muted-foreground text-right">
-                        Soma parcelas: {formatMoeda(data.parcelas.reduce((s, p) => s + p.valor, 0))}
-                      </div>
-                    )}
+                    <div className="text-[9px] text-muted-foreground space-y-0.5">
+                      <div className="text-right">Base parcelas (Resultado c/ Boitel): {formatMoeda(baseParcelamento)}</div>
+                      {data.parcelas.length > 0 && (
+                        <div className="text-right">
+                          Soma parcelas: {formatMoeda(data.parcelas.reduce((s, p) => s + p.valor, 0))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </Section>
