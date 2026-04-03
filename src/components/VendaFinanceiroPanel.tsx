@@ -370,13 +370,21 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         await vincularBoitelAoLancamento(targetLancamentoId, boitelId);
         setBoitelData(prev => prev ? { ...prev, _boitelId: boitelId } : prev);
 
+        // Data financeira = data de abate (dataEnvio + dias) se disponível, senão data do lançamento
+        let dataFinanceira = data;
+        if (boitelData.dataEnvio && boitelData.dias > 0) {
+          try {
+            dataFinanceira = format(addDays(parseISO(boitelData.dataEnvio), boitelData.dias), 'yyyy-MM-dd');
+          } catch { /* keep data */ }
+        }
+
         const isUpdate = mode === 'update' || existingCount > 0;
         const ok = await gerarFinanceiroBoitel(
           { ...boitelOp, id: boitelId },
           targetLancamentoId,
           clienteAtual.id,
           fazendaAtual.id,
-          data,
+          dataFinanceira,
           {
             fornecedorId: fornecedorId || undefined,
             notaFiscal: notaFiscal || undefined,

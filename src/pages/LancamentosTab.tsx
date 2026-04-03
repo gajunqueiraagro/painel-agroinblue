@@ -1339,6 +1339,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             fornecedorNome: abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || undefined,
             // Full boitel data for rehydration
             boitelSnapshot: bd ? {
+              qtdCabecas: bd.qtdCabecas,
+              pesoInicial: bd.pesoInicial,
+              fazendaOrigem: bd.fazendaOrigem,
               nomeBoitel: bd.nomeBoitel,
               lote: bd.lote,
               numeroContrato: bd.numeroContrato,
