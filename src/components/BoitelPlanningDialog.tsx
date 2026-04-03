@@ -187,7 +187,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
               <ST>Base Operacional</ST>
               <div className="grid grid-cols-3 gap-1">
                 <F label="Cabeças"><I type="number" value={data.qtdCabecas || ''} onChange={e => set('qtdCabecas', +e.target.value || 0)} /></F>
-                <F label="Peso inicial kg"><I type="number" value={data.pesoInicial || ''} onChange={e => set('pesoInicial', +e.target.value || 0)} step="0.01" /></F>
+                <F label="Peso inicial kg"><IM value={data.pesoInicial} onChange={v => set('pesoInicial', v)} step="0.01" /></F>
                 <F label="Peso líq. ent."><CV>{fmtP(calc.ple)}</CV></F>
               </div>
               <div className="grid grid-cols-2 gap-1">
