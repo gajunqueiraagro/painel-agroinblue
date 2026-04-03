@@ -842,8 +842,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     // 3. Fornecedor: use pendingFornecedorMatch ref for robust loading
     const snap = l.detalhesSnapshot;
-    const snapVendaFornId = snap?.type === 'venda' ? snap.fornecedorId : undefined;
-    const snapVendaFornNome = snap?.type === 'venda' ? snap.fornecedorNome : undefined;
+    const isBoitelSnap = snap?.type === 'venda_boitel';
+    const snapVendaFornId = (snap?.type === 'venda' || isBoitelSnap) ? snap.fornecedorId : undefined;
+    const snapVendaFornNome = (snap?.type === 'venda' || isBoitelSnap) ? snap.fornecedorNome : undefined;
 
     pendingFornecedorMatch.current = {
       tipo: 'venda',
