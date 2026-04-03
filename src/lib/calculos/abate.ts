@@ -111,53 +111,69 @@ export function buildAbateCalculation(input: AbateCalculationInput): AbateCalcul
   const rendCarcaca = parseNumericValue(input.rendCarcaca);
   const precoArroba = parseNumericValue(input.precoArroba);
 
-  const carcacaCalc = roundValue(
-    pesoCarcacaKg > 0 ? pesoCarcacaKg : (rendCarcaca > 0 ? (pesoKg * rendCarcaca) / 100 : 0),
-    4,
-  );
-  const rendCalc = roundValue(
-    pesoCarcacaKg > 0 && pesoKg > 0 ? (pesoCarcacaKg / pesoKg) * 100 : rendCarcaca,
-    4,
-  );
-  const pesoArrobaCab = roundValue(carcacaCalc > 0 ? carcacaCalc / 15 : 0, 4);
-  const totalArrobas = roundValue(pesoArrobaCab * quantidade, 4);
-  const totalKg = roundValue(pesoKg * quantidade, 4);
+  // --- NO intermediate rounding: keep full precision until final output ---
+  const carcacaRaw = pesoCarcacaKg > 0 ? pesoCarcacaKg : (rendCarcaca > 0 ? (pesoKg * rendCarcaca) / 100 : 0);
+  const rendRaw = pesoCarcacaKg > 0 && pesoKg > 0 ? (pesoCarcacaKg / pesoKg) * 100 : rendCarcaca;
+  const pesoArrobaCabRaw = carcacaRaw > 0 ? carcacaRaw / 15 : 0;
+  const totalArrobasRaw = pesoArrobaCabRaw * quantidade;
+  const totalKgRaw = pesoKg * quantidade;
 
-  const valorBase = roundValue(totalArrobas * precoArroba);
+  const valorBaseRaw = totalArrobasRaw * precoArroba;
 
   const funruralReais = parseNumericValue(input.funruralReais);
   const funruralPct = parseNumericValue(input.funruralPct);
-  const funruralTotal = roundValue(funruralReais > 0 ? funruralReais : (valorBase * funruralPct) / 100);
-  const valorBruto = roundValue(valorBase - funruralTotal);
+  const funruralTotalRaw = funruralReais > 0 ? funruralReais : (valorBaseRaw * funruralPct) / 100;
+  const valorBrutoRaw = valorBaseRaw - funruralTotalRaw;
 
   const bonusPrecoce = parseNumericValue(input.bonusPrecoce);
   const bonusPrecoceReais = parseNumericValue(input.bonusPrecoceReais);
-  const bonusPrecoceTotal = roundValue(bonusPrecoce > 0 ? bonusPrecoce * totalArrobas : bonusPrecoceReais);
+  const bonusPrecoceTotalRaw = bonusPrecoce > 0 ? bonusPrecoce * totalArrobasRaw : bonusPrecoceReais;
 
   const bonusQualidade = parseNumericValue(input.bonusQualidade);
   const bonusQualidadeReais = parseNumericValue(input.bonusQualidadeReais);
-  const bonusQualidadeTotal = roundValue(bonusQualidade > 0 ? bonusQualidade * totalArrobas : bonusQualidadeReais);
+  const bonusQualidadeTotalRaw = bonusQualidade > 0 ? bonusQualidade * totalArrobasRaw : bonusQualidadeReais;
 
   const bonusListaTrace = parseNumericValue(input.bonusListaTrace);
   const bonusListaTraceReais = parseNumericValue(input.bonusListaTraceReais);
-  const bonusListaTraceTotal = roundValue(bonusListaTrace > 0 ? bonusListaTrace * totalArrobas : bonusListaTraceReais);
+  const bonusListaTraceTotalRaw = bonusListaTrace > 0 ? bonusListaTrace * totalArrobasRaw : bonusListaTraceReais;
 
-  const totalBonus = roundValue(bonusPrecoceTotal + bonusQualidadeTotal + bonusListaTraceTotal);
+  const totalBonusRaw = bonusPrecoceTotalRaw + bonusQualidadeTotalRaw + bonusListaTraceTotalRaw;
 
   const descontoQualidade = parseNumericValue(input.descontoQualidade);
   const descontoQualidadeReais = parseNumericValue(input.descontoQualidadeReais);
-  const descQualidadeTotal = roundValue(descontoQualidade > 0 ? descontoQualidade * totalArrobas : descontoQualidadeReais);
+  const descQualidadeTotalRaw = descontoQualidade > 0 ? descontoQualidade * totalArrobasRaw : descontoQualidadeReais;
 
   const outrosDescontos = parseNumericValue(input.outrosDescontos);
   const outrosDescontosArroba = parseNumericValue(input.outrosDescontosArroba);
-  const descOutrosTotal = roundValue(outrosDescontosArroba > 0 ? outrosDescontosArroba * totalArrobas : outrosDescontos);
+  const descOutrosTotalRaw = outrosDescontosArroba > 0 ? outrosDescontosArroba * totalArrobasRaw : outrosDescontos;
 
-  const totalDescontos = roundValue(descQualidadeTotal + descOutrosTotal);
-  const valorLiquido = roundValue(valorBruto + totalBonus - totalDescontos);
+  const totalDescontosRaw = descQualidadeTotalRaw + descOutrosTotalRaw;
+  const valorLiquidoRaw = valorBrutoRaw + totalBonusRaw - totalDescontosRaw;
 
-  const liqArroba = roundValue(totalArrobas > 0 ? valorLiquido / totalArrobas : 0);
-  const liqCabeca = roundValue(quantidade > 0 ? valorLiquido / quantidade : 0);
-  const liqKg = roundValue(totalKg > 0 ? valorLiquido / totalKg : 0);
+  const liqArrobaRaw = totalArrobasRaw > 0 ? valorLiquidoRaw / totalArrobasRaw : 0;
+  const liqCabecaRaw = quantidade > 0 ? valorLiquidoRaw / quantidade : 0;
+  const liqKgRaw = totalKgRaw > 0 ? valorLiquidoRaw / totalKgRaw : 0;
+
+  // --- Round ONLY for final output ---
+  const carcacaCalc = roundValue(carcacaRaw, 4);
+  const rendCalc = roundValue(rendRaw, 4);
+  const pesoArrobaCab = roundValue(pesoArrobaCabRaw, 4);
+  const totalArrobas = roundValue(totalArrobasRaw, 4);
+  const totalKg = roundValue(totalKgRaw, 4);
+  const valorBase = roundValue(valorBaseRaw);
+  const funruralTotal = roundValue(funruralTotalRaw);
+  const valorBruto = roundValue(valorBrutoRaw);
+  const bonusPrecoceTotal = roundValue(bonusPrecoceTotalRaw);
+  const bonusQualidadeTotal = roundValue(bonusQualidadeTotalRaw);
+  const bonusListaTraceTotal = roundValue(bonusListaTraceTotalRaw);
+  const totalBonus = roundValue(totalBonusRaw);
+  const descQualidadeTotal = roundValue(descQualidadeTotalRaw);
+  const descOutrosTotal = roundValue(descOutrosTotalRaw);
+  const totalDescontos = roundValue(totalDescontosRaw);
+  const valorLiquido = roundValue(valorLiquidoRaw);
+  const liqArroba = roundValue(liqArrobaRaw);
+  const liqCabeca = roundValue(liqCabecaRaw);
+  const liqKg = roundValue(liqKgRaw);
 
   const parcelas = (input.parcelas || []).map((parcela) => ({
     data: parcela.data,
