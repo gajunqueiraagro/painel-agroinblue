@@ -27,7 +27,7 @@ export interface BoitelData {
   valorAdiantamentoDiarias: number; valorAdiantamentoSanitario: number;
   valorAdiantamentoOutros: number; valorTotalAntecipado: number; adiantamentoObservacao: string;
   _faturamentoBruto?: number; _faturamentoLiquido?: number; _receitaProdutor?: number;
-  _custoTotal?: number; _lucroTotal?: number; _boitelId?: string;
+  _custoTotal?: number; _lucroTotal?: number; _saldoReceber?: number; _boitelId?: string;
 }
 
 interface Props {
