@@ -20,7 +20,7 @@ interface DadosOperacionais {
 }
 
 interface DadosFinanceiros {
-  tipoOperacao: string;       // "Compra", "Abate", "Venda em Pé"
+  tipoOperacao: string;       // "Compra", "Abate", "Venda em Pé", "Boitel"
   fornecedorOuFrigorifico?: string;
   precoBase?: number;
   precoBaseLabel?: string;     // "R$/kg", "R$/@", etc.
@@ -42,6 +42,12 @@ interface DadosFinanceiros {
   liqArroba?: number;
   liqCabeca?: number;
   liqKg?: number;
+  // Boitel-specific
+  boitelDias?: number;
+  boitelGmd?: number;
+  boitelReceitaProdutor?: number;
+  boitelAdiantamento?: number;
+  boitelFrete?: number;
 }
 
 interface Props {
