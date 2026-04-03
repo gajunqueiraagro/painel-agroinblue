@@ -122,37 +122,33 @@ export function AbateResumoPanel({
         </>
       ) : (
         <>
-          <div className="space-y-0.5 text-[10px] leading-tight">
+          <div className="space-y-0 text-[10px] leading-[1.4]">
             {calc && calc.valorBase > 0 && (
               <>
-                <div className="flex justify-between"><span className="text-muted-foreground">Valor Base</span><strong>{formatMoeda(calc.valorBase)}</strong></div>
+                <div className="flex justify-between py-px"><span className="text-muted-foreground">Valor Base</span><strong className="tabular-nums">{formatMoeda(calc.valorBase)}</strong></div>
                 {calc.funruralTotal > 0 && (
-                  <div className="flex justify-between"><span className="text-muted-foreground">– Funrural</span><strong className="text-destructive">-{formatMoeda(calc.funruralTotal)}</strong></div>
+                  <div className="flex justify-between py-px"><span className="text-muted-foreground">– Funrural</span><strong className="text-destructive tabular-nums">-{formatMoeda(calc.funruralTotal)}</strong></div>
                 )}
-                <div className="flex justify-between font-bold"><span>= Valor Bruto</span><strong>{formatMoeda(calc.valorBruto)}</strong></div>
-                {calc.totalBonus > 0 && (
-                  <div className="flex justify-between"><span className="text-muted-foreground">+ Bônus</span><strong className="text-green-600 dark:text-green-400">+{formatMoeda(calc.totalBonus)}</strong></div>
-                )}
-                {calc.totalDescontos > 0 && (
-                  <div className="flex justify-between"><span className="text-muted-foreground">– Descontos</span><strong className="text-destructive">-{formatMoeda(calc.totalDescontos)}</strong></div>
-                )}
-                <Separator />
-                <div className="flex justify-between text-[11px] font-bold">
-                  <span>Valor Líquido</span>
-                  <span className="text-primary">{formatMoeda(calc.valorLiquido)}</span>
+                <div className="flex justify-between py-px font-bold"><span>= Valor Bruto</span><strong className="tabular-nums">{formatMoeda(calc.valorBruto)}</strong></div>
+                <div className="flex justify-between py-px"><span className="text-muted-foreground">+ Bônus</span><strong className="text-green-600 dark:text-green-400 tabular-nums">{calc.totalBonus > 0 ? `+${formatMoeda(calc.totalBonus)}` : '-'}</strong></div>
+                <div className="flex justify-between py-px"><span className="text-muted-foreground">– Despesas</span><strong className="text-destructive tabular-nums">{calc.totalDescontos > 0 ? `-${formatMoeda(calc.totalDescontos)}` : '-'}</strong></div>
+                <Separator className="my-0.5" />
+                <div className="flex justify-between text-[11px] font-bold py-px">
+                  <span>= Valor Líquido</span>
+                  <span className="text-primary tabular-nums">{formatMoeda(calc.valorLiquido)}</span>
                 </div>
                 {calc.liqArroba > 0 && (
-                  <div className="flex justify-between"><span className="text-muted-foreground">R$/@ líq.</span><strong>{formatMoeda(calc.liqArroba)}</strong></div>
+                  <div className="flex justify-between py-px"><span className="text-muted-foreground">R$/@ líq.</span><strong className="tabular-nums">{formatMoeda(calc.liqArroba)}</strong></div>
                 )}
               </>
             )}
-            <div className="flex justify-between"><span className="text-muted-foreground">Pagamento</span><strong>{pagLabel}</strong></div>
+            <div className="flex justify-between py-px"><span className="text-muted-foreground">Pagamento</span><strong>{pagLabel}</strong></div>
             {detalhes?.notaFiscal && (
-              <div className="flex justify-between"><span className="text-muted-foreground">NF</span><strong>{detalhes.notaFiscal}</strong></div>
+              <div className="flex justify-between py-px"><span className="text-muted-foreground">NF</span><strong>{detalhes.notaFiscal}</strong></div>
             )}
           </div>
 
-          <div className="flex items-center gap-1 text-[10px] text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-1.5 leading-tight">
+          <div className="flex items-center gap-1 text-[10px] text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-1 leading-tight">
             <CheckCircle className="h-3 w-3 shrink-0" />
             <span className="font-medium">Detalhes financeiros preenchidos</span>
           </div>
@@ -166,13 +162,13 @@ export function AbateResumoPanel({
 
       <Separator />
 
-      <div className="space-y-1">
+      <div className="flex items-center gap-1.5">
         {onCancelEdit && (
-          <Button type="button" variant="outline" className="w-full h-7 text-[11px] font-bold" onClick={onCancelEdit}>
-            Cancelar Edição
+          <Button type="button" variant="outline" className="flex-1 h-7 text-[10px] font-bold" onClick={onCancelEdit}>
+            Cancelar
           </Button>
         )}
-        <Button type="button" className="w-full h-8 text-[11px] font-bold" onClick={onRequestRegister} disabled={submitting || !detalhesPreenchidos}>
+        <Button type="button" className="flex-1 h-7 text-[10px] font-bold" onClick={onRequestRegister} disabled={submitting || !detalhesPreenchidos}>
           {submitting ? 'Registrando...' : (registerLabel || 'Registrar Abate')}
         </Button>
       </div>
