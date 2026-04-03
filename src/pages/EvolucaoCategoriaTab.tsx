@@ -471,7 +471,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                 <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-muted">
                   Saldo Fin.
                 </th>
-                {hasPastosData && (
+                {showDelta && (
                   <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[30px] bg-muted" title="Divergência: Saldo Oficial − Alocado nos Pastos">
                     Δ
                   </th>
