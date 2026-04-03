@@ -64,8 +64,7 @@ export function parseNumericValue(value: string | number | null | undefined): nu
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
   if (!value) return 0;
 
-  const cleaned = value.toString().replace(/[^
-\d,.-]/g, '').trim();
+  const cleaned = value.toString().replace(/[^\d,.\-]/g, '').trim();
   if (!cleaned) return 0;
 
   const hasComma = cleaned.includes(',');
