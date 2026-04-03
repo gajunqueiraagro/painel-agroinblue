@@ -18,12 +18,13 @@ interface Props {
   onRequestRegister: () => void;
   submitting: boolean;
   registerLabel?: string;
+  onCancelEdit?: () => void;
 }
 
 export function AbateResumoPanel({
   quantidade, pesoKg, categoria, frigorificoNome,
   detalhes, detalhesPreenchidos, canOpenModal,
-  onOpenModal, onRequestRegister, submitting, registerLabel,
+  onOpenModal, onRequestRegister, submitting, registerLabel, onCancelEdit,
 }: Props) {
   const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria || '-';
 
