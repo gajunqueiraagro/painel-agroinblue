@@ -325,7 +325,7 @@ export function ContaBoitelTab({ onBack }: Props) {
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             {l.sinal > 0 ? (
-                              <TrendingUp className="h-3 w-3 text-emerald-600 shrink-0" />
+                              <TrendingUp className="h-3 w-3 text-primary shrink-0" />
                             ) : (
                               <TrendingDown className="h-3 w-3 text-destructive shrink-0" />
                             )}
