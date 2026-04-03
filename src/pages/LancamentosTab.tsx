@@ -1355,7 +1355,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Abate atualizado com financeiro!');
           restoreEditOrigin();
-        } else if (isVenda && calc.valorLiquido > 0) {
+        } else if (isVenda && (calc.valorLiquido > 0 || tipoPeso === 'boitel')) {
           // Auto-generate/update financeiro for venda
           if (vendaFinanceiroRef.current) {
             await vendaFinanceiroRef.current.generateFinanceiro(editingAbateId);
