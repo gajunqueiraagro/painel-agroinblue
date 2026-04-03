@@ -179,7 +179,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
           </div>
 
           {/* ═══ CORPO — 4 COLUNAS ═══ */}
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_0.8fr_14rem] gap-x-2 gap-y-1 px-3 py-1.5 flex-1 overflow-y-auto min-h-0">
+          <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_0.9fr_0.7fr_1.1fr] gap-x-2 gap-y-1 px-3 py-1.5 flex-1 overflow-y-auto min-h-0">
 
             {/* COL 1 — BASE OPERACIONAL + ADIANTAMENTO */}
             {/* COL 1 — BASE OPERACIONAL + ADIANTAMENTO */}
