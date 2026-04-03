@@ -282,11 +282,9 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
               {isAbate && valorTotalCalc > 0 ? (
                 <>
                   <Separator className="my-0.5" />
-                  {/* Abate: Use snapshot.calculation as single source of truth */}
                   {(() => {
                     const snap = lancamento.detalhesSnapshot as any;
                     const snapCalc = snap?.calculation;
-                    // Prefer snapshot calculation, fallback to inline calc
                     const valorBase = snapCalc?.valorBase ?? ((totalArrobas || 0) * (lancamento.precoArroba || 0));
                     const funruralTotal = snapCalc?.funruralTotal ?? (lancamento.descontoFunrural || 0);
                     const valorBruto = snapCalc?.valorBruto ?? (valorBase - funruralTotal);
@@ -322,6 +320,43 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                           {liqArrobaVal > 0 && <Row label="R$/@ líq." value={formatMoeda(liqArrobaVal)} />}
                           {liqCabecaVal > 0 && <Row label="R$/cab líq." value={formatMoeda(liqCabecaVal)} />}
                           {liqKgVal > 0 && <Row label="R$/kg líq." value={formatMoeda(liqKgVal)} />}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </>
+              ) : isVenda && (() => {
+                const snap = lancamento.detalhesSnapshot as any;
+                const vc = snap?._tipo === 'venda' ? snap : (snap?.calculation || null);
+                if (!vc || !vc.valorBruto) return false;
+                return true;
+              })() ? (
+                <>
+                  <Separator className="my-0.5" />
+                  {(() => {
+                    const snap = lancamento.detalhesSnapshot as any;
+                    const vc = snap?._tipo === 'venda' ? snap : snap;
+                    return (
+                      <>
+                        <div className="space-y-0.5 text-[10px]">
+                          <div className="flex justify-between"><span className="text-muted-foreground">Valor Bruto</span><strong className="tabular-nums">{formatMoeda(vc.valorBruto || vc.valorBase)}</strong></div>
+                          {(vc.totalDespesas > 0) && (
+                            <div className="flex justify-between"><span className="text-muted-foreground">– Despesas</span><strong className="text-orange-600 dark:text-orange-400 tabular-nums">-{formatMoeda(vc.totalDespesas)}</strong></div>
+                          )}
+                          {(vc.totalDeducoes > 0 || vc.funruralTotal > 0) && (
+                            <div className="flex justify-between"><span className="text-muted-foreground">– Deduções</span><strong className="text-destructive tabular-nums">-{formatMoeda(vc.totalDeducoes || vc.funruralTotal)}</strong></div>
+                          )}
+                        </div>
+                        <div className="bg-primary/10 rounded px-2.5 py-1.5 flex items-center justify-between">
+                          <span className="text-[10px] text-muted-foreground font-medium">Valor Líquido</span>
+                          <span className="font-extrabold text-primary text-base tabular-nums">{formatMoeda(vc.valorLiquido)}</span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-x-2 gap-y-0.5 text-[10px]">
+                          <Row label="Qtde" value={`${lancamento.quantidade} cab.`} />
+                          {vc.totalArrobas > 0 && <Row label="Total @" value={formatArroba(vc.totalArrobas)} />}
+                          {vc.liqArroba > 0 && <Row label="R$/@ líq." value={formatMoeda(vc.liqArroba)} />}
+                          {vc.liqCabeca > 0 && <Row label="R$/cab líq." value={formatMoeda(vc.liqCabeca)} />}
+                          {vc.liqKg > 0 && <Row label="R$/kg líq." value={formatMoeda(vc.liqKg)} />}
                         </div>
                       </>
                     );

@@ -33,6 +33,7 @@ import { TransferenciaDetalhesDialog, TransferenciaDetalhes, EMPTY_TRANSFERENCIA
 import { TransferenciaResumoPanel } from '@/components/transferencia/TransferenciaResumoPanel';
 import { buildTransferenciaCalculation, buildTransferenciaSnapshot } from '@/lib/calculos/transferencia';
 import { buildAbateCalculation, type AbateCalculation } from '@/lib/calculos/abate';
+import { buildVendaCalculation, buildVendaSnapshot, type VendaCalculation } from '@/lib/calculos/venda';
 import { VendaDetalhesDialog, VendaDetalhes, EMPTY_VENDA_DETALHES } from '@/components/venda/VendaDetalhesDialog';
 import { VendaResumoPanel } from '@/components/venda/VendaResumoPanel';
 import { AbateExportDialog } from '@/components/AbateExportMenu';
@@ -337,6 +338,37 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       precoReferenciaCabeca: transferenciaDetalhes?.precoReferenciaCabeca || undefined,
     });
   }, [isTransferenciaSaida, quantidade, pesoKg, categoria, fazendaOrigem, fazendaDestino, data, statusOp, observacao, transferenciaDetalhes, nomeFazenda]);
+
+  // Venda em Pé — unified calc (single source of truth)
+  const vendaCalc = useMemo((): VendaCalculation | null => {
+    if (!isVenda || !vendaDetalhes) return null;
+    const tipoPrecoEngine = vendaDetalhes.tipoPreco === 'por_total' ? 'por_cab' as const
+      : vendaDetalhes.tipoPreco === 'por_cab' ? 'por_cab' as const
+      : vendaDetalhes.tipoPreco === 'por_kg' ? 'por_kg' as const
+      : 'por_kg' as const;
+    return buildVendaCalculation({
+      quantidade: Number(quantidade) || 0,
+      pesoKg: Number(pesoKg) || 0,
+      categoria,
+      fazendaOrigem: nomeFazenda || fazendaOrigem,
+      compradorNome: abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || '',
+      data,
+      statusOperacional: statusOp,
+      observacao,
+      tipoPreco: tipoPrecoEngine,
+      precoInput: vendaDetalhes.precoInput || vendaPrecoInput,
+      tipoVenda: vendaDetalhes.tipoVenda,
+      frete: vendaDetalhes.frete,
+      comissaoPct: vendaDetalhes.comissaoPct,
+      outrosCustos: vendaDetalhes.outrosCustos,
+      funruralPct: vendaDetalhes.funruralPct,
+      funruralReais: vendaDetalhes.funruralReais,
+      notaFiscal: vendaDetalhes.notaFiscal,
+      formaReceb: vendaDetalhes.formaReceb,
+      qtdParcelas: vendaDetalhes.qtdParcelas,
+      parcelas: vendaDetalhes.parcelas,
+    });
+  }, [isVenda, vendaDetalhes, quantidade, pesoKg, categoria, fazendaOrigem, data, statusOp, observacao, vendaPrecoInput, nomeFazenda, abateFornecedores, vendaDestinoFornecedorId]);
 
   const calc = useMemo(() => {
     const qtd = Number(quantidade) || 0;
@@ -1281,7 +1313,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         }
         if (isVenda && vendaDetalhes) {
           const fornNome = abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome;
-          return { type: 'venda', ...vendaDetalhes, tipoPreco: vendaTipoPreco, precoInput: vendaPrecoInput, fornecedorId: vendaDestinoFornecedorId || undefined, fornecedorNome: fornNome || undefined };
+          const vc = vendaCalc || vendaDetalhes.calculation;
+          return {
+            ...buildVendaSnapshot(vc || buildVendaCalculation({
+              quantidade: Number(quantidade) || 0, pesoKg: Number(pesoKg) || 0, categoria,
+              fazendaOrigem: nomeFazenda || fazendaOrigem, compradorNome: fornNome || '',
+              data, statusOperacional: statusOp, tipoPreco: 'por_kg', precoInput: vendaPrecoInput,
+            })),
+            type: 'venda',
+            ...vendaDetalhes,
+            tipoPreco: vendaTipoPreco, precoInput: vendaPrecoInput,
+            fornecedorId: vendaDestinoFornecedorId || undefined, fornecedorNome: fornNome || undefined,
+          };
         }
         if (isTransferenciaSaida && transferenciaCalc) {
           return {
@@ -1516,8 +1559,23 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       } else {
         result.formaPagamento = 'À vista';
       }
+    } else if (isVenda && vendaCalc) {
+      const vc = vendaCalc;
+      const tipoPrecoLabel = vendaDetalhes?.tipoPreco === 'por_kg' ? 'R$/kg' : vendaDetalhes?.tipoPreco === 'por_cab' ? 'R$/cab' : 'R$/@';
+      result.precoBase = vc.precoInput;
+      result.precoBaseLabel = tipoPrecoLabel;
+      result.totalBruto = vc.valorBruto;
+      result.totalArrobas = vc.totalArrobas;
+      result.totalDescontos = vc.totalDespesas + vc.totalDeducoes;
+      result.valorLiquido = vc.valorLiquido;
+      result.fornecedorOuFrigorifico = vc.compradorNome;
+      if (vc.formaReceb === 'prazo' && vc.parcelas.length > 0) {
+        result.formaPagamento = `A prazo (${vc.parcelas.length}x)`;
+        result.parcelas = vc.parcelas;
+      } else {
+        result.formaPagamento = 'À vista';
+      }
     } else if (isTransferenciaSaida) {
-      // Economic (managerial) — no financial impact
       const tc = transferenciaCalc;
       if (tc && tc.temPrecoReferencia) {
         result.precoBase = tc.precoReferenciaArroba;
@@ -1526,13 +1584,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         result.valorLiquido = tc.valorEconomicoLote;
         result.totalArrobas = tc.totalArrobas;
       }
-      // No payment info — transferência doesn't generate financial entries
     } else {
       result.precoBase = Number(precoKg) || 0;
       result.precoBaseLabel = 'R$/kg';
       result.totalBruto = calc.valorBruto;
-      result.totalBonus = isVenda ? 0 : (Number(bonus) || 0);
-      result.totalDescontos = isVenda ? calc.totalDescontos : (Number(descontos) || 0);
+      result.totalBonus = Number(bonus) || 0;
+      result.totalDescontos = Number(descontos) || 0;
       result.valorLiquido = calc.valorLiquido;
       if (formaPagamento === 'parcelado' && parcelas.length > 0) {
         result.formaPagamento = `A prazo (${parcelas.length}x)`;
@@ -2461,6 +2518,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   submitting={submitting}
                   registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
                   onCancelEdit={editingAbateId ? handleCancelEdit : undefined}
+                  calculation={vendaCalc}
                 />
                 <VendaDetalhesDialog
                   open={vendaDialogOpen}
@@ -2484,6 +2542,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   categoria={categoria}
                   dataVenda={data}
                   compradorNome={abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || ''}
+                  statusOperacional={statusOp}
                 />
                 {/* Hidden panel for financeiro generation */}
                 <div className="hidden">

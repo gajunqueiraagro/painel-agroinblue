@@ -10,7 +10,9 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { CATEGORIAS } from '@/types/cattle';
 import { ShoppingCart, Truck, TrendingDown, CreditCard, FileText, Users, DollarSign } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
+import { buildVendaCalculation, type VendaCalculation, type TipoPrecoVenda as EngineTipoPreco } from '@/lib/calculos/venda';
 
+// Re-export legacy type for backward compat
 export type TipoPrecoVenda = 'por_kg' | 'por_cab' | 'por_total';
 export type TipoVendaPe = 'desmama' | 'gado_adulto';
 
@@ -27,6 +29,8 @@ export interface VendaDetalhes {
   formaReceb: 'avista' | 'prazo';
   qtdParcelas: string;
   parcelas: { data: string; valor: number }[];
+  /** Attached calculation from engine — single source of truth */
+  calculation?: VendaCalculation;
 }
 
 export const EMPTY_VENDA_DETALHES: VendaDetalhes = {
@@ -44,6 +48,13 @@ export const EMPTY_VENDA_DETALHES: VendaDetalhes = {
   parcelas: [],
 };
 
+/** Map legacy tipoPreco to engine tipoPreco */
+function toEngineTipoPreco(tp: TipoPrecoVenda): EngineTipoPreco {
+  if (tp === 'por_total') return 'por_cab'; // por_total treated as lump-sum per-cab
+  if (tp === 'por_cab') return 'por_cab';
+  return 'por_kg';
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -54,9 +65,10 @@ interface Props {
   categoria: string;
   dataVenda: string;
   compradorNome: string;
+  statusOperacional?: 'previsto' | 'confirmado' | 'conciliado';
 }
 
-export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quantidade, pesoKg, categoria, dataVenda, compradorNome }: Props) {
+export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quantidade, pesoKg, categoria, dataVenda, compradorNome, statusOperacional = 'conciliado' }: Props) {
   const [tipoVenda, setTipoVenda] = useState<TipoVendaPe>(initialData.tipoVenda);
   const [tipoPreco, setTipoPreco] = useState<TipoPrecoVenda>(initialData.tipoPreco);
   const [precoInput, setPrecoInput] = useState(initialData.precoInput);
@@ -96,49 +108,44 @@ export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quanti
 
   const qtd = quantidade || 0;
   const peso = pesoKg || 0;
-  const totalKg = peso * qtd;
   const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria || '-';
 
-  // Price calculations
+  const isPrevisto = statusOperacional === 'previsto' || statusOperacional === 'confirmado';
+  const labelSuffix = isPrevisto ? ' Prev.' : '';
+
+  // ── Use engine as single source of truth ──
   const calc = useMemo(() => {
-    const vi = Number(precoInput) || 0;
-    let valorBruto = 0;
-    if (tipoPreco === 'por_kg') valorBruto = totalKg * vi;
-    else if (tipoPreco === 'por_cab') valorBruto = qtd * vi;
-    else valorBruto = vi;
+    return buildVendaCalculation({
+      quantidade: qtd,
+      pesoKg: peso,
+      categoria,
+      fazendaOrigem: '',
+      compradorNome,
+      data: dataVenda,
+      statusOperacional,
+      tipoPreco: toEngineTipoPreco(tipoPreco),
+      precoInput,
+      tipoVenda,
+      frete: freteLocal,
+      comissaoPct: comissaoPctLocal,
+      outrosCustos,
+      funruralPct: funruralPctLocal,
+      funruralReais: funruralReaisLocal,
+      notaFiscal,
+      formaReceb,
+      qtdParcelas,
+      parcelas,
+    });
+  }, [qtd, peso, categoria, compradorNome, dataVenda, statusOperacional, tipoPreco, precoInput, tipoVenda, freteLocal, comissaoPctLocal, outrosCustos, funruralPctLocal, funruralReaisLocal, notaFiscal, formaReceb, qtdParcelas, parcelas]);
 
-    const rKg = totalKg > 0 ? valorBruto / totalKg : 0;
-    const rCab = qtd > 0 ? valorBruto / qtd : 0;
-
-    const freteVal = Number(freteLocal) || 0;
-    const comissaoVal = valorBruto * ((Number(comissaoPctLocal) || 0) / 100);
-    const outrosCustosVal = Number(outrosCustos) || 0;
-    const totalDespesas = freteVal + comissaoVal + outrosCustosVal;
-
-    // Funrural: mutual exclusion
-    const funruralPctFilled = !!funruralPctLocal && Number(funruralPctLocal) > 0;
-    const funruralReaisFilled = !!funruralReaisLocal && Number(funruralReaisLocal) > 0;
-    const descFunruralTotal = funruralReaisFilled
-      ? (Number(funruralReaisLocal) || 0)
-      : valorBruto * ((Number(funruralPctLocal) || 0) / 100);
-    const totalDeducoes = descFunruralTotal;
-
-    const valorLiquido = valorBruto - totalDespesas - totalDeducoes;
-
-    return {
-      valorBruto, rKg, rCab,
-      freteVal, comissaoVal, outrosCustosVal, totalDespesas,
-      descFunruralTotal, totalDeducoes, funruralPctFilled, funruralReaisFilled,
-      valorLiquido,
-    };
-  }, [tipoPreco, precoInput, totalKg, qtd, freteLocal, comissaoPctLocal, outrosCustos, funruralPctLocal, funruralReaisLocal]);
-
-  // Funrural calculated fields
-  const funruralPctCalculado = calc.funruralReaisFilled && calc.valorBruto > 0
-    ? ((Number(funruralReaisLocal) / calc.valorBruto) * 100).toFixed(2)
+  // Funrural calculated fields for display
+  const funruralReaisInput = Number(funruralReaisLocal) || 0;
+  const funruralPctInput = Number(funruralPctLocal) || 0;
+  const funruralPctCalculado = funruralReaisInput > 0 && calc.valorBase > 0
+    ? ((funruralReaisInput / calc.valorBase) * 100).toFixed(2)
     : funruralPctLocal;
-  const funruralReaisCalculado = calc.funruralPctFilled
-    ? (calc.descFunruralTotal > 0 ? calc.descFunruralTotal.toFixed(2) : '')
+  const funruralReaisCalculado = funruralPctInput > 0
+    ? (calc.funruralTotal > 0 ? calc.funruralTotal.toFixed(2) : '')
     : funruralReaisLocal;
 
   const gerarParcelas = useCallback((n: number, base: number) => {
@@ -170,6 +177,7 @@ export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quanti
       frete: freteLocal, comissaoPct: comissaoPctLocal, outrosCustos,
       funruralPct: funruralPctLocal, funruralReais: funruralReaisLocal,
       notaFiscal, formaReceb, qtdParcelas, parcelas,
+      calculation: calc,
     });
   };
 
@@ -188,6 +196,11 @@ export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quanti
           <DialogTitle className="text-[13px] font-bold flex items-center gap-2">
             <DollarSign className="h-4 w-4 text-primary" />
             Detalhes da Venda em Pé
+            {isPrevisto && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+                {statusOperacional === 'previsto' ? 'Previsto' : 'Programado'}
+              </span>
+            )}
           </DialogTitle>
         </DialogHeader>
 
@@ -202,8 +215,6 @@ export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quanti
 
           <Separator />
 
-          {/* Tipo de Venda herdado da tela principal — não repete aqui */}
-
           {/* BLOCO 2 — Comprador */}
           {sectionTitle(<Users className="h-4 w-4 text-muted-foreground" />, 'Comprador')}
           <div className="bg-muted/30 rounded p-2 text-[11px]">
@@ -214,7 +225,7 @@ export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quanti
           <Separator />
 
           {/* BLOCO 3 — Tipo de Preço / Preço Base */}
-          {sectionTitle(<span className="text-muted-foreground text-sm">R$</span>, 'Tipo de Preço / Preço Base')}
+          {sectionTitle(<span className="text-muted-foreground text-sm">R$</span>, `Tipo de Preço / Preço Base${labelSuffix}`)}
           <div className="grid grid-cols-3 gap-1.5">
             {(['por_kg', 'por_cab', 'por_total'] as const).map(tp => (
               <button key={tp} type="button"
@@ -226,20 +237,23 @@ export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quanti
           </div>
           <div>
             <Label className="text-[10px]">
-              {tipoPreco === 'por_kg' ? 'R$/kg' : tipoPreco === 'por_cab' ? 'R$/cabeça' : 'Valor total (R$)'}
+              {tipoPreco === 'por_kg' ? `R$/kg${labelSuffix}` : tipoPreco === 'por_cab' ? `R$/cabeça${labelSuffix}` : `Valor total (R$)${labelSuffix}`}
             </Label>
             <Input type="number" value={precoInput} onChange={e => { setPrecoInput(e.target.value); markDirty(); }} placeholder="0,00" className="h-8 text-[11px] w-40" />
           </div>
-          {calc.valorBruto > 0 && (
+          {calc.valorBase > 0 && (
             <div className="bg-muted/30 rounded p-2 space-y-0.5 text-[10px]">
               {tipoPreco !== 'por_kg' && (
                 <div className="flex justify-between"><span className="text-muted-foreground">R$/kg</span><strong>{formatMoeda(calc.rKg)}</strong></div>
               )}
-              {tipoPreco !== 'por_cab' && (
+              {tipoPreco !== 'por_cab' && tipoPreco !== 'por_total' && (
                 <div className="flex justify-between"><span className="text-muted-foreground">R$/cab.</span><strong>{formatMoeda(calc.rCab)}</strong></div>
               )}
+              {calc.rArroba > 0 && (
+                <div className="flex justify-between"><span className="text-muted-foreground">R$/@</span><strong>{formatMoeda(calc.rArroba)}</strong></div>
+              )}
               <div className="flex justify-between font-bold text-[11px]">
-                <span>Valor bruto total</span>
+                <span>{`Valor bruto${labelSuffix}`}</span>
                 <span className="text-primary">{formatMoeda(calc.valorBruto)}</span>
               </div>
             </div>
@@ -248,7 +262,7 @@ export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quanti
           <Separator />
 
           {/* BLOCO 4 — Despesas Comerciais */}
-          {sectionTitle(<Truck className="h-4 w-4 text-muted-foreground" />, 'Despesas Comerciais')}
+          {sectionTitle(<Truck className="h-4 w-4 text-muted-foreground" />, `Despesas Comerciais${labelSuffix}`)}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-[10px]">Frete (R$)</Label>
@@ -288,7 +302,7 @@ export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quanti
           )}
           {calc.totalDespesas > 0 && (
             <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded px-2 py-1.5 flex justify-between text-[10px] font-bold">
-              <span className="text-orange-700 dark:text-orange-400">Total despesas comerciais</span>
+              <span className="text-orange-700 dark:text-orange-400">{`Total despesas${labelSuffix}`}</span>
               <span className="text-orange-800 dark:text-orange-300">{formatMoeda(calc.totalDespesas)}</span>
             </div>
           )}
@@ -296,7 +310,7 @@ export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quanti
           <Separator />
 
           {/* BLOCO 5 — Deduções / Encargos */}
-          {sectionTitle(<TrendingDown className="h-4 w-4 text-muted-foreground" />, 'Deduções / Encargos')}
+          {sectionTitle(<TrendingDown className="h-4 w-4 text-muted-foreground" />, `Deduções / Encargos${labelSuffix}`)}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-[10px]">Funrural (%)</Label>
@@ -304,7 +318,7 @@ export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quanti
                 type="number" value={funruralPctCalculado}
                 onChange={e => { setFunruralPctLocal(e.target.value); if (e.target.value && Number(e.target.value) > 0) setFunruralReaisLocal(''); markDirty(); }}
                 placeholder="0,00" step="0.01" className="h-8 text-[11px]"
-                disabled={calc.funruralReaisFilled}
+                disabled={funruralReaisInput > 0}
               />
             </div>
             <div>
@@ -312,15 +326,15 @@ export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quanti
               <Input
                 type="number" value={funruralReaisCalculado}
                 onChange={e => { setFunruralReaisLocal(e.target.value); if (e.target.value && Number(e.target.value) > 0) setFunruralPctLocal(''); markDirty(); }}
-                placeholder="0,00" className={`h-8 text-[11px] ${calc.funruralPctFilled ? 'bg-muted/40' : ''}`}
-                disabled={calc.funruralPctFilled} readOnly={calc.funruralPctFilled}
+                placeholder="0,00" className={`h-8 text-[11px] ${funruralPctInput > 0 ? 'bg-muted/40' : ''}`}
+                disabled={funruralPctInput > 0} readOnly={funruralPctInput > 0}
               />
             </div>
           </div>
           <p className="text-[9px] text-muted-foreground">Informe em % ou R$ — o outro será calculado automaticamente.</p>
           {calc.totalDeducoes > 0 && (
             <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded px-2 py-1.5 flex justify-between text-[10px] font-bold">
-              <span className="text-red-700 dark:text-red-400">Total deduções</span>
+              <span className="text-red-700 dark:text-red-400">{`Total deduções${labelSuffix}`}</span>
               <span className="text-red-800 dark:text-red-300">-{formatMoeda(calc.totalDeducoes)}</span>
             </div>
           )}
@@ -375,26 +389,31 @@ export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quanti
 
           {/* BLOCO 7 — Resultado Final */}
           {calc.valorBruto > 0 && (
-            <div className="bg-primary/5 border border-primary/20 rounded p-2 space-y-0.5">
-              <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Resultado Final</h4>
+            <div className={`rounded p-2 space-y-0.5 border ${isPrevisto ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800' : 'bg-primary/5 border-primary/20'}`}>
+              <h4 className="text-[10px] font-bold text-muted-foreground uppercase">
+                {`Resultado Final${labelSuffix}`}
+              </h4>
               <div className="space-y-0.5 text-[10px]">
-                <div className="flex justify-between"><span className="text-muted-foreground">Valor bruto</span><strong>{formatMoeda(calc.valorBruto)}</strong></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">{`Valor bruto${labelSuffix}`}</span><strong>{formatMoeda(calc.valorBruto)}</strong></div>
                 {calc.totalDespesas > 0 && (
-                  <div className="flex justify-between"><span className="text-muted-foreground">Despesas</span><strong className="text-orange-600 dark:text-orange-400">-{formatMoeda(calc.totalDespesas)}</strong></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">{`Despesas${labelSuffix}`}</span><strong className="text-orange-600 dark:text-orange-400">-{formatMoeda(calc.totalDespesas)}</strong></div>
                 )}
                 {calc.totalDeducoes > 0 && (
-                  <div className="flex justify-between"><span className="text-muted-foreground">Deduções</span><strong className="text-destructive">-{formatMoeda(calc.totalDeducoes)}</strong></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">{`Deduções${labelSuffix}`}</span><strong className="text-destructive">-{formatMoeda(calc.totalDeducoes)}</strong></div>
                 )}
                 <Separator />
                 <div className="flex justify-between text-[12px] font-bold">
-                  <span>Valor líquido</span>
-                  <span className="text-primary">{formatMoeda(calc.valorLiquido)}</span>
+                  <span>{`Valor líquido${labelSuffix}`}</span>
+                  <span className={isPrevisto ? 'text-amber-700 dark:text-amber-400' : 'text-primary'}>{formatMoeda(calc.valorLiquido)}</span>
                 </div>
-                {totalKg > 0 && (
-                  <div className="flex justify-between"><span className="text-muted-foreground">R$/kg líq.</span><strong>{formatMoeda(calc.valorLiquido / totalKg)}</strong></div>
+                {calc.liqKg > 0 && (
+                  <div className="flex justify-between"><span className="text-muted-foreground">R$/kg líq.</span><strong>{formatMoeda(calc.liqKg)}</strong></div>
                 )}
-                {qtd > 0 && (
-                  <div className="flex justify-between"><span className="text-muted-foreground">R$/cab. líq.</span><strong>{formatMoeda(calc.valorLiquido / qtd)}</strong></div>
+                {calc.liqCabeca > 0 && (
+                  <div className="flex justify-between"><span className="text-muted-foreground">R$/cab. líq.</span><strong>{formatMoeda(calc.liqCabeca)}</strong></div>
+                )}
+                {calc.liqArroba > 0 && (
+                  <div className="flex justify-between"><span className="text-muted-foreground">R$/@ líq.</span><strong>{formatMoeda(calc.liqArroba)}</strong></div>
                 )}
               </div>
             </div>
