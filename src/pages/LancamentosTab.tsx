@@ -126,6 +126,51 @@ function fmt(v?: number, decimals = 2) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
+type FornecedorOption = {
+  id: string;
+  nome: string;
+  nomeNormalizado?: string | null;
+  aliases?: string[] | null;
+};
+
+function normalizeFornecedorText(value?: string | null) {
+  return (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function matchFornecedor(options: FornecedorOption[], params: { id?: string | null; nome?: string | null }) {
+  if (!options.length) return undefined;
+
+  if (params.id) {
+    const byId = options.find(option => option.id === params.id);
+    if (byId) return byId;
+  }
+
+  const normalizedNome = normalizeFornecedorText(params.nome);
+  if (!normalizedNome) return undefined;
+
+  return options.find(option => {
+    const optionNome = normalizeFornecedorText(option.nome);
+    const optionNormalizado = normalizeFornecedorText(option.nomeNormalizado);
+    const aliases = (option.aliases || []).map(alias => normalizeFornecedorText(alias));
+
+    return (
+      optionNome === normalizedNome ||
+      optionNormalizado === normalizedNome ||
+      aliases.includes(normalizedNome) ||
+      optionNome.includes(normalizedNome) ||
+      normalizedNome.includes(optionNome) ||
+      (optionNormalizado && optionNormalizado.includes(normalizedNome)) ||
+      (optionNormalizado && normalizedNome.includes(optionNormalizado))
+    );
+  });
+}
+
 export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, onReturnFromEdit }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
@@ -198,7 +243,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Abate fornecedor (frigorífico) state
   const [abateFornecedorId, setAbateFornecedorId] = useState('');
-  const [abateFornecedores, setAbateFornecedores] = useState<{ id: string; nome: string }[]>([]);
+  const [abateFornecedores, setAbateFornecedores] = useState<FornecedorOption[]>([]);
   const [novoFornecedorAbateOpen, setNovoFornecedorAbateOpen] = useState(false);
 
   // Compra fornecedor state
@@ -530,29 +575,30 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       });
     }
 
-    // Fornecedor: priority 1 = snapshot fornecedorId, 2 = name match, 3 = financeiro favorecido_id
-    const snapFornId = snap?.fornecedorId;
-    if (snapFornId && abateFornecedores.some(f => f.id === snapFornId)) {
-      setAbateFornecedorId(snapFornId);
-    } else if (l.fazendaDestino) {
-      const forn = abateFornecedores.find(f => f.nome === l.fazendaDestino);
-      if (forn) {
-        setAbateFornecedorId(forn.id);
-      } else {
-        // Fallback: try to find from linked financeiro records
-        supabase.from('financeiro_lancamentos_v2').select('favorecido_id').eq('movimentacao_rebanho_id', l.id).not('favorecido_id', 'is', null).limit(1).then(({ data: finRecs }) => {
-          if (finRecs?.[0]?.favorecido_id && abateFornecedores.some(f => f.id === finRecs[0].favorecido_id)) {
-            setAbateFornecedorId(finRecs[0].favorecido_id);
+    // Fornecedor: priority 1 = snapshot (id/nome), 2 = lançamento, 3 = financeiro vinculado
+    const matchedFornecedor = matchFornecedor(abateFornecedores, {
+      id: snap?.fornecedorId,
+      nome: snap?.fornecedorNome || l.fazendaDestino,
+    });
+
+    if (matchedFornecedor) {
+      setAbateFornecedorId(matchedFornecedor.id);
+    } else {
+      supabase
+        .from('financeiro_lancamentos_v2')
+        .select('favorecido_id')
+        .eq('movimentacao_rebanho_id', l.id)
+        .not('favorecido_id', 'is', null)
+        .limit(1)
+        .then(({ data: finRecs }) => {
+          const matchedFromFinanceiro = matchFornecedor(abateFornecedores, {
+            id: finRecs?.[0]?.favorecido_id,
+            nome: snap?.fornecedorNome || l.fazendaDestino,
+          });
+          if (matchedFromFinanceiro) {
+            setAbateFornecedorId(matchedFromFinanceiro.id);
           }
         });
-      }
-    } else {
-      // No destino name – try financeiro fallback
-      supabase.from('financeiro_lancamentos_v2').select('favorecido_id').eq('movimentacao_rebanho_id', l.id).not('favorecido_id', 'is', null).limit(1).then(({ data: finRecs }) => {
-        if (finRecs?.[0]?.favorecido_id && abateFornecedores.some(f => f.id === finRecs[0].favorecido_id)) {
-          setAbateFornecedorId(finRecs[0].favorecido_id);
-        }
-      });
     }
 
     // 8. Set editing mode
@@ -581,29 +627,23 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const tipo = editingLancamento.tipo;
 
     if (tipo === 'abate') {
-      const snapFornId = snap?.fornecedorId;
-      if (snapFornId && abateFornecedores.some(f => f.id === snapFornId)) {
-        setAbateFornecedorId(snapFornId);
-      } else if (editingLancamento.fazendaDestino) {
-        const forn = abateFornecedores.find(f => f.nome === editingLancamento.fazendaDestino);
-        if (forn) setAbateFornecedorId(forn.id);
-      }
+      const matched = matchFornecedor(abateFornecedores, {
+        id: snap?.fornecedorId,
+        nome: snap?.fornecedorNome || editingLancamento.fazendaDestino,
+      });
+      if (matched) setAbateFornecedorId(matched.id);
     } else if (tipo === 'venda') {
-      const snapFornId = snap?.fornecedorId;
-      if (snapFornId && abateFornecedores.some(f => f.id === snapFornId)) {
-        setVendaDestinoFornecedorId(snapFornId);
-      } else if (editingLancamento.fazendaDestino) {
-        const forn = abateFornecedores.find(f => f.nome === editingLancamento.fazendaDestino);
-        if (forn) setVendaDestinoFornecedorId(forn.id);
-      }
+      const matched = matchFornecedor(abateFornecedores, {
+        id: snap?.fornecedorId,
+        nome: snap?.fornecedorNome || editingLancamento.fazendaDestino,
+      });
+      if (matched) setVendaDestinoFornecedorId(matched.id);
     } else if (tipo === 'compra') {
-      const snapFornId = snap?.fornecedorId;
-      if (snapFornId && abateFornecedores.some(f => f.id === snapFornId)) {
-        setCompraFornecedorId(snapFornId);
-      } else if (editingLancamento.fazendaOrigem) {
-        const forn = abateFornecedores.find(f => f.nome === editingLancamento.fazendaOrigem);
-        if (forn) setCompraFornecedorId(forn.id);
-      }
+      const matched = matchFornecedor(abateFornecedores, {
+        id: snap?.fornecedorId,
+        nome: snap?.fornecedorNome || editingLancamento.fazendaOrigem,
+      });
+      if (matched) setCompraFornecedorId(matched.id);
     }
   }, [abateFornecedores, editingAbateId]);
 
@@ -931,7 +971,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     supabase
       .from('financeiro_fornecedores')
-      .select('id, nome')
+      .select('id, nome, nome_normalizado, aliases')
       .eq('cliente_id', clienteAtual.id)
       .eq('ativo', true)
       .order('nome')
@@ -943,7 +983,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           return;
         }
 
-        setAbateFornecedores((data as { id: string; nome: string }[]) || []);
+        setAbateFornecedores(((data as any[]) || []).map(item => ({
+          id: item.id,
+          nome: item.nome,
+          nomeNormalizado: item.nome_normalizado ?? null,
+          aliases: item.aliases ?? null,
+        })));
       });
 
     return () => {
