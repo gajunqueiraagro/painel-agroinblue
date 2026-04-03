@@ -2079,7 +2079,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           )}
         </div>
       )}
-      )}
 
     </div>
   );
