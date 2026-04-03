@@ -705,6 +705,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Load venda into form for editing
   const loadVendaForEdit = useCallback(async (l: Lancamento) => {
+    // Save current context before switching to edit mode
+    if (!onReturnFromEdit) {
+      internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
+    }
     // 1. Set tab & type
     setAba('saida');
     setTipo('venda');
