@@ -370,6 +370,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     });
   }, [isVenda, vendaDetalhes, quantidade, pesoKg, categoria, fazendaOrigem, data, statusOp, observacao, vendaPrecoInput, nomeFazenda, abateFornecedores, vendaDestinoFornecedorId]);
 
+  const calc = useMemo(() => {
     const qtd = Number(quantidade) || 0;
     const peso = Number(pesoKg) || 0;
 
