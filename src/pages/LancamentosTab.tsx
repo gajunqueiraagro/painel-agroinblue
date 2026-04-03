@@ -703,7 +703,120 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
   }, [vendaParaEditar]);
 
-  useEffect(() => {
+  // Load compra into form for editing
+  const loadCompraForEdit = useCallback(async (l: Lancamento) => {
+    setAba('entrada');
+    setTipo('compra');
+    setData(l.data);
+    setCategoria(l.categoria);
+    setQuantidade(String(l.quantidade));
+    setPesoKg(l.pesoMedioKg ? String(l.pesoMedioKg) : '');
+    setFazendaOrigem(l.fazendaOrigem || '');
+    setFazendaDestino(l.fazendaDestino || '');
+    setObservacao(l.observacao || '');
+    setStatusOp((l.statusOperacional as StatusOperacional) || 'conciliado');
+    setNotaFiscal(l.notaFiscal || '');
+
+    // Fornecedor
+    if (l.fazendaOrigem) {
+      const forn = abateFornecedores.find(f => f.nome === l.fazendaOrigem);
+      if (forn) setCompraFornecedorId(forn.id);
+    }
+
+    // PRIORITY 1: snapshot
+    const snap = l.detalhesSnapshot;
+    if (snap && snap.type === 'compra') {
+      const det: CompraDetalhes = {
+        tipoPreco: snap.tipoPreco || 'por_kg',
+        precoKg: snap.precoKg || '',
+        precoCab: snap.precoCab || '',
+        valorTotal: snap.valorTotal || '',
+        frete: snap.frete || '',
+        comissaoPct: snap.comissaoPct || '',
+        formaPag: snap.formaPag || 'avista',
+        qtdParcelas: snap.qtdParcelas || '1',
+        parcelas: snap.parcelas || [],
+        notaFiscal: snap.notaFiscal || '',
+      };
+      setCompraDetalhes(det);
+    } else {
+      // FALLBACK: reconstruct from lancamento + financeiros
+      let tipoPreco: 'por_kg' | 'por_cab' | 'por_total' = 'por_kg';
+      let precoKgVal = '';
+      let precoCabVal = '';
+      let valorTotalVal = '';
+      let freteVal = '';
+      let comissaoVal = '';
+      let formaPag: 'avista' | 'prazo' = 'avista';
+      let parcelasArr: { data: string; valor: number }[] = [];
+
+      // Infer price type from stored data
+      if (l.precoArroba) {
+        // Try to infer
+        const qtd = l.quantidade || 0;
+        const peso = l.pesoMedioKg || 0;
+        const totalKg = qtd * peso;
+        const stored = l.precoArroba;
+        // If close to per-kg value
+        if (totalKg > 0 && l.valorTotal && Math.abs(totalKg * stored - (l.valorTotal || 0)) < 1) {
+          tipoPreco = 'por_kg';
+          precoKgVal = String(stored);
+        } else if (qtd > 0 && l.valorTotal && Math.abs(qtd * stored - (l.valorTotal || 0)) < 1) {
+          tipoPreco = 'por_cab';
+          precoCabVal = String(stored);
+        } else {
+          tipoPreco = 'por_kg';
+          precoKgVal = String(stored);
+        }
+      }
+
+      try {
+        const { data: finRecs } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .select('origem_tipo, valor, data_pagamento')
+          .eq('movimentacao_rebanho_id', l.id)
+          .eq('cancelado', false)
+          .order('data_pagamento', { ascending: true });
+
+        if (finRecs && finRecs.length > 0) {
+          const freteRec = finRecs.find(r => r.origem_tipo === 'compra:frete');
+          if (freteRec) freteVal = String(freteRec.valor);
+
+          const comissaoRec = finRecs.find(r => r.origem_tipo === 'compra:comissao');
+          const parcelaRecs = finRecs.filter(r => r.origem_tipo === 'compra:parcela');
+          if (parcelaRecs.length > 1) {
+            formaPag = 'prazo';
+            parcelasArr = parcelaRecs.map(p => ({ data: p.data_pagamento || l.data, valor: p.valor }));
+          }
+          if (comissaoRec) {
+            const totalBruto = parcelaRecs.reduce((s, r) => s + r.valor, 0);
+            if (totalBruto > 0) comissaoVal = String(((comissaoRec.valor / totalBruto) * 100).toFixed(2));
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar financeiro da compra para edição:', err);
+      }
+
+      setCompraDetalhes({
+        tipoPreco,
+        precoKg: precoKgVal,
+        precoCab: precoCabVal,
+        valorTotal: valorTotalVal,
+        frete: freteVal,
+        comissaoPct: comissaoVal,
+        formaPag,
+        qtdParcelas: parcelasArr.length > 0 ? String(parcelasArr.length) : '1',
+        parcelas: parcelasArr,
+        notaFiscal: l.notaFiscal || '',
+      });
+    }
+
+    setEditingAbateId(l.id);
+    setDetalheId(null);
+    setLastSavedLancamentoId(null);
+  }, [abateFornecedores]);
+
+
     if (!clienteAtual?.id) {
       setAbateFornecedores([]);
       return;
