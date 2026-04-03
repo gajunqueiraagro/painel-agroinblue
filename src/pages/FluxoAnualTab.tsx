@@ -202,7 +202,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                 {MESES_COLS.map(m => {
                   const val = dados.porMesTipo[m.key][li.tipo];
                   return (
-                    <td key={m.key} className={`px-1 py-0.5 text-center font-semibold tabular-nums ${val > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}>
+                    <td key={m.key} className={`px-1 py-0.5 text-center font-semibold tabular-nums ${qb(m.key)} ${val > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}>
                       {val ? fmtNum(val) : '–'}
                     </td>
                   );
