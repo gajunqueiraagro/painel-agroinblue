@@ -405,7 +405,7 @@ function IP({ value, onChange, decimals = 2, step }: { value: number; onChange: 
   const [display, setDisplay] = useState(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + '%' : '');
   const [focused, setFocused] = useState(false);
   useEffect(() => { if (!focused) setDisplay(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + '%' : ''); }, [value, focused, decimals]);
-  return <Input className="h-5 text-[9px] tabular-nums text-right bg-background" value={display}
+  return <Input className="h-5 text-[9px] tabular-nums text-right bg-background border-border shadow-sm" value={display}
     onChange={e => { setDisplay(e.target.value); }}
     onFocus={() => { setFocused(true); setDisplay(value ? String(value) : ''); }}
     onBlur={() => { const clean = display.replace(/%/g, '').replace(/\./g, '').replace(',', '.').trim(); const n = parseFloat(clean); onChange(isNaN(n) ? 0 : n); setFocused(false); }}
