@@ -721,7 +721,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
                 const { data: manuais } = await supabase
                   .from('financeiro_lancamentos_v2')
                   .select('id')
-                  .eq('boitel_id', boitelData._boitelId)
+                  .eq('boitel_lote_id', boitelData._boitelId)
                   .eq('cancelado', false)
                   .is('grupo_geracao_id', null)
                   .limit(1);
