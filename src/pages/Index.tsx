@@ -138,6 +138,10 @@ const Index = () => {
   const [vendaParaEditar, setVendaParaEditar] = useState<Lancamento | null>(null);
   const [compraParaEditar, setCompraParaEditar] = useState<Lancamento | null>(null);
   const [editOriginTab, setEditOriginTab] = useState<TabId | null>(null);
+  const [editOriginSubAba, setEditOriginSubAba] = useState<SubAba | undefined>(undefined);
+  const [editOriginStatusFiltro, setEditOriginStatusFiltro] = useState<string | undefined>(undefined);
+  const [editOriginAnoFiltro, setEditOriginAnoFiltro] = useState<string | undefined>(undefined);
+  const [editOriginMesFiltro, setEditOriginMesFiltro] = useState<string | undefined>(undefined);
   const { user } = useAuth();
   const { canViewTab, canEdit, isReadOnly } = usePermissions();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
