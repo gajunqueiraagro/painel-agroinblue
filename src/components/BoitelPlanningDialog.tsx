@@ -51,7 +51,9 @@ const defaultData: BoitelData = {
 function fmtP(v: number) { return formatKg(v); }
 function fmtG(v: number) { if (!v || isNaN(v)) return '-'; return v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }); }
 function fmtA(v: number) { return formatArroba(v); }
+function fmtPct2(v: number) { if (v === null || v === undefined || isNaN(v)) return '-'; return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%'; }
 function fmtPct1(v: number) { if (v === null || v === undefined || isNaN(v)) return '-'; return v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%'; }
+function fmtR$(v: number) { if (v === null || v === undefined || isNaN(v)) return '-'; return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function fmtDate(iso: string) { if (!iso) return '-'; try { return format(parseISO(iso), 'dd/MM/yyyy'); } catch { return '-'; } }
 
 export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quantidade, pesoKg, fazendaNome, dataLancamento, destinoNome }: Props) {
