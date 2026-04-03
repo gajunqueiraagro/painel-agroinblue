@@ -142,42 +142,42 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
         />
       )}
 
-      <div className="p-3 pt-2 space-y-2">
+      <div className="p-3 pt-2 space-y-2 flex justify-center">
 
-      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
-        <table className="w-full text-[10px]">
+      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto max-w-[1200px] w-full">
+        <table className="w-full text-[10px]" style={{ tableLayout: 'fixed' }}>
           <thead>
-            <tr className="border-b bg-muted">
-              <th className="text-left px-2 py-1 font-bold text-foreground sticky left-0 bg-muted min-w-[110px]">
+            <tr className="border-b bg-primary/15">
+              <th className="text-left px-1.5 py-1.5 font-bold text-foreground sticky left-0 bg-primary/15 w-[110px]">
                 Movimentação
               </th>
               {MESES_COLS.map(m => (
                 <th
                   key={m.key}
-                  className="px-2 py-1 font-bold text-foreground text-center min-w-[45px] cursor-pointer hover:bg-accent/50 transition-colors"
+                  className="px-1 py-1.5 font-bold text-foreground text-center cursor-pointer hover:bg-accent/50 transition-colors"
                   onClick={() => setDrilldownMonth(m.key)}
                 >
                   {m.label}
                 </th>
               ))}
-              <th className="px-2 py-1 font-bold text-foreground text-center min-w-[55px] bg-muted">
+              <th className="px-1.5 py-1.5 font-bold text-foreground text-center w-[60px] bg-primary/15">
                 Total
               </th>
             </tr>
           </thead>
           <tbody>
-            <tr className="bg-muted border-b">
-              <td className="px-2 py-1 font-bold text-foreground sticky left-0 bg-muted">Saldo Início</td>
+            <tr className="bg-primary/10 border-b">
+              <td className="px-1.5 py-1 font-bold text-foreground sticky left-0 bg-primary/10">Saldo Início</td>
               {MESES_COLS.map(m => (
                 <td
                   key={m.key}
-                  className="px-2 py-1 text-center font-extrabold text-foreground cursor-pointer hover:bg-accent/50 transition-colors"
+                  className="px-1 py-1 text-center font-extrabold text-foreground tabular-nums cursor-pointer hover:bg-accent/50 transition-colors"
                   onClick={() => setDrilldownMonth(m.key)}
                 >
                   {fmtNum(dados.saldoInicioMes[m.key])}
                 </td>
               ))}
-              <td className="px-2 py-1 text-center font-extrabold text-foreground bg-muted">
+              <td className="px-1.5 py-1 text-center font-extrabold text-foreground tabular-nums bg-primary/10">
                 {fmtNum(dados.saldoInicialAno)}
               </td>
             </tr>
@@ -191,35 +191,35 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                 className={`${i % 2 === 0 ? '' : 'bg-muted/30'} ${onNavigateToMovimentacao ? 'cursor-pointer hover:bg-accent/50' : ''}`}
                 onClick={() => onNavigateToMovimentacao?.(li.tipo as SubAba)}
               >
-                <td className={`px-2 py-0.5 font-bold text-foreground sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
+                <td className={`px-1.5 py-0.5 font-bold text-foreground sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
                   <span className="text-[8px] opacity-60">{li.sinal === '+' ? '+' : '−'}</span> {li.label}
                 </td>
                 {MESES_COLS.map(m => {
                   const val = dados.porMesTipo[m.key][li.tipo];
                   return (
-                    <td key={m.key} className={`px-2 py-0.5 text-center font-semibold ${val > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}>
+                    <td key={m.key} className={`px-1 py-0.5 text-center font-semibold tabular-nums ${val > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}>
                       {val ? fmtNum(val) : '–'}
                     </td>
                   );
                 })}
-                <td className={`px-2 py-0.5 text-center font-bold bg-muted ${dados.totalAno[li.tipo] > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}>
+                <td className={`px-1.5 py-0.5 text-center font-bold tabular-nums bg-muted/60 ${dados.totalAno[li.tipo] > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}>
                   {dados.totalAno[li.tipo] ? fmtNum(dados.totalAno[li.tipo]) : '–'}
                 </td>
               </tr>
               );
             })}
 
-            <tr className="border-t-2 bg-muted">
-              <td className="px-2 py-1 font-extrabold text-foreground sticky left-0 bg-muted">Saldo Final</td>
+            <tr className="border-t-2 bg-primary/10">
+              <td className="px-1.5 py-1 font-extrabold text-foreground sticky left-0 bg-primary/10">Saldo Final</td>
               {MESES_COLS.map((m, i) => {
                 const saldoFim = i < 11 ? dados.saldoInicioMes[MESES_COLS[i + 1].key] : dados.saldoFinalAno;
                 return (
-                  <td key={m.key} className="px-2 py-1 text-center font-extrabold text-foreground">
+                  <td key={m.key} className="px-1 py-1 text-center font-extrabold text-foreground tabular-nums">
                     {fmtNum(saldoFim)}
                   </td>
                 );
               })}
-              <td className="px-2 py-1 text-center font-extrabold text-foreground bg-muted">
+              <td className="px-1.5 py-1 text-center font-extrabold text-foreground tabular-nums bg-primary/10">
                 {fmtNum(dados.saldoFinalAno)}
               </td>
             </tr>
