@@ -28,6 +28,7 @@ interface Props {
   drillDownLabel?: string;
   onEditarAbate?: (lancamento: Lancamento) => void;
   onEditarVenda?: (lancamento: Lancamento) => void;
+  onEditarCompra?: (lancamento: Lancamento) => void;
 }
 
 export type SubAba = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
