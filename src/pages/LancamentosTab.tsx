@@ -462,7 +462,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (onReturnFromEdit) onReturnFromEdit();
   }, [onReturnFromEdit]);
 
-  // Load abate into form for editing
+  // Helper: restore edit origin context (internal or external)
+  const restoreEditOrigin = useCallback(() => {
+    const ctx = internalEditOrigin.current;
+    if (ctx) {
+      setAba(ctx.aba);
+      setAnoFiltro(ctx.anoFiltro);
+      setMesFiltro(ctx.mesFiltro);
+      internalEditOrigin.current = null;
+    }
+    onReturnFromEdit?.();
+  }, [onReturnFromEdit]);
+
   const loadAbateForEdit = useCallback((l: Lancamento) => {
     // Save current context before switching to edit mode
     if (!onReturnFromEdit) {
