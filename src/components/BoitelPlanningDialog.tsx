@@ -187,7 +187,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
               <ST>Base Operacional</ST>
               <div className="grid grid-cols-3 gap-1">
                 <F label="Cabeças"><I type="number" value={data.qtdCabecas || ''} onChange={e => set('qtdCabecas', +e.target.value || 0)} /></F>
-                <F label="Peso inicial kg"><I type="number" value={data.pesoInicial || ''} onChange={e => set('pesoInicial', +e.target.value || 0)} step="0.01" /></F>
+                <F label="Peso inicial kg"><IM value={data.pesoInicial} onChange={v => set('pesoInicial', v)} step="0.01" /></F>
                 <F label="Peso líq. ent."><CV>{fmtP(calc.ple)}</CV></F>
               </div>
               <div className="grid grid-cols-2 gap-1">
@@ -216,12 +216,12 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <div className="bg-blue-50/60 dark:bg-blue-950/20 rounded border border-blue-200 dark:border-blue-800 p-1 space-y-0.5">
                   <div className="grid grid-cols-2 gap-1">
                     <F label="Data"><I type="date" value={data.dataAdiantamento} onChange={e => set('dataAdiantamento', e.target.value)} /></F>
-                    <F label="% diárias"><I type="number" value={data.pctAdiantamentoDiarias || ''} onChange={e => set('pctAdiantamentoDiarias', +e.target.value || 0)} step="0.1" /></F>
+                    <F label="% diárias"><IP value={data.pctAdiantamentoDiarias} onChange={v => set('pctAdiantamentoDiarias', v)} step="0.1" /></F>
                   </div>
                   <div className="grid grid-cols-3 gap-1">
-                    <F label="Diárias R$"><I type="number" value={data.valorAdiantamentoDiarias || ''} onChange={e => { set('valorAdiantamentoDiarias', +e.target.value || 0); set('pctAdiantamentoDiarias', 0); }} /></F>
-                    <F label="Sanitário R$"><I type="number" value={data.valorAdiantamentoSanitario || ''} onChange={e => set('valorAdiantamentoSanitario', +e.target.value || 0)} /></F>
-                    <F label="Outros R$"><I type="number" value={data.valorAdiantamentoOutros || ''} onChange={e => set('valorAdiantamentoOutros', +e.target.value || 0)} /></F>
+                    <F label="Diárias R$"><IM value={data.valorAdiantamentoDiarias} onChange={v => { set('valorAdiantamentoDiarias', v); set('pctAdiantamentoDiarias', 0); }} /></F>
+                    <F label="Sanitário R$"><IM value={data.valorAdiantamentoSanitario} onChange={v => set('valorAdiantamentoSanitario', v)} /></F>
+                    <F label="Outros R$"><IM value={data.valorAdiantamentoOutros} onChange={v => set('valorAdiantamentoOutros', v)} /></F>
                   </div>
                   <div className="flex justify-between text-[8px] bg-blue-100/60 dark:bg-blue-900/30 rounded px-1.5 py-0.5 border border-blue-300 dark:border-blue-700">
                     <span className="font-bold text-blue-800 dark:text-blue-300">Total</span>
@@ -235,36 +235,36 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
             <div className="space-y-1">
               <ST>Desempenho</ST>
               <div className="grid grid-cols-2 gap-1">
-                <F label="Quebra viagem %"><I type="number" value={data.quebraViagem || ''} onChange={e => set('quebraViagem', +e.target.value || 0)} step="0.1" /></F>
-                <F label="Custo oport. R$/kg"><I type="number" value={data.custoOportunidade || ''} onChange={e => set('custoOportunidade', +e.target.value || 0)} step="0.01" /></F>
+                <F label="Quebra viagem %"><IP value={data.quebraViagem} onChange={v => set('quebraViagem', v)} step="0.1" /></F>
+                <F label="Custo oport. R$/kg"><IM value={data.custoOportunidade} onChange={v => set('custoOportunidade', v)} step="0.01" /></F>
               </div>
               <div className="grid grid-cols-2 gap-1">
                 <F label="Dias confinamento"><I type="number" value={data.dias || ''} onChange={e => set('dias', +e.target.value || 0)} /></F>
                 <F label="GMD kg/dia"><I type="number" value={data.gmd || ''} onChange={e => set('gmd', +e.target.value || 0)} step="0.001" /></F>
               </div>
               <div className="grid grid-cols-2 gap-1">
-                <F label="Rend. entrada %"><I type="number" value={data.rendimentoEntrada || ''} onChange={e => set('rendimentoEntrada', +e.target.value || 0)} step="0.01" /></F>
-                <F label="Rend. saída %"><I type="number" value={data.rendimento || ''} onChange={e => set('rendimento', +e.target.value || 0)} step="0.01" /></F>
+                <F label="Rend. entrada %"><IP value={data.rendimentoEntrada} onChange={v => set('rendimentoEntrada', v)} step="0.01" /></F>
+                <F label="Rend. saída %"><IP value={data.rendimento} onChange={v => set('rendimento', v)} step="0.01" /></F>
               </div>
 
               <Separator className="!my-0.5" />
               <ST>Custos</ST>
               <div className="grid grid-cols-2 gap-1">
-                {data.modalidadeCusto === 'diaria' && <F label="R$/cab/dia"><I type="number" value={data.custoDiaria || ''} onChange={e => set('custoDiaria', +e.target.value || 0)} step="0.01" /></F>}
-                {data.modalidadeCusto === 'arroba' && <F label="R$/@ prod."><I type="number" value={data.custoArroba || ''} onChange={e => set('custoArroba', +e.target.value || 0)} /></F>}
-                {data.modalidadeCusto === 'parceria' && (<><F label="% parceiro"><I type="number" value={data.percentualParceria || ''} onChange={e => set('percentualParceria', +e.target.value || 0)} /></F><F label="Extras R$"><I type="number" value={data.custosExtrasParceria || ''} onChange={e => set('custosExtrasParceria', +e.target.value || 0)} /></F></>)}
-                <F label="Frete R$"><I type="number" value={data.custoFrete || ''} onChange={e => set('custoFrete', +e.target.value || 0)} step="0.01" /></F>
+                {data.modalidadeCusto === 'diaria' && <F label="R$/cab/dia"><IM value={data.custoDiaria} onChange={v => set('custoDiaria', v)} step="0.01" /></F>}
+                {data.modalidadeCusto === 'arroba' && <F label="R$/@ prod."><IM value={data.custoArroba} onChange={v => set('custoArroba', v)} /></F>}
+                {data.modalidadeCusto === 'parceria' && (<><F label="% parceiro"><IP value={data.percentualParceria} onChange={v => set('percentualParceria', v)} /></F><F label="Extras R$"><IM value={data.custosExtrasParceria} onChange={v => set('custosExtrasParceria', v)} /></F></>)}
+                <F label="Frete R$"><IM value={data.custoFrete} onChange={v => set('custoFrete', v)} step="0.01" /></F>
               </div>
               <div className="grid grid-cols-2 gap-1">
-                <F label="Sanidade R$"><I type="number" value={data.custoSanidade || ''} onChange={e => set('custoSanidade', +e.target.value || 0)} /></F>
-                <F label="Outros R$"><I type="number" value={data.outrosCustos || ''} onChange={e => set('outrosCustos', +e.target.value || 0)} step="0.01" /></F>
+                <F label="Sanidade R$"><IM value={data.custoSanidade} onChange={v => set('custoSanidade', v)} /></F>
+                <F label="Outros R$"><IM value={data.outrosCustos} onChange={v => set('outrosCustos', v)} step="0.01" /></F>
               </div>
 
               <Separator className="!my-0.5" />
               <ST>Comercialização</ST>
               <div className="grid grid-cols-2 gap-1">
-                <F label="Preço venda R$/@"><I type="number" value={data.precoVendaArroba || ''} onChange={e => set('precoVendaArroba', +e.target.value || 0)} step="0.01" /></F>
-                <F label="Despesas com abate R$"><I type="number" value={data.despesasAbate || ''} onChange={e => set('despesasAbate', +e.target.value || 0)} /></F>
+                <F label="Preço venda R$/@"><IM value={data.precoVendaArroba} onChange={v => set('precoVendaArroba', v)} step="0.01" /></F>
+                <F label="Despesas com abate R$"><IM value={data.despesasAbate} onChange={v => set('despesasAbate', v)} /></F>
               </div>
             </div>
 
@@ -282,7 +282,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                     {data.parcelas.map((p, i) => (
                       <div key={i} className="grid grid-cols-2 gap-1 bg-muted/20 rounded px-1 py-0.5">
                         <div><Label className="text-[7px]">P{i + 1}</Label><I type="date" value={p.data} onChange={e => { const np = [...data.parcelas]; np[i] = { ...np[i], data: e.target.value }; set('parcelas', np); }} /></div>
-                        <div><Label className="text-[7px]">R$</Label><I type="number" value={String(p.valor)} onChange={e => { const np = [...data.parcelas]; np[i] = { ...np[i], valor: +e.target.value || 0 }; set('parcelas', np); }} /></div>
+                        <div><Label className="text-[7px]">R$</Label><IM value={p.valor} onChange={v => { const np = [...data.parcelas]; np[i] = { ...np[i], valor: v }; set('parcelas', np); }} /></div>
                       </div>
                     ))}
                   </div>
@@ -330,22 +330,6 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 </CSection>
               )}
 
-              {/* DESTAQUE RESULTADO — sem card colorido */}
-              <Separator className="!my-0.5" />
-              <div className="grid grid-cols-2 gap-1 py-0.5">
-                <div>
-                  <span className="text-[7px] uppercase text-muted-foreground font-bold block">Total Op.</span>
-                  <strong className={`text-[13px] tabular-nums ${pos ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive'}`}>R$ {fmtR$(calc.tOp)}</strong>
-                </div>
-                <div>
-                  <span className="text-[7px] uppercase text-muted-foreground font-bold block">Res. Líquido</span>
-                  <strong className={`text-[13px] tabular-nums ${pos ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive'}`}>R$ {fmtR$(calc.rLiq)}</strong>
-                </div>
-              </div>
-              <div className="flex justify-around text-[7px] text-muted-foreground">
-                <span>/cab <strong className="text-foreground tabular-nums">R$ {fmtR$(calc.rLCab)}</strong></span>
-                <span>/kg <strong className="text-foreground tabular-nums">R$ {fmtR$(calc.rLKg)}</strong></span>
-              </div>
 
               {/* COMPARATIVO */}
               <Separator className="!my-0.5" />
@@ -403,6 +387,30 @@ function RR({ l, v, b, accent, c = '' }: { l: string; v: string; b?: boolean; ac
   return <div className="flex justify-between text-[8px] leading-snug"><span className="text-muted-foreground">{l}</span><span className={`tabular-nums ${b ? 'font-bold' : 'font-medium'} ${accent ? 'text-primary' : ''} ${c}`}>{v}</span></div>;
 }
 function DL() { return <div className="border-t border-dashed my-0.5" />; }
+
+/** Formatted monetary input: shows 0.000,00 on blur, raw number on focus */
+function IM({ value, onChange, step }: { value: number; onChange: (v: number) => void; step?: string }) {
+  const [display, setDisplay] = useState(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+  const [focused, setFocused] = useState(false);
+  useEffect(() => { if (!focused) setDisplay(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''); }, [value, focused]);
+  return <Input className="h-5 text-[9px] tabular-nums text-right bg-background" value={display}
+    onChange={e => { setDisplay(e.target.value); }}
+    onFocus={() => { setFocused(true); setDisplay(value ? String(value) : ''); }}
+    onBlur={() => { const clean = display.replace(/\./g, '').replace(',', '.'); const n = parseFloat(clean); onChange(isNaN(n) ? 0 : n); setFocused(false); }}
+    inputMode="decimal" step={step} />;
+}
+
+/** Formatted percentage input: shows 00,00% on blur */
+function IP({ value, onChange, decimals = 2, step }: { value: number; onChange: (v: number) => void; decimals?: number; step?: string }) {
+  const [display, setDisplay] = useState(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + '%' : '');
+  const [focused, setFocused] = useState(false);
+  useEffect(() => { if (!focused) setDisplay(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + '%' : ''); }, [value, focused, decimals]);
+  return <Input className="h-5 text-[9px] tabular-nums text-right bg-background" value={display}
+    onChange={e => { setDisplay(e.target.value); }}
+    onFocus={() => { setFocused(true); setDisplay(value ? String(value) : ''); }}
+    onBlur={() => { const clean = display.replace(/%/g, '').replace(/\./g, '').replace(',', '.').trim(); const n = parseFloat(clean); onChange(isNaN(n) ? 0 : n); setFocused(false); }}
+    inputMode="decimal" step={step} />;
+}
 
 function CSection({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
