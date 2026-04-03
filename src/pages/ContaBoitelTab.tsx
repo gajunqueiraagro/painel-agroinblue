@@ -276,7 +276,7 @@ export function ContaBoitelTab({ onBack }: Props) {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">(-) Adiantamentos recebidos</span>
-                    <span className="font-semibold text-blue-600">{fmt(resumo.adiantRecebidos)}</span>
+                    <span className="font-semibold text-primary">{fmt(resumo.adiantRecebidos)}</span>
                   </div>
                   <hr className="border-border" />
                   <div className="flex justify-between">
