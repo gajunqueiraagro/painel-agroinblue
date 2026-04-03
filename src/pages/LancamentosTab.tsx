@@ -1249,6 +1249,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           const fornNome = abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome;
           return { type: 'venda', ...vendaDetalhes, tipoPreco: vendaTipoPreco, precoInput: vendaPrecoInput, fornecedorId: vendaDestinoFornecedorId || undefined, fornecedorNome: fornNome || undefined };
         }
+        if (isTransferenciaSaida && transferenciaCalc) {
+          return {
+            type: 'transferencia_saida',
+            ...buildTransferenciaSnapshot(transferenciaCalc),
+            ...(transferenciaDetalhes ? { observacaoEconomica: transferenciaDetalhes.observacaoEconomica } : {}),
+          };
+        }
         return undefined;
       })(),
     };
