@@ -222,7 +222,7 @@ export function ContaBoitelTab({ onBack }: Props) {
       sinal: config.sinal,
       status_transacao: 'confirmado',
       origem_lancamento: 'boitel',
-      boitel_id: selected.id,
+      boitel_lote_id: selected.id,
       macro_custo: cls.macro_custo,
       centro_custo: cls.centro_custo,
       subcentro: cls.subcentro,
