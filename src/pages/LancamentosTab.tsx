@@ -29,6 +29,7 @@ import { CompraResumoPanel } from '@/components/compra/CompraResumoPanel';
 import { gerarFinanceiroCompra } from '@/components/compra/gerarFinanceiroCompra';
 import { AbateDetalhesDialog, AbateDetalhes, EMPTY_ABATE_DETALHES } from '@/components/abate/AbateDetalhesDialog';
 import { AbateResumoPanel } from '@/components/abate/AbateResumoPanel';
+import { buildAbateCalculation, type AbateCalculation } from '@/lib/calculos/abate';
 import { VendaDetalhesDialog, VendaDetalhes, EMPTY_VENDA_DETALHES } from '@/components/venda/VendaDetalhesDialog';
 import { VendaResumoPanel } from '@/components/venda/VendaResumoPanel';
 import { AbateExportDialog } from '@/components/AbateExportMenu';
