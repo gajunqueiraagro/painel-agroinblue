@@ -1695,18 +1695,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
       )}
 
-      {editingAbateId && (
-        <Button type="button" variant="outline" className="w-full h-9 text-[12px] font-bold mb-1" size="sm" onClick={() => {
-          setEditingAbateId(null);
-          setQuantidade(''); setCategoria(''); setPesoKg('');
-          setFazendaOrigem(''); setFazendaDestino('');
-          setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('conciliado');
-          resetFinancialFields();
-        }}>
-          Cancelar Edição
-        </Button>
-      )}
     </div>
   );
 
