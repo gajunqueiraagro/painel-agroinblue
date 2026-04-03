@@ -46,7 +46,8 @@ interface Props {
 }
 
 export function ContaBoitelTab({ onBack }: Props) {
-  const { clienteId } = useCliente();
+  const { clienteAtual } = useCliente();
+  const clienteId = clienteAtual?.id;
   const { fazendaAtual } = useFazenda();
   const [boitels, setBoitels] = useState<BoitelOp[]>([]);
   const [selected, setSelected] = useState<BoitelOp | null>(null);
