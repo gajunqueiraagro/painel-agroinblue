@@ -663,7 +663,28 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
             type="button"
             variant="outline"
             className="w-full h-9 text-[12px] font-bold gap-2 border-primary/30 text-primary hover:bg-primary/10"
-            onClick={() => setBoitelOpen(true)}
+            onClick={async () => {
+              // Se já existe boitelData (edição), verificar se há lançamentos manuais
+              if (boitelData?._boitelId) {
+                const { data: manuais } = await supabase
+                  .from('financeiro_lancamentos_v2')
+                  .select('id')
+                  .eq('boitel_id', boitelData._boitelId)
+                  .eq('cancelado', false)
+                  .is('grupo_geracao_id', null)
+                  .limit(1);
+                if (manuais && manuais.length > 0) {
+                  const confirmou = window.confirm(
+                    '⚠️ Este boitel já possui movimentações financeiras registradas.\n\n' +
+                    'Alterar o planejamento pode gerar divergência entre o resultado projetado e o financeiro já realizado.\n\n' +
+                    'Recomendação:\n• Utilizar a Conta Boitel para controle e conciliação\n• Evitar alterações após início da movimentação financeira\n\n' +
+                    'Deseja continuar mesmo assim?'
+                  );
+                  if (!confirmou) return;
+                }
+              }
+              setBoitelOpen(true);
+            }}
           >
             <Calculator className="h-4 w-4" />
             {boitelData ? 'Editar Planejamento Boitel' : 'Abrir Planejamento Boitel'}
