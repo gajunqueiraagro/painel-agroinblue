@@ -88,6 +88,10 @@ export function VendaResumoPanel({
               <AlertTriangle className="h-3 w-3 shrink-0" />
               <span className="font-medium">Planejamento Boitel não preenchido</span>
             </div>
+            <Button type="button" variant="outline" className="w-full h-7 text-[11px] font-bold gap-1.5" onClick={onOpenModal}>
+              <Calculator className="h-3 w-3" />
+              Abrir Planejamento Boitel
+            </Button>
           </>
         )}
 
