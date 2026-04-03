@@ -129,8 +129,16 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
   const handleQtdP = (v: string) => { const n = Math.max(1, Math.min(48, Number(v) || 1)); set('qtdParcelas', n); set('parcelas', gerarParcelas(n, saldoReceberBase)); };
   const basePar = saldoReceberBase;
 
-  useEffect(() => { if (data.possuiAdiantamento) { const t = data.valorAdiantamentoDiarias + data.valorAdiantamentoSanitario + data.valorAdiantamentoOutros; if (t !== data.valorTotalAntecipado) setData(p => ({ ...p, valorTotalAntecipado: t })); } }, [data.possuiAdiantamento, data.valorAdiantamentoDiarias, data.valorAdiantamentoSanitario, data.valorAdiantamentoOutros]);
-  useEffect(() => { if (data.possuiAdiantamento) { const v = Math.round(calc.cDT * data.pctAdiantamentoDiarias / 100 * 100) / 100; if (v !== data.valorAdiantamentoDiarias) setData(p => ({ ...p, valorAdiantamentoDiarias: v })); } }, [data.possuiAdiantamento, data.pctAdiantamentoDiarias, calc.cDT]);
+  // Auto-sum total adiantamento
+  useEffect(() => {
+    if (!data.possuiAdiantamento) return;
+    // Recalculate diárias from percentage
+    const diariasCalc = Math.round(calc.cDT * data.pctAdiantamentoDiarias / 100 * 100) / 100;
+    const total = diariasCalc + data.valorAdiantamentoSanitario + data.valorAdiantamentoOutros;
+    if (diariasCalc !== data.valorAdiantamentoDiarias || total !== data.valorTotalAntecipado) {
+      setData(p => ({ ...p, valorAdiantamentoDiarias: diariasCalc, valorTotalAntecipado: total }));
+    }
+  }, [data.possuiAdiantamento, data.pctAdiantamentoDiarias, calc.cDT, data.valorAdiantamentoSanitario, data.valorAdiantamentoOutros]);
   useEffect(() => { if (data.formaReceb === 'prazo' && data.qtdParcelas > 0 && basePar > 0) setData(p => ({ ...p, parcelas: gerarParcelas(p.qtdParcelas, basePar) })); }, [basePar, data.formaReceb, data.qtdParcelas, dataAbateISO]);
 
   const handleSave = () => { onSave({ ...data, _faturamentoBruto: calc.fba, _faturamentoLiquido: calc.fLiq, _receitaProdutor: calc.rProd, _custoTotal: calc.cOp, _lucroTotal: calc.rLiq, _saldoReceber: saldoReceberBase }); onClose(); };
