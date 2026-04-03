@@ -252,6 +252,7 @@ export async function gerarFinanceiroBoitel(
 
     // If no specific mapping found, use a generic custeio produtivo
     const clasSaida = planoSaida?.[0];
+    console.log(`[Boitel Financeiro] Saída "${custo.label}": hint="${custo.subcentroHint}", encontrado=${!!clasSaida}`, clasSaida || 'buscando fallback...');
     if (!clasSaida) {
       // Try generic fallback
       const { data: fallback } = await supabase
