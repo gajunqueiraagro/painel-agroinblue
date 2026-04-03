@@ -1601,7 +1601,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/60'
       }`;
     const childCls = (active: boolean) =>
-      `w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] font-semibold transition-all ${
+      `w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] font-semibold transition-all text-left ${
         isEditing && !active ? 'opacity-20 cursor-not-allowed pointer-events-none grayscale text-muted-foreground/50 shadow-none border-transparent' :
         active ? 'bg-primary/15 text-foreground border border-primary/40' : 'text-muted-foreground hover:bg-muted/40 border border-transparent'
       }`;
