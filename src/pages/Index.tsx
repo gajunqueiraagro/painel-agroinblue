@@ -423,9 +423,9 @@ const Index = () => {
           filtroMesInicial={movFiltroMes}
           drillDownLabel={movDrillLabel}
           onBack={movBackTab ? () => setActiveTab(movBackTab) : undefined}
-          onEditarAbate={(l) => { setAbateParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarVenda={(l) => { setVendaParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarCompra={(l) => { setCompraParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarAbate={(l) => { setEditOriginTab('financeiro'); setAbateParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarVenda={(l) => { setEditOriginTab('financeiro'); setVendaParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarCompra={(l) => { setEditOriginTab('financeiro'); setCompraParaEditar(l); setActiveTab('lancamentos'); }}
         />
       )}
       {activeTab === 'acessos' && <AcessosTab />}
