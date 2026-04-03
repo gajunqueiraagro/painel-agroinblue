@@ -6,7 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Plus, TrendingUp, TrendingDown, ArrowUpDown, Wallet, BarChart3 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Badge } from '@/components/ui/badge';
+import { ArrowLeft, Plus, ArrowUpRight, ArrowDownRight, ArrowUpDown, Wallet, BarChart3, Info, CheckCircle, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -48,6 +51,11 @@ interface FinLancamento {
   status_transacao: string | null;
   cancelado: boolean;
   grupo_geracao_id: string | null;
+  created_at?: string;
+  historico?: string | null;
+  macro_custo?: string | null;
+  centro_custo?: string | null;
+  subcentro?: string | null;
 }
 
 interface Props {
@@ -65,6 +73,28 @@ const ORIGEM_LABELS: Record<string, string> = {
   'boitel:custo_outros': 'Outros custos',
 };
 
+// === Row component for financial summary lines ===
+function SummaryRow({ label, value, variant, indent, bold }: {
+  label: string;
+  value: string;
+  variant?: 'default' | 'positive' | 'negative' | 'highlight' | 'muted';
+  indent?: boolean;
+  bold?: boolean;
+}) {
+  const colorClass = variant === 'positive' ? 'text-primary'
+    : variant === 'negative' ? 'text-destructive'
+    : variant === 'highlight' ? 'text-primary'
+    : variant === 'muted' ? 'text-muted-foreground'
+    : 'text-foreground';
+
+  return (
+    <div className={`flex justify-between items-baseline ${indent ? 'pl-3' : ''}`}>
+      <span className={`text-[11px] ${bold ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>{label}</span>
+      <span className={`text-[11px] font-mono tabular-nums ${bold ? 'font-bold' : 'font-semibold'} ${colorClass}`}>{value}</span>
+    </div>
+  );
+}
+
 export function ContaBoitelTab({ onBack }: Props) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
@@ -74,6 +104,7 @@ export function ContaBoitelTab({ onBack }: Props) {
   const [lancamentos, setLancamentos] = useState<FinLancamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [detailLanc, setDetailLanc] = useState<FinLancamento | null>(null);
 
   const [novoTipo, setNovoTipo] = useState<'adiantamento_pago' | 'adiantamento_recebido'>('adiantamento_recebido');
   const [novoData, setNovoData] = useState('');
@@ -100,7 +131,7 @@ export function ContaBoitelTab({ onBack }: Props) {
   async function loadLancamentos(boitelId: string) {
     const { data } = await supabase
       .from('financeiro_lancamentos_v2')
-      .select('id, data_competencia, data_pagamento, descricao, valor, sinal, tipo_operacao, origem_tipo, status_transacao, cancelado, grupo_geracao_id')
+      .select('id, data_competencia, data_pagamento, descricao, valor, sinal, tipo_operacao, origem_tipo, status_transacao, cancelado, grupo_geracao_id, created_at, historico, macro_custo, centro_custo, subcentro')
       .eq('boitel_id', boitelId)
       .eq('cancelado', false)
       .order('data_pagamento', { ascending: true });
@@ -112,7 +143,7 @@ export function ContaBoitelTab({ onBack }: Props) {
     loadLancamentos(b.id);
   }
 
-  // === RESULTADO ECONÔMICO (do simulador, imutável) ===
+  // === RESULTADO ECONÔMICO ===
   const resultadoEconomico = useMemo(() => {
     if (!selected) return null;
     const fretTotal = selected.custo_frete || 0;
@@ -126,7 +157,7 @@ export function ContaBoitelTab({ onBack }: Props) {
     };
   }, [selected]);
 
-  // === CONCILIAÇÃO FINANCEIRA (extrato vs econômico) ===
+  // === CONCILIAÇÃO FINANCEIRA ===
   const conciliacao = useMemo(() => {
     if (!selected) return null;
 
@@ -138,11 +169,6 @@ export function ContaBoitelTab({ onBack }: Props) {
       .filter(l => l.origem_tipo === 'boitel:adiantamento_recebido')
       .reduce((s, l) => s + l.valor, 0);
 
-    const custoFrete = lancamentos
-      .filter(l => l.origem_tipo === 'boitel:custo_frete' || (l.origem_tipo === 'boitel:custo' && l.descricao?.toLowerCase().includes('frete')))
-      .reduce((s, l) => s + l.valor, 0);
-
-    // Adiantamento pago ao boitel é devolvido na liquidação → soma ao saldo a receber
     const saldoAReceberBoitel = selected.receita_produtor + adiantPagos;
     const saldoLiquidoEsperado = saldoAReceberBoitel - adiantRecebidos - (selected.custo_frete || 0);
 
@@ -154,8 +180,9 @@ export function ContaBoitelTab({ onBack }: Props) {
     const totalSaidas = lancamentos.filter(l => l.sinal < 0).reduce((s, l) => s + l.valor, 0);
 
     const gap = totalRealizado - saldoLiquidoEsperado;
+    const gapOk = gap >= -0.01 && gap <= 0.01;
 
-    return { adiantPagos, adiantRecebidos, custoFrete, saldoAReceberBoitel, saldoLiquidoEsperado, totalRealizado, totalEntradas, totalSaidas, gap };
+    return { adiantPagos, adiantRecebidos, saldoAReceberBoitel, saldoLiquidoEsperado, totalRealizado, totalEntradas, totalSaidas, gap, gapOk };
   }, [selected, lancamentos]);
 
   async function handleNovoLancamento() {
@@ -168,10 +195,7 @@ export function ContaBoitelTab({ onBack }: Props) {
 
     const origemTipo = `boitel:${novoTipo}`;
     const config = BOITEL_CLASSIFICACAO[origemTipo];
-    if (!config) {
-      toast.error('Tipo de lançamento inválido.');
-      return;
-    }
+    if (!config) { toast.error('Tipo de lançamento inválido.'); return; }
 
     const cls = await buscarPlanoContasBoitel(supabase, clienteId, origemTipo);
     if (!cls) {
@@ -201,10 +225,7 @@ export function ContaBoitelTab({ onBack }: Props) {
       origem_tipo: origemTipo,
     });
 
-    if (error) {
-      toast.error('Erro ao salvar: ' + error.message);
-      return;
-    }
+    if (error) { toast.error('Erro ao salvar: ' + error.message); return; }
 
     toast.success('Lançamento registrado!');
     setDialogOpen(false);
@@ -216,6 +237,10 @@ export function ContaBoitelTab({ onBack }: Props) {
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const fmtDate = (d: string | null) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
+  const fmtDateTime = (d: string | null) => {
+    if (!d) return '-';
+    try { return new Date(d).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }); } catch { return d; }
+  };
 
   if (loading) {
     return (
@@ -226,250 +251,372 @@ export function ContaBoitelTab({ onBack }: Props) {
   }
 
   return (
-    <div className="w-full px-4 pb-20 animate-fade-in">
-      <div className="p-4 space-y-4">
-        <Button variant="ghost" size="sm" onClick={onBack} className="gap-1">
-          <ArrowLeft className="h-4 w-4" /> Voltar
-        </Button>
+    <TooltipProvider>
+      <div className="w-full px-4 pb-20 animate-fade-in">
+        <div className="p-4 space-y-4">
+          <Button variant="ghost" size="sm" onClick={onBack} className="gap-1 h-7 text-[11px]">
+            <ArrowLeft className="h-3.5 w-3.5" /> Voltar
+          </Button>
 
-        {!selected ? (
-          <>
-            <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-              <Wallet className="h-5 w-5 text-primary" /> Conta Boitel
-            </h2>
-            <p className="text-xs text-muted-foreground">Controle financeiro por lote de boitel</p>
-
-            {boitels.length === 0 ? (
-              <Card><CardContent className="p-6 text-center text-muted-foreground text-sm">
-                Nenhuma operação boitel encontrada.
-              </CardContent></Card>
-            ) : (
-              <div className="space-y-2">
-                {boitels.map(b => (
-                  <Card key={b.id} className="cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all"
-                    onClick={() => selectBoitel(b)}>
-                    <CardContent className="p-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="text-sm font-bold text-foreground">
-                            {b.lote || b.fazenda_destino_nome}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground">
-                            {b.quantidade} cab · {b.dias} dias · Envio: {fmtDate(b.data_envio)}
-                          </p>
-                          {b.numero_contrato && (
-                            <p className="text-[10px] text-muted-foreground">Contrato: {b.numero_contrato}</p>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-bold text-primary">{fmt(b.receita_produtor)}</p>
-                          <p className="text-[10px] text-muted-foreground">Resultado Boitel</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <div className="flex items-center justify-between">
+          {!selected ? (
+            <>
               <div>
-                <h2 className="text-lg font-bold text-foreground">
-                  {selected.lote || selected.fazenda_destino_nome}
+                <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                  <Wallet className="h-5 w-5 text-primary" /> Conta Boitel
                 </h2>
-                <p className="text-xs text-muted-foreground">
-                  {selected.quantidade} cab · {selected.dias} dias · Contrato: {selected.numero_contrato || '-'}
-                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Controle financeiro e conciliação por lote</p>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => { setSelected(null); setLancamentos([]); }}>
-                ← Lista
-              </Button>
-            </div>
 
-            {/* 1. RESULTADO ECONÔMICO (do simulador) */}
-            {resultadoEconomico && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-1">
-                    <BarChart3 className="h-4 w-4" /> Resultado Econômico
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-1.5 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Faturamento Bruto Abate</span>
-                    <span className="font-semibold">{fmt(resultadoEconomico.faturamentoBruto)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">(-) Despesas Abate</span>
-                    <span className="text-destructive">{fmt(resultadoEconomico.despesasAbate)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">= Faturamento Líquido</span>
-                    <span className="font-semibold">{fmt(resultadoEconomico.faturamentoLiquido)}</span>
-                  </div>
-                  <hr className="border-border" />
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground font-semibold">Resultado com Boitel</span>
-                    <span className="font-bold text-primary">{fmt(resultadoEconomico.resultadoBoitel)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">(-) Frete</span>
-                    <span className="text-destructive">{fmt(resultadoEconomico.frete)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground font-semibold">= Total Operacional</span>
-                    <span className="font-bold">{fmt(resultadoEconomico.totalOperacional)}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* 2. CONCILIAÇÃO FINANCEIRA */}
-            {conciliacao && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-1">
-                    <Wallet className="h-4 w-4" /> Conciliação Financeira
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-1.5 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Resultado com Boitel</span>
-                    <span className="font-bold text-primary">{fmt(selected.receita_produtor)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">(+) Adiantamento pago ao boitel</span>
-                    <span className="text-primary">{fmt(conciliacao.adiantPagos)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground font-semibold">= Saldo a receber do boitel</span>
-                    <span className="font-bold">{fmt(conciliacao.saldoAReceberBoitel)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">(-) Adiantamentos recebidos</span>
-                    <span className="text-muted-foreground">{fmt(conciliacao.adiantRecebidos)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">(-) Frete pago fora</span>
-                    <span className="text-destructive">{fmt(selected.custo_frete || 0)}</span>
-                  </div>
-                  <hr className="border-border" />
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground font-semibold">Saldo líquido final de caixa</span>
-                    <span className="font-bold">{fmt(conciliacao.saldoLiquidoEsperado)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Total financeiro realizado</span>
-                    <span className="font-semibold">{fmt(conciliacao.totalRealizado)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground font-semibold">Diferença de conciliação</span>
-                    <span className={`font-bold ${conciliacao.gap >= -0.01 && conciliacao.gap <= 0.01 ? 'text-primary' : 'text-destructive'}`}>
-                      {fmt(conciliacao.gap)}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* ACTIONS */}
-            <Button size="sm" className="w-full gap-1" onClick={() => {
-              setNovoTipo('adiantamento_recebido');
-              setNovoData('');
-              setNovoValor('');
-              setNovoDesc('');
-              setDialogOpen(true);
-            }}>
-              <Plus className="h-4 w-4" /> Novo Lançamento Boitel
-            </Button>
-
-            {/* 3. EXTRATO FINANCEIRO */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-1">
-                  <ArrowUpDown className="h-4 w-4" /> Extrato Financeiro
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                {lancamentos.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-4">Nenhum lançamento vinculado.</p>
-                ) : (
-                  <div className="divide-y divide-border">
-                    {lancamentos.map(l => (
-                      <div key={l.id} className="px-3 py-2 flex items-center justify-between">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            {l.sinal > 0 ? (
-                              <TrendingUp className="h-3 w-3 text-primary shrink-0" />
-                            ) : (
-                              <TrendingDown className="h-3 w-3 text-destructive shrink-0" />
+              {boitels.length === 0 ? (
+                <Card><CardContent className="p-6 text-center text-muted-foreground text-sm">
+                  Nenhuma operação boitel encontrada.
+                </CardContent></Card>
+              ) : (
+                <div className="space-y-2">
+                  {boitels.map(b => (
+                    <Card key={b.id} className="cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all"
+                      onClick={() => selectBoitel(b)}>
+                      <CardContent className="p-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="text-[13px] font-bold text-foreground">
+                              {b.lote || b.fazenda_destino_nome}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {b.quantidade} cab · {b.dias} dias · Envio: {fmtDate(b.data_envio)}
+                            </p>
+                            {b.numero_contrato && (
+                              <p className="text-[10px] text-muted-foreground">Contrato: {b.numero_contrato}</p>
                             )}
-                            <span className="text-xs font-medium text-foreground truncate">
-                              {l.descricao || ORIGEM_LABELS[l.origem_tipo || ''] || 'Lançamento'}
-                            </span>
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
-                              l.grupo_geracao_id
-                                ? 'bg-secondary text-secondary-foreground'
-                                : 'bg-accent text-accent-foreground'
-                            }`}>
-                              {l.grupo_geracao_id ? 'Simulador' : 'Manual'}
-                            </span>
                           </div>
-                          <p className="text-[10px] text-muted-foreground ml-[18px]">
-                            {fmtDate(l.data_pagamento)} · {ORIGEM_LABELS[l.origem_tipo || ''] || l.origem_tipo || '-'}
-                          </p>
+                          <div className="text-right">
+                            <p className="text-[13px] font-bold text-primary font-mono tabular-nums">{fmt(b.receita_produtor)}</p>
+                            <p className="text-[10px] text-muted-foreground">Resultado</p>
+                          </div>
                         </div>
-                        <span className={`text-xs font-bold whitespace-nowrap ${l.sinal > 0 ? 'text-primary' : 'text-destructive'}`}>
-                          {l.sinal > 0 ? '+' : '-'} {fmt(l.valor)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </>
-        )}
-      </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {/* HEADER */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-foreground">
+                    {selected.lote || selected.fazenda_destino_nome}
+                  </h2>
+                  <p className="text-[10px] text-muted-foreground">
+                    {selected.quantidade} cab · {selected.dias} dias · Contrato: {selected.numero_contrato || '-'}
+                  </p>
+                </div>
+                <Button variant="ghost" size="sm" className="h-7 text-[11px]" onClick={() => { setSelected(null); setLancamentos([]); }}>
+                  ← Lista
+                </Button>
+              </div>
 
-      {/* DIALOG: Novo Lançamento */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Novo Lançamento Boitel</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs">Tipo</Label>
-              <Select value={novoTipo} onValueChange={(v: any) => setNovoTipo(v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="adiantamento_pago">Adiantamento Pago (Saída)</SelectItem>
-                  <SelectItem value="adiantamento_recebido">Adiantamento Recebido (Entrada)</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* GAP HIGHLIGHT — sempre visível no topo quando há lançamentos */}
+              {conciliacao && lancamentos.length > 0 && (
+                <div className={`rounded-lg border-2 p-3 flex items-center justify-between ${
+                  conciliacao.gapOk
+                    ? 'border-primary/40 bg-primary/5'
+                    : 'border-destructive/40 bg-destructive/5'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {conciliacao.gapOk ? (
+                      <CheckCircle className="h-5 w-5 text-primary" />
+                    ) : (
+                      <AlertTriangle className="h-5 w-5 text-destructive" />
+                    )}
+                    <div>
+                      <p className="text-[11px] font-semibold text-foreground">
+                        {conciliacao.gapOk ? 'Conciliação OK' : 'Divergência encontrada'}
+                      </p>
+                      <p className="text-[9px] text-muted-foreground">
+                        Diferença entre saldo esperado e realizado
+                      </p>
+                    </div>
+                  </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className={`text-lg font-bold font-mono tabular-nums cursor-help ${
+                        conciliacao.gapOk ? 'text-primary' : 'text-destructive'
+                      }`}>
+                        {fmt(conciliacao.gap)}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="left" className="max-w-[280px] text-[10px] space-y-0.5">
+                      <p className="font-bold mb-1">Como é calculado:</p>
+                      <p>Total Financeiro Realizado: {fmt(conciliacao.totalRealizado)}</p>
+                      <p>(-) Saldo Líquido Esperado: {fmt(conciliacao.saldoLiquidoEsperado)}</p>
+                      <p className="font-bold border-t border-border pt-1 mt-1">= Diferença: {fmt(conciliacao.gap)}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              )}
+
+              {/* A. RESULTADO ECONÔMICO */}
+              {resultadoEconomico && (
+                <Card>
+                  <CardHeader className="pb-1.5 pt-3 px-3">
+                    <CardTitle className="text-[12px] flex items-center gap-1.5 text-muted-foreground uppercase tracking-wide">
+                      <BarChart3 className="h-3.5 w-3.5" /> Resultado Econômico
+                      <Badge variant="secondary" className="text-[8px] h-4 px-1.5 font-normal ml-auto">Simulador</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1 px-3 pb-3">
+                    <SummaryRow label="Faturamento Bruto Abate" value={fmt(resultadoEconomico.faturamentoBruto)} />
+                    <SummaryRow label="(-) Despesas Abate" value={fmt(resultadoEconomico.despesasAbate)} variant="negative" />
+                    <SummaryRow label="= Faturamento Líquido" value={fmt(resultadoEconomico.faturamentoLiquido)} bold />
+                    <div className="border-t border-border my-1" />
+                    <SummaryRow label="Resultado com Boitel" value={fmt(resultadoEconomico.resultadoBoitel)} variant="highlight" bold />
+                    <SummaryRow label="(-) Frete" value={fmt(resultadoEconomico.frete)} variant="negative" />
+                    <SummaryRow label="= Total Operacional" value={fmt(resultadoEconomico.totalOperacional)} bold />
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* B. CONCILIAÇÃO FINANCEIRA */}
+              {conciliacao && (
+                <Card>
+                  <CardHeader className="pb-1.5 pt-3 px-3">
+                    <CardTitle className="text-[12px] flex items-center gap-1.5 text-muted-foreground uppercase tracking-wide">
+                      <Wallet className="h-3.5 w-3.5" /> Conciliação Financeira
+                      <Badge variant="outline" className="text-[8px] h-4 px-1.5 font-normal ml-auto">Simulador + Caixa</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1 px-3 pb-3">
+                    <SummaryRow label="Resultado com Boitel" value={fmt(selected.receita_produtor)} variant="highlight" />
+                    <SummaryRow label="(+) Adiantamento pago ao boitel" value={fmt(conciliacao.adiantPagos)} variant="positive" indent />
+                    <SummaryRow label="= Saldo a receber do boitel" value={fmt(conciliacao.saldoAReceberBoitel)} bold />
+                    <SummaryRow label="(-) Adiantamentos recebidos" value={fmt(conciliacao.adiantRecebidos)} variant="muted" indent />
+                    <SummaryRow label="(-) Frete pago fora" value={fmt(selected.custo_frete || 0)} variant="negative" indent />
+                    <div className="border-t border-border my-1" />
+                    <SummaryRow label="Saldo líquido final de caixa" value={fmt(conciliacao.saldoLiquidoEsperado)} bold />
+                    <SummaryRow label="Total financeiro realizado" value={fmt(conciliacao.totalRealizado)} />
+                    <div className="border-t border-dashed border-border my-1" />
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-[11px] font-bold text-foreground">Diferença de conciliação</span>
+                      <span className={`text-sm font-bold font-mono tabular-nums ${conciliacao.gapOk ? 'text-primary' : 'text-destructive'}`}>
+                        {fmt(conciliacao.gap)}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* ACTION BAR */}
+              <Button size="sm" className="w-full gap-1 h-8 text-[11px]" onClick={() => {
+                setNovoTipo('adiantamento_recebido');
+                setNovoData('');
+                setNovoValor('');
+                setNovoDesc('');
+                setDialogOpen(true);
+              }}>
+                <Plus className="h-3.5 w-3.5" /> Novo Lançamento
+              </Button>
+
+              {/* C. EXTRATO FINANCEIRO */}
+              <Card>
+                <CardHeader className="pb-1.5 pt-3 px-3">
+                  <CardTitle className="text-[12px] flex items-center gap-1.5 text-muted-foreground uppercase tracking-wide">
+                    <ArrowUpDown className="h-3.5 w-3.5" /> Extrato Financeiro
+                    <span className="ml-auto text-[9px] font-normal text-muted-foreground/70">
+                      {lancamentos.length} lançamento{lancamentos.length !== 1 ? 's' : ''}
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {lancamentos.length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground text-center py-6">Nenhum lançamento vinculado a este lote.</p>
+                  ) : (
+                    <>
+                      <div className="divide-y divide-border">
+                        {lancamentos.map(l => {
+                          const isEntrada = l.sinal > 0;
+                          const isSimulador = !!l.grupo_geracao_id;
+                          return (
+                            <Tooltip key={l.id}>
+                              <TooltipTrigger asChild>
+                                <div
+                                  className="px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-muted/40 transition-colors"
+                                  onClick={() => setDetailLanc(l)}
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5">
+                                      {isEntrada ? (
+                                        <ArrowUpRight className="h-3.5 w-3.5 text-primary shrink-0" />
+                                      ) : (
+                                        <ArrowDownRight className="h-3.5 w-3.5 text-destructive shrink-0" />
+                                      )}
+                                      <span className="text-[11px] font-medium text-foreground truncate">
+                                        {l.descricao || ORIGEM_LABELS[l.origem_tipo || ''] || 'Lançamento'}
+                                      </span>
+                                      <span className={`text-[8px] px-1.5 py-0.5 rounded font-semibold shrink-0 uppercase tracking-wider ${
+                                        isSimulador
+                                          ? 'bg-primary/10 text-primary'
+                                          : 'bg-muted text-muted-foreground'
+                                      }`}>
+                                        {isSimulador ? 'Simulador' : 'Manual'}
+                                      </span>
+                                    </div>
+                                    <p className="text-[9px] text-muted-foreground ml-5 mt-0.5">
+                                      {fmtDate(l.data_pagamento)} · {ORIGEM_LABELS[l.origem_tipo || ''] || l.origem_tipo || '-'}
+                                    </p>
+                                  </div>
+                                  <span className={`text-[11px] font-bold font-mono tabular-nums whitespace-nowrap ml-2 ${
+                                    isEntrada ? 'text-primary' : 'text-destructive'
+                                  }`}>
+                                    {isEntrada ? '+' : '−'} {fmt(l.valor)}
+                                  </span>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="left" className="max-w-[240px] text-[9px] space-y-0.5">
+                                <p className="font-semibold">{isSimulador ? 'Gerado pelo simulador' : 'Lançado manualmente'}</p>
+                                <p>Criado em: {fmtDateTime(l.created_at || null)}</p>
+                                {l.historico && <p className="text-muted-foreground">{l.historico}</p>}
+                              </TooltipContent>
+                            </Tooltip>
+                          );
+                        })}
+                      </div>
+
+                      {/* TOTALS */}
+                      <div className="border-t-2 border-border px-3 py-2 space-y-0.5 bg-muted/30">
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-muted-foreground">Total Entradas</span>
+                          <span className="font-bold font-mono tabular-nums text-primary">+ {fmt(conciliacao?.totalEntradas || 0)}</span>
+                        </div>
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-muted-foreground">Total Saídas</span>
+                          <span className="font-bold font-mono tabular-nums text-destructive">− {fmt(conciliacao?.totalSaidas || 0)}</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* LEGENDA */}
+              <div className="flex items-center gap-4 text-[9px] text-muted-foreground/70 px-1">
+                <div className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-sm bg-primary/20" />
+                  <span><strong className="text-primary">Simulador</strong> = gerado automaticamente</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-sm bg-muted" />
+                  <span><strong className="text-muted-foreground">Manual</strong> = lançado pelo usuário</span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* DIALOG: Novo Lançamento */}
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-sm">Novo Lançamento Boitel</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label className="text-[11px]">Tipo</Label>
+                <Select value={novoTipo} onValueChange={(v: any) => setNovoTipo(v)}>
+                  <SelectTrigger className="h-8 text-[11px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="adiantamento_pago">Adiantamento Pago (Saída)</SelectItem>
+                    <SelectItem value="adiantamento_recebido">Adiantamento Recebido (Entrada)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-[11px]">Data</Label>
+                <Input type="date" className="h-8 text-[11px]" value={novoData} onChange={e => setNovoData(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-[11px]">Valor (R$)</Label>
+                <Input type="number" step="0.01" className="h-8 text-[11px] text-right font-mono" value={novoValor} onChange={e => setNovoValor(e.target.value)} placeholder="0,00" />
+              </div>
+              <div>
+                <Label className="text-[11px]">Descrição (opcional)</Label>
+                <Textarea className="text-[11px]" value={novoDesc} onChange={e => setNovoDesc(e.target.value)} rows={2} placeholder="Ex: Antecipação 30 dias" />
+              </div>
             </div>
-            <div>
-              <Label className="text-xs">Data</Label>
-              <Input type="date" value={novoData} onChange={e => setNovoData(e.target.value)} />
-            </div>
-            <div>
-              <Label className="text-xs">Valor (R$)</Label>
-              <Input type="number" step="0.01" value={novoValor} onChange={e => setNovoValor(e.target.value)} placeholder="0,00" />
-            </div>
-            <div>
-              <Label className="text-xs">Descrição (opcional)</Label>
-              <Textarea value={novoDesc} onChange={e => setNovoDesc(e.target.value)} rows={2} placeholder="Ex: Antecipação 30 dias" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleNovoLancamento}>Salvar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+            <DialogFooter>
+              <Button variant="outline" size="sm" className="h-8 text-[11px]" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+              <Button size="sm" className="h-8 text-[11px]" onClick={handleNovoLancamento}>Salvar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* SHEET: Detalhe do Lançamento */}
+        <Sheet open={!!detailLanc} onOpenChange={open => { if (!open) setDetailLanc(null); }}>
+          <SheetContent side="bottom" className="max-h-[60vh]">
+            {detailLanc && (
+              <>
+                <SheetHeader>
+                  <SheetTitle className="text-sm flex items-center gap-2">
+                    {detailLanc.sinal > 0 ? (
+                      <ArrowUpRight className="h-4 w-4 text-primary" />
+                    ) : (
+                      <ArrowDownRight className="h-4 w-4 text-destructive" />
+                    )}
+                    {detailLanc.descricao || 'Lançamento'}
+                  </SheetTitle>
+                </SheetHeader>
+                <div className="mt-4 space-y-2 text-[11px]">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                    <div>
+                      <p className="text-muted-foreground text-[9px] uppercase tracking-wide">Valor</p>
+                      <p className={`font-bold font-mono tabular-nums ${detailLanc.sinal > 0 ? 'text-primary' : 'text-destructive'}`}>
+                        {detailLanc.sinal > 0 ? '+' : '−'} {fmt(detailLanc.valor)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-[9px] uppercase tracking-wide">Origem</p>
+                      <Badge variant={detailLanc.grupo_geracao_id ? 'default' : 'secondary'} className="text-[9px] h-4 mt-0.5">
+                        {detailLanc.grupo_geracao_id ? 'Simulador' : 'Manual'}
+                      </Badge>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-[9px] uppercase tracking-wide">Data Pagamento</p>
+                      <p className="font-medium">{fmtDate(detailLanc.data_pagamento)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-[9px] uppercase tracking-wide">Data Competência</p>
+                      <p className="font-medium">{fmtDate(detailLanc.data_competencia)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-[9px] uppercase tracking-wide">Tipo</p>
+                      <p className="font-medium">{ORIGEM_LABELS[detailLanc.origem_tipo || ''] || detailLanc.origem_tipo || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-[9px] uppercase tracking-wide">Status</p>
+                      <p className="font-medium">{detailLanc.status_transacao || '-'}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <p className="text-muted-foreground text-[9px] uppercase tracking-wide">Classificação</p>
+                      <p className="font-medium text-[10px]">{[detailLanc.macro_custo, detailLanc.centro_custo, detailLanc.subcentro].filter(Boolean).join(' / ') || '-'}</p>
+                    </div>
+                    {detailLanc.historico && (
+                      <div className="col-span-2">
+                        <p className="text-muted-foreground text-[9px] uppercase tracking-wide">Histórico</p>
+                        <p className="text-[10px] text-muted-foreground">{detailLanc.historico}</p>
+                      </div>
+                    )}
+                    <div className="col-span-2">
+                      <p className="text-muted-foreground text-[9px] uppercase tracking-wide">Criado em</p>
+                      <p className="text-[10px]">{fmtDateTime(detailLanc.created_at || null)}</p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </SheetContent>
+        </Sheet>
+      </div>
+    </TooltipProvider>
   );
 }
