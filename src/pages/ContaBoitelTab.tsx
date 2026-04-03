@@ -409,6 +409,13 @@ export function ContaBoitelTab({ onBack }: Props) {
                             <span className="text-xs font-medium text-foreground truncate">
                               {l.descricao || ORIGEM_LABELS[l.origem_tipo || ''] || 'Lançamento'}
                             </span>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
+                              l.grupo_geracao_id
+                                ? 'bg-secondary text-secondary-foreground'
+                                : 'bg-accent text-accent-foreground'
+                            }`}>
+                              {l.grupo_geracao_id ? 'Simulador' : 'Manual'}
+                            </span>
                           </div>
                           <p className="text-[10px] text-muted-foreground ml-[18px]">
                             {fmtDate(l.data_pagamento)} · {ORIGEM_LABELS[l.origem_tipo || ''] || l.origem_tipo || '-'}
