@@ -33,6 +33,7 @@ import { TransferenciaDetalhesDialog, TransferenciaDetalhes, EMPTY_TRANSFERENCIA
 import { TransferenciaResumoPanel } from '@/components/transferencia/TransferenciaResumoPanel';
 import { buildTransferenciaCalculation, buildTransferenciaSnapshot } from '@/lib/calculos/transferencia';
 import { buildAbateCalculation, type AbateCalculation } from '@/lib/calculos/abate';
+import { buildVendaCalculation, buildVendaSnapshot, type VendaCalculation } from '@/lib/calculos/venda';
 import { VendaDetalhesDialog, VendaDetalhes, EMPTY_VENDA_DETALHES } from '@/components/venda/VendaDetalhesDialog';
 import { VendaResumoPanel } from '@/components/venda/VendaResumoPanel';
 import { AbateExportDialog } from '@/components/AbateExportMenu';
