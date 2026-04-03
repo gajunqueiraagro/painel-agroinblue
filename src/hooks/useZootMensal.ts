@@ -31,6 +31,7 @@ export interface ZootMensal {
   saidas: number;
   dias_mes: number;
   gmd_kg_cab_dia: number | null;
+  gmd_numerador_kg: number | null;
   ua_media: number | null;
   area_produtiva_ha: number;
   lotacao_ua_ha: number | null;

@@ -3661,6 +3661,7 @@ export type Database = {
           entradas: number | null
           fazenda_id: string | null
           gmd_kg_cab_dia: number | null
+          gmd_numerador_kg: number | null
           lotacao_ua_ha: number | null
           mes: number | null
           mes_key: string | null
