@@ -126,6 +126,51 @@ function fmt(v?: number, decimals = 2) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
+type FornecedorOption = {
+  id: string;
+  nome: string;
+  nomeNormalizado?: string | null;
+  aliases?: string[] | null;
+};
+
+function normalizeFornecedorText(value?: string | null) {
+  return (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function matchFornecedor(options: FornecedorOption[], params: { id?: string | null; nome?: string | null }) {
+  if (!options.length) return undefined;
+
+  if (params.id) {
+    const byId = options.find(option => option.id === params.id);
+    if (byId) return byId;
+  }
+
+  const normalizedNome = normalizeFornecedorText(params.nome);
+  if (!normalizedNome) return undefined;
+
+  return options.find(option => {
+    const optionNome = normalizeFornecedorText(option.nome);
+    const optionNormalizado = normalizeFornecedorText(option.nomeNormalizado);
+    const aliases = (option.aliases || []).map(alias => normalizeFornecedorText(alias));
+
+    return (
+      optionNome === normalizedNome ||
+      optionNormalizado === normalizedNome ||
+      aliases.includes(normalizedNome) ||
+      optionNome.includes(normalizedNome) ||
+      normalizedNome.includes(optionNome) ||
+      (optionNormalizado && optionNormalizado.includes(normalizedNome)) ||
+      (optionNormalizado && normalizedNome.includes(optionNormalizado))
+    );
+  });
+}
+
 export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, onReturnFromEdit }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
