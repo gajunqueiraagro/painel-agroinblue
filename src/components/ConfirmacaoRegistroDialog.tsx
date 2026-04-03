@@ -48,6 +48,7 @@ interface DadosFinanceiros {
   boitelReceitaProdutor?: number;
   boitelAdiantamento?: number;
   boitelFrete?: number;
+  boitelResultadoLiquido?: number;
 }
 
 interface Props {
