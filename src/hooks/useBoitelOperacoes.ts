@@ -230,12 +230,84 @@ export async function gerarFinanceiroBoitel(
   const clasReceita = planoReceita[0];
   const inserts: any[] = [];
   const descBase = `Venda ${op.quantidade} cab - Boitel`;
+  const temAdiantamento = op.possui_adiantamento && op.valor_total_antecipado > 0;
 
-  // 1. RECEITA: usar parcelas se a prazo, senão à vista
+  // 0. ADIANTAMENTO: saída financeira na data de entrada/envio
+  if (temAdiantamento) {
+    const dataAdiant = op.data_adiantamento || op.data_envio || dataRecebimento;
+    // Buscar plano de contas para adiantamento
+    const adiantSubcentroCandidates = [
+      'PEC/ADIANTAMENTOS/ADIANTAMENTO BOITEL',
+      'PEC/BOITEL/ADIANTAMENTO OPERACIONAL',
+    ];
+    const { data: planoAdiant } = await supabase
+      .from('financeiro_plano_contas')
+      .select('id, macro_custo, centro_custo, subcentro')
+      .eq('cliente_id', clienteId)
+      .eq('ativo', true)
+      .eq('tipo_operacao', '2-Saídas')
+      .in('subcentro', adiantSubcentroCandidates);
+
+    // Fallback: buscar qualquer adiantamento
+    let clsAdiant = planoAdiant?.[0];
+    if (!clsAdiant) {
+      const { data: fb } = await supabase
+        .from('financeiro_plano_contas')
+        .select('id, macro_custo, centro_custo, subcentro')
+        .eq('cliente_id', clienteId)
+        .eq('ativo', true)
+        .eq('tipo_operacao', '2-Saídas')
+        .ilike('subcentro', '%adiantamento%')
+        .limit(1);
+      clsAdiant = fb?.[0];
+    }
+    // Last fallback: custeio
+    if (!clsAdiant) {
+      const { data: fb2 } = await supabase
+        .from('financeiro_plano_contas')
+        .select('id, macro_custo, centro_custo, subcentro')
+        .eq('cliente_id', clienteId)
+        .eq('ativo', true)
+        .eq('tipo_operacao', '2-Saídas')
+        .ilike('macro_custo', '%custeio%')
+        .limit(1);
+      clsAdiant = fb2?.[0];
+    }
+
+    if (clsAdiant) {
+      inserts.push({
+        cliente_id: clienteId,
+        fazenda_id: fazendaId,
+        tipo_operacao: '2-Saídas',
+        sinal: -1,
+        status_transacao: 'confirmado',
+        origem_lancamento: 'boitel',
+        movimentacao_rebanho_id: lancamentoId,
+        boitel_id: op.id,
+        macro_custo: clsAdiant.macro_custo,
+        centro_custo: clsAdiant.centro_custo,
+        subcentro: clsAdiant.subcentro,
+        ano_mes: dataAdiant.slice(0, 7),
+        valor: op.valor_total_antecipado,
+        data_competencia: dataAdiant,
+        data_pagamento: dataAdiant,
+        descricao: `Adiantamento - ${descBase}`,
+        historico: `Boitel: ${op.fazenda_destino_nome} | Adiantamento na entrada | ${op.adiantamento_observacao || ''}`,
+        origem_tipo: 'boitel:adiantamento',
+      });
+    }
+  }
+
+  // 1. RECEITA: valor = receita_produtor menos adiantamento já pago (saldo a receber)
+  const valorReceitaLiquida = temAdiantamento
+    ? op.receita_produtor - op.valor_total_antecipado
+    : op.receita_produtor;
+
   const parcelas = options?.parcelas || [];
   const isPrazo = options?.formaReceb === 'prazo' && parcelas.length > 0;
 
   if (isPrazo) {
+    // Parcelas já estão calculadas com base no saldo (descontado adiantamento)
     parcelas.forEach((p, i) => {
       inserts.push({
         cliente_id: clienteId,
@@ -276,11 +348,11 @@ export async function gerarFinanceiroBoitel(
       nota_fiscal: options?.notaFiscal || null,
       favorecido_id: options?.fornecedorId || null,
       ano_mes: dataRecebimento.slice(0, 7),
-      valor: op.receita_produtor,
+      valor: valorReceitaLiquida,
       data_competencia: dataRecebimento,
       data_pagamento: dataRecebimento,
       descricao: descBase,
-      historico: `Boitel: ${op.fazenda_destino_nome} | Lote: ${op.lote || '-'} | Contrato: ${op.numero_contrato || '-'}`,
+      historico: `Boitel: ${op.fazenda_destino_nome} | Lote: ${op.lote || '-'} | Contrato: ${op.numero_contrato || '-'}${temAdiantamento ? ' | Adiantamento descontado: R$ ' + op.valor_total_antecipado.toFixed(2) : ''}`,
       origem_tipo: 'boitel:receita',
     });
   }
