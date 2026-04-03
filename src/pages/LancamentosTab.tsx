@@ -2163,6 +2163,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onCountFinanceiros={onCountFinanceiros}
           onEditarAbate={loadAbateForEdit}
           onEditarVenda={loadVendaForEdit}
+          onEditarCompra={loadCompraForEdit}
         />
       )}
 
