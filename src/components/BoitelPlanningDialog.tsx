@@ -225,7 +225,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                   </div>
                   <div className="flex justify-between text-[8px] bg-blue-100/60 dark:bg-blue-900/30 rounded px-1.5 py-0.5 border border-blue-300 dark:border-blue-700">
                     <span className="font-bold text-blue-800 dark:text-blue-300">Total</span>
-                    <span className="font-bold text-blue-800 dark:text-blue-300 tabular-nums">{formatMoeda(data.valorTotalAntecipado)}</span>
+                    <span className="font-bold text-blue-800 dark:text-blue-300 tabular-nums">R$ {fmtR$(data.valorTotalAntecipado)}</span>
                   </div>
                 </div>
               )}
