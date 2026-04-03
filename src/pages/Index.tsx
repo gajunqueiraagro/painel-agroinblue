@@ -395,6 +395,13 @@ const Index = () => {
           abateParaEditar={abateParaEditar}
           vendaParaEditar={vendaParaEditar}
           compraParaEditar={compraParaEditar}
+          onReturnFromEdit={editOriginTab ? () => {
+            setActiveTab(editOriginTab);
+            setEditOriginTab(null);
+            setAbateParaEditar(null);
+            setVendaParaEditar(null);
+            setCompraParaEditar(null);
+          } : undefined}
         />
       )}
       {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} onNavigateToValorRebanho={() => setActiveTab('valor_rebanho')} onSetSaldo={canEditZoo ? setSaldoInicial : undefined} onNavigateToReclass={goToReclassFromFluxoAnual} />}
