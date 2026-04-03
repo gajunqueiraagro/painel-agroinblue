@@ -289,9 +289,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   }, [isNascimento]);
 
   // Import buildAbateCalculation for the abate-specific unified calc
-  const abateCalc = useMemo(() => {
+  const abateCalc = useMemo((): AbateCalculation | null => {
     if (!isAbate || !abateDetalhes) return null;
-    const { buildAbateCalculation } = require('@/lib/calculos/abate');
     return buildAbateCalculation({
       quantidade: Number(quantidade) || 0,
       pesoKg: Number(pesoKg) || 0,
@@ -313,7 +312,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       formaReceb: abateDetalhes.formaReceb,
       qtdParcelas: abateDetalhes.qtdParcelas || undefined,
       parcelas: abateDetalhes.parcelas,
-    }) as import('@/lib/calculos/abate').AbateCalculation;
+    });
   }, [isAbate, abateDetalhes, quantidade, pesoKg]);
 
   const calc = useMemo(() => {
