@@ -81,6 +81,13 @@ export function VendaResumoPanel({
           </>
         )}
 
+        {hasData && (
+          <Button type="button" variant="ghost" size="sm" className="w-full h-6 text-[10px] font-medium gap-1 text-muted-foreground" onClick={onOpenModal}>
+            <Edit className="h-3 w-3" />
+            Editar Planejamento Boitel
+          </Button>
+        )}
+
         {!hasData && (
           <>
             <Separator />
@@ -88,6 +95,10 @@ export function VendaResumoPanel({
               <AlertTriangle className="h-3 w-3 shrink-0" />
               <span className="font-medium">Planejamento Boitel não preenchido</span>
             </div>
+            <Button type="button" variant="outline" className="w-full h-7 text-[11px] font-bold gap-1.5" onClick={onOpenModal}>
+              <Calculator className="h-3 w-3" />
+              Abrir Planejamento Boitel
+            </Button>
           </>
         )}
 

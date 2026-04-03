@@ -2585,7 +2585,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   detalhes={vendaDetalhes}
                   detalhesPreenchidos={!!vendaDetalhes || (tipoPeso === 'boitel' && !!boitelDataForResumo)}
                   canOpenModal={!!(data && quantidade && Number(quantidade) > 0 && pesoKg && Number(pesoKg) > 0 && categoria && vendaDestinoFornecedorId)}
-                  onOpenModal={() => setVendaDialogOpen(true)}
+                  onOpenModal={() => {
+                    if (tipoPeso === 'boitel') {
+                      vendaFinanceiroRef.current?.openBoitelDialog();
+                    } else {
+                      setVendaDialogOpen(true);
+                    }
+                  }}
                   onRequestRegister={handleRequestRegister}
                   submitting={submitting}
                   registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
