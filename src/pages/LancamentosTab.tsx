@@ -784,17 +784,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (compraSnap && compraSnap.type === 'compra') {
       const det: CompraDetalhes = {
         tipoPreco: compraSnap.tipoPreco || 'por_kg',
-      const det: CompraDetalhes = {
-        tipoPreco: snap.tipoPreco || 'por_kg',
-        precoKg: snap.precoKg || '',
-        precoCab: snap.precoCab || '',
-        valorTotal: snap.valorTotal || '',
-        frete: snap.frete || '',
-        comissaoPct: snap.comissaoPct || '',
-        formaPag: snap.formaPag || 'avista',
-        qtdParcelas: snap.qtdParcelas || '1',
-        parcelas: snap.parcelas || [],
-        notaFiscal: snap.notaFiscal || '',
+        precoKg: compraSnap.precoKg || '',
+        precoCab: compraSnap.precoCab || '',
+        valorTotal: compraSnap.valorTotal || '',
+        frete: compraSnap.frete || '',
+        comissaoPct: compraSnap.comissaoPct || '',
+        formaPag: compraSnap.formaPag || 'avista',
+        qtdParcelas: compraSnap.qtdParcelas || '1',
+        parcelas: compraSnap.parcelas || [],
+        notaFiscal: compraSnap.notaFiscal || '',
       };
       setCompraDetalhes(det);
     } else {
