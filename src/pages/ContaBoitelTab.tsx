@@ -18,11 +18,13 @@ import { toast } from 'sonner';
 
 interface BoitelOp {
   id: string;
-  lote: string | null;
-  numero_contrato: string | null;
-  fazenda_destino_nome: string;
-  quantidade: number;
+  lote_codigo: string;
+  contrato_baia: string | null;
+  boitel_destino: string;
+  quantidade_cab: number;
   data_envio: string | null;
+  status_lote: string;
+  // From planejamento join
   dias: number;
   receita_produtor: number;
   faturamento_bruto: number;
