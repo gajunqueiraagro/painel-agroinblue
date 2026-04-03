@@ -252,17 +252,17 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               return (
                 <>
                   <tr className="border-t bg-muted/40">
-                    <td className="px-1.5 py-0.5 font-medium text-muted-foreground sticky left-0 bg-muted/50 text-[9px]">Peso Médio Final do mês (kg)</td>
+                    <td className="px-1.5 py-0.5 font-normal italic text-muted-foreground sticky left-0 bg-muted/50 text-[8px]">Peso Médio Final do mês (kg)</td>
                     {MESES_COLS.map(m => {
-                      if (isFuturo(m.key)) return <td key={m.key} className={`px-1.5 py-0.5 text-right tabular-nums text-foreground/80 ${qb(m.key)}`}>–</td>;
+                      if (isFuturo(m.key)) return <td key={m.key} className={`px-1.5 py-0.5 text-right tabular-nums italic text-[9px] text-muted-foreground ${qb(m.key)}`}>–</td>;
                       const z = zootByMes[m.key];
                       return (
-                        <td key={m.key} className={`px-1.5 py-0.5 text-right font-semibold tabular-nums text-foreground/80 ${qb(m.key)}`}>
+                        <td key={m.key} className={`px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground ${qb(m.key)}`}>
                           {z?.peso_medio_final_kg != null ? fmtDec(z.peso_medio_final_kg, 2) : '–'}
                         </td>
                       );
                     })}
-                    <td className="px-1.5 py-0.5 text-right font-semibold tabular-nums text-foreground/80 bg-muted/50 border-l border-border/60">–</td>
+                    <td className="px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground bg-muted/50 border-l border-border/60">–</td>
                   </tr>
 
                   <tr className="bg-muted/30">
