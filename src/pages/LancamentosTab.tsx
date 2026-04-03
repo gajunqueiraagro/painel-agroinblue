@@ -1140,9 +1140,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       dataAbate: abateDataAbate || undefined,
       tipoVenda: tipoVendaFinal || undefined,
       detalhesSnapshot: (() => {
-        if (isCompra && compraDetalhes) return { type: 'compra', ...compraDetalhes, fornecedorId: compraFornecedorId || undefined };
-        if (isAbate && abateDetalhes) return { type: 'abate', ...abateDetalhes, fornecedorId: abateFornecedorId || undefined };
-        if (isVenda && vendaDetalhes) return { type: 'venda', ...vendaDetalhes, tipoPreco: vendaTipoPreco, precoInput: vendaPrecoInput, fornecedorId: vendaDestinoFornecedorId || undefined };
+        if (isCompra && compraDetalhes) {
+          const fornNome = abateFornecedores.find(f => f.id === compraFornecedorId)?.nome;
+          return { type: 'compra', ...compraDetalhes, fornecedorId: compraFornecedorId || undefined, fornecedorNome: fornNome || undefined };
+        }
+        if (isAbate && abateDetalhes) {
+          const fornNome = abateFornecedores.find(f => f.id === abateFornecedorId)?.nome;
+          return { type: 'abate', ...abateDetalhes, fornecedorId: abateFornecedorId || undefined, fornecedorNome: fornNome || undefined };
+        }
+        if (isVenda && vendaDetalhes) {
+          const fornNome = abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome;
+          return { type: 'venda', ...vendaDetalhes, tipoPreco: vendaTipoPreco, precoInput: vendaPrecoInput, fornecedorId: vendaDestinoFornecedorId || undefined, fornecedorNome: fornNome || undefined };
+        }
         return undefined;
       })(),
     };
