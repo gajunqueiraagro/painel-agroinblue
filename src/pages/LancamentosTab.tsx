@@ -283,6 +283,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const isVenda = tipo === 'venda';
   const isConsumo = tipo === 'consumo';
   const isTransferencia = tipo === 'transferencia_entrada' || tipo === 'transferencia_saida';
+  const isTransferenciaSaida = tipo === 'transferencia_saida';
   const hasFinancialImpact = !isNascimento && !isMorte && !isTransferencia;
 
   const usaPrecoArroba = isAbate;
