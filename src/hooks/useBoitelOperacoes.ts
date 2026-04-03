@@ -286,7 +286,10 @@ export async function gerarFinanceiroBoitel(
     });
   }
 
-  const { error } = await supabase.from('financeiro_lancamentos_v2').insert(inserts);
+  // Adiciona grupo_geracao_id a todos os inserts
+  const insertsComGrupo = inserts.map(ins => ({ ...ins, grupo_geracao_id: grupoId }));
+
+  const { error } = await supabase.from('financeiro_lancamentos_v2').insert(insertsComGrupo);
   if (error) {
     toast.error('Erro ao gerar financeiro do boitel: ' + error.message);
     return false;
