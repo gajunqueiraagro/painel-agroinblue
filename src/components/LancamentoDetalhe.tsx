@@ -327,8 +327,8 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 </>
               ) : isVenda && (() => {
                 const snap = lancamento.detalhesSnapshot as any;
-                const vc = snap?._tipo === 'venda' ? snap : (snap?.calculation || null);
-                if (!vc || !vc.valorBruto) return false;
+                const vc = snap?._tipo === 'venda' ? snap : (snap?.type === 'venda_boitel' ? snap : (snap?.calculation || null));
+                if (!vc || (!vc.valorBruto && !vc.tipoVenda)) return false;
                 return true;
               })() ? (
                 <>
