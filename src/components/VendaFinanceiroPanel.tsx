@@ -313,6 +313,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
     },
     getBoitelData: () => boitelData,
     resetForm,
+    openBoitelDialog: () => setBoitelOpen(true),
   }), [fornecedorId, formaReceb, parcelas, resetForm, validationErrors, tipoPeso, boitelData]);
 
   const handleGerarFinanceiroInternal = async (targetLancamentoId: string): Promise<boolean> => {
