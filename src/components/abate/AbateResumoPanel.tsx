@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { formatMoeda, formatKg } from '@/lib/calculos/formatters';
+import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
 import { CATEGORIAS } from '@/types/cattle';
 import { AlertTriangle, CheckCircle, Edit, Tag } from 'lucide-react';
 import type { AbateDetalhes } from './AbateDetalhesDialog';
@@ -35,22 +35,47 @@ export function AbateResumoPanel({
     const pesoArrobaCab = carcacaCalc > 0 ? carcacaCalc / 15 : 0;
     const totalArrobas = pesoArrobaCab * quantidade;
     const preco = Number(detalhes.precoArroba) || 0;
-    const valorBruto = totalArrobas * preco;
+    const valorBase = totalArrobas * preco;
 
-    const bonusPrecoceTotal = (Number(detalhes.bonusPrecoce) || 0) * totalArrobas;
-    const bonusQualidadeTotal = (Number(detalhes.bonusQualidade) || 0) * totalArrobas;
-    const bonusListaTraceTotal = (Number(detalhes.bonusListaTrace) || 0) * totalArrobas;
+    // Funrural (sobre Valor Base)
+    const funruralReaisVal = Number(detalhes.funruralReais) || 0;
+    const funruralPctVal = Number(detalhes.funruralPct) || 0;
+    const funruralTotal = funruralReaisVal > 0 ? funruralReaisVal : valorBase * funruralPctVal / 100;
+
+    // Valor Bruto = Valor Base - Funrural
+    const valorBruto = valorBase - funruralTotal;
+
+    // Bônus
+    const bPrecoceArr = Number(detalhes.bonusPrecoce) || 0;
+    const bPrecoceR = Number(detalhes.bonusPrecoceReais) || 0;
+    const bonusPrecoceTotal = bPrecoceArr > 0 ? bPrecoceArr * totalArrobas : bPrecoceR;
+
+    const bQualArr = Number(detalhes.bonusQualidade) || 0;
+    const bQualR = Number(detalhes.bonusQualidadeReais) || 0;
+    const bonusQualidadeTotal = bQualArr > 0 ? bQualArr * totalArrobas : bQualR;
+
+    const bTraceArr = Number(detalhes.bonusListaTrace) || 0;
+    const bTraceR = Number(detalhes.bonusListaTraceReais) || 0;
+    const bonusListaTraceTotal = bTraceArr > 0 ? bTraceArr * totalArrobas : bTraceR;
+
     const totalBonus = bonusPrecoceTotal + bonusQualidadeTotal + bonusListaTraceTotal;
 
-    const descQualidadeTotal = (Number(detalhes.descontoQualidade) || 0) * totalArrobas;
-    const funruralReaisVal = Number(detalhes.funruralReais) || 0;
-    const descFunruralTotal = funruralReaisVal > 0 ? funruralReaisVal : valorBruto * (Number(detalhes.funruralPct) || 0) / 100;
-    const descOutrosTotal = Number(detalhes.outrosDescontos) || 0;
-    const totalDescontos = descQualidadeTotal + descFunruralTotal + descOutrosTotal;
+    // Descontos
+    const dQualArr = Number(detalhes.descontoQualidade) || 0;
+    const dQualR = Number(detalhes.descontoQualidadeReais) || 0;
+    const descQualidadeTotal = dQualArr > 0 ? dQualArr * totalArrobas : dQualR;
 
+    const dOutrosArr = Number(detalhes.outrosDescontosArroba) || 0;
+    const dOutrosR = Number(detalhes.outrosDescontos) || 0;
+    const descOutrosTotal = dOutrosArr > 0 ? dOutrosArr * totalArrobas : dOutrosR;
+
+    const totalDescontos = descQualidadeTotal + descOutrosTotal;
+
+    // Valor Líquido = Valor Bruto + Bônus - Descontos
     const valorLiquido = valorBruto + totalBonus - totalDescontos;
+    const liqArroba = totalArrobas > 0 ? valorLiquido / totalArrobas : 0;
 
-    return { valorBruto, totalBonus, totalDescontos, valorLiquido, totalArrobas };
+    return { valorBase, funruralTotal, valorBruto, totalBonus, totalDescontos, valorLiquido, totalArrobas, liqArroba };
   }, [detalhes, pesoKg, quantidade]);
 
   const tipoAbateLabel = detalhes?.tipoPeso === 'morto' ? 'Peso morto' : detalhes?.tipoPeso === 'vivo' ? 'Peso vivo' : '-';
@@ -98,20 +123,27 @@ export function AbateResumoPanel({
       ) : (
         <>
           <div className="space-y-0.5 text-[10px] leading-tight">
-            {calc && calc.valorBruto > 0 && (
+            {calc && calc.valorBase > 0 && (
               <>
-                <div className="flex justify-between"><span className="text-muted-foreground">Valor bruto</span><strong>{formatMoeda(calc.valorBruto)}</strong></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Valor Base</span><strong>{formatMoeda(calc.valorBase)}</strong></div>
+                {calc.funruralTotal > 0 && (
+                  <div className="flex justify-between"><span className="text-muted-foreground">– Funrural</span><strong className="text-destructive">-{formatMoeda(calc.funruralTotal)}</strong></div>
+                )}
+                <div className="flex justify-between font-bold"><span>= Valor Bruto</span><strong>{formatMoeda(calc.valorBruto)}</strong></div>
                 {calc.totalBonus > 0 && (
-                  <div className="flex justify-between"><span className="text-muted-foreground">Bônus</span><strong className="text-green-600 dark:text-green-400">+{formatMoeda(calc.totalBonus)}</strong></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">+ Bônus</span><strong className="text-green-600 dark:text-green-400">+{formatMoeda(calc.totalBonus)}</strong></div>
                 )}
                 {calc.totalDescontos > 0 && (
-                  <div className="flex justify-between"><span className="text-muted-foreground">Descontos</span><strong className="text-destructive">-{formatMoeda(calc.totalDescontos)}</strong></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">– Descontos</span><strong className="text-destructive">-{formatMoeda(calc.totalDescontos)}</strong></div>
                 )}
                 <Separator />
                 <div className="flex justify-between text-[11px] font-bold">
-                  <span>Valor líquido</span>
+                  <span>Valor Líquido</span>
                   <span className="text-primary">{formatMoeda(calc.valorLiquido)}</span>
                 </div>
+                {calc.liqArroba > 0 && (
+                  <div className="flex justify-between"><span className="text-muted-foreground">R$/@ líq.</span><strong>{formatMoeda(calc.liqArroba)}</strong></div>
+                )}
               </>
             )}
             <div className="flex justify-between"><span className="text-muted-foreground">Pagamento</span><strong>{pagLabel}</strong></div>
