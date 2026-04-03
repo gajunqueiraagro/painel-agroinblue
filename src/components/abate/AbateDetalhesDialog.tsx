@@ -152,10 +152,15 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
   const qtd = quantidade || 0;
   const peso = pesoKg || 0;
 
+  // Peso carcaça kg state for bidirectional
+  const [pesoCarcacaKg, setPesoCarcacaKg] = useState('');
+
   // Core calculations
   const calc = useMemo(() => {
     const rend = Number(rendCarcaca) || 0;
-    const carcacaCalc = rend > 0 ? peso * rend / 100 : 0;
+    const pcKgManual = Number(pesoCarcacaKg) || 0;
+    const carcacaCalc = pcKgManual > 0 ? pcKgManual : (rend > 0 ? peso * rend / 100 : 0);
+    const rendCalc = pcKgManual > 0 && peso > 0 ? (pcKgManual / peso) * 100 : rend;
     const pesoArrobaCab = carcacaCalc > 0 ? carcacaCalc / 15 : 0;
     const totalArrobas = pesoArrobaCab * qtd;
     const totalKg = peso * qtd;
@@ -203,13 +208,13 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
     const liqKg = totalKg > 0 ? valorLiquido / totalKg : 0;
 
     return {
-      carcacaCalc, pesoArrobaCab, totalArrobas, totalKg, valorBase,
+      carcacaCalc, rendCalc, pesoArrobaCab, totalArrobas, totalKg, valorBase,
       funruralTotal, valorBruto,
       bonusPrecoceTotal, bonusQualidadeTotal, bonusListaTraceTotal, totalBonus,
       descQualidadeTotal, descOutrosTotal, totalDescontos,
       valorLiquido, liqArroba, liqCabeca, liqKg,
     };
-  }, [peso, qtd, rendCarcaca, precoArroba, bonusPrecoce, bonusPrecoceReais, bonusQualidade, bonusQualidadeReais, bonusListaTrace, bonusListaTraceReais, descontoQualidade, descontoQualidadeReais, outrosDescontos, outrosDescontosArroba, funruralPct, funruralReais]);
+  }, [peso, qtd, rendCarcaca, pesoCarcacaKg, precoArroba, bonusPrecoce, bonusPrecoceReais, bonusQualidade, bonusQualidadeReais, bonusListaTrace, bonusListaTraceReais, descontoQualidade, descontoQualidadeReais, outrosDescontos, outrosDescontosArroba, funruralPct, funruralReais]);
 
   // Auto-compute dates
   const dataVendaAuto = dataVenda || format(new Date(), 'yyyy-MM-dd');
@@ -390,7 +395,10 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
           <div className="grid grid-cols-3 gap-2">
             <div>
               <Label className="text-[10px]">R$/@ (Preço Base)</Label>
-              <Input type="number" value={precoArroba} onChange={e => { setPrecoArroba(e.target.value); markDirty(); }} placeholder="0,00" className="h-7 text-[10px] text-right tabular-nums" step="0.01" />
+              <div className="relative">
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">R$</span>
+                <Input type="number" value={precoArroba} onChange={e => { setPrecoArroba(e.target.value); markDirty(); }} placeholder="0,00" className="h-7 text-[10px] text-right tabular-nums pl-7" step="0.01" />
+              </div>
             </div>
             <div>
               <Label className="text-[10px]">Tipo de Abate</Label>
@@ -416,16 +424,26 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             </div>
           </div>
 
-          {/* Desempenho do Abate */}
+          {/* Desempenho do Abate — 3 cols, bidirectional */}
           <h4 className="text-[10px] font-semibold text-muted-foreground pt-1">Desempenho do Abate</h4>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <div>
               <Label className="text-[10px]">{usePrev ? 'Rend. Carcaça Prev. (%)' : 'Rend. Carcaça (%)'}</Label>
-              <Input type="number" value={rendCarcaca} onChange={e => { setRendCarcaca(e.target.value); markDirty(); }} placeholder="0,00" step="0.01" className="h-7 text-[10px] text-right tabular-nums" />
+              <div className="relative">
+                <Input type="number" value={rendCarcaca} onChange={e => { setRendCarcaca(e.target.value); setPesoCarcacaKg(''); markDirty(); }} placeholder="0,00" step="0.01" className="h-7 text-[10px] text-right tabular-nums pr-6" />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">%</span>
+              </div>
             </div>
             <div>
               <Label className="text-[10px]">Peso Carcaça (kg)</Label>
-              <Input type="text" readOnly value={calc.carcacaCalc > 0 ? `${calc.carcacaCalc.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg` : '-'} className="h-7 text-[10px] text-right tabular-nums bg-muted cursor-not-allowed" />
+              <div className="relative">
+                <Input type="number" value={pesoCarcacaKg || (calc.carcacaCalc > 0 ? String(Math.round(calc.carcacaCalc * 100) / 100) : '')} onChange={e => { setPesoCarcacaKg(e.target.value); const v = Number(e.target.value) || 0; if (v > 0 && peso > 0) setRendCarcaca(String(Math.round((v / peso) * 10000) / 100)); markDirty(); }} placeholder="0,00" step="0.01" className="h-7 text-[10px] text-right tabular-nums pr-6" />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">kg</span>
+              </div>
+            </div>
+            <div>
+              <Label className="text-[10px]">Peso Carcaça (@)</Label>
+              <Input type="text" readOnly value={calc.pesoArrobaCab > 0 ? formatArroba(calc.pesoArrobaCab) : '-'} className="h-7 text-[10px] text-right tabular-nums bg-muted cursor-not-allowed" />
             </div>
           </div>
 
@@ -446,28 +464,30 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             <thead>
               <tr className="border-b border-border/50">
                 <th className="text-left py-1 text-muted-foreground font-medium">Tipo</th>
-                <th className="text-right py-1 text-muted-foreground font-medium px-1">%</th>
-                <th className="text-right py-1 text-muted-foreground font-medium px-1">R$</th>
-                <th className="text-right py-1 text-muted-foreground font-medium pl-1">R$ Total</th>
+                <th className="text-center py-1 text-muted-foreground font-medium px-1">%</th>
+                <th className="text-center py-1 text-muted-foreground font-medium px-1">R$</th>
               </tr>
             </thead>
             <tbody>
               <tr className="border-b border-border/30">
                 <td className="py-1 pr-2 text-muted-foreground font-medium">Funrural</td>
                 <td className="py-1 px-1">
-                  <Input type="number" value={funruralPct} onChange={e => handleFunruralPctChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[10px] w-20 text-right tabular-nums" />
+                  <div className="relative">
+                    <Input type="number" value={funruralPct} onChange={e => handleFunruralPctChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[10px] w-20 text-right tabular-nums pr-6 mx-auto" />
+                    <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">%</span>
+                  </div>
                 </td>
                 <td className="py-1 px-1">
-                  <Input type="number" value={funruralReais} onChange={e => handleFunruralReaisChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[10px] w-24 text-right tabular-nums" />
-                </td>
-                <td className="py-1 pl-1 font-bold text-right tabular-nums text-destructive whitespace-nowrap">
-                  {calc.funruralTotal > 0 ? `-${formatMoeda(calc.funruralTotal)}` : '-'}
+                  <div className="relative">
+                    <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">R$</span>
+                    <Input type="number" value={funruralReais} onChange={e => handleFunruralReaisChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[10px] w-28 text-right tabular-nums pl-7 mx-auto" />
+                  </div>
                 </td>
               </tr>
             </tbody>
           </table>
           {calc.valorBruto > 0 && calc.funruralTotal > 0 && (
-            <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded px-2 py-1 flex justify-between text-[10px]">
+            <div className="bg-muted/40 border border-border/50 rounded px-2 py-1 flex justify-between text-[10px]">
               <span className="font-bold">Valor Bruto (desconto - Funrural)</span>
               <span className="font-bold text-primary tabular-nums">{formatMoeda(calc.valorBruto)}</span>
             </div>
@@ -481,9 +501,9 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             <thead>
               <tr className="border-b border-border/50">
                 <th className="text-left py-1 text-muted-foreground font-medium">Tipo Bônus</th>
-                <th className="text-right py-1 text-muted-foreground font-medium px-1">R$/@</th>
-                <th className="text-right py-1 text-muted-foreground font-medium px-1">R$</th>
-                <th className="text-right py-1 text-muted-foreground font-medium pl-1">R$ Total</th>
+                <th className="text-center py-1 text-muted-foreground font-medium px-1">R$/@</th>
+                <th className="text-center py-1 text-muted-foreground font-medium px-1">R$</th>
+                <th className="text-center py-1 text-muted-foreground font-medium pl-1">R$ Total</th>
               </tr>
             </thead>
             <tbody>
@@ -514,9 +534,9 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             </tbody>
           </table>
           {calc.totalBonus > 0 && (
-            <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded px-2 py-1 flex justify-between text-[10px]">
-              <span className="font-bold text-green-700 dark:text-green-400">Total Bônus</span>
-              <span className="font-bold text-green-800 dark:text-green-300 tabular-nums">+{formatMoeda(calc.totalBonus)}</span>
+            <div className="bg-muted/40 border border-border/50 rounded px-2 py-1 flex justify-between text-[10px]">
+              <span className="font-bold">Total Bônus</span>
+              <span className="font-bold tabular-nums">+{formatMoeda(calc.totalBonus)}</span>
             </div>
           )}
 
@@ -528,9 +548,9 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             <thead>
               <tr className="border-b border-border/50">
                 <th className="text-left py-1 text-muted-foreground font-medium">Tipo Desconto</th>
-                <th className="text-right py-1 text-muted-foreground font-medium px-1">R$/@</th>
-                <th className="text-right py-1 text-muted-foreground font-medium px-1">R$</th>
-                <th className="text-right py-1 text-muted-foreground font-medium pl-1">R$ Total</th>
+                <th className="text-center py-1 text-muted-foreground font-medium px-1">R$/@</th>
+                <th className="text-center py-1 text-muted-foreground font-medium px-1">R$</th>
+                <th className="text-center py-1 text-muted-foreground font-medium pl-1">R$ Total</th>
               </tr>
             </thead>
             <tbody>
@@ -553,15 +573,15 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             </tbody>
           </table>
           {calc.totalDescontos > 0 && (
-            <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded px-2 py-1 flex justify-between text-[10px]">
-              <span className="font-bold text-red-700 dark:text-red-400">Total Descontos</span>
-              <span className="font-bold text-red-800 dark:text-red-300 tabular-nums">-{formatMoeda(calc.totalDescontos)}</span>
+            <div className="bg-muted/40 border border-border/50 rounded px-2 py-1 flex justify-between text-[10px]">
+              <span className="font-bold">Total Descontos</span>
+              <span className="font-bold text-destructive tabular-nums">-{formatMoeda(calc.totalDescontos)}</span>
             </div>
           )}
 
           <Separator />
 
-          {/* BLOCO 6 — Resultado Final (moved up, right after Descontos) */}
+          {/* BLOCO 6 — Resultado Final */}
           {calc.valorBase > 0 && (
             <div className="bg-primary/5 border border-primary/20 rounded p-2 space-y-0.5">
               <h4 className="text-[10px] font-bold text-muted-foreground uppercase">
@@ -570,16 +590,30 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
               <div className="space-y-0.5 text-[10px]">
                 <div className="flex justify-between"><span className="text-muted-foreground">Valor Base</span><strong className="tabular-nums">{formatMoeda(calc.valorBase)}</strong></div>
                 {calc.funruralTotal > 0 && (
-                  <div className="flex justify-between"><span className="text-muted-foreground">– Funrural</span><strong className="text-destructive tabular-nums">-{formatMoeda(calc.funruralTotal)}</strong></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">(–) Funrural</span><strong className="text-destructive tabular-nums">-{formatMoeda(calc.funruralTotal)}</strong></div>
                 )}
                 <Separator className="my-0.5" />
                 <div className="flex justify-between font-bold"><span>= Valor Bruto</span><span className="tabular-nums">{formatMoeda(calc.valorBruto)}</span></div>
+
+                {/* Bônus breakdown */}
+                <div className="flex justify-between"><span className="text-muted-foreground">(+) Bônus</span><strong className="tabular-nums">{calc.totalBonus > 0 ? `+${formatMoeda(calc.totalBonus)}` : '-'}</strong></div>
                 {calc.totalBonus > 0 && (
-                  <div className="flex justify-between"><span className="text-muted-foreground">+ Créditos</span><strong className="text-green-600 dark:text-green-400 tabular-nums">+{formatMoeda(calc.totalBonus)}</strong></div>
+                  <div className="pl-3 space-y-0 text-muted-foreground">
+                    {calc.bonusPrecoceTotal > 0 && <div className="flex justify-between"><span>Precoce</span><span className="tabular-nums">{formatMoeda(calc.bonusPrecoceTotal)}</span></div>}
+                    {calc.bonusQualidadeTotal > 0 && <div className="flex justify-between"><span>Qualidade</span><span className="tabular-nums">{formatMoeda(calc.bonusQualidadeTotal)}</span></div>}
+                    {calc.bonusListaTraceTotal > 0 && <div className="flex justify-between"><span>Lista Trace</span><span className="tabular-nums">{formatMoeda(calc.bonusListaTraceTotal)}</span></div>}
+                  </div>
                 )}
+
+                {/* Descontos breakdown */}
+                <div className="flex justify-between"><span className="text-muted-foreground">(–) Descontos</span><strong className="text-destructive tabular-nums">{calc.totalDescontos > 0 ? `-${formatMoeda(calc.totalDescontos)}` : '-'}</strong></div>
                 {calc.totalDescontos > 0 && (
-                  <div className="flex justify-between"><span className="text-muted-foreground">– Débitos</span><strong className="text-destructive tabular-nums">-{formatMoeda(calc.totalDescontos)}</strong></div>
+                  <div className="pl-3 space-y-0 text-muted-foreground">
+                    {calc.descQualidadeTotal > 0 && <div className="flex justify-between"><span>Qualidade</span><span className="tabular-nums">{formatMoeda(calc.descQualidadeTotal)}</span></div>}
+                    {calc.descOutrosTotal > 0 && <div className="flex justify-between"><span>Outros</span><span className="tabular-nums">{formatMoeda(calc.descOutrosTotal)}</span></div>}
+                  </div>
                 )}
+
                 <Separator className="my-0.5" />
                 <div className="flex justify-between text-[12px] font-bold">
                   <span>= Valor Líquido</span>
@@ -591,7 +625,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
               <div className="bg-muted/30 rounded p-1.5 mt-1 grid grid-cols-4 gap-x-2 gap-y-0.5 text-[10px]">
                 <div><span className="text-muted-foreground">Qtde</span><p className="font-bold">{qtd} cab.</p></div>
                 <div><span className="text-muted-foreground">Peso médio</span><p className="font-bold">{formatKg(peso)}</p></div>
-                <div><span className="text-muted-foreground">Rendimento</span><p className="font-bold">{Number(rendCarcaca) > 0 ? `${fmtR(Number(rendCarcaca))}%` : '-'}</p></div>
+                <div><span className="text-muted-foreground">Rendimento</span><p className="font-bold">{calc.rendCalc > 0 ? `${fmtR(calc.rendCalc)}%` : '-'}</p></div>
                 <div><span className="text-muted-foreground">@/cab</span><p className="font-bold">{formatArroba(calc.pesoArrobaCab)}</p></div>
                 <div><span className="text-muted-foreground">Total @</span><p className="font-bold">{formatArroba(calc.totalArrobas)}</p></div>
                 <div><span className="text-muted-foreground">R$/@ líq.</span><p className="font-bold">{formatMoeda(calc.liqArroba)}</p></div>
