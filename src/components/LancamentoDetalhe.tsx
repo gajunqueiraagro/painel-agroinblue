@@ -21,10 +21,11 @@ import { ptBR } from 'date-fns/locale';
 import { Pencil, Trash2, DollarSign, AlertTriangle } from 'lucide-react';
 import { AbateShareButtons } from '@/components/AbateExportMenu';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { STATUS_OPTIONS, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
+import { STATUS_OPTIONS, getStatusBadge, getStatus, type StatusOperacional } from '@/lib/statusOperacional';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 import { supabase } from '@/integrations/supabase/client';
-import { formatMoeda } from '@/lib/calculos/formatters';
+import { formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calculos/formatters';
+import { calcValorTotal, calcArrobas, calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 
 interface Props {
   lancamento: Lancamento;
@@ -194,185 +195,159 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       ? CATEGORIAS.find(c => c.value === lancamento.categoriaDestino)
       : null;
 
+    const statusBadge = getStatusBadge(lancamento);
+    const ind = calcIndicadoresLancamento(lancamento);
+    const totalArrobas = calcArrobas(lancamento);
+    const valorTotalCalc = calcValorTotal(lancamento);
+
+    // Helper for a detail row
+    const Row = ({ label, value, className = '' }: { label: string; value: React.ReactNode; className?: string }) => (
+      <div className={className}>
+        <p className="text-[9px] text-muted-foreground leading-none mb-0.5">{label}</p>
+        <p className="font-bold text-foreground text-[11px] leading-tight tabular-nums">{value}</p>
+      </div>
+    );
+
     return (
       <>
         <Dialog open={open} onOpenChange={onClose}>
-          <DialogContent className="max-w-md">
-            <DialogHeader className="pb-1">
-              <DialogTitle className="flex items-center gap-2 text-base">
-                <span className="text-xl">{tipoInfo?.icon}</span>
+          <DialogContent className="max-w-lg">
+            <DialogHeader className="pb-0">
+              <DialogTitle className="flex items-center gap-2 text-sm">
+                <span className="text-lg">{tipoInfo?.icon}</span>
                 {tipoInfo?.label}
+                <span className={`ml-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${statusBadge.cls}`}>
+                  {statusBadge.label}
+                </span>
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[12px]">
-                <div>
-                  <p className="text-[10px] text-muted-foreground">{isAbate ? 'Data do Abate' : 'Data'}</p>
-                  <p className="font-bold text-foreground">
-                    {format(parseISO(lancamento.data), 'dd/MM/yyyy', { locale: ptBR })}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-muted-foreground">Quantidade</p>
-                  <p className={`font-bold ${entrada ? 'text-success' : reclass ? 'text-foreground' : 'text-destructive'}`}>
-                    {entrada ? '+' : reclass ? '' : '-'}{lancamento.quantidade} cab.
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-muted-foreground">Categoria</p>
-                  <p className="font-bold text-foreground">{catInfo?.label}</p>
-                </div>
-                {catDestinoInfo && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Categoria Destino</p>
-                    <p className="font-bold text-foreground">{catDestinoInfo.label}</p>
-                  </div>
-                )}
+
+            <div className="space-y-1.5">
+              {/* ── Dados operacionais ── */}
+              <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-[11px]">
+                <Row label={isAbate ? 'Data do Abate' : 'Data'} value={format(parseISO(lancamento.data), 'dd/MM/yyyy', { locale: ptBR })} />
+                <Row
+                  label="Quantidade"
+                  value={
+                    <span className={entrada ? 'text-green-700 dark:text-green-400' : reclass ? '' : 'text-destructive'}>
+                      {entrada ? '+' : reclass ? '' : '-'}{lancamento.quantidade} cab.
+                    </span>
+                  }
+                />
+                <Row label="Categoria" value={catInfo?.label || '-'} />
+
+                {catDestinoInfo && <Row label="Cat. Destino" value={catDestinoInfo.label} />}
+
                 {lancamento.pesoMedioKg && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Peso Médio</p>
-                    <p className="font-bold text-foreground">{lancamento.pesoMedioKg} kg ({lancamento.pesoMedioArrobas} @)</p>
-                  </div>
+                  <Row label="Peso Médio" value={`${formatKg(lancamento.pesoMedioKg)} (${formatArroba(lancamento.pesoMedioKg / 30)})`} />
                 )}
-                {lancamento.precoMedioCabeca && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Preço/Cabeça</p>
-                    <p className="font-bold text-foreground">{formatMoeda(lancamento.precoMedioCabeca)}</p>
-                  </div>
-                )}
+
                 {lancamento.fazendaOrigem && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Fazenda Origem</p>
-                    <p className="font-bold text-foreground">{lancamento.fazendaOrigem}</p>
-                  </div>
+                  <Row label="Fazenda Origem" value={lancamento.fazendaOrigem} />
                 )}
                 {lancamento.fazendaDestino && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">{isAbate ? 'Frigorífico' : 'Fazenda Destino'}</p>
-                    <p className="font-bold text-foreground">{lancamento.fazendaDestino}</p>
-                  </div>
-                )}
-                {/* Abate: extra dates & tipo venda */}
-                {isAbate && lancamento.dataVenda && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Data Venda</p>
-                    <p className="font-bold text-foreground">{format(parseISO(lancamento.dataVenda), 'dd/MM/yyyy')}</p>
-                  </div>
-                )}
-                {isAbate && lancamento.dataEmbarque && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Data Embarque</p>
-                    <p className="font-bold text-foreground">{format(parseISO(lancamento.dataEmbarque), 'dd/MM/yyyy')}</p>
-                  </div>
-                )}
-                {isAbate && lancamento.dataAbate && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Data Abate</p>
-                    <p className="font-bold text-foreground">{format(parseISO(lancamento.dataAbate), 'dd/MM/yyyy')}</p>
-                  </div>
-                )}
-                {isAbate && lancamento.tipoVenda && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Comercialização</p>
-                    <p className="font-bold text-foreground">{{ escala: 'Escala', a_termo: 'A termo', spot: 'Spot', outro: 'Outro' }[lancamento.tipoVenda] || lancamento.tipoVenda}</p>
-                  </div>
-                )}
-                {isAbate && lancamento.tipoPeso && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Tipo de Abate</p>
-                    <p className="font-bold text-foreground">{{ vivo: 'Peso vivo', morto: 'Peso morto' }[lancamento.tipoPeso] || lancamento.tipoPeso}</p>
-                  </div>
-                )}
-                {/* Abate: financial summary */}
-                {isAbate && lancamento.pesoCarcacaKg && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Peso Carcaça</p>
-                    <p className="font-bold text-foreground">{lancamento.pesoCarcacaKg} kg</p>
-                  </div>
-                )}
-                {isAbate && lancamento.pesoCarcacaKg && lancamento.pesoMedioKg && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Rendimento</p>
-                    <p className="font-bold text-foreground">{((lancamento.pesoCarcacaKg / lancamento.pesoMedioKg) * 100).toFixed(1)}%</p>
-                  </div>
-                )}
-                {isAbate && lancamento.precoArroba && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">R$/@ Base</p>
-                    <p className="font-bold text-foreground">{formatMoeda(lancamento.precoArroba)}</p>
-                  </div>
-                )}
-                {lancamento.precoMedioCabeca && lancamento.quantidade && (
-                  <div className="col-span-2 bg-primary/10 rounded-md p-2 mt-0.5">
-                    <p className="text-[10px] text-muted-foreground">Valor Total</p>
-                    <p className="font-extrabold text-primary text-lg leading-tight">
-                      {formatMoeda(lancamento.precoMedioCabeca * lancamento.quantidade)}
-                    </p>
-                  </div>
-                )}
-                {isAbate && lancamento.valorTotal && (
-                  <div className="col-span-2 bg-primary/10 rounded-md p-2 mt-0.5">
-                    <p className="text-[10px] text-muted-foreground">Valor Líquido Final</p>
-                    <p className="font-extrabold text-primary text-lg leading-tight">
-                      {formatMoeda(lancamento.valorTotal)}
-                    </p>
-                  </div>
+                  <Row label={isAbate ? 'Frigorífico' : 'Fazenda Destino'} value={lancamento.fazendaDestino} />
                 )}
               </div>
-              {/* Abate share buttons */}
+
+              {/* ── Abate: campos específicos ── */}
               {isAbate && (
-                <AbateShareButtons lancamento={lancamento} fazendaNome={nomeFazenda} />
+                <>
+                  <Separator className="my-0.5" />
+                  <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-[11px]">
+                    {lancamento.dataVenda && <Row label="Data Venda" value={format(parseISO(lancamento.dataVenda), 'dd/MM/yyyy')} />}
+                    {lancamento.dataEmbarque && <Row label="Data Embarque" value={format(parseISO(lancamento.dataEmbarque), 'dd/MM/yyyy')} />}
+                    {lancamento.dataAbate && <Row label="Data Abate" value={format(parseISO(lancamento.dataAbate), 'dd/MM/yyyy')} />}
+                    {lancamento.tipoVenda && (
+                      <Row label="Comercialização" value={{ escala: 'Escala', a_termo: 'A termo', spot: 'Spot', outro: 'Outro' }[lancamento.tipoVenda] || lancamento.tipoVenda} />
+                    )}
+                    {lancamento.tipoPeso && (
+                      <Row label="Tipo de Abate" value={{ vivo: 'Peso vivo', morto: 'Peso morto' }[lancamento.tipoPeso] || lancamento.tipoPeso} />
+                    )}
+                    {lancamento.pesoCarcacaKg && <Row label="Peso Carcaça" value={formatKg(lancamento.pesoCarcacaKg)} />}
+                    {lancamento.pesoCarcacaKg && lancamento.pesoMedioKg && ind.rendimento > 0 && (
+                      <Row label="Rendimento" value={formatPercent(ind.rendimento)} />
+                    )}
+                    {lancamento.precoArroba && <Row label="R$/@ Base" value={formatMoeda(lancamento.precoArroba)} />}
+                  </div>
+                </>
               )}
-              {/* Audit info */}
-              <div className="bg-muted/40 rounded-md px-2.5 py-1.5 space-y-0.5">
-                <p className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wide">Histórico</p>
-                <p className="text-[10px] text-muted-foreground">
+
+              {/* ── Bloco financeiro resumido ── */}
+              {valorTotalCalc > 0 && (
+                <>
+                  <Separator className="my-0.5" />
+                  <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-[11px]">
+                    {totalArrobas && totalArrobas > 0 && (
+                      <Row label="Total Arrobas" value={formatArroba(totalArrobas)} />
+                    )}
+                    {ind.liqCabeca > 0 && (
+                      <Row label="R$/Cabeça" value={formatMoeda(ind.liqCabeca)} />
+                    )}
+                    {totalArrobas && totalArrobas > 0 && ind.liqArroba > 0 && (
+                      <Row label="R$/@ Líq." value={formatMoeda(ind.liqArroba)} />
+                    )}
+                  </div>
+                  <div className="bg-primary/10 rounded px-2.5 py-1.5 flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground font-medium">
+                      {isAbate && lancamento.valorTotal ? 'Valor Líquido Final' : 'Valor Total'}
+                    </span>
+                    <span className="font-extrabold text-primary text-base tabular-nums">{formatMoeda(valorTotalCalc)}</span>
+                  </div>
+                </>
+              )}
+
+              {/* Abate share buttons */}
+              {isAbate && <AbateShareButtons lancamento={lancamento} fazendaNome={nomeFazenda} />}
+
+              {/* ── Histórico (compacto) ── */}
+              <div className="bg-muted/30 rounded px-2 py-1 space-y-px">
+                <p className="text-[8px] text-muted-foreground font-semibold uppercase tracking-wider">Histórico</p>
+                <p className="text-[9px] text-muted-foreground leading-tight">
                   <span className="font-semibold">ID:</span> {lancamento.id.slice(0, 8)}
+                  {lancamento.createdAt && (
+                    <> · <span className="font-semibold">Criado:</span> {format(parseISO(lancamento.createdAt), "dd/MM/yy HH:mm", { locale: ptBR })}{lancamento.createdByNome && ` por ${lancamento.createdByNome}`}</>
+                  )}
                 </p>
-                {lancamento.createdAt && (
-                  <p className="text-[10px] text-muted-foreground">
-                    <span className="font-semibold">Criado:</span>{' '}
-                    {format(parseISO(lancamento.createdAt), "dd/MM/yy 'às' HH:mm", { locale: ptBR })}
-                    {lancamento.createdByNome && ` por ${lancamento.createdByNome}`}
-                  </p>
-                )}
                 {lancamento.updatedAt && lancamento.updatedAt !== lancamento.createdAt && (
-                  <p className="text-[10px] text-muted-foreground">
-                    <span className="font-semibold">Editado:</span>{' '}
-                    {format(parseISO(lancamento.updatedAt), "dd/MM/yy 'às' HH:mm", { locale: ptBR })}
-                    {lancamento.updatedByNome && ` por ${lancamento.updatedByNome}`}
+                  <p className="text-[9px] text-muted-foreground leading-tight">
+                    <span className="font-semibold">Editado:</span> {format(parseISO(lancamento.updatedAt), "dd/MM/yy HH:mm", { locale: ptBR })}{lancamento.updatedByNome && ` por ${lancamento.updatedByNome}`}
                   </p>
                 )}
               </div>
+
               {isTransferenciaEntrada && (
-                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-2.5 py-1.5">
-                  <p className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
+                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-2 py-1">
+                  <p className="text-[9px] text-amber-700 dark:text-amber-400 font-medium">
                     🔒 Transferência automática — só pode ser editada/removida na fazenda de origem.
                   </p>
                 </div>
               )}
-              <div className="flex gap-2 pt-1">
+
+              {/* ── Ações ── */}
+              <div className="flex gap-2 pt-0.5">
                 {!isTransferenciaEntrada && (
                   <>
-                    <Button variant="default" size="sm" className="flex-1 h-8 text-[11px] font-bold" onClick={handleEditClick}>
-                      <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
+                    <Button variant="default" size="sm" className="flex-1 h-7 text-[10px] font-bold" onClick={handleEditClick}>
+                      <Pencil className="h-3 w-3 mr-1" /> Editar
                     </Button>
-                    <Button variant="destructive" size="sm" className="h-8 text-[11px]" onClick={handleRemoverClick} disabled={checkingVinculos}>
-                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Apagar
+                    <Button variant="destructive" size="sm" className="h-7 text-[10px]" onClick={handleRemoverClick} disabled={checkingVinculos}>
+                      <Trash2 className="h-3 w-3 mr-1" /> Apagar
                     </Button>
                   </>
                 )}
               </div>
+
               {/* Resumo financeiro da compra (view-only) */}
               {isCompra && !isTransferenciaEntrada && (
                 <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase text-muted-foreground tracking-wide">
+                  <div className="flex items-center gap-1.5 text-[8px] font-bold uppercase text-muted-foreground tracking-wider">
                     <DollarSign className="h-3 w-3" /> Financeiro vinculado
                   </div>
                   {finLoading ? (
-                    <p className="text-[10px] text-muted-foreground">Carregando...</p>
+                    <p className="text-[9px] text-muted-foreground">Carregando...</p>
                   ) : finRecords.length === 0 ? (
-                    <div className="bg-muted/40 rounded-md px-2 py-1.5 text-[10px] text-muted-foreground">
+                    <div className="bg-muted/30 rounded px-2 py-1 text-[9px] text-muted-foreground">
                       Nenhum lançamento financeiro gerado para esta compra.
                     </div>
                   ) : (() => {
@@ -381,43 +356,43 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                     const totalBov = bovinos.reduce((s, r) => s + r.valor, 0);
                     const totalDesp = despesas.reduce((s, r) => s + r.valor, 0);
                     return (
-                      <div className="bg-muted/20 rounded-md px-2 py-1.5 space-y-1.5">
+                      <div className="bg-muted/20 rounded px-2 py-1 space-y-1">
                         {bovinos.length > 0 && (
                           <div className="space-y-px">
-                            <p className="text-[9px] font-bold uppercase text-muted-foreground tracking-wide">Rebanho</p>
+                            <p className="text-[8px] font-bold uppercase text-muted-foreground tracking-wider">Rebanho</p>
                             {bovinos.map(r => (
-                              <div key={r.id} className="flex justify-between text-[10px] leading-relaxed">
+                              <div key={r.id} className="flex justify-between text-[9px] leading-tight">
                                 <span className="text-muted-foreground truncate max-w-[60%]">💰 {r.descricao}</span>
-                                <span className="font-semibold shrink-0">{formatMoeda(r.valor)}</span>
+                                <span className="font-semibold tabular-nums shrink-0">{formatMoeda(r.valor)}</span>
                               </div>
                             ))}
-                            <div className="flex justify-between text-[10px] font-bold pt-0.5 border-t border-border/30">
+                            <div className="flex justify-between text-[9px] font-bold pt-0.5 border-t border-border/30">
                               <span>Total Bovinos</span>
-                              <span>{formatMoeda(totalBov)}</span>
+                              <span className="tabular-nums">{formatMoeda(totalBov)}</span>
                             </div>
                           </div>
                         )}
                         {despesas.length > 0 && (
                           <div className="space-y-px">
-                            <p className="text-[9px] font-bold uppercase text-muted-foreground tracking-wide">Despesas Vinculadas</p>
+                            <p className="text-[8px] font-bold uppercase text-muted-foreground tracking-wider">Despesas Vinculadas</p>
                             {despesas.map(r => {
                               const icon = r.origem_tipo?.includes('frete') ? '🚚' : '📋';
                               return (
-                                <div key={r.id} className="flex justify-between text-[10px] leading-relaxed">
+                                <div key={r.id} className="flex justify-between text-[9px] leading-tight">
                                   <span className="text-muted-foreground truncate max-w-[60%]">{icon} {r.descricao}</span>
-                                  <span className="font-semibold shrink-0">{formatMoeda(r.valor)}</span>
+                                  <span className="font-semibold tabular-nums shrink-0">{formatMoeda(r.valor)}</span>
                                 </div>
                               );
                             })}
-                            <div className="flex justify-between text-[10px] font-bold pt-0.5 border-t border-border/30">
+                            <div className="flex justify-between text-[9px] font-bold pt-0.5 border-t border-border/30">
                               <span>Total Despesas</span>
-                              <span>{formatMoeda(totalDesp)}</span>
+                              <span className="tabular-nums">{formatMoeda(totalDesp)}</span>
                             </div>
                           </div>
                         )}
-                        <div className="flex justify-between text-[11px] font-bold pt-1 border-t border-border/50 text-primary">
+                        <div className="flex justify-between text-[10px] font-bold pt-0.5 border-t border-border/50 text-primary">
                           <span>Total Geral Vinculado</span>
-                          <span>{formatMoeda(totalBov + totalDesp)}</span>
+                          <span className="tabular-nums">{formatMoeda(totalBov + totalDesp)}</span>
                         </div>
                       </div>
                     );
