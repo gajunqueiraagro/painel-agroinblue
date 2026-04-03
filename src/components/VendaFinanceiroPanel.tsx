@@ -81,6 +81,7 @@ export interface VendaFinanceiroPanelRef {
   getRecebimentoSnapshot: () => { formaReceb: 'avista' | 'prazo'; parcelas: Parcela[] };
   getBoitelData: () => BoitelData | null;
   resetForm: () => void;
+  openBoitelDialog: () => void;
 }
 
 export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(function VendaFinanceiroPanel({
