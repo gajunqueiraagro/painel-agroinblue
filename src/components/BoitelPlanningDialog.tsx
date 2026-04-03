@@ -291,7 +291,28 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
   };
 
   // Base de parcelamento = resultadoComBoitel - parceiroParte (exclui frete da base)
-  const baseParcelamento = calc.resultadoComBoitel - calc.parceiroParte;
+  // Se houver adiantamento, desconta do saldo a receber
+  const baseParcelamento = (calc.resultadoComBoitel - calc.parceiroParte) - (data.possuiAdiantamento ? data.valorTotalAntecipado : 0);
+
+  // Auto-calc valorTotalAntecipado
+  useEffect(() => {
+    if (data.possuiAdiantamento) {
+      const total = data.valorAdiantamentoDiarias + data.valorAdiantamentoSanitario + data.valorAdiantamentoOutros;
+      if (total !== data.valorTotalAntecipado) {
+        setData(prev => ({ ...prev, valorTotalAntecipado: total }));
+      }
+    }
+  }, [data.possuiAdiantamento, data.valorAdiantamentoDiarias, data.valorAdiantamentoSanitario, data.valorAdiantamentoOutros]);
+
+  // Auto-calc adiantamento diárias from percentage
+  useEffect(() => {
+    if (data.possuiAdiantamento && data.pctAdiantamentoDiarias > 0) {
+      const valDiarias = Math.round(calc.custoDiariaTotal * data.pctAdiantamentoDiarias / 100 * 100) / 100;
+      if (valDiarias !== data.valorAdiantamentoDiarias) {
+        setData(prev => ({ ...prev, valorAdiantamentoDiarias: valDiarias }));
+      }
+    }
+  }, [data.possuiAdiantamento, data.pctAdiantamentoDiarias, calc.custoDiariaTotal]);
 
   // Update parcelas when base changes
   useEffect(() => {
