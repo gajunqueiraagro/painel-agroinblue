@@ -399,7 +399,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setData(format(new Date(), 'yyyy-MM-dd'));
     setObservacao(''); setStatusOp('conciliado');
     resetFinancialFields();
-  }, []);
+    if (onReturnFromEdit) onReturnFromEdit();
+  }, [onReturnFromEdit]);
 
   // Load abate into form for editing
   const loadAbateForEdit = useCallback((l: Lancamento) => {
