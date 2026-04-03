@@ -48,6 +48,7 @@ interface DadosFinanceiros {
   boitelReceitaProdutor?: number;
   boitelAdiantamento?: number;
   boitelFrete?: number;
+  boitelResultadoLiquido?: number;
 }
 
 interface Props {
@@ -176,9 +177,12 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
                 )}
                 <Separator className="my-0.5" />
                 <div className="flex justify-between text-[12px] font-bold">
-                  <span>= Resultado Líquido</span>
+                  <span>= Valor a Receber do Boitel</span>
                   <span className={`tabular-nums ${(financeiros.valorLiquido || 0) >= 0 ? 'text-primary' : 'text-destructive'}`}>{formatMoeda(financeiros.valorLiquido || 0)}</span>
                 </div>
+                {financeiros.boitelResultadoLiquido != null && financeiros.boitelResultadoLiquido !== 0 && (
+                  <div className="flex justify-between text-[10px]"><span className="text-muted-foreground">Resultado Líquido (econômico)</span><strong className={`tabular-nums ${financeiros.boitelResultadoLiquido >= 0 ? 'text-primary' : 'text-destructive'}`}>{formatMoeda(financeiros.boitelResultadoLiquido)}</strong></div>
+                )}
                 {financeiros.liqCabeca != null && (
                   <div className="flex justify-between text-[10px]"><span className="text-muted-foreground">R$/cab líq.</span><strong className="tabular-nums">{formatMoeda(financeiros.liqCabeca)}</strong></div>
                 )}
