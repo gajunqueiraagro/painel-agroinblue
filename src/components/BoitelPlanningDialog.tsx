@@ -271,13 +271,16 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     set('parcelas', gerarParcelas(n, calc.receitaProdutor));
   };
 
-  // Update parcelas when receitaProdutor changes
+  // Base de parcelamento = resultadoComBoitel - parceiroParte (exclui frete da base)
+  const baseParcelamento = calc.resultadoComBoitel - calc.parceiroParte;
+
+  // Update parcelas when base changes
   useEffect(() => {
-    if (data.formaReceb === 'prazo' && data.qtdParcelas > 0 && calc.receitaProdutor > 0) {
-      const newParcelas = gerarParcelas(data.qtdParcelas, calc.receitaProdutor);
+    if (data.formaReceb === 'prazo' && data.qtdParcelas > 0 && baseParcelamento > 0) {
+      const newParcelas = gerarParcelas(data.qtdParcelas, baseParcelamento);
       setData(prev => ({ ...prev, parcelas: newParcelas }));
     }
-  }, [calc.receitaProdutor, data.formaReceb, data.qtdParcelas, dataAbateISO]);
+  }, [baseParcelamento, data.formaReceb, data.qtdParcelas, dataAbateISO]);
 
   const handleSave = () => {
     const dataWithSnapshot: BoitelData = {
