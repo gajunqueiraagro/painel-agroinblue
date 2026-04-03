@@ -1311,6 +1311,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             calculation: abateCalc || abateDetalhes.calculation || undefined,
           };
         }
+        if (isVenda && tipoPeso === 'boitel') {
+          // Boitel: snapshot from VendaFinanceiroPanel's boitelData (via ref)
+          const recebSnap = vendaFinanceiroRef.current?.getRecebimentoSnapshot?.();
+          return {
+            type: 'venda_boitel',
+            tipoVenda: 'boitel',
+            quantidade: Number(quantidade) || 0,
+            pesoKg: Number(pesoKg) || 0,
+            categoria,
+            data,
+            statusOperacional: statusOp,
+            formaReceb: recebSnap?.formaReceb || 'avista',
+            parcelas: recebSnap?.parcelas || [],
+          };
+        }
         if (isVenda && vendaDetalhes) {
           const fornNome = abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome;
           const vc = vendaCalc || vendaDetalhes.calculation;
@@ -1355,7 +1370,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Abate atualizado com financeiro!');
           restoreEditOrigin();
-        } else if (isVenda && calc.valorLiquido > 0) {
+        } else if (isVenda && (calc.valorLiquido > 0 || tipoPeso === 'boitel')) {
           // Auto-generate/update financeiro for venda
           if (vendaFinanceiroRef.current) {
             await vendaFinanceiroRef.current.generateFinanceiro(editingAbateId);
@@ -1446,7 +1461,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Abate registrado com financeiro!');
         } else if (isVenda && returnedId) {
-          if (vendaFinanceiroRef.current && calc.valorLiquido > 0) {
+          if (vendaFinanceiroRef.current && (calc.valorLiquido > 0 || tipoPeso === 'boitel')) {
             await vendaFinanceiroRef.current.generateFinanceiro(returnedId);
           }
           vendaFinanceiroRef.current?.resetForm();

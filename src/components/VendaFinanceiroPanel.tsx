@@ -199,11 +199,21 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   }), [fornecedorId, formaReceb, parcelas, resetForm, validationErrors, tipoPeso, boitelData]);
 
   const handleGerarFinanceiroInternal = async (targetLancamentoId: string): Promise<boolean> => {
+    console.log('[Venda Financeiro] generateFinanceiro chamado', { targetLancamentoId, tipoPeso, temBoitelData: !!boitelData });
     if (!targetLancamentoId) { toast.error('Salve o lançamento zootécnico primeiro.'); return false; }
-    if (!fazendaAtual || !clienteAtual) return false;
+    if (!fazendaAtual || !clienteAtual) {
+      console.error('[Venda Financeiro] fazendaAtual ou clienteAtual ausente', { fazendaAtual: !!fazendaAtual, clienteAtual: !!clienteAtual });
+      return false;
+    }
 
     // ── BOITEL FLOW ──
-    if (tipoPeso === 'boitel' && boitelData) {
+    if (tipoPeso === 'boitel') {
+      if (!boitelData) {
+        console.error('[Venda Financeiro] BOITEL selecionado mas boitelData está vazio — o dialog do Boitel precisa ser preenchido primeiro.');
+        toast.error('Preencha os dados do Boitel antes de registrar.');
+        return false;
+      }
+      console.log('[Venda Financeiro] Entrando no fluxo BOITEL', { receitaProdutor: boitelData._receitaProdutor, lucroTotal: boitelData._lucroTotal });
       setGerando(true);
       try {
         const boitelOp = {
