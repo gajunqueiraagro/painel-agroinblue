@@ -1096,6 +1096,40 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setLastSavedLancamentoId(null);
   }, [abateFornecedores, aba, anoFiltro, mesFiltro, onReturnFromEdit]);
 
+  // ── Transferência Saída — load for edit ──
+  const loadTransferenciaForEdit = useCallback((l: Lancamento) => {
+    if (!onReturnFromEdit) {
+      internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
+    }
+    setAba('saida');
+    setTipo('transferencia_saida');
+
+    setData(l.data);
+    setCategoria(l.categoria);
+    setQuantidade(String(l.quantidade));
+    setPesoKg(l.pesoMedioKg ? String(l.pesoMedioKg) : '');
+    setFazendaOrigem(l.fazendaOrigem || '');
+    setFazendaDestino(l.fazendaDestino || '');
+    setObservacao(l.observacao || '');
+    setStatusOp((l.statusOperacional as StatusOperacional) || 'conciliado');
+
+    // Hydrate from snapshot
+    const snap = l.detalhesSnapshot;
+    if (snap && (snap._tipo === 'transferencia_saida' || snap.type === 'transferencia_saida')) {
+      setTransferenciaDetalhes({
+        precoReferenciaArroba: snap.precoReferenciaArroba ? String(snap.precoReferenciaArroba) : '',
+        precoReferenciaCabeca: snap.precoReferenciaCabeca ? String(snap.precoReferenciaCabeca) : '',
+        observacaoEconomica: snap.observacaoEconomica || '',
+      });
+    } else {
+      setTransferenciaDetalhes(null);
+    }
+
+    setEditingAbateId(l.id);
+    setDetalheId(null);
+    setLastSavedLancamentoId(null);
+  }, [aba, anoFiltro, mesFiltro, onReturnFromEdit]);
+
   // Auto-load compra for editing when navigated from another tab
   useEffect(() => {
     if (compraParaEditar && abateFornecedores.length > 0) {
@@ -2543,6 +2577,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onEditarAbate={loadAbateForEdit}
           onEditarVenda={loadVendaForEdit}
           onEditarCompra={loadCompraForEdit}
+          onEditarTransferencia={loadTransferenciaForEdit}
         />
       )}
 
