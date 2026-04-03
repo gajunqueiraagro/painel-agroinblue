@@ -1213,7 +1213,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         }
         if (isAbate && abateDetalhes) {
           const fornNome = abateFornecedores.find(f => f.id === abateFornecedorId)?.nome;
-          return { type: 'abate', ...abateDetalhes, fornecedorId: abateFornecedorId || undefined, fornecedorNome: fornNome || undefined };
+          return {
+            type: 'abate', ...abateDetalhes,
+            fornecedorId: abateFornecedorId || undefined,
+            fornecedorNome: fornNome || undefined,
+            calculation: abateCalc || abateDetalhes.calculation || undefined,
+          };
         }
         if (isVenda && vendaDetalhes) {
           const fornNome = abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome;
