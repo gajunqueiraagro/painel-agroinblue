@@ -883,7 +883,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, [abateFornecedores, clienteAtual, fazendaAtual]);
+  }, [abateFornecedores, clienteAtual, fazendaAtual, aba, anoFiltro, mesFiltro, onReturnFromEdit]);
 
   // Auto-load venda for editing when navigated from another tab
   useEffect(() => {
