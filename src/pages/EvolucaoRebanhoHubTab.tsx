@@ -16,9 +16,9 @@ interface Props {
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
   onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
-  onEditarAbate?: (lancamento: Lancamento) => void;
-  onEditarVenda?: (lancamento: Lancamento) => void;
-  onEditarCompra?: (lancamento: Lancamento) => void;
+  onEditarAbate?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
+  onEditarVenda?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
+  onEditarCompra?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
 }
 
 export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onEditar, onRemover, filtroAnoInicial, filtroMesInicial, onNavigateToReclass, onEditarAbate, onEditarVenda, onEditarCompra }: Props) {
