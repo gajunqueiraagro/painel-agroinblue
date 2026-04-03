@@ -818,6 +818,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setLastSavedLancamentoId(null);
   }, [abateFornecedores]);
 
+  // Auto-load compra for editing when navigated from another tab
+  useEffect(() => {
+    if (compraParaEditar) {
+      loadCompraForEdit(compraParaEditar);
+    }
+  }, [compraParaEditar]);
 
   useEffect(() => {
     if (!clienteAtual?.id) {
