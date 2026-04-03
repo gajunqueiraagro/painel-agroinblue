@@ -756,10 +756,28 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setStatusOp((l.statusOperacional as StatusOperacional) || 'conciliado');
     setNotaFiscal(l.notaFiscal || '');
 
-    // Fornecedor
-    if (l.fazendaOrigem) {
+    // Fornecedor: priority 1 = snapshot, 2 = name match, 3 = financeiro
+    const compraSnap = l.detalhesSnapshot;
+    const snapCompraFornId = compraSnap?.type === 'compra' ? compraSnap.fornecedorId : undefined;
+    if (snapCompraFornId && abateFornecedores.some(f => f.id === snapCompraFornId)) {
+      setCompraFornecedorId(snapCompraFornId);
+    } else if (l.fazendaOrigem) {
       const forn = abateFornecedores.find(f => f.nome === l.fazendaOrigem);
-      if (forn) setCompraFornecedorId(forn.id);
+      if (forn) {
+        setCompraFornecedorId(forn.id);
+      } else {
+        supabase.from('financeiro_lancamentos_v2').select('favorecido_id').eq('movimentacao_rebanho_id', l.id).not('favorecido_id', 'is', null).limit(1).then(({ data: finRecs }) => {
+          if (finRecs?.[0]?.favorecido_id && abateFornecedores.some(f => f.id === finRecs[0].favorecido_id)) {
+            setCompraFornecedorId(finRecs[0].favorecido_id);
+          }
+        });
+      }
+    } else {
+      supabase.from('financeiro_lancamentos_v2').select('favorecido_id').eq('movimentacao_rebanho_id', l.id).not('favorecido_id', 'is', null).limit(1).then(({ data: finRecs }) => {
+        if (finRecs?.[0]?.favorecido_id && abateFornecedores.some(f => f.id === finRecs[0].favorecido_id)) {
+          setCompraFornecedorId(finRecs[0].favorecido_id);
+        }
+      });
     }
 
     // PRIORITY 1: snapshot
