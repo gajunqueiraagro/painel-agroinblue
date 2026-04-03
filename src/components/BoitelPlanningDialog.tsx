@@ -388,6 +388,30 @@ function RR({ l, v, b, accent, c = '' }: { l: string; v: string; b?: boolean; ac
 }
 function DL() { return <div className="border-t border-dashed my-0.5" />; }
 
+/** Formatted monetary input: shows 0.000,00 on blur, raw number on focus */
+function IM({ value, onChange, step }: { value: number; onChange: (v: number) => void; step?: string }) {
+  const [display, setDisplay] = useState(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+  const [focused, setFocused] = useState(false);
+  useEffect(() => { if (!focused) setDisplay(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''); }, [value, focused]);
+  return <Input className="h-5 text-[9px] tabular-nums text-right bg-background" value={display}
+    onChange={e => { setDisplay(e.target.value); }}
+    onFocus={() => { setFocused(true); setDisplay(value ? String(value) : ''); }}
+    onBlur={() => { const clean = display.replace(/\./g, '').replace(',', '.'); const n = parseFloat(clean); onChange(isNaN(n) ? 0 : n); setFocused(false); }}
+    inputMode="decimal" step={step} />;
+}
+
+/** Formatted percentage input: shows 00,00% on blur */
+function IP({ value, onChange, decimals = 2, step }: { value: number; onChange: (v: number) => void; decimals?: number; step?: string }) {
+  const [display, setDisplay] = useState(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + '%' : '');
+  const [focused, setFocused] = useState(false);
+  useEffect(() => { if (!focused) setDisplay(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + '%' : ''); }, [value, focused, decimals]);
+  return <Input className="h-5 text-[9px] tabular-nums text-right bg-background" value={display}
+    onChange={e => { setDisplay(e.target.value); }}
+    onFocus={() => { setFocused(true); setDisplay(value ? String(value) : ''); }}
+    onBlur={() => { const clean = display.replace(/%/g, '').replace(/\./g, '').replace(',', '.').trim(); const n = parseFloat(clean); onChange(isNaN(n) ? 0 : n); setFocused(false); }}
+    inputMode="decimal" step={step} />;
+}
+
 function CSection({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
