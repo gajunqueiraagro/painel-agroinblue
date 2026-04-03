@@ -1946,25 +1946,29 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
       )}
 
-      {/* Row 2: Fazenda Origem / Destino + Observação */}
-      {(campos.origem.show || campos.destino?.show) ? (
-        <div className={`grid gap-2 ${campos.origem.show && campos.destino?.show ? 'grid-cols-3' : 'grid-cols-2'}`}>
+      {/* Row 2: Origem + Fornecedor/Destino principal (prioridade visual) + extras */}
+      {(campos.origem.show || campos.destino?.show) && (
+        <div className={`grid gap-2 ${
+          isVenda ? 'grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_9rem]' :
+          campos.origem.show ? 'grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]' :
+          'grid-cols-1'
+        }`}>
           {campos.origem.show && (
             <div>
               <Label className="font-bold text-[11px]">{campos.origem.label}</Label>
               {campos.origem.auto ? (
-                <Input value={campos.origem.value} readOnly className="mt-0.5 h-8 text-[12px] bg-muted cursor-not-allowed" />
+                <Input value={campos.origem.value} readOnly className="mt-0.5 h-7 text-[11px] bg-muted cursor-not-allowed" />
               ) : (campos.origem as any).useSelect && outrasFazendas.length > 0 ? (
                 <Select value={fazendaOrigem} onValueChange={setFazendaOrigem}>
-                  <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>{outrasFazendas.map(f => <SelectItem key={f.id} value={f.nome} className="text-[12px]">{f.nome}</SelectItem>)}</SelectContent>
+                  <SelectTrigger className="mt-0.5 h-7 text-[11px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>{outrasFazendas.map(f => <SelectItem key={f.id} value={f.nome} className="text-[11px]">{f.nome}</SelectItem>)}</SelectContent>
                 </Select>
               ) : (
-                <Input value={fazendaOrigem} onChange={e => setFazendaOrigem(e.target.value)} placeholder="Ex: Faz. Boa Vista" className="mt-0.5 h-8 text-[12px]" />
+                <Input value={fazendaOrigem} onChange={e => setFazendaOrigem(e.target.value)} placeholder="Ex: Faz. Boa Vista" className="mt-0.5 h-7 text-[11px]" />
               )}
             </div>
           )}
-          {/* For abate: custom Frigorífico select with SearchableSelect + novo fornecedor */}
+          {/* Abate: Frigorífico (Fornecedor) — campo principal */}
           {isAbate && (
             <div className="min-w-0">
               <Label className="font-bold text-[11px]">Frigorífico (Fornecedor) *</Label>
@@ -1980,25 +1984,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     className="[&_button]:h-7 [&_button]:text-[11px] [&_button]:px-2"
                   />
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="relative z-10 h-8 w-8 shrink-0"
-                  aria-label="Novo frigorífico"
-                  onClick={() => setNovoFornecedorAbateOpen(true)}
-                >
-                  <Plus className="h-4 w-4" />
+                <Button type="button" variant="outline" size="icon" className="relative z-10 h-7 w-7 shrink-0" aria-label="Novo frigorífico" onClick={() => setNovoFornecedorAbateOpen(true)}>
+                  <Plus className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </div>
           )}
-          {/* For compra: fornecedor select same pattern as abate */}
+          {/* Compra: Fornecedor — campo principal */}
           {isCompra && (
-            <div>
+            <div className="min-w-0">
               <Label className="font-bold text-[11px]">Fornecedor *</Label>
               <div className="flex items-center gap-1 mt-0.5">
-                <div className="flex-1">
+                <div className="min-w-0 flex-1">
                   <SearchableSelect
                     value={compraFornecedorId || '__all__'}
                     onValueChange={(v) => setCompraFornecedorId(v === '__all__' ? '' : v)}
@@ -2009,24 +2006,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     className="[&_button]:h-7 [&_button]:text-[11px] [&_button]:px-2"
                   />
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8 shrink-0"
-                  onClick={() => setNovoFornecedorCompraOpen(true)}
-                >
-                  <Plus className="h-4 w-4" />
+                <Button type="button" variant="outline" size="icon" className="h-7 w-7 shrink-0" onClick={() => setNovoFornecedorCompraOpen(true)}>
+                  <Plus className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </div>
           )}
-          {/* For venda: use SearchableSelect for Destino (comprador) */}
+          {/* Venda: Destino (Comprador) — campo principal */}
           {isVenda && campos.destino?.show && (
-            <div>
+            <div className="min-w-0">
               <Label className="font-bold text-[11px]">Destino (Comprador)</Label>
               <div className="flex items-center gap-1 mt-0.5">
-                <div className="flex-1">
+                <div className="min-w-0 flex-1">
                   <SearchableSelect
                     value={vendaDestinoFornecedorId || '__all__'}
                     onValueChange={(v) => {
@@ -2042,22 +2033,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     className="[&_button]:h-7 [&_button]:text-[11px] [&_button]:px-2"
                   />
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8 shrink-0"
-                  onClick={() => setNovoFornecedorVendaOpen(true)}
-                >
-                  <Plus className="h-4 w-4" />
+                <Button type="button" variant="outline" size="icon" className="h-7 w-7 shrink-0" onClick={() => setNovoFornecedorVendaOpen(true)}>
+                  <Plus className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </div>
           )}
-          {/* Tipo de Venda selector for Venda em Pé */}
+          {/* Venda: Tipo de Venda */}
           {isVenda && (
             <div>
-              <Label className="font-bold text-[11px]">Tipo de Venda</Label>
+              <Label className="font-bold text-[11px]">Tipo Venda</Label>
               <Select
                 value={tipoPeso}
                 onValueChange={(v) => {
@@ -2067,41 +2052,33 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   }
                 }}
               >
-                <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger className="mt-0.5 h-7 text-[11px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="desmama" className="text-[12px]">Desmama</SelectItem>
-                  <SelectItem value="gado_adulto" className="text-[12px]">Gado Adulto</SelectItem>
-                  <SelectItem value="boitel" className="text-[12px]">Boitel</SelectItem>
+                  <SelectItem value="desmama" className="text-[11px]">Desmama</SelectItem>
+                  <SelectItem value="gado_adulto" className="text-[11px]">Gado Adulto</SelectItem>
+                  <SelectItem value="boitel" className="text-[11px]">Boitel</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           )}
-          {/* For non-abate, non-compra, non-venda types: keep original destino field */}
+          {/* Outros tipos: campo destino genérico */}
           {!isAbate && !isCompra && !isVenda && campos.destino?.show && (
-            <div>
+            <div className="min-w-0">
               <Label className="font-bold text-[11px]">{campos.destino.label}</Label>
               {campos.destino.auto ? (
-                <Input value={campos.destino.value} readOnly className="mt-0.5 h-8 text-[12px] bg-muted cursor-not-allowed" />
+                <Input value={campos.destino.value} readOnly className="mt-0.5 h-7 text-[11px] bg-muted cursor-not-allowed" />
               ) : (campos.destino as any).useSelect && outrasFazendas.length > 0 ? (
                 <Select value={fazendaDestino} onValueChange={setFazendaDestino}>
-                  <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>{outrasFazendas.map(f => <SelectItem key={f.id} value={f.nome} className="text-[12px]">{f.nome}</SelectItem>)}</SelectContent>
+                  <SelectTrigger className="mt-0.5 h-7 text-[11px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>{outrasFazendas.map(f => <SelectItem key={f.id} value={f.nome} className="text-[11px]">{f.nome}</SelectItem>)}</SelectContent>
                 </Select>
               ) : (
-                <Input value={fazendaDestino} onChange={e => setFazendaDestino(e.target.value)} placeholder={campos.destino.placeholder || 'Ex: Faz. Santa Cruz'} className="mt-0.5 h-8 text-[12px]" />
+                <Input value={fazendaDestino} onChange={e => setFazendaDestino(e.target.value)} placeholder={campos.destino.placeholder || 'Ex: Faz. Santa Cruz'} className="mt-0.5 h-7 text-[11px]" />
               )}
             </div>
           )}
-          <div>
-            <Label className="font-bold text-[11px]">Observação</Label>
-            <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Opcional" className="mt-0.5 h-8 text-[12px]" />
-          </div>
         </div>
-      ) : (
-        <div>
-          <Label className="font-bold text-[11px]">Observação</Label>
-          <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Observação opcional" className="mt-0.5 h-8 text-[12px]" />
-        </div>
+      )}
       )}
 
     </div>
