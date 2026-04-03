@@ -136,18 +136,32 @@ Deno.serve(async (req) => {
       .eq("cliente_id", cliente_id);
     if (e6) throw new Error("[Etapa 7 - boitel_operacoes legado] " + e6.message);
 
-    return json({
-      ok: true,
-      resumo: {
-        financeiros_removidos: finCount || 0,
-        lancamentos_limpos: lancLimpos,
-        adiantamentos_removidos: adiantCount,
-        historicos_removidos: histCount,
-        planejamentos_removidos: planCount,
-        lotes_removidos: loteCount || 0,
-        operacoes_legadas_removidas: opCount || 0,
-      },
+    const resumo = {
+      financeiros_removidos: finCount || 0,
+      lancamentos_limpos: lancLimpos,
+      lancamentos_legado_limpos: legacyLimpos || 0,
+      adiantamentos_removidos: adiantCount,
+      historicos_removidos: histCount,
+      planejamentos_removidos: planCount,
+      lotes_removidos: loteCount || 0,
+      operacoes_legadas_removidas: opCount || 0,
+    };
+
+    // === STEP 8: Audit log ===
+    await supabaseAdmin.from("audit_log").insert({
+      cliente_id,
+      fazenda_id: null,
+      usuario_id: user.id,
+      modulo: "boitel",
+      acao: "reset_teste",
+      tabela_origem: "boitel_lotes",
+      registro_id: null,
+      resumo: `Reset Boitel: ${resumo.lotes_removidos} lotes, ${resumo.financeiros_removidos} financeiros, ${resumo.planejamentos_removidos} planejamentos removidos`,
+      dados_anteriores: null,
+      dados_novos: resumo as any,
     });
+
+    return json({ ok: true, resumo });
   } catch (err) {
     return json({ error: (err as Error).message }, 500);
   }
