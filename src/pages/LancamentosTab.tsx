@@ -339,7 +339,37 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     });
   }, [isTransferenciaSaida, quantidade, pesoKg, categoria, fazendaOrigem, fazendaDestino, data, statusOp, observacao, transferenciaDetalhes, nomeFazenda]);
 
-  const calc = useMemo(() => {
+  // Venda em Pé — unified calc (single source of truth)
+  const vendaCalc = useMemo((): VendaCalculation | null => {
+    if (!isVenda || !vendaDetalhes) return null;
+    const tipoPrecoEngine = vendaDetalhes.tipoPreco === 'por_total' ? 'por_cab' as const
+      : vendaDetalhes.tipoPreco === 'por_cab' ? 'por_cab' as const
+      : vendaDetalhes.tipoPreco === 'por_kg' ? 'por_kg' as const
+      : 'por_kg' as const;
+    return buildVendaCalculation({
+      quantidade: Number(quantidade) || 0,
+      pesoKg: Number(pesoKg) || 0,
+      categoria,
+      fazendaOrigem: nomeFazenda || fazendaOrigem,
+      compradorNome: abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || '',
+      data,
+      statusOperacional: statusOp,
+      observacao,
+      tipoPreco: tipoPrecoEngine,
+      precoInput: vendaDetalhes.precoInput || vendaPrecoInput,
+      tipoVenda: vendaDetalhes.tipoVenda,
+      frete: vendaDetalhes.frete,
+      comissaoPct: vendaDetalhes.comissaoPct,
+      outrosCustos: vendaDetalhes.outrosCustos,
+      funruralPct: vendaDetalhes.funruralPct,
+      funruralReais: vendaDetalhes.funruralReais,
+      notaFiscal: vendaDetalhes.notaFiscal,
+      formaReceb: vendaDetalhes.formaReceb,
+      qtdParcelas: vendaDetalhes.qtdParcelas,
+      parcelas: vendaDetalhes.parcelas,
+    });
+  }, [isVenda, vendaDetalhes, quantidade, pesoKg, categoria, fazendaOrigem, data, statusOp, observacao, vendaPrecoInput, nomeFazenda, abateFornecedores, vendaDestinoFornecedorId]);
+
     const qtd = Number(quantidade) || 0;
     const peso = Number(pesoKg) || 0;
 
