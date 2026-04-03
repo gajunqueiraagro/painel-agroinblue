@@ -817,6 +817,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   }, [abateFornecedores]);
 
 
+  useEffect(() => {
     if (!clienteAtual?.id) {
       setAbateFornecedores([]);
       return;
