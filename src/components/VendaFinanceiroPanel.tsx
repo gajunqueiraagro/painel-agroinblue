@@ -97,6 +97,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   frete, onFreteChange, comissao, onComissaoChange,
   funruralReais, onFunruralReaisChange,
   comissaoVal, freteVal,
+  onBoitelDataChange, initialBoitelData,
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
