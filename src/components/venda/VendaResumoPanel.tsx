@@ -81,6 +81,13 @@ export function VendaResumoPanel({
           </>
         )}
 
+        {hasData && (
+          <Button type="button" variant="ghost" size="sm" className="w-full h-6 text-[10px] font-medium gap-1 text-muted-foreground" onClick={onOpenModal}>
+            <Edit className="h-3 w-3" />
+            Editar Planejamento Boitel
+          </Button>
+        )}
+
         {!hasData && (
           <>
             <Separator />
