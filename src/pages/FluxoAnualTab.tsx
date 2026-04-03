@@ -242,7 +242,68 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                 {fmtNum(dados.saldoFinalAno)}
               </td>
             </tr>
-          </tbody>
+
+            {/* ── Indicadores zootécnicos complementares ── */}
+            <tr className="border-t bg-muted/40">
+              <td className="px-1.5 py-0.5 font-medium text-muted-foreground sticky left-0 bg-muted/50 text-[9px]">Peso Final (kg)</td>
+              {MESES_COLS.map(m => (
+                <td key={m.key} className={`px-1 py-0.5 text-center font-semibold tabular-nums text-foreground/80 ${qb(m.key)}`}>
+                  {dados.pesoFinalMes[m.key] > 0 ? fmtNum(Math.round(dados.pesoFinalMes[m.key])) : '–'}
+                </td>
+              ))}
+              <td className="px-1.5 py-0.5 text-center font-semibold tabular-nums text-foreground/80 bg-muted/50 border-l border-border/60">–</td>
+            </tr>
+
+            <tr className="bg-muted/30">
+              <td className="px-1.5 py-0.5 font-medium text-muted-foreground sticky left-0 bg-muted/40 text-[9px]">GMD (kg/cab/dia)</td>
+              {MESES_COLS.map(m => (
+                <td key={m.key} className={`px-1 py-0.5 text-center font-semibold tabular-nums text-foreground/80 ${qb(m.key)}`}>
+                  {fmtDec(dados.gmdMes[m.key], 3)}
+                </td>
+              ))}
+              <td className="px-1.5 py-0.5 text-center font-semibold tabular-nums text-foreground/80 bg-muted/40 border-l border-border/60">
+                {(() => {
+                  const vals = MESES_COLS.map(m => dados.gmdMes[m.key]).filter((v): v is number => v != null && v !== 0);
+                  return vals.length > 0 ? fmtDec(vals.reduce((a, b) => a + b, 0) / vals.length, 3) : '–';
+                })()}
+              </td>
+            </tr>
+
+            <tr className="bg-muted/40 border-b">
+              <td className="px-1.5 py-0.5 font-medium text-muted-foreground sticky left-0 bg-muted/50 text-[9px]">Lot. média (UA/ha)</td>
+              {MESES_COLS.map((m, i) => {
+                const saldoFim = i < 11 ? dados.saldoInicioMes[MESES_COLS[i + 1].key] : dados.saldoFinalAno;
+                const saldoIni = dados.saldoInicioMes[m.key];
+                const cabMedia = (saldoIni + saldoFim) / 2;
+                const pesoMedio = cabMedia > 0 && dados.pesoFinalMes[m.key] > 0
+                  ? dados.pesoFinalMes[m.key] / saldoFim
+                  : null;
+                const ua = pesoMedio ? calcUA(cabMedia, pesoMedio) : cabMedia;
+                const uaHa = calcUAHa(ua, areaProdutiva);
+                return (
+                  <td key={m.key} className={`px-1 py-0.5 text-center font-semibold tabular-nums text-foreground/80 ${qb(m.key)}`}>
+                    {uaHa != null ? fmtDec(uaHa, 2) : '–'}
+                  </td>
+                );
+              })}
+              <td className="px-1.5 py-0.5 text-center font-semibold tabular-nums text-foreground/80 bg-muted/50 border-l border-border/60">
+                {(() => {
+                  const vals: number[] = [];
+                  MESES_COLS.forEach((m, i) => {
+                    const saldoFim = i < 11 ? dados.saldoInicioMes[MESES_COLS[i + 1].key] : dados.saldoFinalAno;
+                    const saldoIni = dados.saldoInicioMes[m.key];
+                    const cabMedia = (saldoIni + saldoFim) / 2;
+                    const pesoMedio = cabMedia > 0 && dados.pesoFinalMes[m.key] > 0
+                      ? dados.pesoFinalMes[m.key] / saldoFim
+                      : null;
+                    const ua = pesoMedio ? calcUA(cabMedia, pesoMedio) : cabMedia;
+                    const uaHa = calcUAHa(ua, areaProdutiva);
+                    if (uaHa != null && uaHa > 0) vals.push(uaHa);
+                  });
+                  return vals.length > 0 ? fmtDec(vals.reduce((a, b) => a + b, 0) / vals.length, 2) : '–';
+                })()}
+              </td>
+            </tr>
         </table>
       </div>
       </div>
