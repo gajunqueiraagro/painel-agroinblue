@@ -243,7 +243,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Abate fornecedor (frigorífico) state
   const [abateFornecedorId, setAbateFornecedorId] = useState('');
-  const [abateFornecedores, setAbateFornecedores] = useState<{ id: string; nome: string }[]>([]);
+  const [abateFornecedores, setAbateFornecedores] = useState<FornecedorOption[]>([]);
   const [novoFornecedorAbateOpen, setNovoFornecedorAbateOpen] = useState(false);
 
   // Compra fornecedor state
