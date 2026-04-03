@@ -233,13 +233,13 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                     <F label="% diárias"><IP value={data.pctAdiantamentoDiarias} onChange={v => set('pctAdiantamentoDiarias', v)} step="0.1" /></F>
                   </div>
                   <div className="grid grid-cols-3 gap-1">
-                    <F label="Diárias R$"><CV>{`R$ ${fmtR$(data.valorAdiantamentoDiarias)}`}</CV></F>
+                    <F label="Diárias R$"><CV>{`R$ ${fmtR$(valorAdiantamentoDiariasCalc)}`}</CV></F>
                     <F label="Sanitário R$"><IM value={data.valorAdiantamentoSanitario} onChange={v => set('valorAdiantamentoSanitario', v)} /></F>
                     <F label="Outros R$"><IM value={data.valorAdiantamentoOutros} onChange={v => set('valorAdiantamentoOutros', v)} /></F>
                   </div>
                   <div className="flex justify-between text-[8px] bg-blue-100 dark:bg-blue-900/50 rounded px-1.5 py-0.5 border border-blue-400 dark:border-blue-600">
                     <span className="font-bold text-blue-800 dark:text-blue-300">Total</span>
-                    <span className="font-bold text-blue-800 dark:text-blue-300 tabular-nums">R$ {fmtR$(data.valorTotalAntecipado)}</span>
+                    <span className="font-bold text-blue-800 dark:text-blue-300 tabular-nums">R$ {fmtR$(valorTotalAntecipadoCalc)}</span>
                   </div>
                 </div>
               )}
