@@ -883,6 +883,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Load compra into form for editing
   const loadCompraForEdit = useCallback(async (l: Lancamento) => {
+    // Save current context before switching to edit mode
+    if (!onReturnFromEdit) {
+      internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
+    }
     setAba('entrada');
     setTipo('compra');
     setData(l.data);
