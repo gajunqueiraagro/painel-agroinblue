@@ -744,6 +744,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const abTipoVenda = isAbate && abateDetalhes ? abateDetalhes.tipoVenda : tipoVenda;
     const abNotaFiscal = isAbate && abateDetalhes ? abateDetalhes.notaFiscal : notaFiscal;
 
+    // For venda: save precoInput to precoArroba, tipoPreco to tipoPeso, tipoVenda to tipoVenda
+    const vendaPrecoArrobaFinal = isVenda && vendaDetalhes
+      ? (Number(vendaPrecoInput) || undefined)
+      : (isAbate && abateDetalhes ? (Number(abateDetalhes.precoArroba) || undefined) : (numOrUndef(precoArroba) || undefined));
+    const tipoPesoFinal = isVenda ? vendaTipoPreco : abTipoPeso;
+    const tipoVendaFinal = isVenda ? tipoPeso : abTipoVenda; // tipoPeso state holds desmama/gado_adulto/boitel for venda
+
     const lancamentoDados: Partial<Omit<Lancamento, 'id'>> = {
       data, tipo, quantidade: Number(quantidade), categoria: categoria as Categoria,
       fazendaOrigem: origemFinal, fazendaDestino: destinoFinal,
@@ -751,7 +758,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       pesoMedioArrobas: pesoKg ? kgToArrobas(Number(pesoKg)) : undefined,
       observacao: observacao || undefined,
       pesoCarcacaKg: isAbate ? (calc.carcacaCalc > 0 ? calc.carcacaCalc : undefined) : numOrUndef(pesoCarcacaKg),
-      precoArroba: isAbate && abateDetalhes ? (Number(abateDetalhes.precoArroba) || undefined) : (numOrUndef(precoArroba) || undefined),
+      precoArroba: vendaPrecoArrobaFinal,
       bonusPrecoce: isAbate ? (calc.bonusPrecoceTotal > 0 ? calc.bonusPrecoceTotal : undefined) : numOrUndef(bonusPrecoce),
       bonusQualidade: isAbate ? (calc.bonusQualidadeTotal > 0 ? calc.bonusQualidadeTotal : undefined) : numOrUndef(bonusQualidade),
       bonusListaTrace: isAbate ? (calc.bonusListaTraceTotal > 0 ? calc.bonusListaTraceTotal : undefined) : numOrUndef(bonusListaTrace),
@@ -762,12 +769,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       deducoes: numOrUndef(descontos),
       valorTotal: valorTotalFinal,
       notaFiscal: abNotaFiscal || undefined,
-      tipoPeso: abTipoPeso,
+      tipoPeso: tipoPesoFinal,
       statusOperacional: statusOp,
       dataVenda: abateDataVenda || undefined,
       dataEmbarque: abateDataEmbarque || undefined,
       dataAbate: abateDataAbate || undefined,
-      tipoVenda: abTipoVenda || undefined,
+      tipoVenda: tipoVendaFinal || undefined,
     };
 
     setSubmitting(true);
