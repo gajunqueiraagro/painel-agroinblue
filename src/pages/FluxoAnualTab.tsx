@@ -142,9 +142,9 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
         />
       )}
 
-      <div className="p-3 pt-2 space-y-2 flex justify-center">
+      <div className="p-3 pt-2 flex justify-center">
 
-      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto max-w-[1200px] w-full">
+      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto w-[70%] max-w-[1200px] min-w-[900px]">
         <table className="w-full text-[10px]" style={{ tableLayout: 'fixed' }}>
           <thead>
             <tr className="border-b bg-primary/25">
