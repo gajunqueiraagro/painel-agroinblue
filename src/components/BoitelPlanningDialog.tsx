@@ -180,8 +180,73 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_0.8fr_14rem] gap-x-2 gap-y-1 px-3 py-1.5 flex-1 overflow-y-auto min-h-0">
 
             {/* COL 1 — BASE OPERACIONAL + ADIANTAMENTO */}
+            {/* COL 1 — BASE OPERACIONAL + ADIANTAMENTO */}
             <div className="space-y-1">
               <ST>Base Operacional</ST>
+              <div className="grid grid-cols-3 gap-1">
+                <F label="Cabeças"><I type="number" value={data.qtdCabecas || ''} onChange={e => set('qtdCabecas', +e.target.value || 0)} /></F>
+                <F label="Peso inicial kg"><I type="number" value={data.pesoInicial || ''} onChange={e => set('pesoInicial', +e.target.value || 0)} step="0.01" /></F>
+                <F label="Peso líq. ent."><CV>{fmtP(calc.ple)}</CV></F>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <F label="Boitel / Destino"><I value={data.nomeBoitel} onChange={e => set('nomeBoitel', e.target.value)} className="text-left" /></F>
+                <F label="Modalidade">
+                  <Select value={data.modalidadeCusto} onValueChange={(v: any) => set('modalidadeCusto', v)}>
+                    <SelectTrigger className="h-5 text-[9px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="diaria" className="text-[10px]">Diária</SelectItem>
+                      <SelectItem value="arroba" className="text-[10px]">Arroba</SelectItem>
+                      <SelectItem value="parceria" className="text-[10px]">Parceria</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </F>
+              </div>
+              <F label="Lote"><I value={data.lote} onChange={e => set('lote', e.target.value)} className="text-left" /></F>
+              <F label="Contrato / Baia"><I value={data.numeroContrato} onChange={e => set('numeroContrato', e.target.value)} className="text-left" /></F>
+
+              {/* ADIANTAMENTO */}
+              <div className="flex items-center gap-1.5 pt-0.5">
+                <span className="text-[8px] font-bold uppercase text-foreground">Adiantamento p/ Boitel</span>
+                <TB a={data.possuiAdiantamento} o={() => set('possuiAdiantamento', true)}>Sim</TB>
+                <TB a={!data.possuiAdiantamento} o={() => { set('possuiAdiantamento', false); set('valorAdiantamentoDiarias', 0); set('valorAdiantamentoSanitario', 0); set('valorAdiantamentoOutros', 0); set('valorTotalAntecipado', 0); set('pctAdiantamentoDiarias', 0); set('dataAdiantamento', ''); set('adiantamentoObservacao', ''); }}>Não</TB>
+              </div>
+              {data.possuiAdiantamento && (
+                <div className="bg-blue-50/60 dark:bg-blue-950/20 rounded border border-blue-200 dark:border-blue-800 p-1 space-y-0.5">
+                  <div className="grid grid-cols-2 gap-1">
+                    <F label="Data"><I type="date" value={data.dataAdiantamento} onChange={e => set('dataAdiantamento', e.target.value)} /></F>
+                    <F label="% diárias"><I type="number" value={data.pctAdiantamentoDiarias || ''} onChange={e => set('pctAdiantamentoDiarias', +e.target.value || 0)} step="0.1" /></F>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    <F label="Diárias R$"><I type="number" value={data.valorAdiantamentoDiarias || ''} onChange={e => { set('valorAdiantamentoDiarias', +e.target.value || 0); set('pctAdiantamentoDiarias', 0); }} /></F>
+                    <F label="Sanitário R$"><I type="number" value={data.valorAdiantamentoSanitario || ''} onChange={e => set('valorAdiantamentoSanitario', +e.target.value || 0)} /></F>
+                    <F label="Outros R$"><I type="number" value={data.valorAdiantamentoOutros || ''} onChange={e => set('valorAdiantamentoOutros', +e.target.value || 0)} /></F>
+                  </div>
+                  <div className="flex justify-between text-[8px] bg-blue-100/60 dark:bg-blue-900/30 rounded px-1.5 py-0.5 border border-blue-300 dark:border-blue-700">
+                    <span className="font-bold text-blue-800 dark:text-blue-300">Total</span>
+                    <span className="font-bold text-blue-800 dark:text-blue-300 tabular-nums">{formatMoeda(data.valorTotalAntecipado)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* COL 2 — DESEMPENHO + CUSTOS + COMERCIALIZAÇÃO */}
+            <div className="space-y-1">
+              <ST>Desempenho</ST>
+              <div className="grid grid-cols-2 gap-1">
+                <F label="Quebra viagem %"><I type="number" value={data.quebraViagem || ''} onChange={e => set('quebraViagem', +e.target.value || 0)} step="0.1" /></F>
+                <F label="Custo oport. R$/kg"><I type="number" value={data.custoOportunidade || ''} onChange={e => set('custoOportunidade', +e.target.value || 0)} step="0.01" /></F>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <F label="Dias confinamento"><I type="number" value={data.dias || ''} onChange={e => set('dias', +e.target.value || 0)} /></F>
+                <F label="GMD kg/dia"><I type="number" value={data.gmd || ''} onChange={e => set('gmd', +e.target.value || 0)} step="0.001" /></F>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <F label="Rend. entrada %"><I type="number" value={data.rendimentoEntrada || ''} onChange={e => set('rendimentoEntrada', +e.target.value || 0)} step="0.01" /></F>
+                <F label="Rend. saída %"><I type="number" value={data.rendimento || ''} onChange={e => set('rendimento', +e.target.value || 0)} step="0.01" /></F>
+              </div>
+
+              <Separator className="!my-0.5" />
+              <ST>Custos</ST>
               <div className="grid grid-cols-2 gap-1">
                 {data.modalidadeCusto === 'diaria' && <F label="R$/cab/dia"><I type="number" value={data.custoDiaria || ''} onChange={e => set('custoDiaria', +e.target.value || 0)} step="0.01" /></F>}
                 {data.modalidadeCusto === 'arroba' && <F label="R$/@ prod."><I type="number" value={data.custoArroba || ''} onChange={e => set('custoArroba', +e.target.value || 0)} /></F>}
@@ -199,8 +264,10 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <F label="Preço venda R$/@"><I type="number" value={data.precoVendaArroba || ''} onChange={e => set('precoVendaArroba', +e.target.value || 0)} step="0.01" /></F>
                 <F label="Despesas com abate R$"><I type="number" value={data.despesasAbate || ''} onChange={e => set('despesasAbate', +e.target.value || 0)} /></F>
               </div>
+            </div>
 
-              <Separator className="!my-0.5" />
+            {/* COL 3 — RECEBIMENTO */}
+            <div className="space-y-1">
               <ST>Recebimento</ST>
               <div className="grid grid-cols-2 gap-1">
                 <TB a={data.formaReceb === 'avista'} o={() => handleForma('avista')} full>À vista</TB>
@@ -209,7 +276,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
               {data.formaReceb === 'prazo' && (
                 <div className="space-y-0.5">
                   <F label="Parcelas"><I type="number" min="1" max="48" value={data.qtdParcelas} onChange={e => handleQtdP(e.target.value)} /></F>
-                  <div className="max-h-[80px] overflow-y-auto space-y-0.5">
+                  <div className="max-h-[120px] overflow-y-auto space-y-0.5">
                     {data.parcelas.map((p, i) => (
                       <div key={i} className="grid grid-cols-2 gap-1 bg-muted/20 rounded px-1 py-0.5">
                         <div><Label className="text-[7px]">P{i + 1}</Label><I type="date" value={p.data} onChange={e => { const np = [...data.parcelas]; np[i] = { ...np[i], data: e.target.value }; set('parcelas', np); }} /></div>
@@ -220,37 +287,9 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                   <div className="text-[7px] text-muted-foreground text-right">Base: {formatMoeda(basePar)}</div>
                 </div>
               )}
-
-              {/* TABELA COMPARATIVA — RESULTADO vs OPORTUNIDADE */}
-              <Separator className="!my-0.5" />
-              <ST>Comparativo Resultado</ST>
-              <div className="border rounded overflow-hidden">
-                <table className="w-full text-[8px]">
-                  <thead>
-                    <tr className="bg-muted/60">
-                      <th className="text-left px-1 py-0.5 font-semibold text-muted-foreground">Resultado</th>
-                      <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground">Líquido</th>
-                      <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground">Oportunidade</th>
-                      <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground">Diferença</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <CmpRow label="R$" liq={calc.rLiq} opp={calc.coT} diff={diffTotal} />
-                    <CmpRow label="R$/cab" liq={calc.rLCab} opp={calc.coCabC} diff={diffCab} />
-                    <CmpRow label="R$/kg" liq={calc.rLKg} opp={calc.coKg} diff={diffKg} />
-                  </tbody>
-                </table>
-              </div>
-              <p className="text-[8px] text-muted-foreground italic leading-tight">
-                {calc.coT > 0
-                  ? pctDiffOp >= 0
-                    ? `Resultado ${fmtPct1(Math.abs(pctDiffOp))} acima do custo de oportunidade.`
-                    : `Resultado ${fmtPct1(Math.abs(pctDiffOp))} abaixo do custo de oportunidade.`
-                  : 'Informe o custo de oportunidade para comparação.'}
-              </p>
             </div>
 
-            {/* COL 3 — PAINEL RESULTADO (collapsible) */}
+            {/* COL 4 — RESULTADO + COMPARATIVO */}
             <div className="bg-muted/20 rounded-lg border p-1.5 space-y-0.5 lg:sticky lg:top-0 h-fit">
               <h3 className="text-[9px] font-black uppercase tracking-wide text-foreground mb-0.5">Resultado</h3>
 
@@ -306,6 +345,34 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                   <span>/kg <strong className="text-foreground tabular-nums">{formatMoeda(calc.rLKg)}</strong></span>
                 </div>
               </div>
+
+              {/* COMPARATIVO */}
+              <Separator className="!my-0.5" />
+              <ST>Comparativo Resultado</ST>
+              <div className="border rounded overflow-hidden">
+                <table className="w-full text-[7px]">
+                  <thead>
+                    <tr className="bg-muted/60">
+                      <th className="text-left px-1 py-0.5 font-semibold text-muted-foreground">Resultado</th>
+                      <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground">Líquido</th>
+                      <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground">Oport.</th>
+                      <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground">Dif.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <CmpRow label="R$" liq={calc.rLiq} opp={calc.coT} diff={diffTotal} />
+                    <CmpRow label="R$/cab" liq={calc.rLCab} opp={calc.coCabC} diff={diffCab} />
+                    <CmpRow label="R$/kg" liq={calc.rLKg} opp={calc.coKg} diff={diffKg} />
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[7px] text-muted-foreground italic leading-tight">
+                {calc.coT > 0
+                  ? pctDiffOp >= 0
+                    ? `Resultado ${fmtPct1(Math.abs(pctDiffOp))} acima do custo de oportunidade.`
+                    : `Resultado ${fmtPct1(Math.abs(pctDiffOp))} abaixo do custo de oportunidade.`
+                  : 'Informe o custo de oportunidade para comparação.'}
+              </p>
             </div>
           </div>
 
