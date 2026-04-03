@@ -273,6 +273,7 @@ export function useLancamentos() {
       data_embarque: lancamento.dataEmbarque || null,
       data_abate: lancamento.dataAbate || null,
       tipo_venda: lancamento.tipoVenda || null,
+      detalhes_snapshot: lancamento.detalhesSnapshot || null,
     };
 
     if (!isOnline()) {
