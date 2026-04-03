@@ -119,29 +119,29 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     return p;
   }, [dataAbateISO, data.dataEnvio]);
 
+  const valorAdiantamentoDiariasCalc = useMemo(() => {
+    if (!data.possuiAdiantamento) return 0;
+    return Math.round(calc.cDT * data.pctAdiantamentoDiarias / 100 * 100) / 100;
+  }, [data.possuiAdiantamento, data.pctAdiantamentoDiarias, calc.cDT]);
+
+  const valorTotalAntecipadoCalc = useMemo(() => {
+    if (!data.possuiAdiantamento) return 0;
+    return Math.round((valorAdiantamentoDiariasCalc + data.valorAdiantamentoSanitario + data.valorAdiantamentoOutros) * 100) / 100;
+  }, [data.possuiAdiantamento, valorAdiantamentoDiariasCalc, data.valorAdiantamentoSanitario, data.valorAdiantamentoOutros]);
+
   // Saldo a receber do Boitel = Fat.Bruto - Custo Total Boitel (diárias+sanidade+outros) - Desp.Abate + Adiantamento já pago
   const saldoReceberBase = useMemo(() => {
-    const s = calc.fba - calc.custoTotalBoitel - calc.cAb + (data.possuiAdiantamento ? data.valorTotalAntecipado : 0);
+    const s = calc.fba - calc.custoTotalBoitel - calc.cAb + valorTotalAntecipadoCalc;
     return Math.round(s * 100) / 100;
-  }, [calc.fba, calc.custoTotalBoitel, calc.cAb, data.possuiAdiantamento, data.valorTotalAntecipado]);
+  }, [calc.fba, calc.custoTotalBoitel, calc.cAb, valorTotalAntecipadoCalc]);
 
   const handleForma = (f: 'avista' | 'prazo') => { set('formaReceb', f); if (f === 'avista') set('parcelas', []); else set('parcelas', gerarParcelas(data.qtdParcelas || 1, saldoReceberBase)); };
   const handleQtdP = (v: string) => { const n = Math.max(1, Math.min(48, Number(v) || 1)); set('qtdParcelas', n); set('parcelas', gerarParcelas(n, saldoReceberBase)); };
   const basePar = saldoReceberBase;
 
-  // Auto-sum total adiantamento
-  useEffect(() => {
-    if (!data.possuiAdiantamento) return;
-    // Recalculate diárias from percentage
-    const diariasCalc = Math.round(calc.cDT * data.pctAdiantamentoDiarias / 100 * 100) / 100;
-    const total = diariasCalc + data.valorAdiantamentoSanitario + data.valorAdiantamentoOutros;
-    if (diariasCalc !== data.valorAdiantamentoDiarias || total !== data.valorTotalAntecipado) {
-      setData(p => ({ ...p, valorAdiantamentoDiarias: diariasCalc, valorTotalAntecipado: total }));
-    }
-  }, [data.possuiAdiantamento, data.pctAdiantamentoDiarias, calc.cDT, data.valorAdiantamentoSanitario, data.valorAdiantamentoOutros]);
   useEffect(() => { if (data.formaReceb === 'prazo' && data.qtdParcelas > 0 && basePar > 0) setData(p => ({ ...p, parcelas: gerarParcelas(p.qtdParcelas, basePar) })); }, [basePar, data.formaReceb, data.qtdParcelas, dataAbateISO]);
 
-  const handleSave = () => { onSave({ ...data, _faturamentoBruto: calc.fba, _faturamentoLiquido: calc.fLiq, _receitaProdutor: calc.rProd, _custoTotal: calc.cOp, _lucroTotal: calc.rLiq, _saldoReceber: saldoReceberBase }); onClose(); };
+  const handleSave = () => { onSave({ ...data, valorAdiantamentoDiarias: valorAdiantamentoDiariasCalc, valorTotalAntecipado: valorTotalAntecipadoCalc, _faturamentoBruto: calc.fba, _faturamentoLiquido: calc.fLiq, _receitaProdutor: calc.rProd, _custoTotal: calc.cOp, _lucroTotal: calc.rLiq, _saldoReceber: saldoReceberBase }); onClose(); };
 
   const pos = calc.rLiq > 0;
   const saldoReceber = saldoReceberBase;
