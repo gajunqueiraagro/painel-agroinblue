@@ -78,6 +78,8 @@ export interface Lancamento {
   dataEmbarque?: string;
   dataAbate?: string;
   tipoVenda?: string;
+  // Structured snapshot of financial screen
+  detalhesSnapshot?: Record<string, any>;
   // Audit fields
   createdAt?: string;
   updatedAt?: string;
