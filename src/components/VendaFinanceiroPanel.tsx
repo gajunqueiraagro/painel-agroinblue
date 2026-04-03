@@ -191,57 +191,58 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
     (async () => {
       const { data: lanc } = await supabase
         .from('lancamentos')
-        .select('boitel_id')
+        .select('boitel_lote_id')
         .eq('id', lancamentoId)
         .single();
-      if (!lanc?.boitel_id) { setBoitelLoaded(true); return; }
-      const boitel = await carregarBoitelOperacao(lanc.boitel_id as string);
+      if (!lanc?.boitel_lote_id) { setBoitelLoaded(true); return; }
+      const boitel = await carregarBoitelOperacao(lanc.boitel_lote_id as string);
       if (boitel) {
+        const p = boitel.planejamento;
         console.log('[Boitel Edit] Loaded boitelData from DB:', boitel.id);
         setBoitelData({
-          qtdCabecas: boitel.quantidade,
-          pesoInicial: boitel.peso_inicial_kg,
+          qtdCabecas: boitel.quantidade_cab,
+          pesoInicial: boitel.peso_saida_fazenda_kg,
           fazendaOrigem: '',
-          nomeBoitel: boitel.fazenda_destino_nome,
-          lote: boitel.lote || '',
-          numeroContrato: boitel.numero_contrato || '',
+          nomeBoitel: boitel.boitel_destino,
+          lote: boitel.lote_codigo || '',
+          numeroContrato: boitel.contrato_baia || '',
           dataEnvio: boitel.data_envio || '',
           quebraViagem: 3,
           custoOportunidade: 0,
-          dias: boitel.dias,
-          gmd: boitel.gmd,
-          rendimentoEntrada: boitel.rendimento_entrada,
-          rendimento: boitel.rendimento_saida,
-          modalidadeCusto: boitel.modalidade as 'diaria' | 'arroba' | 'parceria',
-          custoDiaria: boitel.custo_diaria,
-          custoArroba: boitel.custo_arroba,
-          percentualParceria: boitel.percentual_parceria,
-          custosExtrasParceria: boitel.custos_extras_parceria,
-          custoFrete: boitel.custo_frete,
-          outrosCustos: boitel.outros_custos,
-          custoNutricao: boitel.custo_nutricao || 0,
-          custoSanidade: boitel.custo_sanidade || 0,
+          dias: p.dias,
+          gmd: p.gmd,
+          rendimentoEntrada: p.rendimento_entrada,
+          rendimento: p.rendimento_saida,
+          modalidadeCusto: p.modalidade as 'diaria' | 'arroba' | 'parceria',
+          custoDiaria: p.custo_diaria,
+          custoArroba: p.custo_arroba,
+          percentualParceria: p.percentual_parceria,
+          custosExtrasParceria: p.custos_extras_parceria,
+          custoFrete: p.custo_frete,
+          outrosCustos: p.outros_custos,
+          custoNutricao: p.custo_nutricao || 0,
+          custoSanidade: p.custo_sanidade || 0,
           custoNfAbate: 0,
-          precoVendaArroba: boitel.preco_venda_arroba,
-          despesasAbate: boitel.despesas_abate,
+          precoVendaArroba: p.preco_venda_arroba,
+          despesasAbate: p.despesas_abate,
           formaReceb: 'avista',
           qtdParcelas: 1,
           parcelas: [],
-          possuiAdiantamento: (boitel as any).possui_adiantamento ?? false,
-          dataAdiantamento: (boitel as any).data_adiantamento ?? '',
-          pctAdiantamentoDiarias: (boitel as any).pct_adiantamento_diarias ?? 0,
-          valorAdiantamentoDiarias: (boitel as any).valor_adiantamento_diarias ?? 0,
-          valorAdiantamentoSanitario: (boitel as any).valor_adiantamento_sanitario ?? 0,
-          valorAdiantamentoOutros: (boitel as any).valor_adiantamento_outros ?? 0,
-          valorTotalAntecipado: (boitel as any).valor_total_antecipado ?? 0,
-          adiantamentoObservacao: (boitel as any).adiantamento_observacao ?? '',
-          _faturamentoBruto: boitel.faturamento_bruto,
-          _faturamentoLiquido: boitel.faturamento_liquido,
-          _receitaProdutor: boitel.receita_produtor,
-          _custoTotal: boitel.custo_total,
-          _lucroTotal: boitel.lucro_total,
-          _saldoReceber: undefined, // Will be recalculated by simulator if reopened
-          _boitelId: (boitel as any).id || lanc.boitel_id,
+          possuiAdiantamento: p.possui_adiantamento ?? false,
+          dataAdiantamento: p.data_adiantamento ?? '',
+          pctAdiantamentoDiarias: p.pct_adiantamento_diarias ?? 0,
+          valorAdiantamentoDiarias: p.valor_adiantamento_diarias ?? 0,
+          valorAdiantamentoSanitario: p.valor_adiantamento_sanitario ?? 0,
+          valorAdiantamentoOutros: p.valor_adiantamento_outros ?? 0,
+          valorTotalAntecipado: p.valor_total_antecipado ?? 0,
+          adiantamentoObservacao: p.adiantamento_observacao ?? '',
+          _faturamentoBruto: p.faturamento_bruto,
+          _faturamentoLiquido: p.faturamento_liquido,
+          _receitaProdutor: p.receita_produtor,
+          _custoTotal: p.custo_total,
+          _lucroTotal: p.lucro_total,
+          _saldoReceber: undefined,
+          _boitelId: boitel.id,
         });
       }
       setBoitelLoaded(true);
