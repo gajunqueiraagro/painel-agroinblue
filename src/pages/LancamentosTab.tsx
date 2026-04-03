@@ -1904,6 +1904,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onRequestRegister={handleRequestRegister}
           registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
           submitting={submitting}
+          onBoitelDataChange={setBoitelDataForResumo}
+          initialBoitelData={boitelDataForResumo}
         />
       );
     }
