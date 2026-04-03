@@ -230,9 +230,9 @@ export async function gerarFinanceiroBoitel(
 
   // 2. SAÍDAS: apenas custos pagos diretamente (frete, sanidade, outros)
   const custosDiretos = [
-    { valor: op.custo_frete, label: 'Frete Boitel', subcentroHint: 'PEC/CUSTEIO/FRETE' },
-    { valor: op.custo_sanidade, label: 'Sanidade Boitel', subcentroHint: 'PEC/CUSTEIO/SANITARIO' },
-    { valor: op.outros_custos + op.custo_nutricao + op.custos_extras_parceria, label: 'Outros Custos Boitel', subcentroHint: 'PEC/CUSTEIO/OUTROS' },
+    { valor: op.custo_frete, label: 'Frete Boitel', subcentroHint: 'FRETE' },
+    { valor: op.custo_sanidade, label: 'Sanidade Boitel', subcentroHint: 'SANIDADE' },
+    { valor: op.outros_custos + op.custo_nutricao + op.custos_extras_parceria, label: 'Outros Custos Boitel', subcentroHint: 'OUTROS' },
   ];
 
   for (const custo of custosDiretos) {
