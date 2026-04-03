@@ -1232,7 +1232,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           setCompraDetalhes(null);
           toast.success('Compra atualizada com financeiro!');
-          onReturnFromEdit?.();
+          restoreEditOrigin();
         } else {
           setEditingAbateId(null);
           setLastSavedLancamentoId(null);
