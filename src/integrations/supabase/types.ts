@@ -1897,6 +1897,7 @@ export type Database = {
           favorecido_id: string | null
           fazenda_id: string
           forma_pagamento: string | null
+          grupo_geracao_id: string | null
           hash_importacao: string | null
           historico: string | null
           id: string
@@ -1940,6 +1941,7 @@ export type Database = {
           favorecido_id?: string | null
           fazenda_id: string
           forma_pagamento?: string | null
+          grupo_geracao_id?: string | null
           hash_importacao?: string | null
           historico?: string | null
           id?: string
@@ -1983,6 +1985,7 @@ export type Database = {
           favorecido_id?: string | null
           fazenda_id?: string
           forma_pagamento?: string | null
+          grupo_geracao_id?: string | null
           hash_importacao?: string | null
           historico?: string | null
           id?: string
