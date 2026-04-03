@@ -60,6 +60,8 @@ interface Props {
   vendaParaEditar?: Lancamento | null;
   /** Compra para abrir em modo edição automaticamente */
   compraParaEditar?: Lancamento | null;
+  /** Callback to return to the origin tab after edit cancel/save */
+  onReturnFromEdit?: () => void;
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
