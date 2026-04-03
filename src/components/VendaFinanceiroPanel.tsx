@@ -380,6 +380,14 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           receita_produtor: boitelData._receitaProdutor || 0,
           custo_total: boitelData._custoTotal || 0,
           lucro_total: boitelData._lucroTotal || 0,
+          possui_adiantamento: boitelData.possuiAdiantamento || false,
+          data_adiantamento: boitelData.dataAdiantamento || null,
+          pct_adiantamento_diarias: boitelData.pctAdiantamentoDiarias || 0,
+          valor_adiantamento_diarias: boitelData.valorAdiantamentoDiarias || 0,
+          valor_adiantamento_sanitario: boitelData.valorAdiantamentoSanitario || 0,
+          valor_adiantamento_outros: boitelData.valorAdiantamentoOutros || 0,
+          valor_total_antecipado: boitelData.valorTotalAntecipado || 0,
+          adiantamento_observacao: boitelData.adiantamentoObservacao || null,
         };
 
         const boitelId = await salvarBoitelOperacao(boitelOp);
