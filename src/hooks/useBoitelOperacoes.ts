@@ -183,8 +183,8 @@ export async function gerarFinanceiroBoitel(
 
   // Buscar plano de contas para receita de venda com boitel
   const subcentroCandidates = [
-    'PEC/RECEITA/VENDAS COM BOITEL',
-    'PEC/RECEITA/VENDAS EM PÉ/MACHOS',
+    'PEC/RECEITA/VENDAS/BOITEL',
+    'PEC/RECEITA/VENDAS/MACHOS ADULTOS',
     'PEC/RECEITA/VENDAS/MACHOS',
   ];
 
