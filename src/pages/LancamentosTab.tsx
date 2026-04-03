@@ -983,7 +983,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           return;
         }
 
-        setAbateFornecedores((data as { id: string; nome: string }[]) || []);
+        setAbateFornecedores(((data as any[]) || []).map(item => ({
+          id: item.id,
+          nome: item.nome,
+          nomeNormalizado: item.nome_normalizado ?? null,
+          aliases: item.aliases ?? null,
+        })));
       });
 
     return () => {
