@@ -261,14 +261,16 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
       set('parcelas', []);
     } else {
       const n = data.qtdParcelas || 1;
-      set('parcelas', gerarParcelas(n, calc.receitaProdutor));
+      const base = calc.resultadoComBoitel - calc.parceiroParte;
+      set('parcelas', gerarParcelas(n, base));
     }
   };
 
   const handleQtdParcelasChange = (v: string) => {
     const n = Math.max(1, Math.min(48, Number(v) || 1));
     set('qtdParcelas', n);
-    set('parcelas', gerarParcelas(n, calc.receitaProdutor));
+    const base = calc.resultadoComBoitel - calc.parceiroParte;
+    set('parcelas', gerarParcelas(n, base));
   };
 
   // Base de parcelamento = resultadoComBoitel - parceiroParte (exclui frete da base)
