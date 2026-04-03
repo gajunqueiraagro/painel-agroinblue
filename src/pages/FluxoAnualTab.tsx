@@ -11,6 +11,9 @@ import { calcFluxoAnual, FLUXO_LINHAS } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { parseISO, format } from 'date-fns';
 
+const QB = new Set(['04', '07', '10']);
+const qb = (key: string) => QB.has(key) ? 'border-l border-border/60' : '';
+
 const fmtNum = (v: number | string | undefined): string => {
   if (v == null) return '–';
   const n = typeof v === 'string' ? Number(v) : v;
@@ -154,13 +157,13 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               {MESES_COLS.map(m => (
                 <th
                   key={m.key}
-                  className="px-1 py-1.5 font-bold text-foreground text-center cursor-pointer hover:bg-primary/30 transition-colors"
+                  className={`px-1 py-1.5 font-bold text-foreground text-center cursor-pointer hover:bg-primary/30 transition-colors ${qb(m.key)}`}
                   onClick={() => setDrilldownMonth(m.key)}
                 >
                   {m.label}
                 </th>
               ))}
-              <th className="px-1.5 py-1.5 font-bold text-primary-foreground text-center w-[60px] bg-primary/25">
+              <th className="px-1.5 py-1.5 font-bold text-primary-foreground text-center w-[60px] bg-primary/25 border-l border-border/60">
                 Total
               </th>
             </tr>
@@ -171,13 +174,13 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               {MESES_COLS.map(m => (
                 <td
                   key={m.key}
-                  className="px-1 py-1 text-center font-extrabold text-foreground tabular-nums cursor-pointer hover:bg-accent/50 transition-colors"
+                  className={`px-1 py-1 text-center font-extrabold text-foreground tabular-nums cursor-pointer hover:bg-accent/50 transition-colors ${qb(m.key)}`}
                   onClick={() => setDrilldownMonth(m.key)}
                 >
                   {fmtNum(dados.saldoInicioMes[m.key])}
                 </td>
               ))}
-              <td className="px-1.5 py-1 text-center font-extrabold text-foreground tabular-nums bg-primary/15">
+              <td className="px-1.5 py-1 text-center font-extrabold text-foreground tabular-nums bg-primary/15 border-l border-border/60">
                 {fmtNum(dados.saldoInicialAno)}
               </td>
             </tr>
@@ -199,12 +202,12 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                 {MESES_COLS.map(m => {
                   const val = dados.porMesTipo[m.key][li.tipo];
                   return (
-                    <td key={m.key} className={`px-1 py-0.5 text-center font-semibold tabular-nums ${val > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}>
+                    <td key={m.key} className={`px-1 py-0.5 text-center font-semibold tabular-nums ${qb(m.key)} ${val > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}>
                       {val ? fmtNum(val) : '–'}
                     </td>
                   );
                 })}
-                <td className={`px-1.5 py-0.5 text-center font-bold tabular-nums bg-muted/80 ${dados.totalAno[li.tipo] > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}>
+                <td className={`px-1.5 py-0.5 text-center font-bold tabular-nums bg-muted/80 border-l border-border/60 ${dados.totalAno[li.tipo] > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}>
                   {dados.totalAno[li.tipo] ? fmtNum(dados.totalAno[li.tipo]) : '–'}
                 </td>
               </tr>
@@ -216,12 +219,12 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               {MESES_COLS.map((m, i) => {
                 const saldoFim = i < 11 ? dados.saldoInicioMes[MESES_COLS[i + 1].key] : dados.saldoFinalAno;
                 return (
-                  <td key={m.key} className="px-1 py-1 text-center font-extrabold text-foreground tabular-nums">
+                  <td key={m.key} className={`px-1 py-1 text-center font-extrabold text-foreground tabular-nums ${qb(m.key)}`}>
                     {fmtNum(saldoFim)}
                   </td>
                 );
               })}
-              <td className="px-1.5 py-1 text-center font-extrabold text-foreground tabular-nums bg-primary/20">
+              <td className="px-1.5 py-1 text-center font-extrabold text-foreground tabular-nums bg-primary/20 border-l border-border/60">
                 {fmtNum(dados.saldoFinalAno)}
               </td>
             </tr>
