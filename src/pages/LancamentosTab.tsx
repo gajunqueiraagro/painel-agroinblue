@@ -627,29 +627,23 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const tipo = editingLancamento.tipo;
 
     if (tipo === 'abate') {
-      const snapFornId = snap?.fornecedorId;
-      if (snapFornId && abateFornecedores.some(f => f.id === snapFornId)) {
-        setAbateFornecedorId(snapFornId);
-      } else if (editingLancamento.fazendaDestino) {
-        const forn = abateFornecedores.find(f => f.nome === editingLancamento.fazendaDestino);
-        if (forn) setAbateFornecedorId(forn.id);
-      }
+      const matched = matchFornecedor(abateFornecedores, {
+        id: snap?.fornecedorId,
+        nome: snap?.fornecedorNome || editingLancamento.fazendaDestino,
+      });
+      if (matched) setAbateFornecedorId(matched.id);
     } else if (tipo === 'venda') {
-      const snapFornId = snap?.fornecedorId;
-      if (snapFornId && abateFornecedores.some(f => f.id === snapFornId)) {
-        setVendaDestinoFornecedorId(snapFornId);
-      } else if (editingLancamento.fazendaDestino) {
-        const forn = abateFornecedores.find(f => f.nome === editingLancamento.fazendaDestino);
-        if (forn) setVendaDestinoFornecedorId(forn.id);
-      }
+      const matched = matchFornecedor(abateFornecedores, {
+        id: snap?.fornecedorId,
+        nome: snap?.fornecedorNome || editingLancamento.fazendaDestino,
+      });
+      if (matched) setVendaDestinoFornecedorId(matched.id);
     } else if (tipo === 'compra') {
-      const snapFornId = snap?.fornecedorId;
-      if (snapFornId && abateFornecedores.some(f => f.id === snapFornId)) {
-        setCompraFornecedorId(snapFornId);
-      } else if (editingLancamento.fazendaOrigem) {
-        const forn = abateFornecedores.find(f => f.nome === editingLancamento.fazendaOrigem);
-        if (forn) setCompraFornecedorId(forn.id);
-      }
+      const matched = matchFornecedor(abateFornecedores, {
+        id: snap?.fornecedorId,
+        nome: snap?.fornecedorNome || editingLancamento.fazendaOrigem,
+      });
+      if (matched) setCompraFornecedorId(matched.id);
     }
   }, [abateFornecedores, editingAbateId]);
 
