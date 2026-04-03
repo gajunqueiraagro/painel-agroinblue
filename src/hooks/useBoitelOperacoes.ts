@@ -126,7 +126,15 @@ export async function salvarBoitelOperacao(op: BoitelOperacao): Promise<string |
         receita_produtor: op.receita_produtor,
         custo_total: op.custo_total,
         lucro_total: op.lucro_total,
-      })
+        possui_adiantamento: op.possui_adiantamento,
+        data_adiantamento: op.data_adiantamento || null,
+        pct_adiantamento_diarias: op.pct_adiantamento_diarias,
+        valor_adiantamento_diarias: op.valor_adiantamento_diarias,
+        valor_adiantamento_sanitario: op.valor_adiantamento_sanitario,
+        valor_adiantamento_outros: op.valor_adiantamento_outros,
+        valor_total_antecipado: op.valor_total_antecipado,
+        adiantamento_observacao: op.adiantamento_observacao || null,
+      } as any)
       .select('id')
       .single();
     if (error) { toast.error('Erro ao salvar boitel: ' + error.message); return null; }
