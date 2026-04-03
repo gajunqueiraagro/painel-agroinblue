@@ -1080,6 +1080,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('conciliado');
           resetFinancialFields();
           toast.success('Registro atualizado com sucesso!');
+          onReturnFromEdit?.();
         }
       } else {
         const returnedId = await onAdicionar(lancamentoDados as Omit<Lancamento, 'id'>);
