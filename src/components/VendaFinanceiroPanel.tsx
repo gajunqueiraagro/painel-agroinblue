@@ -240,6 +240,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           _receitaProdutor: boitel.receita_produtor,
           _custoTotal: boitel.custo_total,
           _lucroTotal: boitel.lucro_total,
+          _saldoReceber: undefined, // Will be recalculated by simulator if reopened
           _boitelId: (boitel as any).id || lanc.boitel_id,
         });
       }
