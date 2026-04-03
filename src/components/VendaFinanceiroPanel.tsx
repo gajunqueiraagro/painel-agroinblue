@@ -352,8 +352,22 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       console.log('[Venda Financeiro] Entrando no fluxo BOITEL', { receitaProdutor: boitelData._receitaProdutor, lucroTotal: boitelData._lucroTotal });
       setGerando(true);
       try {
+        // Resolve existing boitel_id: from state, or from lancamento in DB
+        let resolvedBoitelId = boitelData._boitelId;
+        if (!resolvedBoitelId && targetLancamentoId) {
+          const { data: lancDb } = await supabase
+            .from('lancamentos')
+            .select('boitel_id')
+            .eq('id', targetLancamentoId)
+            .single();
+          if (lancDb?.boitel_id) {
+            resolvedBoitelId = lancDb.boitel_id as string;
+            console.log('[Boitel] Resolved existing boitel_id from lancamento:', resolvedBoitelId);
+          }
+        }
+
         const boitelOp = {
-          id: boitelData._boitelId,
+          id: resolvedBoitelId,
           cliente_id: clienteAtual.id,
           fazenda_origem_id: fazendaAtual.id,
           fazenda_destino_nome: boitelData.nomeBoitel || '',
