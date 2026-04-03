@@ -242,6 +242,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [tipoPeso, setTipoPeso] = useState<string>('vivo');
   const [vendaTipoPreco, setVendaTipoPreco] = useState<string>('por_kg');
   const [vendaPrecoInput, setVendaPrecoInput] = useState('');
+  const [boitelDataForResumo, setBoitelDataForResumo] = useState<import('@/components/BoitelPlanningDialog').BoitelData | null>(null);
   const [rendCarcaca, setRendCarcaca] = useState('');
   const [funruralPct, setFunruralPct] = useState('');
   const [funruralReais, setFunruralReais] = useState('');
