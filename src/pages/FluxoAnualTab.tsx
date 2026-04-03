@@ -219,7 +219,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               {MESES_COLS.map((m, i) => {
                 const saldoFim = i < 11 ? dados.saldoInicioMes[MESES_COLS[i + 1].key] : dados.saldoFinalAno;
                 return (
-                  <td key={m.key} className="px-1 py-1 text-center font-extrabold text-foreground tabular-nums">
+                  <td key={m.key} className={`px-1 py-1 text-center font-extrabold text-foreground tabular-nums ${qb(m.key)}`}>
                     {fmtNum(saldoFim)}
                   </td>
                 );
