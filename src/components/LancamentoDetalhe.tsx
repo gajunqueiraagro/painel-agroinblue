@@ -34,6 +34,7 @@ interface Props {
   onRemover: (id: string) => void;
   onCountFinanceiros?: (id: string) => Promise<number>;
   onEditarAbate?: (lancamento: Lancamento) => void;
+  onEditarVenda?: (lancamento: Lancamento) => void;
 }
 
 export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover, onCountFinanceiros, onEditarAbate }: Props) {
