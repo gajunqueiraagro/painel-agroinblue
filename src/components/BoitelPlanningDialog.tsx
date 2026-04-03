@@ -51,7 +51,9 @@ const defaultData: BoitelData = {
 function fmtP(v: number) { return formatKg(v); }
 function fmtG(v: number) { if (!v || isNaN(v)) return '-'; return v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }); }
 function fmtA(v: number) { return formatArroba(v); }
+function fmtPct2(v: number) { if (v === null || v === undefined || isNaN(v)) return '-'; return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%'; }
 function fmtPct1(v: number) { if (v === null || v === undefined || isNaN(v)) return '-'; return v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%'; }
+function fmtR$(v: number) { if (v === null || v === undefined || isNaN(v)) return '-'; return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function fmtDate(iso: string) { if (!iso) return '-'; try { return format(parseISO(iso), 'dd/MM/yyyy'); } catch { return '-'; } }
 
 export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quantidade, pesoKg, fazendaNome, dataLancamento, destinoNome }: Props) {
@@ -157,27 +159,27 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <HI l="Período" v={`${data.dias} dias`} />
               </div>
               <div className="grid grid-cols-2 gap-x-6 gap-y-0 text-[9px]">
-                <HI l="Custo @ Prod." v={formatMoeda(calc.cPArr)} />
+                <HI l="Custo @ Prod." v={`R$ ${fmtR$(calc.cPArr)}`} />
                 <div className="flex gap-2 items-baseline justify-end">
                   <span className="text-slate-400 text-[8px]">RES. LÍQ. TOTAL</span>
-                  <strong className={`text-[15px] tabular-nums ${pos ? 'text-emerald-300' : 'text-red-300'}`}>{formatMoeda(calc.rLiq)}</strong>
+                  <strong className={`text-[15px] tabular-nums ${pos ? 'text-emerald-300' : 'text-red-300'}`}>R$ {fmtR$(calc.rLiq)}</strong>
                 </div>
-                <HI l="Custo cab." v={formatMoeda(calc.cPCab)} />
+                <HI l="Custo cab." v={`R$ ${fmtR$(calc.cPCab)}`} />
                 <div className="flex gap-2 items-baseline justify-end">
                   <span className="text-slate-400 text-[8px]">RES. LÍQ. R$/CAB</span>
-                  <strong className={`text-[13px] tabular-nums ${pos ? 'text-emerald-300' : 'text-red-300'}`}>{formatMoeda(calc.rLCab)}</strong>
+                  <strong className={`text-[13px] tabular-nums ${pos ? 'text-emerald-300' : 'text-red-300'}`}>R$ {fmtR$(calc.rLCab)}</strong>
                 </div>
-                <HI l="R$/KG" v={formatMoeda(calc.rLKg)} />
+                <HI l="R$/KG" v={`R$ ${fmtR$(calc.rLKg)}`} />
                 <div className="flex gap-2 items-baseline justify-end">
                   <span className="text-slate-400 text-[8px]">RES. LÍQ. R$/KG</span>
-                  <strong className={`text-[13px] tabular-nums ${pos ? 'text-emerald-300' : 'text-red-300'}`}>{formatMoeda(calc.rLKg)}</strong>
+                  <strong className={`text-[13px] tabular-nums ${pos ? 'text-emerald-300' : 'text-red-300'}`}>R$ {fmtR$(calc.rLKg)}</strong>
                 </div>
               </div>
             </div>
           </div>
 
           {/* ═══ CORPO — 4 COLUNAS ═══ */}
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_0.8fr_14rem] gap-x-2 gap-y-1 px-3 py-1.5 flex-1 overflow-y-auto min-h-0">
+          <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_0.9fr_0.7fr_1.1fr] gap-x-2 gap-y-1 px-3 py-1.5 flex-1 overflow-y-auto min-h-0">
 
             {/* COL 1 — BASE OPERACIONAL + ADIANTAMENTO */}
             {/* COL 1 — BASE OPERACIONAL + ADIANTAMENTO */}
@@ -223,7 +225,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                   </div>
                   <div className="flex justify-between text-[8px] bg-blue-100/60 dark:bg-blue-900/30 rounded px-1.5 py-0.5 border border-blue-300 dark:border-blue-700">
                     <span className="font-bold text-blue-800 dark:text-blue-300">Total</span>
-                    <span className="font-bold text-blue-800 dark:text-blue-300 tabular-nums">{formatMoeda(data.valorTotalAntecipado)}</span>
+                    <span className="font-bold text-blue-800 dark:text-blue-300 tabular-nums">R$ {fmtR$(data.valorTotalAntecipado)}</span>
                   </div>
                 </div>
               )}
@@ -284,7 +286,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                       </div>
                     ))}
                   </div>
-                  <div className="text-[7px] text-muted-foreground text-right">Base: {formatMoeda(basePar)}</div>
+                  <div className="text-[7px] text-muted-foreground text-right">Base: R$ {fmtR$(basePar)}</div>
                 </div>
               )}
             </div>
@@ -297,53 +299,52 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <RR l="GMD" v={`${fmtG(data.gmd)} kg/dia`} />
                 <RR l="GMC" v={`${fmtG(calc.gmc)} kg/dia`} />
                 <RR l="@ prod./cab" v={fmtA(calc.aPcab)} />
-                <RR l="Preço Venda R$/@" v={formatMoeda(data.precoVendaArroba)} />
-                <RR l="Custo/@" v={formatMoeda(calc.cPArr)} c="text-destructive" />
-                <RR l="Margem de venda" v={fmtPct1(calc.margemVenda)} />
+                <RR l="Preço Venda R$/@" v={`R$ ${fmtR$(data.precoVendaArroba)}`} />
+                <RR l="Custo/@" v={`R$ ${fmtR$(calc.cPArr)}`} c="text-destructive" />
+                <RR l="Margem de venda" v={fmtPct2(calc.margemVenda)} />
               </CSection>
 
               <CSection title="Operação" defaultOpen>
-                <RR l="Fat. Bruto" v={formatMoeda(calc.fba)} b />
-                <RR l="(-) Custos Abate" v={formatMoeda(calc.cAb)} c="text-destructive" />
+                <RR l="Fat. Bruto" v={`R$ ${fmtR$(calc.fba)}`} b />
+                <RR l="(-) Custos Abate" v={`R$ ${fmtR$(calc.cAb)}`} c="text-destructive" />
                 <DL />
-                <RR l="= Fat. Líquido" v={formatMoeda(calc.fLiq)} b accent />
-                {data.modalidadeCusto === 'parceria' && calc.pParte > 0 && <RR l={`(-) Parceiro ${data.percentualParceria}%`} v={formatMoeda(calc.pParte)} c="text-destructive" />}
-                <RR l="(-) Diárias Boitel" v={formatMoeda(calc.cDT)} c="text-destructive" />
-                <RR l="(-) Sanidade Boitel" v={formatMoeda(calc.cs)} c="text-destructive" />
-                <RR l="(-) Outros Boitel" v={formatMoeda(calc.oc)} c="text-destructive" />
+                <RR l="= Fat. Líquido" v={`R$ ${fmtR$(calc.fLiq)}`} b accent />
+                {data.modalidadeCusto === 'parceria' && calc.pParte > 0 && <RR l={`(-) Parceiro ${fmtPct2(data.percentualParceria)}`} v={`R$ ${fmtR$(calc.pParte)}`} c="text-destructive" />}
+                <RR l="(-) Diárias Boitel" v={`R$ ${fmtR$(calc.cDT)}`} c="text-destructive" />
+                <RR l="(-) Sanidade Boitel" v={`R$ ${fmtR$(calc.cs)}`} c="text-destructive" />
+                <RR l="(-) Outros Boitel" v={`R$ ${fmtR$(calc.oc)}`} c="text-destructive" />
                 <DL />
-                <RR l="= Res. Direto Boitel" v={formatMoeda(calc.rBoitel)} b accent />
-                <RR l="(-) Frete Terceiros" v={formatMoeda(calc.cf)} c="text-destructive" />
+                <RR l="= Res. Direto Boitel" v={`R$ ${fmtR$(calc.rBoitel)}`} b accent />
+                <RR l="(-) Frete Terceiros" v={`R$ ${fmtR$(calc.cf)}`} c="text-destructive" />
                 <DL />
-                <RR l="= Total Operação" v={formatMoeda(calc.tOp)} b accent />
+                <RR l="= Total Operação" v={`R$ ${fmtR$(calc.tOp)}`} b accent />
               </CSection>
 
               {data.possuiAdiantamento && data.valorTotalAntecipado > 0 && (
                 <CSection title="Acerto com Boitel" defaultOpen={false}>
-                  <RR l="Fat. Bruto" v={formatMoeda(calc.fba)} b />
-                  <RR l="(-) Custo Total Boitel" v={`-${formatMoeda(calc.custoTotalBoitel)}`} c="text-destructive" />
-                  <RR l="(+) Adiant. p/ Boitel" v={formatMoeda(data.valorTotalAntecipado)} c="text-blue-600 dark:text-blue-400" />
+                  <RR l="Fat. Bruto" v={`R$ ${fmtR$(calc.fba)}`} b />
+                  <RR l="(-) Custo Total Boitel" v={`-R$ ${fmtR$(calc.custoTotalBoitel)}`} c="text-destructive" />
+                  <RR l="(+) Adiant. p/ Boitel" v={`R$ ${fmtR$(data.valorTotalAntecipado)}`} c="text-blue-600 dark:text-blue-400" />
                   <DL />
-                  <RR l="= Saldo a receber" v={formatMoeda(saldoReceber)} b accent />
+                  <RR l="= Saldo a receber" v={`R$ ${fmtR$(saldoReceber)}`} b accent />
                 </CSection>
               )}
 
-              {/* DESTAQUE FINAL */}
-              <div className={`rounded border px-1.5 py-1 text-center ${pos ? 'bg-emerald-50/80 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800' : 'bg-destructive/5 border-destructive/20'}`}>
-                <div className="grid grid-cols-2 gap-1">
-                  <div>
-                    <span className="text-[7px] uppercase text-muted-foreground font-bold block">Total Op.</span>
-                    <strong className={`text-[12px] tabular-nums ${pos ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive'}`}>{formatMoeda(calc.tOp)}</strong>
-                  </div>
-                  <div>
-                    <span className="text-[7px] uppercase text-muted-foreground font-bold block">Res. Líquido</span>
-                    <strong className={`text-[12px] tabular-nums ${pos ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive'}`}>{formatMoeda(calc.rLiq)}</strong>
-                  </div>
+              {/* DESTAQUE RESULTADO — sem card colorido */}
+              <Separator className="!my-0.5" />
+              <div className="grid grid-cols-2 gap-1 py-0.5">
+                <div>
+                  <span className="text-[7px] uppercase text-muted-foreground font-bold block">Total Op.</span>
+                  <strong className={`text-[13px] tabular-nums ${pos ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive'}`}>R$ {fmtR$(calc.tOp)}</strong>
                 </div>
-                <div className="flex justify-around text-[7px] mt-0.5 text-muted-foreground">
-                  <span>/cab <strong className="text-foreground tabular-nums">{formatMoeda(calc.rLCab)}</strong></span>
-                  <span>/kg <strong className="text-foreground tabular-nums">{formatMoeda(calc.rLKg)}</strong></span>
+                <div>
+                  <span className="text-[7px] uppercase text-muted-foreground font-bold block">Res. Líquido</span>
+                  <strong className={`text-[13px] tabular-nums ${pos ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive'}`}>R$ {fmtR$(calc.rLiq)}</strong>
                 </div>
+              </div>
+              <div className="flex justify-around text-[7px] text-muted-foreground">
+                <span>/cab <strong className="text-foreground tabular-nums">R$ {fmtR$(calc.rLCab)}</strong></span>
+                <span>/kg <strong className="text-foreground tabular-nums">R$ {fmtR$(calc.rLKg)}</strong></span>
               </div>
 
               {/* COMPARATIVO */}
@@ -369,8 +370,8 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
               <p className="text-[7px] text-muted-foreground italic leading-tight">
                 {calc.coT > 0
                   ? pctDiffOp >= 0
-                    ? `Resultado ${fmtPct1(Math.abs(pctDiffOp))} acima do custo de oportunidade.`
-                    : `Resultado ${fmtPct1(Math.abs(pctDiffOp))} abaixo do custo de oportunidade.`
+                    ? `Resultado ${fmtPct2(Math.abs(pctDiffOp))} acima do custo de oportunidade.`
+                    : `Resultado ${fmtPct2(Math.abs(pctDiffOp))} abaixo do custo de oportunidade.`
                   : 'Informe o custo de oportunidade para comparação.'}
               </p>
             </div>
@@ -419,13 +420,14 @@ function CSection({ title, children, defaultOpen = true }: { title: string; chil
 }
 
 function CmpRow({ label, liq, opp, diff }: { label: string; liq: number; opp: number; diff: number }) {
+  const fv = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return (
     <tr className="border-t border-border/40">
       <td className="px-1 py-0.5 font-medium">{label}</td>
-      <td className="px-1 py-0.5 text-right tabular-nums font-semibold">{formatMoeda(liq)}</td>
-      <td className="px-1 py-0.5 text-right tabular-nums text-muted-foreground">{formatMoeda(opp)}</td>
+      <td className="px-1 py-0.5 text-right tabular-nums font-semibold">R$ {fv(liq)}</td>
+      <td className="px-1 py-0.5 text-right tabular-nums text-muted-foreground">R$ {fv(opp)}</td>
       <td className={`px-1 py-0.5 text-right tabular-nums font-bold ${diff >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
-        {diff >= 0 ? '+' : ''}{formatMoeda(diff)}
+        {diff >= 0 ? '+' : ''}R$ {fv(diff)}
       </td>
     </tr>
   );
