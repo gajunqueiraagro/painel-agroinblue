@@ -246,6 +246,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [abateFornecedores, setAbateFornecedores] = useState<FornecedorOption[]>([]);
   const [novoFornecedorAbateOpen, setNovoFornecedorAbateOpen] = useState(false);
 
+  // Ref to store pending fornecedor match params — survives across renders
+  const pendingFornecedorMatch = useRef<{ tipo: 'abate' | 'venda' | 'compra'; id?: string | null; nome?: string | null; lancamentoId?: string } | null>(null);
+
   // Compra fornecedor state
   const [compraFornecedorId, setCompraFornecedorId] = useState('');
   const [novoFornecedorCompraOpen, setNovoFornecedorCompraOpen] = useState(false);
