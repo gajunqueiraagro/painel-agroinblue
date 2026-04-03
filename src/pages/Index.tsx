@@ -138,6 +138,10 @@ const Index = () => {
   const [vendaParaEditar, setVendaParaEditar] = useState<Lancamento | null>(null);
   const [compraParaEditar, setCompraParaEditar] = useState<Lancamento | null>(null);
   const [editOriginTab, setEditOriginTab] = useState<TabId | null>(null);
+  const [editOriginSubAba, setEditOriginSubAba] = useState<SubAba | undefined>(undefined);
+  const [editOriginStatusFiltro, setEditOriginStatusFiltro] = useState<string | undefined>(undefined);
+  const [editOriginAnoFiltro, setEditOriginAnoFiltro] = useState<string | undefined>(undefined);
+  const [editOriginMesFiltro, setEditOriginMesFiltro] = useState<string | undefined>(undefined);
   const { user } = useAuth();
   const { canViewTab, canEdit, isReadOnly } = usePermissions();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
@@ -207,6 +211,10 @@ const Index = () => {
       setVendaParaEditar(null);
       setCompraParaEditar(null);
       setEditOriginTab(null);
+      setEditOriginSubAba(undefined);
+      setEditOriginStatusFiltro(undefined);
+      setEditOriginAnoFiltro(undefined);
+      setEditOriginMesFiltro(undefined);
     }
     if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
     setActiveTab(tab);
@@ -399,8 +407,18 @@ const Index = () => {
           vendaParaEditar={vendaParaEditar}
           compraParaEditar={compraParaEditar}
           onReturnFromEdit={editOriginTab ? () => {
+            // Restore origin tab with saved filter context
+            if (editOriginTab === 'financeiro') {
+              setSubAbaFinanceiro(editOriginSubAba);
+              setMovFiltroAno(editOriginAnoFiltro);
+              setMovFiltroMes(editOriginMesFiltro);
+            }
             setActiveTab(editOriginTab);
             setEditOriginTab(null);
+            setEditOriginSubAba(undefined);
+            setEditOriginStatusFiltro(undefined);
+            setEditOriginAnoFiltro(undefined);
+            setEditOriginMesFiltro(undefined);
             setAbateParaEditar(null);
             setVendaParaEditar(null);
             setCompraParaEditar(null);
@@ -418,9 +436,9 @@ const Index = () => {
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
           onNavigateToReclass={goToReclassFromEvolCategoria}
-          onEditarAbate={(l) => { setEditOriginTab('evolucao_rebanho_hub'); setAbateParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarVenda={(l) => { setEditOriginTab('evolucao_rebanho_hub'); setVendaParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarCompra={(l) => { setEditOriginTab('evolucao_rebanho_hub'); setCompraParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarAbate={(l, ctx) => { setEditOriginTab('evolucao_rebanho_hub'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setAbateParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarVenda={(l, ctx) => { setEditOriginTab('evolucao_rebanho_hub'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setVendaParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarCompra={(l, ctx) => { setEditOriginTab('evolucao_rebanho_hub'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setCompraParaEditar(l); setActiveTab('lancamentos'); }}
         />
       )}
       {activeTab === 'financeiro' && (
@@ -433,9 +451,10 @@ const Index = () => {
           filtroMesInicial={movFiltroMes}
           drillDownLabel={movDrillLabel}
           onBack={movBackTab ? () => setActiveTab(movBackTab) : undefined}
-          onEditarAbate={(l) => { setEditOriginTab('financeiro'); setAbateParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarVenda={(l) => { setEditOriginTab('financeiro'); setVendaParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarCompra={(l) => { setEditOriginTab('financeiro'); setCompraParaEditar(l); setActiveTab('lancamentos'); }}
+          filtroStatusInicial={editOriginTab === 'financeiro' ? editOriginStatusFiltro : undefined}
+          onEditarAbate={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setAbateParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarVenda={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setVendaParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarCompra={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setCompraParaEditar(l); setActiveTab('lancamentos'); }}
         />
       )}
       {activeTab === 'acessos' && <AcessosTab />}

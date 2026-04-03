@@ -200,6 +200,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const consumoFinanceiroRef = useRef<ConsumoFinanceiroPanelRef>(null);
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState('todos');
+
+  // Internal edit origin context — saves aba/filters before switching to form mode
+  const internalEditOrigin = useRef<{ aba: Aba; anoFiltro: string; mesFiltro: string } | null>(null);
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
   const [statusOp, setStatusOp] = useState<StatusOperacional>('conciliado');
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
@@ -448,11 +451,34 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setData(format(new Date(), 'yyyy-MM-dd'));
     setObservacao(''); setStatusOp('conciliado');
     resetFinancialFields();
+    // Restore internal origin context if editing from within the same tab
+    const ctx = internalEditOrigin.current;
+    if (ctx) {
+      setAba(ctx.aba);
+      setAnoFiltro(ctx.anoFiltro);
+      setMesFiltro(ctx.mesFiltro);
+      internalEditOrigin.current = null;
+    }
     if (onReturnFromEdit) onReturnFromEdit();
   }, [onReturnFromEdit]);
 
-  // Load abate into form for editing
+  // Helper: restore edit origin context (internal or external)
+  const restoreEditOrigin = useCallback(() => {
+    const ctx = internalEditOrigin.current;
+    if (ctx) {
+      setAba(ctx.aba);
+      setAnoFiltro(ctx.anoFiltro);
+      setMesFiltro(ctx.mesFiltro);
+      internalEditOrigin.current = null;
+    }
+    onReturnFromEdit?.();
+  }, [onReturnFromEdit]);
+
   const loadAbateForEdit = useCallback((l: Lancamento) => {
+    // Save current context before switching to edit mode
+    if (!onReturnFromEdit) {
+      internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
+    }
     // 1. Set tab & type
     setAba('saida');
     setTipo('abate');
@@ -602,7 +628,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, [abateFornecedores]);
+  }, [abateFornecedores, aba, anoFiltro, mesFiltro, onReturnFromEdit]);
 
   // Auto-load abate for editing when navigated from another tab
   useEffect(() => {
@@ -690,6 +716,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Load venda into form for editing
   const loadVendaForEdit = useCallback(async (l: Lancamento) => {
+    // Save current context before switching to edit mode
+    if (!onReturnFromEdit) {
+      internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
+    }
     // 1. Set tab & type
     setAba('saida');
     setTipo('venda');
@@ -853,7 +883,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, [abateFornecedores, clienteAtual, fazendaAtual]);
+  }, [abateFornecedores, clienteAtual, fazendaAtual, aba, anoFiltro, mesFiltro, onReturnFromEdit]);
 
   // Auto-load venda for editing when navigated from another tab
   useEffect(() => {
@@ -864,6 +894,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Load compra into form for editing
   const loadCompraForEdit = useCallback(async (l: Lancamento) => {
+    // Save current context before switching to edit mode
+    if (!onReturnFromEdit) {
+      internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
+    }
     setAba('entrada');
     setTipo('compra');
     setData(l.data);
@@ -987,7 +1021,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, [abateFornecedores]);
+  }, [abateFornecedores, aba, anoFiltro, mesFiltro, onReturnFromEdit]);
 
   // Auto-load compra for editing when navigated from another tab
   useEffect(() => {
@@ -1158,7 +1192,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('conciliado');
           resetFinancialFields();
           toast.success('Abate atualizado com financeiro!');
-          onReturnFromEdit?.();
+          restoreEditOrigin();
         } else if (isVenda && calc.valorLiquido > 0) {
           // Auto-generate/update financeiro for venda
           if (vendaFinanceiroRef.current) {
@@ -1173,7 +1207,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('conciliado');
           resetFinancialFields();
           toast.success('Venda atualizada com financeiro!');
-          onReturnFromEdit?.();
+          restoreEditOrigin();
         } else if (isCompra && compraDetalhes && fazendaAtual && clienteAtual) {
           // Re-generate financeiro for compra edit
           await gerarFinanceiroCompra({
@@ -1198,7 +1232,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           setCompraDetalhes(null);
           toast.success('Compra atualizada com financeiro!');
-          onReturnFromEdit?.();
+          restoreEditOrigin();
         } else {
           setEditingAbateId(null);
           setLastSavedLancamentoId(null);
@@ -1208,7 +1242,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('conciliado');
           resetFinancialFields();
           toast.success('Registro atualizado com sucesso!');
-          onReturnFromEdit?.();
+          restoreEditOrigin();
         }
       } else {
         const returnedId = await onAdicionar(lancamentoDados as Omit<Lancamento, 'id'>);
