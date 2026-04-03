@@ -18,7 +18,6 @@ interface Props {
   onRequestRegister: () => void;
   submitting: boolean;
   registerLabel?: string;
-  /** Whether Boitel mode is active (shows different flow) */
   isBoitel?: boolean;
   onCancelEdit?: () => void;
 }
@@ -60,123 +59,72 @@ export function VendaResumoPanel({
   const tipoPrecoLabel = detalhes?.tipoPreco === 'por_kg' ? 'Por kg' : detalhes?.tipoPreco === 'por_cab' ? 'Por cabeça' : 'Por total';
   const pagLabel = detalhes?.formaReceb === 'prazo' && detalhes.parcelas.length > 0 ? `A prazo (${detalhes.parcelas.length}x)` : 'À vista';
 
-  // If Boitel, don't show the modal flow — just pass through
   if (isBoitel) return null;
 
   return (
-    <div className="bg-card rounded-md border shadow-sm p-3 space-y-2.5 self-start">
-      <h3 className="text-[14px] font-semibold text-foreground">Resumo da Operação</h3>
+    <div className="bg-card rounded-md border shadow-sm p-2 space-y-1.5 self-start">
+      <h3 className="text-[12px] font-semibold text-foreground leading-tight">Resumo da Operação</h3>
       <Separator />
 
-      {/* Dados operacionais */}
-      <div className="space-y-1 text-[11px]">
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Quantidade</span>
-          <strong>{quantidade || '-'} cab.</strong>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Peso médio</span>
-          <strong>{pesoKg || '-'} kg</strong>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Categoria</span>
-          <strong>{catLabel}</strong>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Comprador</span>
-          <strong className="truncate max-w-[120px]">{compradorNome || '-'}</strong>
-        </div>
+      <div className="space-y-0.5 text-[10px] leading-tight">
+        <div className="flex justify-between"><span className="text-muted-foreground">Quantidade</span><strong>{quantidade || '-'} cab.</strong></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Peso médio</span><strong>{pesoKg || '-'} kg</strong></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Categoria</span><strong>{catLabel}</strong></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Comprador</span><strong className="truncate max-w-[120px]">{compradorNome || '-'}</strong></div>
         {detalhesPreenchidos && detalhes && (
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Tipo de venda</span>
-            <strong>{tipoVendaLabel}</strong>
-          </div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Tipo de venda</span><strong>{tipoVendaLabel}</strong></div>
         )}
       </div>
 
       <Separator />
 
-      {/* Status financeiro */}
       {!detalhesPreenchidos ? (
         <>
-          <div className="flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md p-2">
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-            <span className="font-medium">Detalhes financeiros não preenchidos</span>
+          <div className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded p-1.5 leading-tight">
+            <AlertTriangle className="h-3 w-3 shrink-0" />
+            <span className="font-medium">Financeiro não preenchido</span>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full h-10 text-[12px] font-bold gap-2"
-            disabled={!canOpenModal}
-            onClick={onOpenModal}
-          >
-            <DollarSign className="h-4 w-4" />
+          <Button type="button" variant="outline" className="w-full h-7 text-[11px] font-bold gap-1.5" disabled={!canOpenModal} onClick={onOpenModal}>
+            <DollarSign className="h-3 w-3" />
             Completar Venda
           </Button>
           {!canOpenModal && (
-            <p className="text-[10px] text-muted-foreground text-center">
-              Preencha Data, Quantidade, Peso, Categoria e Comprador para liberar
-            </p>
+            <p className="text-[9px] text-muted-foreground text-center leading-tight">Preencha Data, Quantidade, Peso, Categoria e Comprador</p>
           )}
         </>
       ) : (
         <>
-          {/* Resumo financeiro */}
-          <div className="space-y-1 text-[11px]">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Tipo de preço</span>
-              <strong>{tipoPrecoLabel}</strong>
-            </div>
+          <div className="space-y-0.5 text-[10px] leading-tight">
+            <div className="flex justify-between"><span className="text-muted-foreground">Tipo de preço</span><strong>{tipoPrecoLabel}</strong></div>
             {calc && calc.valorBruto > 0 && (
               <>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Valor bruto</span>
-                  <strong>{formatMoeda(calc.valorBruto)}</strong>
-                </div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Valor bruto</span><strong>{formatMoeda(calc.valorBruto)}</strong></div>
                 {calc.totalDespesas > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Despesas</span>
-                    <strong className="text-orange-600 dark:text-orange-400">-{formatMoeda(calc.totalDespesas)}</strong>
-                  </div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Despesas</span><strong className="text-orange-600 dark:text-orange-400">-{formatMoeda(calc.totalDespesas)}</strong></div>
                 )}
                 {calc.totalDeducoes > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Deduções</span>
-                    <strong className="text-destructive">-{formatMoeda(calc.totalDeducoes)}</strong>
-                  </div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Deduções</span><strong className="text-destructive">-{formatMoeda(calc.totalDeducoes)}</strong></div>
                 )}
                 <Separator />
-                <div className="flex justify-between text-[12px] font-bold">
+                <div className="flex justify-between text-[11px] font-bold">
                   <span>Valor líquido</span>
                   <span className="text-primary">{formatMoeda(calc.valorLiquido)}</span>
                 </div>
               </>
             )}
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Recebimento</span>
-              <strong>{pagLabel}</strong>
-            </div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Recebimento</span><strong>{pagLabel}</strong></div>
             {detalhes?.notaFiscal && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">NF</span>
-                <strong>{detalhes.notaFiscal}</strong>
-              </div>
+              <div className="flex justify-between"><span className="text-muted-foreground">NF</span><strong>{detalhes.notaFiscal}</strong></div>
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 text-[11px] text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md p-2">
-            <CheckCircle className="h-3.5 w-3.5 shrink-0" />
+          <div className="flex items-center gap-1 text-[10px] text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-1.5 leading-tight">
+            <CheckCircle className="h-3 w-3 shrink-0" />
             <span className="font-medium">Detalhes financeiros preenchidos</span>
           </div>
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="w-full h-8 text-[11px] font-medium gap-1.5 text-muted-foreground"
-            onClick={onOpenModal}
-          >
-            <Edit className="h-3.5 w-3.5" />
+          <Button type="button" variant="ghost" size="sm" className="w-full h-6 text-[10px] font-medium gap-1 text-muted-foreground" onClick={onOpenModal}>
+            <Edit className="h-3 w-3" />
             Editar Detalhes
           </Button>
         </>
@@ -184,24 +132,13 @@ export function VendaResumoPanel({
 
       <Separator />
 
-      {/* Action buttons */}
-      <div className="space-y-1.5">
+      <div className="space-y-1">
         {onCancelEdit && (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full h-9 text-[12px] font-bold"
-            onClick={onCancelEdit}
-          >
+          <Button type="button" variant="outline" className="w-full h-7 text-[11px] font-bold" onClick={onCancelEdit}>
             Cancelar Edição
           </Button>
         )}
-        <Button
-          type="button"
-          className="w-full h-10 text-[13px] font-bold"
-          onClick={onRequestRegister}
-          disabled={submitting || !detalhesPreenchidos}
-        >
+        <Button type="button" className="w-full h-8 text-[11px] font-bold" onClick={onRequestRegister} disabled={submitting || !detalhesPreenchidos}>
           {submitting ? 'Registrando...' : (registerLabel || 'Registrar Venda')}
         </Button>
       </div>
