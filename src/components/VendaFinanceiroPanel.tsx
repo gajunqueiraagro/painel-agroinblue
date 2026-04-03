@@ -207,7 +207,12 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
     }
 
     // ── BOITEL FLOW ──
-    if (tipoPeso === 'boitel' && boitelData) {
+    if (tipoPeso === 'boitel') {
+      if (!boitelData) {
+        console.error('[Venda Financeiro] BOITEL selecionado mas boitelData está vazio — o dialog do Boitel precisa ser preenchido primeiro.');
+        toast.error('Preencha os dados do Boitel antes de registrar.');
+        return false;
+      }
       console.log('[Venda Financeiro] Entrando no fluxo BOITEL', { receitaProdutor: boitelData._receitaProdutor, lucroTotal: boitelData._lucroTotal });
       setGerando(true);
       try {
