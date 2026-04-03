@@ -268,7 +268,8 @@ const Index = () => {
     lancamentos: goToLancarZooHub,
     fechamento: goToLancarZooHub,
     chuvas: goToLancarZooHub,
-    mapa_pastos: goToLancarZooHub,
+    mapa_pastos: () => setActiveTab('movimentacao'),
+    mapa_geo_pastos: () => setActiveTab('movimentacao'),
     resumo_pastos: goToLancarZooHub,
     // Lanç. Fin (V2) sub-screens
     financeiro_v2: () => setActiveTab('financeiro_v2_hub'),
@@ -390,7 +391,7 @@ const Index = () => {
         <MovimentacaoTab onNavigate={(dest) => {
           if (dest === 'tipos') setActiveTab('financeiro');
           if (dest === 'resumo') setActiveTab('fluxo_anual');
-        }} />
+        }} onTabChange={handleTabChange} />
       )}
       {activeTab === 'lancamentos' && (
         <LancamentosTab

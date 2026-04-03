@@ -5,9 +5,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { TabId } from '@/components/BottomNav';
 import { useFazenda } from '@/contexts/FazendaContext';
 import {
-  ChevronRight, Lock, AlertCircle,
+  Lock, AlertCircle,
   ArrowLeftRight, LayoutGrid, CloudRain,
-  GitCompare, Map, Layers,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -42,11 +41,6 @@ const ACOES_PRINCIPAIS = [
     icon: CloudRain,
     description: 'Registro climático',
   },
-];
-
-const PASTOS_ITEMS = [
-  { label: 'Mapa de Pastos', tab: 'mapa_pastos' as TabId, icon: Map, description: 'Visualização consolidada' },
-  { label: 'Mapa Geográfico', tab: 'mapa_geo_pastos' as TabId, icon: Map, description: 'Mapa real com polígonos KML' },
 ];
 
 export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
@@ -109,34 +103,6 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
           })}
         </div>
 
-        {/* ── PASTOS ── */}
-        <div className="grid grid-cols-2 gap-3">
-          {PASTOS_ITEMS.map(item => {
-            const blocked = isBlocked(item.tab);
-            return (
-              <button
-                key={item.tab}
-                onClick={() => navTo(item.tab)}
-                className={`flex items-center gap-2.5 rounded-xl border bg-card px-3 py-3 transition-all group ${
-                  blocked
-                    ? 'border-border opacity-50 cursor-not-allowed'
-                    : 'border-border hover:border-primary/40 hover:shadow-sm'
-                }`}
-              >
-                <item.icon className={`h-5 w-5 shrink-0 ${blocked ? 'text-muted-foreground' : 'text-primary'}`} />
-                <div className="text-left min-w-0 flex-1">
-                  <p className={`text-xs font-bold leading-tight ${blocked ? 'text-muted-foreground' : 'text-foreground'}`}>{item.label}</p>
-                  <p className="text-[9px] text-muted-foreground mt-0.5 leading-tight">{item.description}</p>
-                </div>
-                {blocked ? (
-                  <Lock className="h-3 w-3 text-muted-foreground shrink-0" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0" />
-                )}
-              </button>
-            );
-          })}
-        </div>
       </div>
     </div>
   );
