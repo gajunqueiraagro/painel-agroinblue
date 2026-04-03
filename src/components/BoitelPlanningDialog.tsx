@@ -330,22 +330,6 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 </CSection>
               )}
 
-              {/* DESTAQUE RESULTADO — sem card colorido */}
-              <Separator className="!my-0.5" />
-              <div className="grid grid-cols-2 gap-1 py-0.5">
-                <div>
-                  <span className="text-[7px] uppercase text-muted-foreground font-bold block">Total Op.</span>
-                  <strong className={`text-[13px] tabular-nums ${pos ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive'}`}>R$ {fmtR$(calc.tOp)}</strong>
-                </div>
-                <div>
-                  <span className="text-[7px] uppercase text-muted-foreground font-bold block">Res. Líquido</span>
-                  <strong className={`text-[13px] tabular-nums ${pos ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive'}`}>R$ {fmtR$(calc.rLiq)}</strong>
-                </div>
-              </div>
-              <div className="flex justify-around text-[7px] text-muted-foreground">
-                <span>/cab <strong className="text-foreground tabular-nums">R$ {fmtR$(calc.rLCab)}</strong></span>
-                <span>/kg <strong className="text-foreground tabular-nums">R$ {fmtR$(calc.rLKg)}</strong></span>
-              </div>
 
               {/* COMPARATIVO */}
               <Separator className="!my-0.5" />
