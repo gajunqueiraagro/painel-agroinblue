@@ -135,6 +135,7 @@ const Index = () => {
   const [lancamentosFromEvolCategoria, setLancamentosFromEvolCategoria] = useState(false);
   const [lancamentosFromFluxoAnual, setLancamentosFromFluxoAnual] = useState(false);
   const [abateParaEditar, setAbateParaEditar] = useState<Lancamento | null>(null);
+  const [vendaParaEditar, setVendaParaEditar] = useState<Lancamento | null>(null);
   const { user } = useAuth();
   const { canViewTab, canEdit, isReadOnly } = usePermissions();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
