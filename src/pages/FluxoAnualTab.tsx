@@ -57,6 +57,11 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'previsto'>('realizado');
 
+  // Fonte única oficial de indicadores mensais (view consolidada)
+  const cenarioView = statusFiltro === 'realizado' ? 'realizado' : 'meta';
+  const { data: zootMensal = [] } = useZootMensal({ ano: Number(anoFiltro), cenario: cenarioView as 'realizado' | 'meta' });
+  const zootByMes = useMemo(() => indexByMes(zootMensal), [zootMensal]);
+
   const lancFiltrados = useMemo(() => {
     const cenario = statusFiltro === 'realizado' ? 'realizado' : 'meta';
     return filtrarPorCenario(lancamentos, cenario);
