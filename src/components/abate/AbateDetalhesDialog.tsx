@@ -468,7 +468,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
           </table>
           {calc.valorBruto > 0 && calc.funruralTotal > 0 && (
             <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded px-2 py-1 flex justify-between text-[10px]">
-              <span className="font-bold">Valor Bruto (Base - Funrural)</span>
+              <span className="font-bold">Valor Bruto (desconto - Funrural)</span>
               <span className="font-bold text-primary tabular-nums">{formatMoeda(calc.valorBruto)}</span>
             </div>
           )}
