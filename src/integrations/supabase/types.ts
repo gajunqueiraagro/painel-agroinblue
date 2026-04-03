@@ -3648,6 +3648,47 @@ export type Database = {
           },
         ]
       }
+      vw_zoot_fazenda_mensal: {
+        Row: {
+          ano: number | null
+          ano_mes: string | null
+          area_produtiva_ha: number | null
+          cabecas_final: number | null
+          cabecas_inicio: number | null
+          cenario: string | null
+          cliente_id: string | null
+          dias_mes: number | null
+          entradas: number | null
+          fazenda_id: string | null
+          gmd_kg_cab_dia: number | null
+          lotacao_ua_ha: number | null
+          mes: number | null
+          mes_key: string | null
+          peso_entradas_kg: number | null
+          peso_inicio_kg: number | null
+          peso_medio_final_kg: number | null
+          peso_saidas_kg: number | null
+          peso_total_final_kg: number | null
+          saidas: number | null
+          ua_media: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saldos_iniciais_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saldos_iniciais_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       audit_modulo_from_lancamento_tipo: {
