@@ -34,9 +34,10 @@ interface Props {
   onRemover: (id: string) => void;
   onCountFinanceiros?: (id: string) => Promise<number>;
   onEditarAbate?: (lancamento: Lancamento) => void;
+  onEditarVenda?: (lancamento: Lancamento) => void;
 }
 
-export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover, onCountFinanceiros, onEditarAbate }: Props) {
+export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover, onCountFinanceiros, onEditarAbate, onEditarVenda }: Props) {
   const { fazendaAtual, fazendas } = useFazenda();
   const nomeFazenda = fazendaAtual?.nome || '';
   const outrasFazendas = useMemo(() => fazendas.filter(f => f.id !== fazendaAtual?.id), [fazendas, fazendaAtual]);
@@ -64,6 +65,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
 
   const isCompra = lancamento.tipo === 'compra';
   const isAbate = lancamento.tipo === 'abate';
+  const isVenda = lancamento.tipo === 'venda';
 
   const loadFinRecords = useCallback(() => {
     if (!isCompra) return;
@@ -97,6 +99,10 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       // Redirect abate to the full form in LancamentosTab
       onClose();
       onEditarAbate(lancamento);
+    } else if (isVenda && onEditarVenda) {
+      // Redirect venda to the full form in LancamentosTab
+      onClose();
+      onEditarVenda(lancamento);
     } else if (isCompra) {
       // Open unified purchase edit sheet
       setCompraForm({ ...lancamento });
