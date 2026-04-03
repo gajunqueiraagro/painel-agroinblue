@@ -256,21 +256,21 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
               <Separator className="!my-0.5" />
               <ST>Custos</ST>
               <div className="grid grid-cols-2 gap-1">
-                {data.modalidadeCusto === 'diaria' && <F label="R$/cab/dia"><IM value={data.custoDiaria} onChange={v => set('custoDiaria', v)} step="0.01" /></F>}
-                {data.modalidadeCusto === 'arroba' && <F label="R$/@ prod."><IM value={data.custoArroba} onChange={v => set('custoArroba', v)} /></F>}
+                {data.modalidadeCusto === 'diaria' && <FH label="R$/cab/dia" hint={data.qtdCabecas > 0 ? `Total: R$ ${fmtR$(data.custoDiaria * data.dias * data.qtdCabecas)} | R$ ${fmtR$(data.custoDiaria * data.dias)}/cab` : undefined}><IM value={data.custoDiaria} onChange={v => set('custoDiaria', v)} step="0.01" /></FH>}
+                {data.modalidadeCusto === 'arroba' && <FH label="R$/@ prod." hint={calc.aP > 0 ? `Total: R$ ${fmtR$(data.custoArroba * calc.aP)}` : undefined}><IM value={data.custoArroba} onChange={v => set('custoArroba', v)} /></FH>}
                 {data.modalidadeCusto === 'parceria' && (<><F label="% parceiro"><IP value={data.percentualParceria} onChange={v => set('percentualParceria', v)} /></F><F label="Extras R$"><IM value={data.custosExtrasParceria} onChange={v => set('custosExtrasParceria', v)} /></F></>)}
-                <F label="Frete R$"><IM value={data.custoFrete} onChange={v => set('custoFrete', v)} step="0.01" /></F>
+                <FH label="Frete R$" hint={data.qtdCabecas > 0 && data.custoFrete > 0 ? `R$ ${fmtR$(data.custoFrete / data.qtdCabecas)}/cab` : undefined}><IM value={data.custoFrete} onChange={v => set('custoFrete', v)} step="0.01" /></FH>
               </div>
               <div className="grid grid-cols-2 gap-1">
-                <F label="Sanidade R$"><IM value={data.custoSanidade} onChange={v => set('custoSanidade', v)} /></F>
-                <F label="Outros R$"><IM value={data.outrosCustos} onChange={v => set('outrosCustos', v)} step="0.01" /></F>
+                <FH label="Sanidade R$" hint={data.qtdCabecas > 0 && data.custoSanidade > 0 ? `R$ ${fmtR$(data.custoSanidade / data.qtdCabecas)}/cab` : undefined}><IM value={data.custoSanidade} onChange={v => set('custoSanidade', v)} /></FH>
+                <FH label="Outros R$" hint={data.qtdCabecas > 0 && data.outrosCustos > 0 ? `R$ ${fmtR$(data.outrosCustos / data.qtdCabecas)}/cab` : undefined}><IM value={data.outrosCustos} onChange={v => set('outrosCustos', v)} step="0.01" /></FH>
               </div>
 
               <Separator className="!my-0.5" />
               <ST>Comercialização</ST>
               <div className="grid grid-cols-2 gap-1">
-                <F label="Preço venda R$/@"><IM value={data.precoVendaArroba} onChange={v => set('precoVendaArroba', v)} step="0.01" /></F>
-                <F label="Despesas com abate R$"><IM value={data.despesasAbate} onChange={v => set('despesasAbate', v)} /></F>
+                <FH label="Preço venda R$/@" hint={data.qtdCabecas > 0 && calc.aS > 0 ? `R$ ${fmtR$(data.precoVendaArroba * calc.aS)}/cab` : undefined}><IM value={data.precoVendaArroba} onChange={v => set('precoVendaArroba', v)} step="0.01" /></FH>
+                <FH label="Despesas c/ abate R$" hint={data.qtdCabecas > 0 && data.despesasAbate > 0 ? `R$ ${fmtR$(data.despesasAbate / data.qtdCabecas)}/cab` : undefined}><IM value={data.despesasAbate} onChange={v => set('despesasAbate', v)} /></FH>
               </div>
             </div>
 
