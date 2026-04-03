@@ -200,6 +200,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const consumoFinanceiroRef = useRef<ConsumoFinanceiroPanelRef>(null);
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState('todos');
+
+  // Internal edit origin context — saves aba/filters before switching to form mode
+  const internalEditOrigin = useRef<{ aba: Aba; anoFiltro: string; mesFiltro: string } | null>(null);
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
   const [statusOp, setStatusOp] = useState<StatusOperacional>('conciliado');
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
