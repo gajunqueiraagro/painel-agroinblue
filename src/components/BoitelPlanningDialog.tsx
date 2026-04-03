@@ -159,20 +159,20 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <HI l="Período" v={`${data.dias} dias`} />
               </div>
               <div className="grid grid-cols-2 gap-x-6 gap-y-0 text-[9px]">
-                <HI l="Custo @ Prod." v={formatMoeda(calc.cPArr)} />
+                <HI l="Custo @ Prod." v={`R$ ${fmtR$(calc.cPArr)}`} />
                 <div className="flex gap-2 items-baseline justify-end">
                   <span className="text-slate-400 text-[8px]">RES. LÍQ. TOTAL</span>
-                  <strong className={`text-[15px] tabular-nums ${pos ? 'text-emerald-300' : 'text-red-300'}`}>{formatMoeda(calc.rLiq)}</strong>
+                  <strong className={`text-[15px] tabular-nums ${pos ? 'text-emerald-300' : 'text-red-300'}`}>R$ {fmtR$(calc.rLiq)}</strong>
                 </div>
-                <HI l="Custo cab." v={formatMoeda(calc.cPCab)} />
+                <HI l="Custo cab." v={`R$ ${fmtR$(calc.cPCab)}`} />
                 <div className="flex gap-2 items-baseline justify-end">
                   <span className="text-slate-400 text-[8px]">RES. LÍQ. R$/CAB</span>
-                  <strong className={`text-[13px] tabular-nums ${pos ? 'text-emerald-300' : 'text-red-300'}`}>{formatMoeda(calc.rLCab)}</strong>
+                  <strong className={`text-[13px] tabular-nums ${pos ? 'text-emerald-300' : 'text-red-300'}`}>R$ {fmtR$(calc.rLCab)}</strong>
                 </div>
-                <HI l="R$/KG" v={formatMoeda(calc.rLKg)} />
+                <HI l="R$/KG" v={`R$ ${fmtR$(calc.rLKg)}`} />
                 <div className="flex gap-2 items-baseline justify-end">
                   <span className="text-slate-400 text-[8px]">RES. LÍQ. R$/KG</span>
-                  <strong className={`text-[13px] tabular-nums ${pos ? 'text-emerald-300' : 'text-red-300'}`}>{formatMoeda(calc.rLKg)}</strong>
+                  <strong className={`text-[13px] tabular-nums ${pos ? 'text-emerald-300' : 'text-red-300'}`}>R$ {fmtR$(calc.rLKg)}</strong>
                 </div>
               </div>
             </div>
