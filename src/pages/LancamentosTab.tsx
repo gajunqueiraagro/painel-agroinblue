@@ -979,6 +979,30 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('conciliado');
           resetFinancialFields();
           toast.success('Venda atualizada com financeiro!');
+        } else if (isCompra && compraDetalhes && fazendaAtual && clienteAtual) {
+          // Re-generate financeiro for compra edit
+          await gerarFinanceiroCompra({
+            compraDetalhes,
+            lancamentoId: editingAbateId,
+            clienteId: clienteAtual.id,
+            fazendaId: fazendaAtual.id,
+            quantidade: Number(quantidade) || 0,
+            pesoKg: Number(pesoKg) || 0,
+            data,
+            categoria,
+            statusOp,
+            fazendaOrigem,
+            fornecedorId: compraFornecedorId,
+          });
+          setEditingAbateId(null);
+          setLastSavedLancamentoId(null);
+          setQuantidade(''); setCategoria(''); setPesoKg('');
+          setFazendaOrigem(''); setFazendaDestino('');
+          setData(format(new Date(), 'yyyy-MM-dd'));
+          setObservacao(''); setStatusOp('conciliado');
+          resetFinancialFields();
+          setCompraDetalhes(null);
+          toast.success('Compra atualizada com financeiro!');
         } else {
           setEditingAbateId(null);
           setLastSavedLancamentoId(null);
