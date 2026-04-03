@@ -412,87 +412,130 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setFazendaDestino(l.fazendaDestino || '');
     setObservacao(l.observacao || '');
     setStatusOp((l.statusOperacional as StatusOperacional) || 'conciliado');
-    setTipoPeso(l.tipoPeso || 'vivo');
     setNotaFiscal(l.notaFiscal || '');
 
-    // 3. Financial / commercial data
-    setDataVenda(l.dataVenda || '');
-    setDataEmbarque(l.dataEmbarque || '');
-    setDataAbate(l.dataAbate || l.data || '');
-    setTipoVenda(l.tipoVenda || '');
-    setPrecoArroba(l.precoArroba ? String(l.precoArroba) : '');
-    setPesoCarcacaKg(l.pesoCarcacaKg ? String(l.pesoCarcacaKg) : '');
+    // 3. Check for snapshot first (PRIORITY 1)
+    const snap = l.detalhesSnapshot;
+    if (snap && snap.type === 'abate') {
+      // Direct restore from snapshot
+      setTipoPeso(snap.tipoPeso || 'vivo');
+      setDataVenda(snap.dataVenda || '');
+      setDataEmbarque(snap.dataEmbarque || '');
+      setDataAbate(snap.dataAbate || l.data || '');
+      setTipoVenda(snap.tipoVenda || '');
+      setPrecoArroba(snap.precoArroba || '');
+      setRendCarcaca(snap.rendCarcaca || '');
+      setBonusPrecoce(snap.bonusPrecoce || '');
+      setBonusQualidade(snap.bonusQualidade || '');
+      setBonusListaTrace(snap.bonusListaTrace || '');
+      setDescontoQualidade(snap.descontoQualidade || '');
+      setFunruralPct(snap.funruralPct || '');
+      setFunruralReais(snap.funruralReais || '');
+      setOutrosDescontos(snap.outrosDescontos || '');
 
-    // 4. Reverse-calc rendimento from pesoCarcacaKg / pesoMedioKg
-    if (l.pesoCarcacaKg && l.pesoMedioKg && l.pesoMedioKg > 0) {
-      setRendCarcaca(String(((l.pesoCarcacaKg / l.pesoMedioKg) * 100).toFixed(2)));
+      setAbateDetalhes({
+        dataVenda: snap.dataVenda || '',
+        dataEmbarque: snap.dataEmbarque || '',
+        dataAbate: snap.dataAbate || l.data || '',
+        tipoVenda: snap.tipoVenda || '',
+        tipoPeso: snap.tipoPeso || 'vivo',
+        rendCarcaca: snap.rendCarcaca || '',
+        precoArroba: snap.precoArroba || '',
+        bonusPrecoce: snap.bonusPrecoce || '',
+        bonusQualidade: snap.bonusQualidade || '',
+        bonusListaTrace: snap.bonusListaTrace || '',
+        descontoQualidade: snap.descontoQualidade || '',
+        funruralPct: snap.funruralPct || '',
+        funruralReais: snap.funruralReais || '',
+        outrosDescontos: snap.outrosDescontos || '',
+        notaFiscal: snap.notaFiscal || '',
+        formaReceb: snap.formaReceb || 'avista',
+        qtdParcelas: snap.qtdParcelas || '1',
+        parcelas: snap.parcelas || [],
+      });
     } else {
-      setRendCarcaca('');
-    }
+      // FALLBACK: reconstruct from lancamento fields
+      setTipoPeso(l.tipoPeso || 'vivo');
+      setDataVenda(l.dataVenda || '');
+      setDataEmbarque(l.dataEmbarque || '');
+      setDataAbate(l.dataAbate || l.data || '');
+      setTipoVenda(l.tipoVenda || '');
+      setPrecoArroba(l.precoArroba ? String(l.precoArroba) : '');
+      setPesoCarcacaKg(l.pesoCarcacaKg ? String(l.pesoCarcacaKg) : '');
 
-    // 5. Bonus/desconto stored as totals → convert back to R$/@ for form inputs
-    const rend = l.pesoCarcacaKg && l.pesoMedioKg ? l.pesoCarcacaKg / l.pesoMedioKg : 0;
-    const arrobasCab = (l.pesoMedioKg ?? 0) * rend / 15;
-    const totalArrobas = arrobasCab * l.quantidade;
-    const toArroba = (total: number | undefined) => {
-      if (!total || totalArrobas <= 0) return '';
-      return String((total / totalArrobas).toFixed(2));
-    };
-    setBonusPrecoce(toArroba(l.bonusPrecoce));
-    setBonusQualidade(toArroba(l.bonusQualidade));
-    setBonusListaTrace(toArroba(l.bonusListaTrace));
-    setDescontoQualidade(toArroba(l.descontoQualidade));
-    setOutrosDescontos(l.outrosDescontos ? String(l.outrosDescontos) : '');
+      if (l.pesoCarcacaKg && l.pesoMedioKg && l.pesoMedioKg > 0) {
+        setRendCarcaca(String(((l.pesoCarcacaKg / l.pesoMedioKg) * 100).toFixed(2)));
+      } else {
+        setRendCarcaca('');
+      }
 
-    // 6. Funrural: stored as total → reverse to percentage of valor bruto
-    if (l.descontoFunrural && l.descontoFunrural > 0 && totalArrobas > 0 && l.precoArroba) {
-      const valorBruto = totalArrobas * l.precoArroba;
-      if (valorBruto > 0) {
-        setFunruralPct(String(((l.descontoFunrural / valorBruto) * 100).toFixed(2)));
+      const rend = l.pesoCarcacaKg && l.pesoMedioKg ? l.pesoCarcacaKg / l.pesoMedioKg : 0;
+      const arrobasCab = (l.pesoMedioKg ?? 0) * rend / 15;
+      const totalArrobas = arrobasCab * l.quantidade;
+      const toArroba = (total: number | undefined) => {
+        if (!total || totalArrobas <= 0) return '';
+        return String((total / totalArrobas).toFixed(2));
+      };
+      setBonusPrecoce(toArroba(l.bonusPrecoce));
+      setBonusQualidade(toArroba(l.bonusQualidade));
+      setBonusListaTrace(toArroba(l.bonusListaTrace));
+      setDescontoQualidade(toArroba(l.descontoQualidade));
+      setOutrosDescontos(l.outrosDescontos ? String(l.outrosDescontos) : '');
+
+      if (l.descontoFunrural && l.descontoFunrural > 0 && totalArrobas > 0 && l.precoArroba) {
+        const valorBruto = totalArrobas * l.precoArroba;
+        if (valorBruto > 0) {
+          setFunruralPct(String(((l.descontoFunrural / valorBruto) * 100).toFixed(2)));
+        } else {
+          setFunruralPct('');
+        }
       } else {
         setFunruralPct('');
       }
-    } else {
-      setFunruralPct('');
+
+      const rendCalc = l.pesoCarcacaKg && l.pesoMedioKg && l.pesoMedioKg > 0
+        ? String(((l.pesoCarcacaKg / l.pesoMedioKg) * 100).toFixed(2)) : '';
+      const funruralPctCalc = (() => {
+        if (l.descontoFunrural && l.descontoFunrural > 0 && totalArrobas > 0 && l.precoArroba) {
+          const vb = totalArrobas * l.precoArroba;
+          return vb > 0 ? String(((l.descontoFunrural / vb) * 100).toFixed(2)) : '';
+        }
+        return '';
+      })();
+
+      setAbateDetalhes({
+        dataVenda: l.dataVenda || '',
+        dataEmbarque: l.dataEmbarque || '',
+        dataAbate: l.dataAbate || l.data || '',
+        tipoVenda: l.tipoVenda || '',
+        tipoPeso: l.tipoPeso || 'vivo',
+        rendCarcaca: rendCalc,
+        precoArroba: l.precoArroba ? String(l.precoArroba) : '',
+        bonusPrecoce: toArroba(l.bonusPrecoce),
+        bonusQualidade: toArroba(l.bonusQualidade),
+        bonusListaTrace: toArroba(l.bonusListaTrace),
+        descontoQualidade: toArroba(l.descontoQualidade),
+        funruralPct: funruralPctCalc,
+        funruralReais: '',
+        outrosDescontos: l.outrosDescontos ? String(l.outrosDescontos) : '',
+        notaFiscal: l.notaFiscal || '',
+        formaReceb: 'avista',
+        qtdParcelas: '1',
+        parcelas: [],
+      });
     }
 
-    // 7. Build abateDetalhes for new modal flow
-    const rendCalc = l.pesoCarcacaKg && l.pesoMedioKg && l.pesoMedioKg > 0
-      ? String(((l.pesoCarcacaKg / l.pesoMedioKg) * 100).toFixed(2)) : '';
-    const funruralPctCalc = (() => {
-      if (l.descontoFunrural && l.descontoFunrural > 0 && totalArrobas > 0 && l.precoArroba) {
-        const vb = totalArrobas * l.precoArroba;
-        return vb > 0 ? String(((l.descontoFunrural / vb) * 100).toFixed(2)) : '';
-      }
-      return '';
-    })();
-
-    setAbateDetalhes({
-      dataVenda: l.dataVenda || '',
-      dataEmbarque: l.dataEmbarque || '',
-      dataAbate: l.dataAbate || l.data || '',
-      tipoVenda: l.tipoVenda || '',
-      tipoPeso: l.tipoPeso || 'vivo',
-      rendCarcaca: rendCalc,
-      precoArroba: l.precoArroba ? String(l.precoArroba) : '',
-      bonusPrecoce: toArroba(l.bonusPrecoce),
-      bonusQualidade: toArroba(l.bonusQualidade),
-      bonusListaTrace: toArroba(l.bonusListaTrace),
-      descontoQualidade: toArroba(l.descontoQualidade),
-      funruralPct: funruralPctCalc,
-      funruralReais: '',
-      outrosDescontos: l.outrosDescontos ? String(l.outrosDescontos) : '',
-      notaFiscal: l.notaFiscal || '',
-      formaReceb: 'avista',
-      qtdParcelas: '1',
-      parcelas: [],
-    });
+    // Fornecedor
+    if (l.fazendaDestino) {
+      const forn = abateFornecedores.find(f => f.nome === l.fazendaDestino);
+      if (forn) setAbateFornecedorId(forn.id);
+    }
 
     // 8. Set editing mode
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, []);
+  }, [abateFornecedores]);
 
   // Auto-load abate for editing when navigated from another tab
   useEffect(() => {
