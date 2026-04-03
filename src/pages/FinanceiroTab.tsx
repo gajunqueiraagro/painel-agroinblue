@@ -740,9 +740,9 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
             onClose={() => setDetalheId(null)}
             onEditar={(id, dados) => { onEditar(id, dados); setDetalheId(null); }}
             onRemover={(id) => { onRemover(id); setDetalheId(null); }}
-            onEditarAbate={onEditarAbate ? (l) => { setDetalheId(null); onEditarAbate(l); } : undefined}
-            onEditarVenda={onEditarVenda ? (l) => { setDetalheId(null); onEditarVenda(l); } : undefined}
-            onEditarCompra={onEditarCompra ? (l) => { setDetalheId(null); onEditarCompra(l); } : undefined}
+            onEditarAbate={onEditarAbate ? (l) => { setDetalheId(null); onEditarAbate(l, { subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
+            onEditarVenda={onEditarVenda ? (l) => { setDetalheId(null); onEditarVenda(l, { subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
+            onEditarCompra={onEditarCompra ? (l) => { setDetalheId(null); onEditarCompra(l, { subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
           />
         ) : null;
       })()}
