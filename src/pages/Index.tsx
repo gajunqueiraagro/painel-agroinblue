@@ -391,7 +391,7 @@ const Index = () => {
         <MovimentacaoTab onNavigate={(dest) => {
           if (dest === 'tipos') setActiveTab('financeiro');
           if (dest === 'resumo') setActiveTab('fluxo_anual');
-        }} />
+        }} onTabChange={handleTabChange} />
       )}
       {activeTab === 'lancamentos' && (
         <LancamentosTab
