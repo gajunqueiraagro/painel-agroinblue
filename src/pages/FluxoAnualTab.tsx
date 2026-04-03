@@ -11,6 +11,9 @@ import { calcFluxoAnual, FLUXO_LINHAS } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { parseISO, format } from 'date-fns';
 
+const QB = new Set(['04', '07', '10']);
+const qb = (key: string) => QB.has(key) ? 'border-l border-border/60' : '';
+
 const fmtNum = (v: number | string | undefined): string => {
   if (v == null) return '–';
   const n = typeof v === 'string' ? Number(v) : v;
