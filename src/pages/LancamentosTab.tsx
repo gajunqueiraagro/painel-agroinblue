@@ -1267,11 +1267,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       destinoFinal = motivoMorte === '__custom__' ? motivoMorteCustom : motivoMorte || undefined;
     }
 
-    // For Boitel venda, use lucroTotal from boitel engine as the grid TOTAL
+    // For Boitel venda, use saldoReceber (financial cash value) as the grid TOTAL
     const isBoitelVenda = isVenda && tipoPeso === 'boitel';
-    const boitelLucro = boitelDataForResumo?._lucroTotal || 0;
+    const boitelSaldo = boitelDataForResumo?._saldoReceber || boitelDataForResumo?._lucroTotal || 0;
     const valorTotalFinal = isBoitelVenda
-      ? (boitelLucro > 0 ? boitelLucro : undefined)
+      ? (boitelSaldo > 0 ? boitelSaldo : undefined)
       : (calc.valorLiquido > 0 ? calc.valorLiquido : undefined);
 
     const abateDataVenda = isAbate ? (abateDetalhes?.dataVenda || dataVenda || format(new Date(), 'yyyy-MM-dd')) : (dataVenda || undefined);
