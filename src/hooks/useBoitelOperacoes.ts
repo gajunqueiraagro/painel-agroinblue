@@ -131,28 +131,26 @@ export async function gerarFinanceiroBoitel(
   }
 
   const userId = (await supabase.auth.getUser()).data.user?.id;
+  const grupoId = crypto.randomUUID();
 
-  // Cancel old entries on update
-  if (options?.isUpdate) {
-    const { data: old } = await supabase
-      .from('financeiro_lancamentos_v2')
-      .select('id')
-      .eq('boitel_id', op.id)
-      .eq('cancelado', false);
-    const oldIds = (old || []).map(r => r.id);
-    if (oldIds.length > 0) {
-      await supabase.from('financeiro_lancamentos_v2')
-        .update({ cancelado: true, cancelado_em: new Date().toISOString(), cancelado_por: userId || null })
-        .in('id', oldIds);
-      await supabase.from('audit_log_movimentacoes').insert({
-        cliente_id: clienteId,
-        usuario_id: userId || null,
-        acao: 'recalculo_financeiro_boitel',
-        movimentacao_id: lancamentoId,
-        financeiro_ids: oldIds,
-        detalhes: { registros_cancelados: oldIds.length, motivo: 'Recálculo financeiro do boitel' },
-      });
-    }
+  // IDEMPOTENTE: sempre cancela TODOS os lançamentos anteriores deste boitel (sem filtrar cancelado)
+  const { data: old } = await supabase
+    .from('financeiro_lancamentos_v2')
+    .select('id')
+    .eq('boitel_id', op.id);
+  const oldIds = (old || []).map(r => r.id);
+  if (oldIds.length > 0) {
+    await supabase.from('financeiro_lancamentos_v2')
+      .update({ cancelado: true, cancelado_em: new Date().toISOString(), cancelado_por: userId || null } as any)
+      .in('id', oldIds);
+    await supabase.from('audit_log_movimentacoes').insert({
+      cliente_id: clienteId,
+      usuario_id: userId || null,
+      acao: 'recalculo_financeiro_boitel',
+      movimentacao_id: lancamentoId,
+      financeiro_ids: oldIds,
+      detalhes: { registros_cancelados: oldIds.length, motivo: 'Recálculo financeiro do boitel (idempotente)' },
+    });
   }
 
   // === MAPEAMENTO EXPLÍCITO ===
