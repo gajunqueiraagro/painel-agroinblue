@@ -6,8 +6,9 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
-import { Calculator } from 'lucide-react';
+import { Calculator, ChevronDown } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 
 interface Parcela { data: string; valor: number; }
@@ -51,9 +52,7 @@ function fmtP(v: number) { return formatKg(v); }
 function fmtG(v: number) { if (!v || isNaN(v)) return '-'; return v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }); }
 function fmtA(v: number) { return formatArroba(v); }
 function fmtPct1(v: number) { if (v === null || v === undefined || isNaN(v)) return '-'; return v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%'; }
-function fmtPct2(v: number) { if (v === null || v === undefined || isNaN(v)) return '-'; return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%'; }
 function fmtDate(iso: string) { if (!iso) return '-'; try { return format(parseISO(iso), 'dd/MM/yyyy'); } catch { return '-'; } }
-function fmtBR2(v: number) { if (!v || isNaN(v)) return '-'; return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quantidade, pesoKg, fazendaNome, dataLancamento, destinoNome }: Props) {
   const [data, setData] = useState<BoitelData>({ ...defaultData });
@@ -101,17 +100,12 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     const lVKg = pi > 0 ? lVCab / pi : 0;
     const cPCab = q > 0 ? cOp / q : 0;
     const cPArr = aP > 0 ? cOp / aP : 0;
-    const qCab = pi * (qv / 100);
-    const cdCP = cd * dias;
-    const frCab = q > 0 ? cf / q : 0;
-    const saCab = q > 0 ? cs / q : 0;
-    const oCab = q > 0 ? oc / q : 0;
-    const pvCab = aS * pva;
-    const daCab = q > 0 ? da / q : 0;
-    const coCabC = co * pi;
     const custoTotalBoitel = cDT + cs + oc;
     const margemVenda = fba > 0 ? ((fba - cOp) / fba * 100) : 0;
-    return { ple, ganho, pf, aEF, aS, aPcab, aP, aTS, gmc, fba, cAb, fLiq, pParte, pArr, rProd, cDT, cs, oc, cf, cOp, rBoitel, tOp, coT, coCab, rLiq, rLCab, rLKg, lViab, lVCab, lVKg, cPCab, cPArr, qCab, cdCP, frCab, saCab, oCab, pvCab, daCab, coCabC, custoTotalBoitel, margemVenda };
+    // Oportunidade per-unit
+    const coKg = co;
+    const coCabC = co * pi;
+    return { ple, ganho, pf, aEF, aS, aPcab, aP, aTS, gmc, fba, cAb, fLiq, pParte, pArr, rProd, cDT, cs, oc, cf, cOp, rBoitel, tOp, coT, coCab, rLiq, rLCab, rLKg, lViab, lVCab, lVKg, cPCab, cPArr, custoTotalBoitel, margemVenda, coKg, coCabC };
   }, [data]);
 
   const gerarParcelas = useCallback((n: number, total: number): Parcela[] => {
@@ -136,81 +130,57 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
   const pos = calc.rLiq > 0;
   const saldoReceber = calc.fba - calc.custoTotalBoitel + data.valorTotalAntecipado;
 
+  // Comparativo oportunidade
+  const diffTotal = calc.rLiq - calc.coT;
+  const diffCab = calc.rLCab - calc.coCabC;
+  const diffKg = calc.rLKg - calc.coKg;
+  const pctDiffOp = calc.coT > 0 ? ((calc.rLiq - calc.coT) / calc.coT * 100) : 0;
+
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-[98vw] w-[1440px] p-0 gap-0 overflow-hidden" style={{ maxHeight: '96vh' }}>
+      <DialogContent className="max-w-[95vw] w-[1180px] p-0 gap-0 overflow-hidden flex flex-col" style={{ maxHeight: '96vh' }}>
         <TooltipProvider delayDuration={200}>
 
-          {/* ═══ CABEÇALHO LARANJA ═══ */}
-          <div className="bg-gradient-to-r from-orange-600 to-orange-500 text-white px-4 py-2">
-            <div className="flex items-center gap-2 mb-1.5">
-              <Calculator className="h-4 w-4 text-orange-200" />
-              <span className="text-[11px] font-black tracking-widest uppercase">Simulador Boitel</span>
+          {/* ═══ CABEÇALHO AZUL PETRÓLEO ═══ */}
+          <div className="bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 text-white px-4 py-1.5 shrink-0">
+            <div className="flex items-center gap-2 mb-1">
+              <Calculator className="h-3.5 w-3.5 text-slate-400" />
+              <span className="text-[10px] font-black tracking-widest uppercase text-slate-300">Simulador Boitel</span>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              {/* Lado esquerdo — dados base */}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-0 text-[10px]">
-                <div className="flex gap-2">
-                  <span className="text-orange-200">Faz. Origem</span>
-                  <strong>{data.fazendaOrigem || '-'}</strong>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-orange-200">Data envio</span>
-                  <strong className="tabular-nums">{fmtDate(data.dataEnvio)}</strong>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-orange-200">Qtde cab.</span>
-                  <strong className="tabular-nums">{data.qtdCabecas || '-'}</strong>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-orange-200">Data Abate</span>
-                  <strong className="tabular-nums">{fmtDate(dataAbateISO)}</strong>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-orange-200">Peso Saída Faz.</span>
-                  <strong className="tabular-nums">{fmtP(data.pesoInicial)}</strong>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-orange-200">Período</span>
-                  <strong className="tabular-nums">{data.dias} dias</strong>
-                </div>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-0 text-[9px]">
+                <HI l="Faz. Origem" v={data.fazendaOrigem || '-'} />
+                <HI l="Data envio" v={fmtDate(data.dataEnvio)} />
+                <HI l="Qtde cab." v={String(data.qtdCabecas || '-')} />
+                <HI l="Data Abate" v={fmtDate(dataAbateISO)} />
+                <HI l="Peso Saída Faz." v={fmtP(data.pesoInicial)} />
+                <HI l="Período" v={`${data.dias} dias`} />
               </div>
-
-              {/* Lado direito — resultados com destaque */}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-0 text-[10px]">
-                <div className="flex gap-2 items-baseline">
-                  <span className="text-orange-200">Custo @ Prod.</span>
-                  <strong className="tabular-nums">{formatMoeda(calc.cPArr)}</strong>
-                </div>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-0 text-[9px]">
+                <HI l="Custo @ Prod." v={formatMoeda(calc.cPArr)} />
                 <div className="flex gap-2 items-baseline justify-end">
-                  <span className="text-orange-200 text-[9px]">RESULTADO LÍQ. TOTAL</span>
-                  <strong className={`text-[16px] tabular-nums ${pos ? 'text-green-200' : 'text-red-200'}`}>{formatMoeda(calc.rLiq)}</strong>
+                  <span className="text-slate-400 text-[8px]">RES. LÍQ. TOTAL</span>
+                  <strong className={`text-[15px] tabular-nums ${pos ? 'text-emerald-300' : 'text-red-300'}`}>{formatMoeda(calc.rLiq)}</strong>
                 </div>
-                <div className="flex gap-2 items-baseline">
-                  <span className="text-orange-200">Custo cab.</span>
-                  <strong className="tabular-nums">{formatMoeda(calc.cPCab)}</strong>
-                </div>
+                <HI l="Custo cab." v={formatMoeda(calc.cPCab)} />
                 <div className="flex gap-2 items-baseline justify-end">
-                  <span className="text-orange-200 text-[9px]">RESULTADO LÍQ. R$/CAB</span>
-                  <strong className={`text-[14px] tabular-nums ${pos ? 'text-green-200' : 'text-red-200'}`}>{formatMoeda(calc.rLCab)}</strong>
+                  <span className="text-slate-400 text-[8px]">RES. LÍQ. R$/CAB</span>
+                  <strong className={`text-[13px] tabular-nums ${pos ? 'text-emerald-300' : 'text-red-300'}`}>{formatMoeda(calc.rLCab)}</strong>
                 </div>
-                <div className="flex gap-2 items-baseline">
-                  <span className="text-orange-200">R$/KG</span>
-                  <strong className="tabular-nums">{formatMoeda(calc.rLKg)}</strong>
-                </div>
+                <HI l="R$/KG" v={formatMoeda(calc.rLKg)} />
                 <div className="flex gap-2 items-baseline justify-end">
-                  <span className="text-orange-200 text-[9px]">RESULTADO LÍQ. R$/KG</span>
-                  <strong className={`text-[14px] tabular-nums ${pos ? 'text-green-200' : 'text-red-200'}`}>{formatMoeda(calc.rLKg)}</strong>
+                  <span className="text-slate-400 text-[8px]">RES. LÍQ. R$/KG</span>
+                  <strong className={`text-[13px] tabular-nums ${pos ? 'text-emerald-300' : 'text-red-300'}`}>{formatMoeda(calc.rLKg)}</strong>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* ═══ CORPO — 4 COLUNAS ═══ */}
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_1fr_17rem] gap-2 px-3 py-2 overflow-y-auto" style={{ maxHeight: 'calc(96vh - 90px)' }}>
+          {/* ═══ CORPO — 3 COLUNAS + RESULTADO ═══ */}
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_16rem] gap-x-3 gap-y-1 px-3 py-1.5 flex-1 overflow-y-auto min-h-0">
 
-            {/* COL 1 — BASE OPERACIONAL + ADIANTAMENTO */}
-            <div className="space-y-1.5">
+            {/* COL 1 — BASE + ADIANTAMENTO + DESEMPENHO */}
+            <div className="space-y-1">
               <ST>Base Operacional</ST>
               <div className="grid grid-cols-3 gap-1">
                 <F label="Cabeças"><I type="number" value={data.qtdCabecas || ''} onChange={e => set('qtdCabecas', +e.target.value || 0)} /></F>
@@ -218,10 +188,10 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <F label="Peso líq. ent."><CV>{fmtP(calc.ple)}</CV></F>
               </div>
               <div className="grid grid-cols-2 gap-1">
-                <F label="Boitel / Destino"><I value={data.nomeBoitel} onChange={e => set('nomeBoitel', e.target.value)} /></F>
+                <F label="Boitel / Destino"><I value={data.nomeBoitel} onChange={e => set('nomeBoitel', e.target.value)} className="text-left" /></F>
                 <F label="Modalidade">
                   <Select value={data.modalidadeCusto} onValueChange={(v: any) => set('modalidadeCusto', v)}>
-                    <SelectTrigger className="h-6 text-[10px]"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-5 text-[9px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="diaria" className="text-[10px]">Diária</SelectItem>
                       <SelectItem value="arroba" className="text-[10px]">Arroba</SelectItem>
@@ -230,17 +200,19 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                   </Select>
                 </F>
               </div>
-              <F label="Lote"><I value={data.lote} onChange={e => set('lote', e.target.value)} /></F>
-              <F label="Contrato / Baia"><I value={data.numeroContrato} onChange={e => set('numeroContrato', e.target.value)} /></F>
+              <div className="grid grid-cols-2 gap-1">
+                <F label="Lote"><I value={data.lote} onChange={e => set('lote', e.target.value)} className="text-left" /></F>
+                <F label="Contrato / Baia"><I value={data.numeroContrato} onChange={e => set('numeroContrato', e.target.value)} className="text-left" /></F>
+              </div>
 
-              {/* ADIANTAMENTO PARA BOITEL */}
-              <div className="flex items-center gap-1.5 pt-1">
-                <span className="text-[9px] font-bold uppercase text-foreground">Adiantamento para Boitel</span>
+              {/* ADIANTAMENTO */}
+              <div className="flex items-center gap-1.5 pt-0.5">
+                <span className="text-[8px] font-bold uppercase text-foreground">Adiantamento p/ Boitel</span>
                 <TB a={data.possuiAdiantamento} o={() => set('possuiAdiantamento', true)}>Sim</TB>
                 <TB a={!data.possuiAdiantamento} o={() => { set('possuiAdiantamento', false); set('valorAdiantamentoDiarias', 0); set('valorAdiantamentoSanitario', 0); set('valorAdiantamentoOutros', 0); set('valorTotalAntecipado', 0); set('pctAdiantamentoDiarias', 0); set('dataAdiantamento', ''); set('adiantamentoObservacao', ''); }}>Não</TB>
               </div>
               {data.possuiAdiantamento && (
-                <div className="bg-blue-50/60 dark:bg-blue-950/20 rounded border border-blue-200 dark:border-blue-800 p-1.5 space-y-1">
+                <div className="bg-blue-50/60 dark:bg-blue-950/20 rounded border border-blue-200 dark:border-blue-800 p-1 space-y-0.5">
                   <div className="grid grid-cols-2 gap-1">
                     <F label="Data"><I type="date" value={data.dataAdiantamento} onChange={e => set('dataAdiantamento', e.target.value)} /></F>
                     <F label="% diárias"><I type="number" value={data.pctAdiantamentoDiarias || ''} onChange={e => set('pctAdiantamentoDiarias', +e.target.value || 0)} step="0.1" /></F>
@@ -250,16 +222,14 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                     <F label="Sanitário R$"><I type="number" value={data.valorAdiantamentoSanitario || ''} onChange={e => set('valorAdiantamentoSanitario', +e.target.value || 0)} /></F>
                     <F label="Outros R$"><I type="number" value={data.valorAdiantamentoOutros || ''} onChange={e => set('valorAdiantamentoOutros', +e.target.value || 0)} /></F>
                   </div>
-                  <div className="flex justify-between text-[9px] bg-blue-100/60 dark:bg-blue-900/30 rounded px-1.5 py-0.5 border border-blue-300 dark:border-blue-700">
+                  <div className="flex justify-between text-[8px] bg-blue-100/60 dark:bg-blue-900/30 rounded px-1.5 py-0.5 border border-blue-300 dark:border-blue-700">
                     <span className="font-bold text-blue-800 dark:text-blue-300">Total</span>
                     <span className="font-bold text-blue-800 dark:text-blue-300 tabular-nums">{formatMoeda(data.valorTotalAntecipado)}</span>
                   </div>
                 </div>
               )}
-            </div>
 
-            {/* COL 2 — DESEMPENHO */}
-            <div className="space-y-1.5">
+              <Separator className="!my-0.5" />
               <ST>Desempenho</ST>
               <div className="grid grid-cols-2 gap-1">
                 <F label="Quebra viagem %"><I type="number" value={data.quebraViagem || ''} onChange={e => set('quebraViagem', +e.target.value || 0)} step="0.1" /></F>
@@ -273,24 +243,11 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <F label="Rend. entrada %"><I type="number" value={data.rendimentoEntrada || ''} onChange={e => set('rendimentoEntrada', +e.target.value || 0)} step="0.01" /></F>
                 <F label="Rend. saída %"><I type="number" value={data.rendimento || ''} onChange={e => set('rendimento', +e.target.value || 0)} step="0.01" /></F>
               </div>
-              {/* Calculados */}
-              <div className="bg-muted/40 rounded border p-1.5 space-y-0.5">
-                <div className="grid grid-cols-3 gap-1">
-                  <IV l="Peso final" v={fmtP(calc.pf)} t="Peso inicial + GMD × Dias" />
-                  <IV l="@ Prod./cab" v={fmtA(calc.aPcab)} t="@saída - @entrada por cabeça" />
-                  <IV l="Ganho/cab" v={fmtP(calc.ganho)} t="GMD × Dias" />
-                </div>
-                <div className="grid grid-cols-3 gap-1">
-                  <IV l="GMC" v={fmtG(calc.gmc)} t="(Carc.saída - Carc.ent) / Dias" />
-                  <IV l="@/cab saída" v={fmtA(calc.aS)} t="(PF × Rend) / 15" />
-                  <IV l="Custo/cab" v={formatMoeda(calc.cPCab)} t="Custos op. / cab" />
-                </div>
-              </div>
             </div>
 
-            {/* COL 3 — CUSTOS + COMERCIALIZAÇÃO + RECEBIMENTO */}
-            <div className="space-y-1.5">
-              <ST>Custos + Comercialização</ST>
+            {/* COL 2 — CUSTOS + COMERCIALIZAÇÃO + RECEBIMENTO */}
+            <div className="space-y-1">
+              <ST>Custos</ST>
               <div className="grid grid-cols-2 gap-1">
                 {data.modalidadeCusto === 'diaria' && <F label="R$/cab/dia"><I type="number" value={data.custoDiaria || ''} onChange={e => set('custoDiaria', +e.target.value || 0)} step="0.01" /></F>}
                 {data.modalidadeCusto === 'arroba' && <F label="R$/@ prod."><I type="number" value={data.custoArroba || ''} onChange={e => set('custoArroba', +e.target.value || 0)} /></F>}
@@ -302,103 +259,126 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <F label="Outros R$"><I type="number" value={data.outrosCustos || ''} onChange={e => set('outrosCustos', +e.target.value || 0)} step="0.01" /></F>
               </div>
 
-              <Separator className="!my-1" />
+              <Separator className="!my-0.5" />
               <ST>Comercialização</ST>
               <div className="grid grid-cols-2 gap-1">
                 <F label="Preço venda R$/@"><I type="number" value={data.precoVendaArroba || ''} onChange={e => set('precoVendaArroba', +e.target.value || 0)} step="0.01" /></F>
                 <F label="Despesas com abate R$"><I type="number" value={data.despesasAbate || ''} onChange={e => set('despesasAbate', +e.target.value || 0)} /></F>
               </div>
 
-              <Separator className="!my-1" />
+              <Separator className="!my-0.5" />
               <ST>Recebimento</ST>
               <div className="grid grid-cols-2 gap-1">
                 <TB a={data.formaReceb === 'avista'} o={() => handleForma('avista')} full>À vista</TB>
                 <TB a={data.formaReceb === 'prazo'} o={() => handleForma('prazo')} full>A prazo</TB>
               </div>
               {data.formaReceb === 'prazo' && (
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   <F label="Parcelas"><I type="number" min="1" max="48" value={data.qtdParcelas} onChange={e => handleQtdP(e.target.value)} /></F>
-                  {data.parcelas.map((p, i) => (
-                    <div key={i} className="grid grid-cols-2 gap-1 bg-muted/20 rounded p-1">
-                      <div><Label className="text-[7px]">P{i + 1}</Label><I type="date" value={p.data} onChange={e => { const np = [...data.parcelas]; np[i] = { ...np[i], data: e.target.value }; set('parcelas', np); }} /></div>
-                      <div><Label className="text-[7px]">R$</Label><I type="number" value={String(p.valor)} onChange={e => { const np = [...data.parcelas]; np[i] = { ...np[i], valor: +e.target.value || 0 }; set('parcelas', np); }} /></div>
-                    </div>
-                  ))}
+                  <div className="max-h-[80px] overflow-y-auto space-y-0.5">
+                    {data.parcelas.map((p, i) => (
+                      <div key={i} className="grid grid-cols-2 gap-1 bg-muted/20 rounded px-1 py-0.5">
+                        <div><Label className="text-[7px]">P{i + 1}</Label><I type="date" value={p.data} onChange={e => { const np = [...data.parcelas]; np[i] = { ...np[i], data: e.target.value }; set('parcelas', np); }} /></div>
+                        <div><Label className="text-[7px]">R$</Label><I type="number" value={String(p.valor)} onChange={e => { const np = [...data.parcelas]; np[i] = { ...np[i], valor: +e.target.value || 0 }; set('parcelas', np); }} /></div>
+                      </div>
+                    ))}
+                  </div>
                   <div className="text-[7px] text-muted-foreground text-right">Base: {formatMoeda(basePar)}</div>
                 </div>
               )}
+
+              {/* TABELA COMPARATIVA — RESULTADO vs OPORTUNIDADE */}
+              <Separator className="!my-0.5" />
+              <ST>Comparativo Resultado</ST>
+              <div className="border rounded overflow-hidden">
+                <table className="w-full text-[8px]">
+                  <thead>
+                    <tr className="bg-muted/60">
+                      <th className="text-left px-1 py-0.5 font-semibold text-muted-foreground">Resultado</th>
+                      <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground">Líquido</th>
+                      <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground">Oportunidade</th>
+                      <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground">Diferença</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <CmpRow label="R$" liq={calc.rLiq} opp={calc.coT} diff={diffTotal} />
+                    <CmpRow label="R$/cab" liq={calc.rLCab} opp={calc.coCabC} diff={diffCab} />
+                    <CmpRow label="R$/kg" liq={calc.rLKg} opp={calc.coKg} diff={diffKg} />
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[8px] text-muted-foreground italic leading-tight">
+                {calc.coT > 0
+                  ? pctDiffOp >= 0
+                    ? `Resultado ${fmtPct1(Math.abs(pctDiffOp))} acima do custo de oportunidade.`
+                    : `Resultado ${fmtPct1(Math.abs(pctDiffOp))} abaixo do custo de oportunidade.`
+                  : 'Informe o custo de oportunidade para comparação.'}
+              </p>
             </div>
 
-            {/* COL 4 — PAINEL RESULTADO */}
-            <div className="bg-muted/20 rounded-lg border p-2 space-y-1.5 lg:sticky lg:top-0 h-fit">
-              <ST>Resultado</ST>
+            {/* COL 3 — PAINEL RESULTADO (collapsible) */}
+            <div className="bg-muted/20 rounded-lg border p-1.5 space-y-0.5 lg:sticky lg:top-0 h-fit">
+              <h3 className="text-[9px] font-black uppercase tracking-wide text-foreground mb-0.5">Resultado</h3>
 
-              <RG label="Indicadores">
+              <CSection title="Indicadores" defaultOpen>
                 <RR l="GMD" v={`${fmtG(data.gmd)} kg/dia`} />
                 <RR l="GMC" v={`${fmtG(calc.gmc)} kg/dia`} />
-                <RR l="@ produzidas/cab" v={fmtA(calc.aPcab)} />
+                <RR l="@ prod./cab" v={fmtA(calc.aPcab)} />
                 <RR l="Preço Venda R$/@" v={formatMoeda(data.precoVendaArroba)} />
                 <RR l="Custo/@" v={formatMoeda(calc.cPArr)} c="text-destructive" />
                 <RR l="Margem de venda" v={fmtPct1(calc.margemVenda)} />
-              </RG>
+              </CSection>
 
-              <Sep />
-              <RG label="Operação">
-                <RR l="Faturamento Bruto" v={formatMoeda(calc.fba)} b />
-                <RR l="(-) Custos Abate Boitel" v={formatMoeda(calc.cAb)} c="text-destructive" />
+              <CSection title="Operação" defaultOpen>
+                <RR l="Fat. Bruto" v={formatMoeda(calc.fba)} b />
+                <RR l="(-) Custos Abate" v={formatMoeda(calc.cAb)} c="text-destructive" />
                 <DL />
-                <RR l="= Faturamento Líquido" v={formatMoeda(calc.fLiq)} b accent />
+                <RR l="= Fat. Líquido" v={formatMoeda(calc.fLiq)} b accent />
                 {data.modalidadeCusto === 'parceria' && calc.pParte > 0 && <RR l={`(-) Parceiro ${data.percentualParceria}%`} v={formatMoeda(calc.pParte)} c="text-destructive" />}
                 <RR l="(-) Diárias Boitel" v={formatMoeda(calc.cDT)} c="text-destructive" />
                 <RR l="(-) Sanidade Boitel" v={formatMoeda(calc.cs)} c="text-destructive" />
                 <RR l="(-) Outros Boitel" v={formatMoeda(calc.oc)} c="text-destructive" />
                 <DL />
-                <RR l="= Resultado Direto Boitel" v={formatMoeda(calc.rBoitel)} b accent />
+                <RR l="= Res. Direto Boitel" v={formatMoeda(calc.rBoitel)} b accent />
                 <RR l="(-) Frete Terceiros" v={formatMoeda(calc.cf)} c="text-destructive" />
                 <DL />
                 <RR l="= Total Operação" v={formatMoeda(calc.tOp)} b accent />
-              </RG>
+              </CSection>
 
-              {data.possuiAdiantamento && data.valorTotalAntecipado > 0 && (<>
-                <Sep />
-                <RG label="Acerto com Boitel">
-                  <RR l="Faturamento Bruto" v={formatMoeda(calc.fba)} b />
+              {data.possuiAdiantamento && data.valorTotalAntecipado > 0 && (
+                <CSection title="Acerto com Boitel" defaultOpen={false}>
+                  <RR l="Fat. Bruto" v={formatMoeda(calc.fba)} b />
                   <RR l="(-) Custo Total Boitel" v={`-${formatMoeda(calc.custoTotalBoitel)}`} c="text-destructive" />
-                  <RR l="(+) Adiantamento p/ Boitel" v={formatMoeda(data.valorTotalAntecipado)} c="text-blue-600 dark:text-blue-400" />
+                  <RR l="(+) Adiant. p/ Boitel" v={formatMoeda(data.valorTotalAntecipado)} c="text-blue-600 dark:text-blue-400" />
                   <DL />
-                  <RR l="= Saldo a receber do Boitel" v={formatMoeda(saldoReceber)} b accent />
-                </RG>
-              </>)}
+                  <RR l="= Saldo a receber" v={formatMoeda(saldoReceber)} b accent />
+                </CSection>
+              )}
 
-              <Sep />
               {/* DESTAQUE FINAL */}
-              <div className={`rounded border px-2 py-1.5 text-center ${pos ? 'bg-green-50/80 border-green-200 dark:bg-green-950/30 dark:border-green-800' : 'bg-destructive/5 border-destructive/20'}`}>
-                <div className="grid grid-cols-2 gap-2">
+              <div className={`rounded border px-1.5 py-1 text-center ${pos ? 'bg-emerald-50/80 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800' : 'bg-destructive/5 border-destructive/20'}`}>
+                <div className="grid grid-cols-2 gap-1">
                   <div>
-                    <span className="text-[7px] uppercase text-muted-foreground font-bold block">Total Operação</span>
-                    <strong className={`text-[13px] tabular-nums ${pos ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>{formatMoeda(calc.tOp)}</strong>
+                    <span className="text-[7px] uppercase text-muted-foreground font-bold block">Total Op.</span>
+                    <strong className={`text-[12px] tabular-nums ${pos ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive'}`}>{formatMoeda(calc.tOp)}</strong>
                   </div>
                   <div>
                     <span className="text-[7px] uppercase text-muted-foreground font-bold block">Res. Líquido</span>
-                    <strong className={`text-[13px] tabular-nums ${pos ? 'text-green-700 dark:text-green-400' : 'text-destructive'}`}>{formatMoeda(calc.rLiq)}</strong>
+                    <strong className={`text-[12px] tabular-nums ${pos ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive'}`}>{formatMoeda(calc.rLiq)}</strong>
                   </div>
                 </div>
-                <div className="flex justify-around text-[8px] mt-0.5 text-muted-foreground">
+                <div className="flex justify-around text-[7px] mt-0.5 text-muted-foreground">
                   <span>/cab <strong className="text-foreground tabular-nums">{formatMoeda(calc.rLCab)}</strong></span>
                   <span>/kg <strong className="text-foreground tabular-nums">{formatMoeda(calc.rLKg)}</strong></span>
                 </div>
               </div>
-
-              <RG label="Custo Oportunidade">
-                <RR l="Total" v={formatMoeda(calc.coT)} c="text-destructive" />
-                <RR l="Viabilidade" v={formatMoeda(calc.lViab)} b c={calc.lViab >= 0 ? 'text-green-700 dark:text-green-400' : 'text-destructive'} />
-              </RG>
-
-              <div className="flex gap-1.5 pt-1">
-                <Button variant="outline" size="sm" onClick={onClose} className="flex-1 text-[9px] h-6">Cancelar</Button>
-                <Button size="sm" onClick={handleSave} className="flex-1 font-bold text-[9px] h-6">Salvar</Button>
-              </div>
             </div>
+          </div>
+
+          {/* ═══ BOTÕES — SEMPRE VISÍVEIS ═══ */}
+          <div className="flex justify-end gap-2 px-3 py-1.5 border-t bg-background shrink-0">
+            <Button variant="outline" size="sm" onClick={onClose} className="text-[10px] h-7 px-4">Cancelar</Button>
+            <Button size="sm" onClick={handleSave} className="font-bold text-[10px] h-7 px-6">Salvar</Button>
           </div>
         </TooltipProvider>
       </DialogContent>
@@ -407,23 +387,45 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
 }
 
 /* ═══ MICRO-COMPONENTS ═══ */
-function ST({ children }: { children: React.ReactNode }) { return <h3 className="text-[10px] font-bold uppercase text-foreground tracking-wide border-b border-foreground/20 pb-0.5">{children}</h3>; }
-function F({ label, children }: { label: string; children: React.ReactNode }) { return <div><Label className="text-[8px] leading-none">{label}</Label>{children}</div>; }
-function I(props: React.ComponentProps<typeof Input>) { return <Input {...props} className={`h-6 text-[10px] tabular-nums text-right bg-background ${props.className || ''}`} />; }
-function CV({ children }: { children: React.ReactNode }) { return <div className="h-6 flex items-center px-1.5 rounded bg-muted/50 border text-[10px] font-medium tabular-nums">{children}</div>; }
-function IV({ l, v, t }: { l: string; v: string; t?: string }) {
-  const el = <div className="text-center"><span className="text-[7px] text-muted-foreground block leading-tight">{l}</span><strong className="text-[10px] tabular-nums">{v}</strong></div>;
-  if (!t) return el;
-  return <Tooltip><TooltipTrigger asChild><div className="cursor-help">{el}</div></TooltipTrigger><TooltipContent className="text-[9px]">{t}</TooltipContent></Tooltip>;
+function HI({ l, v }: { l: string; v: string }) {
+  return <div className="flex gap-1.5"><span className="text-slate-400">{l}</span><strong className="tabular-nums text-white">{v}</strong></div>;
 }
+function ST({ children }: { children: React.ReactNode }) { return <h3 className="text-[9px] font-bold uppercase text-slate-700 dark:text-slate-300 tracking-wide border-b border-slate-300 dark:border-slate-600 pb-0.5">{children}</h3>; }
+function F({ label, children }: { label: string; children: React.ReactNode }) { return <div><Label className="text-[7px] leading-none text-muted-foreground">{label}</Label>{children}</div>; }
+function I(props: React.ComponentProps<typeof Input>) { return <Input {...props} className={`h-5 text-[9px] tabular-nums text-right bg-background ${props.className || ''}`} />; }
+function CV({ children }: { children: React.ReactNode }) { return <div className="h-5 flex items-center px-1.5 rounded bg-muted/50 border text-[9px] font-medium tabular-nums">{children}</div>; }
 function TB({ a, o, children, full }: { a: boolean; o: () => void; children: React.ReactNode; full?: boolean }) {
-  return <button type="button" onClick={o} className={`h-5 px-2 rounded text-[9px] font-bold border transition-all ${full ? 'w-full' : ''} ${a ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}>{children}</button>;
+  return <button type="button" onClick={o} className={`h-5 px-2 rounded text-[8px] font-bold border transition-all ${full ? 'w-full' : ''} ${a ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}>{children}</button>;
 }
-function RG({ label, children }: { label: string; children: React.ReactNode }) { return <div className="space-y-0"><span className="text-[8px] font-bold uppercase text-foreground tracking-wide">{label}</span>{children}</div>; }
-function RR({ l, v, b, accent, c = '', t }: { l: string; v: string; b?: boolean; accent?: boolean; c?: string; t?: string }) {
-  const row = <div className="flex justify-between text-[9px] leading-snug"><span className="text-muted-foreground">{l}</span><span className={`tabular-nums ${b ? 'font-bold' : 'font-medium'} ${accent ? 'text-primary' : ''} ${c}`}>{v}</span></div>;
-  if (!t) return row;
-  return <Tooltip><TooltipTrigger asChild><div className="cursor-help">{row}</div></TooltipTrigger><TooltipContent side="left" className="text-[9px]">{t}</TooltipContent></Tooltip>;
+function RR({ l, v, b, accent, c = '' }: { l: string; v: string; b?: boolean; accent?: boolean; c?: string }) {
+  return <div className="flex justify-between text-[8px] leading-snug"><span className="text-muted-foreground">{l}</span><span className={`tabular-nums ${b ? 'font-bold' : 'font-medium'} ${accent ? 'text-primary' : ''} ${c}`}>{v}</span></div>;
 }
-function Sep() { return <Separator className="!my-0.5" />; }
 function DL() { return <div className="border-t border-dashed my-0.5" />; }
+
+function CSection({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger className="flex items-center justify-between w-full group">
+        <span className="text-[8px] font-bold uppercase text-foreground tracking-wide">{title}</span>
+        <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="space-y-0 pt-0.5">
+        {children}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function CmpRow({ label, liq, opp, diff }: { label: string; liq: number; opp: number; diff: number }) {
+  return (
+    <tr className="border-t border-border/40">
+      <td className="px-1 py-0.5 font-medium">{label}</td>
+      <td className="px-1 py-0.5 text-right tabular-nums font-semibold">{formatMoeda(liq)}</td>
+      <td className="px-1 py-0.5 text-right tabular-nums text-muted-foreground">{formatMoeda(opp)}</td>
+      <td className={`px-1 py-0.5 text-right tabular-nums font-bold ${diff >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+        {diff >= 0 ? '+' : ''}{formatMoeda(diff)}
+      </td>
+    </tr>
+  );
+}
