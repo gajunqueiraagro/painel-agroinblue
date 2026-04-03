@@ -388,6 +388,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     consumoFinanceiroRef.current?.resetForm();
   };
 
+  const handleCancelEdit = useCallback(() => {
+    setEditingAbateId(null);
+    setQuantidade(''); setCategoria(''); setPesoKg('');
+    setFazendaOrigem(''); setFazendaDestino('');
+    setData(format(new Date(), 'yyyy-MM-dd'));
+    setObservacao(''); setStatusOp('conciliado');
+    resetFinancialFields();
+  }, []);
+
   // Load abate into form for editing
   const loadAbateForEdit = useCallback((l: Lancamento) => {
     // 1. Set tab & type
