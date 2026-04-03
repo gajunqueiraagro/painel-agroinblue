@@ -246,7 +246,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
               </div>
               <div className="grid grid-cols-2 gap-1">
                 <F label="Dias confinamento"><I type="number" value={data.dias || ''} onChange={e => set('dias', +e.target.value || 0)} /></F>
-                <F label="GMD kg/dia"><I type="number" value={data.gmd || ''} onChange={e => set('gmd', +e.target.value || 0)} step="0.001" /></F>
+                <F label="GMD kg/dia"><IM value={data.gmd} onChange={v => set('gmd', v)} step="0.001" decimals={3} /></F>
               </div>
               <div className="grid grid-cols-2 gap-1">
                 <F label="Rend. entrada %"><IP value={data.rendimentoEntrada} onChange={v => set('rendimentoEntrada', v)} step="0.01" /></F>
