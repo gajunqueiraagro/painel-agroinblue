@@ -42,7 +42,8 @@ interface UseZootMensalParams {
 }
 
 export function useZootMensal({ ano, cenario }: UseZootMensalParams) {
-  const { fazendaId } = useFazenda();
+  const { fazendaAtual } = useFazenda();
+  const fazendaId = fazendaAtual?.id;
 
   return useQuery({
     queryKey: ['zoot-mensal', fazendaId, ano, cenario],
