@@ -1,0 +1,1 @@
+ALTER TABLE public.lancamentos ADD COLUMN detalhes_snapshot jsonb DEFAULT NULL;
