@@ -245,6 +245,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       notaFiscal, formaReceb, qtdParcelas, parcelas,
       bonusPrecoceReais, bonusQualidadeReais, bonusListaTraceReais,
       descontoQualidadeReais, outrosDescontosArroba,
+      pesoCarcacaKgManual: pesoCarcacaKg || undefined,
+      calculation: calc,
     });
   };
 
