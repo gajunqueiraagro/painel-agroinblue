@@ -1,10 +1,10 @@
-import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
+import { formatMoeda, formatKg } from '@/lib/calculos/formatters';
 import { CATEGORIAS } from '@/types/cattle';
 import { AlertTriangle, CheckCircle, Edit, Tag } from 'lucide-react';
 import type { AbateDetalhes } from './AbateDetalhesDialog';
+import type { AbateCalculation } from '@/lib/calculos/abate';
 
 interface Props {
   quantidade: number;
@@ -19,64 +19,20 @@ interface Props {
   submitting: boolean;
   registerLabel?: string;
   onCancelEdit?: () => void;
+  /** Official calculation object — single source of truth */
+  calculation?: AbateCalculation | null;
 }
 
 export function AbateResumoPanel({
   quantidade, pesoKg, categoria, frigorificoNome,
   detalhes, detalhesPreenchidos, canOpenModal,
   onOpenModal, onRequestRegister, submitting, registerLabel, onCancelEdit,
+  calculation,
 }: Props) {
   const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria || '-';
 
-  const calc = useMemo(() => {
-    if (!detalhes) return null;
-    const rend = Number(detalhes.rendCarcaca) || 0;
-    const carcacaCalc = rend > 0 ? pesoKg * rend / 100 : 0;
-    const pesoArrobaCab = carcacaCalc > 0 ? carcacaCalc / 15 : 0;
-    const totalArrobas = pesoArrobaCab * quantidade;
-    const preco = Number(detalhes.precoArroba) || 0;
-    const valorBase = totalArrobas * preco;
-
-    // Funrural (sobre Valor Base)
-    const funruralReaisVal = Number(detalhes.funruralReais) || 0;
-    const funruralPctVal = Number(detalhes.funruralPct) || 0;
-    const funruralTotal = funruralReaisVal > 0 ? funruralReaisVal : valorBase * funruralPctVal / 100;
-
-    // Valor Bruto = Valor Base - Funrural
-    const valorBruto = valorBase - funruralTotal;
-
-    // Bônus
-    const bPrecoceArr = Number(detalhes.bonusPrecoce) || 0;
-    const bPrecoceR = Number(detalhes.bonusPrecoceReais) || 0;
-    const bonusPrecoceTotal = bPrecoceArr > 0 ? bPrecoceArr * totalArrobas : bPrecoceR;
-
-    const bQualArr = Number(detalhes.bonusQualidade) || 0;
-    const bQualR = Number(detalhes.bonusQualidadeReais) || 0;
-    const bonusQualidadeTotal = bQualArr > 0 ? bQualArr * totalArrobas : bQualR;
-
-    const bTraceArr = Number(detalhes.bonusListaTrace) || 0;
-    const bTraceR = Number(detalhes.bonusListaTraceReais) || 0;
-    const bonusListaTraceTotal = bTraceArr > 0 ? bTraceArr * totalArrobas : bTraceR;
-
-    const totalBonus = bonusPrecoceTotal + bonusQualidadeTotal + bonusListaTraceTotal;
-
-    // Descontos
-    const dQualArr = Number(detalhes.descontoQualidade) || 0;
-    const dQualR = Number(detalhes.descontoQualidadeReais) || 0;
-    const descQualidadeTotal = dQualArr > 0 ? dQualArr * totalArrobas : dQualR;
-
-    const dOutrosArr = Number(detalhes.outrosDescontosArroba) || 0;
-    const dOutrosR = Number(detalhes.outrosDescontos) || 0;
-    const descOutrosTotal = dOutrosArr > 0 ? dOutrosArr * totalArrobas : dOutrosR;
-
-    const totalDescontos = descQualidadeTotal + descOutrosTotal;
-
-    // Valor Líquido = Valor Bruto + Bônus - Descontos
-    const valorLiquido = valorBruto + totalBonus - totalDescontos;
-    const liqArroba = totalArrobas > 0 ? valorLiquido / totalArrobas : 0;
-
-    return { valorBase, funruralTotal, valorBruto, totalBonus, totalDescontos, valorLiquido, totalArrobas, liqArroba };
-  }, [detalhes, pesoKg, quantidade]);
+  // Use the official calculation object — NO recalculation
+  const calc = calculation || detalhes?.calculation || null;
 
   const tipoAbateLabel = detalhes?.tipoPeso === 'morto' ? 'Peso morto' : detalhes?.tipoPeso === 'vivo' ? 'Peso vivo' : '-';
   const comercLabel = detalhes?.tipoVenda
