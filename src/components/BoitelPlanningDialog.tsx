@@ -420,13 +420,14 @@ function CSection({ title, children, defaultOpen = true }: { title: string; chil
 }
 
 function CmpRow({ label, liq, opp, diff }: { label: string; liq: number; opp: number; diff: number }) {
+  const fv = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return (
     <tr className="border-t border-border/40">
       <td className="px-1 py-0.5 font-medium">{label}</td>
-      <td className="px-1 py-0.5 text-right tabular-nums font-semibold">{formatMoeda(liq)}</td>
-      <td className="px-1 py-0.5 text-right tabular-nums text-muted-foreground">{formatMoeda(opp)}</td>
+      <td className="px-1 py-0.5 text-right tabular-nums font-semibold">R$ {fv(liq)}</td>
+      <td className="px-1 py-0.5 text-right tabular-nums text-muted-foreground">R$ {fv(opp)}</td>
       <td className={`px-1 py-0.5 text-right tabular-nums font-bold ${diff >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
-        {diff >= 0 ? '+' : ''}{formatMoeda(diff)}
+        {diff >= 0 ? '+' : ''}R$ {fv(diff)}
       </td>
     </tr>
   );
