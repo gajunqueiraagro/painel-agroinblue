@@ -657,9 +657,23 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <ResultRow label="Custo/cab" value={formatMoeda(calc.custoPorCab)} className="text-destructive" />
               </ResultGroup>
 
-              <Separator />
+              {/* BLOCO ADIANTAMENTO — Conciliação */}
+              {data.possuiAdiantamento && data.valorTotalAntecipado > 0 && (
+                <>
+                  <Separator />
+                  <ResultGroup label="Conciliação Financeira">
+                    <ResultRow label="Resultado com Boitel" value={formatMoeda(calc.resultadoComBoitel)} bold />
+                    <ResultRow label="(-) Adiantamento já pago" value={formatMoeda(data.valorTotalAntecipado)} className="text-destructive" />
+                    <div className="border-t border-dashed my-0.5" />
+                    <ResultRow label="= Saldo a receber" value={formatMoeda(calc.resultadoComBoitel - data.valorTotalAntecipado)} bold accent />
+                    <ResultRow label="(-) Frete" value={formatMoeda(calc.custosFreteTotal)} className="text-destructive" />
+                    <div className="border-t border-dashed my-0.5" />
+                    <ResultRow label="= Saldo líquido final" value={formatMoeda(calc.resultadoComBoitel - data.valorTotalAntecipado - calc.custosFreteTotal)} bold accent />
+                  </ResultGroup>
+                </>
+              )}
 
-              {/* BLOCO 4 — RESULTADO LÍQUIDO POR GADO MAGRO */}
+              <Separator />
               <ResultGroup label="Resultado Líquido por Gado Magro">
                 <div className={`rounded border px-2.5 py-2 text-center ${isPositive ? 'bg-green-50/80 border-green-200 dark:bg-green-950/20 dark:border-green-800' : 'bg-destructive/5 border-destructive/20'}`}>
                   <span className="text-[8px] text-muted-foreground block uppercase font-bold">Total</span>

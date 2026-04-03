@@ -34,6 +34,15 @@ export interface BoitelOperacao {
   receita_produtor: number;
   custo_total: number;
   lucro_total: number;
+  // Adiantamento
+  possui_adiantamento: boolean;
+  data_adiantamento: string | null;
+  pct_adiantamento_diarias: number;
+  valor_adiantamento_diarias: number;
+  valor_adiantamento_sanitario: number;
+  valor_adiantamento_outros: number;
+  valor_total_antecipado: number;
+  adiantamento_observacao: string | null;
 }
 
 /**
