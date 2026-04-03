@@ -1002,29 +1002,38 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   }
 
   // ===== LEFT SIDEBAR NAV =====
+  const isEditing = !!editingAbateId;
   const renderSidebar = () => {
     const parentCls = (active: boolean) =>
       `w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[13px] font-bold transition-all ${
+        isEditing && !active ? 'opacity-40 cursor-not-allowed' :
         active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/60'
       }`;
     const childCls = (active: boolean) =>
       `w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] font-semibold transition-all ${
+        isEditing && !active ? 'opacity-40 cursor-not-allowed' :
         active ? 'bg-primary/15 text-foreground border border-primary/40' : 'text-muted-foreground hover:bg-muted/40 border border-transparent'
       }`;
     const childWrap = "ml-3 mt-0.5 border-l-2 border-primary/30 pl-1.5 space-y-0.5";
+
+    const handleNavClick = (cb: () => void) => {
+      if (isEditing) return; // Block navigation during edit
+      cb();
+    };
 
     return (
       <div className="shrink-0 space-y-2">
         {/* Entradas */}
         <div>
-          <button onClick={() => { setAba('entrada'); setTipo('nascimento'); resetAllFields(); }} className={parentCls(aba === 'entrada')}>
+          <button onClick={() => handleNavClick(() => { setAba('entrada'); setTipo('nascimento'); resetAllFields(); })} className={parentCls(aba === 'entrada')} disabled={isEditing && aba !== 'entrada'}>
             <LogIn className="h-3.5 w-3.5" /> Entradas
           </button>
           <div className={childWrap}>
             {TIPOS_ENTRADA.map(t => (
               <button key={t.value} type="button"
-                onClick={() => { setAba('entrada'); setTipo(t.value); resetAllFields(); }}
-                className={childCls(aba === 'entrada' && tipo === t.value)}>
+                onClick={() => handleNavClick(() => { setAba('entrada'); setTipo(t.value); resetAllFields(); })}
+                className={childCls(aba === 'entrada' && tipo === t.value)}
+                disabled={isEditing && !(aba === 'entrada' && tipo === t.value)}>
                 <span className="text-[12px]">{t.icon}</span> {t.label}
               </button>
             ))}
@@ -1033,14 +1042,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
         {/* Saídas */}
         <div>
-          <button onClick={() => { setAba('saida'); setTipo('abate'); resetAllFields(); }} className={parentCls(aba === 'saida')}>
+          <button onClick={() => handleNavClick(() => { setAba('saida'); setTipo('abate'); resetAllFields(); })} className={parentCls(aba === 'saida')} disabled={isEditing && aba !== 'saida'}>
             <LogOut className="h-3.5 w-3.5" /> Saídas
           </button>
           <div className={childWrap}>
             {TIPOS_SAIDA.map(t => (
               <button key={t.value} type="button"
-                onClick={() => { setAba('saida'); setTipo(t.value); resetAllFields(); }}
-                className={childCls(aba === 'saida' && tipo === t.value)}>
+                onClick={() => handleNavClick(() => { setAba('saida'); setTipo(t.value); resetAllFields(); })}
+                className={childCls(aba === 'saida' && tipo === t.value)}
+                disabled={isEditing && !(aba === 'saida' && tipo === t.value)}>
                 <span className="text-[12px]">{t.icon}</span> {t.label}
               </button>
             ))}
@@ -1048,12 +1058,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
 
         {/* Evoluir Categoria Animal */}
-        <button onClick={() => setAba('reclassificacao')} className={parentCls(aba === 'reclassificacao')}>
+        <button onClick={() => handleNavClick(() => setAba('reclassificacao'))} className={parentCls(aba === 'reclassificacao')} disabled={isEditing && aba !== 'reclassificacao'}>
           <RefreshCw className="h-3.5 w-3.5" /> Evoluir Categoria
         </button>
 
         {/* Histórico */}
-        <button onClick={() => setAba('historico')} className={parentCls(aba === 'historico')}>
+        <button onClick={() => handleNavClick(() => setAba('historico'))} className={parentCls(aba === 'historico')} disabled={isEditing && aba !== 'historico'}>
           <Clock className="h-3.5 w-3.5" /> Histórico
         </button>
       </div>
