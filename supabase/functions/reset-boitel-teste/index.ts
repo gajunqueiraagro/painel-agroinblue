@@ -68,17 +68,26 @@ Deno.serve(async (req) => {
       .eq("origem_lancamento", "boitel");
     if (e1) throw new Error("[Etapa 1 - financeiro_lancamentos_v2] " + e1.message);
 
-    // === STEP 2: Limpar boitel_lote_id em lancamentos (zootécnico) ===
+    // === STEP 2: Limpar boitel_lote_id e boitel_id (legado) em lancamentos ===
     let lancLimpos = 0;
     if (loteIds.length > 0) {
       const { count: c0, error: e0 } = await supabaseAdmin
         .from("lancamentos")
-        .update({ boitel_lote_id: null } as any)
+        .update({ boitel_lote_id: null, boitel_id: null } as any)
         .in("boitel_lote_id", loteIds)
         .select("id", { count: "exact", head: true });
-      if (e0) throw new Error("[Etapa 2 - limpar lancamentos.boitel_lote_id] " + e0.message);
+      if (e0) throw new Error("[Etapa 2a - limpar lancamentos.boitel_lote_id] " + e0.message);
       lancLimpos = c0 || 0;
     }
+
+    // Also clean orphan boitel_id references not linked via boitel_lote_id
+    const { count: legacyLimpos, error: eLeg } = await supabaseAdmin
+      .from("lancamentos")
+      .update({ boitel_id: null } as any)
+      .not("boitel_id", "is", null)
+      .eq("cliente_id", cliente_id)
+      .select("id", { count: "exact", head: true });
+    if (eLeg) throw new Error("[Etapa 2b - limpar lancamentos.boitel_id legado] " + eLeg.message);
 
     // === STEP 3: boitel_adiantamentos (FK → boitel_lotes) ===
     let adiantCount = 0;
