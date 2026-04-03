@@ -120,13 +120,20 @@ export function ContaBoitelTab({ onBack }: Props) {
 
   async function loadBoitels() {
     setLoading(true);
-    const q = supabase
-      .from('boitel_operacoes')
-      .select('id, lote, numero_contrato, fazenda_destino_nome, quantidade, data_envio, dias, receita_produtor, faturamento_bruto, faturamento_liquido, lucro_total, custo_total, custo_frete, custo_sanidade, custo_nutricao, outros_custos, custos_extras_parceria, despesas_abate, valor_total_antecipado, possui_adiantamento')
-      .eq('cliente_id', clienteId!);
-    if (fazendaAtual?.id) q.eq('fazenda_origem_id', fazendaAtual.id);
-    const { data } = await q.order('data_envio', { ascending: false });
-    setBoitels((data as any[]) || []);
+    let query = supabase
+      .from('boitel_lotes')
+      .select(`id, lote_codigo, contrato_baia, boitel_destino, quantidade_cab, data_envio, status_lote,
+        boitel_planejamento(dias, receita_produtor, faturamento_bruto, faturamento_liquido, lucro_total, custo_total, custo_frete, custo_sanidade, custo_nutricao, outros_custos, custos_extras_parceria, despesas_abate, valor_total_antecipado, possui_adiantamento)`)
+      .eq('cliente_id', clienteId!)
+      .neq('status_lote', 'cancelado');
+    if (fazendaAtual?.id) query = query.eq('fazenda_id', fazendaAtual.id);
+    const { data } = await query.order('data_envio', { ascending: false });
+    // Flatten planejamento join
+    const flat = (data || []).map((d: any) => {
+      const p = Array.isArray(d.boitel_planejamento) ? d.boitel_planejamento[0] : d.boitel_planejamento;
+      return { ...d, ...(p || {}), boitel_planejamento: undefined };
+    });
+    setBoitels(flat as any[]);
     setLoading(false);
   }
 
