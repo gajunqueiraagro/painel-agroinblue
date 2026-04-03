@@ -36,6 +36,12 @@ interface DadosFinanceiros {
   comercializacao?: string;
   tipoAbate?: string;
   dataVenda?: string;
+  // Full breakdown (from buildAbateCalculation)
+  valorBase?: number;
+  funruralTotal?: number;
+  liqArroba?: number;
+  liqCabeca?: number;
+  liqKg?: number;
 }
 
 interface Props {
