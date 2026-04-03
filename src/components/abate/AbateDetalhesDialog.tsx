@@ -342,10 +342,18 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
     <Dialog open={open} onOpenChange={(v) => { if (!v) tryClose(); }}>
       <DialogContent className="max-w-xl max-h-[88vh] overflow-y-auto">
         <DialogHeader className="pb-0">
-          <DialogTitle className="text-[13px] font-bold flex items-center gap-2">
-            <Tag className="h-4 w-4 text-primary" />
-            Detalhes do Abate
-          </DialogTitle>
+         <DialogTitle className="text-[13px] font-bold flex items-center gap-2">
+             <Tag className="h-4 w-4 text-primary" />
+             Detalhes do Abate
+             {(() => {
+               const badge = getStatusBadge({ statusOperacional: statusOp } as any);
+               return (
+                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.cls}`}>
+                   {badge.label}
+                 </span>
+               );
+             })()}
+           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-2 pt-1">
