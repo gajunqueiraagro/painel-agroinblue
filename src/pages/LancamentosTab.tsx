@@ -2489,6 +2489,42 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   />
                 </div>
               </>
+            ) : isTransferenciaSaida ? (
+              <>
+                <TransferenciaResumoPanel
+                  quantidade={Number(quantidade) || 0}
+                  pesoKg={Number(pesoKg) || 0}
+                  categoria={categoria}
+                  fazendaOrigem={nomeFazenda || fazendaOrigem}
+                  fazendaDestino={fazendaDestino}
+                  detalhes={transferenciaDetalhes}
+                  detalhesPreenchidos={!!transferenciaDetalhes}
+                  canOpenModal={!!(data && quantidade && Number(quantidade) > 0 && pesoKg && Number(pesoKg) > 0 && categoria && fazendaDestino)}
+                  onOpenModal={() => setTransferenciaDialogOpen(true)}
+                  onRequestRegister={handleRequestRegister}
+                  submitting={submitting}
+                  registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Transferência'}
+                  onCancelEdit={editingAbateId ? handleCancelEdit : undefined}
+                  calculation={transferenciaCalc}
+                />
+                <TransferenciaDetalhesDialog
+                  open={transferenciaDialogOpen}
+                  onClose={() => setTransferenciaDialogOpen(false)}
+                  onSave={(det) => {
+                    setTransferenciaDetalhes(det);
+                    setTransferenciaDialogOpen(false);
+                  }}
+                  initialData={transferenciaDetalhes || EMPTY_TRANSFERENCIA_DETALHES}
+                  quantidade={Number(quantidade) || 0}
+                  pesoKg={Number(pesoKg) || 0}
+                  categoria={categoria}
+                  fazendaOrigem={nomeFazenda || fazendaOrigem}
+                  fazendaDestino={fazendaDestino}
+                  data={data}
+                  statusOp={statusOp}
+                  observacao={observacao}
+                />
+              </>
             ) : (
               renderFinancialPanel()
             )}
