@@ -315,15 +315,25 @@ export function calcFluxoAnual(
     .filter(s => s.ano === ano)
     .reduce((sum, s) => sum + s.quantidade, 0);
 
+  // Peso inicial do ano (soma ponderada dos saldos iniciais)
+  const pesoInicialAno = saldosIniciais
+    .filter(s => s.ano === ano)
+    .reduce((sum, s) => sum + s.quantidade * (s.pesoMedioKg || 0), 0);
+
   const lancAno = lancamentos.filter(l =>
     l.data.substring(0, 4) === String(ano) && (preFiltered || isLancConciliado(l))
   );
 
   const porMesTipo: Record<string, Record<FluxoTipo, number>> = {};
+  // Peso por mês: entradas e saídas em kg
+  const pesoEntradasMes: Record<string, number> = {};
+  const pesoSaidasMes: Record<string, number> = {};
   for (let m = 1; m <= 12; m++) {
     const mesKey = String(m).padStart(2, '0');
     porMesTipo[mesKey] = {} as Record<FluxoTipo, number>;
     FLUXO_LINHAS.forEach(li => { porMesTipo[mesKey][li.tipo] = 0; });
+    pesoEntradasMes[mesKey] = 0;
+    pesoSaidasMes[mesKey] = 0;
   }
 
   lancAno.forEach(l => {
@@ -333,17 +343,48 @@ export function calcFluxoAnual(
       if (porMesTipo[mes][tipo] !== undefined) {
         porMesTipo[mes][tipo] += l.quantidade;
       }
+      const pesoUnit = l.pesoMedioKg || l.pesoCarcacaKg || 0;
+      if (isEntrada(l.tipo)) {
+        pesoEntradasMes[mes] += l.quantidade * pesoUnit;
+      } else if (isSaida(l.tipo)) {
+        pesoSaidasMes[mes] += l.quantidade * pesoUnit;
+      }
     }
   });
 
   const saldoInicioMes: Record<string, number> = {};
+  const pesoFinalMes: Record<string, number> = {};
+  const gmdMes: Record<string, number | null> = {};
+
   let acum = saldoInicialAno;
+  let pesoAcum = pesoInicialAno;
+
   for (let m = 1; m <= 12; m++) {
     const mesKey = String(m).padStart(2, '0');
     saldoInicioMes[mesKey] = acum;
+    const pesoInicioMes = pesoAcum;
+    const cabInicioMes = acum;
+
     const entradas = FLUXO_LINHAS.filter(li => li.sinal === '+').reduce((s, li) => s + porMesTipo[mesKey][li.tipo], 0);
     const saidas = FLUXO_LINHAS.filter(li => li.sinal === '-').reduce((s, li) => s + porMesTipo[mesKey][li.tipo], 0);
     acum += entradas - saidas;
+
+    // Peso final do mês: peso início + peso entradas - peso saídas
+    pesoAcum = pesoInicioMes + pesoEntradasMes[mesKey] - pesoSaidasMes[mesKey];
+    // Ajustar peso pelo delta de cabeças que já estavam (sem movimento)
+    // Simplificação: manter peso acumulado conforme fluxo
+    pesoFinalMes[mesKey] = pesoAcum;
+
+    // GMD mensal: (pesoFinal - pesoInicial - pesoEntradas + pesoSaídas) / dias / cabMédia
+    const cabFinalMes = acum;
+    const cabMedia = (cabInicioMes + cabFinalMes) / 2;
+    const daysInMonth = new Date(ano, m, 0).getDate();
+    if (cabMedia > 0 && pesoInicioMes > 0 && pesoAcum > 0) {
+      const gmdVal = (pesoAcum - pesoInicioMes - pesoEntradasMes[mesKey] + pesoSaidasMes[mesKey]) / (daysInMonth * cabMedia);
+      gmdMes[mesKey] = (gmdVal > 3.0 || gmdVal < -1.0) ? null : gmdVal;
+    } else {
+      gmdMes[mesKey] = null;
+    }
   }
 
   const totalAno: Record<FluxoTipo, number> = {} as any;
@@ -351,7 +392,10 @@ export function calcFluxoAnual(
     totalAno[li.tipo] = Object.values(porMesTipo).reduce((s, m) => s + m[li.tipo], 0);
   });
 
-  return { porMesTipo, saldoInicioMes, saldoFinalAno: acum, totalAno, saldoInicialAno };
+  return {
+    porMesTipo, saldoInicioMes, saldoFinalAno: acum, totalAno, saldoInicialAno,
+    pesoFinalMes, gmdMes,
+  };
 }
 
 // ---------------------------------------------------------------------------
