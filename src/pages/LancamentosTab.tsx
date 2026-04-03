@@ -563,10 +563,49 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Auto-load abate for editing when navigated from another tab
   useEffect(() => {
-    if (abateParaEditar) {
+    if (abateParaEditar && abateFornecedores.length > 0) {
       loadAbateForEdit(abateParaEditar);
     }
-  }, [abateParaEditar]);
+  }, [abateParaEditar, abateFornecedores]);
+
+  // Re-apply fornecedor when fornecedores list loads after edit was already set
+  useEffect(() => {
+    if (!editingAbateId || abateFornecedores.length === 0) return;
+    if (abateFornecedorId && abateFornecedores.some(f => f.id === abateFornecedorId)) return; // already set correctly
+    
+    // Try to find from the lancamento being edited
+    const editingLancamento = abateParaEditar || vendaParaEditar || compraParaEditar || lancamentos.find(l => l.id === editingAbateId);
+    if (!editingLancamento) return;
+
+    const snap = editingLancamento.detalhesSnapshot;
+    const tipo = editingLancamento.tipo;
+
+    if (tipo === 'abate') {
+      const snapFornId = snap?.fornecedorId;
+      if (snapFornId && abateFornecedores.some(f => f.id === snapFornId)) {
+        setAbateFornecedorId(snapFornId);
+      } else if (editingLancamento.fazendaDestino) {
+        const forn = abateFornecedores.find(f => f.nome === editingLancamento.fazendaDestino);
+        if (forn) setAbateFornecedorId(forn.id);
+      }
+    } else if (tipo === 'venda') {
+      const snapFornId = snap?.fornecedorId;
+      if (snapFornId && abateFornecedores.some(f => f.id === snapFornId)) {
+        setVendaDestinoFornecedorId(snapFornId);
+      } else if (editingLancamento.fazendaDestino) {
+        const forn = abateFornecedores.find(f => f.nome === editingLancamento.fazendaDestino);
+        if (forn) setVendaDestinoFornecedorId(forn.id);
+      }
+    } else if (tipo === 'compra') {
+      const snapFornId = snap?.fornecedorId;
+      if (snapFornId && abateFornecedores.some(f => f.id === snapFornId)) {
+        setCompraFornecedorId(snapFornId);
+      } else if (editingLancamento.fazendaOrigem) {
+        const forn = abateFornecedores.find(f => f.nome === editingLancamento.fazendaOrigem);
+        if (forn) setCompraFornecedorId(forn.id);
+      }
+    }
+  }, [abateFornecedores, editingAbateId]);
 
   // Load venda into form for editing
   const loadVendaForEdit = useCallback(async (l: Lancamento) => {
@@ -740,10 +779,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Auto-load venda for editing when navigated from another tab
   useEffect(() => {
-    if (vendaParaEditar) {
+    if (vendaParaEditar && abateFornecedores.length > 0) {
       loadVendaForEdit(vendaParaEditar);
     }
-  }, [vendaParaEditar]);
+  }, [vendaParaEditar, abateFornecedores]);
 
   // Load compra into form for editing
   const loadCompraForEdit = useCallback(async (l: Lancamento) => {
@@ -877,10 +916,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Auto-load compra for editing when navigated from another tab
   useEffect(() => {
-    if (compraParaEditar) {
+    if (compraParaEditar && abateFornecedores.length > 0) {
       loadCompraForEdit(compraParaEditar);
     }
-  }, [compraParaEditar]);
+  }, [compraParaEditar, abateFornecedores]);
 
   useEffect(() => {
     if (!clienteAtual?.id) {
