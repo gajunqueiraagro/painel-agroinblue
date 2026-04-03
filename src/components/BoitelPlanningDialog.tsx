@@ -119,23 +119,17 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     return p;
   }, [dataAbateISO, data.dataEnvio]);
 
-  const valorAdiantamentoDiariasCalc = useMemo(() => {
-    if (!data.possuiAdiantamento) return 0;
-    const result = Math.round(calc.cDT * data.pctAdiantamentoDiarias / 100 * 100) / 100;
-    console.log('[BOITEL DEBUG] cDT=', calc.cDT, 'pct=', data.pctAdiantamentoDiarias, 'diariasCalc=', result, 'custoDiaria=', data.custoDiaria, 'dias=', data.dias, 'qtd=', data.qtdCabecas, 'modalidade=', data.modalidadeCusto);
-    return result;
-  }, [data.possuiAdiantamento, data.pctAdiantamentoDiarias, calc.cDT]);
+  // Direct inline derivation — no useMemo, no state, always fresh
+  const custoTotalDiarias = data.custoDiaria * data.dias * data.qtdCabecas;
+  const valorAdiantamentoDiariasCalc = data.possuiAdiantamento
+    ? Math.round(custoTotalDiarias * data.pctAdiantamentoDiarias / 100 * 100) / 100
+    : 0;
+  const valorTotalAntecipadoCalc = data.possuiAdiantamento
+    ? Math.round((valorAdiantamentoDiariasCalc + data.valorAdiantamentoSanitario + data.valorAdiantamentoOutros) * 100) / 100
+    : 0;
 
-  const valorTotalAntecipadoCalc = useMemo(() => {
-    if (!data.possuiAdiantamento) return 0;
-    return Math.round((valorAdiantamentoDiariasCalc + data.valorAdiantamentoSanitario + data.valorAdiantamentoOutros) * 100) / 100;
-  }, [data.possuiAdiantamento, valorAdiantamentoDiariasCalc, data.valorAdiantamentoSanitario, data.valorAdiantamentoOutros]);
-
-  // Saldo a receber do Boitel = Fat.Bruto - Custo Total Boitel (diárias+sanidade+outros) - Desp.Abate + Adiantamento já pago
-  const saldoReceberBase = useMemo(() => {
-    const s = calc.fba - calc.custoTotalBoitel - calc.cAb + valorTotalAntecipadoCalc;
-    return Math.round(s * 100) / 100;
-  }, [calc.fba, calc.custoTotalBoitel, calc.cAb, valorTotalAntecipadoCalc]);
+  // Saldo a receber do Boitel
+  const saldoReceberBase = Math.round((calc.fba - calc.custoTotalBoitel - calc.cAb + valorTotalAntecipadoCalc) * 100) / 100;
 
   const handleForma = (f: 'avista' | 'prazo') => { set('formaReceb', f); if (f === 'avista') set('parcelas', []); else set('parcelas', gerarParcelas(data.qtdParcelas || 1, saldoReceberBase)); };
   const handleQtdP = (v: string) => { const n = Math.max(1, Math.min(48, Number(v) || 1)); set('qtdParcelas', n); set('parcelas', gerarParcelas(n, saldoReceberBase)); };
