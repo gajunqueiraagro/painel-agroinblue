@@ -37,7 +37,7 @@ interface Props {
   onEditarVenda?: (lancamento: Lancamento) => void;
 }
 
-export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover, onCountFinanceiros, onEditarAbate }: Props) {
+export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover, onCountFinanceiros, onEditarAbate, onEditarVenda }: Props) {
   const { fazendaAtual, fazendas } = useFazenda();
   const nomeFazenda = fazendaAtual?.nome || '';
   const outrasFazendas = useMemo(() => fazendas.filter(f => f.id !== fazendaAtual?.id), [fazendas, fazendaAtual]);
