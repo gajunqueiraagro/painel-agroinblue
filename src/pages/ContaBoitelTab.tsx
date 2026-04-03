@@ -18,11 +18,13 @@ import { toast } from 'sonner';
 
 interface BoitelOp {
   id: string;
-  lote: string | null;
-  numero_contrato: string | null;
-  fazenda_destino_nome: string;
-  quantidade: number;
+  lote_codigo: string;
+  contrato_baia: string | null;
+  boitel_destino: string;
+  quantidade_cab: number;
   data_envio: string | null;
+  status_lote: string;
+  // From planejamento join
   dias: number;
   receita_produtor: number;
   faturamento_bruto: number;
@@ -118,13 +120,20 @@ export function ContaBoitelTab({ onBack }: Props) {
 
   async function loadBoitels() {
     setLoading(true);
-    const q = supabase
-      .from('boitel_operacoes')
-      .select('id, lote, numero_contrato, fazenda_destino_nome, quantidade, data_envio, dias, receita_produtor, faturamento_bruto, faturamento_liquido, lucro_total, custo_total, custo_frete, custo_sanidade, custo_nutricao, outros_custos, custos_extras_parceria, despesas_abate, valor_total_antecipado, possui_adiantamento')
-      .eq('cliente_id', clienteId!);
-    if (fazendaAtual?.id) q.eq('fazenda_origem_id', fazendaAtual.id);
-    const { data } = await q.order('data_envio', { ascending: false });
-    setBoitels((data as any[]) || []);
+    let query = supabase
+      .from('boitel_lotes')
+      .select(`id, lote_codigo, contrato_baia, boitel_destino, quantidade_cab, data_envio, status_lote,
+        boitel_planejamento(dias, receita_produtor, faturamento_bruto, faturamento_liquido, lucro_total, custo_total, custo_frete, custo_sanidade, custo_nutricao, outros_custos, custos_extras_parceria, despesas_abate, valor_total_antecipado, possui_adiantamento)`)
+      .eq('cliente_id', clienteId!)
+      .neq('status_lote', 'cancelado');
+    if (fazendaAtual?.id) query = query.eq('fazenda_id', fazendaAtual.id);
+    const { data } = await query.order('data_envio', { ascending: false });
+    // Flatten planejamento join
+    const flat = (data || []).map((d: any) => {
+      const p = Array.isArray(d.boitel_planejamento) ? d.boitel_planejamento[0] : d.boitel_planejamento;
+      return { ...d, ...(p || {}), boitel_planejamento: undefined };
+    });
+    setBoitels(flat as any[]);
     setLoading(false);
   }
 
@@ -132,7 +141,7 @@ export function ContaBoitelTab({ onBack }: Props) {
     const { data } = await supabase
       .from('financeiro_lancamentos_v2')
       .select('id, data_competencia, data_pagamento, descricao, valor, sinal, tipo_operacao, origem_tipo, status_transacao, cancelado, grupo_geracao_id, created_at, historico, macro_custo, centro_custo, subcentro')
-      .eq('boitel_id', boitelId)
+      .eq('boitel_lote_id', boitelId)
       .eq('cancelado', false)
       .order('data_pagamento', { ascending: true });
     setLancamentos((data as any[]) || []);
@@ -204,7 +213,7 @@ export function ContaBoitelTab({ onBack }: Props) {
     }
 
     const isPago = novoTipo === 'adiantamento_pago';
-    const desc = novoDesc || `${isPago ? 'Adiantamento pago' : 'Adiantamento recebido'} - Boitel ${selected.lote || selected.fazenda_destino_nome}`;
+    const desc = novoDesc || `${isPago ? 'Adiantamento pago' : 'Adiantamento recebido'} - Boitel ${selected.lote_codigo || selected.boitel_destino}`;
 
     const { error } = await supabase.from('financeiro_lancamentos_v2').insert({
       cliente_id: clienteId,
@@ -213,7 +222,7 @@ export function ContaBoitelTab({ onBack }: Props) {
       sinal: config.sinal,
       status_transacao: 'confirmado',
       origem_lancamento: 'boitel',
-      boitel_id: selected.id,
+      boitel_lote_id: selected.id,
       macro_custo: cls.macro_custo,
       centro_custo: cls.centro_custo,
       subcentro: cls.subcentro,
@@ -280,13 +289,13 @@ export function ContaBoitelTab({ onBack }: Props) {
                         <div className="flex justify-between items-start">
                           <div>
                             <p className="text-[13px] font-bold text-foreground">
-                              {b.lote || b.fazenda_destino_nome}
+                              {b.lote_codigo || b.boitel_destino}
                             </p>
                             <p className="text-[10px] text-muted-foreground">
-                              {b.quantidade} cab · {b.dias} dias · Envio: {fmtDate(b.data_envio)}
+                              {b.quantidade_cab} cab · {b.dias} dias · Envio: {fmtDate(b.data_envio)}
                             </p>
-                            {b.numero_contrato && (
-                              <p className="text-[10px] text-muted-foreground">Contrato: {b.numero_contrato}</p>
+                            {b.contrato_baia && (
+                              <p className="text-[10px] text-muted-foreground">Contrato: {b.contrato_baia}</p>
                             )}
                           </div>
                           <div className="text-right">
@@ -306,10 +315,10 @@ export function ContaBoitelTab({ onBack }: Props) {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-base font-bold text-foreground">
-                    {selected.lote || selected.fazenda_destino_nome}
+                    {selected.lote_codigo || selected.boitel_destino}
                   </h2>
                   <p className="text-[10px] text-muted-foreground">
-                    {selected.quantidade} cab · {selected.dias} dias · Contrato: {selected.numero_contrato || '-'}
+                    {selected.quantidade_cab} cab · {selected.dias} dias · Contrato: {selected.contrato_baia || '-'}
                   </p>
                 </div>
                 <Button variant="ghost" size="sm" className="h-7 text-[11px]" onClick={() => { setSelected(null); setLancamentos([]); }}>
