@@ -116,12 +116,68 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   const [existingLoaded, setExistingLoaded] = useState(false);
 
   const [boitelOpen, setBoitelOpen] = useState(false);
-  const [boitelData, setBoitelData] = useState<BoitelData | null>(null);
+  const [boitelData, setBoitelDataInternal] = useState<BoitelData | null>(null);
   const [boitelLoaded, setBoitelLoaded] = useState(false);
 
-  // Auto-load boitel data when editing a boitel venda
+  // Wrapper to notify parent on every change
+  const setBoitelData = (val: BoitelData | null | ((prev: BoitelData | null) => BoitelData | null)) => {
+    setBoitelDataInternal(prev => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      onBoitelDataChange?.(next);
+      return next;
+    });
+  };
+
+  // Initialize from snapshot first, then fallback to DB
   useEffect(() => {
-    if (tipoPeso !== 'boitel' || !lancamentoId || boitelLoaded || boitelData) return;
+    if (tipoPeso !== 'boitel' || boitelLoaded || boitelData) return;
+
+    // Priority 1: Use snapshot data passed from parent (from detalhesSnapshot.boitelSnapshot)
+    if (initialBoitelData && Object.keys(initialBoitelData).length > 0) {
+      console.log('[Boitel Edit] Rehydrating from snapshot', initialBoitelData);
+      const rehydrated: BoitelData = {
+        qtdCabecas: initialBoitelData.qtdCabecas ?? quantidade,
+        pesoInicial: initialBoitelData.pesoInicial ?? pesoKg,
+        fazendaOrigem: initialBoitelData.fazendaOrigem ?? '',
+        nomeBoitel: initialBoitelData.nomeBoitel ?? '',
+        lote: initialBoitelData.lote ?? '',
+        numeroContrato: initialBoitelData.numeroContrato ?? '',
+        dataEnvio: initialBoitelData.dataEnvio ?? '',
+        quebraViagem: initialBoitelData.quebraViagem ?? 3,
+        custoOportunidade: initialBoitelData.custoOportunidade ?? 0,
+        dias: initialBoitelData.dias ?? 90,
+        gmd: initialBoitelData.gmd ?? 0.8,
+        rendimentoEntrada: initialBoitelData.rendimentoEntrada ?? 50,
+        rendimento: initialBoitelData.rendimento ?? 52,
+        modalidadeCusto: initialBoitelData.modalidadeCusto ?? 'diaria',
+        custoDiaria: initialBoitelData.custoDiaria ?? 0,
+        custoArroba: initialBoitelData.custoArroba ?? 0,
+        percentualParceria: initialBoitelData.percentualParceria ?? 50,
+        custosExtrasParceria: initialBoitelData.custosExtrasParceria ?? 0,
+        custoFrete: initialBoitelData.custoFrete ?? 0,
+        outrosCustos: initialBoitelData.outrosCustos ?? 0,
+        custoNutricao: initialBoitelData.custoNutricao ?? 0,
+        custoSanidade: initialBoitelData.custoSanidade ?? 0,
+        custoNfAbate: initialBoitelData.custoNfAbate ?? 0,
+        precoVendaArroba: initialBoitelData.precoVendaArroba ?? 0,
+        despesasAbate: initialBoitelData.despesasAbate ?? 0,
+        formaReceb: initialBoitelData.formaReceb ?? 'avista',
+        qtdParcelas: initialBoitelData.qtdParcelas ?? 1,
+        parcelas: initialBoitelData.parcelas ?? [],
+        _faturamentoBruto: initialBoitelData._faturamentoBruto,
+        _faturamentoLiquido: initialBoitelData._faturamentoLiquido,
+        _receitaProdutor: initialBoitelData._receitaProdutor,
+        _custoTotal: initialBoitelData._custoTotal,
+        _lucroTotal: initialBoitelData._lucroTotal,
+        _boitelId: initialBoitelData._boitelId,
+      };
+      setBoitelData(rehydrated);
+      setBoitelLoaded(true);
+      return;
+    }
+
+    // Priority 2: Load from DB via boitel_id
+    if (!lancamentoId) { setBoitelLoaded(true); return; }
     (async () => {
       const { data: lanc } = await supabase
         .from('lancamentos')
@@ -171,7 +227,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       }
       setBoitelLoaded(true);
     })();
-  }, [tipoPeso, lancamentoId, boitelLoaded, boitelData]);
+  }, [tipoPeso, lancamentoId, boitelLoaded, boitelData, initialBoitelData]);
 
   useEffect(() => {
     if (!lancamentoId || existingLoaded) return;
