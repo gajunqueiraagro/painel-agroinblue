@@ -137,6 +137,7 @@ const Index = () => {
   const [abateParaEditar, setAbateParaEditar] = useState<Lancamento | null>(null);
   const [vendaParaEditar, setVendaParaEditar] = useState<Lancamento | null>(null);
   const [compraParaEditar, setCompraParaEditar] = useState<Lancamento | null>(null);
+  const [editOriginTab, setEditOriginTab] = useState<TabId | null>(null);
   const { user } = useAuth();
   const { canViewTab, canEdit, isReadOnly } = usePermissions();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
@@ -203,6 +204,9 @@ const Index = () => {
       setLancamentosFromEvolCategoria(false);
       setLancamentosFromFluxoAnual(false);
       setAbateParaEditar(null);
+      setVendaParaEditar(null);
+      setCompraParaEditar(null);
+      setEditOriginTab(null);
     }
     if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
     setActiveTab(tab);
@@ -394,6 +398,13 @@ const Index = () => {
           abateParaEditar={abateParaEditar}
           vendaParaEditar={vendaParaEditar}
           compraParaEditar={compraParaEditar}
+          onReturnFromEdit={editOriginTab ? () => {
+            setActiveTab(editOriginTab);
+            setEditOriginTab(null);
+            setAbateParaEditar(null);
+            setVendaParaEditar(null);
+            setCompraParaEditar(null);
+          } : undefined}
         />
       )}
       {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} onNavigateToValorRebanho={() => setActiveTab('valor_rebanho')} onSetSaldo={canEditZoo ? setSaldoInicial : undefined} onNavigateToReclass={goToReclassFromFluxoAnual} />}
@@ -407,9 +418,9 @@ const Index = () => {
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
           onNavigateToReclass={goToReclassFromEvolCategoria}
-          onEditarAbate={(l) => { setAbateParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarVenda={(l) => { setVendaParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarCompra={(l) => { setCompraParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarAbate={(l) => { setEditOriginTab('evolucao_rebanho_hub'); setAbateParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarVenda={(l) => { setEditOriginTab('evolucao_rebanho_hub'); setVendaParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarCompra={(l) => { setEditOriginTab('evolucao_rebanho_hub'); setCompraParaEditar(l); setActiveTab('lancamentos'); }}
         />
       )}
       {activeTab === 'financeiro' && (
@@ -422,9 +433,9 @@ const Index = () => {
           filtroMesInicial={movFiltroMes}
           drillDownLabel={movDrillLabel}
           onBack={movBackTab ? () => setActiveTab(movBackTab) : undefined}
-          onEditarAbate={(l) => { setAbateParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarVenda={(l) => { setVendaParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarCompra={(l) => { setCompraParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarAbate={(l) => { setEditOriginTab('financeiro'); setAbateParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarVenda={(l) => { setEditOriginTab('financeiro'); setVendaParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarCompra={(l) => { setEditOriginTab('financeiro'); setCompraParaEditar(l); setActiveTab('lancamentos'); }}
         />
       )}
       {activeTab === 'acessos' && <AcessosTab />}

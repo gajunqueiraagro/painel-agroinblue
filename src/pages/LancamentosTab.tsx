@@ -60,6 +60,8 @@ interface Props {
   vendaParaEditar?: Lancamento | null;
   /** Compra para abrir em modo edição automaticamente */
   compraParaEditar?: Lancamento | null;
+  /** Callback to return to the origin tab after edit cancel/save */
+  onReturnFromEdit?: () => void;
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
@@ -124,7 +126,7 @@ function fmt(v?: number, decimals = 2) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, onReturnFromEdit }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
   const nomeFazenda = fazendaAtual?.nome || '';
@@ -397,7 +399,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setData(format(new Date(), 'yyyy-MM-dd'));
     setObservacao(''); setStatusOp('conciliado');
     resetFinancialFields();
-  }, []);
+    if (onReturnFromEdit) onReturnFromEdit();
+  }, [onReturnFromEdit]);
 
   // Load abate into form for editing
   const loadAbateForEdit = useCallback((l: Lancamento) => {
@@ -1027,6 +1030,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('conciliado');
           resetFinancialFields();
           toast.success('Abate atualizado com financeiro!');
+          onReturnFromEdit?.();
         } else if (isVenda && calc.valorLiquido > 0) {
           // Auto-generate/update financeiro for venda
           if (vendaFinanceiroRef.current) {
@@ -1041,6 +1045,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('conciliado');
           resetFinancialFields();
           toast.success('Venda atualizada com financeiro!');
+          onReturnFromEdit?.();
         } else if (isCompra && compraDetalhes && fazendaAtual && clienteAtual) {
           // Re-generate financeiro for compra edit
           await gerarFinanceiroCompra({
@@ -1065,6 +1070,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           setCompraDetalhes(null);
           toast.success('Compra atualizada com financeiro!');
+          onReturnFromEdit?.();
         } else {
           setEditingAbateId(null);
           setLastSavedLancamentoId(null);
@@ -1074,6 +1080,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('conciliado');
           resetFinancialFields();
           toast.success('Registro atualizado com sucesso!');
+          onReturnFromEdit?.();
         }
       } else {
         const returnedId = await onAdicionar(lancamentoDados as Omit<Lancamento, 'id'>);
