@@ -58,6 +58,8 @@ interface Props {
   abateParaEditar?: Lancamento | null;
   /** Venda para abrir em modo edição automaticamente */
   vendaParaEditar?: Lancamento | null;
+  /** Compra para abrir em modo edição automaticamente */
+  compraParaEditar?: Lancamento | null;
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
