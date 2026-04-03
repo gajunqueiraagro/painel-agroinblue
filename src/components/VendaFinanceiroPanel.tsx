@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { CATEGORIAS } from '@/types/cattle';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { BoitelPlanningDialog, type BoitelData } from '@/components/BoitelPlanningDialog';
-import { salvarBoitelOperacao, vincularBoitelAoLancamento, gerarFinanceiroBoitel } from '@/hooks/useBoitelOperacoes';
+import { salvarBoitelOperacao, vincularBoitelAoLancamento, gerarFinanceiroBoitel, carregarBoitelOperacao } from '@/hooks/useBoitelOperacoes';
 import type { StatusOperacional } from '@/lib/statusOperacional';
 
 interface Parcela {
