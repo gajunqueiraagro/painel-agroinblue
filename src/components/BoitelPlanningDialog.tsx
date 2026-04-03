@@ -330,15 +330,16 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <RR l="= Total Operação" v={`R$ ${fmtR$(calc.tOp)}`} b accent />
               </CSection>
 
-              {data.possuiAdiantamento && data.valorTotalAntecipado > 0 && (
-                <CSection title="Acerto com Boitel" defaultOpen={false}>
-                  <RR l="Fat. Bruto" v={`R$ ${fmtR$(calc.fba)}`} b />
-                  <RR l="(-) Custo Total Boitel" v={`-R$ ${fmtR$(calc.custoTotalBoitel)}`} c="text-destructive" />
+              <CSection title="Acerto com Boitel" defaultOpen={false}>
+                <RR l="Fat. Bruto" v={`R$ ${fmtR$(calc.fba)}`} b />
+                <RR l="(-) Custo Total Boitel" v={`-R$ ${fmtR$(calc.custoTotalBoitel)}`} c="text-destructive" />
+                <RR l="(-) Custos Abate" v={`-R$ ${fmtR$(calc.cAb)}`} c="text-destructive" />
+                {data.possuiAdiantamento && data.valorTotalAntecipado > 0 && (
                   <RR l="(+) Adiant. p/ Boitel" v={`R$ ${fmtR$(data.valorTotalAntecipado)}`} c="text-blue-600 dark:text-blue-400" />
-                  <DL />
-                  <RR l="= Saldo a receber" v={`R$ ${fmtR$(saldoReceber)}`} b accent />
-                </CSection>
-              )}
+                )}
+                <DL />
+                <RR l="= Saldo a receber" v={`R$ ${fmtR$(saldoReceber)}`} b accent />
+              </CSection>
 
 
               {/* COMPARATIVO */}
