@@ -1446,7 +1446,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Abate registrado com financeiro!');
         } else if (isVenda && returnedId) {
-          if (vendaFinanceiroRef.current && calc.valorLiquido > 0) {
+          if (vendaFinanceiroRef.current && (calc.valorLiquido > 0 || tipoPeso === 'boitel')) {
             await vendaFinanceiroRef.current.generateFinanceiro(returnedId);
           }
           vendaFinanceiroRef.current?.resetForm();
