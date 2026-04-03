@@ -1313,7 +1313,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         }
         if (isVenda && vendaDetalhes) {
           const fornNome = abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome;
-          return { type: 'venda', ...vendaDetalhes, tipoPreco: vendaTipoPreco, precoInput: vendaPrecoInput, fornecedorId: vendaDestinoFornecedorId || undefined, fornecedorNome: fornNome || undefined };
+          const vc = vendaCalc || vendaDetalhes.calculation;
+          return {
+            ...buildVendaSnapshot(vc || buildVendaCalculation({
+              quantidade: Number(quantidade) || 0, pesoKg: Number(pesoKg) || 0, categoria,
+              fazendaOrigem: nomeFazenda || fazendaOrigem, compradorNome: fornNome || '',
+              data, statusOperacional: statusOp, tipoPreco: 'por_kg', precoInput: vendaPrecoInput,
+            })),
+            type: 'venda',
+            ...vendaDetalhes,
+            tipoPreco: vendaTipoPreco, precoInput: vendaPrecoInput,
+            fornecedorId: vendaDestinoFornecedorId || undefined, fornecedorNome: fornNome || undefined,
+          };
         }
         if (isTransferenciaSaida && transferenciaCalc) {
           return {
