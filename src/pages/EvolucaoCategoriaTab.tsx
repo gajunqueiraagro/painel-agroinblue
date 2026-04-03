@@ -501,7 +501,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                     <td className={`px-1.5 py-0.5 text-center font-extrabold bg-primary/5 ${cat.saldoFinal === 0 ? 'text-transparent' : 'text-foreground'}`}>
                       {cat.saldoFinal}
                     </td>
-                    {hasPastosData && (
+                    {showDelta && (
                       <td className="px-1.5 py-0.5 text-center">
                         {cat.saldoFinal === 0 && cat.pastosQtd === 0 ? (
                           <span className="text-transparent">–</span>
