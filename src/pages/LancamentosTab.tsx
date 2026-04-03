@@ -492,6 +492,79 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
   }, [abateParaEditar]);
 
+  // Load venda into form for editing
+  const loadVendaForEdit = useCallback((l: Lancamento) => {
+    // 1. Set tab & type
+    setAba('saida');
+    setTipo('venda');
+
+    // 2. Zootechnical data
+    setData(l.data);
+    setCategoria(l.categoria);
+    setQuantidade(String(l.quantidade));
+    setPesoKg(l.pesoMedioKg ? String(l.pesoMedioKg) : '');
+    setFazendaOrigem(l.fazendaOrigem || '');
+    setFazendaDestino(l.fazendaDestino || '');
+    setObservacao(l.observacao || '');
+    setStatusOp((l.statusOperacional as StatusOperacional) || 'conciliado');
+    setNotaFiscal(l.notaFiscal || '');
+
+    // 3. Tipo de venda (desmama / gado_adulto / boitel)
+    const tv = l.tipoPeso || 'gado_adulto';
+    setTipoPeso(tv);
+
+    // 4. Try to find the fornecedor by name (fazendaDestino)
+    if (l.fazendaDestino) {
+      const forn = abateFornecedores.find(f => f.nome === l.fazendaDestino);
+      if (forn) setVendaDestinoFornecedorId(forn.id);
+    }
+
+    // 5. Build vendaDetalhes from stored lancamento data
+    const vendaDet: VendaDetalhes = {
+      tipoVenda: (tv === 'desmama' || tv === 'gado_adulto') ? tv as 'desmama' | 'gado_adulto' : 'gado_adulto',
+      tipoPreco: 'por_kg',
+      precoInput: l.precoArroba ? String(l.precoArroba) : '',
+      frete: '',
+      comissaoPct: '',
+      outrosCustos: l.outrosDescontos ? String(l.outrosDescontos) : '',
+      funruralPct: '',
+      funruralReais: '',
+      notaFiscal: l.notaFiscal || '',
+      formaReceb: 'avista',
+      qtdParcelas: '1',
+      parcelas: [],
+    };
+
+    // Reverse-calc funrural percentage if available
+    if (l.descontoFunrural && l.descontoFunrural > 0 && l.valorTotal) {
+      const valorBruto = (l.valorTotal || 0) + (l.descontoFunrural || 0) + (l.outrosDescontos || 0);
+      if (valorBruto > 0) {
+        vendaDet.funruralPct = String(((l.descontoFunrural / valorBruto) * 100).toFixed(2));
+      }
+    }
+
+    setVendaDetalhes(vendaDet);
+    setVendaTipoPreco(vendaDet.tipoPreco);
+    setVendaPrecoInput(vendaDet.precoInput);
+    setFunruralPct(vendaDet.funruralPct);
+    setFunruralReais(vendaDet.funruralReais);
+    setFrete(vendaDet.frete);
+    setComissaoPct(vendaDet.comissaoPct);
+    setOutrosDescontos(vendaDet.outrosCustos);
+
+    // 6. Set editing mode (reuse editingAbateId for all types)
+    setEditingAbateId(l.id);
+    setDetalheId(null);
+    setLastSavedLancamentoId(null);
+  }, [abateFornecedores]);
+
+  // Auto-load venda for editing when navigated from another tab
+  useEffect(() => {
+    if (vendaParaEditar) {
+      loadVendaForEdit(vendaParaEditar);
+    }
+  }, [vendaParaEditar]);
+
   useEffect(() => {
     if (!clienteAtual?.id) {
       setAbateFornecedores([]);
