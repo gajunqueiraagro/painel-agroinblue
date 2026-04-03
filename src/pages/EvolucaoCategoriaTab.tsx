@@ -336,6 +336,8 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   }, [dados, precosRebanho]);
 
   const hasPastosData = Object.keys(pastosQtdPorCat).length > 0;
+  const showDelta = hasPastosData && statusFiltro === 'realizado';
+  const isRealizado = statusFiltro === 'realizado';
 
   const formatPeso = (v: number | null) => {
     if (v === null || v === undefined || v <= 0) return '—';
