@@ -415,15 +415,26 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
         className="overflow-x-hidden flex-shrink-0 border-t-2"
         onScroll={(e) => syncScroll(e.currentTarget)}
       >
-        <table className="min-w-full w-max border-separate border-spacing-0 text-[11px]">
+        <table className="min-w-full w-max border-separate border-spacing-0 text-[11px]" style={{ tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: 80 }} />
+            <col style={{ width: 55 }} />
+            <col style={{ width: 36 }} />
+            {categorias.map(cat => <col key={cat.id} style={{ width: 28 }} />)}
+            <col style={{ width: 36 }} />
+            <col style={{ width: 42 }} />
+            <col style={{ width: 40 }} />
+            <col style={{ width: 40 }} />
+            <col style={{ width: 32 }} />
+          </colgroup>
           <tfoot>
-            <tr className="bg-muted font-bold text-xs h-8">
-              <td className="sticky left-0 z-10 bg-muted px-2 py-1 border-r min-w-[80px]" colSpan={3}>TOTAL / MÉDIA</td>
+            <tr className="bg-muted/80 font-bold h-7">
+              <td className="sticky left-0 z-10 bg-muted px-1.5 py-0.5 text-[11px] border-r" colSpan={3}>TOTAL / MÉDIA</td>
               {categorias.map(cat => {
                 const t = totais.catTotals.get(cat.id);
                 const pesoMed = t && t.qtdComPeso > 0 ? t.pesoTotal / t.qtdComPeso : null;
                 return (
-                  <td key={cat.id} className="px-1 py-1 text-center border-r min-w-[28px]">
+                  <td key={cat.id} className="px-0.5 py-0.5 text-center text-[11px] border-r">
                     {t && t.quantidade > 0 ? (
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -438,15 +449,15 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
                   </td>
                 );
               })}
-              <td className="px-1.5 py-1 text-center border-r bg-primary/10 text-sm font-extrabold min-w-[36px]">{totais.totalCab}</td>
-              <td className="px-1.5 py-1 text-center border-r min-w-[42px]">{totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 0) : '—'}</td>
-              <td className="px-1.5 py-1 text-center border-r min-w-[40px]">{formatNum(totais.areaTotal, 1)}</td>
-              <td className={`px-1.5 py-1 text-center border-r min-w-[40px] ${getUaHaColor(totais.uaHaGeral)}`}>
+              <td className="px-0.5 py-0.5 text-center text-[11px] font-extrabold border-r bg-primary/10">{totais.totalCab}</td>
+              <td className="px-0.5 py-0.5 text-center text-[11px] border-r">{totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 0) : '—'}</td>
+              <td className="px-0.5 py-0.5 text-center text-[11px] border-r">{formatNum(totais.areaTotal, 1)}</td>
+              <td className={`px-0.5 py-0.5 text-center text-[11px] border-r ${getUaHaColor(totais.uaHaGeral)}`}>
                 {totais.uaHaGeral ? formatNum(totais.uaHaGeral, 2) : '—'}
               </td>
-              <td className="px-1.5 py-1 text-center min-w-[32px]">
+              <td className="px-0.5 py-0.5 text-center text-[11px]">
                 {totais.qualidadeMedia ? (
-                  <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${getQualidadeColor(totais.qualidadeMedia)}`}>
+                  <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold ${getQualidadeColor(totais.qualidadeMedia)}`}>
                     {formatNum(totais.qualidadeMedia, 1)}
                   </span>
                 ) : '—'}
