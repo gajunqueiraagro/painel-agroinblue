@@ -1796,6 +1796,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   submitting={submitting}
                   registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Compra'}
                   onCancelEdit={editingAbateId ? handleCancelEdit : undefined}
+                />
                 <CompraDetalhesDialog
                   open={compraDialogOpen}
                   onClose={() => setCompraDialogOpen(false)}
