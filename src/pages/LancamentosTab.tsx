@@ -1647,11 +1647,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     } else if (isVenda && tipoPeso === 'boitel' && boitelDataForResumo) {
       // ── BOITEL-specific confirmation ──
       const bd = boitelDataForResumo;
+      const saldoReceber = bd._saldoReceber || 0;
       result.tipoOperacao = 'Boitel';
       result.fornecedorOuFrigorifico = bd.nomeBoitel || '';
       result.totalBruto = bd._faturamentoBruto || 0;
       result.totalDescontos = bd._custoTotal || 0;
-      result.valorLiquido = bd._lucroTotal || 0;
+      result.valorLiquido = saldoReceber; // Financial: what actually enters cash
       result.formaPagamento = bd.formaReceb === 'prazo' ? `A prazo (${bd.qtdParcelas}x)` : 'À vista';
       if (bd.formaReceb === 'prazo' && bd.parcelas?.length > 0) {
         result.parcelas = bd.parcelas;
@@ -1662,8 +1663,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       result.boitelReceitaProdutor = bd._receitaProdutor || 0;
       result.boitelAdiantamento = bd.possuiAdiantamento ? bd.valorTotalAntecipado : 0;
       result.boitelFrete = bd.custoFrete || 0;
-      result.liqCabeca = bd.qtdCabecas > 0 ? (bd._lucroTotal || 0) / bd.qtdCabecas : 0;
-      result.liqKg = bd.pesoInicial > 0 && bd.qtdCabecas > 0 ? ((bd._lucroTotal || 0) / bd.qtdCabecas) / bd.pesoInicial : 0;
+      result.boitelResultadoLiquido = bd._lucroTotal || 0; // Economic result (informational)
+      result.liqCabeca = bd.qtdCabecas > 0 ? saldoReceber / bd.qtdCabecas : 0;
+      result.liqKg = bd.pesoInicial > 0 && bd.qtdCabecas > 0 ? (saldoReceber / bd.qtdCabecas) / bd.pesoInicial : 0;
     } else if (isVenda && vendaCalc) {
       const vc = vendaCalc;
       const tipoPrecoLabel = vendaDetalhes?.tipoPreco === 'por_kg' ? 'R$/kg' : vendaDetalhes?.tipoPreco === 'por_cab' ? 'R$/cab' : 'R$/@';

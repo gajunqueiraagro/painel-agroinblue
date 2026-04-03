@@ -133,7 +133,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
   useEffect(() => { if (data.possuiAdiantamento) { const v = Math.round(calc.cDT * data.pctAdiantamentoDiarias / 100 * 100) / 100; if (v !== data.valorAdiantamentoDiarias) setData(p => ({ ...p, valorAdiantamentoDiarias: v })); } }, [data.possuiAdiantamento, data.pctAdiantamentoDiarias, calc.cDT]);
   useEffect(() => { if (data.formaReceb === 'prazo' && data.qtdParcelas > 0 && basePar > 0) setData(p => ({ ...p, parcelas: gerarParcelas(p.qtdParcelas, basePar) })); }, [basePar, data.formaReceb, data.qtdParcelas, dataAbateISO]);
 
-  const handleSave = () => { onSave({ ...data, _faturamentoBruto: calc.fba, _faturamentoLiquido: calc.fLiq, _receitaProdutor: calc.rProd, _custoTotal: calc.cOp, _lucroTotal: calc.rLiq }); onClose(); };
+  const handleSave = () => { onSave({ ...data, _faturamentoBruto: calc.fba, _faturamentoLiquido: calc.fLiq, _receitaProdutor: calc.rProd, _custoTotal: calc.cOp, _lucroTotal: calc.rLiq, _saldoReceber: saldoReceberBase }); onClose(); };
 
   const pos = calc.rLiq > 0;
   const saldoReceber = saldoReceberBase;
