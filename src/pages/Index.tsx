@@ -408,9 +408,9 @@ const Index = () => {
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
           onNavigateToReclass={goToReclassFromEvolCategoria}
-          onEditarAbate={(l) => { setAbateParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarVenda={(l) => { setVendaParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarCompra={(l) => { setCompraParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarAbate={(l) => { setEditOriginTab('evolucao_rebanho_hub'); setAbateParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarVenda={(l) => { setEditOriginTab('evolucao_rebanho_hub'); setVendaParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarCompra={(l) => { setEditOriginTab('evolucao_rebanho_hub'); setCompraParaEditar(l); setActiveTab('lancamentos'); }}
         />
       )}
       {activeTab === 'financeiro' && (
