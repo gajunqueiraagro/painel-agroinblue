@@ -196,8 +196,10 @@ export async function gerarFinanceiroBoitel(
   }
 
   // 1. RECEITA
+  // Adiantamento pago ao boitel é devolvido na liquidação final,
+  // então o valor a receber do boitel = receita_produtor + adiantamento
   const valorReceitaLiquida = temAdiantamento
-    ? op.receita_produtor - op.valor_total_antecipado
+    ? op.receita_produtor + op.valor_total_antecipado
     : op.receita_produtor;
 
   const parcelas = options?.parcelas || [];

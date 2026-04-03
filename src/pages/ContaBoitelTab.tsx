@@ -339,20 +339,24 @@ export function ContaBoitelTab({ onBack }: Props) {
                     <span className="font-bold text-primary">{fmt(selected.receita_produtor)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">(-) Adiantamentos pagos ao boitel</span>
-                    <span className="text-destructive">{fmt(conciliacao.adiantPagos)}</span>
+                    <span className="text-muted-foreground">(+) Adiantamento pago ao boitel</span>
+                    <span className="text-primary">{fmt(conciliacao.adiantPagos)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground font-semibold">= Saldo a receber do boitel</span>
+                    <span className="font-bold">{fmt(conciliacao.saldoAReceberBoitel)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">(-) Adiantamentos recebidos</span>
                     <span className="text-muted-foreground">{fmt(conciliacao.adiantRecebidos)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">(-) Frete</span>
+                    <span className="text-muted-foreground">(-) Frete pago fora</span>
                     <span className="text-destructive">{fmt(selected.custo_frete || 0)}</span>
                   </div>
                   <hr className="border-border" />
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground font-semibold">Saldo líquido esperado</span>
+                    <span className="text-muted-foreground font-semibold">Saldo líquido final de caixa</span>
                     <span className="font-bold">{fmt(conciliacao.saldoLiquidoEsperado)}</span>
                   </div>
                   <div className="flex justify-between">
