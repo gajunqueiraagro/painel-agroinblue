@@ -213,7 +213,7 @@ export function ContaBoitelTab({ onBack }: Props) {
     }
 
     const isPago = novoTipo === 'adiantamento_pago';
-    const desc = novoDesc || `${isPago ? 'Adiantamento pago' : 'Adiantamento recebido'} - Boitel ${selected.lote || selected.fazenda_destino_nome}`;
+    const desc = novoDesc || `${isPago ? 'Adiantamento pago' : 'Adiantamento recebido'} - Boitel ${selected.lote_codigo || selected.boitel_destino}`;
 
     const { error } = await supabase.from('financeiro_lancamentos_v2').insert({
       cliente_id: clienteId,
