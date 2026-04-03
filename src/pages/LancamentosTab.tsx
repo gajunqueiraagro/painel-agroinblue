@@ -1886,7 +1886,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   onRequestRegister={handleRequestRegister}
                   submitting={submitting}
                   registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
-                />
+                  onCancelEdit={editingAbateId ? handleCancelEdit : undefined}
                 <VendaDetalhesDialog
                   open={vendaDialogOpen}
                   onClose={() => setVendaDialogOpen(false)}
