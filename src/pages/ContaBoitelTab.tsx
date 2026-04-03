@@ -141,7 +141,9 @@ export function ContaBoitelTab({ onBack }: Props) {
       .filter(l => l.origem_tipo === 'boitel:custo_frete' || (l.origem_tipo === 'boitel:custo' && l.descricao?.toLowerCase().includes('frete')))
       .reduce((s, l) => s + l.valor, 0);
 
-    const saldoLiquidoEsperado = selected.receita_produtor - adiantPagos - adiantRecebidos - (selected.custo_frete || 0);
+    // Adiantamento pago ao boitel é devolvido na liquidação → soma ao saldo a receber
+    const saldoAReceberBoitel = selected.receita_produtor + adiantPagos;
+    const saldoLiquidoEsperado = saldoAReceberBoitel - adiantRecebidos - (selected.custo_frete || 0);
 
     const totalRealizado = lancamentos
       .filter(l => l.status_transacao === 'conciliado' || l.status_transacao === 'confirmado')
