@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { buscarPlanoContasBoitel, BOITEL_CLASSIFICACAO } from '@/lib/financeiro/boitelMapping';
 
 export interface BoitelOperacao {
   id?: string;
@@ -12,12 +13,10 @@ export interface BoitelOperacao {
   quantidade: number;
   peso_inicial_kg: number;
   modalidade: 'diaria' | 'arroba' | 'parceria';
-  // Inputs técnicos
   dias: number;
   gmd: number;
   rendimento_entrada: number;
   rendimento_saida: number;
-  // Custos
   custo_diaria: number;
   custo_arroba: number;
   percentual_parceria: number;
@@ -28,13 +27,11 @@ export interface BoitelOperacao {
   outros_custos: number;
   despesas_abate: number;
   preco_venda_arroba: number;
-  // Resultados snapshot
   faturamento_bruto: number;
   faturamento_liquido: number;
   receita_produtor: number;
   custo_total: number;
   lucro_total: number;
-  // Adiantamento
   possui_adiantamento: boolean;
   data_adiantamento: string | null;
   pct_adiantamento_diarias: number;
@@ -45,96 +42,55 @@ export interface BoitelOperacao {
   adiantamento_observacao: string | null;
 }
 
-/**
- * Salva operação de boitel na tabela boitel_operacoes.
- * Retorna o ID criado/atualizado.
- */
 export async function salvarBoitelOperacao(op: BoitelOperacao): Promise<string | null> {
+  const payload = {
+    fazenda_destino_nome: op.fazenda_destino_nome,
+    lote: op.lote || null,
+    numero_contrato: op.numero_contrato || null,
+    data_envio: op.data_envio || null,
+    quantidade: op.quantidade,
+    peso_inicial_kg: op.peso_inicial_kg,
+    modalidade: op.modalidade,
+    dias: op.dias,
+    gmd: op.gmd,
+    rendimento_entrada: op.rendimento_entrada,
+    rendimento_saida: op.rendimento_saida,
+    custo_diaria: op.custo_diaria,
+    custo_arroba: op.custo_arroba,
+    percentual_parceria: op.percentual_parceria,
+    custos_extras_parceria: op.custos_extras_parceria,
+    custo_nutricao: op.custo_nutricao,
+    custo_sanidade: op.custo_sanidade,
+    custo_frete: op.custo_frete,
+    outros_custos: op.outros_custos,
+    despesas_abate: op.despesas_abate,
+    preco_venda_arroba: op.preco_venda_arroba,
+    faturamento_bruto: op.faturamento_bruto,
+    faturamento_liquido: op.faturamento_liquido,
+    receita_produtor: op.receita_produtor,
+    custo_total: op.custo_total,
+    lucro_total: op.lucro_total,
+    possui_adiantamento: op.possui_adiantamento,
+    data_adiantamento: op.data_adiantamento || null,
+    pct_adiantamento_diarias: op.pct_adiantamento_diarias,
+    valor_adiantamento_diarias: op.valor_adiantamento_diarias,
+    valor_adiantamento_sanitario: op.valor_adiantamento_sanitario,
+    valor_adiantamento_outros: op.valor_adiantamento_outros,
+    valor_total_antecipado: op.valor_total_antecipado,
+    adiantamento_observacao: op.adiantamento_observacao || null,
+  };
+
   if (op.id) {
-    // Update
     const { error } = await supabase
       .from('boitel_operacoes')
-      .update({
-        fazenda_destino_nome: op.fazenda_destino_nome,
-        lote: op.lote || null,
-        numero_contrato: op.numero_contrato || null,
-        data_envio: op.data_envio || null,
-        quantidade: op.quantidade,
-        peso_inicial_kg: op.peso_inicial_kg,
-        modalidade: op.modalidade,
-        dias: op.dias,
-        gmd: op.gmd,
-        rendimento_entrada: op.rendimento_entrada,
-        rendimento_saida: op.rendimento_saida,
-        custo_diaria: op.custo_diaria,
-        custo_arroba: op.custo_arroba,
-        percentual_parceria: op.percentual_parceria,
-        custos_extras_parceria: op.custos_extras_parceria,
-        custo_nutricao: op.custo_nutricao,
-        custo_sanidade: op.custo_sanidade,
-        custo_frete: op.custo_frete,
-        outros_custos: op.outros_custos,
-        despesas_abate: op.despesas_abate,
-        preco_venda_arroba: op.preco_venda_arroba,
-        faturamento_bruto: op.faturamento_bruto,
-        faturamento_liquido: op.faturamento_liquido,
-        receita_produtor: op.receita_produtor,
-        custo_total: op.custo_total,
-        lucro_total: op.lucro_total,
-        possui_adiantamento: op.possui_adiantamento,
-        data_adiantamento: op.data_adiantamento || null,
-        pct_adiantamento_diarias: op.pct_adiantamento_diarias,
-        valor_adiantamento_diarias: op.valor_adiantamento_diarias,
-        valor_adiantamento_sanitario: op.valor_adiantamento_sanitario,
-        valor_adiantamento_outros: op.valor_adiantamento_outros,
-        valor_total_antecipado: op.valor_total_antecipado,
-        adiantamento_observacao: op.adiantamento_observacao || null,
-      } as any)
+      .update(payload as any)
       .eq('id', op.id);
     if (error) { toast.error('Erro ao atualizar boitel: ' + error.message); return null; }
     return op.id;
   } else {
-    // Insert
     const { data, error } = await supabase
       .from('boitel_operacoes')
-      .insert({
-        cliente_id: op.cliente_id,
-        fazenda_origem_id: op.fazenda_origem_id,
-        fazenda_destino_nome: op.fazenda_destino_nome,
-        lote: op.lote || null,
-        numero_contrato: op.numero_contrato || null,
-        data_envio: op.data_envio || null,
-        quantidade: op.quantidade,
-        peso_inicial_kg: op.peso_inicial_kg,
-        modalidade: op.modalidade,
-        dias: op.dias,
-        gmd: op.gmd,
-        rendimento_entrada: op.rendimento_entrada,
-        rendimento_saida: op.rendimento_saida,
-        custo_diaria: op.custo_diaria,
-        custo_arroba: op.custo_arroba,
-        percentual_parceria: op.percentual_parceria,
-        custos_extras_parceria: op.custos_extras_parceria,
-        custo_nutricao: op.custo_nutricao,
-        custo_sanidade: op.custo_sanidade,
-        custo_frete: op.custo_frete,
-        outros_custos: op.outros_custos,
-        despesas_abate: op.despesas_abate,
-        preco_venda_arroba: op.preco_venda_arroba,
-        faturamento_bruto: op.faturamento_bruto,
-        faturamento_liquido: op.faturamento_liquido,
-        receita_produtor: op.receita_produtor,
-        custo_total: op.custo_total,
-        lucro_total: op.lucro_total,
-        possui_adiantamento: op.possui_adiantamento,
-        data_adiantamento: op.data_adiantamento || null,
-        pct_adiantamento_diarias: op.pct_adiantamento_diarias,
-        valor_adiantamento_diarias: op.valor_adiantamento_diarias,
-        valor_adiantamento_sanitario: op.valor_adiantamento_sanitario,
-        valor_adiantamento_outros: op.valor_adiantamento_outros,
-        valor_total_antecipado: op.valor_total_antecipado,
-        adiantamento_observacao: op.adiantamento_observacao || null,
-      } as any)
+      .insert({ ...payload, cliente_id: op.cliente_id, fazenda_origem_id: op.fazenda_origem_id } as any)
       .select('id')
       .single();
     if (error) { toast.error('Erro ao salvar boitel: ' + error.message); return null; }
@@ -142,9 +98,6 @@ export async function salvarBoitelOperacao(op: BoitelOperacao): Promise<string |
   }
 }
 
-/**
- * Vincula boitel_id à movimentação de rebanho.
- */
 export async function vincularBoitelAoLancamento(lancamentoId: string, boitelId: string): Promise<boolean> {
   const { error } = await supabase
     .from('lancamentos')
@@ -156,10 +109,7 @@ export async function vincularBoitelAoLancamento(lancamentoId: string, boitelId:
 
 /**
  * Gera lançamentos financeiros para uma operação de boitel.
- * REGRAS:
- * - Receita = receita_produtor (caixa real)
- * - Saídas = apenas custos pagos diretamente (frete, sanidade, outros)
- * - NÃO gerar faturamento bruto, diárias, custos internos
+ * Usa mapeamento explícito de subcentros via boitelMapping.ts.
  */
 export async function gerarFinanceiroBoitel(
   op: BoitelOperacao & { id: string },
@@ -175,15 +125,14 @@ export async function gerarFinanceiroBoitel(
     formaReceb?: 'avista' | 'prazo';
   }
 ): Promise<boolean> {
-  // Guard: receita_produtor deve ser > 0
   if (op.receita_produtor <= 0) {
-    toast.error('Resultado do boitel inválido para geração financeira. Receita do produtor deve ser maior que zero.');
+    toast.error('Resultado do boitel inválido. Receita do produtor deve ser maior que zero.');
     return false;
   }
 
   const userId = (await supabase.auth.getUser()).data.user?.id;
 
-  // Se update, cancelar lançamentos antigos
+  // Cancel old entries on update
   if (options?.isUpdate) {
     const { data: old } = await supabase
       .from('financeiro_lancamentos_v2')
@@ -206,73 +155,21 @@ export async function gerarFinanceiroBoitel(
     }
   }
 
-  // Buscar plano de contas para receita de venda com boitel
-  const subcentroCandidates = [
-    'PEC/RECEITA/VENDAS/BOITEL',
-    'PEC/RECEITA/VENDAS/MACHOS ADULTOS',
-    'PEC/RECEITA/VENDAS/MACHOS',
-  ];
-
-  const { data: planoReceita } = await supabase
-    .from('financeiro_plano_contas')
-    .select('id, macro_custo, centro_custo, subcentro')
-    .eq('cliente_id', clienteId)
-    .eq('ativo', true)
-    .eq('tipo_operacao', '1-Entradas')
-    .in('subcentro', subcentroCandidates);
-
-  if (!planoReceita || planoReceita.length === 0) {
-    console.error('[Boitel Financeiro] Mapeamento de receita não encontrado.', { clienteId, subcentroCandidates });
-    toast.error(`Mapeamento financeiro não encontrado para receita de Boitel. Subcentros buscados: ${subcentroCandidates.join(', ')}. Cadastre no Plano de Contas.`);
+  // === MAPEAMENTO EXPLÍCITO ===
+  const clasReceita = await buscarPlanoContasBoitel(supabase, clienteId, 'boitel:receita');
+  if (!clasReceita) {
+    toast.error('Mapeamento financeiro não encontrado para receita de Boitel. Cadastre subcentro PEC/RECEITA/VENDAS/BOITEL no Plano de Contas.');
     return false;
   }
 
-  const clasReceita = planoReceita[0];
   const inserts: any[] = [];
   const descBase = `Venda ${op.quantidade} cab - Boitel`;
   const temAdiantamento = op.possui_adiantamento && op.valor_total_antecipado > 0;
 
-  // 0. ADIANTAMENTO: saída financeira na data de entrada/envio
+  // 0. ADIANTAMENTO PAGO na entrada
   if (temAdiantamento) {
     const dataAdiant = op.data_adiantamento || op.data_envio || dataRecebimento;
-    // Buscar plano de contas para adiantamento
-    const adiantSubcentroCandidates = [
-      'PEC/ADIANTAMENTOS/ADIANTAMENTO BOITEL',
-      'PEC/BOITEL/ADIANTAMENTO OPERACIONAL',
-    ];
-    const { data: planoAdiant } = await supabase
-      .from('financeiro_plano_contas')
-      .select('id, macro_custo, centro_custo, subcentro')
-      .eq('cliente_id', clienteId)
-      .eq('ativo', true)
-      .eq('tipo_operacao', '2-Saídas')
-      .in('subcentro', adiantSubcentroCandidates);
-
-    // Fallback: buscar qualquer adiantamento
-    let clsAdiant = planoAdiant?.[0];
-    if (!clsAdiant) {
-      const { data: fb } = await supabase
-        .from('financeiro_plano_contas')
-        .select('id, macro_custo, centro_custo, subcentro')
-        .eq('cliente_id', clienteId)
-        .eq('ativo', true)
-        .eq('tipo_operacao', '2-Saídas')
-        .ilike('subcentro', '%adiantamento%')
-        .limit(1);
-      clsAdiant = fb?.[0];
-    }
-    // Last fallback: custeio
-    if (!clsAdiant) {
-      const { data: fb2 } = await supabase
-        .from('financeiro_plano_contas')
-        .select('id, macro_custo, centro_custo, subcentro')
-        .eq('cliente_id', clienteId)
-        .eq('ativo', true)
-        .eq('tipo_operacao', '2-Saídas')
-        .ilike('macro_custo', '%custeio%')
-        .limit(1);
-      clsAdiant = fb2?.[0];
-    }
+    const clsAdiant = await buscarPlanoContasBoitel(supabase, clienteId, 'boitel:adiantamento_pago');
 
     if (clsAdiant) {
       inserts.push({
@@ -293,12 +190,12 @@ export async function gerarFinanceiroBoitel(
         data_pagamento: dataAdiant,
         descricao: `Adiantamento - ${descBase}`,
         historico: `Boitel: ${op.fazenda_destino_nome} | Adiantamento na entrada | ${op.adiantamento_observacao || ''}`,
-        origem_tipo: 'boitel:adiantamento',
+        origem_tipo: 'boitel:adiantamento_pago',
       });
     }
   }
 
-  // 1. RECEITA: valor = receita_produtor menos adiantamento já pago (saldo a receber)
+  // 1. RECEITA
   const valorReceitaLiquida = temAdiantamento
     ? op.receita_produtor - op.valor_total_antecipado
     : op.receita_produtor;
@@ -307,7 +204,6 @@ export async function gerarFinanceiroBoitel(
   const isPrazo = options?.formaReceb === 'prazo' && parcelas.length > 0;
 
   if (isPrazo) {
-    // Parcelas já estão calculadas com base no saldo (descontado adiantamento)
     parcelas.forEach((p, i) => {
       inserts.push({
         cliente_id: clienteId,
@@ -357,38 +253,17 @@ export async function gerarFinanceiroBoitel(
     });
   }
 
-  // 2. SAÍDAS: apenas custos pagos diretamente (frete, sanidade, outros)
-  const custosDiretos = [
-    { valor: op.custo_frete, label: `Frete - ${descBase}`, subcentroHint: 'FRETE' },
-    { valor: op.custo_sanidade, label: `Sanidade - ${descBase}`, subcentroHint: 'SANIDADE' },
-    { valor: op.outros_custos + op.custo_nutricao + op.custos_extras_parceria, label: `Outros Custos - ${descBase}`, subcentroHint: 'OUTROS' },
+  // 2. CUSTOS DIRETOS (frete, sanidade, outros) — mapeamento explícito
+  const custosDiretos: { valor: number; label: string; origemTipo: string }[] = [
+    { valor: op.custo_frete, label: `Frete - ${descBase}`, origemTipo: 'boitel:custo_frete' },
+    { valor: op.custo_sanidade, label: `Sanidade - ${descBase}`, origemTipo: 'boitel:custo_sanidade' },
+    { valor: op.outros_custos + op.custo_nutricao + op.custos_extras_parceria, label: `Outros Custos - ${descBase}`, origemTipo: 'boitel:custo_outros' },
   ];
 
   for (const custo of custosDiretos) {
     if (custo.valor <= 0) continue;
-
-    const { data: planoSaida } = await supabase
-      .from('financeiro_plano_contas')
-      .select('id, macro_custo, centro_custo, subcentro')
-      .eq('cliente_id', clienteId)
-      .eq('ativo', true)
-      .eq('tipo_operacao', '2-Saídas')
-      .ilike('subcentro', `%${custo.subcentroHint}%`)
-      .limit(1);
-
-    let cls = planoSaida?.[0];
-    if (!cls) {
-      const { data: fallback } = await supabase
-        .from('financeiro_plano_contas')
-        .select('id, macro_custo, centro_custo, subcentro')
-        .eq('cliente_id', clienteId)
-        .eq('ativo', true)
-        .eq('tipo_operacao', '2-Saídas')
-        .ilike('macro_custo', '%custeio%')
-        .limit(1);
-      if (!fallback || fallback.length === 0) continue;
-      cls = fallback[0];
-    }
+    const cls = await buscarPlanoContasBoitel(supabase, clienteId, custo.origemTipo);
+    if (!cls) continue;
 
     inserts.push({
       cliente_id: clienteId,
@@ -407,7 +282,7 @@ export async function gerarFinanceiroBoitel(
       data_competencia: dataRecebimento,
       data_pagamento: dataRecebimento,
       descricao: custo.label,
-      origem_tipo: 'boitel:custo',
+      origem_tipo: custo.origemTipo,
     });
   }
 
@@ -417,7 +292,6 @@ export async function gerarFinanceiroBoitel(
     return false;
   }
 
-  // Audit
   await supabase.from('audit_log_movimentacoes').insert({
     cliente_id: clienteId,
     usuario_id: userId || null,
@@ -435,9 +309,6 @@ export async function gerarFinanceiroBoitel(
   return true;
 }
 
-/**
- * Carrega operação de boitel pelo ID.
- */
 export async function carregarBoitelOperacao(boitelId: string): Promise<BoitelOperacao | null> {
   const { data, error } = await supabase
     .from('boitel_operacoes')

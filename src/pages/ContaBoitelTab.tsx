@@ -1,16 +1,16 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Plus, TrendingUp, TrendingDown, ArrowUpDown, Wallet } from 'lucide-react';
+import { ArrowLeft, Plus, TrendingUp, TrendingDown, ArrowUpDown, Wallet, BarChart3 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { buscarPlanoContasBoitel, BOITEL_CLASSIFICACAO } from '@/lib/financeiro/boitelMapping';
 import { toast } from 'sonner';
 
 interface BoitelOp {
@@ -22,8 +22,16 @@ interface BoitelOp {
   data_envio: string | null;
   dias: number;
   receita_produtor: number;
+  faturamento_bruto: number;
+  faturamento_liquido: number;
   lucro_total: number;
   custo_total: number;
+  custo_frete: number;
+  custo_sanidade: number;
+  custo_nutricao: number;
+  outros_custos: number;
+  custos_extras_parceria: number;
+  despesas_abate: number;
   valor_total_antecipado: number;
   possui_adiantamento: boolean;
 }
@@ -45,6 +53,17 @@ interface Props {
   onBack: () => void;
 }
 
+const ORIGEM_LABELS: Record<string, string> = {
+  'boitel:receita': 'Recebimento',
+  'boitel:adiantamento_pago': 'Adiantamento pago',
+  'boitel:adiantamento_recebido': 'Adiantamento recebido',
+  'boitel:adiantamento': 'Adiantamento pago',
+  'boitel:custo': 'Custo',
+  'boitel:custo_frete': 'Frete',
+  'boitel:custo_sanidade': 'Sanidade',
+  'boitel:custo_outros': 'Outros custos',
+};
+
 export function ContaBoitelTab({ onBack }: Props) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
@@ -55,7 +74,6 @@ export function ContaBoitelTab({ onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  // New lancamento dialog state
   const [novoTipo, setNovoTipo] = useState<'adiantamento_pago' | 'adiantamento_recebido'>('adiantamento_recebido');
   const [novoData, setNovoData] = useState('');
   const [novoValor, setNovoValor] = useState('');
@@ -70,7 +88,7 @@ export function ContaBoitelTab({ onBack }: Props) {
     setLoading(true);
     const q = supabase
       .from('boitel_operacoes')
-      .select('id, lote, numero_contrato, fazenda_destino_nome, quantidade, data_envio, dias, receita_produtor, lucro_total, custo_total, valor_total_antecipado, possui_adiantamento')
+      .select('id, lote, numero_contrato, fazenda_destino_nome, quantidade, data_envio, dias, receita_produtor, faturamento_bruto, faturamento_liquido, lucro_total, custo_total, custo_frete, custo_sanidade, custo_nutricao, outros_custos, custos_extras_parceria, despesas_abate, valor_total_antecipado, possui_adiantamento')
       .eq('cliente_id', clienteId!);
     if (fazendaAtual?.id) q.eq('fazenda_origem_id', fazendaAtual.id);
     const { data } = await q.order('data_envio', { ascending: false });
@@ -93,18 +111,48 @@ export function ContaBoitelTab({ onBack }: Props) {
     loadLancamentos(b.id);
   }
 
-  // Computed summary
-  const resumo = useMemo(() => {
+  // === RESULTADO ECONÔMICO (do simulador, imutável) ===
+  const resultadoEconomico = useMemo(() => {
     if (!selected) return null;
-    const entradas = lancamentos.filter(l => l.sinal > 0).reduce((s, l) => s + l.valor, 0);
-    const saidas = lancamentos.filter(l => l.sinal < 0).reduce((s, l) => s + l.valor, 0);
-    const adiantPagos = lancamentos.filter(l => l.origem_tipo === 'boitel:adiantamento' || l.origem_tipo === 'boitel:adiantamento_pago').reduce((s, l) => s + l.valor, 0);
-    const adiantRecebidos = lancamentos.filter(l => l.origem_tipo === 'boitel:adiantamento_recebido').reduce((s, l) => s + l.valor, 0);
-    const recebFinal = lancamentos.filter(l => l.origem_tipo === 'boitel:receita').reduce((s, l) => s + l.valor, 0);
-    const saldoEsperado = selected.receita_produtor - adiantPagos - adiantRecebidos;
-    const totalRecebido = entradas;
-    const gap = totalRecebido - selected.receita_produtor;
-    return { entradas, saidas, adiantPagos, adiantRecebidos, recebFinal, saldoEsperado, totalRecebido, gap };
+    const fretTotal = selected.custo_frete || 0;
+    return {
+      faturamentoBruto: selected.faturamento_bruto,
+      despesasAbate: selected.despesas_abate,
+      faturamentoLiquido: selected.faturamento_liquido,
+      resultadoBoitel: selected.receita_produtor,
+      frete: fretTotal,
+      totalOperacional: selected.receita_produtor - fretTotal,
+    };
+  }, [selected]);
+
+  // === CONCILIAÇÃO FINANCEIRA (extrato vs econômico) ===
+  const conciliacao = useMemo(() => {
+    if (!selected) return null;
+
+    const adiantPagos = lancamentos
+      .filter(l => l.origem_tipo === 'boitel:adiantamento' || l.origem_tipo === 'boitel:adiantamento_pago')
+      .reduce((s, l) => s + l.valor, 0);
+
+    const adiantRecebidos = lancamentos
+      .filter(l => l.origem_tipo === 'boitel:adiantamento_recebido')
+      .reduce((s, l) => s + l.valor, 0);
+
+    const custoFrete = lancamentos
+      .filter(l => l.origem_tipo === 'boitel:custo_frete' || (l.origem_tipo === 'boitel:custo' && l.descricao?.toLowerCase().includes('frete')))
+      .reduce((s, l) => s + l.valor, 0);
+
+    const saldoLiquidoEsperado = selected.receita_produtor - adiantPagos - adiantRecebidos - (selected.custo_frete || 0);
+
+    const totalRealizado = lancamentos
+      .filter(l => l.status_transacao === 'conciliado' || l.status_transacao === 'confirmado')
+      .reduce((s, l) => s + (l.sinal * l.valor), 0);
+
+    const totalEntradas = lancamentos.filter(l => l.sinal > 0).reduce((s, l) => s + l.valor, 0);
+    const totalSaidas = lancamentos.filter(l => l.sinal < 0).reduce((s, l) => s + l.valor, 0);
+
+    const gap = totalRealizado - saldoLiquidoEsperado;
+
+    return { adiantPagos, adiantRecebidos, custoFrete, saldoLiquidoEsperado, totalRealizado, totalEntradas, totalSaidas, gap };
   }, [selected, lancamentos]);
 
   async function handleNovoLancamento() {
@@ -115,46 +163,27 @@ export function ContaBoitelTab({ onBack }: Props) {
       return;
     }
 
-    const isPago = novoTipo === 'adiantamento_pago';
-    const tipoOp = isPago ? '2-Saídas' : '1-Entradas';
-    const sinal = isPago ? -1 : 1;
     const origemTipo = `boitel:${novoTipo}`;
-
-    // Find plano de contas
-    const subHint = isPago ? '%adiantamento%' : '%boitel%';
-    const { data: plano } = await supabase
-      .from('financeiro_plano_contas')
-      .select('id, macro_custo, centro_custo, subcentro')
-      .eq('cliente_id', clienteId)
-      .eq('ativo', true)
-      .eq('tipo_operacao', tipoOp)
-      .ilike('subcentro', subHint)
-      .limit(1);
-
-    let cls = plano?.[0];
-    if (!cls) {
-      // Fallback
-      const { data: fb } = await supabase
-        .from('financeiro_plano_contas')
-        .select('id, macro_custo, centro_custo, subcentro')
-        .eq('cliente_id', clienteId)
-        .eq('ativo', true)
-        .eq('tipo_operacao', tipoOp)
-        .limit(1);
-      cls = fb?.[0];
-    }
-    if (!cls) {
-      toast.error('Nenhuma conta encontrada no Plano de Contas para este tipo de operação.');
+    const config = BOITEL_CLASSIFICACAO[origemTipo];
+    if (!config) {
+      toast.error('Tipo de lançamento inválido.');
       return;
     }
 
+    const cls = await buscarPlanoContasBoitel(supabase, clienteId, origemTipo);
+    if (!cls) {
+      toast.error(`Mapeamento financeiro não encontrado. Cadastre um dos subcentros: ${config.subcentroCandidatos.join(', ')}`);
+      return;
+    }
+
+    const isPago = novoTipo === 'adiantamento_pago';
     const desc = novoDesc || `${isPago ? 'Adiantamento pago' : 'Adiantamento recebido'} - Boitel ${selected.lote || selected.fazenda_destino_nome}`;
 
     const { error } = await supabase.from('financeiro_lancamentos_v2').insert({
       cliente_id: clienteId,
       fazenda_id: fazendaAtual.id,
-      tipo_operacao: tipoOp,
-      sinal,
+      tipo_operacao: config.tipo_operacao,
+      sinal: config.sinal,
       status_transacao: 'confirmado',
       origem_lancamento: 'boitel',
       boitel_id: selected.id,
@@ -196,13 +225,11 @@ export function ContaBoitelTab({ onBack }: Props) {
   return (
     <div className="w-full px-4 pb-20 animate-fade-in">
       <div className="p-4 space-y-4">
-        {/* Back button */}
         <Button variant="ghost" size="sm" onClick={onBack} className="gap-1">
           <ArrowLeft className="h-4 w-4" /> Voltar
         </Button>
 
         {!selected ? (
-          /* LIST VIEW */
           <>
             <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
               <Wallet className="h-5 w-5 text-primary" /> Conta Boitel
@@ -243,7 +270,6 @@ export function ContaBoitelTab({ onBack }: Props) {
             )}
           </>
         ) : (
-          /* DETAIL VIEW */
           <>
             <div className="flex items-center justify-between">
               <div>
@@ -259,38 +285,82 @@ export function ContaBoitelTab({ onBack }: Props) {
               </Button>
             </div>
 
-            {/* RESUMO */}
-            {resumo && (
+            {/* 1. RESULTADO ECONÔMICO (do simulador) */}
+            {resultadoEconomico && (
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Resumo Financeiro</CardTitle>
+                  <CardTitle className="text-sm flex items-center gap-1">
+                    <BarChart3 className="h-4 w-4" /> Resultado Econômico
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2 text-xs">
+                <CardContent className="space-y-1.5 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Faturamento Bruto Abate</span>
+                    <span className="font-semibold">{fmt(resultadoEconomico.faturamentoBruto)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">(-) Despesas Abate</span>
+                    <span className="text-destructive">{fmt(resultadoEconomico.despesasAbate)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">= Faturamento Líquido</span>
+                    <span className="font-semibold">{fmt(resultadoEconomico.faturamentoLiquido)}</span>
+                  </div>
+                  <hr className="border-border" />
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground font-semibold">Resultado com Boitel</span>
+                    <span className="font-bold text-primary">{fmt(resultadoEconomico.resultadoBoitel)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">(-) Frete</span>
+                    <span className="text-destructive">{fmt(resultadoEconomico.frete)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground font-semibold">= Total Operacional</span>
+                    <span className="font-bold">{fmt(resultadoEconomico.totalOperacional)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* 2. CONCILIAÇÃO FINANCEIRA */}
+            {conciliacao && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-1">
+                    <Wallet className="h-4 w-4" /> Conciliação Financeira
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-1.5 text-xs">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Resultado com Boitel</span>
                     <span className="font-bold text-primary">{fmt(selected.receita_produtor)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">(-) Adiantamentos pagos</span>
-                    <span className="font-semibold text-destructive">{fmt(resumo.adiantPagos)}</span>
+                    <span className="text-muted-foreground">(-) Adiantamentos pagos ao boitel</span>
+                    <span className="text-destructive">{fmt(conciliacao.adiantPagos)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">(-) Adiantamentos recebidos</span>
-                    <span className="font-semibold text-primary">{fmt(resumo.adiantRecebidos)}</span>
+                    <span className="text-muted-foreground">{fmt(conciliacao.adiantRecebidos)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">(-) Frete</span>
+                    <span className="text-destructive">{fmt(selected.custo_frete || 0)}</span>
                   </div>
                   <hr className="border-border" />
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground font-semibold">Saldo esperado a receber</span>
-                    <span className="font-bold">{fmt(resumo.saldoEsperado)}</span>
+                    <span className="text-muted-foreground font-semibold">Saldo líquido esperado</span>
+                    <span className="font-bold">{fmt(conciliacao.saldoLiquidoEsperado)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Total recebido</span>
-                    <span className="font-semibold text-primary">{fmt(resumo.totalRecebido)}</span>
+                    <span className="text-muted-foreground">Total financeiro realizado</span>
+                    <span className="font-semibold">{fmt(conciliacao.totalRealizado)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Diferença (gap)</span>
-                    <span className={`font-bold ${resumo.gap >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
-                      {fmt(resumo.gap)}
+                    <span className="text-muted-foreground font-semibold">Diferença de conciliação</span>
+                    <span className={`font-bold ${conciliacao.gap >= -0.01 && conciliacao.gap <= 0.01 ? 'text-primary' : 'text-destructive'}`}>
+                      {fmt(conciliacao.gap)}
                     </span>
                   </div>
                 </CardContent>
@@ -308,11 +378,11 @@ export function ContaBoitelTab({ onBack }: Props) {
               <Plus className="h-4 w-4" /> Novo Lançamento Boitel
             </Button>
 
-            {/* EXTRATO */}
+            {/* 3. EXTRATO FINANCEIRO */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-1">
-                  <ArrowUpDown className="h-4 w-4" /> Extrato
+                  <ArrowUpDown className="h-4 w-4" /> Extrato Financeiro
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
@@ -330,14 +400,14 @@ export function ContaBoitelTab({ onBack }: Props) {
                               <TrendingDown className="h-3 w-3 text-destructive shrink-0" />
                             )}
                             <span className="text-xs font-medium text-foreground truncate">
-                              {l.descricao || l.origem_tipo || 'Lançamento'}
+                              {l.descricao || ORIGEM_LABELS[l.origem_tipo || ''] || 'Lançamento'}
                             </span>
                           </div>
-                          <p className="text-[10px] text-muted-foreground pl-4.5">
-                            {fmtDate(l.data_pagamento)} · {l.origem_tipo?.replace('boitel:', '') || '-'}
+                          <p className="text-[10px] text-muted-foreground ml-[18px]">
+                            {fmtDate(l.data_pagamento)} · {ORIGEM_LABELS[l.origem_tipo || ''] || l.origem_tipo || '-'}
                           </p>
                         </div>
-                        <span className={`text-xs font-bold whitespace-nowrap ${l.sinal > 0 ? 'text-emerald-600' : 'text-destructive'}`}>
+                        <span className={`text-xs font-bold whitespace-nowrap ${l.sinal > 0 ? 'text-primary' : 'text-destructive'}`}>
                           {l.sinal > 0 ? '+' : '-'} {fmt(l.valor)}
                         </span>
                       </div>
