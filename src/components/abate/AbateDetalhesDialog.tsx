@@ -39,6 +39,9 @@ export interface AbateDetalhes {
   bonusListaTraceReais?: string;
   descontoQualidadeReais?: string;
   outrosDescontosArroba?: string;
+  pesoCarcacaKgManual?: string;
+  /** Official calculation snapshot — single source of truth */
+  calculation?: AbateCalculation;
 }
 
 export const EMPTY_ABATE_DETALHES: AbateDetalhes = {
