@@ -490,7 +490,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
   const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState(filtroMesInicial || 'todos');
-  const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>('todos');
+  const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>((filtroStatusInicial as StatusFiltro) || 'todos');
   const [categoriaFiltro, setCategoriaFiltro] = useState('todas');
 
   useEffect(() => {
