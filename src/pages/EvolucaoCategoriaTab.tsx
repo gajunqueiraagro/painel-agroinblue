@@ -336,6 +336,8 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   }, [dados, precosRebanho]);
 
   const hasPastosData = Object.keys(pastosQtdPorCat).length > 0;
+  const showDelta = hasPastosData && statusFiltro === 'realizado';
+  const isRealizado = statusFiltro === 'realizado';
 
   const formatPeso = (v: number | null) => {
     if (v === null || v === undefined || v <= 0) return '—';
@@ -399,8 +401,8 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
           </div>
         </div>
 
-        {/* Card status conciliação */}
-        {conciliacaoStatus && (
+        {/* Card status conciliação — only in Realizado */}
+        {isRealizado && conciliacaoStatus && (
           <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
             conciliacaoStatus === 'fechado'
               ? 'bg-green-50 border-green-300 text-green-800'
@@ -418,7 +420,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
             Pasto: {conciliacaoStatus === 'fechado' ? 'Fechado' : conciliacaoStatus === 'parcial' ? 'Parcial' : 'Aberto'}
           </div>
         )}
-        {rebanhoStatus && (
+        {isRealizado && rebanhoStatus && (
           <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
             rebanhoStatus === 'fechado'
               ? 'bg-green-50 border-green-300 text-green-800'
@@ -469,7 +471,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                 <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-muted">
                   Saldo Fin.
                 </th>
-                {hasPastosData && (
+                {showDelta && (
                   <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[30px] bg-muted" title="Divergência: Saldo Oficial − Alocado nos Pastos">
                     Δ
                   </th>
@@ -499,7 +501,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                     <td className={`px-1.5 py-0.5 text-center font-extrabold bg-primary/5 ${cat.saldoFinal === 0 ? 'text-transparent' : 'text-foreground'}`}>
                       {cat.saldoFinal}
                     </td>
-                    {hasPastosData && (
+                    {showDelta && (
                       <td className="px-1.5 py-0.5 text-center">
                         {cat.saldoFinal === 0 && cat.pastosQtd === 0 ? (
                           <span className="text-transparent">–</span>
@@ -549,7 +551,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                   </td>
                 ))}
                 <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoFin}</td>
-                {hasPastosData && (
+                {showDelta && (
                   <td className="px-1.5 py-1 text-center">
                     <Tooltip>
                       <TooltipTrigger asChild>
