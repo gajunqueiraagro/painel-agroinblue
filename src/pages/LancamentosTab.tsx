@@ -700,6 +700,20 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('conciliado');
           resetFinancialFields();
           toast.success('Abate atualizado com financeiro!');
+        } else if (isVenda && calc.valorLiquido > 0) {
+          // Auto-generate/update financeiro for venda
+          if (vendaFinanceiroRef.current) {
+            await vendaFinanceiroRef.current.generateFinanceiro(editingAbateId);
+          }
+          vendaFinanceiroRef.current?.resetForm();
+          setEditingAbateId(null);
+          setLastSavedLancamentoId(null);
+          setQuantidade(''); setCategoria(''); setPesoKg('');
+          setFazendaOrigem(''); setFazendaDestino('');
+          setData(format(new Date(), 'yyyy-MM-dd'));
+          setObservacao(''); setStatusOp('conciliado');
+          resetFinancialFields();
+          toast.success('Venda atualizada com financeiro!');
         } else {
           setEditingAbateId(null);
           setLastSavedLancamentoId(null);
