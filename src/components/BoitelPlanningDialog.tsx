@@ -292,7 +292,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
             </div>
 
             {/* COL 4 — RESULTADO + COMPARATIVO */}
-            <div className="bg-muted/20 rounded-lg border p-1.5 space-y-0.5 lg:sticky lg:top-0 h-fit">
+            <div className="bg-muted/40 rounded-lg border border-border p-1.5 space-y-0.5 lg:sticky lg:top-0 h-fit">
               <h3 className="text-[9px] font-black uppercase tracking-wide text-foreground mb-0.5">Resultado</h3>
 
               <CSection title="Indicadores" defaultOpen>
