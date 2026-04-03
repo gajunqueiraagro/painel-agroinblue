@@ -406,6 +406,7 @@ const Index = () => {
           filtroMesInicial={filtroGlobal.mes}
           onNavigateToReclass={goToReclassFromEvolCategoria}
           onEditarAbate={(l) => { setAbateParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarVenda={(l) => { setVendaParaEditar(l); setActiveTab('lancamentos'); }}
         />
       )}
       {activeTab === 'financeiro' && (
