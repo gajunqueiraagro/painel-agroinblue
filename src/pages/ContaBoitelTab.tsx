@@ -154,7 +154,7 @@ export function ContaBoitelTab({ onBack }: Props) {
 
     const gap = totalRealizado - saldoLiquidoEsperado;
 
-    return { adiantPagos, adiantRecebidos, custoFrete, saldoLiquidoEsperado, totalRealizado, totalEntradas, totalSaidas, gap };
+    return { adiantPagos, adiantRecebidos, custoFrete, saldoAReceberBoitel, saldoLiquidoEsperado, totalRealizado, totalEntradas, totalSaidas, gap };
   }, [selected, lancamentos]);
 
   async function handleNovoLancamento() {
