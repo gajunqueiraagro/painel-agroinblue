@@ -119,9 +119,15 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     return p;
   }, [dataAbateISO, data.dataEnvio]);
 
-  const handleForma = (f: 'avista' | 'prazo') => { set('formaReceb', f); if (f === 'avista') set('parcelas', []); else set('parcelas', gerarParcelas(data.qtdParcelas || 1, calc.rBoitel - calc.pParte)); };
-  const handleQtdP = (v: string) => { const n = Math.max(1, Math.min(48, Number(v) || 1)); set('qtdParcelas', n); set('parcelas', gerarParcelas(n, calc.rBoitel - calc.pParte)); };
-  const basePar = (calc.rBoitel - calc.pParte) - (data.possuiAdiantamento ? data.valorTotalAntecipado : 0);
+  // Saldo a receber do Boitel = Fat.Bruto - Custo Total Boitel (diárias+sanidade+outros) - Desp.Abate + Adiantamento já pago
+  const saldoReceberBase = useMemo(() => {
+    const s = calc.fba - calc.custoTotalBoitel - calc.cAb + (data.possuiAdiantamento ? data.valorTotalAntecipado : 0);
+    return Math.round(s * 100) / 100;
+  }, [calc.fba, calc.custoTotalBoitel, calc.cAb, data.possuiAdiantamento, data.valorTotalAntecipado]);
+
+  const handleForma = (f: 'avista' | 'prazo') => { set('formaReceb', f); if (f === 'avista') set('parcelas', []); else set('parcelas', gerarParcelas(data.qtdParcelas || 1, saldoReceberBase)); };
+  const handleQtdP = (v: string) => { const n = Math.max(1, Math.min(48, Number(v) || 1)); set('qtdParcelas', n); set('parcelas', gerarParcelas(n, saldoReceberBase)); };
+  const basePar = saldoReceberBase;
 
   useEffect(() => { if (data.possuiAdiantamento) { const t = data.valorAdiantamentoDiarias + data.valorAdiantamentoSanitario + data.valorAdiantamentoOutros; if (t !== data.valorTotalAntecipado) setData(p => ({ ...p, valorTotalAntecipado: t })); } }, [data.possuiAdiantamento, data.valorAdiantamentoDiarias, data.valorAdiantamentoSanitario, data.valorAdiantamentoOutros]);
   useEffect(() => { if (data.possuiAdiantamento && data.pctAdiantamentoDiarias > 0) { const v = Math.round(calc.cDT * data.pctAdiantamentoDiarias / 100 * 100) / 100; if (v !== data.valorAdiantamentoDiarias) setData(p => ({ ...p, valorAdiantamentoDiarias: v })); } }, [data.possuiAdiantamento, data.pctAdiantamentoDiarias, calc.cDT]);
@@ -130,7 +136,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
   const handleSave = () => { onSave({ ...data, _faturamentoBruto: calc.fba, _faturamentoLiquido: calc.fLiq, _receitaProdutor: calc.rProd, _custoTotal: calc.cOp, _lucroTotal: calc.rLiq }); onClose(); };
 
   const pos = calc.rLiq > 0;
-  const saldoReceber = calc.fba - calc.custoTotalBoitel + data.valorTotalAntecipado;
+  const saldoReceber = saldoReceberBase;
 
   // Comparativo oportunidade
   const diffTotal = calc.rLiq - calc.coT;
@@ -240,7 +246,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
               </div>
               <div className="grid grid-cols-2 gap-1">
                 <F label="Dias confinamento"><I type="number" value={data.dias || ''} onChange={e => set('dias', +e.target.value || 0)} /></F>
-                <F label="GMD kg/dia"><I type="number" value={data.gmd || ''} onChange={e => set('gmd', +e.target.value || 0)} step="0.001" /></F>
+                <F label="GMD kg/dia"><IM value={data.gmd} onChange={v => set('gmd', v)} step="0.001" decimals={3} /></F>
               </div>
               <div className="grid grid-cols-2 gap-1">
                 <F label="Rend. entrada %"><IP value={data.rendimentoEntrada} onChange={v => set('rendimentoEntrada', v)} step="0.01" /></F>
@@ -250,27 +256,31 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
               <Separator className="!my-0.5" />
               <ST>Custos</ST>
               <div className="grid grid-cols-2 gap-1">
-                {data.modalidadeCusto === 'diaria' && <F label="R$/cab/dia"><IM value={data.custoDiaria} onChange={v => set('custoDiaria', v)} step="0.01" /></F>}
-                {data.modalidadeCusto === 'arroba' && <F label="R$/@ prod."><IM value={data.custoArroba} onChange={v => set('custoArroba', v)} /></F>}
+                {data.modalidadeCusto === 'diaria' && <FH label="R$/cab/dia" hint={data.qtdCabecas > 0 ? `Total: R$ ${fmtR$(data.custoDiaria * data.dias * data.qtdCabecas)} | R$ ${fmtR$(data.custoDiaria * data.dias)}/cab` : undefined}><IM value={data.custoDiaria} onChange={v => set('custoDiaria', v)} step="0.01" /></FH>}
+                {data.modalidadeCusto === 'arroba' && <FH label="R$/@ prod." hint={calc.aP > 0 ? `Total: R$ ${fmtR$(data.custoArroba * calc.aP)}` : undefined}><IM value={data.custoArroba} onChange={v => set('custoArroba', v)} /></FH>}
                 {data.modalidadeCusto === 'parceria' && (<><F label="% parceiro"><IP value={data.percentualParceria} onChange={v => set('percentualParceria', v)} /></F><F label="Extras R$"><IM value={data.custosExtrasParceria} onChange={v => set('custosExtrasParceria', v)} /></F></>)}
-                <F label="Frete R$"><IM value={data.custoFrete} onChange={v => set('custoFrete', v)} step="0.01" /></F>
+                <FH label="Frete R$" hint={data.qtdCabecas > 0 && data.custoFrete > 0 ? `R$ ${fmtR$(data.custoFrete / data.qtdCabecas)}/cab` : undefined}><IM value={data.custoFrete} onChange={v => set('custoFrete', v)} step="0.01" /></FH>
               </div>
               <div className="grid grid-cols-2 gap-1">
-                <F label="Sanidade R$"><IM value={data.custoSanidade} onChange={v => set('custoSanidade', v)} /></F>
-                <F label="Outros R$"><IM value={data.outrosCustos} onChange={v => set('outrosCustos', v)} step="0.01" /></F>
+                <FH label="Sanidade R$" hint={data.qtdCabecas > 0 && data.custoSanidade > 0 ? `R$ ${fmtR$(data.custoSanidade / data.qtdCabecas)}/cab` : undefined}><IM value={data.custoSanidade} onChange={v => set('custoSanidade', v)} /></FH>
+                <FH label="Outros R$" hint={data.qtdCabecas > 0 && data.outrosCustos > 0 ? `R$ ${fmtR$(data.outrosCustos / data.qtdCabecas)}/cab` : undefined}><IM value={data.outrosCustos} onChange={v => set('outrosCustos', v)} step="0.01" /></FH>
               </div>
 
               <Separator className="!my-0.5" />
               <ST>Comercialização</ST>
               <div className="grid grid-cols-2 gap-1">
-                <F label="Preço venda R$/@"><IM value={data.precoVendaArroba} onChange={v => set('precoVendaArroba', v)} step="0.01" /></F>
-                <F label="Despesas com abate R$"><IM value={data.despesasAbate} onChange={v => set('despesasAbate', v)} /></F>
+                <FH label="Preço venda R$/@" hint={data.qtdCabecas > 0 && calc.aS > 0 ? `R$ ${fmtR$(data.precoVendaArroba * calc.aS)}/cab` : undefined}><IM value={data.precoVendaArroba} onChange={v => set('precoVendaArroba', v)} step="0.01" /></FH>
+                <FH label="Despesas c/ abate R$" hint={data.qtdCabecas > 0 && data.despesasAbate > 0 ? `R$ ${fmtR$(data.despesasAbate / data.qtdCabecas)}/cab` : undefined}><IM value={data.despesasAbate} onChange={v => set('despesasAbate', v)} /></FH>
               </div>
             </div>
 
             {/* COL 3 — RECEBIMENTO */}
             <div className="space-y-1">
               <ST>Recebimento</ST>
+              <div className="flex justify-between text-[8px] bg-muted/50 rounded px-1.5 py-0.5 border border-border mb-0.5">
+                <span className="font-semibold text-foreground/70">Saldo a receber</span>
+                <span className="font-bold tabular-nums text-primary">R$ {fmtR$(saldoReceber)}</span>
+              </div>
               <div className="grid grid-cols-2 gap-1">
                 <TB a={data.formaReceb === 'avista'} o={() => handleForma('avista')} full>À vista</TB>
                 <TB a={data.formaReceb === 'prazo'} o={() => handleForma('prazo')} full>A prazo</TB>
@@ -320,15 +330,16 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <RR l="= Total Operação" v={`R$ ${fmtR$(calc.tOp)}`} b accent />
               </CSection>
 
-              {data.possuiAdiantamento && data.valorTotalAntecipado > 0 && (
-                <CSection title="Acerto com Boitel" defaultOpen={false}>
-                  <RR l="Fat. Bruto" v={`R$ ${fmtR$(calc.fba)}`} b />
-                  <RR l="(-) Custo Total Boitel" v={`-R$ ${fmtR$(calc.custoTotalBoitel)}`} c="text-destructive" />
+              <CSection title="Acerto com Boitel" defaultOpen={false}>
+                <RR l="Fat. Bruto" v={`R$ ${fmtR$(calc.fba)}`} b />
+                <RR l="(-) Custo Total Boitel" v={`-R$ ${fmtR$(calc.custoTotalBoitel)}`} c="text-destructive" />
+                <RR l="(-) Custos Abate" v={`-R$ ${fmtR$(calc.cAb)}`} c="text-destructive" />
+                {data.possuiAdiantamento && data.valorTotalAntecipado > 0 && (
                   <RR l="(+) Adiant. p/ Boitel" v={`R$ ${fmtR$(data.valorTotalAntecipado)}`} c="text-blue-600 dark:text-blue-400" />
-                  <DL />
-                  <RR l="= Saldo a receber" v={`R$ ${fmtR$(saldoReceber)}`} b accent />
-                </CSection>
-              )}
+                )}
+                <DL />
+                <RR l="= Saldo a receber" v={`R$ ${fmtR$(saldoReceber)}`} b accent />
+              </CSection>
 
 
               {/* COMPARATIVO */}
@@ -378,6 +389,9 @@ function HI({ l, v }: { l: string; v: string }) {
 }
 function ST({ children }: { children: React.ReactNode }) { return <h3 className="text-[9px] font-bold uppercase text-slate-800 dark:text-slate-200 tracking-wide border-b border-slate-400 dark:border-slate-500 pb-0.5">{children}</h3>; }
 function F({ label, children }: { label: string; children: React.ReactNode }) { return <div><Label className="text-[7px] leading-none font-semibold text-foreground/70">{label}</Label>{children}</div>; }
+function FH({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return <div><Label className="text-[7px] leading-none font-semibold text-foreground/70">{label}</Label>{children}{hint && <span className="text-[6px] text-muted-foreground leading-none block mt-0.5">{hint}</span>}</div>;
+}
 function I(props: React.ComponentProps<typeof Input>) { return <Input {...props} className={`h-5 text-[9px] tabular-nums text-right bg-background border-border shadow-sm ${props.className || ''}`} />; }
 function CV({ children }: { children: React.ReactNode }) { return <div className="h-5 flex items-center px-1.5 rounded bg-muted/60 border border-border text-[9px] font-semibold tabular-nums text-foreground">{children}</div>; }
 function TB({ a, o, children, full }: { a: boolean; o: () => void; children: React.ReactNode; full?: boolean }) {
@@ -388,27 +402,47 @@ function RR({ l, v, b, accent, c = '' }: { l: string; v: string; b?: boolean; ac
 }
 function DL() { return <div className="border-t border-dashed my-0.5" />; }
 
-/** Formatted monetary input: shows 0.000,00 on blur, raw number on focus */
-function IM({ value, onChange, step }: { value: number; onChange: (v: number) => void; step?: string }) {
-  const [display, setDisplay] = useState(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+/** Formatted monetary input — on focus shows raw with comma, on blur formats pt-BR */
+function IM({ value, onChange, step, decimals = 2 }: { value: number; onChange: (v: number) => void; step?: string; decimals?: number }) {
+  const fmt = (v: number) => v ? v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) : '';
+  const [display, setDisplay] = useState(fmt(value));
   const [focused, setFocused] = useState(false);
-  useEffect(() => { if (!focused) setDisplay(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''); }, [value, focused]);
+  useEffect(() => { if (!focused) setDisplay(fmt(value)); }, [value, focused, decimals]);
   return <Input className="h-5 text-[9px] tabular-nums text-right bg-background border-border shadow-sm" value={display}
     onChange={e => { setDisplay(e.target.value); }}
-    onFocus={() => { setFocused(true); setDisplay(value ? String(value) : ''); }}
-    onBlur={() => { const clean = display.replace(/\./g, '').replace(',', '.'); const n = parseFloat(clean); onChange(isNaN(n) ? 0 : n); setFocused(false); }}
+    onFocus={() => {
+      setFocused(true);
+      setDisplay(value ? value.toFixed(decimals).replace('.', ',') : '');
+    }}
+    onBlur={() => {
+      let clean = display.trim();
+      if (clean.includes(',')) { clean = clean.replace(/\./g, '').replace(',', '.'); }
+      const n = parseFloat(clean);
+      onChange(isNaN(n) ? 0 : Math.round(n * Math.pow(10, decimals)) / Math.pow(10, decimals));
+      setFocused(false);
+    }}
     inputMode="decimal" step={step} />;
 }
 
-/** Formatted percentage input: shows 00,00% on blur */
+/** Formatted percentage input — on focus shows raw with comma */
 function IP({ value, onChange, decimals = 2, step }: { value: number; onChange: (v: number) => void; decimals?: number; step?: string }) {
-  const [display, setDisplay] = useState(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + '%' : '');
+  const fmt = (v: number) => v ? v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + '%' : '';
+  const [display, setDisplay] = useState(fmt(value));
   const [focused, setFocused] = useState(false);
-  useEffect(() => { if (!focused) setDisplay(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + '%' : ''); }, [value, focused, decimals]);
+  useEffect(() => { if (!focused) setDisplay(fmt(value)); }, [value, focused, decimals]);
   return <Input className="h-5 text-[9px] tabular-nums text-right bg-background border-border shadow-sm" value={display}
     onChange={e => { setDisplay(e.target.value); }}
-    onFocus={() => { setFocused(true); setDisplay(value ? String(value) : ''); }}
-    onBlur={() => { const clean = display.replace(/%/g, '').replace(/\./g, '').replace(',', '.').trim(); const n = parseFloat(clean); onChange(isNaN(n) ? 0 : n); setFocused(false); }}
+    onFocus={() => {
+      setFocused(true);
+      setDisplay(value ? value.toFixed(decimals).replace('.', ',') : '');
+    }}
+    onBlur={() => {
+      let clean = display.replace(/%/g, '').trim();
+      if (clean.includes(',')) { clean = clean.replace(/\./g, '').replace(',', '.'); }
+      const n = parseFloat(clean);
+      onChange(isNaN(n) ? 0 : Math.round(n * Math.pow(10, decimals)) / Math.pow(10, decimals));
+      setFocused(false);
+    }}
     inputMode="decimal" step={step} />;
 }
 
