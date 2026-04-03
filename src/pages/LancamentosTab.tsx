@@ -2528,6 +2528,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   categoria={categoria}
                   dataVenda={data}
                   compradorNome={abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || ''}
+                  statusOperacional={statusOp}
                 />
                 {/* Hidden panel for financeiro generation */}
                 <div className="hidden">
