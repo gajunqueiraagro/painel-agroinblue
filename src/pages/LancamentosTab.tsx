@@ -417,6 +417,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setMotivoMorte(''); setMotivoMorteCustom('');
     setRendCarcaca(''); setFunruralPct(''); setFunruralReais('');
     setVendaDetalhes(null);
+    pendingFornecedorMatch.current = null;
   };
 
   const resetAllFields = () => {
