@@ -70,6 +70,8 @@ interface Props {
   // Calculation values for resumo
   comissaoVal: number;
   freteVal: number;
+  onBoitelDataChange?: (data: BoitelData | null) => void;
+  initialBoitelData?: Partial<BoitelData> | null;
 }
 
 export interface VendaFinanceiroPanelRef {
