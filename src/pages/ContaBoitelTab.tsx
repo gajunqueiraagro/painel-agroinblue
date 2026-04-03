@@ -289,13 +289,13 @@ export function ContaBoitelTab({ onBack }: Props) {
                         <div className="flex justify-between items-start">
                           <div>
                             <p className="text-[13px] font-bold text-foreground">
-                              {b.lote || b.fazenda_destino_nome}
+                              {b.lote_codigo || b.boitel_destino}
                             </p>
                             <p className="text-[10px] text-muted-foreground">
-                              {b.quantidade} cab · {b.dias} dias · Envio: {fmtDate(b.data_envio)}
+                              {b.quantidade_cab} cab · {b.dias} dias · Envio: {fmtDate(b.data_envio)}
                             </p>
-                            {b.numero_contrato && (
-                              <p className="text-[10px] text-muted-foreground">Contrato: {b.numero_contrato}</p>
+                            {b.contrato_baia && (
+                              <p className="text-[10px] text-muted-foreground">Contrato: {b.contrato_baia}</p>
                             )}
                           </div>
                           <div className="text-right">
