@@ -393,7 +393,7 @@ function IM({ value, onChange, step }: { value: number; onChange: (v: number) =>
   const [display, setDisplay] = useState(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
   const [focused, setFocused] = useState(false);
   useEffect(() => { if (!focused) setDisplay(value ? value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''); }, [value, focused]);
-  return <Input className="h-5 text-[9px] tabular-nums text-right bg-background" value={display}
+  return <Input className="h-5 text-[9px] tabular-nums text-right bg-background border-border shadow-sm" value={display}
     onChange={e => { setDisplay(e.target.value); }}
     onFocus={() => { setFocused(true); setDisplay(value ? String(value) : ''); }}
     onBlur={() => { const clean = display.replace(/\./g, '').replace(',', '.'); const n = parseFloat(clean); onChange(isNaN(n) ? 0 : n); setFocused(false); }}
