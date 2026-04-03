@@ -186,7 +186,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       return;
     }
 
-    // Priority 2: Load from DB via boitel_id
+    // Priority 2: Load from DB via boitel_lote_id
     if (!lancamentoId) { setBoitelLoaded(true); return; }
     (async () => {
       const { data: lanc } = await supabase
