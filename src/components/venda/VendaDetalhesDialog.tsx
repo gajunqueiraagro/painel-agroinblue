@@ -202,19 +202,7 @@ export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quanti
 
           <Separator />
 
-          {/* BLOCO 1 — Tipo de Venda */}
-          {sectionTitle(<ShoppingCart className="h-4 w-4 text-muted-foreground" />, 'Tipo de Venda')}
-          <div className="grid grid-cols-2 gap-1.5">
-            {(['desmama', 'gado_adulto'] as const).map(tv => (
-              <button key={tv} type="button"
-                onClick={() => { setTipoVenda(tv); markDirty(); }}
-                className={`h-8 rounded text-[11px] font-bold border-2 transition-all ${tipoVenda === tv ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
-                {tv === 'desmama' ? 'Desmama' : 'Gado Adulto'}
-              </button>
-            ))}
-          </div>
-
-          <Separator />
+          {/* Tipo de Venda herdado da tela principal — não repete aqui */}
 
           {/* BLOCO 2 — Comprador */}
           {sectionTitle(<Users className="h-4 w-4 text-muted-foreground" />, 'Comprador')}
