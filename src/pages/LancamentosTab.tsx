@@ -2578,7 +2578,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   categoria={categoria}
                   compradorNome={abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || ''}
                   detalhes={vendaDetalhes}
-                  detalhesPreenchidos={!!vendaDetalhes}
+                  detalhesPreenchidos={!!vendaDetalhes || (tipoPeso === 'boitel' && !!boitelDataForResumo)}
                   canOpenModal={!!(data && quantidade && Number(quantidade) > 0 && pesoKg && Number(pesoKg) > 0 && categoria && vendaDestinoFornecedorId)}
                   onOpenModal={() => setVendaDialogOpen(true)}
                   onRequestRegister={handleRequestRegister}
@@ -2586,6 +2586,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
                   onCancelEdit={editingAbateId ? handleCancelEdit : undefined}
                   calculation={vendaCalc}
+                  isBoitel={tipoPeso === 'boitel'}
+                  boitelData={boitelDataForResumo}
                 />
                 <VendaDetalhesDialog
                   open={vendaDialogOpen}
