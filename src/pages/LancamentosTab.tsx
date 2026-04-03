@@ -864,7 +864,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     // 4. Check for snapshot first (PRIORITY 1)
     const vendaSnap = l.detalhesSnapshot;
-    if (vendaSnap && vendaSnap.type === 'venda') {
+    if (vendaSnap && vendaSnap.type === 'venda_boitel') {
+      // Boitel: restore tipoPeso to 'boitel', no vendaDetalhes needed
+      setTipoPeso('boitel');
+      // The VendaFinanceiroPanel will load boitelData from the boitel_id linkage
+      console.log('[Venda Edit] Rehydrating Boitel from snapshot', vendaSnap);
+    } else if (vendaSnap && vendaSnap.type === 'venda') {
       const tv = vendaSnap.tipoVenda || 'gado_adulto';
       setTipoPeso(tv);
 
