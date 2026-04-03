@@ -178,6 +178,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         _receitaProdutor: initialBoitelData._receitaProdutor,
         _custoTotal: initialBoitelData._custoTotal,
         _lucroTotal: initialBoitelData._lucroTotal,
+        _saldoReceber: initialBoitelData._saldoReceber,
         _boitelId: initialBoitelData._boitelId,
       };
       setBoitelData(rehydrated);
