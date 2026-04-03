@@ -174,7 +174,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               {MESES_COLS.map(m => (
                 <td
                   key={m.key}
-                  className="px-1 py-1 text-center font-extrabold text-foreground tabular-nums cursor-pointer hover:bg-accent/50 transition-colors"
+                  className={`px-1 py-1 text-center font-extrabold text-foreground tabular-nums cursor-pointer hover:bg-accent/50 transition-colors ${qb(m.key)}`}
                   onClick={() => setDrilldownMonth(m.key)}
                 >
                   {fmtNum(dados.saldoInicioMes[m.key])}
