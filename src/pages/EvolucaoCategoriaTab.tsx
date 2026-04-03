@@ -401,8 +401,8 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
           </div>
         </div>
 
-        {/* Card status conciliação */}
-        {conciliacaoStatus && (
+        {/* Card status conciliação — only in Realizado */}
+        {isRealizado && conciliacaoStatus && (
           <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
             conciliacaoStatus === 'fechado'
               ? 'bg-green-50 border-green-300 text-green-800'
@@ -420,7 +420,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
             Pasto: {conciliacaoStatus === 'fechado' ? 'Fechado' : conciliacaoStatus === 'parcial' ? 'Parcial' : 'Aberto'}
           </div>
         )}
-        {rebanhoStatus && (
+        {isRealizado && rebanhoStatus && (
           <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
             rebanhoStatus === 'fechado'
               ? 'bg-green-50 border-green-300 text-green-800'
