@@ -506,11 +506,14 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                         </div>
                       </div>
                     ))}
-                    {data.parcelas.length > 0 && (
-                      <div className="text-[9px] text-muted-foreground text-right">
-                        Soma parcelas: {formatMoeda(data.parcelas.reduce((s, p) => s + p.valor, 0))}
-                      </div>
-                    )}
+                    <div className="text-[9px] text-muted-foreground space-y-0.5">
+                      <div className="text-right">Base parcelas (Resultado c/ Boitel): {formatMoeda(baseParcelamento)}</div>
+                      {data.parcelas.length > 0 && (
+                        <div className="text-right">
+                          Soma parcelas: {formatMoeda(data.parcelas.reduce((s, p) => s + p.valor, 0))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </Section>
