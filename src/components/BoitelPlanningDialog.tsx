@@ -250,14 +250,14 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
               <Separator className="!my-0.5" />
               <ST>Custos</ST>
               <div className="grid grid-cols-2 gap-1">
-                {data.modalidadeCusto === 'diaria' && <F label="R$/cab/dia"><I type="number" value={data.custoDiaria || ''} onChange={e => set('custoDiaria', +e.target.value || 0)} step="0.01" /></F>}
-                {data.modalidadeCusto === 'arroba' && <F label="R$/@ prod."><I type="number" value={data.custoArroba || ''} onChange={e => set('custoArroba', +e.target.value || 0)} /></F>}
-                {data.modalidadeCusto === 'parceria' && (<><F label="% parceiro"><I type="number" value={data.percentualParceria || ''} onChange={e => set('percentualParceria', +e.target.value || 0)} /></F><F label="Extras R$"><I type="number" value={data.custosExtrasParceria || ''} onChange={e => set('custosExtrasParceria', +e.target.value || 0)} /></F></>)}
-                <F label="Frete R$"><I type="number" value={data.custoFrete || ''} onChange={e => set('custoFrete', +e.target.value || 0)} step="0.01" /></F>
+                {data.modalidadeCusto === 'diaria' && <F label="R$/cab/dia"><IM value={data.custoDiaria} onChange={v => set('custoDiaria', v)} step="0.01" /></F>}
+                {data.modalidadeCusto === 'arroba' && <F label="R$/@ prod."><IM value={data.custoArroba} onChange={v => set('custoArroba', v)} /></F>}
+                {data.modalidadeCusto === 'parceria' && (<><F label="% parceiro"><IP value={data.percentualParceria} onChange={v => set('percentualParceria', v)} /></F><F label="Extras R$"><IM value={data.custosExtrasParceria} onChange={v => set('custosExtrasParceria', v)} /></F></>)}
+                <F label="Frete R$"><IM value={data.custoFrete} onChange={v => set('custoFrete', v)} step="0.01" /></F>
               </div>
               <div className="grid grid-cols-2 gap-1">
-                <F label="Sanidade R$"><I type="number" value={data.custoSanidade || ''} onChange={e => set('custoSanidade', +e.target.value || 0)} /></F>
-                <F label="Outros R$"><I type="number" value={data.outrosCustos || ''} onChange={e => set('outrosCustos', +e.target.value || 0)} step="0.01" /></F>
+                <F label="Sanidade R$"><IM value={data.custoSanidade} onChange={v => set('custoSanidade', v)} /></F>
+                <F label="Outros R$"><IM value={data.outrosCustos} onChange={v => set('outrosCustos', v)} step="0.01" /></F>
               </div>
 
               <Separator className="!my-0.5" />
