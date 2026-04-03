@@ -976,7 +976,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     supabase
       .from('financeiro_fornecedores')
-      .select('id, nome')
+      .select('id, nome, nome_normalizado, aliases')
       .eq('cliente_id', clienteAtual.id)
       .eq('ativo', true)
       .order('nome')
