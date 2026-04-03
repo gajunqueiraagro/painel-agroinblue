@@ -9,12 +9,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Plus, ArrowUpRight, ArrowDownRight, ArrowUpDown, Wallet, BarChart3, Info, CheckCircle, AlertTriangle } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { ArrowLeft, Plus, ArrowUpRight, ArrowDownRight, ArrowUpDown, Wallet, BarChart3, Info, CheckCircle, AlertTriangle, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { buscarPlanoContasBoitel, BOITEL_CLASSIFICACAO } from '@/lib/financeiro/boitelMapping';
 import { toast } from 'sonner';
+
+const isDev = import.meta.env.DEV;
 
 interface BoitelOp {
   id: string;
@@ -269,11 +272,58 @@ export function ContaBoitelTab({ onBack }: Props) {
 
           {!selected ? (
             <>
-              <div>
-                <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                  <Wallet className="h-5 w-5 text-primary" /> Conta Boitel
-                </h2>
-                <p className="text-[11px] text-muted-foreground mt-0.5">Controle financeiro e conciliação por lote</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                    <Wallet className="h-5 w-5 text-primary" /> Conta Boitel
+                  </h2>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Controle financeiro e conciliação por lote</p>
+                </div>
+                {isDev && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm" className="h-7 text-[11px] gap-1">
+                        <Trash2 className="h-3 w-3" /> Reset Boitel (teste)
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Reset completo do Boitel</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Esta ação irá apagar <strong>todos os dados de teste do Boitel</strong> para este cliente:
+                          lotes, planejamentos, históricos, adiantamentos e lançamentos financeiros vinculados ao Boitel.
+                          <br /><br />
+                          <strong>Essa ação é irreversível.</strong> Confirma?
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          onClick={async () => {
+                            if (!clienteId) return;
+                            try {
+                              const { data, error } = await supabase.functions.invoke('reset-boitel-teste', {
+                                body: { cliente_id: clienteId },
+                              });
+                              if (error) throw error;
+                              if (data?.error) throw new Error(data.error);
+                              const r = data.resumo;
+                              toast.success(
+                                `Reset concluído: ${r.lotes_removidos} lotes, ${r.financeiros_removidos} financeiros, ${r.planejamentos_removidos} planejamentos, ${r.historicos_removidos} históricos, ${r.adiantamentos_removidos} adiantamentos removidos.`
+                              );
+                              loadBoitels();
+                            } catch (err: any) {
+                              toast.error('Erro no reset: ' + (err.message || 'Erro desconhecido'));
+                            }
+                          }}
+                        >
+                          Sim, apagar tudo
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
               </div>
 
               {boitels.length === 0 ? (
