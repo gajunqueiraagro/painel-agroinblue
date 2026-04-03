@@ -251,6 +251,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       }
       return { formaReceb, parcelas };
     },
+    getBoitelData: () => boitelData,
     resetForm,
   }), [fornecedorId, formaReceb, parcelas, resetForm, validationErrors, tipoPeso, boitelData]);
 
