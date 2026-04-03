@@ -379,6 +379,7 @@ export function useLancamentos() {
     if (dados.dataEmbarque !== undefined) update.data_embarque = dados.dataEmbarque;
     if (dados.dataAbate !== undefined) update.data_abate = dados.dataAbate;
     if (dados.tipoVenda !== undefined) update.tipo_venda = dados.tipoVenda;
+    if (dados.detalhesSnapshot !== undefined) update.detalhes_snapshot = dados.detalhesSnapshot;
 
     const { error } = await supabase.from('lancamentos').update(update).eq('id', id);
     if (!error) {
