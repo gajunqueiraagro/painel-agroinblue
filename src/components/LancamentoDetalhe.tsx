@@ -69,6 +69,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const isCompra = lancamento.tipo === 'compra';
   const isAbate = lancamento.tipo === 'abate';
   const isVenda = lancamento.tipo === 'venda';
+  const isTransferenciaSaida = lancamento.tipo === 'transferencia_saida';
 
   const loadFinRecords = useCallback(() => {
     if (!isCompra) return;
