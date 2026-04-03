@@ -207,7 +207,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                     </td>
                   );
                 })}
-                <td className={`px-1.5 py-0.5 text-center font-bold tabular-nums bg-muted/80 ${dados.totalAno[li.tipo] > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}>
+                <td className={`px-1.5 py-0.5 text-center font-bold tabular-nums bg-muted/80 border-l border-border/60 ${dados.totalAno[li.tipo] > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}>
                   {dados.totalAno[li.tipo] ? fmtNum(dados.totalAno[li.tipo]) : '–'}
                 </td>
               </tr>
