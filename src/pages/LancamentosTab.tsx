@@ -610,22 +610,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const vendaSnap = l.detalhesSnapshot;
     if (vendaSnap && vendaSnap.type === 'venda') {
       const tv = vendaSnap.tipoVenda || 'gado_adulto';
-      const tv = snap.tipoVenda || 'gado_adulto';
       setTipoPeso(tv);
 
       const vendaDet: VendaDetalhes = {
         tipoVenda: (tv === 'desmama' || tv === 'gado_adulto') ? tv as 'desmama' | 'gado_adulto' : 'gado_adulto',
-        tipoPreco: snap.tipoPreco || 'por_kg',
-        precoInput: snap.precoInput || '',
-        frete: snap.frete || '',
-        comissaoPct: snap.comissaoPct || '',
-        outrosCustos: snap.outrosCustos || '',
-        funruralPct: snap.funruralPct || '',
-        funruralReais: snap.funruralReais || '',
-        notaFiscal: snap.notaFiscal || '',
-        formaReceb: snap.formaReceb || 'avista',
-        qtdParcelas: snap.qtdParcelas || '1',
-        parcelas: snap.parcelas || [],
+        tipoPreco: vendaSnap.tipoPreco || 'por_kg',
+        precoInput: vendaSnap.precoInput || '',
+        frete: vendaSnap.frete || '',
+        comissaoPct: vendaSnap.comissaoPct || '',
+        outrosCustos: vendaSnap.outrosCustos || '',
+        funruralPct: vendaSnap.funruralPct || '',
+        funruralReais: vendaSnap.funruralReais || '',
+        notaFiscal: vendaSnap.notaFiscal || '',
+        formaReceb: vendaSnap.formaReceb || 'avista',
+        qtdParcelas: vendaSnap.qtdParcelas || '1',
+        parcelas: vendaSnap.parcelas || [],
       };
 
       setVendaDetalhes(vendaDet);
