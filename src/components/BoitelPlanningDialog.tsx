@@ -384,7 +384,7 @@ function TB({ a, o, children, full }: { a: boolean; o: () => void; children: Rea
   return <button type="button" onClick={o} className={`h-5 px-2 rounded text-[8px] font-bold border transition-all ${full ? 'w-full' : ''} ${a ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}>{children}</button>;
 }
 function RR({ l, v, b, accent, c = '' }: { l: string; v: string; b?: boolean; accent?: boolean; c?: string }) {
-  return <div className="flex justify-between text-[8px] leading-snug"><span className="text-muted-foreground">{l}</span><span className={`tabular-nums ${b ? 'font-bold' : 'font-medium'} ${accent ? 'text-primary' : ''} ${c}`}>{v}</span></div>;
+  return <div className="flex justify-between text-[8px] leading-snug"><span className="text-foreground/60 font-medium">{l}</span><span className={`tabular-nums ${b ? 'font-bold' : 'font-semibold'} ${accent ? 'text-primary' : ''} ${c}`}>{v}</span></div>;
 }
 function DL() { return <div className="border-t border-dashed my-0.5" />; }
 
