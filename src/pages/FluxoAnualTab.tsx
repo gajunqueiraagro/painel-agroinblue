@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import { usePastos } from '@/hooks/usePastos';
+import { calcAreaProdutivaPecuaria, calcUA, calcUAHa } from '@/lib/calculos/zootecnicos';
 import { filtrarPorCenario } from '@/lib/statusOperacional';
 import { Lancamento, SaldoInicial, Categoria } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
