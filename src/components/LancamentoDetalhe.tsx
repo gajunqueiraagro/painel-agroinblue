@@ -110,6 +110,9 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       // Redirect compra to the full form in LancamentosTab
       onClose();
       onEditarCompra(lancamento);
+    } else if (lancamento.tipo === 'transferencia_saida' && onEditarTransferencia) {
+      onClose();
+      onEditarTransferencia(lancamento);
     } else if (isCompra) {
       // Fallback: Open unified purchase edit sheet
       setCompraForm({ ...lancamento });
