@@ -12,7 +12,7 @@ interface BottomNavProps {
 const allTabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'resumo', label: 'Resumo', icon: LayoutDashboard },
   { id: 'lancar_zoo_hub', label: 'Lanç. Zoo.', icon: PenSquare },
-  { id: 'movimentacao', label: 'Mov. Rebanho', icon: BarChart3 },
+  { id: 'movimentacao', label: 'Tela Zootécnico', icon: BarChart3 },
   { id: 'financeiro_v2_hub', label: 'Lanç. Fin.', icon: DollarSign },
   { id: 'fin_caixa', label: 'Financeiro', icon: Wallet },
   { id: 'cadastros', label: 'Cadastro', icon: Settings },
