@@ -323,7 +323,18 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
         className="overflow-x-hidden flex-shrink-0"
         onScroll={(e) => syncScroll(e.currentTarget)}
       >
-        <table className="min-w-full w-max border-separate border-spacing-0 text-[11px]">
+        <table className="min-w-full w-max border-separate border-spacing-0 text-[11px]" style={{ tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: 80 }} />
+            <col style={{ width: 55 }} />
+            <col style={{ width: 36 }} />
+            {categorias.map(cat => <col key={cat.id} style={{ width: 28 }} />)}
+            <col style={{ width: 36 }} />
+            <col style={{ width: 42 }} />
+            <col style={{ width: 40 }} />
+            <col style={{ width: 40 }} />
+            <col style={{ width: 32 }} />
+          </colgroup>
           <thead>
             <tr className="h-7">{headerCols}</tr>
           </thead>
