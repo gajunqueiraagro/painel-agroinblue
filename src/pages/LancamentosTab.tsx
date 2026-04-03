@@ -1559,8 +1559,23 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       } else {
         result.formaPagamento = 'À vista';
       }
+    } else if (isVenda && vendaCalc) {
+      const vc = vendaCalc;
+      const tipoPrecoLabel = vendaDetalhes?.tipoPreco === 'por_kg' ? 'R$/kg' : vendaDetalhes?.tipoPreco === 'por_cab' ? 'R$/cab' : 'R$/@';
+      result.precoBase = vc.precoInput;
+      result.precoBaseLabel = tipoPrecoLabel;
+      result.totalBruto = vc.valorBruto;
+      result.totalArrobas = vc.totalArrobas;
+      result.totalDescontos = vc.totalDespesas + vc.totalDeducoes;
+      result.valorLiquido = vc.valorLiquido;
+      result.fornecedorOuFrigorifico = vc.compradorNome;
+      if (vc.formaReceb === 'prazo' && vc.parcelas.length > 0) {
+        result.formaPagamento = `A prazo (${vc.parcelas.length}x)`;
+        result.parcelas = vc.parcelas;
+      } else {
+        result.formaPagamento = 'À vista';
+      }
     } else if (isTransferenciaSaida) {
-      // Economic (managerial) — no financial impact
       const tc = transferenciaCalc;
       if (tc && tc.temPrecoReferencia) {
         result.precoBase = tc.precoReferenciaArroba;
@@ -1569,13 +1584,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         result.valorLiquido = tc.valorEconomicoLote;
         result.totalArrobas = tc.totalArrobas;
       }
-      // No payment info — transferência doesn't generate financial entries
     } else {
       result.precoBase = Number(precoKg) || 0;
       result.precoBaseLabel = 'R$/kg';
       result.totalBruto = calc.valorBruto;
-      result.totalBonus = isVenda ? 0 : (Number(bonus) || 0);
-      result.totalDescontos = isVenda ? calc.totalDescontos : (Number(descontos) || 0);
+      result.totalBonus = Number(bonus) || 0;
+      result.totalDescontos = Number(descontos) || 0;
       result.valorLiquido = calc.valorLiquido;
       if (formaPagamento === 'parcelado' && parcelas.length > 0) {
         result.formaPagamento = `A prazo (${parcelas.length}x)`;
