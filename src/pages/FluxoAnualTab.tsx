@@ -38,12 +38,6 @@ interface Props {
 
 export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onNavigateToValorRebanho, onSetSaldo, onNavigateToReclass }: Props) {
   const [drilldownMonth, setDrilldownMonth] = useState<string | null>(null);
-  const { pastos } = usePastos();
-
-  const areaProdutiva = useMemo(
-    () => calcAreaProdutivaPecuaria(pastos),
-    [pastos],
-  );
 
 
   const anosDisponiveis = useMemo(() => {
