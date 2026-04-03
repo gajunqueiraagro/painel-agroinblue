@@ -2661,6 +2661,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     freteVal={calc.freteVal}
                     onRequestRegister={() => {}}
                     submitting={false}
+                    onBoitelDataChange={setBoitelDataForResumo}
+                    initialBoitelData={boitelDataForResumo}
                   />
                 </div>
               </>
