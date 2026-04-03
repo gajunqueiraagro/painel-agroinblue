@@ -58,6 +58,8 @@ interface Props {
   abateParaEditar?: Lancamento | null;
   /** Venda para abrir em modo edição automaticamente */
   vendaParaEditar?: Lancamento | null;
+  /** Compra para abrir em modo edição automaticamente */
+  compraParaEditar?: Lancamento | null;
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
@@ -122,7 +124,7 @@ function fmt(v?: number, decimals = 2) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
   const nomeFazenda = fazendaAtual?.nome || '';
@@ -412,87 +414,130 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setFazendaDestino(l.fazendaDestino || '');
     setObservacao(l.observacao || '');
     setStatusOp((l.statusOperacional as StatusOperacional) || 'conciliado');
-    setTipoPeso(l.tipoPeso || 'vivo');
     setNotaFiscal(l.notaFiscal || '');
 
-    // 3. Financial / commercial data
-    setDataVenda(l.dataVenda || '');
-    setDataEmbarque(l.dataEmbarque || '');
-    setDataAbate(l.dataAbate || l.data || '');
-    setTipoVenda(l.tipoVenda || '');
-    setPrecoArroba(l.precoArroba ? String(l.precoArroba) : '');
-    setPesoCarcacaKg(l.pesoCarcacaKg ? String(l.pesoCarcacaKg) : '');
+    // 3. Check for snapshot first (PRIORITY 1)
+    const snap = l.detalhesSnapshot;
+    if (snap && snap.type === 'abate') {
+      // Direct restore from snapshot
+      setTipoPeso(snap.tipoPeso || 'vivo');
+      setDataVenda(snap.dataVenda || '');
+      setDataEmbarque(snap.dataEmbarque || '');
+      setDataAbate(snap.dataAbate || l.data || '');
+      setTipoVenda(snap.tipoVenda || '');
+      setPrecoArroba(snap.precoArroba || '');
+      setRendCarcaca(snap.rendCarcaca || '');
+      setBonusPrecoce(snap.bonusPrecoce || '');
+      setBonusQualidade(snap.bonusQualidade || '');
+      setBonusListaTrace(snap.bonusListaTrace || '');
+      setDescontoQualidade(snap.descontoQualidade || '');
+      setFunruralPct(snap.funruralPct || '');
+      setFunruralReais(snap.funruralReais || '');
+      setOutrosDescontos(snap.outrosDescontos || '');
 
-    // 4. Reverse-calc rendimento from pesoCarcacaKg / pesoMedioKg
-    if (l.pesoCarcacaKg && l.pesoMedioKg && l.pesoMedioKg > 0) {
-      setRendCarcaca(String(((l.pesoCarcacaKg / l.pesoMedioKg) * 100).toFixed(2)));
+      setAbateDetalhes({
+        dataVenda: snap.dataVenda || '',
+        dataEmbarque: snap.dataEmbarque || '',
+        dataAbate: snap.dataAbate || l.data || '',
+        tipoVenda: snap.tipoVenda || '',
+        tipoPeso: snap.tipoPeso || 'vivo',
+        rendCarcaca: snap.rendCarcaca || '',
+        precoArroba: snap.precoArroba || '',
+        bonusPrecoce: snap.bonusPrecoce || '',
+        bonusQualidade: snap.bonusQualidade || '',
+        bonusListaTrace: snap.bonusListaTrace || '',
+        descontoQualidade: snap.descontoQualidade || '',
+        funruralPct: snap.funruralPct || '',
+        funruralReais: snap.funruralReais || '',
+        outrosDescontos: snap.outrosDescontos || '',
+        notaFiscal: snap.notaFiscal || '',
+        formaReceb: snap.formaReceb || 'avista',
+        qtdParcelas: snap.qtdParcelas || '1',
+        parcelas: snap.parcelas || [],
+      });
     } else {
-      setRendCarcaca('');
-    }
+      // FALLBACK: reconstruct from lancamento fields
+      setTipoPeso(l.tipoPeso || 'vivo');
+      setDataVenda(l.dataVenda || '');
+      setDataEmbarque(l.dataEmbarque || '');
+      setDataAbate(l.dataAbate || l.data || '');
+      setTipoVenda(l.tipoVenda || '');
+      setPrecoArroba(l.precoArroba ? String(l.precoArroba) : '');
+      setPesoCarcacaKg(l.pesoCarcacaKg ? String(l.pesoCarcacaKg) : '');
 
-    // 5. Bonus/desconto stored as totals → convert back to R$/@ for form inputs
-    const rend = l.pesoCarcacaKg && l.pesoMedioKg ? l.pesoCarcacaKg / l.pesoMedioKg : 0;
-    const arrobasCab = (l.pesoMedioKg ?? 0) * rend / 15;
-    const totalArrobas = arrobasCab * l.quantidade;
-    const toArroba = (total: number | undefined) => {
-      if (!total || totalArrobas <= 0) return '';
-      return String((total / totalArrobas).toFixed(2));
-    };
-    setBonusPrecoce(toArroba(l.bonusPrecoce));
-    setBonusQualidade(toArroba(l.bonusQualidade));
-    setBonusListaTrace(toArroba(l.bonusListaTrace));
-    setDescontoQualidade(toArroba(l.descontoQualidade));
-    setOutrosDescontos(l.outrosDescontos ? String(l.outrosDescontos) : '');
+      if (l.pesoCarcacaKg && l.pesoMedioKg && l.pesoMedioKg > 0) {
+        setRendCarcaca(String(((l.pesoCarcacaKg / l.pesoMedioKg) * 100).toFixed(2)));
+      } else {
+        setRendCarcaca('');
+      }
 
-    // 6. Funrural: stored as total → reverse to percentage of valor bruto
-    if (l.descontoFunrural && l.descontoFunrural > 0 && totalArrobas > 0 && l.precoArroba) {
-      const valorBruto = totalArrobas * l.precoArroba;
-      if (valorBruto > 0) {
-        setFunruralPct(String(((l.descontoFunrural / valorBruto) * 100).toFixed(2)));
+      const rend = l.pesoCarcacaKg && l.pesoMedioKg ? l.pesoCarcacaKg / l.pesoMedioKg : 0;
+      const arrobasCab = (l.pesoMedioKg ?? 0) * rend / 15;
+      const totalArrobas = arrobasCab * l.quantidade;
+      const toArroba = (total: number | undefined) => {
+        if (!total || totalArrobas <= 0) return '';
+        return String((total / totalArrobas).toFixed(2));
+      };
+      setBonusPrecoce(toArroba(l.bonusPrecoce));
+      setBonusQualidade(toArroba(l.bonusQualidade));
+      setBonusListaTrace(toArroba(l.bonusListaTrace));
+      setDescontoQualidade(toArroba(l.descontoQualidade));
+      setOutrosDescontos(l.outrosDescontos ? String(l.outrosDescontos) : '');
+
+      if (l.descontoFunrural && l.descontoFunrural > 0 && totalArrobas > 0 && l.precoArroba) {
+        const valorBruto = totalArrobas * l.precoArroba;
+        if (valorBruto > 0) {
+          setFunruralPct(String(((l.descontoFunrural / valorBruto) * 100).toFixed(2)));
+        } else {
+          setFunruralPct('');
+        }
       } else {
         setFunruralPct('');
       }
-    } else {
-      setFunruralPct('');
+
+      const rendCalc = l.pesoCarcacaKg && l.pesoMedioKg && l.pesoMedioKg > 0
+        ? String(((l.pesoCarcacaKg / l.pesoMedioKg) * 100).toFixed(2)) : '';
+      const funruralPctCalc = (() => {
+        if (l.descontoFunrural && l.descontoFunrural > 0 && totalArrobas > 0 && l.precoArroba) {
+          const vb = totalArrobas * l.precoArroba;
+          return vb > 0 ? String(((l.descontoFunrural / vb) * 100).toFixed(2)) : '';
+        }
+        return '';
+      })();
+
+      setAbateDetalhes({
+        dataVenda: l.dataVenda || '',
+        dataEmbarque: l.dataEmbarque || '',
+        dataAbate: l.dataAbate || l.data || '',
+        tipoVenda: l.tipoVenda || '',
+        tipoPeso: l.tipoPeso || 'vivo',
+        rendCarcaca: rendCalc,
+        precoArroba: l.precoArroba ? String(l.precoArroba) : '',
+        bonusPrecoce: toArroba(l.bonusPrecoce),
+        bonusQualidade: toArroba(l.bonusQualidade),
+        bonusListaTrace: toArroba(l.bonusListaTrace),
+        descontoQualidade: toArroba(l.descontoQualidade),
+        funruralPct: funruralPctCalc,
+        funruralReais: '',
+        outrosDescontos: l.outrosDescontos ? String(l.outrosDescontos) : '',
+        notaFiscal: l.notaFiscal || '',
+        formaReceb: 'avista',
+        qtdParcelas: '1',
+        parcelas: [],
+      });
     }
 
-    // 7. Build abateDetalhes for new modal flow
-    const rendCalc = l.pesoCarcacaKg && l.pesoMedioKg && l.pesoMedioKg > 0
-      ? String(((l.pesoCarcacaKg / l.pesoMedioKg) * 100).toFixed(2)) : '';
-    const funruralPctCalc = (() => {
-      if (l.descontoFunrural && l.descontoFunrural > 0 && totalArrobas > 0 && l.precoArroba) {
-        const vb = totalArrobas * l.precoArroba;
-        return vb > 0 ? String(((l.descontoFunrural / vb) * 100).toFixed(2)) : '';
-      }
-      return '';
-    })();
-
-    setAbateDetalhes({
-      dataVenda: l.dataVenda || '',
-      dataEmbarque: l.dataEmbarque || '',
-      dataAbate: l.dataAbate || l.data || '',
-      tipoVenda: l.tipoVenda || '',
-      tipoPeso: l.tipoPeso || 'vivo',
-      rendCarcaca: rendCalc,
-      precoArroba: l.precoArroba ? String(l.precoArroba) : '',
-      bonusPrecoce: toArroba(l.bonusPrecoce),
-      bonusQualidade: toArroba(l.bonusQualidade),
-      bonusListaTrace: toArroba(l.bonusListaTrace),
-      descontoQualidade: toArroba(l.descontoQualidade),
-      funruralPct: funruralPctCalc,
-      funruralReais: '',
-      outrosDescontos: l.outrosDescontos ? String(l.outrosDescontos) : '',
-      notaFiscal: l.notaFiscal || '',
-      formaReceb: 'avista',
-      qtdParcelas: '1',
-      parcelas: [],
-    });
+    // Fornecedor
+    if (l.fazendaDestino) {
+      const forn = abateFornecedores.find(f => f.nome === l.fazendaDestino);
+      if (forn) setAbateFornecedorId(forn.id);
+    }
 
     // 8. Set editing mode
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, []);
+  }, [abateFornecedores]);
 
   // Auto-load abate for editing when navigated from another tab
   useEffect(() => {
@@ -518,122 +563,134 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setStatusOp((l.statusOperacional as StatusOperacional) || 'conciliado');
     setNotaFiscal(l.notaFiscal || '');
 
-    // 3. Tipo de venda from tipoVenda field (desmama / gado_adulto / boitel)
-    const tv = l.tipoVenda || 'gado_adulto';
-    setTipoPeso(tv); // tipoPeso state holds the tipoVenda selector value for venda
-
-    // 4. Tipo de preço from tipoPeso field (por_kg / por_cab / por_total)
-    // New convention: tipoPeso stores tipoPreco for vendas
-    let tipoPreco: 'por_kg' | 'por_cab' | 'por_total' = 'por_kg';
-    if (l.tipoPeso === 'por_kg' || l.tipoPeso === 'por_cab' || l.tipoPeso === 'por_total') {
-      tipoPreco = l.tipoPeso as 'por_kg' | 'por_cab' | 'por_total';
-    }
-    
-    // 5. Price input from precoArroba field
-    const precoInput = l.precoArroba ? String(l.precoArroba) : '';
-
-    // 6. Try to find the fornecedor by name (fazendaDestino)
+    // 3. Fornecedor
     if (l.fazendaDestino) {
       const forn = abateFornecedores.find(f => f.nome === l.fazendaDestino);
       if (forn) setVendaDestinoFornecedorId(forn.id);
     }
 
-    // 7. Query financial records to reconstruct frete, comissão, parcelas
-    let freteVal = '';
-    let comissaoVal = '';
-    let formaReceb: 'avista' | 'prazo' = 'avista';
-    let parcelasArr: { data: string; valor: number }[] = [];
+    // 4. Check for snapshot first (PRIORITY 1)
+    const snap = l.detalhesSnapshot;
+    if (snap && snap.type === 'venda') {
+      const tv = snap.tipoVenda || 'gado_adulto';
+      setTipoPeso(tv);
 
-    try {
-      const { data: finRecs } = await supabase
-        .from('financeiro_lancamentos_v2')
-        .select('origem_tipo, valor, data_pagamento, descricao, sinal')
-        .eq('movimentacao_rebanho_id', l.id)
-        .eq('cancelado', false)
-        .order('data_pagamento', { ascending: true });
+      const vendaDet: VendaDetalhes = {
+        tipoVenda: (tv === 'desmama' || tv === 'gado_adulto') ? tv as 'desmama' | 'gado_adulto' : 'gado_adulto',
+        tipoPreco: snap.tipoPreco || 'por_kg',
+        precoInput: snap.precoInput || '',
+        frete: snap.frete || '',
+        comissaoPct: snap.comissaoPct || '',
+        outrosCustos: snap.outrosCustos || '',
+        funruralPct: snap.funruralPct || '',
+        funruralReais: snap.funruralReais || '',
+        notaFiscal: snap.notaFiscal || '',
+        formaReceb: snap.formaReceb || 'avista',
+        qtdParcelas: snap.qtdParcelas || '1',
+        parcelas: snap.parcelas || [],
+      };
 
-      if (finRecs && finRecs.length > 0) {
-        const freteRec = finRecs.find(r => r.origem_tipo === 'venda:frete');
-        if (freteRec) freteVal = String(freteRec.valor);
+      setVendaDetalhes(vendaDet);
+      setVendaTipoPreco(vendaDet.tipoPreco);
+      setVendaPrecoInput(vendaDet.precoInput);
+      setFunruralPct(vendaDet.funruralPct);
+      setFunruralReais(vendaDet.funruralReais);
+      setFrete(vendaDet.frete);
+      setComissaoPct(vendaDet.comissaoPct);
+      setOutrosDescontos(vendaDet.outrosCustos);
+    } else {
+      // FALLBACK: reconstruct from lancamento + financial records
+      const tv = l.tipoVenda || 'gado_adulto';
+      setTipoPeso(tv);
 
-        const comissaoRec = finRecs.find(r => r.origem_tipo === 'venda:comissao');
-
-        const parcelaRecs = finRecs.filter(r => r.origem_tipo === 'venda:parcela');
-        if (parcelaRecs.length > 1) {
-          formaReceb = 'prazo';
-          parcelasArr = parcelaRecs.map(p => ({
-            data: p.data_pagamento || l.data,
-            valor: p.valor,
-          }));
-        } else if (parcelaRecs.length === 1) {
-          const p = parcelaRecs[0];
-          if (p.data_pagamento && p.data_pagamento !== l.data) {
-            formaReceb = 'prazo';
-            parcelasArr = [{ data: p.data_pagamento, valor: p.valor }];
-          }
-        }
-
-        if (comissaoRec) {
-          const totalBruto = parcelaRecs.reduce((s, r) => s + r.valor, 0);
-          if (totalBruto > 0) {
-            comissaoVal = String(((comissaoRec.valor / totalBruto) * 100).toFixed(2));
-          }
-        }
+      let tipoPreco: 'por_kg' | 'por_cab' | 'por_total' = 'por_kg';
+      if (l.tipoPeso === 'por_kg' || l.tipoPeso === 'por_cab' || l.tipoPeso === 'por_total') {
+        tipoPreco = l.tipoPeso as 'por_kg' | 'por_cab' | 'por_total';
       }
-    } catch (err) {
-      console.warn('Erro ao carregar financeiro da venda para edição:', err);
-    }
+      const precoInput = l.precoArroba ? String(l.precoArroba) : '';
 
-    // 8. Build vendaDetalhes with all data
-    const vendaDet: VendaDetalhes = {
-      tipoVenda: (tv === 'desmama' || tv === 'gado_adulto') ? tv as 'desmama' | 'gado_adulto' : 'gado_adulto',
-      tipoPreco,
-      precoInput,
-      frete: freteVal,
-      comissaoPct: comissaoVal,
-      outrosCustos: l.outrosDescontos ? String(l.outrosDescontos) : '',
-      funruralPct: '',
-      funruralReais: '',
-      notaFiscal: l.notaFiscal || '',
-      formaReceb,
-      qtdParcelas: parcelasArr.length > 0 ? String(parcelasArr.length) : '1',
-      parcelas: parcelasArr,
-    };
+      let freteVal = '';
+      let comissaoVal = '';
+      let formaReceb: 'avista' | 'prazo' = 'avista';
+      let parcelasArr: { data: string; valor: number }[] = [];
 
-    // 9. Reverse-calc funrural
-    if (l.descontoFunrural && l.descontoFunrural > 0) {
-      const qtd = l.quantidade || 0;
-      const peso = l.pesoMedioKg || 0;
-      const totalKgCalc = qtd * peso;
-      const storedPreco = l.precoArroba || 0;
-      
-      // Calculate estimated bruto based on tipoPreco
-      let estimatedBruto = 0;
-      if (tipoPreco === 'por_kg') estimatedBruto = totalKgCalc * storedPreco;
-      else if (tipoPreco === 'por_cab') estimatedBruto = qtd * storedPreco;
-      else if (tipoPreco === 'por_total') estimatedBruto = storedPreco;
+      try {
+        const { data: finRecs } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .select('origem_tipo, valor, data_pagamento, descricao, sinal')
+          .eq('movimentacao_rebanho_id', l.id)
+          .eq('cancelado', false)
+          .order('data_pagamento', { ascending: true });
 
-      if (estimatedBruto > 0) {
-        const pct = (l.descontoFunrural / estimatedBruto) * 100;
-        if (pct > 0.5 && pct < 10) {
-          vendaDet.funruralPct = String(pct.toFixed(2));
+        if (finRecs && finRecs.length > 0) {
+          const freteRec = finRecs.find(r => r.origem_tipo === 'venda:frete');
+          if (freteRec) freteVal = String(freteRec.valor);
+
+          const comissaoRec = finRecs.find(r => r.origem_tipo === 'venda:comissao');
+          const parcelaRecs = finRecs.filter(r => r.origem_tipo === 'venda:parcela');
+          if (parcelaRecs.length > 1) {
+            formaReceb = 'prazo';
+            parcelasArr = parcelaRecs.map(p => ({ data: p.data_pagamento || l.data, valor: p.valor }));
+          } else if (parcelaRecs.length === 1) {
+            const p = parcelaRecs[0];
+            if (p.data_pagamento && p.data_pagamento !== l.data) {
+              formaReceb = 'prazo';
+              parcelasArr = [{ data: p.data_pagamento, valor: p.valor }];
+            }
+          }
+          if (comissaoRec) {
+            const totalBruto = parcelaRecs.reduce((s, r) => s + r.valor, 0);
+            if (totalBruto > 0) comissaoVal = String(((comissaoRec.valor / totalBruto) * 100).toFixed(2));
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar financeiro da venda para edição:', err);
+      }
+
+      const vendaDet: VendaDetalhes = {
+        tipoVenda: (tv === 'desmama' || tv === 'gado_adulto') ? tv as 'desmama' | 'gado_adulto' : 'gado_adulto',
+        tipoPreco,
+        precoInput,
+        frete: freteVal,
+        comissaoPct: comissaoVal,
+        outrosCustos: l.outrosDescontos ? String(l.outrosDescontos) : '',
+        funruralPct: '',
+        funruralReais: '',
+        notaFiscal: l.notaFiscal || '',
+        formaReceb,
+        qtdParcelas: parcelasArr.length > 0 ? String(parcelasArr.length) : '1',
+        parcelas: parcelasArr,
+      };
+
+      // Reverse-calc funrural
+      if (l.descontoFunrural && l.descontoFunrural > 0) {
+        const qtd = l.quantidade || 0;
+        const peso = l.pesoMedioKg || 0;
+        const totalKgCalc = qtd * peso;
+        const storedPreco = l.precoArroba || 0;
+        let estimatedBruto = 0;
+        if (tipoPreco === 'por_kg') estimatedBruto = totalKgCalc * storedPreco;
+        else if (tipoPreco === 'por_cab') estimatedBruto = qtd * storedPreco;
+        else if (tipoPreco === 'por_total') estimatedBruto = storedPreco;
+        if (estimatedBruto > 0) {
+          const pct = (l.descontoFunrural / estimatedBruto) * 100;
+          if (pct > 0.5 && pct < 10) vendaDet.funruralPct = String(pct.toFixed(2));
+          else vendaDet.funruralReais = String(l.descontoFunrural);
         } else {
           vendaDet.funruralReais = String(l.descontoFunrural);
         }
-      } else {
-        vendaDet.funruralReais = String(l.descontoFunrural);
       }
-    }
 
-    setVendaDetalhes(vendaDet);
-    setVendaTipoPreco(vendaDet.tipoPreco);
-    setVendaPrecoInput(vendaDet.precoInput);
-    setFunruralPct(vendaDet.funruralPct);
-    setFunruralReais(vendaDet.funruralReais);
-    setFrete(vendaDet.frete);
-    setComissaoPct(vendaDet.comissaoPct);
-    setOutrosDescontos(vendaDet.outrosCustos);
-    setDescontoQualidade(l.descontoQualidade ? String(l.descontoQualidade) : '');
+      setVendaDetalhes(vendaDet);
+      setVendaTipoPreco(vendaDet.tipoPreco);
+      setVendaPrecoInput(vendaDet.precoInput);
+      setFunruralPct(vendaDet.funruralPct);
+      setFunruralReais(vendaDet.funruralReais);
+      setFrete(vendaDet.frete);
+      setComissaoPct(vendaDet.comissaoPct);
+      setOutrosDescontos(vendaDet.outrosCustos);
+      setDescontoQualidade(l.descontoQualidade ? String(l.descontoQualidade) : '');
+    }
 
     // 10. Set editing mode
     setEditingAbateId(l.id);
@@ -647,6 +704,126 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       loadVendaForEdit(vendaParaEditar);
     }
   }, [vendaParaEditar]);
+
+  // Load compra into form for editing
+  const loadCompraForEdit = useCallback(async (l: Lancamento) => {
+    setAba('entrada');
+    setTipo('compra');
+    setData(l.data);
+    setCategoria(l.categoria);
+    setQuantidade(String(l.quantidade));
+    setPesoKg(l.pesoMedioKg ? String(l.pesoMedioKg) : '');
+    setFazendaOrigem(l.fazendaOrigem || '');
+    setFazendaDestino(l.fazendaDestino || '');
+    setObservacao(l.observacao || '');
+    setStatusOp((l.statusOperacional as StatusOperacional) || 'conciliado');
+    setNotaFiscal(l.notaFiscal || '');
+
+    // Fornecedor
+    if (l.fazendaOrigem) {
+      const forn = abateFornecedores.find(f => f.nome === l.fazendaOrigem);
+      if (forn) setCompraFornecedorId(forn.id);
+    }
+
+    // PRIORITY 1: snapshot
+    const snap = l.detalhesSnapshot;
+    if (snap && snap.type === 'compra') {
+      const det: CompraDetalhes = {
+        tipoPreco: snap.tipoPreco || 'por_kg',
+        precoKg: snap.precoKg || '',
+        precoCab: snap.precoCab || '',
+        valorTotal: snap.valorTotal || '',
+        frete: snap.frete || '',
+        comissaoPct: snap.comissaoPct || '',
+        formaPag: snap.formaPag || 'avista',
+        qtdParcelas: snap.qtdParcelas || '1',
+        parcelas: snap.parcelas || [],
+        notaFiscal: snap.notaFiscal || '',
+      };
+      setCompraDetalhes(det);
+    } else {
+      // FALLBACK: reconstruct from lancamento + financeiros
+      let tipoPreco: 'por_kg' | 'por_cab' | 'por_total' = 'por_kg';
+      let precoKgVal = '';
+      let precoCabVal = '';
+      let valorTotalVal = '';
+      let freteVal = '';
+      let comissaoVal = '';
+      let formaPag: 'avista' | 'prazo' = 'avista';
+      let parcelasArr: { data: string; valor: number }[] = [];
+
+      // Infer price type from stored data
+      if (l.precoArroba) {
+        // Try to infer
+        const qtd = l.quantidade || 0;
+        const peso = l.pesoMedioKg || 0;
+        const totalKg = qtd * peso;
+        const stored = l.precoArroba;
+        // If close to per-kg value
+        if (totalKg > 0 && l.valorTotal && Math.abs(totalKg * stored - (l.valorTotal || 0)) < 1) {
+          tipoPreco = 'por_kg';
+          precoKgVal = String(stored);
+        } else if (qtd > 0 && l.valorTotal && Math.abs(qtd * stored - (l.valorTotal || 0)) < 1) {
+          tipoPreco = 'por_cab';
+          precoCabVal = String(stored);
+        } else {
+          tipoPreco = 'por_kg';
+          precoKgVal = String(stored);
+        }
+      }
+
+      try {
+        const { data: finRecs } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .select('origem_tipo, valor, data_pagamento')
+          .eq('movimentacao_rebanho_id', l.id)
+          .eq('cancelado', false)
+          .order('data_pagamento', { ascending: true });
+
+        if (finRecs && finRecs.length > 0) {
+          const freteRec = finRecs.find(r => r.origem_tipo === 'compra:frete');
+          if (freteRec) freteVal = String(freteRec.valor);
+
+          const comissaoRec = finRecs.find(r => r.origem_tipo === 'compra:comissao');
+          const parcelaRecs = finRecs.filter(r => r.origem_tipo === 'compra:parcela');
+          if (parcelaRecs.length > 1) {
+            formaPag = 'prazo';
+            parcelasArr = parcelaRecs.map(p => ({ data: p.data_pagamento || l.data, valor: p.valor }));
+          }
+          if (comissaoRec) {
+            const totalBruto = parcelaRecs.reduce((s, r) => s + r.valor, 0);
+            if (totalBruto > 0) comissaoVal = String(((comissaoRec.valor / totalBruto) * 100).toFixed(2));
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar financeiro da compra para edição:', err);
+      }
+
+      setCompraDetalhes({
+        tipoPreco,
+        precoKg: precoKgVal,
+        precoCab: precoCabVal,
+        valorTotal: valorTotalVal,
+        frete: freteVal,
+        comissaoPct: comissaoVal,
+        formaPag,
+        qtdParcelas: parcelasArr.length > 0 ? String(parcelasArr.length) : '1',
+        parcelas: parcelasArr,
+        notaFiscal: l.notaFiscal || '',
+      });
+    }
+
+    setEditingAbateId(l.id);
+    setDetalheId(null);
+    setLastSavedLancamentoId(null);
+  }, [abateFornecedores]);
+
+  // Auto-load compra for editing when navigated from another tab
+  useEffect(() => {
+    if (compraParaEditar) {
+      loadCompraForEdit(compraParaEditar);
+    }
+  }, [compraParaEditar]);
 
   useEffect(() => {
     if (!clienteAtual?.id) {
@@ -771,6 +948,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       dataEmbarque: abateDataEmbarque || undefined,
       dataAbate: abateDataAbate || undefined,
       tipoVenda: tipoVendaFinal || undefined,
+      detalhesSnapshot: (() => {
+        if (isCompra && compraDetalhes) return { type: 'compra', ...compraDetalhes };
+        if (isAbate && abateDetalhes) return { type: 'abate', ...abateDetalhes };
+        if (isVenda && vendaDetalhes) return { type: 'venda', ...vendaDetalhes, tipoPreco: vendaTipoPreco, precoInput: vendaPrecoInput };
+        return undefined;
+      })(),
     };
 
     setSubmitting(true);
@@ -804,6 +987,30 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('conciliado');
           resetFinancialFields();
           toast.success('Venda atualizada com financeiro!');
+        } else if (isCompra && compraDetalhes && fazendaAtual && clienteAtual) {
+          // Re-generate financeiro for compra edit
+          await gerarFinanceiroCompra({
+            compraDetalhes,
+            lancamentoId: editingAbateId,
+            clienteId: clienteAtual.id,
+            fazendaId: fazendaAtual.id,
+            quantidade: Number(quantidade) || 0,
+            pesoKg: Number(pesoKg) || 0,
+            data,
+            categoria,
+            statusOp,
+            fazendaOrigem,
+            fornecedorId: compraFornecedorId,
+          });
+          setEditingAbateId(null);
+          setLastSavedLancamentoId(null);
+          setQuantidade(''); setCategoria(''); setPesoKg('');
+          setFazendaOrigem(''); setFazendaDestino('');
+          setData(format(new Date(), 'yyyy-MM-dd'));
+          setObservacao(''); setStatusOp('conciliado');
+          resetFinancialFields();
+          setCompraDetalhes(null);
+          toast.success('Compra atualizada com financeiro!');
         } else {
           setEditingAbateId(null);
           setLastSavedLancamentoId(null);
@@ -1988,6 +2195,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onCountFinanceiros={onCountFinanceiros}
           onEditarAbate={loadAbateForEdit}
           onEditarVenda={loadVendaForEdit}
+          onEditarCompra={loadCompraForEdit}
         />
       )}
 

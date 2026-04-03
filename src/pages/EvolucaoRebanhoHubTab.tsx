@@ -18,9 +18,10 @@ interface Props {
   onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
   onEditarAbate?: (lancamento: Lancamento) => void;
   onEditarVenda?: (lancamento: Lancamento) => void;
+  onEditarCompra?: (lancamento: Lancamento) => void;
 }
 
-export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onEditar, onRemover, filtroAnoInicial, filtroMesInicial, onNavigateToReclass, onEditarAbate, onEditarVenda }: Props) {
+export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onEditar, onRemover, filtroAnoInicial, filtroMesInicial, onNavigateToReclass, onEditarAbate, onEditarVenda, onEditarCompra }: Props) {
   const [activeTab, setActiveTab] = useState('movimentacoes');
 
   return (
@@ -33,7 +34,7 @@ export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateT
       </TabsList>
 
       <TabsContent value="movimentacoes">
-        <FinanceiroTab lancamentos={lancamentos} onEditar={onEditar || (() => {})} onRemover={onRemover || (() => {})} modoMovimentacao onEditarAbate={onEditarAbate} onEditarVenda={onEditarVenda} />
+        <FinanceiroTab lancamentos={lancamentos} onEditar={onEditar || (() => {})} onRemover={onRemover || (() => {})} modoMovimentacao onEditarAbate={onEditarAbate} onEditarVenda={onEditarVenda} onEditarCompra={onEditarCompra} />
       </TabsContent>
 
       <TabsContent value="evolucao">

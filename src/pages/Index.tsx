@@ -136,6 +136,7 @@ const Index = () => {
   const [lancamentosFromFluxoAnual, setLancamentosFromFluxoAnual] = useState(false);
   const [abateParaEditar, setAbateParaEditar] = useState<Lancamento | null>(null);
   const [vendaParaEditar, setVendaParaEditar] = useState<Lancamento | null>(null);
+  const [compraParaEditar, setCompraParaEditar] = useState<Lancamento | null>(null);
   const { user } = useAuth();
   const { canViewTab, canEdit, isReadOnly } = usePermissions();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
@@ -386,12 +387,13 @@ const Index = () => {
           onEditar={wrappedEditar as any}
           onRemover={wrappedRemover as any}
           onCountFinanceiros={countFinanceirosVinculados}
-          abaInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? 'reclassificacao' : (abateParaEditar || vendaParaEditar) ? 'saida' : undefined}
+          abaInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? 'reclassificacao' : (abateParaEditar || vendaParaEditar) ? 'saida' : compraParaEditar ? 'entrada' : undefined}
           onBackToConciliacao={lancamentosFromConciliacao ? goToFechamentoTab : lancamentosFromFechamento ? goToFechamentoTab : lancamentosFromEvolCategoria ? goToEvolucaoRebanhoHub : lancamentosFromFluxoAnual ? goToFluxoAnual : undefined}
           dataInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? `${filtroGlobal.ano}-${String(filtroGlobal.mes).padStart(2, '0')}-15` : undefined}
           backLabel={lancamentosFromFechamento ? 'Voltar para Lançamento de Pasto' : (lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? 'Voltar para Evolução por Categoria' : undefined}
           abateParaEditar={abateParaEditar}
           vendaParaEditar={vendaParaEditar}
+          compraParaEditar={compraParaEditar}
         />
       )}
       {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} onNavigateToValorRebanho={() => setActiveTab('valor_rebanho')} onSetSaldo={canEditZoo ? setSaldoInicial : undefined} onNavigateToReclass={goToReclassFromFluxoAnual} />}
@@ -407,6 +409,7 @@ const Index = () => {
           onNavigateToReclass={goToReclassFromEvolCategoria}
           onEditarAbate={(l) => { setAbateParaEditar(l); setActiveTab('lancamentos'); }}
           onEditarVenda={(l) => { setVendaParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarCompra={(l) => { setCompraParaEditar(l); setActiveTab('lancamentos'); }}
         />
       )}
       {activeTab === 'financeiro' && (
@@ -421,6 +424,7 @@ const Index = () => {
           onBack={movBackTab ? () => setActiveTab(movBackTab) : undefined}
           onEditarAbate={(l) => { setAbateParaEditar(l); setActiveTab('lancamentos'); }}
           onEditarVenda={(l) => { setVendaParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarCompra={(l) => { setCompraParaEditar(l); setActiveTab('lancamentos'); }}
         />
       )}
       {activeTab === 'acessos' && <AcessosTab />}

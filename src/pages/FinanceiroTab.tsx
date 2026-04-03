@@ -28,6 +28,7 @@ interface Props {
   drillDownLabel?: string;
   onEditarAbate?: (lancamento: Lancamento) => void;
   onEditarVenda?: (lancamento: Lancamento) => void;
+  onEditarCompra?: (lancamento: Lancamento) => void;
 }
 
 export type SubAba = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
@@ -459,7 +460,7 @@ function getTopTabFromSubAba(subAba?: SubAba): TopTab {
   return 'entradas';
 }
 
-export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, onBack, drillDownLabel, onEditarAbate, onEditarVenda }: Props) {
+export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, onBack, drillDownLabel, onEditarAbate, onEditarVenda, onEditarCompra }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const fazendaMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -740,6 +741,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
             onRemover={(id) => { onRemover(id); setDetalheId(null); }}
             onEditarAbate={onEditarAbate ? (l) => { setDetalheId(null); onEditarAbate(l); } : undefined}
             onEditarVenda={onEditarVenda ? (l) => { setDetalheId(null); onEditarVenda(l); } : undefined}
+            onEditarCompra={onEditarCompra ? (l) => { setDetalheId(null); onEditarCompra(l); } : undefined}
           />
         ) : null;
       })()}

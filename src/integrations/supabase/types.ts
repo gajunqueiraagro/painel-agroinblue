@@ -2518,6 +2518,7 @@ export type Database = {
           deducoes: number | null
           desconto_funrural: number | null
           desconto_qualidade: number | null
+          detalhes_snapshot: Json | null
           fazenda_destino: string | null
           fazenda_id: string
           fazenda_origem: string | null
@@ -2562,6 +2563,7 @@ export type Database = {
           deducoes?: number | null
           desconto_funrural?: number | null
           desconto_qualidade?: number | null
+          detalhes_snapshot?: Json | null
           fazenda_destino?: string | null
           fazenda_id: string
           fazenda_origem?: string | null
@@ -2606,6 +2608,7 @@ export type Database = {
           deducoes?: number | null
           desconto_funrural?: number | null
           desconto_qualidade?: number | null
+          detalhes_snapshot?: Json | null
           fazenda_destino?: string | null
           fazenda_id?: string
           fazenda_origem?: string | null
