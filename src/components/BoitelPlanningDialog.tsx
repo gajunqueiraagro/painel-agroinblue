@@ -555,6 +555,66 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                   </div>
                 )}
               </Section>
+
+              {/* ADIANTAMENTOS */}
+              <Section icon={<DollarSign className="h-3.5 w-3.5" />} title="Adiantamento ao Boitel">
+                <div className="flex items-center gap-2 mb-1">
+                  <Label className="text-[10px]">Possui pagamento antecipado?</Label>
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => set('possuiAdiantamento', true)}
+                      className={`h-6 px-3 rounded text-[10px] font-bold border-2 transition-all ${data.possuiAdiantamento ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
+                      Sim
+                    </button>
+                    <button type="button" onClick={() => {
+                      set('possuiAdiantamento', false);
+                      set('valorAdiantamentoDiarias', 0);
+                      set('valorAdiantamentoSanitario', 0);
+                      set('valorAdiantamentoOutros', 0);
+                      set('valorTotalAntecipado', 0);
+                      set('pctAdiantamentoDiarias', 0);
+                      set('dataAdiantamento', '');
+                      set('adiantamentoObservacao', '');
+                    }}
+                      className={`h-6 px-3 rounded text-[10px] font-bold border-2 transition-all ${!data.possuiAdiantamento ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
+                      Não
+                    </button>
+                  </div>
+                </div>
+                {data.possuiAdiantamento && (
+                  <div className="space-y-2 bg-muted/30 rounded p-2 border">
+                    <div className="grid grid-cols-2 gap-2">
+                      <Field label="Data do adiantamento">
+                        <Input type="date" value={data.dataAdiantamento} onChange={e => set('dataAdiantamento', e.target.value)} className="h-7 text-[11px]" />
+                      </Field>
+                      <Field label="% adiantado sobre diárias">
+                        <Input type="number" value={data.pctAdiantamentoDiarias || ''} onChange={e => set('pctAdiantamentoDiarias', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="1" min="0" max="100" />
+                        <HintBelow>Total diárias: {formatMoeda(calc.custoDiariaTotal)}</HintBelow>
+                      </Field>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Field label="Diárias antecipadas (R$)">
+                        <Input type="number" value={data.valorAdiantamentoDiarias || ''} onChange={e => {
+                          set('valorAdiantamentoDiarias', Number(e.target.value) || 0);
+                          set('pctAdiantamentoDiarias', 0); // manual override clears %
+                        }} className="h-7 text-[11px]" />
+                      </Field>
+                      <Field label="Sanitário antecipado (R$)">
+                        <Input type="number" value={data.valorAdiantamentoSanitario || ''} onChange={e => set('valorAdiantamentoSanitario', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
+                      </Field>
+                      <Field label="Outros antecipados (R$)">
+                        <Input type="number" value={data.valorAdiantamentoOutros || ''} onChange={e => set('valorAdiantamentoOutros', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
+                      </Field>
+                    </div>
+                    <div className="flex justify-between items-center bg-primary/5 rounded px-2 py-1 border border-primary/20">
+                      <span className="text-[10px] font-bold">Total Antecipado</span>
+                      <span className="text-[12px] font-bold text-primary">{formatMoeda(data.valorTotalAntecipado)}</span>
+                    </div>
+                    <Field label="Observação">
+                      <Input value={data.adiantamentoObservacao} onChange={e => set('adiantamentoObservacao', e.target.value)} className="h-7 text-[11px]" placeholder="Ex: 30% diárias + sanitário pago na entrada" />
+                    </Field>
+                  </div>
+                )}
+              </Section>
             </div>
 
             {/* ── COLUNA DIREITA: RESULTADO ── */}
