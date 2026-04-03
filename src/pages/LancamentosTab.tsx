@@ -969,7 +969,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       tipoVenda: tipoVendaFinal || undefined,
       detalhesSnapshot: (() => {
         if (isCompra && compraDetalhes) return { type: 'compra', ...compraDetalhes };
-        if (isAbate && abateDetalhes) return { type: 'abate', ...abateDetalhes };
+        if (isAbate && abateDetalhes) return { type: 'abate', ...abateDetalhes, fornecedorId: abateFornecedorId || undefined };
         if (isVenda && vendaDetalhes) return { type: 'venda', ...vendaDetalhes, tipoPreco: vendaTipoPreco, precoInput: vendaPrecoInput };
         return undefined;
       })(),
