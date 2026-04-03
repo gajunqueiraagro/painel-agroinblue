@@ -1,0 +1,82 @@
+/**
+ * Hook: useZootMensal
+ * 
+ * Fonte única oficial de indicadores zootécnicos mensais.
+ * Consome a view `vw_zoot_fazenda_mensal` do banco.
+ * 
+ * Regra de produto: todo indicador mensal do rebanho deve vir deste hook.
+ * O front NÃO recalcula — apenas lê, formata e filtra.
+ */
+
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useFazenda } from '@/contexts/FazendaContext';
+
+export interface ZootMensal {
+  fazenda_id: string;
+  cliente_id: string;
+  ano: number;
+  mes: number;
+  cenario: 'realizado' | 'meta';
+  mes_key: string;       // '01'..'12'
+  ano_mes: string;        // '2025-03'
+  cabecas_inicio: number;
+  cabecas_final: number;
+  peso_inicio_kg: number;
+  peso_total_final_kg: number;
+  peso_medio_final_kg: number | null;
+  peso_entradas_kg: number;
+  peso_saidas_kg: number;
+  entradas: number;
+  saidas: number;
+  dias_mes: number;
+  gmd_kg_cab_dia: number | null;
+  ua_media: number | null;
+  area_produtiva_ha: number;
+  lotacao_ua_ha: number | null;
+}
+
+interface UseZootMensalParams {
+  ano: number;
+  cenario: 'realizado' | 'meta';
+}
+
+export function useZootMensal({ ano, cenario }: UseZootMensalParams) {
+  const { fazendaId } = useFazenda();
+
+  return useQuery({
+    queryKey: ['zoot-mensal', fazendaId, ano, cenario],
+    queryFn: async (): Promise<ZootMensal[]> => {
+      if (!fazendaId) return [];
+
+      const { data, error } = await supabase
+        .from('vw_zoot_fazenda_mensal' as any)
+        .select('*')
+        .eq('fazenda_id', fazendaId)
+        .eq('ano', ano)
+        .eq('cenario', cenario)
+        .order('mes');
+
+      if (error) {
+        console.error('useZootMensal error:', error);
+        return [];
+      }
+
+      return (data as unknown as ZootMensal[]) || [];
+    },
+    enabled: !!fazendaId,
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Helper: converte array de ZootMensal em Record<mes_key, ZootMensal>
+ * para acesso direto por mês (ex: byMes['03']).
+ */
+export function indexByMes(rows: ZootMensal[]): Record<string, ZootMensal> {
+  const map: Record<string, ZootMensal> = {};
+  for (const r of rows) {
+    map[r.mes_key] = r;
+  }
+  return map;
+}
