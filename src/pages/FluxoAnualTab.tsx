@@ -23,6 +23,11 @@ const fmtNum = (v: number | string | undefined): string => {
   return n.toLocaleString('pt-BR');
 };
 
+const fmtDec = (v: number | null | undefined, decimals: number): string => {
+  if (v == null) return '–';
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+};
+
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
