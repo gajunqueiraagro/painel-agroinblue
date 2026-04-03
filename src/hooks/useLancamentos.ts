@@ -81,6 +81,7 @@ export function useLancamentos() {
           dataEmbarque: l.data_embarque ?? undefined,
           dataAbate: l.data_abate ?? undefined,
           tipoVenda: l.tipo_venda ?? undefined,
+          detalhesSnapshot: l.detalhes_snapshot ?? undefined,
           createdAt: l.created_at,
           updatedAt: l.updated_at,
           createdBy: l.created_by ?? undefined,
