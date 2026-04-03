@@ -56,6 +56,8 @@ interface Props {
   backLabel?: string;
   /** Abate para abrir em modo edição automaticamente */
   abateParaEditar?: Lancamento | null;
+  /** Venda para abrir em modo edição automaticamente */
+  vendaParaEditar?: Lancamento | null;
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
