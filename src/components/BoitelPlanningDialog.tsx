@@ -44,6 +44,15 @@ export interface BoitelData {
   formaReceb: 'avista' | 'prazo';
   qtdParcelas: number;
   parcelas: Parcela[];
+  // Adiantamento
+  possuiAdiantamento: boolean;
+  dataAdiantamento: string;
+  pctAdiantamentoDiarias: number;
+  valorAdiantamentoDiarias: number;
+  valorAdiantamentoSanitario: number;
+  valorAdiantamentoOutros: number;
+  valorTotalAntecipado: number;
+  adiantamentoObservacao: string;
   // Snapshots
   _faturamentoBruto?: number;
   _faturamentoLiquido?: number;
@@ -94,6 +103,14 @@ const defaultData: BoitelData = {
   formaReceb: 'avista',
   qtdParcelas: 1,
   parcelas: [],
+  possuiAdiantamento: false,
+  dataAdiantamento: '',
+  pctAdiantamentoDiarias: 0,
+  valorAdiantamentoDiarias: 0,
+  valorAdiantamentoSanitario: 0,
+  valorAdiantamentoOutros: 0,
+  valorTotalAntecipado: 0,
+  adiantamentoObservacao: '',
 };
 
 function fmtPeso(v: number) { return formatKg(v); }
@@ -274,7 +291,28 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
   };
 
   // Base de parcelamento = resultadoComBoitel - parceiroParte (exclui frete da base)
-  const baseParcelamento = calc.resultadoComBoitel - calc.parceiroParte;
+  // Se houver adiantamento, desconta do saldo a receber
+  const baseParcelamento = (calc.resultadoComBoitel - calc.parceiroParte) - (data.possuiAdiantamento ? data.valorTotalAntecipado : 0);
+
+  // Auto-calc valorTotalAntecipado
+  useEffect(() => {
+    if (data.possuiAdiantamento) {
+      const total = data.valorAdiantamentoDiarias + data.valorAdiantamentoSanitario + data.valorAdiantamentoOutros;
+      if (total !== data.valorTotalAntecipado) {
+        setData(prev => ({ ...prev, valorTotalAntecipado: total }));
+      }
+    }
+  }, [data.possuiAdiantamento, data.valorAdiantamentoDiarias, data.valorAdiantamentoSanitario, data.valorAdiantamentoOutros]);
+
+  // Auto-calc adiantamento diárias from percentage
+  useEffect(() => {
+    if (data.possuiAdiantamento && data.pctAdiantamentoDiarias > 0) {
+      const valDiarias = Math.round(calc.custoDiariaTotal * data.pctAdiantamentoDiarias / 100 * 100) / 100;
+      if (valDiarias !== data.valorAdiantamentoDiarias) {
+        setData(prev => ({ ...prev, valorAdiantamentoDiarias: valDiarias }));
+      }
+    }
+  }, [data.possuiAdiantamento, data.pctAdiantamentoDiarias, calc.custoDiariaTotal]);
 
   // Update parcelas when base changes
   useEffect(() => {
@@ -517,6 +555,66 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                   </div>
                 )}
               </Section>
+
+              {/* ADIANTAMENTOS */}
+              <Section icon={<DollarSign className="h-3.5 w-3.5" />} title="Adiantamento ao Boitel">
+                <div className="flex items-center gap-2 mb-1">
+                  <Label className="text-[10px]">Possui pagamento antecipado?</Label>
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => set('possuiAdiantamento', true)}
+                      className={`h-6 px-3 rounded text-[10px] font-bold border-2 transition-all ${data.possuiAdiantamento ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
+                      Sim
+                    </button>
+                    <button type="button" onClick={() => {
+                      set('possuiAdiantamento', false);
+                      set('valorAdiantamentoDiarias', 0);
+                      set('valorAdiantamentoSanitario', 0);
+                      set('valorAdiantamentoOutros', 0);
+                      set('valorTotalAntecipado', 0);
+                      set('pctAdiantamentoDiarias', 0);
+                      set('dataAdiantamento', '');
+                      set('adiantamentoObservacao', '');
+                    }}
+                      className={`h-6 px-3 rounded text-[10px] font-bold border-2 transition-all ${!data.possuiAdiantamento ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
+                      Não
+                    </button>
+                  </div>
+                </div>
+                {data.possuiAdiantamento && (
+                  <div className="space-y-2 bg-muted/30 rounded p-2 border">
+                    <div className="grid grid-cols-2 gap-2">
+                      <Field label="Data do adiantamento">
+                        <Input type="date" value={data.dataAdiantamento} onChange={e => set('dataAdiantamento', e.target.value)} className="h-7 text-[11px]" />
+                      </Field>
+                      <Field label="% adiantado sobre diárias">
+                        <Input type="number" value={data.pctAdiantamentoDiarias || ''} onChange={e => set('pctAdiantamentoDiarias', Number(e.target.value) || 0)} className="h-7 text-[11px]" step="1" min="0" max="100" />
+                        <HintBelow>Total diárias: {formatMoeda(calc.custoDiariaTotal)}</HintBelow>
+                      </Field>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Field label="Diárias antecipadas (R$)">
+                        <Input type="number" value={data.valorAdiantamentoDiarias || ''} onChange={e => {
+                          set('valorAdiantamentoDiarias', Number(e.target.value) || 0);
+                          set('pctAdiantamentoDiarias', 0); // manual override clears %
+                        }} className="h-7 text-[11px]" />
+                      </Field>
+                      <Field label="Sanitário antecipado (R$)">
+                        <Input type="number" value={data.valorAdiantamentoSanitario || ''} onChange={e => set('valorAdiantamentoSanitario', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
+                      </Field>
+                      <Field label="Outros antecipados (R$)">
+                        <Input type="number" value={data.valorAdiantamentoOutros || ''} onChange={e => set('valorAdiantamentoOutros', Number(e.target.value) || 0)} className="h-7 text-[11px]" />
+                      </Field>
+                    </div>
+                    <div className="flex justify-between items-center bg-primary/5 rounded px-2 py-1 border border-primary/20">
+                      <span className="text-[10px] font-bold">Total Antecipado</span>
+                      <span className="text-[12px] font-bold text-primary">{formatMoeda(data.valorTotalAntecipado)}</span>
+                    </div>
+                    <Field label="Observação">
+                      <Input value={data.adiantamentoObservacao} onChange={e => set('adiantamentoObservacao', e.target.value)} className="h-7 text-[11px]" placeholder="Ex: 30% diárias + sanitário pago na entrada" />
+                    </Field>
+                  </div>
+                )}
+              </Section>
             </div>
 
             {/* ── COLUNA DIREITA: RESULTADO ── */}
@@ -559,9 +657,23 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <ResultRow label="Custo/cab" value={formatMoeda(calc.custoPorCab)} className="text-destructive" />
               </ResultGroup>
 
-              <Separator />
+              {/* BLOCO ADIANTAMENTO — Conciliação */}
+              {data.possuiAdiantamento && data.valorTotalAntecipado > 0 && (
+                <>
+                  <Separator />
+                  <ResultGroup label="Conciliação Financeira">
+                    <ResultRow label="Resultado com Boitel" value={formatMoeda(calc.resultadoComBoitel)} bold />
+                    <ResultRow label="(-) Adiantamento já pago" value={formatMoeda(data.valorTotalAntecipado)} className="text-destructive" />
+                    <div className="border-t border-dashed my-0.5" />
+                    <ResultRow label="= Saldo a receber" value={formatMoeda(calc.resultadoComBoitel - data.valorTotalAntecipado)} bold accent />
+                    <ResultRow label="(-) Frete" value={formatMoeda(calc.custosFreteTotal)} className="text-destructive" />
+                    <div className="border-t border-dashed my-0.5" />
+                    <ResultRow label="= Saldo líquido final" value={formatMoeda(calc.resultadoComBoitel - data.valorTotalAntecipado - calc.custosFreteTotal)} bold accent />
+                  </ResultGroup>
+                </>
+              )}
 
-              {/* BLOCO 4 — RESULTADO LÍQUIDO POR GADO MAGRO */}
+              <Separator />
               <ResultGroup label="Resultado Líquido por Gado Magro">
                 <div className={`rounded border px-2.5 py-2 text-center ${isPositive ? 'bg-green-50/80 border-green-200 dark:bg-green-950/20 dark:border-green-800' : 'bg-destructive/5 border-destructive/20'}`}>
                   <span className="text-[8px] text-muted-foreground block uppercase font-bold">Total</span>

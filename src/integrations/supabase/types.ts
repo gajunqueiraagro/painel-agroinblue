@@ -163,6 +163,7 @@ export type Database = {
       }
       boitel_operacoes: {
         Row: {
+          adiantamento_observacao: string | null
           cliente_id: string
           created_at: string
           custo_arroba: number
@@ -172,6 +173,7 @@ export type Database = {
           custo_sanidade: number
           custo_total: number
           custos_extras_parceria: number
+          data_adiantamento: string | null
           data_envio: string | null
           despesas_abate: number
           dias: number
@@ -186,16 +188,23 @@ export type Database = {
           modalidade: string
           numero_contrato: string | null
           outros_custos: number
+          pct_adiantamento_diarias: number
           percentual_parceria: number
           peso_inicial_kg: number
+          possui_adiantamento: boolean
           preco_venda_arroba: number
           quantidade: number
           receita_produtor: number
           rendimento_entrada: number
           rendimento_saida: number
           updated_at: string
+          valor_adiantamento_diarias: number
+          valor_adiantamento_outros: number
+          valor_adiantamento_sanitario: number
+          valor_total_antecipado: number
         }
         Insert: {
+          adiantamento_observacao?: string | null
           cliente_id: string
           created_at?: string
           custo_arroba?: number
@@ -205,6 +214,7 @@ export type Database = {
           custo_sanidade?: number
           custo_total?: number
           custos_extras_parceria?: number
+          data_adiantamento?: string | null
           data_envio?: string | null
           despesas_abate?: number
           dias?: number
@@ -219,16 +229,23 @@ export type Database = {
           modalidade?: string
           numero_contrato?: string | null
           outros_custos?: number
+          pct_adiantamento_diarias?: number
           percentual_parceria?: number
           peso_inicial_kg?: number
+          possui_adiantamento?: boolean
           preco_venda_arroba?: number
           quantidade?: number
           receita_produtor?: number
           rendimento_entrada?: number
           rendimento_saida?: number
           updated_at?: string
+          valor_adiantamento_diarias?: number
+          valor_adiantamento_outros?: number
+          valor_adiantamento_sanitario?: number
+          valor_total_antecipado?: number
         }
         Update: {
+          adiantamento_observacao?: string | null
           cliente_id?: string
           created_at?: string
           custo_arroba?: number
@@ -238,6 +255,7 @@ export type Database = {
           custo_sanidade?: number
           custo_total?: number
           custos_extras_parceria?: number
+          data_adiantamento?: string | null
           data_envio?: string | null
           despesas_abate?: number
           dias?: number
@@ -252,14 +270,20 @@ export type Database = {
           modalidade?: string
           numero_contrato?: string | null
           outros_custos?: number
+          pct_adiantamento_diarias?: number
           percentual_parceria?: number
           peso_inicial_kg?: number
+          possui_adiantamento?: boolean
           preco_venda_arroba?: number
           quantidade?: number
           receita_produtor?: number
           rendimento_entrada?: number
           rendimento_saida?: number
           updated_at?: string
+          valor_adiantamento_diarias?: number
+          valor_adiantamento_outros?: number
+          valor_adiantamento_sanitario?: number
+          valor_total_antecipado?: number
         }
         Relationships: [
           {
