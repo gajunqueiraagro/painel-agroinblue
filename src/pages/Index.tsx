@@ -407,8 +407,18 @@ const Index = () => {
           vendaParaEditar={vendaParaEditar}
           compraParaEditar={compraParaEditar}
           onReturnFromEdit={editOriginTab ? () => {
+            // Restore origin tab with saved filter context
+            if (editOriginTab === 'financeiro') {
+              setSubAbaFinanceiro(editOriginSubAba);
+              setMovFiltroAno(editOriginAnoFiltro);
+              setMovFiltroMes(editOriginMesFiltro);
+            }
             setActiveTab(editOriginTab);
             setEditOriginTab(null);
+            setEditOriginSubAba(undefined);
+            setEditOriginStatusFiltro(undefined);
+            setEditOriginAnoFiltro(undefined);
+            setEditOriginMesFiltro(undefined);
             setAbateParaEditar(null);
             setVendaParaEditar(null);
             setCompraParaEditar(null);
