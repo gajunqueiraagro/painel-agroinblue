@@ -119,29 +119,29 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     return p;
   }, [dataAbateISO, data.dataEnvio]);
 
+  const valorAdiantamentoDiariasCalc = useMemo(() => {
+    if (!data.possuiAdiantamento) return 0;
+    return Math.round(calc.cDT * data.pctAdiantamentoDiarias / 100 * 100) / 100;
+  }, [data.possuiAdiantamento, data.pctAdiantamentoDiarias, calc.cDT]);
+
+  const valorTotalAntecipadoCalc = useMemo(() => {
+    if (!data.possuiAdiantamento) return 0;
+    return Math.round((valorAdiantamentoDiariasCalc + data.valorAdiantamentoSanitario + data.valorAdiantamentoOutros) * 100) / 100;
+  }, [data.possuiAdiantamento, valorAdiantamentoDiariasCalc, data.valorAdiantamentoSanitario, data.valorAdiantamentoOutros]);
+
   // Saldo a receber do Boitel = Fat.Bruto - Custo Total Boitel (diárias+sanidade+outros) - Desp.Abate + Adiantamento já pago
   const saldoReceberBase = useMemo(() => {
-    const s = calc.fba - calc.custoTotalBoitel - calc.cAb + (data.possuiAdiantamento ? data.valorTotalAntecipado : 0);
+    const s = calc.fba - calc.custoTotalBoitel - calc.cAb + valorTotalAntecipadoCalc;
     return Math.round(s * 100) / 100;
-  }, [calc.fba, calc.custoTotalBoitel, calc.cAb, data.possuiAdiantamento, data.valorTotalAntecipado]);
+  }, [calc.fba, calc.custoTotalBoitel, calc.cAb, valorTotalAntecipadoCalc]);
 
   const handleForma = (f: 'avista' | 'prazo') => { set('formaReceb', f); if (f === 'avista') set('parcelas', []); else set('parcelas', gerarParcelas(data.qtdParcelas || 1, saldoReceberBase)); };
   const handleQtdP = (v: string) => { const n = Math.max(1, Math.min(48, Number(v) || 1)); set('qtdParcelas', n); set('parcelas', gerarParcelas(n, saldoReceberBase)); };
   const basePar = saldoReceberBase;
 
-  // Auto-sum total adiantamento
-  useEffect(() => {
-    if (!data.possuiAdiantamento) return;
-    // Recalculate diárias from percentage
-    const diariasCalc = Math.round(calc.cDT * data.pctAdiantamentoDiarias / 100 * 100) / 100;
-    const total = diariasCalc + data.valorAdiantamentoSanitario + data.valorAdiantamentoOutros;
-    if (diariasCalc !== data.valorAdiantamentoDiarias || total !== data.valorTotalAntecipado) {
-      setData(p => ({ ...p, valorAdiantamentoDiarias: diariasCalc, valorTotalAntecipado: total }));
-    }
-  }, [data.possuiAdiantamento, data.pctAdiantamentoDiarias, calc.cDT, data.valorAdiantamentoSanitario, data.valorAdiantamentoOutros]);
   useEffect(() => { if (data.formaReceb === 'prazo' && data.qtdParcelas > 0 && basePar > 0) setData(p => ({ ...p, parcelas: gerarParcelas(p.qtdParcelas, basePar) })); }, [basePar, data.formaReceb, data.qtdParcelas, dataAbateISO]);
 
-  const handleSave = () => { onSave({ ...data, _faturamentoBruto: calc.fba, _faturamentoLiquido: calc.fLiq, _receitaProdutor: calc.rProd, _custoTotal: calc.cOp, _lucroTotal: calc.rLiq, _saldoReceber: saldoReceberBase }); onClose(); };
+  const handleSave = () => { onSave({ ...data, valorAdiantamentoDiarias: valorAdiantamentoDiariasCalc, valorTotalAntecipado: valorTotalAntecipadoCalc, _faturamentoBruto: calc.fba, _faturamentoLiquido: calc.fLiq, _receitaProdutor: calc.rProd, _custoTotal: calc.cOp, _lucroTotal: calc.rLiq, _saldoReceber: saldoReceberBase }); onClose(); };
 
   const pos = calc.rLiq > 0;
   const saldoReceber = saldoReceberBase;
@@ -233,13 +233,13 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                     <F label="% diárias"><IP value={data.pctAdiantamentoDiarias} onChange={v => set('pctAdiantamentoDiarias', v)} step="0.1" /></F>
                   </div>
                   <div className="grid grid-cols-3 gap-1">
-                    <F label="Diárias R$"><CV>{`R$ ${fmtR$(data.valorAdiantamentoDiarias)}`}</CV></F>
+                    <F label="Diárias R$"><CV>{`R$ ${fmtR$(valorAdiantamentoDiariasCalc)}`}</CV></F>
                     <F label="Sanitário R$"><IM value={data.valorAdiantamentoSanitario} onChange={v => set('valorAdiantamentoSanitario', v)} /></F>
                     <F label="Outros R$"><IM value={data.valorAdiantamentoOutros} onChange={v => set('valorAdiantamentoOutros', v)} /></F>
                   </div>
                   <div className="flex justify-between text-[8px] bg-blue-100 dark:bg-blue-900/50 rounded px-1.5 py-0.5 border border-blue-400 dark:border-blue-600">
                     <span className="font-bold text-blue-800 dark:text-blue-300">Total</span>
-                    <span className="font-bold text-blue-800 dark:text-blue-300 tabular-nums">R$ {fmtR$(data.valorTotalAntecipado)}</span>
+                    <span className="font-bold text-blue-800 dark:text-blue-300 tabular-nums">R$ {fmtR$(valorTotalAntecipadoCalc)}</span>
                   </div>
                 </div>
               )}
@@ -342,8 +342,8 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                 <RR l="Fat. Bruto" v={`R$ ${fmtR$(calc.fba)}`} b />
                 <RR l="(-) Custo Total Boitel" v={`-R$ ${fmtR$(calc.custoTotalBoitel)}`} c="text-destructive" />
                 <RR l="(-) Custos Abate" v={`-R$ ${fmtR$(calc.cAb)}`} c="text-destructive" />
-                {data.possuiAdiantamento && data.valorTotalAntecipado > 0 && (
-                  <RR l="(+) Adiant. p/ Boitel" v={`R$ ${fmtR$(data.valorTotalAntecipado)}`} c="text-blue-600 dark:text-blue-400" />
+                {data.possuiAdiantamento && valorTotalAntecipadoCalc > 0 && (
+                  <RR l="(+) Adiant. p/ Boitel" v={`R$ ${fmtR$(valorTotalAntecipadoCalc)}`} c="text-blue-600 dark:text-blue-400" />
                 )}
                 <DL />
                 <RR l="= Saldo a receber" v={`R$ ${fmtR$(saldoReceber)}`} b accent />
@@ -417,7 +417,14 @@ function IM({ value, onChange, step, decimals = 2 }: { value: number; onChange: 
   const [focused, setFocused] = useState(false);
   useEffect(() => { if (!focused) setDisplay(fmt(value)); }, [value, focused, decimals]);
   return <Input className="h-5 text-[9px] tabular-nums text-right bg-background border-border shadow-sm" value={display}
-    onChange={e => { setDisplay(e.target.value); }}
+    onChange={e => {
+      const next = e.target.value;
+      setDisplay(next);
+      let clean = next.trim();
+      if (clean.includes(',')) clean = clean.replace(/\./g, '').replace(',', '.');
+      const n = parseFloat(clean);
+      onChange(isNaN(n) ? 0 : Math.round(n * Math.pow(10, decimals)) / Math.pow(10, decimals));
+    }}
     onFocus={() => {
       setFocused(true);
       setDisplay(value ? value.toFixed(decimals).replace('.', ',') : '');
@@ -439,7 +446,14 @@ function IP({ value, onChange, decimals = 2, step }: { value: number; onChange: 
   const [focused, setFocused] = useState(false);
   useEffect(() => { if (!focused) setDisplay(fmt(value)); }, [value, focused, decimals]);
   return <Input className="h-5 text-[9px] tabular-nums text-right bg-background border-border shadow-sm" value={display}
-    onChange={e => { setDisplay(e.target.value); }}
+    onChange={e => {
+      const next = e.target.value;
+      setDisplay(next);
+      let clean = next.replace(/%/g, '').trim();
+      if (clean.includes(',')) clean = clean.replace(/\./g, '').replace(',', '.');
+      const n = parseFloat(clean);
+      onChange(isNaN(n) ? 0 : Math.round(n * Math.pow(10, decimals)) / Math.pow(10, decimals));
+    }}
     onFocus={() => {
       setFocused(true);
       setDisplay(value ? value.toFixed(decimals).replace('.', ',') : '');
