@@ -99,6 +99,10 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       // Redirect abate to the full form in LancamentosTab
       onClose();
       onEditarAbate(lancamento);
+    } else if (isVenda && onEditarVenda) {
+      // Redirect venda to the full form in LancamentosTab
+      onClose();
+      onEditarVenda(lancamento);
     } else if (isCompra) {
       // Open unified purchase edit sheet
       setCompraForm({ ...lancamento });
