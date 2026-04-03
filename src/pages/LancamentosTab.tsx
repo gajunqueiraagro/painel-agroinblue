@@ -1311,6 +1311,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             calculation: abateCalc || abateDetalhes.calculation || undefined,
           };
         }
+        if (isVenda && tipoPeso === 'boitel') {
+          // Boitel: snapshot from VendaFinanceiroPanel's boitelData (via ref)
+          const recebSnap = vendaFinanceiroRef.current?.getRecebimentoSnapshot?.();
+          return {
+            type: 'venda_boitel',
+            tipoVenda: 'boitel',
+            quantidade: Number(quantidade) || 0,
+            pesoKg: Number(pesoKg) || 0,
+            categoria,
+            data,
+            statusOperacional: statusOp,
+            formaReceb: recebSnap?.formaReceb || 'avista',
+            parcelas: recebSnap?.parcelas || [],
+          };
+        }
         if (isVenda && vendaDetalhes) {
           const fornNome = abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome;
           const vc = vendaCalc || vendaDetalhes.calculation;
