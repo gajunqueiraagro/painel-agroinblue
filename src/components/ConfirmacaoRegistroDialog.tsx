@@ -36,6 +36,12 @@ interface DadosFinanceiros {
   comercializacao?: string;
   tipoAbate?: string;
   dataVenda?: string;
+  // Full breakdown (from buildAbateCalculation)
+  valorBase?: number;
+  funruralTotal?: number;
+  liqArroba?: number;
+  liqCabeca?: number;
+  liqKg?: number;
 }
 
 interface Props {
@@ -148,41 +154,75 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
                 <strong>{financeiros.tipoAbate === 'vivo' ? 'Peso vivo' : 'Peso morto'}</strong>
               </div>
             )}
-            {financeiros.rendCarcaca && financeiros.rendCarcaca > 0 && (
+            {financeiros.rendCarcaca != null && financeiros.rendCarcaca > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Rend. Carcaça</span>
                 <strong>{financeiros.rendCarcaca.toFixed(2)}%</strong>
               </div>
             )}
-            {financeiros.totalArrobas && financeiros.totalArrobas > 0 && (
+            {financeiros.totalArrobas != null && financeiros.totalArrobas > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Total Arrobas</span>
                 <strong>{formatArroba(financeiros.totalArrobas)}</strong>
               </div>
             )}
-            {financeiros.precoBase && financeiros.precoBase > 0 && (
+            {financeiros.precoBase != null && financeiros.precoBase > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Preço base {financeiros.precoBaseLabel || ''}</span>
                 <strong>{formatMoeda(financeiros.precoBase)}</strong>
               </div>
             )}
-            {financeiros.totalBruto && financeiros.totalBruto > 0 && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Valor bruto</span>
-                <strong>{formatMoeda(financeiros.totalBruto)}</strong>
+            {/* Full Abate financial hierarchy */}
+            {financeiros.valorBase != null && financeiros.valorBase > 0 ? (
+              <div className="space-y-0.5 pt-1">
+                <Separator className="my-0.5" />
+                <div className="flex justify-between"><span className="text-muted-foreground">Valor Base</span><strong className="tabular-nums">{formatMoeda(financeiros.valorBase)}</strong></div>
+                {financeiros.funruralTotal != null && financeiros.funruralTotal > 0 && (
+                  <div className="flex justify-between"><span className="text-muted-foreground">(–) Funrural</span><strong className="text-destructive tabular-nums">-{formatMoeda(financeiros.funruralTotal)}</strong></div>
+                )}
+                <div className="flex justify-between font-bold"><span>= Valor Bruto</span><span className="tabular-nums">{formatMoeda(financeiros.totalBruto || 0)}</span></div>
+                {financeiros.totalBonus != null && financeiros.totalBonus > 0 && (
+                  <div className="flex justify-between"><span className="text-muted-foreground">(+) Bônus</span><strong className="text-green-600 tabular-nums">+{formatMoeda(financeiros.totalBonus)}</strong></div>
+                )}
+                {financeiros.totalDescontos != null && financeiros.totalDescontos > 0 && (
+                  <div className="flex justify-between"><span className="text-muted-foreground">(–) Descontos</span><strong className="text-destructive tabular-nums">-{formatMoeda(financeiros.totalDescontos)}</strong></div>
+                )}
+                <Separator className="my-0.5" />
+                <div className="flex justify-between text-[12px] font-bold">
+                  <span>= Valor Líquido</span>
+                  <span className="text-primary tabular-nums">{formatMoeda(financeiros.valorLiquido || 0)}</span>
+                </div>
+                {financeiros.liqArroba != null && financeiros.liqArroba > 0 && (
+                  <div className="flex justify-between text-[10px]"><span className="text-muted-foreground">R$/@ líq.</span><strong className="tabular-nums">{formatMoeda(financeiros.liqArroba)}</strong></div>
+                )}
+                {financeiros.liqCabeca != null && financeiros.liqCabeca > 0 && (
+                  <div className="flex justify-between text-[10px]"><span className="text-muted-foreground">R$/cab líq.</span><strong className="tabular-nums">{formatMoeda(financeiros.liqCabeca)}</strong></div>
+                )}
+                {financeiros.liqKg != null && financeiros.liqKg > 0 && (
+                  <div className="flex justify-between text-[10px]"><span className="text-muted-foreground">R$/kg líq.</span><strong className="tabular-nums">{formatMoeda(financeiros.liqKg)}</strong></div>
+                )}
               </div>
-            )}
-            {financeiros.totalBonus && financeiros.totalBonus > 0 && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Bônus</span>
-                <strong className="text-green-600">+{formatMoeda(financeiros.totalBonus)}</strong>
-              </div>
-            )}
-            {financeiros.totalDescontos && financeiros.totalDescontos > 0 && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Descontos</span>
-                <strong className="text-destructive">-{formatMoeda(financeiros.totalDescontos)}</strong>
-              </div>
+            ) : (
+              <>
+                {financeiros.totalBruto != null && financeiros.totalBruto > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Valor bruto</span>
+                    <strong>{formatMoeda(financeiros.totalBruto)}</strong>
+                  </div>
+                )}
+                {financeiros.totalBonus != null && financeiros.totalBonus > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Bônus</span>
+                    <strong className="text-green-600">+{formatMoeda(financeiros.totalBonus)}</strong>
+                  </div>
+                )}
+                {financeiros.totalDescontos != null && financeiros.totalDescontos > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Descontos</span>
+                    <strong className="text-destructive">-{formatMoeda(financeiros.totalDescontos)}</strong>
+                  </div>
+                )}
+              </>
             )}
             {financeiros.dataVenda && (
               <div className="flex justify-between">
