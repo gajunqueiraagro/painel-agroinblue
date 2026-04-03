@@ -842,8 +842,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     // 3. Fornecedor: use pendingFornecedorMatch ref for robust loading
     const snap = l.detalhesSnapshot;
-    const snapVendaFornId = snap?.type === 'venda' ? snap.fornecedorId : undefined;
-    const snapVendaFornNome = snap?.type === 'venda' ? snap.fornecedorNome : undefined;
+    const isBoitelSnap = snap?.type === 'venda_boitel';
+    const snapVendaFornId = (snap?.type === 'venda' || isBoitelSnap) ? snap.fornecedorId : undefined;
+    const snapVendaFornNome = (snap?.type === 'venda' || isBoitelSnap) ? snap.fornecedorNome : undefined;
 
     pendingFornecedorMatch.current = {
       tipo: 'venda',
@@ -863,7 +864,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     // 4. Check for snapshot first (PRIORITY 1)
     const vendaSnap = l.detalhesSnapshot;
-    if (vendaSnap && vendaSnap.type === 'venda') {
+    if (vendaSnap && vendaSnap.type === 'venda_boitel') {
+      // Boitel: restore tipoPeso to 'boitel', no vendaDetalhes needed
+      setTipoPeso('boitel');
+      // The VendaFinanceiroPanel will load boitelData from the boitel_id linkage
+      console.log('[Venda Edit] Rehydrating Boitel from snapshot', vendaSnap);
+    } else if (vendaSnap && vendaSnap.type === 'venda') {
       const tv = vendaSnap.tipoVenda || 'gado_adulto';
       setTipoPeso(tv);
 
@@ -1422,7 +1428,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           restoreEditOrigin();
         }
       } else {
+        console.log('[Save Flow] Payload final:', { tipo, tipoPeso, isVenda, isAbate, isCompra, snapshot: lancamentoDados.detalhesSnapshot ? JSON.stringify(lancamentoDados.detalhesSnapshot).slice(0, 200) : 'none' });
         const returnedId = await onAdicionar(lancamentoDados as Omit<Lancamento, 'id'>);
+        console.log('[Save Flow] Lançamento salvo, returnedId:', returnedId);
 
         if (isCompra && returnedId) {
           if (compraDetalhes && fazendaAtual && clienteAtual) {
@@ -1461,8 +1469,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Abate registrado com financeiro!');
         } else if (isVenda && returnedId) {
-          if (vendaFinanceiroRef.current && (calc.valorLiquido > 0 || tipoPeso === 'boitel')) {
-            await vendaFinanceiroRef.current.generateFinanceiro(returnedId);
+          const isBoitel = tipoPeso === 'boitel';
+          console.log('[Save Flow] Venda detectada', { isBoitel, valorLiquido: calc.valorLiquido, temRef: !!vendaFinanceiroRef.current });
+          if (vendaFinanceiroRef.current && (calc.valorLiquido > 0 || isBoitel)) {
+            const finResult = await vendaFinanceiroRef.current.generateFinanceiro(returnedId);
+            console.log('[Save Flow] generateFinanceiro resultado:', finResult);
           }
           vendaFinanceiroRef.current?.resetForm();
           setLastSavedLancamentoId(null);

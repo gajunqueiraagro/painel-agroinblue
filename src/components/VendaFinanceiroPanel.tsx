@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { CATEGORIAS } from '@/types/cattle';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { BoitelPlanningDialog, type BoitelData } from '@/components/BoitelPlanningDialog';
-import { salvarBoitelOperacao, vincularBoitelAoLancamento, gerarFinanceiroBoitel } from '@/hooks/useBoitelOperacoes';
+import { salvarBoitelOperacao, vincularBoitelAoLancamento, gerarFinanceiroBoitel, carregarBoitelOperacao } from '@/hooks/useBoitelOperacoes';
 import type { StatusOperacional } from '@/lib/statusOperacional';
 
 interface Parcela {
@@ -113,6 +113,61 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
   const [boitelOpen, setBoitelOpen] = useState(false);
   const [boitelData, setBoitelData] = useState<BoitelData | null>(null);
+  const [boitelLoaded, setBoitelLoaded] = useState(false);
+
+  // Auto-load boitel data when editing a boitel venda
+  useEffect(() => {
+    if (tipoPeso !== 'boitel' || !lancamentoId || boitelLoaded || boitelData) return;
+    (async () => {
+      const { data: lanc } = await supabase
+        .from('lancamentos')
+        .select('boitel_id')
+        .eq('id', lancamentoId)
+        .single();
+      if (!lanc?.boitel_id) { setBoitelLoaded(true); return; }
+      const boitel = await carregarBoitelOperacao(lanc.boitel_id as string);
+      if (boitel) {
+        console.log('[Boitel Edit] Loaded boitelData from DB:', boitel.id);
+        setBoitelData({
+          qtdCabecas: boitel.quantidade,
+          pesoInicial: boitel.peso_inicial_kg,
+          fazendaOrigem: '',
+          nomeBoitel: boitel.fazenda_destino_nome,
+          lote: boitel.lote || '',
+          numeroContrato: boitel.numero_contrato || '',
+          dataEnvio: boitel.data_envio || '',
+          quebraViagem: 3,
+          custoOportunidade: 0,
+          dias: boitel.dias,
+          gmd: boitel.gmd,
+          rendimentoEntrada: boitel.rendimento_entrada,
+          rendimento: boitel.rendimento_saida,
+          modalidadeCusto: boitel.modalidade as 'diaria' | 'arroba' | 'parceria',
+          custoDiaria: boitel.custo_diaria,
+          custoArroba: boitel.custo_arroba,
+          percentualParceria: boitel.percentual_parceria,
+          custosExtrasParceria: boitel.custos_extras_parceria,
+          custoFrete: boitel.custo_frete,
+          outrosCustos: boitel.outros_custos,
+          custoNutricao: boitel.custo_nutricao || 0,
+          custoSanidade: boitel.custo_sanidade || 0,
+          custoNfAbate: 0,
+          precoVendaArroba: boitel.preco_venda_arroba,
+          despesasAbate: boitel.despesas_abate,
+          formaReceb: 'avista',
+          qtdParcelas: 1,
+          parcelas: [],
+          _faturamentoBruto: boitel.faturamento_bruto,
+          _faturamentoLiquido: boitel.faturamento_liquido,
+          _receitaProdutor: boitel.receita_produtor,
+          _custoTotal: boitel.custo_total,
+          _lucroTotal: boitel.lucro_total,
+          _boitelId: (boitel as any).id || lanc.boitel_id,
+        });
+      }
+      setBoitelLoaded(true);
+    })();
+  }, [tipoPeso, lancamentoId, boitelLoaded, boitelData]);
 
   useEffect(() => {
     if (!lancamentoId || existingLoaded) return;

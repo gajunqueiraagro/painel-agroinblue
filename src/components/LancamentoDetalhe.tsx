@@ -327,37 +327,48 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 </>
               ) : isVenda && (() => {
                 const snap = lancamento.detalhesSnapshot as any;
-                const vc = snap?._tipo === 'venda' ? snap : (snap?.calculation || null);
-                if (!vc || !vc.valorBruto) return false;
+                const vc = snap?._tipo === 'venda' ? snap : (snap?.type === 'venda_boitel' ? snap : (snap?.calculation || null));
+                if (!vc || (!vc.valorBruto && !vc.tipoVenda)) return false;
                 return true;
               })() ? (
                 <>
                   <Separator className="my-0.5" />
                   {(() => {
                     const snap = lancamento.detalhesSnapshot as any;
+                    const isBoitelSnap = snap?.type === 'venda_boitel';
                     const vc = snap?._tipo === 'venda' ? snap : snap;
                     return (
                       <>
-                        <div className="space-y-0.5 text-[10px]">
-                          <div className="flex justify-between"><span className="text-muted-foreground">Valor Bruto</span><strong className="tabular-nums">{formatMoeda(vc.valorBruto || vc.valorBase)}</strong></div>
-                          {(vc.totalDespesas > 0) && (
-                            <div className="flex justify-between"><span className="text-muted-foreground">– Despesas</span><strong className="text-orange-600 dark:text-orange-400 tabular-nums">-{formatMoeda(vc.totalDespesas)}</strong></div>
-                          )}
-                          {(vc.totalDeducoes > 0 || vc.funruralTotal > 0) && (
-                            <div className="flex justify-between"><span className="text-muted-foreground">– Deduções</span><strong className="text-destructive tabular-nums">-{formatMoeda(vc.totalDeducoes || vc.funruralTotal)}</strong></div>
-                          )}
-                        </div>
-                        <div className="bg-primary/10 rounded px-2.5 py-1.5 flex items-center justify-between">
-                          <span className="text-[10px] text-muted-foreground font-medium">Valor Líquido</span>
-                          <span className="font-extrabold text-primary text-base tabular-nums">{formatMoeda(vc.valorLiquido)}</span>
-                        </div>
-                        <div className="grid grid-cols-4 gap-x-2 gap-y-0.5 text-[10px]">
-                          <Row label="Qtde" value={`${lancamento.quantidade} cab.`} />
-                          {vc.totalArrobas > 0 && <Row label="Total @" value={formatArroba(vc.totalArrobas)} />}
-                          {vc.liqArroba > 0 && <Row label="R$/@ líq." value={formatMoeda(vc.liqArroba)} />}
-                          {vc.liqCabeca > 0 && <Row label="R$/cab líq." value={formatMoeda(vc.liqCabeca)} />}
-                          {vc.liqKg > 0 && <Row label="R$/kg líq." value={formatMoeda(vc.liqKg)} />}
-                        </div>
+                        {isBoitelSnap ? (
+                          <div className="space-y-0.5 text-[10px]">
+                            <div className="flex justify-between"><span className="text-muted-foreground">Tipo</span><strong>Boitel</strong></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Qtde</span><strong>{lancamento.quantidade} cab.</strong></div>
+                            {vc.pesoKg > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Peso Inicial</span><strong>{formatKg(vc.pesoKg)}</strong></div>}
+                          </div>
+                        ) : (
+                          <>
+                            <div className="space-y-0.5 text-[10px]">
+                              <div className="flex justify-between"><span className="text-muted-foreground">Valor Bruto</span><strong className="tabular-nums">{formatMoeda(vc.valorBruto || vc.valorBase)}</strong></div>
+                              {(vc.totalDespesas > 0) && (
+                                <div className="flex justify-between"><span className="text-muted-foreground">– Despesas</span><strong className="text-orange-600 dark:text-orange-400 tabular-nums">-{formatMoeda(vc.totalDespesas)}</strong></div>
+                              )}
+                              {(vc.totalDeducoes > 0 || vc.funruralTotal > 0) && (
+                                <div className="flex justify-between"><span className="text-muted-foreground">– Deduções</span><strong className="text-destructive tabular-nums">-{formatMoeda(vc.totalDeducoes || vc.funruralTotal)}</strong></div>
+                              )}
+                            </div>
+                            <div className="bg-primary/10 rounded px-2.5 py-1.5 flex items-center justify-between">
+                              <span className="text-[10px] text-muted-foreground font-medium">Valor Líquido</span>
+                              <span className="font-extrabold text-primary text-base tabular-nums">{formatMoeda(vc.valorLiquido)}</span>
+                            </div>
+                            <div className="grid grid-cols-4 gap-x-2 gap-y-0.5 text-[10px]">
+                              <Row label="Qtde" value={`${lancamento.quantidade} cab.`} />
+                              {vc.totalArrobas > 0 && <Row label="Total @" value={formatArroba(vc.totalArrobas)} />}
+                              {vc.liqArroba > 0 && <Row label="R$/@ líq." value={formatMoeda(vc.liqArroba)} />}
+                              {vc.liqCabeca > 0 && <Row label="R$/cab líq." value={formatMoeda(vc.liqCabeca)} />}
+                              {vc.liqKg > 0 && <Row label="R$/kg líq." value={formatMoeda(vc.liqKg)} />}
+                            </div>
+                          </>
+                        )}
                       </>
                     );
                   })()}
