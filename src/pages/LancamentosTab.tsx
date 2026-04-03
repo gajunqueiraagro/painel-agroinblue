@@ -1428,7 +1428,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           restoreEditOrigin();
         }
       } else {
+        console.log('[Save Flow] Payload final:', { tipo, tipoPeso, isVenda, isAbate, isCompra, snapshot: lancamentoDados.detalhesSnapshot ? JSON.stringify(lancamentoDados.detalhesSnapshot).slice(0, 200) : 'none' });
         const returnedId = await onAdicionar(lancamentoDados as Omit<Lancamento, 'id'>);
+        console.log('[Save Flow] Lançamento salvo, returnedId:', returnedId);
 
         if (isCompra && returnedId) {
           if (compraDetalhes && fazendaAtual && clienteAtual) {
