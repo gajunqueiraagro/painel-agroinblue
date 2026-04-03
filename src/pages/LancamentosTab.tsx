@@ -781,8 +781,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
 
     // PRIORITY 1: snapshot
-    const snap = l.detalhesSnapshot;
-    if (snap && snap.type === 'compra') {
+    if (compraSnap && compraSnap.type === 'compra') {
+      const det: CompraDetalhes = {
+        tipoPreco: compraSnap.tipoPreco || 'por_kg',
       const det: CompraDetalhes = {
         tipoPreco: snap.tipoPreco || 'por_kg',
         precoKg: snap.precoKg || '',
