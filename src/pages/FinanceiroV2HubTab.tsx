@@ -1,7 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { TabId } from '@/components/BottomNav';
 import {
-  ListChecks, Building2, Users, BookOpen, Wallet, ChevronRight, FileText, Scale,
+  ListChecks, Building2, Users, BookOpen, Wallet, ChevronRight, FileText, Scale, Landmark,
 } from 'lucide-react';
 
 interface Props {
@@ -23,6 +23,7 @@ const ITEMS: HubItem[] = [
   { label: 'Plano de Contas', tab: 'fin_v2_plano' as TabId, icon: BookOpen, description: 'Subcentros, centros e macro custos' },
   { label: 'Saldos Mensais', tab: 'fin_v2_saldos' as TabId, icon: Wallet, description: 'Saldos bancários para fechamento mensal' },
   { label: 'Conciliação Bancária', tab: 'conciliacao_bancaria' as TabId, icon: Scale, description: 'Conciliação mensal entre sistema e extrato' },
+  { label: 'Conta Boitel', tab: 'conta_boitel' as TabId, icon: Landmark, description: 'Controle financeiro por lote de boitel' },
 ];
 
 export function FinanceiroV2HubTab({ onTabChange }: Props) {

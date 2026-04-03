@@ -48,6 +48,7 @@ import { ContratosTab } from './ContratosTab';
 import { ConciliacaoBancariaTab } from './ConciliacaoBancariaTab';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { AuditoriaTab } from './AuditoriaTab';
+import { ContaBoitelTab } from './ContaBoitelTab';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { SyncStatus } from '@/components/SyncStatus';
 import { useLancamentos } from '@/hooks/useLancamentos';
@@ -113,6 +114,7 @@ const TITLES: Record<TabId, string> = {
   conciliacao_bancaria: 'Conciliação Bancária',
   painel_consultor: 'Painel do Consultor',
   auditoria: 'Central de Auditoria',
+  conta_boitel: 'Conta Boitel',
 };
 
 const Index = () => {
@@ -279,6 +281,7 @@ const Index = () => {
     fin_v2_saldos: () => setActiveTab('financeiro_v2_hub'),
     contratos: () => setActiveTab('financeiro_v2_hub'),
     conciliacao_bancaria: () => setActiveTab('financeiro_v2_hub'),
+    conta_boitel: () => setActiveTab('financeiro_v2_hub'),
     // Zootécnico (analysis) sub-screens
     zootecnico: goToVisaoZooHub,
     indicadores: goToVisaoZooHub,
@@ -563,6 +566,9 @@ const Index = () => {
         />
       )}
       {activeTab === 'auditoria' && <AuditoriaTab />}
+      {activeTab === 'conta_boitel' && (
+        <ContaBoitelTab onBack={() => setActiveTab('financeiro_v2_hub')} />
+      )}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
