@@ -436,9 +436,9 @@ const Index = () => {
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
           onNavigateToReclass={goToReclassFromEvolCategoria}
-          onEditarAbate={(l) => { setEditOriginTab('evolucao_rebanho_hub'); setAbateParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarVenda={(l) => { setEditOriginTab('evolucao_rebanho_hub'); setVendaParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarCompra={(l) => { setEditOriginTab('evolucao_rebanho_hub'); setCompraParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarAbate={(l, ctx) => { setEditOriginTab('evolucao_rebanho_hub'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setAbateParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarVenda={(l, ctx) => { setEditOriginTab('evolucao_rebanho_hub'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setVendaParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarCompra={(l, ctx) => { setEditOriginTab('evolucao_rebanho_hub'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setCompraParaEditar(l); setActiveTab('lancamentos'); }}
         />
       )}
       {activeTab === 'financeiro' && (
