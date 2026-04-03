@@ -2566,7 +2566,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   />
                 </div>
               </>
-            ) : isVenda && tipoPeso !== 'boitel' ? (
+            ) : isVenda ? (
               <>
                 <VendaResumoPanel
                   quantidade={Number(quantidade) || 0}
