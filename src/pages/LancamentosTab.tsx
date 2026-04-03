@@ -1621,8 +1621,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // ===== FINANCIAL DETAILS PANEL (right column — non-abate) =====
   const renderFinancialPanel = () => {
 
-    // Transferência: no financial impact
-    if (isTransferencia) {
+    // Transferência entrada: simple info panel (no economic layer)
+    if (tipo === 'transferencia_entrada') {
       return (
         <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
            <h3 className="text-[14px] font-semibold text-foreground">Detalhes Financeiros</h3>
