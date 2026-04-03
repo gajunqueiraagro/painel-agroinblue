@@ -103,6 +103,14 @@ const defaultData: BoitelData = {
   formaReceb: 'avista',
   qtdParcelas: 1,
   parcelas: [],
+  possuiAdiantamento: false,
+  dataAdiantamento: '',
+  pctAdiantamentoDiarias: 0,
+  valorAdiantamentoDiarias: 0,
+  valorAdiantamentoSanitario: 0,
+  valorAdiantamentoOutros: 0,
+  valorTotalAntecipado: 0,
+  adiantamentoObservacao: '',
 };
 
 function fmtPeso(v: number) { return formatKg(v); }
