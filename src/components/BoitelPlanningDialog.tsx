@@ -121,7 +121,9 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
 
   const valorAdiantamentoDiariasCalc = useMemo(() => {
     if (!data.possuiAdiantamento) return 0;
-    return Math.round(calc.cDT * data.pctAdiantamentoDiarias / 100 * 100) / 100;
+    const result = Math.round(calc.cDT * data.pctAdiantamentoDiarias / 100 * 100) / 100;
+    console.log('[BOITEL DEBUG] cDT=', calc.cDT, 'pct=', data.pctAdiantamentoDiarias, 'diariasCalc=', result, 'custoDiaria=', data.custoDiaria, 'dias=', data.dias, 'qtd=', data.qtdCabecas, 'modalidade=', data.modalidadeCusto);
+    return result;
   }, [data.possuiAdiantamento, data.pctAdiantamentoDiarias, calc.cDT]);
 
   const valorTotalAntecipadoCalc = useMemo(() => {
