@@ -21,10 +21,11 @@ import { ptBR } from 'date-fns/locale';
 import { Pencil, Trash2, DollarSign, AlertTriangle } from 'lucide-react';
 import { AbateShareButtons } from '@/components/AbateExportMenu';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { STATUS_OPTIONS, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
+import { STATUS_OPTIONS, getStatusBadge, getStatus, type StatusOperacional } from '@/lib/statusOperacional';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 import { supabase } from '@/integrations/supabase/client';
-import { formatMoeda } from '@/lib/calculos/formatters';
+import { formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calculos/formatters';
+import { calcValorTotal, calcArrobas, calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 
 interface Props {
   lancamento: Lancamento;
