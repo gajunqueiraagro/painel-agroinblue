@@ -119,9 +119,15 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
     return p;
   }, [dataAbateISO, data.dataEnvio]);
 
-  const handleForma = (f: 'avista' | 'prazo') => { set('formaReceb', f); if (f === 'avista') set('parcelas', []); else set('parcelas', gerarParcelas(data.qtdParcelas || 1, calc.rBoitel - calc.pParte)); };
-  const handleQtdP = (v: string) => { const n = Math.max(1, Math.min(48, Number(v) || 1)); set('qtdParcelas', n); set('parcelas', gerarParcelas(n, calc.rBoitel - calc.pParte)); };
-  const basePar = (calc.rBoitel - calc.pParte) - (data.possuiAdiantamento ? data.valorTotalAntecipado : 0);
+  // Saldo a receber do Boitel = Fat.Bruto - Custo Total Boitel (diárias+sanidade+outros) - Desp.Abate + Adiantamento já pago
+  const saldoReceberBase = useMemo(() => {
+    const s = calc.fba - calc.custoTotalBoitel - calc.cAb + (data.possuiAdiantamento ? data.valorTotalAntecipado : 0);
+    return Math.round(s * 100) / 100;
+  }, [calc.fba, calc.custoTotalBoitel, calc.cAb, data.possuiAdiantamento, data.valorTotalAntecipado]);
+
+  const handleForma = (f: 'avista' | 'prazo') => { set('formaReceb', f); if (f === 'avista') set('parcelas', []); else set('parcelas', gerarParcelas(data.qtdParcelas || 1, saldoReceberBase)); };
+  const handleQtdP = (v: string) => { const n = Math.max(1, Math.min(48, Number(v) || 1)); set('qtdParcelas', n); set('parcelas', gerarParcelas(n, saldoReceberBase)); };
+  const basePar = saldoReceberBase;
 
   useEffect(() => { if (data.possuiAdiantamento) { const t = data.valorAdiantamentoDiarias + data.valorAdiantamentoSanitario + data.valorAdiantamentoOutros; if (t !== data.valorTotalAntecipado) setData(p => ({ ...p, valorTotalAntecipado: t })); } }, [data.possuiAdiantamento, data.valorAdiantamentoDiarias, data.valorAdiantamentoSanitario, data.valorAdiantamentoOutros]);
   useEffect(() => { if (data.possuiAdiantamento && data.pctAdiantamentoDiarias > 0) { const v = Math.round(calc.cDT * data.pctAdiantamentoDiarias / 100 * 100) / 100; if (v !== data.valorAdiantamentoDiarias) setData(p => ({ ...p, valorAdiantamentoDiarias: v })); } }, [data.possuiAdiantamento, data.pctAdiantamentoDiarias, calc.cDT]);
