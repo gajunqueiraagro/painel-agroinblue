@@ -578,80 +578,23 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       });
     }
 
-    // Fornecedor: priority 1 = snapshot (id/nome), 2 = lançamento, 3 = financeiro vinculado
-    console.log('[EDIT-FORN] loadAbateForEdit called', {
-      snapFornecedorId: snap?.fornecedorId,
-      snapFornecedorNome: snap?.fornecedorNome,
-      fazendaDestino: l.fazendaDestino,
-      fornecedoresCount: abateFornecedores.length,
-      fornecedoresNames: abateFornecedores.map(f => f.nome).slice(0, 10),
-    });
+    // Store pending fornecedor match in ref (will be applied by effect when list is ready)
+    pendingFornecedorMatch.current = {
+      tipo: 'abate',
+      id: snap?.fornecedorId,
+      nome: snap?.fornecedorNome || l.fazendaDestino,
+      lancamentoId: l.id,
+    };
 
+    // Try immediate match if fornecedores already loaded
     const matchedFornecedor = matchFornecedor(abateFornecedores, {
       id: snap?.fornecedorId,
       nome: snap?.fornecedorNome || l.fazendaDestino,
     });
 
-    console.log('[EDIT-FORN] matchResult:', matchedFornecedor?.id, matchedFornecedor?.nome);
-
     if (matchedFornecedor) {
       setAbateFornecedorId(matchedFornecedor.id);
-    } else {
-      // Try fetching directly from DB by ID if snapshot has fornecedorId
-      const directFornecedorId = snap?.fornecedorId;
-      if (directFornecedorId) {
-        supabase
-          .from('financeiro_fornecedores')
-          .select('id, nome, nome_normalizado, aliases')
-          .eq('id', directFornecedorId)
-          .maybeSingle()
-          .then(({ data: forn }) => {
-            if (forn) {
-              console.log('[EDIT-FORN] Found fornecedor directly from DB:', forn.nome);
-              setAbateFornecedores(prev => {
-                if (prev.some(f => f.id === forn.id)) return prev;
-                return [...prev, { id: forn.id, nome: forn.nome, nomeNormalizado: forn.nome_normalizado, aliases: forn.aliases as string[] | null }].sort((a, b) => a.nome.localeCompare(b.nome));
-              });
-              setAbateFornecedorId(forn.id);
-            }
-          });
-      }
-
-      // Also try via financeiro vinculado
-      supabase
-        .from('financeiro_lancamentos_v2')
-        .select('favorecido_id')
-        .eq('movimentacao_rebanho_id', l.id)
-        .not('favorecido_id', 'is', null)
-        .limit(1)
-        .then(({ data: finRecs }) => {
-          if (finRecs?.[0]?.favorecido_id) {
-            const matchedFromFinanceiro = matchFornecedor(abateFornecedores, {
-              id: finRecs[0].favorecido_id,
-              nome: snap?.fornecedorNome || l.fazendaDestino,
-            });
-            if (matchedFromFinanceiro) {
-              setAbateFornecedorId(matchedFromFinanceiro.id);
-            } else {
-              // Fetch the fornecedor directly
-              supabase
-                .from('financeiro_fornecedores')
-                .select('id, nome, nome_normalizado, aliases')
-                .eq('id', finRecs[0].favorecido_id)
-                .maybeSingle()
-                .then(({ data: forn }) => {
-                  if (forn) {
-                    console.log('[EDIT-FORN] Found fornecedor from financeiro:', forn.nome);
-                    setAbateFornecedores(prev => {
-                      if (prev.some(f => f.id === forn.id)) return prev;
-                      return [...prev, { id: forn.id, nome: forn.nome, nomeNormalizado: forn.nome_normalizado, aliases: forn.aliases as string[] | null }].sort((a, b) => a.nome.localeCompare(b.nome));
-                    });
-                    setAbateFornecedorId(forn.id);
-                  }
-                });
-            }
-          }
-        });
+      pendingFornecedorMatch.current = null;
     }
 
     // 8. Set editing mode
@@ -667,38 +610,82 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
   }, [abateParaEditar, abateFornecedores]);
 
-  // Re-apply fornecedor when fornecedores list loads after edit was already set
+  // CRITICAL: Apply pending fornecedor match whenever fornecedores list changes
   useEffect(() => {
-    if (!editingAbateId || abateFornecedores.length === 0) return;
-    if (abateFornecedorId && abateFornecedores.some(f => f.id === abateFornecedorId)) return; // already set correctly
-    
-    // Try to find from the lancamento being edited
-    const editingLancamento = abateParaEditar || vendaParaEditar || compraParaEditar || lancamentos.find(l => l.id === editingAbateId);
-    if (!editingLancamento) return;
+    if (abateFornecedores.length === 0) return;
 
-    const snap = editingLancamento.detalhesSnapshot;
-    const tipo = editingLancamento.tipo;
+    const pending = pendingFornecedorMatch.current;
+    if (!pending) return;
 
-    if (tipo === 'abate') {
-      const matched = matchFornecedor(abateFornecedores, {
-        id: snap?.fornecedorId,
-        nome: snap?.fornecedorNome || editingLancamento.fazendaDestino,
-      });
-      if (matched) setAbateFornecedorId(matched.id);
-    } else if (tipo === 'venda') {
-      const matched = matchFornecedor(abateFornecedores, {
-        id: snap?.fornecedorId,
-        nome: snap?.fornecedorNome || editingLancamento.fazendaDestino,
-      });
-      if (matched) setVendaDestinoFornecedorId(matched.id);
-    } else if (tipo === 'compra') {
-      const matched = matchFornecedor(abateFornecedores, {
-        id: snap?.fornecedorId,
-        nome: snap?.fornecedorNome || editingLancamento.fazendaOrigem,
-      });
-      if (matched) setCompraFornecedorId(matched.id);
+    const matched = matchFornecedor(abateFornecedores, { id: pending.id, nome: pending.nome });
+    if (matched) {
+      if (pending.tipo === 'abate') setAbateFornecedorId(matched.id);
+      else if (pending.tipo === 'venda') setVendaDestinoFornecedorId(matched.id);
+      else if (pending.tipo === 'compra') setCompraFornecedorId(matched.id);
+      pendingFornecedorMatch.current = null;
+      return;
     }
-  }, [abateFornecedores, editingAbateId]);
+
+    // If no match in cached list, try direct DB lookup
+    if (pending.id) {
+      supabase
+        .from('financeiro_fornecedores')
+        .select('id, nome, nome_normalizado, aliases')
+        .eq('id', pending.id)
+        .maybeSingle()
+        .then(({ data: forn }) => {
+          if (forn) {
+            setAbateFornecedores(prev => {
+              if (prev.some(f => f.id === forn.id)) return prev;
+              return [...prev, { id: forn.id, nome: forn.nome, nomeNormalizado: forn.nome_normalizado, aliases: forn.aliases as string[] | null }].sort((a, b) => a.nome.localeCompare(b.nome));
+            });
+            if (pending.tipo === 'abate') setAbateFornecedorId(forn.id);
+            else if (pending.tipo === 'venda') setVendaDestinoFornecedorId(forn.id);
+            else if (pending.tipo === 'compra') setCompraFornecedorId(forn.id);
+            pendingFornecedorMatch.current = null;
+          }
+        });
+    }
+
+    // Also try via financeiro vinculado
+    if (pending.lancamentoId) {
+      supabase
+        .from('financeiro_lancamentos_v2')
+        .select('favorecido_id')
+        .eq('movimentacao_rebanho_id', pending.lancamentoId)
+        .not('favorecido_id', 'is', null)
+        .limit(1)
+        .then(({ data: finRecs }) => {
+          if (!finRecs?.[0]?.favorecido_id) return;
+          const favId = finRecs[0].favorecido_id;
+          const matchedFin = matchFornecedor(abateFornecedores, { id: favId, nome: pending.nome });
+          if (matchedFin) {
+            if (pending.tipo === 'abate') setAbateFornecedorId(matchedFin.id);
+            else if (pending.tipo === 'venda') setVendaDestinoFornecedorId(matchedFin.id);
+            else if (pending.tipo === 'compra') setCompraFornecedorId(matchedFin.id);
+            pendingFornecedorMatch.current = null;
+          } else {
+            supabase
+              .from('financeiro_fornecedores')
+              .select('id, nome, nome_normalizado, aliases')
+              .eq('id', favId)
+              .maybeSingle()
+              .then(({ data: forn }) => {
+                if (forn) {
+                  setAbateFornecedores(prev => {
+                    if (prev.some(f => f.id === forn.id)) return prev;
+                    return [...prev, { id: forn.id, nome: forn.nome, nomeNormalizado: forn.nome_normalizado, aliases: forn.aliases as string[] | null }].sort((a, b) => a.nome.localeCompare(b.nome));
+                  });
+                  if (pending.tipo === 'abate') setAbateFornecedorId(forn.id);
+                  else if (pending.tipo === 'venda') setVendaDestinoFornecedorId(forn.id);
+                  else if (pending.tipo === 'compra') setCompraFornecedorId(forn.id);
+                  pendingFornecedorMatch.current = null;
+                }
+              });
+          }
+        });
+    }
+  }, [abateFornecedores]);
 
   // Load venda into form for editing
   const loadVendaForEdit = useCallback(async (l: Lancamento) => {
