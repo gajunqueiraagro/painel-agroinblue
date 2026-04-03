@@ -29,6 +29,9 @@ import { CompraResumoPanel } from '@/components/compra/CompraResumoPanel';
 import { gerarFinanceiroCompra } from '@/components/compra/gerarFinanceiroCompra';
 import { AbateDetalhesDialog, AbateDetalhes, EMPTY_ABATE_DETALHES } from '@/components/abate/AbateDetalhesDialog';
 import { AbateResumoPanel } from '@/components/abate/AbateResumoPanel';
+import { TransferenciaDetalhesDialog, TransferenciaDetalhes, EMPTY_TRANSFERENCIA_DETALHES } from '@/components/transferencia/TransferenciaDetalhesDialog';
+import { TransferenciaResumoPanel } from '@/components/transferencia/TransferenciaResumoPanel';
+import { buildTransferenciaCalculation, buildTransferenciaSnapshot } from '@/lib/calculos/transferencia';
 import { buildAbateCalculation, type AbateCalculation } from '@/lib/calculos/abate';
 import { VendaDetalhesDialog, VendaDetalhes, EMPTY_VENDA_DETALHES } from '@/components/venda/VendaDetalhesDialog';
 import { VendaResumoPanel } from '@/components/venda/VendaResumoPanel';
@@ -212,8 +215,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [compraDialogOpen, setCompraDialogOpen] = useState(false);
   const [abateDetalhes, setAbateDetalhes] = useState<AbateDetalhes | null>(null);
   const [abateDialogOpen, setAbateDialogOpen] = useState(false);
-  const [vendaDetalhes, setVendaDetalhes] = useState<VendaDetalhes | null>(null);
-  const [vendaDialogOpen, setVendaDialogOpen] = useState(false);
+   const [vendaDetalhes, setVendaDetalhes] = useState<VendaDetalhes | null>(null);
+   const [vendaDialogOpen, setVendaDialogOpen] = useState(false);
+   const [transferenciaDetalhes, setTransferenciaDetalhes] = useState<TransferenciaDetalhes | null>(null);
+   const [transferenciaDialogOpen, setTransferenciaDialogOpen] = useState(false);
 
   const [motivoMorte, setMotivoMorte] = useState('');
   const [motivoMorteCustom, setMotivoMorteCustom] = useState('');
@@ -278,6 +283,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const isVenda = tipo === 'venda';
   const isConsumo = tipo === 'consumo';
   const isTransferencia = tipo === 'transferencia_entrada' || tipo === 'transferencia_saida';
+  const isTransferenciaSaida = tipo === 'transferencia_saida';
   const hasFinancialImpact = !isNascimento && !isMorte && !isTransferencia;
 
   const usaPrecoArroba = isAbate;
@@ -314,6 +320,23 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       parcelas: abateDetalhes.parcelas,
     });
   }, [isAbate, abateDetalhes, quantidade, pesoKg]);
+
+  // Transferência Saída — unified calc (single source of truth)
+  const transferenciaCalc = useMemo(() => {
+    if (!isTransferenciaSaida) return null;
+    return buildTransferenciaCalculation({
+      quantidade: Number(quantidade) || 0,
+      pesoKg: Number(pesoKg) || 0,
+      categoria,
+      fazendaOrigem: nomeFazenda || fazendaOrigem,
+      fazendaDestino,
+      data,
+      statusOperacional: statusOp,
+      observacao,
+      precoReferenciaArroba: transferenciaDetalhes?.precoReferenciaArroba || undefined,
+      precoReferenciaCabeca: transferenciaDetalhes?.precoReferenciaCabeca || undefined,
+    });
+  }, [isTransferenciaSaida, quantidade, pesoKg, categoria, fazendaOrigem, fazendaDestino, data, statusOp, observacao, transferenciaDetalhes, nomeFazenda]);
 
   const calc = useMemo(() => {
     const qtd = Number(quantidade) || 0;
@@ -487,6 +510,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setCompraDialogOpen(false);
     setAbateDetalhes(null);
     setAbateDialogOpen(false);
+    setTransferenciaDetalhes(null);
+    setTransferenciaDialogOpen(false);
     resetFinancialFields();
     vendaFinanceiroRef.current?.resetForm();
     consumoFinanceiroRef.current?.resetForm();
@@ -1224,6 +1249,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           const fornNome = abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome;
           return { type: 'venda', ...vendaDetalhes, tipoPreco: vendaTipoPreco, precoInput: vendaPrecoInput, fornecedorId: vendaDestinoFornecedorId || undefined, fornecedorNome: fornNome || undefined };
         }
+        if (isTransferenciaSaida && transferenciaCalc) {
+          return {
+            type: 'transferencia_saida',
+            ...buildTransferenciaSnapshot(transferenciaCalc),
+            ...(transferenciaDetalhes ? { observacaoEconomica: transferenciaDetalhes.observacaoEconomica } : {}),
+          };
+        }
         return undefined;
       })(),
     };
@@ -1589,8 +1621,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // ===== FINANCIAL DETAILS PANEL (right column — non-abate) =====
   const renderFinancialPanel = () => {
 
-    // Transferência: no financial impact
-    if (isTransferencia) {
+    // Transferência entrada: simple info panel (no economic layer)
+    if (tipo === 'transferencia_entrada') {
       return (
         <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
            <h3 className="text-[14px] font-semibold text-foreground">Detalhes Financeiros</h3>
@@ -2456,6 +2488,42 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     submitting={false}
                   />
                 </div>
+              </>
+            ) : isTransferenciaSaida ? (
+              <>
+                <TransferenciaResumoPanel
+                  quantidade={Number(quantidade) || 0}
+                  pesoKg={Number(pesoKg) || 0}
+                  categoria={categoria}
+                  fazendaOrigem={nomeFazenda || fazendaOrigem}
+                  fazendaDestino={fazendaDestino}
+                  detalhes={transferenciaDetalhes}
+                  detalhesPreenchidos={!!transferenciaDetalhes}
+                  canOpenModal={!!(data && quantidade && Number(quantidade) > 0 && pesoKg && Number(pesoKg) > 0 && categoria && fazendaDestino)}
+                  onOpenModal={() => setTransferenciaDialogOpen(true)}
+                  onRequestRegister={handleRequestRegister}
+                  submitting={submitting}
+                  registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Transferência'}
+                  onCancelEdit={editingAbateId ? handleCancelEdit : undefined}
+                  calculation={transferenciaCalc}
+                />
+                <TransferenciaDetalhesDialog
+                  open={transferenciaDialogOpen}
+                  onClose={() => setTransferenciaDialogOpen(false)}
+                  onSave={(det) => {
+                    setTransferenciaDetalhes(det);
+                    setTransferenciaDialogOpen(false);
+                  }}
+                  initialData={transferenciaDetalhes || EMPTY_TRANSFERENCIA_DETALHES}
+                  quantidade={Number(quantidade) || 0}
+                  pesoKg={Number(pesoKg) || 0}
+                  categoria={categoria}
+                  fazendaOrigem={nomeFazenda || fazendaOrigem}
+                  fazendaDestino={fazendaDestino}
+                  data={data}
+                  statusOp={statusOp}
+                  observacao={observacao}
+                />
               </>
             ) : (
               renderFinancialPanel()
