@@ -551,7 +551,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                   </td>
                 ))}
                 <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoFin}</td>
-                {hasPastosData && (
+                {showDelta && (
                   <td className="px-1.5 py-1 text-center">
                     <Tooltip>
                       <TooltipTrigger asChild>
