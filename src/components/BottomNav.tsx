@@ -23,7 +23,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const tabs = allTabs.filter(t => canViewTab(t.id));
   const getActiveId = (tab: TabId): TabId => {
     // Lanç. Zoo sub-screens
-    const lancarZooTabs: TabId[] = ['lancar_zoo_hub', 'lancamentos', 'fechamento', 'chuvas', 'mapa_pastos', 'mapa_geo_pastos', 'resumo_pastos'];
+    const lancarZooTabs: TabId[] = ['lancar_zoo_hub', 'lancamentos', 'fechamento', 'chuvas', 'resumo_pastos'];
     // Lanç. Fin sub-screens (V2 operational)
     const lancarFinTabs: TabId[] = ['financeiro_v2_hub', 'financeiro_v2', 'fin_v2_contas', 'fin_v2_fornecedores', 'fin_v2_plano', 'fin_v2_saldos', 'contratos', 'conciliacao_bancaria'];
     // Zootécnico (analysis) sub-screens
