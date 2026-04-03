@@ -916,10 +916,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Auto-load compra for editing when navigated from another tab
   useEffect(() => {
-    if (compraParaEditar) {
+    if (compraParaEditar && abateFornecedores.length > 0) {
       loadCompraForEdit(compraParaEditar);
     }
-  }, [compraParaEditar]);
+  }, [compraParaEditar, abateFornecedores]);
 
   useEffect(() => {
     if (!clienteAtual?.id) {
