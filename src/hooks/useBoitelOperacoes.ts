@@ -247,7 +247,7 @@ export async function gerarFinanceiroBoitel(
       .eq('cliente_id', clienteId)
       .eq('ativo', true)
       .eq('tipo_operacao', '2-Saídas')
-      .ilike('subcentro', `%${custo.subcentroHint.split('/').pop()}%`)
+      .ilike('subcentro', `%${custo.subcentroHint}%`)
       .limit(1);
 
     // If no specific mapping found, use a generic custeio produtivo
