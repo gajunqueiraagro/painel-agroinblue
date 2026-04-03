@@ -287,57 +287,105 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     return CATEGORIAS;
   }, [isNascimento]);
 
+  // Import buildAbateCalculation for the abate-specific unified calc
+  const abateCalc = useMemo(() => {
+    if (!isAbate || !abateDetalhes) return null;
+    const { buildAbateCalculation } = require('@/lib/calculos/abate');
+    return buildAbateCalculation({
+      quantidade: Number(quantidade) || 0,
+      pesoKg: Number(pesoKg) || 0,
+      pesoCarcacaKg: abateDetalhes.pesoCarcacaKgManual || undefined,
+      rendCarcaca: abateDetalhes.rendCarcaca || undefined,
+      precoArroba: abateDetalhes.precoArroba || undefined,
+      funruralPct: abateDetalhes.funruralPct || undefined,
+      funruralReais: abateDetalhes.funruralReais || undefined,
+      bonusPrecoce: abateDetalhes.bonusPrecoce || undefined,
+      bonusPrecoceReais: abateDetalhes.bonusPrecoceReais || undefined,
+      bonusQualidade: abateDetalhes.bonusQualidade || undefined,
+      bonusQualidadeReais: abateDetalhes.bonusQualidadeReais || undefined,
+      bonusListaTrace: abateDetalhes.bonusListaTrace || undefined,
+      bonusListaTraceReais: abateDetalhes.bonusListaTraceReais || undefined,
+      descontoQualidade: abateDetalhes.descontoQualidade || undefined,
+      descontoQualidadeReais: abateDetalhes.descontoQualidadeReais || undefined,
+      outrosDescontos: abateDetalhes.outrosDescontos || undefined,
+      outrosDescontosArroba: abateDetalhes.outrosDescontosArroba || undefined,
+      formaReceb: abateDetalhes.formaReceb,
+      qtdParcelas: abateDetalhes.qtdParcelas || undefined,
+      parcelas: abateDetalhes.parcelas,
+    }) as import('@/lib/calculos/abate').AbateCalculation;
+  }, [isAbate, abateDetalhes, quantidade, pesoKg]);
+
   const calc = useMemo(() => {
     const qtd = Number(quantidade) || 0;
     const peso = Number(pesoKg) || 0;
-    // For abate with modal detalhes, source from abateDetalhes
-    const abRendCarcaca = isAbate && abateDetalhes ? Number(abateDetalhes.rendCarcaca) || 0 : Number(rendCarcaca) || 0;
-    const abPrecoArroba = isAbate && abateDetalhes ? Number(abateDetalhes.precoArroba) || 0 : Number(precoArroba) || 0;
-    const abBonusPrecoce = isAbate && abateDetalhes ? Number(abateDetalhes.bonusPrecoce) || 0 : Number(bonusPrecoce) || 0;
-    const abBonusQualidade = isAbate && abateDetalhes ? Number(abateDetalhes.bonusQualidade) || 0 : Number(bonusQualidade) || 0;
-    const abBonusListaTrace = isAbate && abateDetalhes ? Number(abateDetalhes.bonusListaTrace) || 0 : Number(bonusListaTrace) || 0;
-    const abDescQualidade = isAbate && abateDetalhes ? Number(abateDetalhes.descontoQualidade) || 0 : Number(descontoQualidade) || 0;
-    const abFunruralPct = isAbate && abateDetalhes ? Number(abateDetalhes.funruralPct) || 0 : Number(funruralPct) || 0;
-    const abFunruralReais = isAbate && abateDetalhes ? Number(abateDetalhes.funruralReais) || 0 : Number(funruralReais) || 0;
-    const abOutrosDescontos = isAbate && abateDetalhes ? Number(abateDetalhes.outrosDescontos) || 0 : Number(outrosDescontos) || 0;
+
+    // For abate, use the official abateCalc
+    if (isAbate && abateCalc) {
+      return {
+        pesoArroba: abateCalc.pesoArrobaCab,
+        totalArrobas: abateCalc.totalArrobas,
+        totalKg: abateCalc.totalKg,
+        valorBruto: abateCalc.valorBase,
+        totalBonus: abateCalc.totalBonus,
+        totalDescontos: abateCalc.funruralTotal + abateCalc.totalDescontos,
+        comissaoVal: 0, freteVal: 0, outrasDespVal: 0,
+        valorLiquido: abateCalc.valorLiquido,
+        liqArroba: abateCalc.liqArroba,
+        liqCabeca: abateCalc.liqCabeca,
+        liqKg: abateCalc.liqKg,
+        carcacaCalc: abateCalc.carcacaCalc,
+        bonusPrecoceTotal: abateCalc.bonusPrecoceTotal,
+        bonusQualidadeTotal: abateCalc.bonusQualidadeTotal,
+        bonusListaTraceTotal: abateCalc.bonusListaTraceTotal,
+        descQualidadeTotal: abateCalc.descQualidadeTotal,
+        descFunruralTotal: abateCalc.funruralTotal,
+        descOutrosTotal: abateCalc.descOutrosTotal,
+      };
+    }
+
+    // Non-abate path (unchanged)
+    const abRendCarcaca = Number(rendCarcaca) || 0;
+    const abPrecoArroba = Number(precoArroba) || 0;
+    const abBonusPrecoce = Number(bonusPrecoce) || 0;
+    const abBonusQualidade = Number(bonusQualidade) || 0;
+    const abBonusListaTrace = Number(bonusListaTrace) || 0;
+    const abDescQualidade = Number(descontoQualidade) || 0;
+    const abFunruralPct = Number(funruralPct) || 0;
+    const abFunruralReais = Number(funruralReais) || 0;
+    const abOutrosDescontos = Number(outrosDescontos) || 0;
 
     // For venda with modal detalhes (normal venda only), source from vendaDetalhes
     const isVendaNormal = isVenda && vendaDetalhes && (vendaDetalhes.tipoVenda === 'desmama' || vendaDetalhes.tipoVenda === 'gado_adulto');
 
     const rend = abRendCarcaca;
-    const carcacaCalc = isAbate && rend > 0 ? peso * rend / 100 : Number(pesoCarcacaKg) || 0;
-    let pesoArroba = 0;
-    if (isAbate) { pesoArroba = carcacaCalc > 0 ? carcacaCalc / 15 : 0; }
-    else { pesoArroba = peso > 0 ? peso / 30 : 0; }
+    const carcacaCalc = rend > 0 ? peso * rend / 100 : Number(pesoCarcacaKg) || 0;
+    let pesoArroba = peso > 0 ? peso / 30 : 0;
     const totalArrobas = pesoArroba * qtd;
     const totalKg = peso * qtd;
     let valorBruto = 0;
-    if (usaPrecoArroba) { valorBruto = totalArrobas * abPrecoArroba; }
-    else if (isVenda) {
+    if (isVenda) {
       const vi = Number(vendaPrecoInput) || 0;
       if (vendaTipoPreco === 'por_kg') { valorBruto = totalKg * vi; }
       else if (vendaTipoPreco === 'por_cab') { valorBruto = qtd * vi; }
       else if (vendaTipoPreco === 'por_total') { valorBruto = vi; }
     }
     else if (usaPrecoKg) { valorBruto = totalKg * (Number(precoKg) || 0); }
-    const bonusPrecoceTotal = isAbate ? abBonusPrecoce * totalArrobas : 0;
-    const bonusQualidadeTotal = isAbate ? abBonusQualidade * totalArrobas : 0;
-    const bonusListaTraceTotal = isAbate ? abBonusListaTrace * totalArrobas : 0;
-    const descQualidadeTotal = isAbate ? abDescQualidade * totalArrobas : (Number(descontoQualidade) || 0);
+    const bonusPrecoceTotal = 0;
+    const bonusQualidadeTotal = 0;
+    const bonusListaTraceTotal = 0;
+    const descQualidadeTotal = Number(descontoQualidade) || 0;
     const funruralReaisVal = abFunruralReais;
-    const descFunruralTotal = (isAbate || isVenda)
+    const descFunruralTotal = isVenda
       ? (funruralReaisVal > 0 ? funruralReaisVal : valorBruto * abFunruralPct / 100)
       : 0;
-    const descOutrosTotal = (isAbate || isVenda) ? abOutrosDescontos : 0;
-    const totalBonus = isAbate
-      ? bonusPrecoceTotal + bonusQualidadeTotal + bonusListaTraceTotal
-      : (Number(bonus) || 0);
-    const totalDescontos = (isAbate || isVenda)
+    const descOutrosTotal = isVenda ? abOutrosDescontos : 0;
+    const totalBonus = Number(bonus) || 0;
+    const totalDescontos = isVenda
       ? descQualidadeTotal + descFunruralTotal + descOutrosTotal
       : (Number(descontos) || 0);
-    const comissaoVal = isAbate ? 0 : valorBruto * (Number(comissaoPct) || 0) / 100;
-    const freteVal = isAbate ? 0 : Number(frete) || 0;
-    const outrasDespVal = isAbate ? 0 : Number(outrasDespesas) || 0;
+    const comissaoVal = valorBruto * (Number(comissaoPct) || 0) / 100;
+    const freteVal = Number(frete) || 0;
+    const outrasDespVal = Number(outrasDespesas) || 0;
     const valorLiquido = valorBruto + totalBonus - totalDescontos - comissaoVal - freteVal - outrasDespVal;
     const liqArroba = totalArrobas > 0 ? valorLiquido / totalArrobas : 0;
     const liqCabeca = qtd > 0 ? valorLiquido / qtd : 0;
@@ -348,7 +396,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       carcacaCalc, bonusPrecoceTotal, bonusQualidadeTotal, bonusListaTraceTotal,
       descQualidadeTotal, descFunruralTotal, descOutrosTotal,
     };
-  }, [quantidade, pesoKg, pesoCarcacaKg, rendCarcaca, precoArroba, precoKg, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, funruralPct, funruralReais, outrosDescontos, bonus, descontos, comissaoPct, frete, outrasDespesas, isAbate, isVenda, usaPrecoArroba, usaPrecoKg, vendaTipoPreco, vendaPrecoInput, vendaDetalhes, abateDetalhes]);
+  }, [quantidade, pesoKg, pesoCarcacaKg, rendCarcaca, precoArroba, precoKg, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, funruralPct, funruralReais, outrosDescontos, bonus, descontos, comissaoPct, frete, outrasDespesas, isAbate, isVenda, usaPrecoArroba, usaPrecoKg, vendaTipoPreco, vendaPrecoInput, vendaDetalhes, abateDetalhes, abateCalc]);
 
   const gerarParcelas = useCallback((numParcelas: number, baseDate: string, valorTotal: number) => {
     const p: Parcela[] = [];
