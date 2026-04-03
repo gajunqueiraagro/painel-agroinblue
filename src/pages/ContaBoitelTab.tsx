@@ -141,7 +141,7 @@ export function ContaBoitelTab({ onBack }: Props) {
     const { data } = await supabase
       .from('financeiro_lancamentos_v2')
       .select('id, data_competencia, data_pagamento, descricao, valor, sinal, tipo_operacao, origem_tipo, status_transacao, cancelado, grupo_geracao_id, created_at, historico, macro_custo, centro_custo, subcentro')
-      .eq('boitel_id', boitelId)
+      .eq('boitel_lote_id', boitelId)
       .eq('cancelado', false)
       .order('data_pagamento', { ascending: true });
     setLancamentos((data as any[]) || []);
