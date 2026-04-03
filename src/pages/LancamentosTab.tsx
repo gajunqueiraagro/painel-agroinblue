@@ -1824,7 +1824,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   onRequestRegister={handleRequestRegister}
                   submitting={submitting}
                   registerLabel={editingAbateId ? 'Salvar Alterações do Abate' : 'Registrar Abate'}
-                />
+                  onCancelEdit={editingAbateId ? handleCancelEdit : undefined}
                 <AbateDetalhesDialog
                   open={abateDialogOpen}
                   onClose={() => setAbateDialogOpen(false)}
