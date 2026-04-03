@@ -607,8 +607,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
 
     // 4. Check for snapshot first (PRIORITY 1)
-    const snap = l.detalhesSnapshot;
-    if (snap && snap.type === 'venda') {
+    const vendaSnap = l.detalhesSnapshot;
+    if (vendaSnap && vendaSnap.type === 'venda') {
+      const tv = vendaSnap.tipoVenda || 'gado_adulto';
       const tv = snap.tipoVenda || 'gado_adulto';
       setTipoPeso(tv);
 
