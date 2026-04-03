@@ -281,6 +281,7 @@ const Index = () => {
     fin_v2_saldos: () => setActiveTab('financeiro_v2_hub'),
     contratos: () => setActiveTab('financeiro_v2_hub'),
     conciliacao_bancaria: () => setActiveTab('financeiro_v2_hub'),
+    conta_boitel: () => setActiveTab('financeiro_v2_hub'),
     // Zootécnico (analysis) sub-screens
     zootecnico: goToVisaoZooHub,
     indicadores: goToVisaoZooHub,
