@@ -44,6 +44,15 @@ export interface BoitelData {
   formaReceb: 'avista' | 'prazo';
   qtdParcelas: number;
   parcelas: Parcela[];
+  // Adiantamento
+  possuiAdiantamento: boolean;
+  dataAdiantamento: string;
+  pctAdiantamentoDiarias: number;
+  valorAdiantamentoDiarias: number;
+  valorAdiantamentoSanitario: number;
+  valorAdiantamentoOutros: number;
+  valorTotalAntecipado: number;
+  adiantamentoObservacao: string;
   // Snapshots
   _faturamentoBruto?: number;
   _faturamentoLiquido?: number;
