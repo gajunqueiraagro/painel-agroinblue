@@ -1393,18 +1393,40 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (isAbate) {
       const forn = abateFornecedores.find(f => f.id === abateFornecedorId);
       result.fornecedorOuFrigorifico = forn?.nome || '';
-      result.comercializacao = tipoVenda;
-      result.tipoAbate = tipoPeso;
-      result.rendCarcaca = Number(rendCarcaca) || 0;
-      result.totalArrobas = calc.totalArrobas;
-      result.precoBase = Number(precoArroba) || 0;
-      result.precoBaseLabel = 'R$/@';
-      result.totalBruto = calc.valorBruto;
-      result.totalBonus = calc.totalBonus;
-      result.totalDescontos = calc.totalDescontos;
-      result.valorLiquido = calc.valorLiquido;
-      result.dataVenda = dataVenda || format(new Date(), 'yyyy-MM-dd');
-      if (formaPagamento === 'parcelado' && parcelas.length > 0) {
+      result.comercializacao = abateDetalhes?.tipoVenda || tipoVenda;
+      result.tipoAbate = abateDetalhes?.tipoPeso || tipoPeso;
+      // Use official abateCalc — single source of truth
+      const ac = abateCalc;
+      if (ac) {
+        result.rendCarcaca = ac.rendCalc;
+        result.totalArrobas = ac.totalArrobas;
+        result.precoBase = ac.precoArroba;
+        result.precoBaseLabel = 'R$/@';
+        result.totalBruto = ac.valorBruto;
+        result.totalBonus = ac.totalBonus;
+        result.totalDescontos = ac.totalDescontos;
+        result.valorLiquido = ac.valorLiquido;
+        result.funruralTotal = ac.funruralTotal;
+        result.valorBase = ac.valorBase;
+        result.liqArroba = ac.liqArroba;
+        result.liqCabeca = ac.liqCabeca;
+        result.liqKg = ac.liqKg;
+      } else {
+        result.rendCarcaca = Number(rendCarcaca) || 0;
+        result.totalArrobas = calc.totalArrobas;
+        result.precoBase = Number(precoArroba) || 0;
+        result.precoBaseLabel = 'R$/@';
+        result.totalBruto = calc.valorBruto;
+        result.totalBonus = calc.totalBonus;
+        result.totalDescontos = calc.totalDescontos;
+        result.valorLiquido = calc.valorLiquido;
+      }
+      result.dataVenda = abateDetalhes?.dataVenda || dataVenda || format(new Date(), 'yyyy-MM-dd');
+      // Use parcelas from abateDetalhes (official source)
+      if (abateDetalhes?.formaReceb === 'prazo' && abateDetalhes.parcelas.length > 0) {
+        result.formaPagamento = `A prazo (${abateDetalhes.parcelas.length}x)`;
+        result.parcelas = abateDetalhes.parcelas;
+      } else if (formaPagamento === 'parcelado' && parcelas.length > 0) {
         result.formaPagamento = `A prazo (${parcelas.length}x)`;
         result.parcelas = parcelas;
       } else {
