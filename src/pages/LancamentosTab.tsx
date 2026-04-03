@@ -1207,7 +1207,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('conciliado');
           resetFinancialFields();
           toast.success('Venda atualizada com financeiro!');
-          onReturnFromEdit?.();
+          restoreEditOrigin();
         } else if (isCompra && compraDetalhes && fazendaAtual && clienteAtual) {
           // Re-generate financeiro for compra edit
           await gerarFinanceiroCompra({
