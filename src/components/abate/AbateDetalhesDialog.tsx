@@ -159,66 +159,52 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
   // Peso carcaça kg state for bidirectional
   const [pesoCarcacaKg, setPesoCarcacaKg] = useState('');
 
-  // Core calculations
+  // Core calculations — single source of truth via buildAbateCalculation
   const calc = useMemo(() => {
-    const rend = Number(rendCarcaca) || 0;
-    const pcKgManual = Number(pesoCarcacaKg) || 0;
-    const carcacaCalc = pcKgManual > 0 ? pcKgManual : (rend > 0 ? peso * rend / 100 : 0);
-    const rendCalc = pcKgManual > 0 && peso > 0 ? (pcKgManual / peso) * 100 : rend;
-    const pesoArrobaCab = carcacaCalc > 0 ? carcacaCalc / 15 : 0;
-    const totalArrobas = pesoArrobaCab * qtd;
-    const totalKg = peso * qtd;
-    const preco = Number(precoArroba) || 0;
-    const valorBase = totalArrobas * preco;
+    return buildAbateCalculation({
+      quantidade: qtd,
+      pesoKg: peso,
+      pesoCarcacaKg: pesoCarcacaKg || undefined,
+      rendCarcaca: rendCarcaca || undefined,
+      precoArroba: precoArroba || undefined,
+      funruralPct: funruralPct || undefined,
+      funruralReais: funruralReais || undefined,
+      bonusPrecoce: bonusPrecoce || undefined,
+      bonusPrecoceReais: bonusPrecoceReais || undefined,
+      bonusQualidade: bonusQualidade || undefined,
+      bonusQualidadeReais: bonusQualidadeReais || undefined,
+      bonusListaTrace: bonusListaTrace || undefined,
+      bonusListaTraceReais: bonusListaTraceReais || undefined,
+      descontoQualidade: descontoQualidade || undefined,
+      descontoQualidadeReais: descontoQualidadeReais || undefined,
+      outrosDescontos: outrosDescontos || undefined,
+      outrosDescontosArroba: outrosDescontosArroba || undefined,
+      formaReceb,
+      qtdParcelas: qtdParcelas || undefined,
+      parcelas,
+    });
+  }, [peso, qtd, rendCarcaca, pesoCarcacaKg, precoArroba, bonusPrecoce, bonusPrecoceReais, bonusQualidade, bonusQualidadeReais, bonusListaTrace, bonusListaTraceReais, descontoQualidade, descontoQualidadeReais, outrosDescontos, outrosDescontosArroba, funruralPct, funruralReais, formaReceb, qtdParcelas, parcelas]);
 
-    // Funrural (sobre Valor Base)
-    const funruralReaisVal = Number(funruralReais) || 0;
-    const funruralPctVal = Number(funruralPct) || 0;
-    const funruralTotal = funruralReaisVal > 0 ? funruralReaisVal : valorBase * funruralPctVal / 100;
-
-    // Valor Bruto = Valor Base - Funrural
-    const valorBruto = valorBase - funruralTotal;
-
-    // Bônus
-    const bPrecoceArr = Number(bonusPrecoce) || 0;
-    const bPrecoceR = Number(bonusPrecoceReais) || 0;
-    const bonusPrecoceTotal = bPrecoceArr > 0 ? bPrecoceArr * totalArrobas : bPrecoceR;
-
-    const bQualArr = Number(bonusQualidade) || 0;
-    const bQualR = Number(bonusQualidadeReais) || 0;
-    const bonusQualidadeTotal = bQualArr > 0 ? bQualArr * totalArrobas : bQualR;
-
-    const bTraceArr = Number(bonusListaTrace) || 0;
-    const bTraceR = Number(bonusListaTraceReais) || 0;
-    const bonusListaTraceTotal = bTraceArr > 0 ? bTraceArr * totalArrobas : bTraceR;
-
-    const totalBonus = bonusPrecoceTotal + bonusQualidadeTotal + bonusListaTraceTotal;
-
-    // Descontos
-    const dQualArr = Number(descontoQualidade) || 0;
-    const dQualR = Number(descontoQualidadeReais) || 0;
-    const descQualidadeTotal = dQualArr > 0 ? dQualArr * totalArrobas : dQualR;
-
-    const dOutrosArr = Number(outrosDescontosArroba) || 0;
-    const dOutrosR = Number(outrosDescontos) || 0;
-    const descOutrosTotal = dOutrosArr > 0 ? dOutrosArr * totalArrobas : dOutrosR;
-
-    const totalDescontos = descQualidadeTotal + descOutrosTotal;
-
-    // Valor Líquido = Valor Bruto + Bônus - Descontos
-    const valorLiquido = valorBruto + totalBonus - totalDescontos;
-    const liqArroba = totalArrobas > 0 ? valorLiquido / totalArrobas : 0;
-    const liqCabeca = qtd > 0 ? valorLiquido / qtd : 0;
-    const liqKg = totalKg > 0 ? valorLiquido / totalKg : 0;
-
-    return {
-      carcacaCalc, rendCalc, pesoArrobaCab, totalArrobas, totalKg, valorBase,
-      funruralTotal, valorBruto,
-      bonusPrecoceTotal, bonusQualidadeTotal, bonusListaTraceTotal, totalBonus,
-      descQualidadeTotal, descOutrosTotal, totalDescontos,
-      valorLiquido, liqArroba, liqCabeca, liqKg,
-    };
-  }, [peso, qtd, rendCarcaca, pesoCarcacaKg, precoArroba, bonusPrecoce, bonusPrecoceReais, bonusQualidade, bonusQualidadeReais, bonusListaTrace, bonusListaTraceReais, descontoQualidade, descontoQualidadeReais, outrosDescontos, outrosDescontosArroba, funruralPct, funruralReais]);
+  // Auto-sync parcelas when valor líquido changes and formaReceb === 'prazo'
+  const prevValorLiquido = useRef(calc.valorLiquido);
+  useEffect(() => {
+    if (formaReceb === 'prazo' && calc.valorLiquido > 0 && calc.valorLiquido !== prevValorLiquido.current) {
+      const n = Math.max(1, Number(qtdParcelas) || 1);
+      setParcelas(current => {
+        const newParcelas = current.map((p, i) => {
+          const parcelaVal = Math.round((calc.valorLiquido / n) * 100) / 100;
+          return { data: p.data, valor: parcelaVal };
+        });
+        // Adjust last parcela for rounding
+        if (newParcelas.length > 0) {
+          const sumOthers = newParcelas.slice(0, -1).reduce((s, p) => s + p.valor, 0);
+          newParcelas[newParcelas.length - 1].valor = Math.round((calc.valorLiquido - sumOthers) * 100) / 100;
+        }
+        return newParcelas;
+      });
+    }
+    prevValorLiquido.current = calc.valorLiquido;
+  }, [calc.valorLiquido, formaReceb, qtdParcelas]);
 
   // Auto-compute dates
   const dataVendaAuto = dataVenda || format(new Date(), 'yyyy-MM-dd');
