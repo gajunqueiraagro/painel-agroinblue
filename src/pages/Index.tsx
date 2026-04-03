@@ -424,6 +424,7 @@ const Index = () => {
           onBack={movBackTab ? () => setActiveTab(movBackTab) : undefined}
           onEditarAbate={(l) => { setAbateParaEditar(l); setActiveTab('lancamentos'); }}
           onEditarVenda={(l) => { setVendaParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarCompra={(l) => { setCompraParaEditar(l); setActiveTab('lancamentos'); }}
         />
       )}
       {activeTab === 'acessos' && <AcessosTab />}
