@@ -104,8 +104,12 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       // Redirect venda to the full form in LancamentosTab
       onClose();
       onEditarVenda(lancamento);
+    } else if (isCompra && onEditarCompra) {
+      // Redirect compra to the full form in LancamentosTab
+      onClose();
+      onEditarCompra(lancamento);
     } else if (isCompra) {
-      // Open unified purchase edit sheet
+      // Fallback: Open unified purchase edit sheet
       setCompraForm({ ...lancamento });
       setCompraZooSaved(false);
       setNotaFiscalEdit(lancamento.notaFiscal || '');
