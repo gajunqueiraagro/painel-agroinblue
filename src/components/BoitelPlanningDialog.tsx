@@ -263,8 +263,8 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
               <Separator className="!my-0.5" />
               <ST>Comercialização</ST>
               <div className="grid grid-cols-2 gap-1">
-                <F label="Preço venda R$/@"><I type="number" value={data.precoVendaArroba || ''} onChange={e => set('precoVendaArroba', +e.target.value || 0)} step="0.01" /></F>
-                <F label="Despesas com abate R$"><I type="number" value={data.despesasAbate || ''} onChange={e => set('despesasAbate', +e.target.value || 0)} /></F>
+                <F label="Preço venda R$/@"><IM value={data.precoVendaArroba} onChange={v => set('precoVendaArroba', v)} step="0.01" /></F>
+                <F label="Despesas com abate R$"><IM value={data.despesasAbate} onChange={v => set('despesasAbate', v)} /></F>
               </div>
             </div>
 
