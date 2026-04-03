@@ -566,6 +566,9 @@ const Index = () => {
         />
       )}
       {activeTab === 'auditoria' && <AuditoriaTab />}
+      {activeTab === 'conta_boitel' && (
+        <ContaBoitelTab onBack={() => setActiveTab('financeiro_v2_hub')} />
+      )}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
