@@ -376,10 +376,10 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
 function HI({ l, v }: { l: string; v: string }) {
   return <div className="flex gap-1.5"><span className="text-slate-400">{l}</span><strong className="tabular-nums text-white">{v}</strong></div>;
 }
-function ST({ children }: { children: React.ReactNode }) { return <h3 className="text-[9px] font-bold uppercase text-slate-700 dark:text-slate-300 tracking-wide border-b border-slate-300 dark:border-slate-600 pb-0.5">{children}</h3>; }
-function F({ label, children }: { label: string; children: React.ReactNode }) { return <div><Label className="text-[7px] leading-none text-muted-foreground">{label}</Label>{children}</div>; }
-function I(props: React.ComponentProps<typeof Input>) { return <Input {...props} className={`h-5 text-[9px] tabular-nums text-right bg-background ${props.className || ''}`} />; }
-function CV({ children }: { children: React.ReactNode }) { return <div className="h-5 flex items-center px-1.5 rounded bg-muted/50 border text-[9px] font-medium tabular-nums">{children}</div>; }
+function ST({ children }: { children: React.ReactNode }) { return <h3 className="text-[9px] font-bold uppercase text-slate-800 dark:text-slate-200 tracking-wide border-b border-slate-400 dark:border-slate-500 pb-0.5">{children}</h3>; }
+function F({ label, children }: { label: string; children: React.ReactNode }) { return <div><Label className="text-[7px] leading-none font-semibold text-foreground/70">{label}</Label>{children}</div>; }
+function I(props: React.ComponentProps<typeof Input>) { return <Input {...props} className={`h-5 text-[9px] tabular-nums text-right bg-background border-border shadow-sm ${props.className || ''}`} />; }
+function CV({ children }: { children: React.ReactNode }) { return <div className="h-5 flex items-center px-1.5 rounded bg-muted/60 border border-border text-[9px] font-semibold tabular-nums text-foreground">{children}</div>; }
 function TB({ a, o, children, full }: { a: boolean; o: () => void; children: React.ReactNode; full?: boolean }) {
   return <button type="button" onClick={o} className={`h-5 px-2 rounded text-[8px] font-bold border transition-all ${full ? 'w-full' : ''} ${a ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}>{children}</button>;
 }
