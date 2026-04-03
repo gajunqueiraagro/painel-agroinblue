@@ -1882,6 +1882,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onRemover={onRemover}
           onCountFinanceiros={onCountFinanceiros}
           onEditarAbate={loadAbateForEdit}
+          onEditarVenda={loadVendaForEdit}
         />
       )}
 
