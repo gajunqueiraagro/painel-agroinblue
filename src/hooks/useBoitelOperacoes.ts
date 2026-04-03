@@ -197,9 +197,11 @@ export async function gerarFinanceiroBoitel(
     .in('subcentro', subcentroCandidates);
 
   if (!planoReceita || planoReceita.length === 0) {
+    console.error('[Boitel Financeiro] Mapeamento de receita não encontrado.', { clienteId, subcentroCandidates });
     toast.error(`Mapeamento financeiro não encontrado para receita de Boitel. Subcentros buscados: ${subcentroCandidates.join(', ')}. Cadastre no Plano de Contas.`);
     return false;
   }
+  console.log('[Boitel Financeiro] Receita mapeada:', { subcentro: planoReceita[0].subcentro, macro: planoReceita[0].macro_custo, centro: planoReceita[0].centro_custo });
 
   const clasReceita = planoReceita[0];
   const inserts: any[] = [];
