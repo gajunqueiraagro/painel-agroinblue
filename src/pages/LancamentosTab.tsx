@@ -1282,9 +1282,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const abNotaFiscal = isAbate && abateDetalhes ? abateDetalhes.notaFiscal : notaFiscal;
 
     // For venda: save precoInput to precoArroba, tipoPreco to tipoPeso, tipoVenda to tipoVenda
-    const vendaPrecoArrobaFinal = isVenda && vendaDetalhes
-      ? (Number(vendaPrecoInput) || undefined)
-      : (isAbate && abateDetalhes ? (Number(abateDetalhes.precoArroba) || undefined) : (numOrUndef(precoArroba) || undefined));
+    const vendaPrecoArrobaFinal = isBoitelVenda && boitelDataForResumo
+      ? (boitelDataForResumo.precoVendaArroba || undefined)
+      : isVenda && vendaDetalhes
+        ? (Number(vendaPrecoInput) || undefined)
+        : (isAbate && abateDetalhes ? (Number(abateDetalhes.precoArroba) || undefined) : (numOrUndef(precoArroba) || undefined));
     const tipoPesoFinal = isVenda ? vendaTipoPreco : abTipoPeso;
     const tipoVendaFinal = isVenda ? tipoPeso : abTipoVenda; // tipoPeso state holds desmama/gado_adulto/boitel for venda
 
