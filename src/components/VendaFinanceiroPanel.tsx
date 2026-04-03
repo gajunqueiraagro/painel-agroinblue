@@ -346,37 +346,44 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
     // ── BOITEL FLOW ──
     if (tipoPeso === 'boitel') {
       if (!boitelData) {
-        console.error('[Venda Financeiro] BOITEL selecionado mas boitelData está vazio — o dialog do Boitel precisa ser preenchido primeiro.');
+        console.error('[Venda Financeiro] BOITEL selecionado mas boitelData está vazio');
         toast.error('Preencha os dados do Boitel antes de registrar.');
         return false;
       }
       console.log('[Venda Financeiro] Entrando no fluxo BOITEL', { receitaProdutor: boitelData._receitaProdutor, lucroTotal: boitelData._lucroTotal });
       setGerando(true);
       try {
-        // Resolve existing boitel_id: from state, or from lancamento in DB
-        let resolvedBoitelId = boitelData._boitelId;
-        if (!resolvedBoitelId && targetLancamentoId) {
+        // Resolve existing boitel_lote_id
+        let resolvedLoteId = boitelData._boitelId;
+        if (!resolvedLoteId && targetLancamentoId) {
           const { data: lancDb } = await supabase
             .from('lancamentos')
-            .select('boitel_id')
+            .select('boitel_lote_id')
             .eq('id', targetLancamentoId)
             .single();
-          if (lancDb?.boitel_id) {
-            resolvedBoitelId = lancDb.boitel_id as string;
-            console.log('[Boitel] Resolved existing boitel_id from lancamento:', resolvedBoitelId);
+          if (lancDb?.boitel_lote_id) {
+            resolvedLoteId = lancDb.boitel_lote_id as string;
+            console.log('[Boitel] Resolved existing boitel_lote_id from lancamento:', resolvedLoteId);
           }
         }
 
-        const boitelOp = {
-          id: resolvedBoitelId,
+        // 1. Save/update lote
+        const loteId = await salvarBoitelLote({
+          id: resolvedLoteId || undefined,
           cliente_id: clienteAtual.id,
-          fazenda_origem_id: fazendaAtual.id,
-          fazenda_destino_nome: boitelData.nomeBoitel || '',
-          lote: boitelData.lote || '',
-          numero_contrato: boitelData.numeroContrato || '',
+          fazenda_id: fazendaAtual.id,
+          lote_codigo: boitelData.lote || '',
           data_envio: boitelData.dataEnvio || data,
-          quantidade: boitelData.qtdCabecas,
-          peso_inicial_kg: boitelData.pesoInicial,
+          boitel_destino: boitelData.nomeBoitel || '',
+          contrato_baia: boitelData.numeroContrato || '',
+          quantidade_cab: boitelData.qtdCabecas,
+          peso_saida_fazenda_kg: boitelData.pesoInicial,
+        });
+        if (!loteId) { setGerando(false); return false; }
+
+        // 2. Save/update planejamento (auto-creates history on update)
+        const planOk = await salvarBoitelPlanejamento({
+          boitel_lote_id: loteId,
           modalidade: boitelData.modalidadeCusto,
           dias: boitelData.dias,
           gmd: boitelData.gmd,
@@ -405,15 +412,14 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           valor_adiantamento_outros: boitelData.valorAdiantamentoOutros || 0,
           valor_total_antecipado: boitelData.valorTotalAntecipado || 0,
           adiantamento_observacao: boitelData.adiantamentoObservacao || null,
-        };
+        });
+        if (!planOk) { setGerando(false); return false; }
 
-        const boitelId = await salvarBoitelOperacao(boitelOp);
-        if (!boitelId) { setGerando(false); return false; }
+        // 3. Link to lancamento
+        await vincularBoitelAoLancamento(targetLancamentoId, loteId);
+        setBoitelData(prev => prev ? { ...prev, _boitelId: loteId } : prev);
 
-        await vincularBoitelAoLancamento(targetLancamentoId, boitelId);
-        setBoitelData(prev => prev ? { ...prev, _boitelId: boitelId } : prev);
-
-        // Data financeira = data de abate (dataEnvio + dias) se disponível, senão data do lançamento
+        // Data financeira = data de abate (dataEnvio + dias)
         let dataFinanceira = data;
         if (boitelData.dataEnvio && boitelData.dias > 0) {
           try {
@@ -421,9 +427,38 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           } catch { /* keep data */ }
         }
 
+        // 4. Generate financial records
         const isUpdate = mode === 'update' || existingCount > 0;
+        const plan = {
+          boitel_lote_id: loteId,
+          modalidade: boitelData.modalidadeCusto as 'diaria' | 'arroba' | 'parceria',
+          dias: boitelData.dias, gmd: boitelData.gmd,
+          rendimento_entrada: boitelData.rendimentoEntrada, rendimento_saida: boitelData.rendimento,
+          custo_diaria: boitelData.custoDiaria, custo_arroba: boitelData.custoArroba,
+          percentual_parceria: boitelData.percentualParceria, custos_extras_parceria: boitelData.custosExtrasParceria,
+          custo_nutricao: boitelData.custoNutricao, custo_sanidade: boitelData.custoSanidade,
+          custo_frete: boitelData.custoFrete, outros_custos: boitelData.outrosCustos,
+          despesas_abate: boitelData.despesasAbate, preco_venda_arroba: boitelData.precoVendaArroba,
+          faturamento_bruto: boitelData._faturamentoBruto || 0, faturamento_liquido: boitelData._faturamentoLiquido || 0,
+          receita_produtor: boitelData._receitaProdutor || 0, custo_total: boitelData._custoTotal || 0,
+          lucro_total: boitelData._lucroTotal || 0,
+          possui_adiantamento: boitelData.possuiAdiantamento || false,
+          data_adiantamento: boitelData.dataAdiantamento || null,
+          pct_adiantamento_diarias: boitelData.pctAdiantamentoDiarias || 0,
+          valor_adiantamento_diarias: boitelData.valorAdiantamentoDiarias || 0,
+          valor_adiantamento_sanitario: boitelData.valorAdiantamentoSanitario || 0,
+          valor_adiantamento_outros: boitelData.valorAdiantamentoOutros || 0,
+          valor_total_antecipado: boitelData.valorTotalAntecipado || 0,
+          adiantamento_observacao: boitelData.adiantamentoObservacao || null,
+        };
+        const lote = {
+          id: loteId, cliente_id: clienteAtual.id, fazenda_id: fazendaAtual.id,
+          lote_codigo: boitelData.lote || '', data_envio: boitelData.dataEnvio || data,
+          boitel_destino: boitelData.nomeBoitel || '', contrato_baia: boitelData.numeroContrato || '',
+          quantidade_cab: boitelData.qtdCabecas, peso_saida_fazenda_kg: boitelData.pesoInicial,
+        };
         const ok = await gerarFinanceiroBoitel(
-          { ...boitelOp, id: boitelId },
+          loteId, plan, lote,
           targetLancamentoId,
           clienteAtual.id,
           fazendaAtual.id,
