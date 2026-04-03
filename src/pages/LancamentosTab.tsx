@@ -510,6 +510,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setCompraDialogOpen(false);
     setAbateDetalhes(null);
     setAbateDialogOpen(false);
+    setTransferenciaDetalhes(null);
+    setTransferenciaDialogOpen(false);
     resetFinancialFields();
     vendaFinanceiroRef.current?.resetForm();
     consumoFinanceiroRef.current?.resetForm();
