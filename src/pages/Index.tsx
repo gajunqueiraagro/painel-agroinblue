@@ -204,6 +204,9 @@ const Index = () => {
       setLancamentosFromEvolCategoria(false);
       setLancamentosFromFluxoAnual(false);
       setAbateParaEditar(null);
+      setVendaParaEditar(null);
+      setCompraParaEditar(null);
+      setEditOriginTab(null);
     }
     if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
     setActiveTab(tab);
