@@ -527,10 +527,29 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       });
     }
 
-    // Fornecedor
-    if (l.fazendaDestino) {
+    // Fornecedor: priority 1 = snapshot fornecedorId, 2 = name match, 3 = financeiro favorecido_id
+    const snapFornId = snap?.fornecedorId;
+    if (snapFornId && abateFornecedores.some(f => f.id === snapFornId)) {
+      setAbateFornecedorId(snapFornId);
+    } else if (l.fazendaDestino) {
       const forn = abateFornecedores.find(f => f.nome === l.fazendaDestino);
-      if (forn) setAbateFornecedorId(forn.id);
+      if (forn) {
+        setAbateFornecedorId(forn.id);
+      } else {
+        // Fallback: try to find from linked financeiro records
+        supabase.from('financeiro_lancamentos_v2').select('favorecido_id').eq('movimentacao_rebanho_id', l.id).not('favorecido_id', 'is', null).limit(1).then(({ data: finRecs }) => {
+          if (finRecs?.[0]?.favorecido_id && abateFornecedores.some(f => f.id === finRecs[0].favorecido_id)) {
+            setAbateFornecedorId(finRecs[0].favorecido_id);
+          }
+        });
+      }
+    } else {
+      // No destino name – try financeiro fallback
+      supabase.from('financeiro_lancamentos_v2').select('favorecido_id').eq('movimentacao_rebanho_id', l.id).not('favorecido_id', 'is', null).limit(1).then(({ data: finRecs }) => {
+        if (finRecs?.[0]?.favorecido_id && abateFornecedores.some(f => f.id === finRecs[0].favorecido_id)) {
+          setAbateFornecedorId(finRecs[0].favorecido_id);
+        }
+      });
     }
 
     // 8. Set editing mode
@@ -563,31 +582,49 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setStatusOp((l.statusOperacional as StatusOperacional) || 'conciliado');
     setNotaFiscal(l.notaFiscal || '');
 
-    // 3. Fornecedor
-    if (l.fazendaDestino) {
+    // 3. Fornecedor: priority 1 = snapshot, 2 = name match, 3 = financeiro
+    const snap = l.detalhesSnapshot;
+    const snapVendaFornId = snap?.type === 'venda' ? snap.fornecedorId : undefined;
+    if (snapVendaFornId && abateFornecedores.some(f => f.id === snapVendaFornId)) {
+      setVendaDestinoFornecedorId(snapVendaFornId);
+    } else if (l.fazendaDestino) {
       const forn = abateFornecedores.find(f => f.nome === l.fazendaDestino);
-      if (forn) setVendaDestinoFornecedorId(forn.id);
+      if (forn) {
+        setVendaDestinoFornecedorId(forn.id);
+      } else {
+        supabase.from('financeiro_lancamentos_v2').select('favorecido_id').eq('movimentacao_rebanho_id', l.id).not('favorecido_id', 'is', null).limit(1).then(({ data: finRecs }) => {
+          if (finRecs?.[0]?.favorecido_id && abateFornecedores.some(f => f.id === finRecs[0].favorecido_id)) {
+            setVendaDestinoFornecedorId(finRecs[0].favorecido_id);
+          }
+        });
+      }
+    } else {
+      supabase.from('financeiro_lancamentos_v2').select('favorecido_id').eq('movimentacao_rebanho_id', l.id).not('favorecido_id', 'is', null).limit(1).then(({ data: finRecs }) => {
+        if (finRecs?.[0]?.favorecido_id && abateFornecedores.some(f => f.id === finRecs[0].favorecido_id)) {
+          setVendaDestinoFornecedorId(finRecs[0].favorecido_id);
+        }
+      });
     }
 
     // 4. Check for snapshot first (PRIORITY 1)
-    const snap = l.detalhesSnapshot;
-    if (snap && snap.type === 'venda') {
-      const tv = snap.tipoVenda || 'gado_adulto';
+    const vendaSnap = l.detalhesSnapshot;
+    if (vendaSnap && vendaSnap.type === 'venda') {
+      const tv = vendaSnap.tipoVenda || 'gado_adulto';
       setTipoPeso(tv);
 
       const vendaDet: VendaDetalhes = {
         tipoVenda: (tv === 'desmama' || tv === 'gado_adulto') ? tv as 'desmama' | 'gado_adulto' : 'gado_adulto',
-        tipoPreco: snap.tipoPreco || 'por_kg',
-        precoInput: snap.precoInput || '',
-        frete: snap.frete || '',
-        comissaoPct: snap.comissaoPct || '',
-        outrosCustos: snap.outrosCustos || '',
-        funruralPct: snap.funruralPct || '',
-        funruralReais: snap.funruralReais || '',
-        notaFiscal: snap.notaFiscal || '',
-        formaReceb: snap.formaReceb || 'avista',
-        qtdParcelas: snap.qtdParcelas || '1',
-        parcelas: snap.parcelas || [],
+        tipoPreco: vendaSnap.tipoPreco || 'por_kg',
+        precoInput: vendaSnap.precoInput || '',
+        frete: vendaSnap.frete || '',
+        comissaoPct: vendaSnap.comissaoPct || '',
+        outrosCustos: vendaSnap.outrosCustos || '',
+        funruralPct: vendaSnap.funruralPct || '',
+        funruralReais: vendaSnap.funruralReais || '',
+        notaFiscal: vendaSnap.notaFiscal || '',
+        formaReceb: vendaSnap.formaReceb || 'avista',
+        qtdParcelas: vendaSnap.qtdParcelas || '1',
+        parcelas: vendaSnap.parcelas || [],
       };
 
       setVendaDetalhes(vendaDet);
@@ -719,26 +756,43 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setStatusOp((l.statusOperacional as StatusOperacional) || 'conciliado');
     setNotaFiscal(l.notaFiscal || '');
 
-    // Fornecedor
-    if (l.fazendaOrigem) {
+    // Fornecedor: priority 1 = snapshot, 2 = name match, 3 = financeiro
+    const compraSnap = l.detalhesSnapshot;
+    const snapCompraFornId = compraSnap?.type === 'compra' ? compraSnap.fornecedorId : undefined;
+    if (snapCompraFornId && abateFornecedores.some(f => f.id === snapCompraFornId)) {
+      setCompraFornecedorId(snapCompraFornId);
+    } else if (l.fazendaOrigem) {
       const forn = abateFornecedores.find(f => f.nome === l.fazendaOrigem);
-      if (forn) setCompraFornecedorId(forn.id);
+      if (forn) {
+        setCompraFornecedorId(forn.id);
+      } else {
+        supabase.from('financeiro_lancamentos_v2').select('favorecido_id').eq('movimentacao_rebanho_id', l.id).not('favorecido_id', 'is', null).limit(1).then(({ data: finRecs }) => {
+          if (finRecs?.[0]?.favorecido_id && abateFornecedores.some(f => f.id === finRecs[0].favorecido_id)) {
+            setCompraFornecedorId(finRecs[0].favorecido_id);
+          }
+        });
+      }
+    } else {
+      supabase.from('financeiro_lancamentos_v2').select('favorecido_id').eq('movimentacao_rebanho_id', l.id).not('favorecido_id', 'is', null).limit(1).then(({ data: finRecs }) => {
+        if (finRecs?.[0]?.favorecido_id && abateFornecedores.some(f => f.id === finRecs[0].favorecido_id)) {
+          setCompraFornecedorId(finRecs[0].favorecido_id);
+        }
+      });
     }
 
     // PRIORITY 1: snapshot
-    const snap = l.detalhesSnapshot;
-    if (snap && snap.type === 'compra') {
+    if (compraSnap && compraSnap.type === 'compra') {
       const det: CompraDetalhes = {
-        tipoPreco: snap.tipoPreco || 'por_kg',
-        precoKg: snap.precoKg || '',
-        precoCab: snap.precoCab || '',
-        valorTotal: snap.valorTotal || '',
-        frete: snap.frete || '',
-        comissaoPct: snap.comissaoPct || '',
-        formaPag: snap.formaPag || 'avista',
-        qtdParcelas: snap.qtdParcelas || '1',
-        parcelas: snap.parcelas || [],
-        notaFiscal: snap.notaFiscal || '',
+        tipoPreco: compraSnap.tipoPreco || 'por_kg',
+        precoKg: compraSnap.precoKg || '',
+        precoCab: compraSnap.precoCab || '',
+        valorTotal: compraSnap.valorTotal || '',
+        frete: compraSnap.frete || '',
+        comissaoPct: compraSnap.comissaoPct || '',
+        formaPag: compraSnap.formaPag || 'avista',
+        qtdParcelas: compraSnap.qtdParcelas || '1',
+        parcelas: compraSnap.parcelas || [],
+        notaFiscal: compraSnap.notaFiscal || '',
       };
       setCompraDetalhes(det);
     } else {
@@ -949,9 +1003,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       dataAbate: abateDataAbate || undefined,
       tipoVenda: tipoVendaFinal || undefined,
       detalhesSnapshot: (() => {
-        if (isCompra && compraDetalhes) return { type: 'compra', ...compraDetalhes };
-        if (isAbate && abateDetalhes) return { type: 'abate', ...abateDetalhes };
-        if (isVenda && vendaDetalhes) return { type: 'venda', ...vendaDetalhes, tipoPreco: vendaTipoPreco, precoInput: vendaPrecoInput };
+        if (isCompra && compraDetalhes) return { type: 'compra', ...compraDetalhes, fornecedorId: compraFornecedorId || undefined };
+        if (isAbate && abateDetalhes) return { type: 'abate', ...abateDetalhes, fornecedorId: abateFornecedorId || undefined };
+        if (isVenda && vendaDetalhes) return { type: 'venda', ...vendaDetalhes, tipoPreco: vendaTipoPreco, precoInput: vendaPrecoInput, fornecedorId: vendaDestinoFornecedorId || undefined };
         return undefined;
       })(),
     };
