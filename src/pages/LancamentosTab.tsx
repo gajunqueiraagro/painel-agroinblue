@@ -779,10 +779,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Auto-load venda for editing when navigated from another tab
   useEffect(() => {
-    if (vendaParaEditar) {
+    if (vendaParaEditar && abateFornecedores.length > 0) {
       loadVendaForEdit(vendaParaEditar);
     }
-  }, [vendaParaEditar]);
+  }, [vendaParaEditar, abateFornecedores]);
 
   // Load compra into form for editing
   const loadCompraForEdit = useCallback(async (l: Lancamento) => {
