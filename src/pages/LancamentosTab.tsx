@@ -451,6 +451,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setData(format(new Date(), 'yyyy-MM-dd'));
     setObservacao(''); setStatusOp('conciliado');
     resetFinancialFields();
+    // Restore internal origin context if editing from within the same tab
+    const ctx = internalEditOrigin.current;
+    if (ctx) {
+      setAba(ctx.aba);
+      setAnoFiltro(ctx.anoFiltro);
+      setMesFiltro(ctx.mesFiltro);
+      internalEditOrigin.current = null;
+    }
     if (onReturnFromEdit) onReturnFromEdit();
   }, [onReturnFromEdit]);
 
