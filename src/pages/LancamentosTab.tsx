@@ -1951,7 +1951,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         <div className={`grid gap-2 ${
           isVenda ? 'grid-cols-[minmax(0,1fr)_minmax(0,2fr)_8rem]' :
           campos.origem.show ? 'grid-cols-[minmax(0,1fr)_minmax(0,2fr)]' :
-          'grid-cols-[minmax(0,1fr)_minmax(0,2fr)]'
+          'grid-cols-[minmax(0,2fr)_minmax(0,1fr)]'
         }`}>
           {campos.origem.show && (
             <div>
