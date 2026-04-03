@@ -274,7 +274,45 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
               )}
 
               {/* ── Bloco financeiro resumido ── */}
-              {valorTotalCalc > 0 && (
+              {isAbate && valorTotalCalc > 0 ? (
+                <>
+                  <Separator className="my-0.5" />
+                  {/* Abate: Valor Base → Valor Bruto → Valor Líquido */}
+                  {(() => {
+                    const valorBase = (totalArrobas || 0) * (lancamento.precoArroba || 0);
+                    const funruralTotal = lancamento.descontoFunrural || (valorBase * ((lancamento.detalhesSnapshot as any)?.funruralPct ? Number((lancamento.detalhesSnapshot as any).funruralPct) : 0) / 100);
+                    const valorBruto = valorBase - funruralTotal;
+                    const bonus = (lancamento.bonusPrecoce || 0) + (lancamento.bonusQualidade || 0) + (lancamento.bonusListaTrace || 0);
+                    const descontos = (lancamento.descontoQualidade || 0) + (lancamento.outrosDescontos || 0);
+                    return (
+                      <div className="space-y-0.5 text-[10px]">
+                        <div className="flex justify-between"><span className="text-muted-foreground">Valor Base</span><strong className="tabular-nums">{formatMoeda(valorBase)}</strong></div>
+                        {funruralTotal > 0 && (
+                          <div className="flex justify-between"><span className="text-muted-foreground">– Funrural</span><strong className="text-destructive tabular-nums">-{formatMoeda(funruralTotal)}</strong></div>
+                        )}
+                        <div className="flex justify-between font-bold text-[10px]"><span>= Valor Bruto</span><span className="tabular-nums">{formatMoeda(valorBruto)}</span></div>
+                        {bonus > 0 && (
+                          <div className="flex justify-between"><span className="text-muted-foreground">+ Bônus</span><strong className="text-green-600 dark:text-green-400 tabular-nums">+{formatMoeda(bonus)}</strong></div>
+                        )}
+                        {descontos > 0 && (
+                          <div className="flex justify-between"><span className="text-muted-foreground">– Descontos</span><strong className="text-destructive tabular-nums">-{formatMoeda(descontos)}</strong></div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  <div className="bg-primary/10 rounded px-2.5 py-1.5 flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground font-medium">Valor Líquido</span>
+                    <span className="font-extrabold text-primary text-base tabular-nums">{formatMoeda(valorTotalCalc)}</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-x-2 gap-y-0.5 text-[10px]">
+                    <Row label="Qtde" value={`${lancamento.quantidade} cab.`} />
+                    {totalArrobas && totalArrobas > 0 && <Row label="Total @" value={formatArroba(totalArrobas)} />}
+                    {ind.liqArroba > 0 && <Row label="R$/@ líq." value={formatMoeda(ind.liqArroba)} />}
+                    {ind.liqCabeca > 0 && <Row label="R$/cab líq." value={formatMoeda(ind.liqCabeca)} />}
+                    {ind.liqKg > 0 && <Row label="R$/kg líq." value={formatMoeda(ind.liqKg)} />}
+                  </div>
+                </>
+              ) : valorTotalCalc > 0 ? (
                 <>
                   <Separator className="my-0.5" />
                   <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-[11px]">
@@ -289,13 +327,11 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                     )}
                   </div>
                   <div className="bg-primary/10 rounded px-2.5 py-1.5 flex items-center justify-between">
-                    <span className="text-[10px] text-muted-foreground font-medium">
-                      {isAbate && lancamento.valorTotal ? 'Valor Líquido Final' : 'Valor Total'}
-                    </span>
+                    <span className="text-[10px] text-muted-foreground font-medium">Valor Total</span>
                     <span className="font-extrabold text-primary text-base tabular-nums">{formatMoeda(valorTotalCalc)}</span>
                   </div>
                 </>
-              )}
+              ) : null}
 
               {/* Abate share buttons */}
               {isAbate && <AbateShareButtons lancamento={lancamento} fazendaNome={nomeFazenda} />}
