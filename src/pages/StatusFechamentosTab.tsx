@@ -61,7 +61,6 @@ function getMonthPendencias(m: { status: StatusMes; motivo?: string; divergencia
 }
 
 function getMonthTooltip(m: { status: StatusMes; motivo?: string; divergencias?: number; detalheFechados?: number; detalheTotal?: number }): string | null {
-  const mesIdx = parseInt(m.mes ?? '0') - 1;
   if (m.status === 'oficial') return 'Mês fechado e conciliado';
   if (m.status === 'bloqueado') {
     if (m.motivo === 'divergencia_rebanho') return `Rebanho não bate com os pastos${m.divergencias ? ` (${m.divergencias} categoria${m.divergencias > 1 ? 's' : ''})` : ''}`;
