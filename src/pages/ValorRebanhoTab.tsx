@@ -403,6 +403,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       return null;
     });
   }, [buildChartData, janTotals, prevTotals, precoMedioArroba, mesNum]);
+
+  const handlePrecoChange = (codigo: string, value: string) => {
     const sanitized = value.replace(/[^0-9.,]/g, '');
     setPrecosDisplay(prev => ({ ...prev, [codigo]: sanitized }));
     const num = parseFloat(sanitized.replace(',', '.'));
