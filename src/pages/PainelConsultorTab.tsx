@@ -706,7 +706,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
   const [viewTab, setViewTab] = useState<ViewTab>('mensal');
   const [cenario, setCenario] = useState<Cenario>('realizado');
   const [pesosPorMes, setPesosPorMes] = useState<Record<string, Record<string, number>>>({});
-  const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(Array(12).fill(0));
+  const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(Array(13).fill(0));
   const [openBlocos, setOpenBlocos] = useState<Record<string, boolean>>({});
   const [showDivP1, setShowDivP1] = useState(false);
   const [showReabrirP1, setShowReabrirP1] = useState(false);
