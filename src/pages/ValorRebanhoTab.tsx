@@ -86,7 +86,7 @@ const CHART_LABELS = ['I', 'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N'
 
 function MiniChart({ data, color, title }: { data: { label: string; value: number | null }[]; color: string; title: string }) {
   return (
-    <div className="min-w-0">
+    <div className="flex-1 min-w-0">
       <p className="text-[8px] font-semibold text-muted-foreground uppercase tracking-wider mb-0 truncate">{title}</p>
       <div className="h-[55px] w-full">
         <ResponsiveContainer width="100%" height="100%">
@@ -552,14 +552,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             <tbody>
               {rows.map((r, i) => (
                 <tr key={r.codigo} className={`border-b ${i % 2 === 0 ? '' : 'bg-muted/20'}`}>
-                  <td className="px-1.5 py-0.5 font-medium text-foreground text-[11px] whitespace-nowrap bg-primary/10">
+                  <td className="px-1.5 py-0.5 text-foreground text-[11px] italic whitespace-nowrap bg-primary/10">
                     {r.nome}
                     {isDezembro && r.saldo === 0 && <span className="text-[9px] text-muted-foreground ml-1">(0)</span>}
                   </td>
-                  <td className="px-1.5 py-0.5 text-right text-foreground font-semibold tabular-nums italic">
+                  <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[11px]">
                     {r.saldo > 0 ? r.saldo : '-'}
                   </td>
-                  <td className="px-1.5 py-0.5 text-right tabular-nums italic">
+                  <td className="px-1.5 py-0.5 text-right tabular-nums italic text-[11px]">
                     {r.pesoMedio > 0 ? (
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -580,7 +580,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                         <Input
                           type="text"
                           inputMode="decimal"
-                          className={`h-5 text-right !text-[10px] leading-none font-normal tabular-nums italic px-1 w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
+                          className={`h-5 text-right !text-[10px] leading-none tabular-nums italic px-1 w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
                           placeholder="0,00"
                           value={precosDisplay[r.codigo] !== undefined ? precosDisplay[r.codigo] : fmtKg(r.precoKg)}
                           onChange={e => handlePrecoChange(r.codigo, e.target.value)}
@@ -595,13 +595,13 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                       )}
                     </Tooltip>
                   </td>
-                  <td className="px-1.5 py-0.5 text-right text-muted-foreground tabular-nums italic">
+                  <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[11px]">
                     {r.precoArroba > 0 ? formatMoeda(r.precoArroba) : '-'}
                   </td>
-                  <td className="px-1.5 py-0.5 text-right text-muted-foreground tabular-nums italic">
+                  <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[11px]">
                     {r.valorCabeca > 0 ? formatMoeda(r.valorCabeca) : '-'}
                   </td>
-                  <td className="px-1.5 py-0.5 text-right font-semibold text-foreground tabular-nums italic">
+                  <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[11px]">
                     {r.valorTotal > 0 ? formatMoeda(r.valorTotal) : '-'}
                   </td>
                 </tr>
@@ -609,15 +609,15 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             </tbody>
             <tfoot>
               <tr className="border-t-2 bg-primary/25">
-                <td className="px-1.5 py-1 font-extrabold text-foreground text-[11px] bg-primary/30">TOTAL</td>
-                <td className="px-1.5 py-1 text-right font-extrabold text-foreground tabular-nums">{totalCabecas}</td>
-                <td className="px-1.5 py-1 text-right text-foreground tabular-nums font-semibold">{formatNum(pesoMedioGeral, 1)}</td>
-                <td className="px-1 py-1 text-center text-foreground tabular-nums font-semibold w-[60px]">
+                <td className="px-1.5 py-1 font-bold text-foreground text-[11px] italic bg-primary/30">TOTAL</td>
+                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{totalCabecas}</td>
+                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatNum(pesoMedioGeral, 1)}</td>
+                <td className="px-1 py-1 text-center text-foreground tabular-nums italic text-[11px] w-[60px]">
                   {precoMedioKg > 0 ? formatNum(precoMedioKg, 2) : ''}
                 </td>
-                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '-'}</td>
-                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums">{formatMoeda(valorMedioCabeca)}</td>
-                <td className="px-1.5 py-1 text-right font-extrabold text-foreground tabular-nums">{formatMoeda(totalRebanho)}</td>
+                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '-'}</td>
+                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatMoeda(valorMedioCabeca)}</td>
+                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{formatMoeda(totalRebanho)}</td>
               </tr>
             </tfoot>
           </table>
@@ -710,11 +710,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             </CardContent>
           </Card>
 
-          {/* Mini charts — stacked in right column */}
-          <div className="space-y-1">
+          {/* Mini charts — side by side in right column */}
+          <div className="flex gap-1.5">
             <MiniChart data={chartDataValor} color="hsl(var(--primary))" title="Valor do Rebanho" />
             <MiniChart data={chartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
-            <MiniChart data={chartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio do Estoque" />
+            <MiniChart data={chartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio" />
           </div>
         </div>
       </div>
