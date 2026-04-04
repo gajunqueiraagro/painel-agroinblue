@@ -424,13 +424,10 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   // Peso total do mês selecionado (live, para mês aberto)
   const pesoTotalKgLive = useMemo(() => allRows.reduce((sum, r) => sum + (r.saldo * r.pesoMedio), 0), [allRows]);
 
-  // Card: fechado usa fonte oficial do Painel do Consultor; aberto usa cálculo live.
-  const valorRebanhoExibido = mesSelecionadoFechado
-    ? (frozenSelecionado?.valor ?? 0)
-    : totalRebanho;
-  const pesoTotalKgExibido = mesSelecionadoFechado
-    ? (frozenSelecionado?.pesoKg ?? 0)
-    : pesoTotalKgLive;
+  // Card: SEMPRE usa o total calculado pela tabela (fonte oficial validada por categoria).
+  // A tabela desta tela é a referência definitiva — não usar valor_rebanho_fechamento aqui.
+  const valorRebanhoExibido = totalRebanho;
+  const pesoTotalKgExibido = pesoTotalKgLive;
   const pesoMedioGeralExibido = totalCabecas > 0 ? pesoTotalKgExibido / totalCabecas : 0;
   const totalArrobasExibido = pesoTotalKgExibido > 0 ? pesoTotalKgExibido / 30 : 0;
   const precoMedioArrobaExibido = totalArrobasExibido > 0 ? valorRebanhoExibido / totalArrobasExibido : 0;
