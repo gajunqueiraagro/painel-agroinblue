@@ -178,7 +178,10 @@ export function useValorRebanhoGlobal(
 
     setLoading(true);
     try {
-      const anoMeses = Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`);
+      const anoMeses = [
+        `${Number(anoFiltro) - 1}-12`,
+        ...Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`),
+      ];
 
       const [headersRes, itensRes, precosRes, pesosResults] = await Promise.all([
         supabase
