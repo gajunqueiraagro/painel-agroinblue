@@ -86,8 +86,8 @@ function buildZooRows(
     return lancAno.filter(l => l.data.startsWith(prefix));
   };
 
-  const mkRow = (grupo: string, indicador: string, fn: (m: number) => number, format: ZooRow['format'] = 'int'): ZooRow => {
-    const valores = Array.from({ length: 12 }, (_, i) => i + 1 <= ateMes ? fn(i + 1) : 0);
+  const mkRow = (grupo: string, indicador: string, fn: (m: number) => number, format: PainelFormatType = 'cab'): ZooRow => {
+    const valores = Array.from({ length: 12 }, (_, i) => fn(i + 1));
     const total = valores.reduce((a, b) => a + b, 0);
     return { grupo, indicador, valores, total, format };
   };
