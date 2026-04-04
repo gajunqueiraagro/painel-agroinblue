@@ -202,9 +202,15 @@ function MiniChart({ data, color, title }: { data: { label: string; value: numbe
 }
 
 export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAnoInicial, filtroMesInicial }: Props) {
-  const { fazendaAtual, isGlobal } = useFazenda();
+  const { fazendaAtual, isGlobal, fazendas } = useFazenda();
   const { categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
+
+  // IDs de fazendas pecuárias (para Global)
+  const fazendaIdsPecuaria = useMemo(
+    () => fazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false).map(f => f.id),
+    [fazendas],
+  );
 
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
@@ -226,7 +232,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const anoMes = `${anoFiltro}-${mesFiltro}`;
   const isDezembro = mesFiltro === '12';
 
-  const statusZoo = useStatusZootecnico(fazendaId, Number(anoFiltro), Number(mesFiltro), lancamentos, saldosIniciais);
+  const statusZoo = useStatusZootecnico(isGlobal ? undefined : fazendaId, Number(anoFiltro), Number(mesFiltro), lancamentos, saldosIniciais);
   const categoriasStatus = statusZoo.pendencias.find(p => p.id === 'categorias');
   const categoriasConciliadas = categoriasStatus?.status === 'fechado';
   const bloqueadoPorConciliacao = !categoriasConciliadas && !isGlobal && !statusZoo.loading;
