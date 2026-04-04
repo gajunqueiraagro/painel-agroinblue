@@ -648,7 +648,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               >
                 {/* Line 1: Name + Status */}
                 <div className="flex items-center justify-between gap-0.5">
-                  <span className="font-bold text-[10px] text-foreground truncate leading-tight">{p.nome}</span>
+                  <span className="font-bold text-xs text-foreground truncate leading-tight">{p.nome}</span>
                   {status === 'fechado' ? (
                     adminClose ? (
                       <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[7px] px-0.5 py-0 h-[12px] shrink-0 leading-none">
