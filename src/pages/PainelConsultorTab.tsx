@@ -998,7 +998,30 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
               onOpenChange={() => toggleBloco(b.nome)}
             >
               <CollapsibleTrigger className="flex items-center justify-between w-full px-2 py-1 bg-muted/60 rounded text-[11px] font-bold text-primary uppercase tracking-wider hover:bg-muted transition-colors">
-                <span>{b.nome}</span>
+                <span className="flex items-center gap-1.5">
+                  {b.nome}
+                  {!isGlobal && cenario === 'realizado' && (() => {
+                    const pilarKey = BLOCO_PILAR_MAP[b.nome];
+                    if (!pilarKey) return null;
+                    const pilarInfo = statusPilares[pilarKey];
+                    const badge = getPilarBadgeConfig(pilarInfo.status);
+                    return (
+                      <span className={`inline-flex items-center text-[8px] font-semibold px-1.5 py-0 rounded-full border leading-relaxed normal-case tracking-normal ${badge.className}`}>
+                        {badge.label}
+                        {pilarInfo.modo_transitorio && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Info className="h-2.5 w-2.5 ml-0.5 opacity-60" />
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-[10px] max-w-[200px]">
+                              Oficial transitório — fechamento formal da competência ainda não implementado
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </span>
+                    );
+                  })()}
+                </span>
                 <ChevronDown className={`h-3.5 w-3.5 transition-transform ${openBlocos[b.nome] ? 'rotate-180' : ''}`} />
               </CollapsibleTrigger>
               <CollapsibleContent className="mt-0.5">
