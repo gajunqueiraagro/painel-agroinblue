@@ -427,7 +427,18 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
   const pesoIni = get('peso_inicio_kg');
   const pesoFin = get('peso_total_final_kg');
   const pesoMedFin = get('peso_medio_final_kg');
-  const gmd = get('gmd_kg_cab_dia');
+  // GMD: usar NaN como sentinela quando meta não projetou ganho de peso
+  // (gmd_numerador_kg=0 com rebanho presente = "sem projeção de GMD", não "GMD=0")
+  const gmd = Array.from({ length: 12 }, (_, i) => {
+    const m = byMes[String(i + 1).padStart(2, '0')];
+    if (!m) return NaN;
+    const gmdVal = Number(m.gmd_kg_cab_dia) || 0;
+    const gmdNumerador = Number(m.gmd_numerador_kg) || 0;
+    const temRebanho = Number(m.cabecas_inicio) > 0 || Number(m.cabecas_final) > 0;
+    // Se tem rebanho mas numerador é zero, meta não projetou ganho → sem base
+    if (temRebanho && gmdNumerador === 0 && gmdVal === 0) return NaN;
+    return gmdVal;
+  });
   const uaMedia = get('ua_media');
   const areaProd = get('area_produtiva_ha');
   const lotacao = get('lotacao_ua_ha');
@@ -436,9 +447,18 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
   const pesoMedIni = cabIni.map((c, i) => c > 0 ? pesoIni[i] / c : 0);
   const cabMedia = cabIni.map((v, i) => (v + cabFin[i]) / 2);
   const gmdNum = get('gmd_numerador_kg');
-  const arrobasProd = gmdNum.map(v => v / 30);
-  const prodKg = gmdNum;
-  const arrHa = arrobasProd.map((v, i) => areaProd[i] > 0 ? v / areaProd[i] : 0);
+  // Produção: se gmd_numerador é zero com rebanho, também sem base
+  const arrobasProd = gmdNum.map((v, i) => {
+    const temRebanho = cabIni[i] > 0 || cabFin[i] > 0;
+    if (temRebanho && v === 0) return NaN;
+    return v / 30;
+  });
+  const prodKg = gmdNum.map((v, i) => {
+    const temRebanho = cabIni[i] > 0 || cabFin[i] > 0;
+    if (temRebanho && v === 0) return NaN;
+    return v;
+  });
+  const arrHa = arrobasProd.map((v, i) => areaProd[i] > 0 && !isNaN(v) ? v / areaProd[i] : NaN);
   const desfruteCab = saidas;
   const desfrute_arr = saidas.map((v, i) => pesoMedFin[i] > 0 ? (v * pesoMedFin[i]) / 30 : 0);
 
@@ -743,13 +763,17 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
 
   const isPrevisto = cenario === 'previsto';
 
+  // REGRA: Previsto em modo Global desabilitado — sem agregação oficial ainda
+  const previstoGlobalBloqueado = isPrevisto && isGlobal;
+
   // Blocos: Realizado usa buildMonthlyData, Previsto usa vw_zoot_fazenda_mensal (meta)
   const blocos = useMemo(() => {
+    if (previstoGlobalBloqueado) return [];
     if (isPrevisto) {
       return buildBlocosFromZootMensal(zootMeta || [], viewTab);
     }
     return buildBlocosForTab(monthlyData, viewTab);
-  }, [isPrevisto, monthlyData, zootMeta, viewTab]);
+  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab]);
 
   useEffect(() => {
     if (blocos.length > 0) {
@@ -836,10 +860,14 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
                 {row.valores.map((v, i) => {
                   const isFuture = (i + 1) > monthCutoff;
                   let cellContent = '';
+                  let isSemBase = false;
                   if (previstoSemFonte) {
                     cellContent = '';  // sem base prevista
                   } else if (isFuture) {
                     cellContent = '';  // mês futuro
+                  } else if (isNaN(v)) {
+                    cellContent = '–';  // meta não projetou este indicador
+                    isSemBase = true;
                   } else {
                     cellContent = formatPainel(v, row.format);
                   }
@@ -848,7 +876,8 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
                       key={i}
                       className={`text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px]${
                         TRIM_BORDER_INDEXES.has(i) ? ' border-l border-border/20' : ''
-                      }${previstoSemFonte ? ' text-muted-foreground/30' : ''}`}
+                      }${previstoSemFonte ? ' text-muted-foreground/30' : ''}${isSemBase ? ' text-muted-foreground/50 italic' : ''}`}
+                      title={isSemBase ? 'Meta não projetou este indicador' : undefined}
                     >
                       {cellContent}
                     </td>
@@ -859,7 +888,9 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
                 }`}>
                   {previstoSemFonte
                     ? ''
-                    : (monthCutoff > 0 && tot !== null ? formatPainel(tot, row.format) : '')}
+                    : row.valores.some(v => isNaN(v))
+                      ? '–'
+                      : (monthCutoff > 0 && tot !== null ? formatPainel(tot, row.format) : '')}
                 </td>
               </tr>
             );
@@ -945,7 +976,16 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
 
         {/* ── Content: collapsible blocks ── */}
         <div className="px-2 space-y-1 mt-1 flex-1 overflow-auto">
-          {blocos.map(b => (
+          {previstoGlobalBloqueado ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center space-y-2">
+              <span className="text-sm font-semibold text-muted-foreground">Previsto indisponível no modo Global</span>
+              <span className="text-xs text-muted-foreground/70 max-w-md">
+                A base prevista (meta) é registrada por fazenda individual.
+                Selecione uma fazenda específica para visualizar o cenário Previsto,
+                ou alterne para o cenário Realizado.
+              </span>
+            </div>
+          ) : blocos.map(b => (
             <Collapsible
               key={b.nome}
               open={openBlocos[b.nome] ?? false}
