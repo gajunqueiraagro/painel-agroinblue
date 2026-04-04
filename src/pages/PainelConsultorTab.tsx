@@ -743,13 +743,17 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
 
   const isPrevisto = cenario === 'previsto';
 
+  // REGRA: Previsto em modo Global desabilitado — sem agregação oficial ainda
+  const previstoGlobalBloqueado = isPrevisto && isGlobal;
+
   // Blocos: Realizado usa buildMonthlyData, Previsto usa vw_zoot_fazenda_mensal (meta)
   const blocos = useMemo(() => {
+    if (previstoGlobalBloqueado) return [];
     if (isPrevisto) {
       return buildBlocosFromZootMensal(zootMeta || [], viewTab);
     }
     return buildBlocosForTab(monthlyData, viewTab);
-  }, [isPrevisto, monthlyData, zootMeta, viewTab]);
+  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab]);
 
   useEffect(() => {
     if (blocos.length > 0) {
