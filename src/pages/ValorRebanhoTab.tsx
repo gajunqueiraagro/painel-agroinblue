@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Save, Copy, Eye, EyeOff, Info, Lock, Unlock, AlertTriangle, ArrowLeft, ShieldAlert } from 'lucide-react';
+import { Save, Copy, Eye, EyeOff, Info, Lock, Unlock, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
@@ -26,7 +26,6 @@ interface Props {
   filtroMesInicial?: number;
 }
 
-/** Mapeia OrigemPeso → label amigável */
 const ORIGEM_LABEL: Record<OrigemPeso, string> = {
   pastos: 'Fechamento do mês',
   lancamento: 'Último lançamento',
@@ -34,11 +33,6 @@ const ORIGEM_LABEL: Record<OrigemPeso, string> = {
   sem_base: 'Sem dados',
 };
 
-/**
- * Mapeamento categoria → preço de mercado
- * bloco + categoria conforme tela Preço de Mercado
- * unidade: 'kg' = já em R$/kg; 'arroba' = R$/@ (converter dividindo por 30)
- */
 const MAPA_PRECO_MERCADO: Record<string, { bloco: string; categoria: string; unidade: 'kg' | 'arroba' }> = {
   mamotes_m: { bloco: 'magro_macho', categoria: '200 kg média', unidade: 'kg' },
   desmama_m: { bloco: 'magro_macho', categoria: '200 kg média', unidade: 'kg' },
@@ -50,6 +44,13 @@ const MAPA_PRECO_MERCADO: Record<string, { bloco: string; categoria: string; uni
   novilhas:  { bloco: 'frigorifico', categoria: 'Novilha', unidade: 'arroba' },
   vacas:     { bloco: 'frigorifico', categoria: 'Vaca', unidade: 'arroba' },
 };
+
+const MESES_SHORT = [
+  { key: '01', label: 'Jan' }, { key: '02', label: 'Fev' }, { key: '03', label: 'Mar' },
+  { key: '04', label: 'Abr' }, { key: '05', label: 'Mai' }, { key: '06', label: 'Jun' },
+  { key: '07', label: 'Jul' }, { key: '08', label: 'Ago' }, { key: '09', label: 'Set' },
+  { key: '10', label: 'Out' }, { key: '11', label: 'Nov' }, { key: '12', label: 'Dez' },
+];
 
 export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAnoInicial, filtroMesInicial }: Props) {
   const { fazendaAtual, isGlobal } = useFazenda();
@@ -77,7 +78,6 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const anoMes = `${anoFiltro}-${mesFiltro}`;
   const isDezembro = mesFiltro === '12';
 
-  // Conciliation check — blocks saving if categories are not conciliated
   const statusZoo = useStatusZootecnico(fazendaId, Number(anoFiltro), Number(mesFiltro), lancamentos, saldosIniciais);
   const categoriasStatus = statusZoo.pendencias.find(p => p.id === 'categorias');
   const categoriasConciliadas = categoriasStatus?.status === 'fechado';
@@ -88,19 +88,15 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     isFechado, isAdmin, reabrirFechamento,
   } = useValorRebanho(anoMes);
 
-  // Preço de mercado do mês
   const { itens: precosMercado, isValidado: mercadoValidado } = usePrecoMercado(anoMes);
 
-  // Build a lookup: codigo → R$/kg sugerido
   const precosSugeridos = useMemo(() => {
     const map: Record<string, number> = {};
     Object.entries(MAPA_PRECO_MERCADO).forEach(([codigo, ref]) => {
       const item = precosMercado.find(p => p.bloco === ref.bloco && p.categoria === ref.categoria);
       if (!item || item.valor <= 0) return;
-      // Ajuste de ágio
       const valorComAgio = item.valor * (1 + (item.agio_perc || 0) / 100);
       if (ref.unidade === 'arroba') {
-        // R$/@ → R$/kg: dividir por 30 (fator padrão peso vivo)
         map[codigo] = valorComAgio / 30;
       } else {
         map[codigo] = valorComAgio;
@@ -113,17 +109,10 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const [precosDisplay, setPrecosDisplay] = useState<Record<string, string>>({});
   const [sugestaoAplicada, setSugestaoAplicada] = useState(false);
 
-  // --- BASE OFICIAL: useFechamentoCategoria ---
   const resumoOficial = useFechamentoCategoria(
-    fazendaId,
-    Number(anoFiltro),
-    Number(mesFiltro),
-    lancamentos,
-    saldosIniciais,
-    categorias,
+    fazendaId, Number(anoFiltro), Number(mesFiltro), lancamentos, saldosIniciais, categorias,
   );
 
-  // Track which categories are using suggested prices
   const categoriasComSugestao = useMemo(() => {
     const set = new Set<string>();
     Object.keys(precosSugeridos).forEach(codigo => {
@@ -139,27 +128,18 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const temSugestao = categoriasComSugestao.size > 0;
 
-  // Build rows from official source
   const allRows = useMemo(() => {
     return resumoOficial.rows.map(row => {
       const precoKg = precosLocal[row.categoriaCodigo] ?? 0;
       const valorTotal = row.quantidadeFinal * (row.pesoMedioFinalKg || 0) * precoKg;
       const valorCabeca = row.quantidadeFinal > 0 && row.pesoMedioFinalKg && precoKg > 0
-        ? row.pesoMedioFinalKg * precoKg
-        : 0;
+        ? row.pesoMedioFinalKg * precoKg : 0;
       const arrobasLinha = row.quantidadeFinal * (row.pesoMedioFinalKg || 0) / 30;
       const precoArroba = arrobasLinha > 0 ? valorTotal / arrobasLinha : 0;
       return {
-        categoriaId: row.categoriaId,
-        codigo: row.categoriaCodigo,
-        nome: row.categoriaNome,
-        saldo: row.quantidadeFinal,
-        pesoMedio: row.pesoMedioFinalKg || 0,
-        origemPeso: row.origemPeso,
-        precoKg,
-        valorCabeca,
-        precoArroba,
-        valorTotal,
+        categoriaId: row.categoriaId, codigo: row.categoriaCodigo, nome: row.categoriaNome,
+        saldo: row.quantidadeFinal, pesoMedio: row.pesoMedioFinalKg || 0,
+        origemPeso: row.origemPeso, precoKg, valorCabeca, precoArroba, valorTotal,
         isSugerido: categoriasComSugestao.has(row.categoriaCodigo),
       };
     });
@@ -197,7 +177,6 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const dezembroCompleto = isDezembro && categoriasSemPreco.length === 0;
 
-  // Sync loaded prices to local state + apply market suggestions for empty ones
   const fmtKg = (v: number) => v.toFixed(2).replace('.', ',');
 
   useEffect(() => {
@@ -208,8 +187,6 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       numMap[p.categoria] = v;
       strMap[p.categoria] = v > 0 ? fmtKg(v) : '0,00';
     });
-
-    // Auto-fill suggestions for categories without saved price
     let aplicouSugestao = false;
     Object.entries(precosSugeridos).forEach(([codigo, valor]) => {
       if (!numMap[codigo] || numMap[codigo] <= 0) {
@@ -219,7 +196,6 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         aplicouSugestao = true;
       }
     });
-
     setPrecosLocal(numMap);
     setPrecosDisplay(strMap);
     setSugestaoAplicada(aplicouSugestao);
@@ -239,22 +215,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const handleSalvar = async () => {
     if (bloqueadoPorConciliacao) {
-      toast.error('Não é possível salvar. Existem categorias desconciliadas entre Pasto e Sistema. Realize a conciliação antes.');
+      toast.error('Não é possível salvar. Existem categorias desconciliadas entre Pasto e Sistema.');
       return;
     }
-    const items = Object.entries(precosLocal).map(([categoria, preco_kg]) => ({
-      categoria,
-      preco_kg,
-    }));
+    const items = Object.entries(precosLocal).map(([categoria, preco_kg]) => ({ categoria, preco_kg }));
     await salvarPrecos(items, totalRebanho);
   };
 
   const handleCopiarMesAnterior = async () => {
     const prev = await loadPrecosMesAnterior();
-    if (prev.length === 0) {
-      toast.info('Nenhum preço encontrado no mês anterior');
-      return;
-    }
+    if (prev.length === 0) { toast.info('Nenhum preço encontrado no mês anterior'); return; }
     const numMap: Record<string, number> = { ...precosLocal };
     const strMap: Record<string, string> = { ...precosDisplay };
     prev.forEach(p => {
@@ -278,18 +248,19 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   }
 
   return (
-    <div className="p-3 w-full space-y-2 animate-fade-in pb-20">
+    <div className="p-2 w-full space-y-1.5 animate-fade-in pb-16">
       {/* Bloqueio por conciliação */}
       {bloqueadoPorConciliacao && (
-        <Alert variant="destructive" className="border-destructive/50">
-          <ShieldAlert className="h-4 w-4" />
-          <AlertDescription className="text-xs font-medium">
+        <Alert variant="destructive" className="border-destructive/50 py-1.5">
+          <ShieldAlert className="h-3.5 w-3.5" />
+          <AlertDescription className="text-[11px] font-medium">
             Fechamento bloqueado: existem divergências na Conciliação de Categorias.
             {categoriasStatus?.descricao && ` (${categoriasStatus.descricao})`}
           </AlertDescription>
         </Alert>
       )}
-      {/* Filtros */}
+
+      {/* Ano filter + actions */}
       <div className="flex gap-1.5 items-center flex-wrap">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
           <SelectTrigger className="w-20 h-7 text-xs font-bold">
@@ -298,17 +269,6 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           <SelectContent>
             {anosDisponiveis.map(a => (
               <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={mesFiltro} onValueChange={setMesFiltro}>
-          <SelectTrigger className="w-24 h-7 text-xs font-bold">
-            <SelectValue placeholder="Mês" />
-          </SelectTrigger>
-          <SelectContent>
-            {MESES_COLS.map(m => (
-              <SelectItem key={m.key} value={m.key} className="text-sm">{m.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -324,194 +284,206 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             <Lock className="h-3 w-3" /> Fechado
           </Badge>
         )}
+
+        <div className="ml-auto flex gap-1.5">
+          {isFechado && isAdmin && (
+            <Button variant="outline" size="sm" onClick={reabrirFechamento} className="gap-1 h-7 text-xs px-2">
+              <Unlock className="h-3 w-3" /> Reabrir
+            </Button>
+          )}
+          {canEdit && (
+            <Button size="sm" onClick={handleSalvar} disabled={saving || bloqueadoPorConciliacao} className="gap-1 h-7 text-xs px-3">
+              <Save className="h-3 w-3" />
+              {bloqueadoPorConciliacao ? 'Bloqueado' : saving ? 'Salvando...' : 'Salvar e Fechar'}
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Summary card */}
-      <Card className="bg-primary/5 border-primary/20">
-        <CardContent className="p-4">
-          <p className="text-xs text-muted-foreground font-medium mb-1">
-            Valor do Rebanho — {mesLabel}/{anoFiltro}
-          </p>
-          <p className="text-2xl font-extrabold text-foreground">{formatMoeda(totalRebanho)}</p>
-          <div className="flex gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
-            <span><strong className="text-foreground">{totalCabecas}</strong> cabeças</span>
-            <span>Peso médio: <strong className="text-foreground">{formatNum(pesoMedioGeral, 1)} kg</strong></span>
-            <span>R$/cab: <strong className="text-foreground">{formatMoeda(valorMedioCabeca)}</strong></span>
-          </div>
-          <div className="flex gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
-            <span>R$/kg médio: <strong className="text-foreground">{precoMedioKg > 0 ? formatMoeda(precoMedioKg) : '—'}</strong></span>
-            <span>R$/@ médio: <strong className="text-foreground">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '—'}</strong></span>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Month bar */}
+      <div className="flex gap-0.5 bg-muted/30 rounded-md p-0.5 border">
+        {MESES_SHORT.map(m => (
+          <button
+            key={m.key}
+            onClick={() => setMesFiltro(m.key)}
+            className={`flex-1 text-center text-[11px] font-semibold py-1 rounded transition-colors
+              ${mesFiltro === m.key
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+              }`}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
 
-      {/* Aviso de sugestão de mercado */}
-      {temSugestao && (
-        <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 rounded-md px-3 py-2 border border-amber-200 dark:border-amber-800">
-          <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-          <span>
-            <strong>Preço de mercado sugerido.</strong> O valor só será considerado definitivo após validação do fechamento do valor do rebanho.
-          </span>
+      {/* Alerts row — compact */}
+      {(temSugestao || temEstimativa || (isDezembro && categoriasSemPreco.length > 0) || (isDezembro && dezembroCompleto)) && (
+        <div className="space-y-1">
+          {temSugestao && (
+            <div className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 rounded px-2 py-1 border border-amber-200 dark:border-amber-800">
+              <Info className="h-3 w-3 shrink-0" />
+              <span><strong>Preço de mercado sugerido.</strong> Valor definitivo após validação do fechamento.</span>
+            </div>
+          )}
+          {temEstimativa && (
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/40 rounded px-2 py-1 border border-border">
+              <Info className="h-3 w-3 shrink-0" />
+              <span>Algumas categorias usam peso estimado (último lançamento ou saldo inicial).</span>
+            </div>
+          )}
+          {isDezembro && categoriasSemPreco.length > 0 && (
+            <div className="flex items-center gap-1.5 text-[11px] bg-destructive/10 text-destructive rounded px-2 py-1 border border-destructive/30">
+              <AlertTriangle className="h-3 w-3 shrink-0" />
+              <span><strong>Dezembro — base anual:</strong> {categoriasSemPreco.length} categoria(s) sem preço: {categoriasSemPreco.join(', ')}.</span>
+            </div>
+          )}
+          {isDezembro && dezembroCompleto && (
+            <div className="flex items-center gap-1.5 text-[11px] text-primary bg-primary/10 rounded px-2 py-1 border border-primary/30">
+              <Info className="h-3 w-3 shrink-0" />
+              <span><strong>Base anual completa.</strong> Todas as categorias têm preço informado para dezembro.</span>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Aviso de estimativa */}
-      {temEstimativa && (
-        <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/40 rounded-md px-3 py-2 border border-border">
-          <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-          <span>
-            Algumas categorias usam peso estimado (último lançamento ou saldo inicial).
-            Para maior precisão, realize o fechamento de pastos do mês.
-          </span>
-        </div>
-      )}
-
-      {/* December warning */}
-      {isDezembro && categoriasSemPreco.length > 0 && (
-        <div className="flex items-start gap-2 text-xs bg-destructive/10 text-destructive rounded-md px-3 py-2 border border-destructive/30">
-          <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-          <span>
-            <strong>Dezembro — base anual:</strong> Os preços de dezembro serão usados como referência do ano seguinte.
-            {' '}{categoriasSemPreco.length} categoria(s) sem preço: {categoriasSemPreco.join(', ')}.
-            Informe preço para todas as categorias para completar o fechamento anual.
-          </span>
-        </div>
-      )}
-
-      {isDezembro && dezembroCompleto && (
-        <div className="flex items-start gap-2 text-xs text-primary bg-primary/10 rounded-md px-3 py-2 border border-primary/30">
-          <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-          <span>
-            <strong>Base anual completa.</strong> Todas as categorias têm preço informado para dezembro.
-            Esses valores serão a referência para análise "sem efeito de mercado" no ano seguinte.
-          </span>
-        </div>
-      )}
-
-      {/* Table */}
-      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-muted/50">
-              <th className="text-left px-2 py-1.5 font-semibold text-foreground text-xs">Categoria</th>
-              <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">Qtd</th>
-              <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">Peso</th>
-              <th className="text-center px-1 py-1.5 font-semibold text-foreground text-xs w-[64px]">R$/kg</th>
-              <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">R$/cab</th>
-              <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">R$/@</th>
-              <th className="text-right px-2 py-1.5 font-semibold text-foreground text-xs">Valor Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={r.codigo} className={`border-b ${i % 2 === 0 ? '' : 'bg-muted/20'}`}>
-                <td className="px-2 py-1 font-medium text-foreground text-xs whitespace-nowrap">
-                  {r.nome}
-                  {isDezembro && r.saldo === 0 && (
-                    <span className="text-[10px] text-muted-foreground ml-1">(0)</span>
-                  )}
-                </td>
-                <td className="px-2 py-1 text-right text-foreground font-semibold text-xs">
-                  {r.saldo > 0 ? r.saldo : '-'}
-                </td>
-                <td className="px-2 py-1 text-right text-[11px]">
-                  {r.pesoMedio > 0 ? (
+      {/* Main content: table left (60%) + summary card right (40%) */}
+      <div className="flex gap-2 items-start">
+        {/* LEFT — Table */}
+        <div className="flex-[3] min-w-0 bg-card rounded-lg shadow-sm border overflow-x-auto">
+          <table className="w-full text-[11px]">
+            <thead>
+              <tr className="border-b bg-muted/50">
+                <th className="text-left px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Categoria</th>
+                <th className="text-right px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Qtd</th>
+                <th className="text-right px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Peso</th>
+                <th className="text-center px-1 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider w-[60px]">R$/kg</th>
+                <th className="text-right px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">R$/@</th>
+                <th className="text-right px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">R$/cab</th>
+                <th className="text-right px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Valor Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={r.codigo} className={`border-b ${i % 2 === 0 ? '' : 'bg-muted/20'}`}>
+                  <td className="px-1.5 py-0.5 font-medium text-foreground text-[11px] whitespace-nowrap">
+                    {r.nome}
+                    {isDezembro && r.saldo === 0 && <span className="text-[9px] text-muted-foreground ml-1">(0)</span>}
+                  </td>
+                  <td className="px-1.5 py-0.5 text-right text-foreground font-semibold tabular-nums">
+                    {r.saldo > 0 ? r.saldo : '-'}
+                  </td>
+                  <td className="px-1.5 py-0.5 text-right tabular-nums">
+                    {r.pesoMedio > 0 ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className={`cursor-help ${r.origemPeso === 'pastos' ? 'text-foreground' : 'text-muted-foreground italic'}`}>
+                            {formatNum(r.pesoMedio, 1)}
+                            {r.origemPeso !== 'pastos' && ' *'}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">
+                          Fonte: {ORIGEM_LABEL[r.origemPeso]}
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : '-'}
+                  </td>
+                  <td className="px-0.5 py-0.5 w-[60px]">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className={`cursor-help ${r.origemPeso === 'pastos' ? 'text-foreground' : 'text-muted-foreground italic'}`}>
-                          {formatNum(r.pesoMedio, 1)} kg
-                          {r.origemPeso !== 'pastos' && ' *'}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="text-xs">
-                        Fonte: {ORIGEM_LABEL[r.origemPeso]}
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : '-'}
-                </td>
-                <td className="px-1 py-0.5 w-[64px]">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="relative">
                         <Input
                           type="text"
                           inputMode="decimal"
-                          className={`h-6 text-right !text-[11px] leading-none font-normal tabular-nums px-1.5 w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
+                          className={`h-5 text-right !text-[10px] leading-none font-normal tabular-nums px-1 w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
                           placeholder="0,00"
                           value={precosDisplay[r.codigo] !== undefined ? precosDisplay[r.codigo] : fmtKg(r.precoKg)}
                           onChange={e => handlePrecoChange(r.codigo, e.target.value)}
                           onBlur={() => handlePrecoBlur(r.codigo)}
                           disabled={!canEdit}
                         />
-                      </div>
-                    </TooltipTrigger>
-                    {r.isSugerido && (
-                      <TooltipContent side="top" className="text-xs max-w-[200px]">
-                        Preço sugerido pelo mercado. Edite se necessário.
-                      </TooltipContent>
-                    )}
-                  </Tooltip>
+                      </TooltipTrigger>
+                      {r.isSugerido && (
+                        <TooltipContent side="top" className="text-xs max-w-[200px]">
+                          Preço sugerido pelo mercado. Edite se necessário.
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                  </td>
+                  <td className="px-1.5 py-0.5 text-right text-muted-foreground tabular-nums">
+                    {r.precoArroba > 0 ? formatMoeda(r.precoArroba) : '-'}
+                  </td>
+                  <td className="px-1.5 py-0.5 text-right text-muted-foreground tabular-nums">
+                    {r.valorCabeca > 0 ? formatMoeda(r.valorCabeca) : '-'}
+                  </td>
+                  <td className="px-1.5 py-0.5 text-right font-semibold text-foreground tabular-nums">
+                    {r.valorTotal > 0 ? formatMoeda(r.valorTotal) : '-'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 bg-primary/10">
+                <td className="px-1.5 py-1 font-extrabold text-foreground text-[11px]">TOTAL</td>
+                <td className="px-1.5 py-1 text-right font-extrabold text-foreground tabular-nums">{totalCabecas}</td>
+                <td className="px-1.5 py-1 text-right text-muted-foreground tabular-nums">{formatNum(pesoMedioGeral, 1)}</td>
+                <td className="px-1 py-1 text-center text-muted-foreground tabular-nums w-[60px]">
+                  {precoMedioKg > 0 ? formatNum(precoMedioKg, 2) : ''}
                 </td>
-                <td className="px-2 py-1 text-right text-muted-foreground text-[11px]">
-                  {r.valorCabeca > 0 ? formatMoeda(r.valorCabeca) : '-'}
-                </td>
-                <td className="px-2 py-1 text-right text-muted-foreground text-[11px]">
-                  {r.precoArroba > 0 ? formatMoeda(r.precoArroba) : '-'}
-                </td>
-                <td className="px-2 py-1 text-right font-semibold text-foreground text-xs">
-                  {r.valorTotal > 0 ? formatMoeda(r.valorTotal) : '-'}
-                </td>
+                <td className="px-1.5 py-1 text-right font-semibold text-foreground tabular-nums">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '-'}</td>
+                <td className="px-1.5 py-1 text-right font-semibold text-foreground tabular-nums">{formatMoeda(valorMedioCabeca)}</td>
+                <td className="px-1.5 py-1 text-right font-extrabold text-foreground tabular-nums">{formatMoeda(totalRebanho)}</td>
               </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="border-t-2 bg-primary/10">
-              <td className="px-2 py-1.5 font-extrabold text-foreground text-xs">TOTAL</td>
-              <td className="px-2 py-1.5 text-right font-extrabold text-foreground text-xs">{totalCabecas}</td>
-              <td className="px-2 py-1.5 text-right text-[11px] text-muted-foreground">{formatNum(pesoMedioGeral, 1)} kg</td>
-              <td className="px-1 py-1.5 text-center text-[11px] text-muted-foreground w-[64px]">
-                {precoMedioKg > 0 ? `${formatNum(precoMedioKg, 2)}` : ''}
-              </td>
-              <td className="px-2 py-1.5 text-right text-[11px] font-semibold text-foreground">{formatMoeda(valorMedioCabeca)}</td>
-              <td className="px-2 py-1.5 text-right text-[11px] font-semibold text-foreground">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '-'}</td>
-              <td className="px-2 py-1.5 text-right font-extrabold text-foreground text-xs">{formatMoeda(totalRebanho)}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+            </tfoot>
+          </table>
 
-      {/* Footer */}
-      <div className="flex flex-col gap-2">
-        <p className="text-[10px] text-muted-foreground">
-          * Peso estimado — sem fechamento oficial no mês. Passe o dedo sobre o valor para ver a fonte.
-          {isDezembro && ' • Em dezembro, informe preço para todas as categorias (base anual).'}
-        </p>
-        <div className="flex justify-between items-center">
-          <div className="flex gap-2 items-center">
-            {categoriasOcultas > 0 && !isDezembro && (
-              <Button variant="ghost" size="sm" onClick={() => setMostrarZerados(!mostrarZerados)} className="gap-1 text-xs text-muted-foreground">
-                {mostrarZerados ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                {mostrarZerados ? 'Ocultar zeradas' : `Mostrar ${categoriasOcultas} zeradas`}
-              </Button>
-            )}
-          </div>
-          <div className="flex gap-2 ml-auto">
-            {isFechado && isAdmin && (
-              <Button variant="outline" size="sm" onClick={reabrirFechamento} className="gap-1">
-                <Unlock className="h-4 w-4" /> Reabrir fechamento
-              </Button>
-            )}
-            {canEdit && (
-              <Button onClick={handleSalvar} disabled={saving || bloqueadoPorConciliacao} className="gap-2">
-                <Save className="h-4 w-4" />
-                {bloqueadoPorConciliacao ? 'Bloqueado' : saving ? 'Salvando...' : 'Salvar e Fechar'}
-              </Button>
-            )}
+          {/* Footer inside table area */}
+          <div className="flex items-center justify-between px-1.5 py-1 border-t">
+            <div className="flex items-center gap-1">
+              {categoriasOcultas > 0 && !isDezembro && (
+                <Button variant="ghost" size="sm" onClick={() => setMostrarZerados(!mostrarZerados)} className="gap-1 text-[10px] text-muted-foreground h-5 px-1">
+                  {mostrarZerados ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  {mostrarZerados ? 'Ocultar zeradas' : `+${categoriasOcultas} zeradas`}
+                </Button>
+              )}
+            </div>
+            <p className="text-[9px] text-muted-foreground">
+              * Peso estimado
+              {isDezembro && ' • Dez = base anual'}
+            </p>
           </div>
         </div>
+
+        {/* RIGHT — Summary Card */}
+        <div className="flex-[2] min-w-[200px] max-w-[320px]">
+          <Card className="bg-primary/5 border-primary/20">
+            <CardContent className="p-3">
+              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-0.5">
+                Valor do Rebanho — {mesLabel}/{anoFiltro}
+              </p>
+              <p className="text-xl font-extrabold text-foreground leading-tight">{formatMoeda(totalRebanho)}</p>
+
+              <div className="mt-2 space-y-0.5 text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Cabeças</span>
+                  <span className="font-bold text-foreground tabular-nums">{formatNum(totalCabecas)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Peso médio</span>
+                  <span className="font-semibold text-foreground tabular-nums">{formatNum(pesoMedioGeral, 1)} kg</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">R$/@ médio</span>
+                  <span className="font-semibold text-foreground tabular-nums">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">R$/cab</span>
+                  <span className="font-semibold text-foreground tabular-nums">{formatMoeda(valorMedioCabeca)}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-
-
     </div>
   );
 }
