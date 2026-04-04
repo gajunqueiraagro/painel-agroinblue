@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-import { Save, Copy, Eye, EyeOff, Info, Lock, Unlock, AlertTriangle, ShieldAlert, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Save, Copy, Info, Lock, Unlock, AlertTriangle, ShieldAlert, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
@@ -45,6 +45,11 @@ const MAPA_PRECO_MERCADO: Record<string, { bloco: string; categoria: string; uni
   novilhas:  { bloco: 'frigorifico', categoria: 'Novilha', unidade: 'arroba' },
   vacas:     { bloco: 'frigorifico', categoria: 'Vaca', unidade: 'arroba' },
 };
+
+const ORDEM_CATEGORIAS_FIXA = [
+  'mamotes_m', 'desmama_m', 'garrotes', 'bois', 'touros',
+  'mamotes_f', 'desmama_f', 'novilhas', 'vacas',
+];
 
 const MESES_SHORT = [
   { key: '01', label: 'Jan' }, { key: '02', label: 'Fev' }, { key: '03', label: 'Mar' },
@@ -127,7 +132,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
     if (filtroMesInicial) setMesFiltro(String(filtroMesInicial).padStart(2, '0'));
   }, [filtroAnoInicial, filtroMesInicial]);
-  const [mostrarZerados, setMostrarZerados] = useState(false);
+  
 
   const anoMes = `${anoFiltro}-${mesFiltro}`;
   const isDezembro = mesFiltro === '12';
@@ -199,12 +204,21 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     });
   }, [resumoOficial.rows, precosLocal, categoriasComSugestao]);
 
+  // Always show all categories in fixed order
   const rows = useMemo(() => {
-    if (mostrarZerados || isDezembro) return allRows;
-    return allRows.filter(r => r.saldo > 0);
-  }, [allRows, mostrarZerados, isDezembro]);
+    return ORDEM_CATEGORIAS_FIXA.map(codigo => {
+      const existing = allRows.find(r => r.codigo === codigo);
+      if (existing) return existing;
+      const cat = categorias.find(c => c.codigo === codigo);
+      return {
+        categoriaId: cat?.id || codigo, codigo, nome: cat?.nome || codigo,
+        saldo: 0, pesoMedio: 0, origemPeso: 'sem_base' as OrigemPeso,
+        precoKg: precosLocal[codigo] ?? 0, valorCabeca: 0, precoArroba: 0, valorTotal: 0,
+        isSugerido: false,
+      };
+    });
+  }, [allRows, categorias, precosLocal]);
 
-  const categoriasOcultas = allRows.length - allRows.filter(r => r.saldo > 0).length;
   const temEstimativa = rows.some(r => r.saldo > 0 && r.pesoMedio > 0 && r.origemPeso !== 'pastos');
 
   const totalRebanho = useMemo(() => allRows.reduce((sum, r) => sum + r.valorTotal, 0), [allRows]);
@@ -327,8 +341,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const varCabValorMes = calcVariacao(valorMedioCabeca, prevTotals.valorCab);
   const varCabValorAno = calcVariacao(valorMedioCabeca, janTotals.valorCab);
 
-  // Chart data: query valor_rebanho_fechamento for all months of the year
+  // Chart data: query valor_rebanho_fechamento + vw_zoot_fazenda_mensal for all months
   const [historicoPorMes, setHistoricoPorMes] = useState<Record<string, number>>({});
+  const [zootPorMes, setZootPorMes] = useState<Record<number, { pesoTotalKg: number; cabecas: number }>>({});
   const mesAtualNum = new Date().getMonth() + 1;
   const anoAtualNum = new Date().getFullYear();
 
@@ -336,28 +351,43 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     if (!fazendaId || fazendaId === '__global__') return;
     const fetchHistorico = async () => {
       const anoMeses = Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`);
-      const { data } = await supabase
-        .from('valor_rebanho_fechamento')
-        .select('ano_mes, valor_total')
-        .eq('fazenda_id', fazendaId)
-        .in('ano_mes', anoMeses);
+      const [vrRes, zootRes] = await Promise.all([
+        supabase
+          .from('valor_rebanho_fechamento')
+          .select('ano_mes, valor_total')
+          .eq('fazenda_id', fazendaId)
+          .in('ano_mes', anoMeses),
+        supabase
+          .from('vw_zoot_fazenda_mensal' as any)
+          .select('mes, peso_total_final_kg, cabecas_final')
+          .eq('fazenda_id', fazendaId)
+          .eq('ano', Number(anoFiltro))
+          .eq('cenario', 'realizado'),
+      ]);
       const map: Record<string, number> = {};
-      (data || []).forEach(d => { map[d.ano_mes] = d.valor_total; });
+      (vrRes.data || []).forEach((d: any) => { map[d.ano_mes] = d.valor_total; });
       setHistoricoPorMes(map);
+
+      const zMap: Record<number, { pesoTotalKg: number; cabecas: number }> = {};
+      ((zootRes.data as any[]) || []).forEach((d: any) => {
+        zMap[d.mes] = { pesoTotalKg: Number(d.peso_total_final_kg) || 0, cabecas: Number(d.cabecas_final) || 0 };
+      });
+      setZootPorMes(zMap);
     };
     fetchHistorico();
   }, [fazendaId, anoFiltro]);
+
+  // Determine if selected month is fechado (has valor_rebanho_fechamento)
+  const mesSelecionadoFechado = !!historicoPorMes[anoMes] || isFechado;
 
   // Build 13-point fixed chart data (Ini, Jan–Dez), blank for future months
   const buildChartData = useCallback((getValue: (mes: number) => number | null) => {
     return CHART_LABELS.map((label, idx) => {
       if (idx === 0) {
-        // "Ini" = saldo inicial / jan value
         const v = getValue(0);
         return { label, value: v };
       }
       const mes = idx;
-      // Future months = blank
       if (Number(anoFiltro) > anoAtualNum || (Number(anoFiltro) === anoAtualNum && mes > mesAtualNum)) {
         return { label, value: null };
       }
@@ -368,39 +398,43 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const chartDataValor = useMemo(() => {
     return buildChartData((mes) => {
       if (mes === 0) {
-        // Use Jan or saldo inicial as "início"
         const janKey = `${anoFiltro}-01`;
         return historicoPorMes[janKey] ?? null;
       }
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
-      // For current selected month, use live computed value
       if (mes === mesNum) return totalRebanho > 0 ? totalRebanho : historicoPorMes[key] ?? null;
       return historicoPorMes[key] ?? null;
     });
   }, [buildChartData, historicoPorMes, anoFiltro, mesNum, totalRebanho]);
 
   const chartDataArrobas = useMemo(() => {
-    // We only have arrobas for jan, prev, and current — others null
-    const janArr = resumoJan.rows.reduce((s, r) => s + r.quantidadeFinal * (r.pesoMedioFinalKg || 0) / 30, 0);
-    const prevArr = resumoMesAnterior.rows.reduce((s, r) => s + r.quantidadeFinal * (r.pesoMedioFinalKg || 0) / 30, 0);
     return buildChartData((mes) => {
-      if (mes === 0) return janArr > 0 ? janArr : null;
-      if (mes === 1) return janArr > 0 ? janArr : null;
+      if (mes === 0) {
+        const z = zootPorMes[1];
+        return z ? z.pesoTotalKg / 30 : null;
+      }
       if (mes === mesNum) return totalArrobas > 0 ? totalArrobas : null;
-      if (mes === mesNum - 1) return prevArr > 0 ? prevArr : null;
-      return null;
+      const z = zootPorMes[mes];
+      return z && z.pesoTotalKg > 0 ? z.pesoTotalKg / 30 : null;
     });
-  }, [buildChartData, resumoJan.rows, resumoMesAnterior.rows, totalArrobas, mesNum]);
+  }, [buildChartData, zootPorMes, totalArrobas, mesNum]);
 
   const chartDataPrecoArroba = useMemo(() => {
     return buildChartData((mes) => {
-      if (mes === 0) return janTotals.precoArroba > 0 ? janTotals.precoArroba : null;
-      if (mes === 1) return janTotals.precoArroba > 0 ? janTotals.precoArroba : null;
+      if (mes === 0) {
+        const z = zootPorMes[1];
+        const v = historicoPorMes[`${anoFiltro}-01`];
+        if (z && z.pesoTotalKg > 0 && v) return v / (z.pesoTotalKg / 30);
+        return null;
+      }
+      const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
       if (mes === mesNum) return precoMedioArroba > 0 ? precoMedioArroba : null;
-      if (mes === mesNum - 1) return prevTotals.precoArroba > 0 ? prevTotals.precoArroba : null;
+      const z = zootPorMes[mes];
+      const v = historicoPorMes[key];
+      if (z && z.pesoTotalKg > 0 && v) return v / (z.pesoTotalKg / 30);
       return null;
     });
-  }, [buildChartData, janTotals, prevTotals, precoMedioArroba, mesNum]);
+  }, [buildChartData, zootPorMes, historicoPorMes, anoFiltro, precoMedioArroba, mesNum]);
 
   const handlePrecoChange = (codigo: string, value: string) => {
     const sanitized = value.replace(/[^0-9.,]/g, '');
@@ -540,8 +574,18 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         </div>
       )}
 
-      {/* Main content: table left + summary card right, charts below full width */}
-      <div className="flex gap-3 items-start">
+      {/* Main content: table left + summary card right */}
+      <div className="flex gap-3 items-start relative">
+        {/* Overlay for unclosed months */}
+        {!mesSelecionadoFechado && (
+          <div className="absolute inset-0 z-10 bg-background/60 backdrop-blur-[1px] rounded-lg flex items-center justify-center pointer-events-none">
+            <div className="bg-card border border-border shadow-lg rounded-lg px-4 py-2 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-muted-foreground">Rebanho e pasto ainda não fechados</span>
+            </div>
+          </div>
+        )}
+
         {/* LEFT — Table */}
         <div className="flex-1 max-w-[50%] min-w-0 bg-card rounded-lg shadow-sm border overflow-x-auto">
           <table className="w-full text-[11px]">
@@ -561,17 +605,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                 <tr key={r.codigo} className={`border-b ${i % 2 === 0 ? '' : 'bg-muted/20'}`}>
                   <td className="px-1.5 py-0.5 text-foreground text-[11px] italic whitespace-nowrap bg-primary/10">
                     {r.nome}
-                    {isDezembro && r.saldo === 0 && <span className="text-[9px] text-muted-foreground ml-1">(0)</span>}
                   </td>
                   <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[11px]">
-                    {r.saldo > 0 ? r.saldo : '-'}
+                    {r.saldo > 0 ? formatNum(r.saldo, 0) : '-'}
                   </td>
                   <td className="px-1.5 py-0.5 text-right tabular-nums italic text-[11px]">
                     {r.pesoMedio > 0 ? (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <span className={`cursor-help ${r.origemPeso === 'pastos' ? 'text-foreground' : 'text-muted-foreground'}`}>
-                            {formatNum(r.pesoMedio, 1)}
+                            {formatNum(r.pesoMedio, 2)}
                             {r.origemPeso !== 'pastos' && ' *'}
                           </span>
                         </TooltipTrigger>
@@ -617,8 +660,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             <tfoot>
               <tr className="border-t-2 bg-primary/25">
                 <td className="px-1.5 py-1 font-bold text-foreground text-[11px] italic bg-primary/30">TOTAL</td>
-                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{totalCabecas}</td>
-                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatNum(pesoMedioGeral, 1)}</td>
+                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{formatNum(totalCabecas, 0)}</td>
+                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatNum(pesoMedioGeral, 2)}</td>
                 <td className="px-1 py-1 text-center text-foreground tabular-nums italic text-[11px] w-[60px]">
                   {precoMedioKg > 0 ? formatNum(precoMedioKg, 2) : ''}
                 </td>
@@ -630,15 +673,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           </table>
 
           {/* Footer inside table area */}
-          <div className="flex items-center justify-between px-1.5 py-0.5 border-t">
-            <div className="flex items-center gap-1">
-              {categoriasOcultas > 0 && !isDezembro && (
-                <Button variant="ghost" size="sm" onClick={() => setMostrarZerados(!mostrarZerados)} className="gap-1 text-[10px] text-muted-foreground h-5 px-1">
-                  {mostrarZerados ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                  {mostrarZerados ? 'Ocultar zeradas' : `+${categoriasOcultas} zeradas`}
-                </Button>
-              )}
-            </div>
+          <div className="flex items-center justify-end px-1.5 py-0.5 border-t">
             <p className="text-[9px] text-muted-foreground">
               * Peso estimado
               {isDezembro && ' • Dez = base anual'}
@@ -688,8 +723,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                     <span className="w-[40px] text-right">vs ano</span>
                   </div>
                   {[
-                    { label: 'Cabeças', value: formatNum(totalCabecas), varMes: varCabMes, varAno: varCabAno },
-                    { label: 'Peso médio', value: `${formatNum(pesoMedioGeral, 1)} kg`, varMes: varPesoMes, varAno: varPesoAno },
+                    { label: 'Cabeças', value: formatNum(totalCabecas, 0), varMes: varCabMes, varAno: varCabAno },
+                    { label: 'Peso médio', value: `${formatNum(pesoMedioGeral, 2)} kg`, varMes: varPesoMes, varAno: varPesoAno },
                     { label: 'R$/@ médio', value: precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '—', varMes: varArrobaMes, varAno: varArrobaAno },
                     { label: 'R$/cab', value: formatMoeda(valorMedioCabeca), varMes: varCabValorMes, varAno: varCabValorAno },
                   ].map(ind => (
