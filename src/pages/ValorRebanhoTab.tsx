@@ -657,8 +657,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           )}
         </div>
 
-        {/* RIGHT — Summary Card + Charts */}
-        <div className="min-w-[200px] max-w-[340px] flex-1 space-y-2">
+        {/* RIGHT — Summary Card */}
+        <div className="min-w-[200px] max-w-[340px] flex-1">
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-3">
               <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-0">
@@ -711,25 +711,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               </div>
             </CardContent>
           </Card>
-
-          {/* Mini charts */}
-          <Card className="border">
-            <CardContent className="p-2 space-y-2">
-              {chartDataValor.length >= 2 && (
-                <MiniChart data={chartDataValor} dataKey="value" color="hsl(var(--primary))" title="Valor do Rebanho" />
-              )}
-              {chartDataArrobas.length >= 2 && (
-                <MiniChart data={chartDataArrobas} dataKey="value" color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
-              )}
-              {chartDataPrecoArroba.length >= 2 && (
-                <MiniChart data={chartDataPrecoArroba} dataKey="value" color="hsl(217, 91%, 60%)" title="R$/@ Médio do Estoque" />
-              )}
-              {chartDataValor.length < 2 && chartDataArrobas.length < 2 && chartDataPrecoArroba.length < 2 && (
-                <p className="text-[9px] text-muted-foreground text-center py-2">Gráficos disponíveis a partir do 2º mês com dados.</p>
-              )}
-            </CardContent>
-          </Card>
         </div>
+      </div>
+
+      {/* Charts — side by side, below table+card */}
+      <div className="flex gap-2 mt-1">
+        <MiniChart data={chartDataValor} color="hsl(var(--primary))" title="Valor do Rebanho" />
+        <MiniChart data={chartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
+        <MiniChart data={chartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio do Estoque" />
       </div>
     </div>
   );
