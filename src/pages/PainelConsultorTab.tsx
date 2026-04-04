@@ -1012,12 +1012,14 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
                     const badge = getPilarBadgeConfig(pilarInfo.status);
                     const tooltipText = getPilarTooltipText(pilarKey, pilarInfo);
                     const isP1Bloqueado = pilarKey === 'p1_mapa_pastos' && pilarInfo.status === 'bloqueado';
+                    const isP1Oficial = pilarKey === 'p1_mapa_pastos' && pilarInfo.status === 'oficial';
+                    const isClickable = isP1Bloqueado || isP1Oficial;
                     return (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <span
-                            className={`inline-flex items-center text-[8px] font-semibold px-1.5 py-0 rounded-full border leading-relaxed normal-case tracking-normal ${isP1Bloqueado ? 'cursor-pointer' : 'cursor-help'} ${badge.className}`}
-                            onClick={isP1Bloqueado ? (e) => { e.stopPropagation(); setShowDivP1(true); } : undefined}
+                            className={`inline-flex items-center text-[8px] font-semibold px-1.5 py-0 rounded-full border leading-relaxed normal-case tracking-normal ${isClickable ? 'cursor-pointer' : 'cursor-help'} ${badge.className}`}
+                            onClick={isP1Bloqueado ? (e) => { e.stopPropagation(); setShowDivP1(true); } : isP1Oficial ? (e) => { e.stopPropagation(); setShowReabrirP1(true); } : undefined}
                           >
                             {badge.label}
                             {(pilarInfo.modo_transitorio || pilarInfo.status === 'bloqueado') && (
