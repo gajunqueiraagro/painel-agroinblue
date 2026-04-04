@@ -99,7 +99,7 @@ const getTipoUsoStyle = (tipoUso: string | undefined) => {
   return TIPO_USO_STYLES[normalizeTipoUso(tipoUso)] || DEFAULT_TIPO_USO_STYLE;
 };
 
-export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass }: Props = {}) {
+export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho }: Props = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { canEdit } = usePermissions();
   const { pastos, categorias } = usePastos();
