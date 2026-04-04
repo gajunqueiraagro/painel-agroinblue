@@ -205,8 +205,9 @@ function buildMonthlyData(
     return (pesoFinMesCalc(m) - pesoIniMesCalc(m) - entradasKgMes(m) + saidasKgMes(m)) / rebMedio / dias;
   });
 
-  const valorRebFin = valorRebanhoMes;
-  const valorRebIni = Array.from({ length: 12 }, (_, i) => i === 0 ? 0 : (valorRebanhoMes[i - 1] || 0));
+  // valorRebanhoMes has 13 elements: [0]=Dec prev year, [1]=Jan, ..., [12]=Dec
+  const valorRebFin = valorRebanhoMes.slice(1); // 12 elements: Jan-Dec
+  const valorRebIni = valorRebanhoMes.slice(0, 12); // 12 elements: Dec(prev)→Nov = initial for Jan→Dec
 
   const entFinArr = mk(entFinMes);
   const saiFinArr = mk(saiFinMes);
@@ -217,8 +218,8 @@ function buildMonthlyData(
   const resOperArr = mk(m => recPecMes(m) - deducMes(m) - desembPecMes(m));
   const ebitdaArr = mk(m => recPecMes(m) - deducMes(m) - desembPecMes(m));
   const varValorRebArr = mk(m => {
-    const atual = valorRebanhoMes[m - 1] || 0;
-    const anterior = m === 1 ? 0 : (valorRebanhoMes[m - 2] || 0);
+    const atual = valorRebFin[m - 1] || 0;
+    const anterior = valorRebIni[m - 1] || 0;
     return atual - anterior;
   });
 
