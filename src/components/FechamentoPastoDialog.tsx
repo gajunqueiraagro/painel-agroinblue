@@ -118,6 +118,7 @@ export function FechamentoPastoDialog({
     });
     await onSave(itens);
     setSaving(false);
+    onOpenChange(false);
   };
 
   const handleCopiar = async () => {
