@@ -282,10 +282,11 @@ export function useStatusFechamentosAno(
         const contadores = { aberto: 0, parcial: 0, fechado: 0 };
         pendencias.forEach((p) => contadores[p.status]++);
 
-        // ── StatusGeral (IDENTICAL to useStatusZootecnico) ──
+        // ── StatusGeral (financeiro é informativo — IDENTICAL to useStatusZootecnico) ──
+        const pilaresDecisivos = [statusPastosCalc, catsResult.status, statusValorCalc, statusEcon];
         let statusGeral: StatusGeral = 'parcial';
-        if (contadores.fechado === 5) statusGeral = 'fechado';
-        else if (contadores.aberto === 5) statusGeral = 'aberto';
+        if (pilaresDecisivos.every((s) => s === 'fechado')) statusGeral = 'fechado';
+        else if (pilaresDecisivos.every((s) => s === 'aberto')) statusGeral = 'aberto';
 
         // ── StatusMes (UI classification derived from statusGeral) ──
         const hasAnyStarted =
