@@ -742,19 +742,27 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
             <DialogTitle>Editar Lançamento</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            {/* P1 governance notice */}
+            {p1Oficial && (
+              <div className="bg-destructive/10 border border-destructive/30 rounded px-2 py-1.5">
+                <p className="text-[9px] text-destructive font-medium">
+                  🔒 Mês fechado (P1 oficial). Campos estruturais estão bloqueados. Apenas peso, preço e observação podem ser alterados.
+                </p>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="font-bold text-foreground">Data</Label>
-                <Input type="date" value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))} className="mt-1" />
+                <Input type="date" value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))} className="mt-1" disabled={p1Oficial} />
               </div>
               <div>
                 <Label className="font-bold text-foreground">Quantidade</Label>
-                <Input type="number" value={form.quantidade} onChange={e => setForm(f => ({ ...f, quantidade: Number(e.target.value) }))} className="mt-1" min="1" />
+                <Input type="number" value={form.quantidade} onChange={e => setForm(f => ({ ...f, quantidade: Number(e.target.value) }))} className="mt-1" min="1" disabled={p1Oficial} />
               </div>
             </div>
             <div>
               <Label className="font-bold text-foreground">Categoria</Label>
-              <Select value={form.categoria} onValueChange={v => setForm(f => ({ ...f, categoria: v as Categoria }))}>
+              <Select value={form.categoria} onValueChange={v => setForm(f => ({ ...f, categoria: v as Categoria }))} disabled={p1Oficial}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {CATEGORIAS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
@@ -764,7 +772,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
             {form.tipo === 'reclassificacao' && (
               <div>
                 <Label className="font-bold text-foreground">Categoria Destino</Label>
-                <Select value={form.categoriaDestino || ''} onValueChange={v => setForm(f => ({ ...f, categoriaDestino: v as Categoria }))}>
+                <Select value={form.categoriaDestino || ''} onValueChange={v => setForm(f => ({ ...f, categoriaDestino: v as Categoria }))} disabled={p1Oficial}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {CATEGORIAS.filter(c => c.value !== form.categoria).map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
@@ -790,7 +798,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                   {isSaidaAuto ? (
                     <Input value={nomeFazenda} readOnly className="mt-1 bg-muted cursor-not-allowed" />
                   ) : (
-                    <Input value={form.fazendaOrigem || ''} onChange={e => setForm(f => ({ ...f, fazendaOrigem: e.target.value }))} className="mt-1" />
+                    <Input value={form.fazendaOrigem || ''} onChange={e => setForm(f => ({ ...f, fazendaOrigem: e.target.value }))} className="mt-1" disabled={p1Oficial} />
                   )}
                 </div>
               )}
@@ -801,7 +809,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 {isEntradaAuto ? (
                   <Input value={nomeFazenda} readOnly className="mt-1 bg-muted cursor-not-allowed" />
                 ) : isTransSaida && outrasFazendas.length > 0 ? (
-                  <Select value={form.fazendaDestino || ''} onValueChange={v => setForm(f => ({ ...f, fazendaDestino: v }))}>
+                  <Select value={form.fazendaDestino || ''} onValueChange={v => setForm(f => ({ ...f, fazendaDestino: v }))} disabled={p1Oficial}>
                     <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a fazenda" /></SelectTrigger>
                     <SelectContent>
                       {outrasFazendas.map(f => (
@@ -815,6 +823,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                     onChange={e => setForm(f => ({ ...f, fazendaDestino: e.target.value }))}
                     placeholder={form.tipo === 'morte' ? 'Ex: Raio, Picada de cobra' : form.tipo === 'consumo' ? 'Ex: Consumo interno' : 'Ex: Faz. Santa Cruz'}
                     className="mt-1"
+                    disabled={p1Oficial}
                   />
                 )}
               </div>
@@ -843,7 +852,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
 
             <div className="flex gap-2 pt-2">
               <Button variant="outline" className="flex-1 touch-target" onClick={() => setEditando(false)}>Cancelar</Button>
-              <Button variant="destructive" className="touch-target" onClick={handleRemoverClick} disabled={checkingVinculos}>
+              <Button variant="destructive" className="touch-target" onClick={handleRemoverClick} disabled={checkingVinculos || p1Oficial}>
                 <Trash2 className="h-4 w-4" />
               </Button>
               <Button className="flex-1 touch-target" onClick={handleSalvar}>Salvar</Button>
