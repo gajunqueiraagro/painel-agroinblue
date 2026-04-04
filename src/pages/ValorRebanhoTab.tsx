@@ -744,11 +744,13 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                 </div>
                 {/* RIGHT column — indicators compact */}
                 <div className="flex-1 min-w-0 text-[10px]">
-                  <div className="grid grid-cols-[100px_100px_70px_70px] gap-x-1 gap-y-0.5 items-center">
+                  <div className="grid grid-cols-[auto_70px_56px_56px] gap-x-2 items-center">
+                    {/* Header */}
                     <span className="text-[8px] text-muted-foreground font-medium">Indicador</span>
                     <span className="text-[8px] text-muted-foreground font-medium text-right">Valor</span>
                     <span className="text-[8px] text-muted-foreground font-medium text-right">vs mês</span>
                     <span className="text-[8px] text-muted-foreground font-medium text-right">vs ano</span>
+                    {/* Rows */}
                     {[
                       { label: 'Cabeças', value: formatNum(totalCabecas, 0), varMes: varCabMes, varAno: varCabAno },
                       { label: 'Peso médio', value: `${formatNum(pesoMedioGeral, 2)} kg`, varMes: varPesoMes, varAno: varPesoAno },
@@ -757,8 +759,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                       { label: '@s estoque', value: formatNum(totalArrobas, 2), varMes: varArrobasEstoqueMes, varAno: varArrobasEstoqueAno },
                     ].map(ind => (
                       <React.Fragment key={ind.label}>
-                        <span className="text-muted-foreground text-[10px] truncate">{ind.label}</span>
-                        <span className="text-right font-semibold text-foreground tabular-nums text-[10px]">{ind.value}</span>
+                        <span className="text-muted-foreground text-[9px] truncate">{ind.label}</span>
+                        <span className="text-right font-semibold text-foreground tabular-nums">{ind.value}</span>
                         <span className="text-right"><VariacaoBadge valor={ind.varMes} label="" /></span>
                         <span className="text-right"><VariacaoBadge valor={ind.varAno} label="" /></span>
                       </React.Fragment>
