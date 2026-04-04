@@ -588,7 +588,6 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
       ];
   }
 }
-}
 
 // ─── Total logic ───
 function totalForRow(row: Row, tab: ViewTab, maxMonth: number): number {
