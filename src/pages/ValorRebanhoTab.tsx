@@ -441,16 +441,20 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         const z = zootPorMes[1];
         return z && z.pesoTotalKg > 0 ? z.pesoTotalKg / 30 : null;
       }
+      // Mês selecionado: usar valor live (= card)
+      if (mes === mesNum) {
+        if (totalArrobas > 0) return totalArrobas;
+        const z = zootPorMes[mes];
+        return z && z.pesoTotalKg > 0 ? z.pesoTotalKg / 30 : null;
+      }
       const z = zootPorMes[mes];
       if (z && z.pesoTotalKg > 0) return z.pesoTotalKg / 30;
-      // Fallback para mês selecionado
-      if (mes === mesNum && totalArrobas > 0) return totalArrobas;
       return null;
     });
   }, [buildChartData, zootPorMes, totalArrobas, mesNum]);
 
-  // R$/@ MÉDIO chart — derivado: valor_rebanho_fechamento / arrobas_zoot
-  // Para o mês selecionado, usar live precoMedioArroba
+  // R$/@ MÉDIO chart — derivado: valor / arrobas
+  // Para o mês selecionado, usar live precoMedioArroba (= card)
   const chartDataPrecoArroba = useMemo(() => {
     return buildChartData((mes) => {
       if (mes === 0) {
@@ -459,13 +463,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         if (z && z.pesoTotalKg > 0 && v) return v / (z.pesoTotalKg / 30);
         return null;
       }
+      // Mês selecionado: usar valor live (= card)
+      if (mes === mesNum) {
+        if (precoMedioArroba > 0) return precoMedioArroba;
+      }
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
       const z = zootPorMes[mes];
       const v = historicoPorMes[key];
-      // Derivar de fontes oficiais
       if (z && z.pesoTotalKg > 0 && v) return v / (z.pesoTotalKg / 30);
-      // Fallback para mês selecionado
-      if (mes === mesNum && precoMedioArroba > 0) return precoMedioArroba;
       return null;
     });
   }, [buildChartData, zootPorMes, historicoPorMes, anoFiltro, precoMedioArroba, mesNum]);
