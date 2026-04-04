@@ -22,6 +22,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import { usePastos } from '@/hooks/usePastos';
+import { useZootMensal, indexByMes, type ZootMensal } from '@/hooks/useZootMensal';
 import { formatPainel, type PainelFormatType } from '@/lib/calculos/formatters';
 import {
   calcSaldoMensalAcumulado,
