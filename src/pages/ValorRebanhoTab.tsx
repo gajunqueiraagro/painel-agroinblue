@@ -232,6 +232,15 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const anoMes = `${anoFiltro}-${mesFiltro}`;
   const isDezembro = mesFiltro === '12';
 
+  // Regra temporal: mês atual, passado ou futuro
+  const hoje = new Date();
+  const mesAtualSistema = hoje.getMonth() + 1;
+  const anoAtualSistema = hoje.getFullYear();
+  const mesNumFiltro = Number(mesFiltro);
+  const anoNumFiltro = Number(anoFiltro);
+  const isMesFuturo = anoNumFiltro > anoAtualSistema || (anoNumFiltro === anoAtualSistema && mesNumFiltro > mesAtualSistema);
+  const isMesAtual = anoNumFiltro === anoAtualSistema && mesNumFiltro === mesAtualSistema;
+
   const statusZoo = useStatusZootecnico(isGlobal ? undefined : fazendaId, Number(anoFiltro), Number(mesFiltro), lancamentos, saldosIniciais);
   const categoriasStatus = statusZoo.pendencias.find(p => p.id === 'categorias');
   const categoriasConciliadas = categoriasStatus?.status === 'fechado';
@@ -694,7 +703,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     toast.success(`${prev.length} preços copiados do mês anterior`);
   };
 
-  const canEdit = fonteMes === 'live';
+  const canEdit = fonteMes === 'live' && !isMesFuturo;
   const tabelaUsaSnapshot = fonteMes === 'snapshot';
   const avisoSnapshotIncompleto = fonteMes === 'snapshot_incompleto';
   const fazendaNome = fazendaAtual?.nome || '';
@@ -828,14 +837,20 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           </span>
         )}
 
-        {uMesFechado && (
+        {isMesFuturo && (
+          <Badge variant="outline" className="gap-1 text-xs text-muted-foreground">
+            <Lock className="h-3 w-3" /> Futuro
+          </Badge>
+        )}
+
+        {!isMesFuturo && uMesFechado && (
           <Badge variant="secondary" className="gap-1 text-xs">
             <Lock className="h-3 w-3" /> Fechado
             {isGlobal && ` (${globalData.fazendasFechadas}/${globalData.fazendasTotal})`}
           </Badge>
         )}
 
-        {!uMesFechado && (
+        {!isMesFuturo && !uMesFechado && (
           <Badge variant="outline" className="gap-1 text-xs">
             <Info className="h-3 w-3" /> Live
           </Badge>
@@ -848,7 +863,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         )}
 
         <div className="ml-auto flex gap-1.5">
-          {!isGlobal && mesSelecionadoFechado && isAdmin && (
+          {!isGlobal && !isMesFuturo && mesSelecionadoFechado && isAdmin && (
             <Button variant="outline" size="sm" onClick={reabrirFechamento} className="gap-1 h-7 text-xs px-2">
               <Unlock className="h-3 w-3" /> Reabrir
             </Button>
@@ -867,6 +882,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           const mesKey = `${anoFiltro}-${m.key}`;
           const isClosed = isGlobal ? !!uHistoricoPorMes[mesKey] : !!historicoPorMes[mesKey];
           const isSelected = mesFiltro === m.key;
+          const mesN = Number(m.key);
+          const isFuturo = anoNumFiltro > anoAtualSistema || (anoNumFiltro === anoAtualSistema && mesN > mesAtualSistema);
           return (
             <button
               key={m.key}
@@ -874,9 +891,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               className={`flex-1 text-center text-[11px] font-semibold py-1 rounded transition-colors
                 ${isSelected
                   ? 'bg-primary text-primary-foreground shadow-sm'
-                  : isClosed
-                    ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50'
-                    : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40'
+                  : isFuturo
+                    ? 'bg-muted/40 text-muted-foreground/50 cursor-default'
+                    : isClosed
+                      ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50'
+                      : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40'
                 }`}
             >
               {m.label}
@@ -885,7 +904,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         })}
       </div>
 
-      {uFonteMes === 'live' && (
+      {isMesAtual && !isMesFuturo && uFonteMes === 'live' && (
+        <div className="flex items-center gap-1.5 text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded px-2 py-1 border border-amber-500/30">
+          <Info className="h-3 w-3 shrink-0" />
+          <span>Mês atual em andamento — valores parciais até o fechamento oficial.</span>
+        </div>
+      )}
+
+      {uFonteMes === 'live' && !isMesFuturo && !isMesAtual && (
         <div className="flex items-center gap-1.5 text-[10px] bg-muted/40 text-muted-foreground rounded px-2 py-1 border">
           <Info className="h-3 w-3 shrink-0" />
           <span>{isGlobal ? 'Mês aberto: valores consolidados de todas as fazendas em cálculo live.' : 'Mês aberto: tabela, card e gráficos exibem cálculo live até o fechamento oficial.'}</span>
@@ -908,6 +934,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         </div>
       )}
 
+      <div className="relative">
+        {isMesFuturo && (
+          <div className="absolute inset-0 z-10 bg-background/80 backdrop-blur-[1px] rounded-lg flex flex-col items-center justify-center gap-1.5">
+            <Lock className="h-6 w-6 text-muted-foreground" />
+            <p className="text-sm font-semibold text-muted-foreground">Mês ainda não aberto</p>
+            <p className="text-[10px] text-muted-foreground/70">Apenas o mês vigente pode ser alimentado.</p>
+          </div>
+        )}
       <div className="flex gap-3 items-start">
         <div className="flex-1 max-w-[50%] min-w-0 bg-card rounded-lg shadow-sm border overflow-x-auto">
           <table className="w-full text-[11px]">
@@ -1115,6 +1149,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           </>
           )}
         </div>
+      </div>
       </div>
     </div>
   );
