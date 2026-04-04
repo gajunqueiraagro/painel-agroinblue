@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
-import { ArrowLeft, Download, ChevronDown, Info } from 'lucide-react';
+import { ArrowLeft, Download, ChevronDown, Info, ClipboardCheck } from 'lucide-react';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useStatusPilares, BLOCO_PILAR_MAP, getPilarBadgeConfig, getPilarTooltipText, type StatusPilares as StatusPilaresType } from '@/hooks/useStatusPilares';
