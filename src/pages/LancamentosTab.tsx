@@ -2889,6 +2889,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setNovoFornecedorVendaOpen(false);
         }}
       />
+
+      {/* Reabertura P1 dialog */}
+      {fazendaAtual?.id && formAnoMes && (
+        <ReabrirP1Dialog
+          open={showReabrirP1}
+          onOpenChange={setShowReabrirP1}
+          fazendaId={fazendaAtual.id}
+          anoMes={formAnoMes}
+          onReaberto={refetchPilares}
+        />
+      )}
     </div>
   );
 }
