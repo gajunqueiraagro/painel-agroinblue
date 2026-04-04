@@ -344,14 +344,14 @@ export function useValorRebanhoGlobal(
     return metricsFromRows(prevRows);
   }, [getGlobalFonteMes, getAggregatedRowsForMonth, anoMesAnterior, anoNum, mesNum]);
 
-  // January
-  const anoMesJan = `${anoFiltro}-01`;
+  // Início do ano = valor final de Dez do ano anterior
+  const anoMesDezAnterior = `${Number(anoFiltro) - 1}-12`;
   const metricasInicioAno = useMemo(() => {
-    const fonte = getGlobalFonteMes(anoMesJan);
+    const fonte = getGlobalFonteMes(anoMesDezAnterior);
     if (fonte === 'snapshot_incompleto') return null;
-    const janRows = getAggregatedRowsForMonth(anoMesJan, anoNum, 1);
-    return metricsFromRows(janRows);
-  }, [getGlobalFonteMes, getAggregatedRowsForMonth, anoMesJan, anoNum]);
+    const dezRows = getAggregatedRowsForMonth(anoMesDezAnterior, Number(anoFiltro) - 1, 12);
+    return metricsFromRows(dezRows);
+  }, [getGlobalFonteMes, getAggregatedRowsForMonth, anoMesDezAnterior, anoFiltro]);
 
   // Historico for month bar + charts
   const historicoPorMes = useMemo(() => {
