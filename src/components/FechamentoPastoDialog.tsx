@@ -201,67 +201,85 @@ export function FechamentoPastoDialog({
     : true;
   const tipoUsoLabel = TIPOS_USO_OPTIONS.find(t => t.value === tipoUsoMes)?.label || tipoUsoMes;
 
-  // ── Render de um grupo (machos ou fêmeas) ──
-  const formatPeso = (v: number | null) => {
-    if (v == null || v === 0) return '';
-    return v.toFixed(2).replace('.', ',');
+  // ── Card de categoria com estado local para peso ──
+  const CategoriaCard = ({ c, idx, tabBase }: { c: CategoriaRebanho; idx: number; tabBase: number }) => {
+    const item = getItem(c.id);
+    const pesoNum = item?.peso_medio_kg;
+
+    const [pesoLocal, setPesoLocal] = useState(() =>
+      pesoNum != null && pesoNum !== 0 ? pesoNum.toFixed(2).replace('.', ',') : ''
+    );
+    const [pesoFocused, setPesoFocused] = useState(false);
+
+    // Sync from external changes (e.g. "Copiar anterior") only when not focused
+    useEffect(() => {
+      if (!pesoFocused) {
+        setPesoLocal(pesoNum != null && pesoNum !== 0 ? pesoNum.toFixed(2).replace('.', ',') : '');
+      }
+    }, [pesoNum, pesoFocused]);
+
+    return (
+      <div className="flex flex-col items-center gap-1" style={{ minWidth: '62px' }}>
+        <span className="text-[11px] font-semibold text-foreground whitespace-nowrap mb-0.5">{c.nome}</span>
+        <div className="relative">
+          <Input
+            type="number" inputMode="numeric" min={0}
+            tabIndex={tabBase + idx * 2}
+            value={item?.quantidade || ''}
+            onChange={e => updateItem(c.id, 'quantidade', Number(e.target.value) || 0)}
+            disabled={isFechado}
+            className="h-8 text-xs font-bold px-1.5 text-center tabular-nums w-[58px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            placeholder="0"
+          />
+          {item?.origem_dado === 'copiado_mes_anterior' && (
+            <Badge variant="secondary" className="absolute -top-1.5 -right-1.5 text-[6px] h-3 px-0.5 leading-none">Cop</Badge>
+          )}
+        </div>
+        <Input
+          type="text" inputMode="decimal"
+          tabIndex={tabBase + idx * 2 + 1}
+          value={pesoLocal}
+          onChange={e => setPesoLocal(e.target.value)}
+          onFocus={() => setPesoFocused(true)}
+          onBlur={() => {
+            setPesoFocused(false);
+            const raw = pesoLocal.replace(',', '.');
+            if (raw === '' || raw.trim() === '') {
+              updateItem(c.id, 'peso_medio_kg', null);
+              setPesoLocal('');
+            } else {
+              const parsed = parseFloat(raw);
+              if (!isNaN(parsed)) {
+                const valorFinal = Math.round(parsed * 100) / 100;
+                updateItem(c.id, 'peso_medio_kg', valorFinal);
+                setPesoLocal(valorFinal.toFixed(2).replace('.', ','));
+              } else {
+                updateItem(c.id, 'peso_medio_kg', null);
+                setPesoLocal('');
+              }
+            }
+          }}
+          disabled={isFechado}
+          className="h-8 text-xs px-1.5 text-center tabular-nums w-[58px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          placeholder="kg"
+        />
+      </div>
+    );
   };
 
+  // ── Render de um grupo (machos ou fêmeas) ──
   const renderGrupo = (label: string, cats: CategoriaRebanho[], colorAccent: string, tabBase: number) => (
     <div>
       <div className={`text-xs font-bold uppercase tracking-widest mb-2 ${colorAccent}`}>{label}</div>
       <div className="flex items-start gap-4 pl-8">
-        {/* Labels column */}
         <div className="flex flex-col pt-[22px] gap-1 shrink-0 w-[40px]">
           <span className="text-[11px] font-bold text-muted-foreground h-8 flex items-center">Qtde</span>
           <span className="text-[11px] font-bold text-muted-foreground h-8 flex items-center">Peso</span>
         </div>
-        {/* Category cards */}
         <div className="flex gap-4 flex-wrap">
-          {cats.map((c, idx) => {
-            const item = getItem(c.id);
-            const pesoDisplay = item?.peso_medio_kg != null && item.peso_medio_kg !== 0
-              ? item.peso_medio_kg.toFixed(2)
-              : '';
-            return (
-              <div key={c.id} className="flex flex-col items-center gap-1" style={{ minWidth: '62px' }}>
-                <span className="text-[11px] font-semibold text-foreground whitespace-nowrap mb-0.5">{c.nome}</span>
-                <div className="relative">
-                  <Input
-                    type="number" inputMode="numeric" min={0}
-                    tabIndex={tabBase + idx * 2}
-                    value={item?.quantidade || ''}
-                    onChange={e => updateItem(c.id, 'quantidade', Number(e.target.value) || 0)}
-                    disabled={isFechado}
-                    className="h-8 text-xs font-bold px-1.5 text-center tabular-nums w-[58px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    placeholder="0"
-                  />
-                  {item?.origem_dado === 'copiado_mes_anterior' && (
-                    <Badge variant="secondary" className="absolute -top-1.5 -right-1.5 text-[6px] h-3 px-0.5 leading-none">Cop</Badge>
-                  )}
-                </div>
-                <Input
-                  type="text" inputMode="decimal"
-                  tabIndex={tabBase + idx * 2 + 1}
-                  value={pesoDisplay}
-                  onChange={e => {
-                    const raw = e.target.value.replace(',', '.');
-                    updateItem(c.id, 'peso_medio_kg', raw === '' ? null : Number(raw) || null);
-                  }}
-                  onBlur={e => {
-                    const raw = e.target.value.replace(',', '.');
-                    if (raw) {
-                      const n = Math.round(parseFloat(raw) * 100) / 100;
-                      if (!isNaN(n)) updateItem(c.id, 'peso_medio_kg', n);
-                    }
-                  }}
-                  disabled={isFechado}
-                  className="h-8 text-xs px-1.5 text-center tabular-nums w-[58px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  placeholder="kg"
-                />
-              </div>
-            );
-          })}
+          {cats.map((c, idx) => (
+            <CategoriaCard key={c.id} c={c} idx={idx} tabBase={tabBase} />
+          ))}
         </div>
       </div>
     </div>
