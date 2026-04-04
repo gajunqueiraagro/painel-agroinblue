@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useStatusPilares } from '@/hooks/useStatusPilares';
+import {
   Lancamento,
   CATEGORIAS,
   TODOS_TIPOS,
@@ -7,6 +7,7 @@ import { useStatusPilares } from '@/hooks/useStatusPilares';
   TipoMovimentacao,
   kgToArrobas,
 } from '@/types/cattle';
+import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { isEntrada, isReclassificacao } from '@/lib/calculos/zootecnicos';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
