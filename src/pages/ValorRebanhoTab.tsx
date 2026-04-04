@@ -493,7 +493,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       return;
     }
     const items = Object.entries(precosLocal).map(([categoria, preco_kg]) => ({ categoria, preco_kg }));
-    await salvarPrecos(items, totalRebanho);
+    const pesoTotalKg = allRows.reduce((sum, r) => sum + (r.saldo * r.pesoMedio), 0);
+    await salvarPrecos(items, totalRebanho, pesoTotalKg);
   };
 
   const handleCopiarMesAnterior = async () => {
