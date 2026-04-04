@@ -541,6 +541,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const metricasSelecionado = useMemo(() => {
     if (fonteMes === 'live') return metricasLiveSelecionado;
+    if (fonteMes === 'snapshot_incompleto') return buildMetricsFromTotals(null, null, null);
     return buildFrozenMetrics(anoMes) ?? buildMetricsFromTotals(null, null, null);
   }, [fonteMes, metricasLiveSelecionado, buildFrozenMetrics, anoMes]);
 
