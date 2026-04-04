@@ -44,7 +44,7 @@ import {
 } from '@/lib/financeiro/classificacao';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
-import { getIndicadorMeta, getFonteStatusLabel, type FonteIndicador } from '@/lib/painelConsultor/indicadorCatalogo';
+import { CATALOGO_INDICADORES, getFonteStatusLabel, type FonteIndicador, type IndicadorMeta } from '@/lib/painelConsultor/indicadorCatalogo';
 
 // ─── Constants ───
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
