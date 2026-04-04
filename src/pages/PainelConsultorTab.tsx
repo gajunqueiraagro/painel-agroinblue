@@ -876,7 +876,8 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
                       key={i}
                       className={`text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px]${
                         TRIM_BORDER_INDEXES.has(i) ? ' border-l border-border/20' : ''
-                      }${previstoSemFonte ? ' text-muted-foreground/30' : ''}`}
+                      }${previstoSemFonte ? ' text-muted-foreground/30' : ''}${isSemBase ? ' text-muted-foreground/50 italic' : ''}`}
+                      title={isSemBase ? 'Meta não projetou este indicador' : undefined}
                     >
                       {cellContent}
                     </td>
@@ -887,7 +888,9 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
                 }`}>
                   {previstoSemFonte
                     ? ''
-                    : (monthCutoff > 0 && tot !== null ? formatPainel(tot, row.format) : '')}
+                    : row.valores.some(v => isNaN(v))
+                      ? '–'
+                      : (monthCutoff > 0 && tot !== null ? formatPainel(tot, row.format) : '')}
                 </td>
               </tr>
             );
