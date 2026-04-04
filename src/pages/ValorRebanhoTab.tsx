@@ -359,9 +359,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const varArrobasEstoqueMes = calcVariacao(totalArrobas, prevArrobas);
   const varArrobasEstoqueAno = calcVariacao(totalArrobas, janArrobas);
 
-  // Chart data: query valor_rebanho_fechamento + vw_zoot_fazenda_mensal for all months
-  const [historicoPorMes, setHistoricoPorMes] = useState<Record<string, number>>({});
-  const [zootPorMes, setZootPorMes] = useState<Record<number, { pesoTotalKg: number; cabecas: number }>>({});
+  // Chart data: query valor_rebanho_fechamento for all months (ÚNICA FONTE OFICIAL)
+  const [historicoPorMes, setHistoricoPorMes] = useState<Record<string, { valor: number; pesoKg: number }>>({});
   const mesAtualNum = new Date().getMonth() + 1;
   const anoAtualNum = new Date().getFullYear();
 
@@ -369,28 +368,19 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     if (!fazendaId || fazendaId === '__global__') return;
     const fetchHistorico = async () => {
       const anoMeses = Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`);
-      const [vrRes, zootRes] = await Promise.all([
-        supabase
-          .from('valor_rebanho_fechamento')
-          .select('ano_mes, valor_total')
-          .eq('fazenda_id', fazendaId)
-          .in('ano_mes', anoMeses),
-        supabase
-          .from('vw_zoot_fazenda_mensal' as any)
-          .select('mes, peso_total_final_kg, cabecas_final')
-          .eq('fazenda_id', fazendaId)
-          .eq('ano', Number(anoFiltro))
-          .eq('cenario', 'realizado'),
-      ]);
-      const map: Record<string, number> = {};
-      (vrRes.data || []).forEach((d: any) => { map[d.ano_mes] = Number(d.valor_total) || 0; });
-      setHistoricoPorMes(map);
-
-      const zMap: Record<number, { pesoTotalKg: number; cabecas: number }> = {};
-      ((zootRes.data as any[]) || []).forEach((d: any) => {
-        zMap[d.mes] = { pesoTotalKg: Number(d.peso_total_final_kg) || 0, cabecas: Number(d.cabecas_final) || 0 };
+      const { data } = await supabase
+        .from('valor_rebanho_fechamento')
+        .select('ano_mes, valor_total, peso_total_kg')
+        .eq('fazenda_id', fazendaId)
+        .in('ano_mes', anoMeses);
+      const map: Record<string, { valor: number; pesoKg: number }> = {};
+      (data || []).forEach((d: any) => {
+        map[d.ano_mes] = {
+          valor: Number(d.valor_total) || 0,
+          pesoKg: Number(d.peso_total_kg) || 0,
+        };
       });
-      setZootPorMes(zMap);
+      setHistoricoPorMes(map);
     };
     fetchHistorico();
   }, [fazendaId, anoFiltro]);
