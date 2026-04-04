@@ -1085,7 +1085,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                     <span className="text-[8px] text-muted-foreground font-medium">Indicador</span>
                     <span className="text-[8px] text-muted-foreground font-medium text-right">Valor</span>
                     <span className="text-[8px] text-muted-foreground font-medium text-right">vs mês</span>
-                    <span className="text-[8px] text-muted-foreground font-medium text-right">vs ano</span>
+                    <span className="text-[8px] text-muted-foreground font-medium text-right">vs ini. ano</span>
 
                     {[
                       { label: 'Cabeças', value: formatNumNullable(uMetricas.cabecas, 0), varMes: uVarCabMes, varAno: uVarCabAno },
