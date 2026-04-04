@@ -269,12 +269,16 @@ export function useStatusFechamentosAno(
             ? 'Aguardando fechamento das bases'
             : 'Bases não fechadas';
 
-        // ── Build Pendencia[] (SAME structure as useStatusZootecnico) ──
+        /**
+         * ORDEM OFICIAL DOS PILARES (padronizada em todas as telas):
+         *   1. Pastos  2. Rebanho conciliado  3. Valor do rebanho
+         *   4. Financeiro caixa (INFORMATIVO)  5. Resultado final (DERIVADO)
+         */
         const pendencias: Pendencia[] = [
-          { id: 'financeiro', label: 'Conciliação do Financeiro', descricao: descFin, status: statusFin, resolverTab: 'fin_caixa' },
           { id: 'pastos', label: 'Fechamento de Pastos', descricao: descPastos, status: statusPastosCalc, resolverTab: 'fechamento' },
           { id: 'categorias', label: 'Conciliação de Categorias', descricao: descCats, status: catsResult.status, resolverTab: 'fechamento' },
           { id: 'valor', label: 'Valor do Rebanho', descricao: descValor, status: statusValorCalc, resolverTab: 'valor_rebanho' },
+          { id: 'financeiro', label: 'Conciliação do Financeiro', descricao: descFin, status: statusFin, resolverTab: 'fin_caixa' },
           { id: 'economico', label: 'Econômico', descricao: descEcon, status: statusEcon },
         ];
 
