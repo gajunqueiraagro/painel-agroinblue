@@ -17,7 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { calcSaldoPorCategoriaLegado, calcPesoMedioPonderado, calcUA, calcUAHa, calcAreaProdutivaPecuaria } from '@/lib/calculos/zootecnicos';
 import { loadPesosPastosPorCategoria, resolverPesoOficial } from '@/hooks/useFechamentoCategoria';
 import { calcArrobasSafe } from '@/lib/calculos/economicos';
-import { ChevronRight, AlertTriangle, CheckCircle2, TrendingUp, Wallet, BarChart3, Landmark } from 'lucide-react';
+import { ChevronRight, AlertTriangle, CheckCircle2, TrendingUp, Wallet, BarChart3, Landmark, ClipboardCheck } from 'lucide-react';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { Categoria } from '@/types/cattle';
 import type { FiltroGlobal } from './Index';
