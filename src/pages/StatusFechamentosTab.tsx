@@ -4,20 +4,20 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { AlertTriangle, CheckCircle2, Clock, Circle, ArrowRight, ChevronRight } from 'lucide-react';
-import { useStatusFechamentosAno, type MesAcao, type MesStatus, type StatusMes } from '@/hooks/useStatusFechamentosAno';
+import { useStatusFechamentosAno, type MesStatus, type StatusMes } from '@/hooks/useStatusFechamentosAno';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { MESES_NOMES } from '@/lib/calculos/labels';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
-import type { StatusCor } from '@/lib/calculos/statusMensal';
+import type { Pendencia } from '@/hooks/useStatusZootecnico';
 
 interface Props {
   ano: string;
   mesSelecionado: number;
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
-  onSelectMes?: (anoMes: string, destino?: 'zootecnico') => void;
+  onSelectMes?: (anoMes: string, destino: 'zootecnico') => void;
 }
 
 const MESES_COMPLETOS = [
@@ -25,7 +25,17 @@ const MESES_COMPLETOS = [
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
 ];
 
-type OrdemStatus = StatusCor | 'nao_iniciado';
+/** Map pendencia IDs to commercial labels for the Central */
+const LABEL_COMERCIAL: Record<string, string> = {
+  pastos: 'Pastos',
+  categorias: 'Rebanho conciliado',
+  valor: 'Valor do rebanho',
+  financeiro: 'Financeiro caixa',
+  economico: 'Resultado final',
+};
+
+/** Commercial ordering for the checklist */
+const ORDEM_COMERCIAL = ['pastos', 'categorias', 'valor', 'financeiro', 'economico'];
 
 function getStatusLabel(status: StatusMes) {
   if (status === 'oficial') return 'Fechado';
@@ -34,48 +44,18 @@ function getStatusLabel(status: StatusMes) {
   return 'Não iniciado';
 }
 
-function countPendencias(m: MesStatus) {
-  return m.acoes?.length ?? ((m.contadores?.aberto || 0) + (m.contadores?.parcial || 0));
-}
-
 function monthTooltip(m: MesStatus): string {
-  if (m.status === 'oficial') return 'Mês fechado e validado';
-  if (m.motivo === 'divergencia_rebanho') {
-    return `Rebanho não bate com os pastos${m.divergencias ? ` (${m.divergencias} categoria${m.divergencias > 1 ? 's' : ''})` : ''}`;
-  }
-  if (m.motivo === 'sem_pastos_fechados' || m.motivo === 'pastos_pendentes') {
-    if (typeof m.detalheFechados === 'number' && typeof m.detalheTotal === 'number' && m.detalheTotal > 0) {
-      return `${m.detalheFechados} de ${m.detalheTotal} pastos fechados`;
-    }
-    return 'Pastos pendentes';
-  }
-  if (m.motivo === 'valor_rebanho_pendente') return 'Valor do rebanho pendente';
-  if (m.motivo === 'financeiro_pendente') return 'Financeiro caixa pendente';
-  if (m.motivo === 'resultado_pendente') return 'Resultado final pendente';
-  return m.proximaAcao || (m.status === 'nao_iniciado' ? 'Nenhuma etapa iniciada' : 'Abrir status do mês');
+  if (m.statusMes === 'oficial') return 'Mês fechado e validado';
+  const pendente = m.pendencias.find((p) => p.status !== 'fechado');
+  if (pendente) return pendente.descricao;
+  return 'Abrir status do mês';
 }
 
-function buildAcaoTexto(mes: MesStatus, acao: MesAcao) {
+function buildAcaoTexto(mes: MesStatus, p: Pendencia) {
   const nomeMes = MESES_COMPLETOS[parseInt(mes.mes, 10) - 1];
-
-  if (acao.id === 'categorias') {
-    if (mes.divergencias && mes.divergencias > 0) {
-      return `${nomeMes} — corrigir divergência de rebanho (${mes.divergencias} categoria${mes.divergencias > 1 ? 's' : ''})`;
-    }
-    return `${nomeMes} — conciliar rebanho do mês`;
-  }
-
-  if (acao.id === 'pastos') {
-    const restantes = Math.max((mes.detalheTotal || 0) - (mes.detalheFechados || 0), 0);
-    return restantes > 0
-      ? `${nomeMes} — fechar ${restantes} pasto${restantes > 1 ? 's' : ''} restante${restantes > 1 ? 's' : ''}`
-      : `${nomeMes} — fechar pastos do período`;
-  }
-
-  if (acao.id === 'valor') return `${nomeMes} — informar valor do rebanho`;
-  if (acao.id === 'financeiro') return `${nomeMes} — finalizar financeiro caixa`;
-  if (acao.id === 'economico') return `${nomeMes} — concluir resultado final`;
-  return `${nomeMes} — ${acao.descricao}`;
+  const label = LABEL_COMERCIAL[p.id] || p.label;
+  if (p.status === 'fechado') return '';
+  return `${nomeMes} — ${p.descricao || label}`;
 }
 
 export function StatusFechamentosTab({ ano, mesSelecionado, lancamentos, saldosIniciais, onSelectMes }: Props) {
@@ -84,94 +64,87 @@ export function StatusFechamentosTab({ ano, mesSelecionado, lancamentos, saldosI
 
   const mesFoco = String(mesSelecionado).padStart(2, '0');
   const mesFocoData = useMemo(() => {
-    return meses.find((m) => m.mes === mesFoco) ?? meses.find((m) => m.status !== 'oficial') ?? meses[0] ?? null;
+    return meses.find((m) => m.mes === mesFoco) ?? meses.find((m) => m.statusMes !== 'oficial') ?? meses[0] ?? null;
   }, [meses, mesFoco]);
 
-  const totalFechados = useMemo(() => meses.filter((m) => m.status === 'oficial').length, [meses]);
+  const totalFechados = useMemo(() => meses.filter((m) => m.statusMes === 'oficial').length, [meses]);
   const progressPct = meses.length > 0 ? Math.round((totalFechados / 12) * 100) : 0;
 
   const ultimoFechado = useMemo(() => {
-    const fechados = meses.filter((m) => m.status === 'oficial');
+    const fechados = meses.filter((m) => m.statusMes === 'oficial');
     return fechados.length ? fechados[fechados.length - 1] : null;
   }, [meses]);
 
-  const proximoPendente = useMemo(() => meses.find((m) => m.status !== 'oficial') ?? null, [meses]);
+  const proximoPendente = useMemo(() => meses.find((m) => m.statusMes !== 'oficial') ?? null, [meses]);
 
+  // Executive card data from mesFocoData pendencias
   const exec = useMemo(() => {
     if (!mesFocoData) {
-      return {
-        cor: 'muted' as const,
-        label: 'Não iniciado',
-        sub: 'Nenhuma etapa iniciada',
-        acao: null as string | null,
-      };
+      return { cor: 'muted' as const, label: 'Não iniciado', sub: 'Nenhuma etapa iniciada', acao: null as string | null };
     }
-
-    if (mesFocoData.status === 'oficial') {
+    if (mesFocoData.statusMes === 'oficial') {
       return { cor: 'green' as const, label: 'Fechado', sub: 'Mês conciliado e validado', acao: null };
     }
-    if (mesFocoData.status === 'bloqueado') {
+    if (mesFocoData.statusMes === 'bloqueado') {
+      const primeira = mesFocoData.pendencias.find((p) => p.status === 'aberto');
       return {
         cor: 'red' as const,
         label: 'Em aberto',
         sub: 'Pendências impedem o fechamento do mês',
-        acao: mesFocoData.proximaAcao || 'Corrigir pendências do mês',
+        acao: primeira?.descricao || 'Corrigir pendências do mês',
       };
     }
-    if (mesFocoData.status === 'provisorio') {
+    if (mesFocoData.statusMes === 'provisorio') {
+      const primeira = mesFocoData.pendencias.find((p) => p.status !== 'fechado');
       return {
         cor: 'yellow' as const,
         label: 'Em andamento',
         sub: 'Fechamento parcial em andamento',
-        acao: mesFocoData.proximaAcao || 'Concluir etapas pendentes',
+        acao: primeira?.descricao || 'Concluir etapas pendentes',
       };
     }
     return {
       cor: 'muted' as const,
       label: 'Não iniciado',
       sub: 'Nenhuma etapa iniciada',
-      acao: mesFocoData.proximaAcao || 'Iniciar fechamento do mês',
+      acao: 'Iniciar fechamento do mês',
     };
   }, [mesFocoData]);
 
+  // Checklist ordered commercially, using the SAME pendencias
   const ordemSteps = useMemo(() => {
-    if (!mesFocoData?.etapas) return [] as Array<{ label: string; status: OrdemStatus }>;
-    const notStarted = mesFocoData.status === 'nao_iniciado';
-    const mapStatus = (status: StatusCor): OrdemStatus => (notStarted ? 'nao_iniciado' : status);
-
-    return [
-      { label: 'Pastos', status: mapStatus(mesFocoData.etapas.pastos) },
-      { label: 'Rebanho conciliado', status: mapStatus(mesFocoData.etapas.categorias) },
-      { label: 'Valor do rebanho', status: mapStatus(mesFocoData.etapas.valor) },
-      { label: 'Financeiro caixa', status: mapStatus(mesFocoData.etapas.financeiro) },
-      { label: 'Resultado final', status: mapStatus(mesFocoData.etapas.economico) },
-    ];
+    if (!mesFocoData?.pendencias) return [] as Array<{ label: string; status: string }>;
+    return ORDEM_COMERCIAL.map((id) => {
+      const p = mesFocoData.pendencias.find((x) => x.id === id);
+      const isNotStarted = mesFocoData.statusMes === 'nao_iniciado';
+      return {
+        label: LABEL_COMERCIAL[id] || id,
+        status: isNotStarted ? 'nao_iniciado' : (p?.status || 'aberto'),
+      };
+    });
   }, [mesFocoData]);
 
+  // Pending actions across all months (max 5, sorted by priority)
   const acoesPendentes = useMemo(() => {
-    const prioridadeAcao: Record<MesAcao['id'], number> = {
-      categorias: 0,
-      pastos: 1,
-      valor: 2,
-      financeiro: 3,
-      economico: 4,
-    };
-
+    const prioridade: Record<string, number> = { categorias: 0, pastos: 1, valor: 2, financeiro: 3, economico: 4 };
     return meses
       .flatMap((mes) =>
-        (mes.acoes || []).map((acao) => ({
-          mes: mes.mes,
-          statusMes: mes.status,
-          tipo: acao.status === 'aberto' ? 'erro' as const : 'aviso' as const,
-          texto: buildAcaoTexto(mes, acao),
-          prioridade: (acao.status === 'aberto' ? 0 : 1) * 10 + prioridadeAcao[acao.id],
-        })),
+        mes.pendencias
+          .filter((p) => p.status !== 'fechado')
+          .map((p) => ({
+            mes: mes.mes,
+            statusMes: mes.statusMes,
+            tipo: p.status === 'aberto' ? ('erro' as const) : ('aviso' as const),
+            texto: buildAcaoTexto(mes, p),
+            prioridade: (p.status === 'aberto' ? 0 : 1) * 10 + (prioridade[p.id] ?? 9),
+          })),
       )
+      .filter((a) => a.texto)
       .sort((a, b) => a.prioridade - b.prioridade || Number(a.mes) - Number(b.mes))
       .slice(0, 5);
   }, [meses]);
 
-  const handleOpenMes = (mes: MesStatus) => {
+  const handleOpenMes = (mes: { mes: string }) => {
     const nomeMes = MESES_COMPLETOS[parseInt(mes.mes, 10) - 1];
     toast(`${nomeMes} aberto no fechamento`);
     onSelectMes?.(`${ano}-${mes.mes}`, 'zootecnico');
@@ -201,6 +174,7 @@ export function StatusFechamentosTab({ ano, mesSelecionado, lancamentos, saldosI
   return (
     <TooltipProvider delayDuration={200}>
       <div className="p-3 flex flex-col gap-2.5 h-full">
+        {/* Row 1: Executive card + Progress */}
         <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-2.5">
           <Card className={cn('px-4 py-3 border-2 flex items-center gap-3', c.bg, c.border)}>
             <div className={cn('h-3.5 w-3.5 rounded-full flex-shrink-0', c.dot)} />
@@ -245,6 +219,7 @@ export function StatusFechamentosTab({ ano, mesSelecionado, lancamentos, saldosI
           </Card>
         </div>
 
+        {/* Row 2: Checklist + Month grid */}
         <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-2.5">
           <Card className="px-3 py-2.5 flex flex-col gap-1.5">
             <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
@@ -287,11 +262,11 @@ export function StatusFechamentosTab({ ano, mesSelecionado, lancamentos, saldosI
           <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-6 gap-1.5">
             {meses.map((mes) => {
               const isSelecionado = parseInt(mes.mes, 10) === mesSelecionado;
-              const pendencias = countPendencias(mes);
-              const statusLabel = getStatusLabel(mes.status);
-              const isOficial = mes.status === 'oficial';
-              const isBloqueado = mes.status === 'bloqueado';
-              const isProvisorio = mes.status === 'provisorio';
+              const pendencias = mes.pendencias.filter((p) => p.status !== 'fechado').length;
+              const statusLabel = getStatusLabel(mes.statusMes);
+              const isOficial = mes.statusMes === 'oficial';
+              const isBloqueado = mes.statusMes === 'bloqueado';
+              const isProvisorio = mes.statusMes === 'provisorio';
               const Icon = isOficial ? CheckCircle2 : isBloqueado ? AlertTriangle : isProvisorio ? Clock : Circle;
               const statusColor = isOficial
                 ? 'text-emerald-600'
@@ -340,6 +315,7 @@ export function StatusFechamentosTab({ ano, mesSelecionado, lancamentos, saldosI
           </div>
         </div>
 
+        {/* Row 3: Pending actions */}
         {acoesPendentes.length > 0 && (
           <div className="flex flex-col gap-1">
             <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
@@ -352,7 +328,7 @@ export function StatusFechamentosTab({ ano, mesSelecionado, lancamentos, saldosI
                   'flex items-center gap-2 px-2.5 py-1.5 rounded text-[11px] font-medium cursor-pointer hover:opacity-80 transition-opacity',
                   acao.tipo === 'erro' ? 'bg-red-500/8 text-red-700' : 'bg-amber-500/8 text-amber-700',
                 )}
-                onClick={() => handleOpenMes({ mes: acao.mes, status: acao.statusMes })}
+                onClick={() => handleOpenMes({ mes: acao.mes })}
               >
                 {acao.tipo === 'erro' ? <AlertTriangle className="h-3 w-3 flex-shrink-0" /> : <Clock className="h-3 w-3 flex-shrink-0" />}
                 <span className="flex-1 truncate">{acao.texto}</span>

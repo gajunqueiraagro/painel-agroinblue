@@ -1,58 +1,31 @@
 /**
  * Hook: useStatusFechamentosAno
  *
- * Usa a mesma metodologia determinística do Status do Mês
- * para consolidar os 12 meses do ano em uma visão anual.
+ * Orquestrador da visão anual. Aplica as MESMAS funções determinísticas
+ * e produz a MESMA estrutura Pendencia[] do useStatusZootecnico,
+ * garantindo espelhamento perfeito entre Central e Status do Mês.
  */
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
+import type { Pendencia, StatusGeral } from '@/hooks/useStatusZootecnico';
 import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
 import {
   statusFinanceiro as calcStatusFinanceiro,
   statusCategorias as calcStatusCategorias,
   statusPastos as calcStatusPastos,
   statusValor as calcStatusValor,
-  type StatusCor,
 } from '@/lib/calculos/statusMensal';
 
 export type StatusMes = 'oficial' | 'provisorio' | 'bloqueado' | 'nao_iniciado';
 
-export interface MesAcao {
-  id: 'categorias' | 'pastos' | 'valor' | 'financeiro' | 'economico';
-  label: string;
-  descricao: string;
-  status: StatusCor;
-  resolverTab?: string;
-}
-
 export interface MesStatus {
   mes: string; // '01'..'12'
-  status: StatusMes;
-  motivo?: string;
-  divergencias?: number;
-  detalheFechados?: number;
-  detalheTotal?: number;
-  descricao?: string;
-  proximaAcao?: string | null;
-  contadores?: {
-    aberto: number;
-    parcial: number;
-    fechado: number;
-  };
-  etapas?: {
-    financeiro: StatusCor;
-    pastos: StatusCor;
-    categorias: StatusCor;
-    valor: StatusCor;
-    economico: StatusCor;
-  };
-  acoes?: MesAcao[];
-}
-
-interface AcaoInterna extends MesAcao {
-  prioridade: number;
+  statusMes: StatusMes;
+  statusGeral: StatusGeral;
+  pendencias: Pendencia[];
+  contadores: { aberto: number; parcial: number; fechado: number };
 }
 
 export function useStatusFechamentosAno(
@@ -77,6 +50,7 @@ export function useStatusFechamentosAno(
       const anoInicio = `${ano}-01`;
       const anoFim = `${ano}-12`;
 
+      // ── Batch data fetch (same tables as useStatusZootecnico) ──
       const [pastosRes, fpRes, vrRes, finFechRes, finLancRes, catsRes] = await Promise.all([
         supabase
           .from('pastos')
@@ -135,6 +109,7 @@ export function useStatusFechamentosAno(
       const totalPastos = activePastoIds.size;
       const idToCodigo = new Map((catsRes.data || []).map((c) => [c.id, c.codigo]));
 
+      // Group itens by fechamento
       const itensByFechamento = new Map<string, Array<{ quantidade: number; categoria_id: string }>>();
       itensData.forEach((item) => {
         const list = itensByFechamento.get(item.fechamento_id) || [];
@@ -142,6 +117,7 @@ export function useStatusFechamentosAno(
         itensByFechamento.set(item.fechamento_id, list);
       });
 
+      // Group fechamento_pastos by month
       const fechamentosByMes = new Map<string, typeof fpData>();
       fpData.forEach((fp) => {
         const list = fechamentosByMes.get(fp.ano_mes) || [];
@@ -149,11 +125,13 @@ export function useStatusFechamentosAno(
         fechamentosByMes.set(fp.ano_mes, list);
       });
 
+      // Group valor_rebanho by month
       const valorByMes = new Map<string, number>();
       (vrRes.data || []).forEach((item) => {
         valorByMes.set(item.ano_mes, (valorByMes.get(item.ano_mes) || 0) + 1);
       });
 
+      // Group financeiro_fechamentos by month
       const finFechByMes = new Map<string, Array<{ status_fechamento: string }>>();
       ((finFechRes as { data?: Array<{ status_fechamento: string; ano_mes: string }> }).data || []).forEach((item) => {
         const list = finFechByMes.get(item.ano_mes) || [];
@@ -161,16 +139,19 @@ export function useStatusFechamentosAno(
         finFechByMes.set(item.ano_mes, list);
       });
 
+      // Set of months with financeiro lancamentos
       const finLancMes = new Set(
         (((finLancRes as { data?: Array<{ ano_mes: string }> }).data) || []).map((item) => item.ano_mes),
       );
 
+      // ── Process each month (same logic as useStatusZootecnico) ──
       const meses: MesStatus[] = Array.from({ length: 12 }, (_, index) => {
         const mesNumero = index + 1;
         const mes = String(mesNumero).padStart(2, '0');
         const anoMes = `${ano}-${mes}`;
         const fechamentosMes = fechamentosByMes.get(anoMes) || [];
 
+        // Deduplicate: most recent fechamento per active pasto (same as useStatusZootecnico)
         const fechamentoMaisRecentePorPasto = new Map<string, { id: string; status: string; updated_at: string | null }>();
         fechamentosMes.forEach((f) => {
           if (!activePastoIds.has(f.pasto_id)) return;
@@ -186,11 +167,15 @@ export function useStatusFechamentosAno(
         const fechIds = fechamentosValidos.map((f) => f.id);
         const pastosFechados = fechamentosValidos.filter((f) => f.status === 'fechado').length;
         const pastosComRegistro = fechamentosValidos.length;
+        const pastosRascunho = Math.max(pastosComRegistro - pastosFechados, 0);
+        const pastosNaoIniciados = Math.max(totalPastos - pastosComRegistro, 0);
 
+        // Saldo oficial (same function as useStatusZootecnico)
         const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, Number(ano), mesNumero);
         const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
         const categoriasComSaldo = catsComSaldo.length;
 
+        // Alocado nos pastos
         const itensMes = fechIds.flatMap((id) => itensByFechamento.get(id) || []);
         const temItensPastos = itensMes.length > 0;
         const alocadoPastos = new Map<string, number>();
@@ -201,44 +186,26 @@ export function useStatusFechamentosAno(
           }
         });
 
+        // ── 1. Financeiro (IDENTICAL to useStatusZootecnico) ──
+        const statusFin = calcStatusFinanceiro({
+          fechamentos: finFechByMes.get(anoMes) || [],
+          totalFazendasEsperadas: 1,
+        });
+        const finTemLancamentos = finLancMes.has(anoMes);
+
+        let descFin = '';
+        if (statusFin === 'fechado') descFin = 'Mês realizado';
+        else if (statusFin === 'parcial') descFin = 'Parcialmente realizado';
+        else if (finTemLancamentos) descFin = 'Pendente de conciliação';
+        else descFin = 'Sem lançamentos no período';
+
+        // ── 2. Categorias (IDENTICAL to useStatusZootecnico) ──
         const catsResult = calcStatusCategorias({
           saldoOficial: new Map(catsComSaldo),
           alocadoPastos,
           temItensPastos,
           pastosAtivos: totalPastos,
         });
-
-        const statusFinanceiro = calcStatusFinanceiro({
-          fechamentos: finFechByMes.get(anoMes) || [],
-          totalFazendasEsperadas: 1,
-        });
-        const finTemLancamentos = finLancMes.has(anoMes);
-
-        const statusPastos = calcStatusPastos({
-          totalPastos,
-          pastosFechados,
-          pastosComRegistro,
-          statusCategorias: catsResult.status,
-        });
-
-        const precosDefinidos = valorByMes.get(anoMes) || 0;
-        const statusValor = calcStatusValor({
-          precosDefinidos,
-          categoriasComSaldo,
-        });
-
-        const baseStatuses: StatusCor[] = [statusFinanceiro, statusPastos, catsResult.status, statusValor];
-        const statusEconomico: StatusCor = baseStatuses.every((s) => s === 'fechado')
-          ? 'fechado'
-          : baseStatuses.every((s) => s === 'aberto')
-            ? 'aberto'
-            : 'parcial';
-
-        let descFin = '';
-        if (statusFinanceiro === 'fechado') descFin = 'Mês realizado';
-        else if (statusFinanceiro === 'parcial') descFin = 'Parcialmente realizado';
-        else if (finTemLancamentos) descFin = 'Pendente de conciliação';
-        else descFin = 'Sem lançamentos no período';
 
         let descCats = '';
         if (catsResult.status === 'fechado') {
@@ -251,153 +218,93 @@ export function useStatusFechamentosAno(
             : 'Sem dados de pastos';
         }
 
+        // ── 3. Pastos (IDENTICAL to useStatusZootecnico) ──
+        const statusPastosCalc = calcStatusPastos({
+          totalPastos,
+          pastosFechados,
+          pastosComRegistro,
+          statusCategorias: catsResult.status,
+        });
+
         let descPastos = '';
         if (totalPastos === 0) {
           descPastos = 'Nenhum pasto cadastrado';
-        } else if (statusPastos === 'fechado') {
+        } else if (statusPastosCalc === 'fechado') {
           descPastos = `${pastosFechados} fechado(s) · realizado`;
-        } else if (statusPastos === 'parcial') {
+        } else if (statusPastosCalc === 'parcial') {
           if (pastosFechados >= totalPastos) {
             descPastos = `Pastos fechados · ${catsResult.difTotalCabecas} cab divergente(s)`;
           } else {
             descPastos = `${pastosFechados}/${totalPastos} fechado(s)`;
           }
         } else {
-          const partes: string[] = [];
-          const rascunho = Math.max(pastosComRegistro - pastosFechados, 0);
-          const naoIniciados = Math.max(totalPastos - pastosComRegistro, 0);
-          if (rascunho > 0) partes.push(`${rascunho} em rascunho`);
-          if (naoIniciados > 0) partes.push(`${naoIniciados} não iniciado(s)`);
-          descPastos = partes.length ? partes.join(' · ') : 'Sem fechamento no período';
+          const parts: string[] = [];
+          if (pastosRascunho > 0) parts.push(`${pastosRascunho} em rascunho`);
+          if (pastosNaoIniciados > 0) parts.push(`${pastosNaoIniciados} não iniciado(s)`);
+          descPastos = parts.length ? parts.join(' · ') : 'Sem fechamento no período';
         }
 
+        // ── 4. Valor do Rebanho (IDENTICAL to useStatusZootecnico) ──
+        const precosDefinidos = valorByMes.get(anoMes) || 0;
+        const statusValorCalc = calcStatusValor({
+          precosDefinidos,
+          categoriasComSaldo,
+        });
+
         let descValor = '';
-        if (statusValor === 'aberto') descValor = 'Nenhum preço definido';
-        else if (statusValor === 'parcial') descValor = `${precosDefinidos}/${categoriasComSaldo} categorias com preço`;
+        if (statusValorCalc === 'aberto') descValor = 'Nenhum preço definido';
+        else if (statusValorCalc === 'parcial') descValor = `${precosDefinidos}/${categoriasComSaldo} categorias com preço`;
         else descValor = 'Preços completos';
 
-        const descEconomico = statusEconomico === 'fechado'
+        // ── 5. Econômico (IDENTICAL to useStatusZootecnico) ──
+        const allStatuses = [statusFin, statusPastosCalc, catsResult.status, statusValorCalc];
+        const statusEcon = allStatuses.every((s) => s === 'fechado')
+          ? 'fechado'
+          : allStatuses.every((s) => s === 'aberto')
+            ? 'aberto'
+            : 'parcial';
+        const descEcon = statusEcon === 'fechado'
           ? 'Base validada'
-          : statusEconomico === 'parcial'
+          : statusEcon === 'parcial'
             ? 'Aguardando fechamento das bases'
             : 'Bases não fechadas';
 
-        const acoes: AcaoInterna[] = [];
-        if (catsResult.status !== 'fechado') {
-          acoes.push({
-            id: 'categorias',
-            label: 'Rebanho conciliado',
-            descricao: descCats,
-            status: catsResult.status,
-            resolverTab: 'fechamento',
-            prioridade: catsResult.status === 'aberto' ? 0 : 1,
-          });
-        }
-        if (statusPastos !== 'fechado') {
-          acoes.push({
-            id: 'pastos',
-            label: 'Pastos',
-            descricao: descPastos,
-            status: statusPastos,
-            resolverTab: 'fechamento',
-            prioridade: statusPastos === 'aberto' ? 2 : 3,
-          });
-        }
-        if (statusValor !== 'fechado') {
-          acoes.push({
-            id: 'valor',
-            label: 'Valor do rebanho',
-            descricao: descValor,
-            status: statusValor,
-            resolverTab: 'valor_rebanho',
-            prioridade: statusValor === 'aberto' ? 4 : 5,
-          });
-        }
-        if (statusFinanceiro !== 'fechado') {
-          acoes.push({
-            id: 'financeiro',
-            label: 'Financeiro caixa',
-            descricao: descFin,
-            status: statusFinanceiro,
-            resolverTab: 'fin_caixa',
-            prioridade: statusFinanceiro === 'aberto' ? 6 : 7,
-          });
-        }
-        if (statusEconomico !== 'fechado') {
-          acoes.push({
-            id: 'economico',
-            label: 'Resultado final',
-            descricao: descEconomico,
-            status: statusEconomico,
-            prioridade: 8,
-          });
-        }
-        acoes.sort((a, b) => a.prioridade - b.prioridade);
+        // ── Build Pendencia[] (SAME structure as useStatusZootecnico) ──
+        const pendencias: Pendencia[] = [
+          { id: 'financeiro', label: 'Conciliação do Financeiro', descricao: descFin, status: statusFin, resolverTab: 'fin_caixa' },
+          { id: 'pastos', label: 'Fechamento de Pastos', descricao: descPastos, status: statusPastosCalc, resolverTab: 'fechamento' },
+          { id: 'categorias', label: 'Conciliação de Categorias', descricao: descCats, status: catsResult.status, resolverTab: 'fechamento' },
+          { id: 'valor', label: 'Valor do Rebanho', descricao: descValor, status: statusValorCalc, resolverTab: 'valor_rebanho' },
+          { id: 'economico', label: 'Econômico', descricao: descEcon, status: statusEcon },
+        ];
 
+        // ── Contadores ──
         const contadores = { aberto: 0, parcial: 0, fechado: 0 };
-        [statusFinanceiro, statusPastos, catsResult.status, statusValor, statusEconomico].forEach((status) => {
-          contadores[status]++;
-        });
+        pendencias.forEach((p) => contadores[p.status]++);
 
+        // ── StatusGeral (IDENTICAL to useStatusZootecnico) ──
+        let statusGeral: StatusGeral = 'parcial';
+        if (contadores.fechado === 5) statusGeral = 'fechado';
+        else if (contadores.aberto === 5) statusGeral = 'aberto';
+
+        // ── StatusMes (UI classification derived from statusGeral) ──
         const hasAnyStarted =
           finTemLancamentos ||
           pastosComRegistro > 0 ||
           precosDefinidos > 0 ||
-          [statusFinanceiro, statusPastos, catsResult.status, statusValor, statusEconomico].some(
-            (status) => status === 'parcial' || status === 'fechado',
-          );
+          pendencias.some((p) => p.status === 'parcial' || p.status === 'fechado');
 
         let statusMes: StatusMes = 'provisorio';
-        if (contadores.fechado === 5) statusMes = 'oficial';
+        if (statusGeral === 'fechado') statusMes = 'oficial';
         else if (!hasAnyStarted) statusMes = 'nao_iniciado';
         else if (catsResult.status === 'aberto' && catsResult.catsDivergentes > 0) statusMes = 'bloqueado';
-        else statusMes = 'provisorio';
-
-        let motivo: string | undefined;
-        let proximaAcao: string | null = null;
-
-        if (catsResult.status !== 'fechado') {
-          motivo = 'divergencia_rebanho';
-          proximaAcao = catsResult.catsDivergentes > 0 ? 'Corrigir divergência de rebanho' : 'Conciliar rebanho do mês';
-        } else if (statusPastos !== 'fechado') {
-          motivo = pastosComRegistro === 0 ? 'sem_pastos_fechados' : 'pastos_pendentes';
-          proximaAcao = 'Fechar pastos do período';
-        } else if (statusValor !== 'fechado') {
-          motivo = 'valor_rebanho_pendente';
-          proximaAcao = 'Informar valor do rebanho';
-        } else if (statusFinanceiro !== 'fechado') {
-          motivo = 'financeiro_pendente';
-          proximaAcao = 'Finalizar financeiro do mês';
-        } else if (statusEconomico !== 'fechado') {
-          motivo = 'resultado_pendente';
-          proximaAcao = 'Concluir resultado final';
-        }
 
         return {
           mes,
-          status: statusMes,
-          motivo,
-          divergencias: catsResult.catsDivergentes,
-          detalheFechados: pastosFechados,
-          detalheTotal: totalPastos,
-          descricao:
-            statusMes === 'oficial'
-              ? 'Mês conciliado e validado'
-              : statusMes === 'bloqueado'
-                ? 'Pendências impedem o fechamento do mês'
-                : statusMes === 'provisorio'
-                  ? 'Fechamento parcial em andamento'
-                  : 'Nenhuma etapa iniciada',
-          proximaAcao,
+          statusMes,
+          statusGeral,
+          pendencias,
           contadores,
-          etapas: {
-            financeiro: statusFinanceiro,
-            pastos: statusPastos,
-            categorias: catsResult.status,
-            valor: statusValor,
-            economico: statusEconomico,
-          },
-          acoes: acoes.map(({ prioridade, ...acao }) => acao),
         };
       });
 

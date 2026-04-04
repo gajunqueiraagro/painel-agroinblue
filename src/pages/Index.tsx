@@ -351,10 +351,13 @@ const Index = () => {
       {activeTab === 'status_fechamentos' && (
         <StatusFechamentosTab
           ano={filtroGlobal.ano}
+          mesSelecionado={filtroGlobal.mes}
+          lancamentos={lancamentosVisiveis}
+          saldosIniciais={saldosIniciais}
           onSelectMes={(anoMes, destino) => {
             const [a, m] = anoMes.split('-');
             handleFiltroChange({ ano: a, mes: parseInt(m) });
-            setActiveTab((destino === 'painel_consultor' ? 'painel_consultor' : 'resumo') as TabId);
+            setActiveTab(destino as TabId);
           }}
         />
       )}
