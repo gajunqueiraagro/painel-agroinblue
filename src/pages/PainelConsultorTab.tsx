@@ -633,26 +633,26 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
     }
   }, [zooRows, finRows, anoNum, ateMes, fazendaNome]);
 
-  const mesesVisiveis = MESES_LABELS.slice(0, ateMes);
-
   const renderTable = (rows: (ZooRow | FinRow)[]) => {
     let lastGrupo = '';
-    const colCount = mesesVisiveis.length + 1;
+    const colCount = 14; // indicator + 12 months + total
     return (
       <div className="overflow-x-auto border rounded">
         <table className="w-full text-[10px] border-collapse" style={{ tableLayout: 'fixed' }}>
           <colgroup>
-            <col style={{ width: '200px' }} />
-            {mesesVisiveis.map((_, i) => (
-              <col key={i} style={{ width: `${Math.max(52, Math.floor((100 - 20) / mesesVisiveis.length))}px` }} />
+            <col style={{ width: '160px' }} />
+            {MESES_LABELS.map((_, i) => (
+              <col key={i} />
             ))}
+            <col style={{ fontWeight: 'bold' }} />
           </colgroup>
           <thead className="sticky top-0 z-10">
             <tr className="bg-muted border-b">
               <th className="sticky left-0 z-20 bg-muted text-left text-[9px] font-semibold uppercase tracking-wider px-1.5 py-1">Indicador</th>
-              {mesesVisiveis.map(m => (
-                <th key={m} className="text-center text-[9px] font-semibold uppercase tracking-wider px-0.5 py-1">{m}</th>
+              {MESES_LABELS.map(m => (
+                <th key={m} className="text-right text-[9px] font-semibold uppercase tracking-wider px-0.5 py-1">{m}</th>
               ))}
+              <th className="text-right text-[9px] font-bold uppercase tracking-wider px-0.5 py-1">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -681,11 +681,14 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
                         </>
                       ) : row.indicador}
                     </td>
-                    {row.valores.slice(0, ateMes).map((v, i) => (
+                    {row.valores.map((v, i) => (
                       <td key={i} className="text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px]">
                         {fmtVal(v, row.format)}
                       </td>
                     ))}
+                    <td className="text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px] font-bold">
+                      {fmtVal(row.total, row.format)}
+                    </td>
                   </tr>
                 </React.Fragment>
               );
