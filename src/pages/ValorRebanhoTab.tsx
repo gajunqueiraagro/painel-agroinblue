@@ -341,6 +341,24 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const varCabValorMes = calcVariacao(valorMedioCabeca, prevTotals.valorCab);
   const varCabValorAno = calcVariacao(valorMedioCabeca, janTotals.valorCab);
 
+  // Arrobas em estoque variations
+  const prevArrobas = useMemo(() => {
+    let arrobas = 0;
+    resumoMesAnterior.rows.forEach(row => {
+      arrobas += row.quantidadeFinal * (row.pesoMedioFinalKg || 0) / 30;
+    });
+    return arrobas;
+  }, [resumoMesAnterior.rows]);
+  const janArrobas = useMemo(() => {
+    let arrobas = 0;
+    resumoJan.rows.forEach(row => {
+      arrobas += row.quantidadeFinal * (row.pesoMedioFinalKg || 0) / 30;
+    });
+    return arrobas;
+  }, [resumoJan.rows]);
+  const varArrobasEstoqueMes = calcVariacao(totalArrobas, prevArrobas);
+  const varArrobasEstoqueAno = calcVariacao(totalArrobas, janArrobas);
+
   // Chart data: query valor_rebanho_fechamento + vw_zoot_fazenda_mensal for all months
   const [historicoPorMes, setHistoricoPorMes] = useState<Record<string, number>>({});
   const [zootPorMes, setZootPorMes] = useState<Record<number, { pesoTotalKg: number; cabecas: number }>>({});
@@ -570,21 +588,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         })}
       </div>
 
-      {/* December-specific alerts */}
-      {isDezembro && (categoriasSemPreco.length > 0 || dezembroCompleto) && (
-        <div className="space-y-1">
-          {categoriasSemPreco.length > 0 && (
-            <div className="flex items-center gap-1.5 text-[10px] bg-destructive/10 text-destructive rounded px-2 py-0.5 border border-destructive/30">
-              <AlertTriangle className="h-3 w-3 shrink-0" />
-              <span><strong>Dezembro — base anual:</strong> {categoriasSemPreco.length} categoria(s) sem preço: {categoriasSemPreco.join(', ')}.</span>
-            </div>
-          )}
-          {dezembroCompleto && (
-            <div className="flex items-center gap-1.5 text-[10px] text-primary bg-primary/10 rounded px-2 py-0.5 border border-primary/30">
-              <Info className="h-3 w-3 shrink-0" />
-              <span><strong>Base anual completa.</strong> Todas as categorias têm preço informado para dezembro.</span>
-            </div>
-          )}
+      {/* December alert — only missing prices (shown above table) */}
+      {isDezembro && categoriasSemPreco.length > 0 && (
+        <div className="flex items-center gap-1.5 text-[10px] bg-destructive/10 text-destructive rounded px-2 py-0.5 border border-destructive/30">
+          <AlertTriangle className="h-3 w-3 shrink-0" />
+          <span><strong>Dezembro — base anual:</strong> {categoriasSemPreco.length} categoria(s) sem preço: {categoriasSemPreco.join(', ')}.</span>
         </div>
       )}
 
@@ -694,7 +702,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             </p>
           </div>
 
-          {(temSugestao || temEstimativa) && (
+          {(temSugestao || temEstimativa || dezembroCompleto) && (
             <div className="px-1.5 pb-1 space-y-0.5">
               {temSugestao && (
                 <p className="text-[9px] text-amber-600 dark:text-amber-400">
@@ -704,6 +712,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               {temEstimativa && (
                 <p className="text-[9px] text-muted-foreground">
                   * Algumas categorias usam peso estimado (último lançamento ou saldo inicial).
+                </p>
+              )}
+              {dezembroCompleto && (
+                <p className="text-[9px] text-primary">
+                  ✔ Base anual completa. Todas as categorias têm preço informado para dezembro.
                 </p>
               )}
             </div>
@@ -731,22 +744,23 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                 </div>
                 {/* RIGHT column — indicators compact */}
                 <div className="flex-1 min-w-0 text-[10px]">
-                  <div className="flex items-center gap-0.5 mb-0.5 text-[8px] text-muted-foreground font-medium justify-end">
-                    <span className="w-[52px] text-right">Valor</span>
-                    <span className="w-[40px] text-right">vs mês</span>
-                    <span className="w-[40px] text-right">vs ano</span>
+                  <div className="flex items-center mb-0.5 text-[8px] text-muted-foreground font-medium justify-end">
+                    <span className="w-[50px] text-right">Valor</span>
+                    <span className="w-[38px] text-right">vs mês</span>
+                    <span className="w-[38px] text-right">vs ano</span>
                   </div>
                   {[
                     { label: 'Cabeças', value: formatNum(totalCabecas, 0), varMes: varCabMes, varAno: varCabAno },
                     { label: 'Peso médio', value: `${formatNum(pesoMedioGeral, 2)} kg`, varMes: varPesoMes, varAno: varPesoAno },
                     { label: 'R$/@ médio', value: precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '—', varMes: varArrobaMes, varAno: varArrobaAno },
                     { label: 'R$/cab', value: formatMoeda(valorMedioCabeca), varMes: varCabValorMes, varAno: varCabValorAno },
+                    { label: '@s estoque', value: formatNum(totalArrobas, 2), varMes: varArrobasEstoqueMes, varAno: varArrobasEstoqueAno },
                   ].map(ind => (
-                    <div key={ind.label} className="flex items-center gap-0.5 py-px justify-end">
-                      <span className="text-muted-foreground truncate mr-auto">{ind.label}</span>
-                      <span className="w-[52px] text-right font-semibold text-foreground tabular-nums">{ind.value}</span>
-                      <span className="w-[40px] text-right"><VariacaoBadge valor={ind.varMes} label="" /></span>
-                      <span className="w-[40px] text-right"><VariacaoBadge valor={ind.varAno} label="" /></span>
+                    <div key={ind.label} className="flex items-center py-px justify-end">
+                      <span className="text-muted-foreground truncate text-[9px] mr-1">{ind.label}</span>
+                      <span className="w-[50px] text-right font-semibold text-foreground tabular-nums">{ind.value}</span>
+                      <span className="w-[38px] text-right"><VariacaoBadge valor={ind.varMes} label="" /></span>
+                      <span className="w-[38px] text-right"><VariacaoBadge valor={ind.varAno} label="" /></span>
                     </div>
                   ))}
                 </div>
