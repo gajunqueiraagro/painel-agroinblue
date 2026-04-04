@@ -1058,7 +1058,17 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
         onIrMovimentacoes={onTabChange ? () => { setShowDivP1(false); onTabChange('lancamentos'); } : undefined}
         onIrMapaPastos={onTabChange ? () => { setShowDivP1(false); onTabChange('mapa_pastos'); } : undefined}
       />
+
+      {/* Modal de reabertura P1 */}
+      {fazendaId && (
+        <ReabrirP1Dialog
+          open={showReabrirP1}
+          onOpenChange={setShowReabrirP1}
+          fazendaId={fazendaId}
+          anoMes={mesAtualRef}
+          onReaberto={refetchPilares}
+        />
+      )}
     </TooltipProvider>
   );
 }
-
