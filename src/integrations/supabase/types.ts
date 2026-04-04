@@ -685,6 +685,63 @@ export type Database = {
         }
         Relationships: []
       }
+      competencia_fechamento: {
+        Row: {
+          ano_mes: string
+          cliente_id: string
+          created_at: string
+          fazenda_id: string
+          fechado_em: string | null
+          fechado_por: string | null
+          id: string
+          reaberto_em: string | null
+          reaberto_por: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          ano_mes: string
+          cliente_id: string
+          created_at?: string
+          fazenda_id: string
+          fechado_em?: string | null
+          fechado_por?: string | null
+          id?: string
+          reaberto_em?: string | null
+          reaberto_por?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          ano_mes?: string
+          cliente_id?: string
+          created_at?: string
+          fazenda_id?: string
+          fechado_em?: string | null
+          fechado_por?: string | null
+          id?: string
+          reaberto_em?: string | null
+          reaberto_por?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competencia_fechamento_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "competencia_fechamento_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fazenda_cadastros: {
         Row: {
           area_produtiva: number | null
@@ -3787,15 +3844,26 @@ export type Database = {
         Args: { _fazenda_id: string; _user_id: string }
         Returns: boolean
       }
-      reabrir_pilar_fechamento: {
-        Args: {
-          _ano_mes: string
-          _fazenda_id: string
-          _motivo?: string
-          _pilar: string
-        }
-        Returns: Json
-      }
+      reabrir_pilar_fechamento:
+        | {
+            Args: {
+              _ano_mes: string
+              _fazenda_id: string
+              _motivo?: string
+              _pilar: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              _ano_mes: string
+              _fazenda_id: string
+              _motivo?: string
+              _pilar: string
+              _usuario_id?: string
+            }
+            Returns: Json
+          }
       resolve_transfer_destination_fazenda: {
         Args: { _destino_nome: string; _origem_fazenda_id: string }
         Returns: string
