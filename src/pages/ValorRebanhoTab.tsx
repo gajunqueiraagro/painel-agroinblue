@@ -724,7 +724,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         </div>
 
         {/* RIGHT — Summary Card + Charts below */}
-        <div className="min-w-[200px] flex-1 flex flex-col gap-1.5">
+        <div className="min-w-[200px] flex-1 space-y-1.5">
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-2.5">
               <div className="flex gap-3">
