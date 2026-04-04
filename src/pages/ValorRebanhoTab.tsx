@@ -574,8 +574,18 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         </div>
       )}
 
-      {/* Main content: table left + summary card right, charts below full width */}
-      <div className="flex gap-3 items-start">
+      {/* Main content: table left + summary card right */}
+      <div className="flex gap-3 items-start relative">
+        {/* Overlay for unclosed months */}
+        {!mesSelecionadoFechado && (
+          <div className="absolute inset-0 z-10 bg-background/60 backdrop-blur-[1px] rounded-lg flex items-center justify-center pointer-events-none">
+            <div className="bg-card border border-border shadow-lg rounded-lg px-4 py-2 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-muted-foreground">Rebanho e pasto ainda não fechados</span>
+            </div>
+          </div>
+        )}
+
         {/* LEFT — Table */}
         <div className="flex-1 max-w-[50%] min-w-0 bg-card rounded-lg shadow-sm border overflow-x-auto">
           <table className="w-full text-[11px]">
@@ -595,17 +605,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                 <tr key={r.codigo} className={`border-b ${i % 2 === 0 ? '' : 'bg-muted/20'}`}>
                   <td className="px-1.5 py-0.5 text-foreground text-[11px] italic whitespace-nowrap bg-primary/10">
                     {r.nome}
-                    {isDezembro && r.saldo === 0 && <span className="text-[9px] text-muted-foreground ml-1">(0)</span>}
                   </td>
                   <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[11px]">
-                    {r.saldo > 0 ? r.saldo : '-'}
+                    {r.saldo > 0 ? formatNum(r.saldo, 0) : '-'}
                   </td>
                   <td className="px-1.5 py-0.5 text-right tabular-nums italic text-[11px]">
                     {r.pesoMedio > 0 ? (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <span className={`cursor-help ${r.origemPeso === 'pastos' ? 'text-foreground' : 'text-muted-foreground'}`}>
-                            {formatNum(r.pesoMedio, 1)}
+                            {formatNum(r.pesoMedio, 2)}
                             {r.origemPeso !== 'pastos' && ' *'}
                           </span>
                         </TooltipTrigger>
@@ -651,8 +660,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             <tfoot>
               <tr className="border-t-2 bg-primary/25">
                 <td className="px-1.5 py-1 font-bold text-foreground text-[11px] italic bg-primary/30">TOTAL</td>
-                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{totalCabecas}</td>
-                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatNum(pesoMedioGeral, 1)}</td>
+                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{formatNum(totalCabecas, 0)}</td>
+                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatNum(pesoMedioGeral, 2)}</td>
                 <td className="px-1 py-1 text-center text-foreground tabular-nums italic text-[11px] w-[60px]">
                   {precoMedioKg > 0 ? formatNum(precoMedioKg, 2) : ''}
                 </td>
@@ -664,15 +673,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           </table>
 
           {/* Footer inside table area */}
-          <div className="flex items-center justify-between px-1.5 py-0.5 border-t">
-            <div className="flex items-center gap-1">
-              {categoriasOcultas > 0 && !isDezembro && (
-                <Button variant="ghost" size="sm" onClick={() => setMostrarZerados(!mostrarZerados)} className="gap-1 text-[10px] text-muted-foreground h-5 px-1">
-                  {mostrarZerados ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                  {mostrarZerados ? 'Ocultar zeradas' : `+${categoriasOcultas} zeradas`}
-                </Button>
-              )}
-            </div>
+          <div className="flex items-center justify-end px-1.5 py-0.5 border-t">
             <p className="text-[9px] text-muted-foreground">
               * Peso estimado
               {isDezembro && ' • Dez = base anual'}
@@ -722,8 +723,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                     <span className="w-[40px] text-right">vs ano</span>
                   </div>
                   {[
-                    { label: 'Cabeças', value: formatNum(totalCabecas), varMes: varCabMes, varAno: varCabAno },
-                    { label: 'Peso médio', value: `${formatNum(pesoMedioGeral, 1)} kg`, varMes: varPesoMes, varAno: varPesoAno },
+                    { label: 'Cabeças', value: formatNum(totalCabecas, 0), varMes: varCabMes, varAno: varCabAno },
+                    { label: 'Peso médio', value: `${formatNum(pesoMedioGeral, 2)} kg`, varMes: varPesoMes, varAno: varPesoAno },
                     { label: 'R$/@ médio', value: precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '—', varMes: varArrobaMes, varAno: varArrobaAno },
                     { label: 'R$/cab', value: formatMoeda(valorMedioCabeca), varMes: varCabValorMes, varAno: varCabValorAno },
                   ].map(ind => (
