@@ -173,18 +173,14 @@ export function FechamentoPastoDialog({
   // ── Render de um grupo (machos ou fêmeas) ──
   const renderGrupo = (label: string, cats: CategoriaRebanho[], colorAccent: string) => (
     <div>
-      <div className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${colorAccent}`}>{label}</div>
-      <div className="border rounded bg-background">
-        <table className="w-full table-fixed text-[11px]">
-          <colgroup>
-            <col className="w-[44px]" />
-            {cats.map(c => <col key={c.id} />)}
-          </colgroup>
+      <div className={`text-[9px] font-bold uppercase tracking-widest mb-0.5 ${colorAccent}`}>{label}</div>
+      <div className="border rounded bg-background inline-block">
+        <table className="text-[11px]" style={{ borderCollapse: 'collapse' }}>
           <thead>
             <tr className="border-b bg-muted/40">
-              <th className="px-1 py-1"></th>
+              <th className="px-1 py-0.5 w-[38px]"></th>
               {cats.map(c => (
-                <th key={c.id} className="text-center px-0.5 py-1 text-[10px] font-semibold text-foreground whitespace-nowrap">
+                <th key={c.id} className="text-center px-1 py-0.5 text-[9px] font-semibold text-foreground whitespace-nowrap" style={{ minWidth: '52px', maxWidth: '64px' }}>
                   {c.nome}
                 </th>
               ))}
@@ -197,13 +193,13 @@ export function FechamentoPastoDialog({
                 const item = getItem(c.id);
                 return (
                   <td key={c.id} className="px-0.5 py-0.5 text-center">
-                    <div className="relative mx-auto" style={{ maxWidth: '56px' }}>
+                    <div className="relative">
                       <Input
                         type="number" inputMode="numeric" min={0}
                         value={item?.quantidade || ''}
                         onChange={e => updateItem(c.id, 'quantidade', Number(e.target.value) || 0)}
                         disabled={isFechado}
-                        className="h-6 text-[11px] font-bold px-1 text-center tabular-nums"
+                        className="h-6 text-[11px] font-bold px-0.5 text-center tabular-nums w-[48px]"
                         placeholder="0"
                       />
                       {item?.origem_dado === 'copiado_mes_anterior' && (
@@ -220,21 +216,19 @@ export function FechamentoPastoDialog({
                 const item = getItem(c.id);
                 return (
                   <td key={c.id} className="px-0.5 py-0.5 text-center">
-                    <div className="mx-auto" style={{ maxWidth: '56px' }}>
-                      <Input
-                        type="number" inputMode="decimal" step="0.1"
-                        value={item?.peso_medio_kg ?? ''}
-                        onChange={e => updateItem(c.id, 'peso_medio_kg', e.target.value ? Number(e.target.value) : null)}
-                        onBlur={e => {
-                          if (e.target.value) {
-                            updateItem(c.id, 'peso_medio_kg', Math.round(Number(e.target.value) * 10) / 10);
-                          }
-                        }}
-                        disabled={isFechado}
-                        className="h-6 text-[11px] px-1 text-center tabular-nums"
-                        placeholder="kg"
-                      />
-                    </div>
+                    <Input
+                      type="number" inputMode="decimal" step="0.1"
+                      value={item?.peso_medio_kg ?? ''}
+                      onChange={e => updateItem(c.id, 'peso_medio_kg', e.target.value ? Number(e.target.value) : null)}
+                      onBlur={e => {
+                        if (e.target.value) {
+                          updateItem(c.id, 'peso_medio_kg', Math.round(Number(e.target.value) * 10) / 10);
+                        }
+                      }}
+                      disabled={isFechado}
+                      className="h-6 text-[11px] px-0.5 text-center tabular-nums w-[48px]"
+                      placeholder="kg"
+                    />
                   </td>
                 );
               })}
@@ -247,13 +241,13 @@ export function FechamentoPastoDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] flex flex-col max-w-5xl p-0 gap-0 overflow-hidden">
+      <DialogContent className="max-h-[90vh] flex flex-col max-w-3xl p-0 gap-0 overflow-hidden">
         {/* ── HEADER ESCURO ── */}
-        <div className="shrink-0 bg-[hsl(215,30%,18%)] text-white px-4 pt-3 pb-2.5 space-y-2">
+        <div className="shrink-0 bg-[hsl(215,30%,18%)] text-white px-4 pt-3 pb-2.5 space-y-1.5">
           {/* Row 1: Name + status + copy */}
           <div className="flex items-center gap-2">
-            <span className="font-bold text-sm leading-none">{pasto.nome}</span>
-            {pasto.area_produtiva_ha && <span className="text-[11px] text-white/60">{pasto.area_produtiva_ha} ha</span>}
+            <span className="font-extrabold text-xl leading-none tracking-tight">{pasto.nome}</span>
+            {pasto.area_produtiva_ha && <span className="text-sm font-medium text-white/70">{pasto.area_produtiva_ha} ha</span>}
             {isFechado && <Badge className="h-5 text-[10px] px-1.5 bg-white/15 text-white border-white/20"><Lock className="h-3 w-3 mr-0.5" />Fechado</Badge>}
             <div className="flex-1" />
             {!isFechado && (
@@ -328,7 +322,7 @@ export function FechamentoPastoDialog({
         </div>
 
         {/* ── GRADE PRINCIPAL ── */}
-        <div className="overflow-y-auto flex-1 px-4 py-3 space-y-3 bg-background">
+        <div className="overflow-y-auto flex-1 px-4 py-2 space-y-2 bg-background">
           {renderGrupo('MACHOS', catsMachos, 'text-blue-600 dark:text-blue-400')}
           {renderGrupo('FÊMEAS', catsFemeas, 'text-pink-600 dark:text-pink-400')}
         </div>
