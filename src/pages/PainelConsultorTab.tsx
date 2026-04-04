@@ -746,7 +746,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
   }, [fazendaId, anoNum, categorias]);
 
   useEffect(() => {
-    if (!fazendaId) { setValorRebanhoMes(Array(12).fill(0)); return; }
+    if (!fazendaId) { setValorRebanhoMes(Array(13).fill(0)); return; }
     (async () => {
       const dezAnoAnterior = `${anoNum - 1}-12`;
       const meses = Array.from({ length: 12 }, (_, i) => `${anoNum}-${String(i + 1).padStart(2, '0')}`);
