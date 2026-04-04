@@ -860,10 +860,14 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
                 {row.valores.map((v, i) => {
                   const isFuture = (i + 1) > monthCutoff;
                   let cellContent = '';
+                  let isSemBase = false;
                   if (previstoSemFonte) {
                     cellContent = '';  // sem base prevista
                   } else if (isFuture) {
                     cellContent = '';  // mês futuro
+                  } else if (isNaN(v)) {
+                    cellContent = '–';  // meta não projetou este indicador
+                    isSemBase = true;
                   } else {
                     cellContent = formatPainel(v, row.format);
                   }
