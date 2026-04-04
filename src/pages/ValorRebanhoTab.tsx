@@ -415,19 +415,21 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   }, [mesNum]);
 
   // VALOR DO REBANHO chart — fonte oficial: valor_rebanho_fechamento.valor_total
-  // Para o mês selecionado: usa valor frozen se existe, senão live totalRebanho
+  // Para o mês selecionado: SEMPRE usar totalRebanho (= valor exibido no card)
+  // Para outros meses: usar valor frozen da tabela valor_rebanho_fechamento
   const chartDataValor = useMemo(() => {
     return buildChartData((mes) => {
       if (mes === 0) {
         // "Ini" = valor de janeiro (frozen)
         return historicoPorMes[`${anoFiltro}-01`] ?? null;
       }
+      // Mês selecionado: usar EXATAMENTE o valor do card (totalRebanho)
+      if (mes === mesNum) {
+        return totalRebanho > 0 ? totalRebanho : (historicoPorMes[`${anoFiltro}-${String(mes).padStart(2, '0')}`] ?? null);
+      }
+      // Outros meses: valor frozen oficial
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
-      // Sempre preferir valor frozen oficial
-      if (historicoPorMes[key] != null) return historicoPorMes[key];
-      // Para o mês selecionado sem frozen, usar live
-      if (mes === mesNum && totalRebanho > 0) return totalRebanho;
-      return null;
+      return historicoPorMes[key] ?? null;
     });
   }, [buildChartData, historicoPorMes, anoFiltro, mesNum, totalRebanho]);
 
