@@ -145,18 +145,18 @@ const FONTE_FIN_COMP_REAL: FonteIndicador = {
  */
 export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
   // ─── Mensal > Rebanho ───
-  'reb_inicial': { id: 'reb_inicial', nome: 'Reb. inicial (cab)', aba: 'mensal', bloco: 'Rebanho', realizado: FONTE_REBANHO_REAL, previsto: SEM_PREVISTO },
-  'reb_final': { id: 'reb_final', nome: 'Reb. final (cab)', aba: 'mensal', bloco: 'Rebanho', realizado: FONTE_REBANHO_REAL, previsto: SEM_PREVISTO },
-  'entradas_cab': { id: 'entradas_cab', nome: 'Entradas (cab)', aba: 'mensal', bloco: 'Rebanho', realizado: FONTE_REBANHO_REAL, previsto: SEM_PREVISTO },
-  'saidas_cab': { id: 'saidas_cab', nome: 'Saídas (cab)', aba: 'mensal', bloco: 'Rebanho', realizado: FONTE_REBANHO_REAL, previsto: SEM_PREVISTO },
+  'reb_inicial': { id: 'reb_inicial', nome: 'Reb. inicial (cab)', aba: 'mensal', bloco: 'Rebanho', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },
+  'reb_final': { id: 'reb_final', nome: 'Reb. final (cab)', aba: 'mensal', bloco: 'Rebanho', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },
+  'entradas_cab': { id: 'entradas_cab', nome: 'Entradas (cab)', aba: 'mensal', bloco: 'Rebanho', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },
+  'saidas_cab': { id: 'saidas_cab', nome: 'Saídas (cab)', aba: 'mensal', bloco: 'Rebanho', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },
 
   // ─── Mensal > Peso ───
-  'peso_ini_kg': { id: 'peso_ini_kg', nome: 'Peso ini. (kg)', aba: 'mensal', bloco: 'Peso', realizado: FONTE_PESO_REAL, previsto: SEM_PREVISTO },
-  'peso_fin_kg': { id: 'peso_fin_kg', nome: 'Peso final (kg)', aba: 'mensal', bloco: 'Peso', realizado: FONTE_PESO_REAL, previsto: SEM_PREVISTO },
-  'peso_ini_arr': { id: 'peso_ini_arr', nome: 'Peso ini. (@)', aba: 'mensal', bloco: 'Peso', realizado: FONTE_PESO_REAL, previsto: SEM_PREVISTO },
-  'peso_fin_arr': { id: 'peso_fin_arr', nome: 'Peso final (@)', aba: 'mensal', bloco: 'Peso', realizado: FONTE_PESO_REAL, previsto: SEM_PREVISTO },
-  'peso_med_ini': { id: 'peso_med_ini', nome: 'Peso méd. ini.', aba: 'mensal', bloco: 'Peso', realizado: FONTE_PESO_REAL, previsto: SEM_PREVISTO },
-  'peso_med_fin': { id: 'peso_med_fin', nome: 'Peso méd. final', aba: 'mensal', bloco: 'Peso', realizado: FONTE_PESO_REAL, previsto: SEM_PREVISTO },
+  'peso_ini_kg': { id: 'peso_ini_kg', nome: 'Peso ini. (kg)', aba: 'mensal', bloco: 'Peso', realizado: FONTE_PESO_REAL, previsto: FONTE_PESO_PREVISTO },
+  'peso_fin_kg': { id: 'peso_fin_kg', nome: 'Peso final (kg)', aba: 'mensal', bloco: 'Peso', realizado: FONTE_PESO_REAL, previsto: FONTE_PESO_PREVISTO },
+  'peso_ini_arr': { id: 'peso_ini_arr', nome: 'Peso ini. (@)', aba: 'mensal', bloco: 'Peso', realizado: FONTE_PESO_REAL, previsto: FONTE_PESO_PREVISTO },
+  'peso_fin_arr': { id: 'peso_fin_arr', nome: 'Peso final (@)', aba: 'mensal', bloco: 'Peso', realizado: FONTE_PESO_REAL, previsto: FONTE_PESO_PREVISTO },
+  'peso_med_ini': { id: 'peso_med_ini', nome: 'Peso méd. ini.', aba: 'mensal', bloco: 'Peso', realizado: FONTE_PESO_REAL, previsto: FONTE_PESO_PREVISTO },
+  'peso_med_fin': { id: 'peso_med_fin', nome: 'Peso méd. final', aba: 'mensal', bloco: 'Peso', realizado: FONTE_PESO_REAL, previsto: FONTE_PESO_PREVISTO },
 
   // ─── Mensal > Valor do Rebanho ───
   'valor_reb_ini': { id: 'valor_reb_ini', nome: 'Valor reb. inicial', aba: 'mensal', bloco: 'Valor do Rebanho', realizado: FONTE_VALOR_REB_REAL, previsto: SEM_PREVISTO },
@@ -165,21 +165,21 @@ export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
   'valor_arr_fin': { id: 'valor_arr_fin', nome: 'Valor/@ final', aba: 'mensal', bloco: 'Valor do Rebanho', realizado: FONTE_VALOR_REB_REAL, previsto: SEM_PREVISTO },
 
   // ─── Médio > Desempenho ───
-  'gmd': { id: 'gmd', nome: 'GMD (kg/cab/dia)', aba: 'medio', bloco: 'Desempenho', realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
-  'peso_med_reb': { id: 'peso_med_reb', nome: 'Peso méd. reb.', aba: 'medio', bloco: 'Desempenho', realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
-  'ua_media': { id: 'ua_media', nome: 'UA média', aba: 'medio', bloco: 'Desempenho', realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
-  'lotacao': { id: 'lotacao', nome: 'Lotação (UA/ha)', aba: 'medio', bloco: 'Desempenho', realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
+  'gmd': { id: 'gmd', nome: 'GMD (kg/cab/dia)', aba: 'medio', bloco: 'Desempenho', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'peso_med_reb': { id: 'peso_med_reb', nome: 'Peso méd. reb.', aba: 'medio', bloco: 'Desempenho', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'ua_media': { id: 'ua_media', nome: 'UA média', aba: 'medio', bloco: 'Desempenho', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'lotacao': { id: 'lotacao', nome: 'Lotação (UA/ha)', aba: 'medio', bloco: 'Desempenho', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
 
   // ─── Médio > Produção ───
-  'arrobas_prod': { id: 'arrobas_prod', nome: '@ produzidas', aba: 'medio', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
-  'prod_kg': { id: 'prod_kg', nome: 'Produção (kg)', aba: 'medio', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
-  'arr_ha': { id: 'arr_ha', nome: '@/ha', aba: 'medio', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
-  'desfrute_cab': { id: 'desfrute_cab', nome: 'Desfrute (cab)', aba: 'medio', bloco: 'Produção', realizado: FONTE_REBANHO_REAL, previsto: SEM_PREVISTO },
-  'desfrute_arr': { id: 'desfrute_arr', nome: 'Desfrute (@)', aba: 'medio', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
+  'arrobas_prod': { id: 'arrobas_prod', nome: '@ produzidas', aba: 'medio', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'prod_kg': { id: 'prod_kg', nome: 'Produção (kg)', aba: 'medio', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'arr_ha': { id: 'arr_ha', nome: '@/ha', aba: 'medio', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'desfrute_cab': { id: 'desfrute_cab', nome: 'Desfrute (cab)', aba: 'medio', bloco: 'Produção', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },
+  'desfrute_arr': { id: 'desfrute_arr', nome: 'Desfrute (@)', aba: 'medio', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
 
   // ─── Médio > Estrutura ───
-  'area_prod': { id: 'area_prod', nome: 'Área prod. (ha)', aba: 'medio', bloco: 'Estrutura', realizado: { ...FONTE_ZOOT_VIEW_REAL, fonte_tabela: 'pastos', fonte_campo: 'area_ha (onde entra_conciliacao=true)', tela_origem: '/pastos', tela_label: 'Mapa de Pastos' }, previsto: SEM_PREVISTO },
-  'reb_medio': { id: 'reb_medio', nome: 'Reb. médio (cab)', aba: 'medio', bloco: 'Estrutura', realizado: FONTE_REBANHO_REAL, previsto: SEM_PREVISTO },
+  'area_prod': { id: 'area_prod', nome: 'Área prod. (ha)', aba: 'medio', bloco: 'Estrutura', realizado: { ...FONTE_ZOOT_VIEW_REAL, fonte_tabela: 'pastos', fonte_campo: 'area_ha (onde entra_conciliacao=true)', tela_origem: '/pastos', tela_label: 'Mapa de Pastos' }, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'reb_medio': { id: 'reb_medio', nome: 'Reb. médio (cab)', aba: 'medio', bloco: 'Estrutura', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },
 
   // ─── Acumulado > Financeiro Caixa ───
   'ent_fin_acum': { id: 'ent_fin_acum', nome: 'Entradas fin. acum.', aba: 'acumulado', bloco: 'Financeiro no Caixa', realizado: FONTE_FIN_CAIXA_REAL, previsto: SEM_PREVISTO },
