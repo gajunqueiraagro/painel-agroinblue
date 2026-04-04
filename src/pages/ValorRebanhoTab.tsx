@@ -625,10 +625,10 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             <tbody>
               {rows.map((r, i) => (
                 <tr key={r.codigo} className={`border-b ${i % 2 === 0 ? '' : 'bg-muted/20'}`}>
-                  <td className="px-1.5 py-0.5 text-foreground text-[11px] italic whitespace-nowrap bg-primary/10">
+                  <td className="px-1.5 py-0.5 text-foreground text-[9.5px] italic whitespace-nowrap bg-primary/10">
                     {r.nome}
                   </td>
-                  <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[11px]">
+                  <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
                     {r.saldo > 0 ? formatNum(r.saldo, 0) : '-'}
                   </td>
                   <td className="px-1.5 py-0.5 text-right tabular-nums italic text-[11px]">
