@@ -324,9 +324,23 @@ export function FechamentoPastoDialog({
           <span className="text-[11px] font-bold text-muted-foreground h-8 flex items-center">Peso</span>
         </div>
         <div className="flex gap-4 flex-wrap">
-          {cats.map((c, idx) => (
-            <CategoriaCard key={c.id} c={c} idx={idx} tabBase={tabBase} />
-          ))}
+          {cats.map((c, idx) => {
+            const item = getItem(c.id);
+            return (
+              <CategoriaCard
+                key={c.id}
+                c={c}
+                idx={idx}
+                tabBase={tabBase}
+                quantidade={item?.quantidade || 0}
+                pesoMedioKg={item?.peso_medio_kg ?? null}
+                origemDado={item?.origem_dado || 'manual'}
+                disabled={isFechado}
+                onUpdateQtd={onUpdateQtd}
+                onUpdatePeso={onUpdatePeso}
+              />
+            );
+          })}
         </div>
       </div>
     </div>
