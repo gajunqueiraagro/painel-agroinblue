@@ -128,10 +128,10 @@ export function StatusFechamentosTab({ ano, onSelectMes }: Props) {
 
     return [
       { label: 'Pastos', done: p1.status === 'oficial' || (!hasDiverg && p1.status !== 'bloqueado' && p1.status !== 'provisorio'), blocked: p1.status === 'bloqueado' && !hasDiverg },
-      { label: 'Rebanho', done: p1.status === 'oficial', blocked: hasDiverg },
-      { label: 'Valor do Gado', done: p2.status === 'oficial', blocked: p2.status === 'bloqueado' },
-      { label: 'Financeiro', done: p3.status === 'oficial', blocked: p3.status === 'bloqueado' },
-      { label: 'Resultado Final', done: p5.status === 'oficial', blocked: p5.status === 'bloqueado' },
+      { label: 'Rebanho conciliado', done: p1.status === 'oficial', blocked: hasDiverg },
+      { label: 'Valor do rebanho', done: p2.status === 'oficial', blocked: p2.status === 'bloqueado' },
+      { label: 'Financeiro caixa', done: p3.status === 'oficial', blocked: p3.status === 'bloqueado' },
+      { label: 'Resultado final', done: p5.status === 'oficial', blocked: p5.status === 'bloqueado' },
     ];
   }, [pilares]);
 
