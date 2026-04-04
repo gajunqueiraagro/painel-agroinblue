@@ -454,34 +454,30 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     });
   }, [buildChartData, historicoPorMes, anoFiltro, mesNum, totalRebanho]);
 
-  // ARROBAS EM ESTOQUE chart — peso oficial da view zootécnica quando fechado
+  // ARROBAS EM ESTOQUE chart — mês selecionado usa peso live da tabela
   const chartDataArrobas = useMemo(() => {
     return buildChartData((mes) => {
       const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
       if (mes === mesNum) {
-        if (mesSelecionadoFechado) {
-          const frozen = getFrozen(key);
-          return frozen && frozen.pesoKg > 0 ? frozen.pesoKg / 30 : null;
-        }
         return pesoTotalKgLive > 0 ? pesoTotalKgLive / 30 : null;
       }
       const frozen = getFrozen(key);
       return frozen && frozen.pesoKg > 0 ? frozen.pesoKg / 30 : null;
     });
-  }, [buildChartData, historicoPorMes, anoFiltro, mesNum, mesSelecionadoFechado, pesoTotalKgLive]);
+  }, [buildChartData, historicoPorMes, anoFiltro, mesNum, pesoTotalKgLive]);
 
-  // R$/@ MÉDIO chart — valor oficial / peso oficial quando fechado
+  // R$/@ MÉDIO chart — mês selecionado usa cálculo live da tabela
   const chartDataPrecoArroba = useMemo(() => {
     return buildChartData((mes) => {
       const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
-      if (mes === mesNum && !mesSelecionadoFechado) {
+      if (mes === mesNum) {
         return precoMedioArroba > 0 ? precoMedioArroba : null;
       }
       const frozen = getFrozen(key);
       if (frozen && frozen.pesoKg > 0 && frozen.valor > 0) return frozen.valor / (frozen.pesoKg / 30);
       return null;
     });
-  }, [buildChartData, historicoPorMes, anoFiltro, precoMedioArroba, mesNum, mesSelecionadoFechado]);
+  }, [buildChartData, historicoPorMes, anoFiltro, precoMedioArroba, mesNum]);
 
   const handlePrecoChange = (codigo: string, value: string) => {
     const sanitized = value.replace(/[^0-9.,]/g, '');
