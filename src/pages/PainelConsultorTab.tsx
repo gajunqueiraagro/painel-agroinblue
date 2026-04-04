@@ -3,6 +3,7 @@
  * Leitura rápida, foco em conferência e fechamento.
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import React from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -639,83 +640,76 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
 
   const renderTable = (rows: (ZooRow | FinRow)[]) => {
     let lastGrupo = '';
+    const colCount = mesesVisiveis.length + 1;
     return (
-      <div className="overflow-x-auto border rounded-lg">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="sticky left-0 z-10 bg-muted text-[10px] font-bold w-[220px] min-w-[220px] max-w-[220px]">Indicador</TableHead>
+      <div className="overflow-x-auto border rounded">
+        <table className="w-full text-[10px] border-collapse" style={{ tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: '200px' }} />
+            {mesesVisiveis.map((_, i) => (
+              <col key={i} style={{ width: `${Math.max(52, Math.floor((100 - 20) / mesesVisiveis.length))}px` }} />
+            ))}
+          </colgroup>
+          <thead className="sticky top-0 z-10">
+            <tr className="bg-muted border-b">
+              <th className="sticky left-0 z-20 bg-muted text-left text-[9px] font-semibold uppercase tracking-wider px-1.5 py-1">Indicador</th>
               {mesesVisiveis.map(m => (
-                <TableHead key={m} className="text-[10px] font-bold text-center w-[88px] min-w-[80px] max-w-[100px]">{m}</TableHead>
+                <th key={m} className="text-center text-[9px] font-semibold uppercase tracking-wider px-0.5 py-1">{m}</th>
               ))}
-              
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+            </tr>
+          </thead>
+          <tbody>
             {rows.map((row, idx) => {
               const showGrupo = row.grupo !== lastGrupo;
               lastGrupo = row.grupo;
               const indicadorLines = row.indicador.split('\n');
               return (
-                <>
+                <React.Fragment key={idx}>
                   {showGrupo && (
-                    <TableRow key={`grp-${row.grupo}-${idx}`} className="bg-primary/5">
-                      <TableCell
-                        colSpan={mesesVisiveis.length + 1}
-                        className="sticky left-0 text-[10px] font-bold text-primary uppercase tracking-wider py-1.5 px-2"
+                    <tr className="bg-muted/40">
+                      <td
+                        colSpan={colCount}
+                        className="sticky left-0 text-[9px] font-bold text-primary uppercase tracking-wider py-0.5 px-1.5"
                       >
                         {row.grupo}
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                    </tr>
                   )}
-                  <TableRow key={`row-${idx}`} className="hover:bg-muted/30">
-                    <TableCell className="sticky left-0 z-10 bg-card text-[10px] font-medium py-1 px-2 w-[220px] min-w-[220px] max-w-[220px]">
+                  <tr className={`border-b border-border/30 hover:bg-muted/20 ${idx % 2 === 0 ? '' : 'bg-muted/10'}`}>
+                    <td className="sticky left-0 z-10 bg-card text-[10px] font-medium py-0.5 px-1.5 leading-tight truncate">
                       {indicadorLines.length > 1 ? (
-                        <span className="leading-tight">
+                        <>
                           {indicadorLines[0]}<br />
-                          <span className="text-muted-foreground">{indicadorLines[1]}</span>
-                        </span>
+                          <span className="text-muted-foreground text-[9px]">{indicadorLines[1]}</span>
+                        </>
                       ) : row.indicador}
-                    </TableCell>
+                    </td>
                     {row.valores.slice(0, ateMes).map((v, i) => (
-                      <TableCell key={i} className="text-[10px] text-right py-1 px-1.5 tabular-nums whitespace-nowrap w-[88px]">
+                      <td key={i} className="text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px]">
                         {fmtVal(v, row.format)}
-                      </TableCell>
+                      </td>
                     ))}
-                  </TableRow>
-                </>
+                  </tr>
+                </React.Fragment>
               );
             })}
-          </TableBody>
-        </Table>
+          </tbody>
+        </table>
       </div>
     );
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto animate-fade-in pb-20">
-      <div className="p-4 space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={onBack}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div>
-              <h1 className="text-lg font-bold text-foreground">Painel do Consultor</h1>
-              <p className="text-[10px] text-muted-foreground">{fazendaNome} · {ano} até {MESES_LABELS[ateMes - 1]}</p>
-            </div>
-          </div>
-          <Button variant="outline" size="sm" onClick={handleExport} className="gap-1.5 text-xs">
-            <Download className="h-3.5 w-3.5" />
-            Exportar Excel
+    <div className="max-w-full mx-auto animate-fade-in pb-16">
+      <div className="px-2 pt-2 space-y-1.5">
+        {/* Toolbar: back + filters + tabs inline */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <Button variant="ghost" size="icon" onClick={onBack} className="h-7 w-7">
+            <ArrowLeft className="h-4 w-4" />
           </Button>
-        </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap gap-2">
           <Select value={ano} onValueChange={setAno}>
-            <SelectTrigger className="w-[90px] h-8 text-xs">
+            <SelectTrigger className="w-[72px] h-7 text-[11px] px-2 border-border/50">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -726,7 +720,7 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
           </Select>
 
           <Select value={String(ateMes)} onValueChange={v => setAteMes(Number(v))}>
-            <SelectTrigger className="w-[110px] h-8 text-xs">
+            <SelectTrigger className="w-[90px] h-7 text-[11px] px-2 border-border/50">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -735,23 +729,43 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
               ))}
             </SelectContent>
           </Select>
+
+          <div className="flex items-center rounded border border-border/50 overflow-hidden h-7">
+            <button
+              onClick={() => setTab('zoo')}
+              className={`px-2.5 text-[11px] font-semibold h-full transition-colors ${
+                tab === 'zoo'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-card text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              Zootécnico
+            </button>
+            <button
+              onClick={() => setTab('fin')}
+              className={`px-2.5 text-[11px] font-semibold h-full transition-colors ${
+                tab === 'fin'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-card text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              Financeiro
+            </button>
+          </div>
+
+          <div className="ml-auto flex items-center gap-1.5">
+            <span className="text-[10px] text-muted-foreground hidden sm:inline">{fazendaNome} · {ano}</span>
+            <Button variant="outline" size="sm" onClick={handleExport} className="h-7 gap-1 text-[11px] px-2">
+              <Download className="h-3 w-3" />
+              Excel
+            </Button>
+          </div>
         </div>
 
-        {/* Tabs */}
-        <Tabs value={tab} onValueChange={v => setTab(v as 'zoo' | 'fin')}>
-          <TabsList className="w-full">
-            <TabsTrigger value="zoo" className="flex-1 text-xs">Zootécnico</TabsTrigger>
-            <TabsTrigger value="fin" className="flex-1 text-xs">Financeiro</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="zoo" className="mt-3">
-            {renderTable(zooRows)}
-          </TabsContent>
-
-          <TabsContent value="fin" className="mt-3">
-            {renderTable(finRows)}
-          </TabsContent>
-        </Tabs>
+        {/* Table */}
+        <div className="mt-1">
+          {tab === 'zoo' ? renderTable(zooRows) : renderTable(finRows)}
+        </div>
       </div>
     </div>
   );
