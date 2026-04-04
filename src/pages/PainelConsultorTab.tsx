@@ -451,12 +451,8 @@ function getCurrentMonthCutoff(anoNum: number): number {
 
 // ─── Source Info Tooltip ───
 function SourceInfoTooltip({ indicadorId, cenario }: { indicadorId?: string; cenario: Cenario }) {
-  const meta = indicadorId ? getIndicadorMeta(undefined as any) : undefined;
-  // Lookup by id from catalog
-  const catalogMeta = indicadorId ? (() => {
-    const { CATALOGO_INDICADORES } = require('@/lib/painelConsultor/indicadorCatalogo');
-    return CATALOGO_INDICADORES[indicadorId] as import('@/lib/painelConsultor/indicadorCatalogo').IndicadorMeta | undefined;
-  })() : undefined;
+  if (!indicadorId) return null;
+  const catalogMeta = CATALOGO_INDICADORES_MAP[indicadorId];
 
   if (!catalogMeta) return null;
 
