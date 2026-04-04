@@ -661,13 +661,13 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           )}
         </div>
 
-        {/* RIGHT — Summary Card + Charts */}
-        <div className="min-w-[200px] max-w-[340px] flex-1 space-y-1.5">
+        {/* RIGHT — Summary Card */}
+        <div className="min-w-[200px] flex-1 space-y-1.5">
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-2.5">
-              <div className="flex gap-3">
+              <div className="flex gap-4">
                 {/* LEFT column — main value */}
-                <div className="flex-1 min-w-0">
+                <div className="shrink-0">
                   <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider">
                     Valor do Rebanho — {mesLabel}/{anoFiltro}
                   </p>
@@ -680,36 +680,40 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                     <VariacaoBadge valor={varValorAno} label="vs ini. ano" showLabel />
                   </div>
                 </div>
-                {/* RIGHT column — indicators */}
-                <div className="space-y-0.5 text-[10px] shrink-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">Cabeças</span>
-                    <span className="font-bold text-foreground tabular-nums">{formatNum(totalCabecas)}</span>
+                {/* RIGHT column — indicators with variations */}
+                <div className="flex-1 min-w-0 text-[10px]">
+                  {/* Header row */}
+                  <div className="flex items-center gap-1 mb-0.5 text-[8px] text-muted-foreground font-medium">
+                    <span className="flex-1" />
+                    <span className="w-16 text-right">Valor</span>
+                    <span className="w-12 text-right">vs mês</span>
+                    <span className="w-12 text-right">vs ano</span>
                   </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">Peso médio</span>
-                    <span className="font-semibold text-foreground tabular-nums">{formatNum(pesoMedioGeral, 1)} kg</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">R$/@ médio</span>
-                    <span className="font-semibold text-foreground tabular-nums">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '—'}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">R$/cab</span>
-                    <span className="font-semibold text-foreground tabular-nums">{formatMoeda(valorMedioCabeca)}</span>
-                  </div>
+                  {[
+                    { label: 'Cabeças', value: formatNum(totalCabecas), varMes: varCabMes, varAno: varCabAno },
+                    { label: 'Peso médio', value: `${formatNum(pesoMedioGeral, 1)} kg`, varMes: varPesoMes, varAno: varPesoAno },
+                    { label: 'R$/@ médio', value: precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '—', varMes: varArrobaMes, varAno: varArrobaAno },
+                    { label: 'R$/cab', value: formatMoeda(valorMedioCabeca), varMes: varCabValorMes, varAno: varCabValorAno },
+                  ].map(ind => (
+                    <div key={ind.label} className="flex items-center gap-1 py-px">
+                      <span className="flex-1 text-muted-foreground truncate">{ind.label}</span>
+                      <span className="w-16 text-right font-semibold text-foreground tabular-nums">{ind.value}</span>
+                      <span className="w-12 text-right"><VariacaoBadge valor={ind.varMes} label="" /></span>
+                      <span className="w-12 text-right"><VariacaoBadge valor={ind.varAno} label="" /></span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </CardContent>
           </Card>
-
-          {/* Charts — below card, inside right column */}
-          <div className="flex gap-1.5">
-            <MiniChart data={chartDataValor} color="hsl(var(--primary))" title="Valor do Rebanho" />
-            <MiniChart data={chartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
-            <MiniChart data={chartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio" />
-          </div>
         </div>
+      </div>
+
+      {/* Charts — full width below, aligned right of table */}
+      <div className="flex gap-2">
+        <MiniChart data={chartDataValor} color="hsl(var(--primary))" title="Valor do Rebanho" />
+        <MiniChart data={chartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
+        <MiniChart data={chartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio" />
       </div>
     </div>
   );
