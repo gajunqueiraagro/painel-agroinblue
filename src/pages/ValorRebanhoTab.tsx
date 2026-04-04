@@ -727,9 +727,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         <div className="min-w-[200px] flex-1 space-y-1.5">
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-2.5">
-              <div className="grid grid-cols-[42%_58%] gap-4 items-start">
-                {/* LEFT block — main value */}
-                <div>
+              <div className="flex gap-3">
+                {/* LEFT column — main value */}
+                <div className="shrink-0">
                   <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider">
                     Valor do Rebanho — {mesLabel}/{anoFiltro}
                   </p>
@@ -742,15 +742,15 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                     <VariacaoBadge valor={varValorAno} label="vs ini. ano" showLabel />
                   </div>
                 </div>
-                {/* RIGHT block — indicators grid */}
-                <div className="text-[10px]">
-                  <div className="grid grid-cols-[130px_110px_80px_80px] gap-x-3 gap-y-1.5 items-center">
-                    {/* Header row */}
+                {/* RIGHT column — indicators compact */}
+                <div className="flex-1 min-w-0 text-[10px]">
+                  <div className="grid grid-cols-[auto_70px_56px_56px] gap-x-2 items-center">
+                    {/* Header */}
                     <span className="text-[8px] text-muted-foreground font-medium">Indicador</span>
                     <span className="text-[8px] text-muted-foreground font-medium text-right">Valor</span>
                     <span className="text-[8px] text-muted-foreground font-medium text-right">vs mês</span>
                     <span className="text-[8px] text-muted-foreground font-medium text-right">vs ano</span>
-                    {/* Data rows */}
+                    {/* Rows */}
                     {[
                       { label: 'Cabeças', value: formatNum(totalCabecas, 0), varMes: varCabMes, varAno: varCabAno },
                       { label: 'Peso médio', value: `${formatNum(pesoMedioGeral, 2)} kg`, varMes: varPesoMes, varAno: varPesoAno },
