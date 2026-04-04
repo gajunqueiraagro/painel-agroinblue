@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import {
+import { useStatusPilares } from '@/hooks/useStatusPilares';
   Lancamento,
   CATEGORIAS,
   TODOS_TIPOS,
