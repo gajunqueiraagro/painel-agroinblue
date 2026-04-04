@@ -541,6 +541,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const metricasSelecionado = useMemo(() => {
     if (fonteMes === 'live') return metricasLiveSelecionado;
+    if (fonteMes === 'snapshot_incompleto') return buildMetricsFromTotals(null, null, null);
     return buildFrozenMetrics(anoMes) ?? buildMetricsFromTotals(null, null, null);
   }, [fonteMes, metricasLiveSelecionado, buildFrozenMetrics, anoMes]);
 
@@ -924,6 +925,20 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         </div>
 
         <div className="min-w-[200px] flex-1 space-y-1.5">
+          {avisoSnapshotIncompleto ? (
+            <Card className="bg-amber-500/10 border-amber-500/30">
+              <CardContent className="p-4 flex flex-col items-center justify-center gap-2 text-center">
+                <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                  Mês fechado sem snapshot detalhado
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  Reabra e salve novamente para consolidar a base oficial. Nenhum valor será exibido até que o snapshot completo seja gerado.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+          <>
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-2.5">
               <div className="flex gap-3">
@@ -973,6 +988,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             <MiniChart data={chartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
             <MiniChart data={chartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio" />
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>
