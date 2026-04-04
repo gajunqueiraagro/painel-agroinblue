@@ -664,11 +664,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                 <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{formatNum(totalCabecas, 0)}</td>
                 <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatNum(pesoMedioGeral, 2)}</td>
                 <td className="px-1 py-1 text-center text-foreground tabular-nums italic text-[11px] w-[60px]">
-                  {precoMedioKg > 0 ? formatNum(precoMedioKg, 2) : ''}
+                  {precoMedioKgCalculado > 0 ? formatNum(precoMedioKgCalculado, 2) : ''}
                 </td>
-                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '-'}</td>
-                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatMoeda(valorMedioCabeca)}</td>
-                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{formatMoeda(totalRebanho)}</td>
+                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{precoMedioArrobaCalculado > 0 ? formatMoeda(precoMedioArrobaCalculado) : '-'}</td>
+                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatMoeda(valorMedioCabecaCalculado)}</td>
+                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{formatMoeda(totalRebanhoCalculado)}</td>
               </tr>
             </tfoot>
           </table>
