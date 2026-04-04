@@ -71,8 +71,35 @@ export function MapaPastosTab() {
   const [rows, setRows] = useState<PastoMapaRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const tableModuleRef = useRef<HTMLDivElement | null>(null);
+
+  const updateLayoutBounds = useCallback(() => {
+    const node = tableModuleRef.current;
+    if (!node) return;
+
+    const topOffset = Math.max(node.getBoundingClientRect().top, 0);
+    node.style.setProperty('--mapa-pastos-top-offset', `${topOffset}px`);
+  }, []);
 
   useEffect(() => { loadFechamentos(anoMes); }, [anoMes, loadFechamentos]);
+
+  useEffect(() => {
+    updateLayoutBounds();
+    const rafId = window.requestAnimationFrame(updateLayoutBounds);
+    window.addEventListener('resize', updateLayoutBounds);
+    window.visualViewport?.addEventListener('resize', updateLayoutBounds);
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', updateLayoutBounds);
+      window.visualViewport?.removeEventListener('resize', updateLayoutBounds);
+    };
+  }, [updateLayoutBounds]);
+
+  useEffect(() => {
+    const rafId = window.requestAnimationFrame(updateLayoutBounds);
+    return () => window.cancelAnimationFrame(rafId);
+  }, [updateLayoutBounds, loading, rows.length, anoFiltro, mesFiltro]);
 
   useEffect(() => {
     const build = async () => {
@@ -101,12 +128,10 @@ export function MapaPastosTab() {
 
         const totalCab = Array.from(catMap.values()).reduce((s, v) => s + v.quantidade, 0);
 
-        // Peso médio ponderado via lib central
         const pesoMedio = calcPesoMedioPonderado(
           Array.from(catMap.values()).map(v => ({ quantidade: v.quantidade, pesoKg: v.peso_medio_kg }))
         );
 
-        // UA via lib central
         let uaTotal = 0;
         catMap.forEach(v => { uaTotal += calcUA(v.quantidade, v.peso_medio_kg); });
         const uaHa = calcUAHa(uaTotal, pasto.area_produtiva_ha);
@@ -140,7 +165,6 @@ export function MapaPastosTab() {
     const totalCab = rows.reduce((s, r) => s + r.totalCabecas, 0);
     const areaTotal = rows.reduce((s, r) => s + (r.pasto.area_produtiva_ha || 0), 0);
 
-    // Peso médio geral via lib central
     const pesoMedioGeral = calcPesoMedioPonderado(
       rows.filter(r => r.totalCabecas > 0).map(r => ({ quantidade: r.totalCabecas, pesoKg: r.pesoMedio }))
     );
@@ -200,7 +224,14 @@ export function MapaPastosTab() {
 
   return (
     <TooltipProvider>
-      <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
+      <div
+        ref={tableModuleRef}
+        className="flex min-h-0 flex-col overflow-hidden bg-background"
+        style={{
+          height: 'calc(100dvh - var(--mapa-pastos-top-offset, 0px) - var(--bottom-nav-safe, 64px))',
+          maxHeight: 'calc(100dvh - var(--mapa-pastos-top-offset, 0px) - var(--bottom-nav-safe, 64px))',
+        }}
+      >
         <div className="flex-shrink-0 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 z-30">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
@@ -284,17 +315,17 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
 }) {
   const colWidths = useMemo(() => {
     const base = [
-      60,   // Pasto
-      45,   // Atividade
-      100,  // Lote
+      60,
+      45,
+      100,
     ];
     const cats = categorias.map(() => 30);
     const tail = [
-      38,   // Total
-      52,   // Peso
-      42,   // Área
-      42,   // UA/ha
-      34,   // Qual.
+      38,
+      52,
+      42,
+      42,
+      34,
     ];
     return [...base, ...cats, ...tail];
   }, [categorias]);
@@ -333,7 +364,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
             </table>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto pb-16">
+          <div className="flex-1 min-h-0 overflow-y-auto pb-3">
             <table className="w-full border-separate border-spacing-0 text-[11px]" style={{ tableLayout: 'fixed' }}>
               {renderColGroup()}
               <tbody>
