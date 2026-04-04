@@ -1031,6 +1031,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
                           <TooltipContent side="top" className="text-[10px] max-w-[220px]">
                             {tooltipText}
                             {isP1Bloqueado && <span className="block mt-0.5 opacity-70">Clique para ver detalhes</span>}
+                            {isP1Oficial && <span className="block mt-0.5 opacity-70">Clique para reabrir</span>}
                           </TooltipContent>
                         )}
                       </Tooltip>
