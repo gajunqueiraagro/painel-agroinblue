@@ -498,21 +498,28 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         </div>
       </div>
 
-      {/* Month bar */}
+      {/* Month bar — green=fechado, red=aberto */}
       <div className="flex gap-0.5 bg-muted/30 rounded-md p-0.5 border">
-        {MESES_SHORT.map(m => (
-          <button
-            key={m.key}
-            onClick={() => setMesFiltro(m.key)}
-            className={`flex-1 text-center text-[11px] font-semibold py-1 rounded transition-colors
-              ${mesFiltro === m.key
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-              }`}
-          >
-            {m.label}
-          </button>
-        ))}
+        {MESES_SHORT.map(m => {
+          const mesKey = `${anoFiltro}-${m.key}`;
+          const isClosed = !!historicoPorMes[mesKey];
+          const isSelected = mesFiltro === m.key;
+          return (
+            <button
+              key={m.key}
+              onClick={() => setMesFiltro(m.key)}
+              className={`flex-1 text-center text-[11px] font-semibold py-1 rounded transition-colors
+                ${isSelected
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : isClosed
+                    ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50'
+                    : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40'
+                }`}
+            >
+              {m.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* December-specific alerts */}
