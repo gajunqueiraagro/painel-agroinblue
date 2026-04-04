@@ -695,6 +695,9 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
 
   const fazendaId = fazendaAtual?.id;
 
+  // ─── Previsto: useZootMensal com cenario='meta' ───
+  const { data: zootMeta } = useZootMensal({ ano: anoNum, cenario: 'meta' });
+
   // Month cutoff: months > cutoff are blank
   const monthCutoff = useMemo(() => getCurrentMonthCutoff(anoNum), [anoNum]);
 
@@ -738,8 +741,15 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
     [lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes],
   );
 
-  // Blocos only for Realizado — Previsto uses same structure but values are blanked
-  const blocos = useMemo(() => buildBlocosForTab(monthlyData, viewTab), [monthlyData, viewTab]);
+  const isPrevisto = cenario === 'previsto';
+
+  // Blocos: Realizado usa buildMonthlyData, Previsto usa vw_zoot_fazenda_mensal (meta)
+  const blocos = useMemo(() => {
+    if (isPrevisto) {
+      return buildBlocosFromZootMensal(zootMeta || [], viewTab);
+    }
+    return buildBlocosForTab(monthlyData, viewTab);
+  }, [isPrevisto, monthlyData, zootMeta, viewTab]);
 
   useEffect(() => {
     if (blocos.length > 0) {
