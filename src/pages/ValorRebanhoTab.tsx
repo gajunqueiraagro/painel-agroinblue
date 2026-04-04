@@ -876,6 +876,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           const mesKey = `${anoFiltro}-${m.key}`;
           const isClosed = isGlobal ? !!uHistoricoPorMes[mesKey] : !!historicoPorMes[mesKey];
           const isSelected = mesFiltro === m.key;
+          const mesN = Number(m.key);
+          const isFuturo = anoNumFiltro > anoAtualSistema || (anoNumFiltro === anoAtualSistema && mesN > mesAtualSistema);
           return (
             <button
               key={m.key}
@@ -883,9 +885,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               className={`flex-1 text-center text-[11px] font-semibold py-1 rounded transition-colors
                 ${isSelected
                   ? 'bg-primary text-primary-foreground shadow-sm'
-                  : isClosed
-                    ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50'
-                    : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40'
+                  : isFuturo
+                    ? 'bg-muted/40 text-muted-foreground/50 cursor-default'
+                    : isClosed
+                      ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50'
+                      : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40'
                 }`}
             >
               {m.label}
@@ -894,7 +898,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         })}
       </div>
 
-      {uFonteMes === 'live' && (
+      {isMesAtual && !isMesFuturo && uFonteMes === 'live' && (
+        <div className="flex items-center gap-1.5 text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded px-2 py-1 border border-amber-500/30">
+          <Info className="h-3 w-3 shrink-0" />
+          <span>Mês atual em andamento — valores parciais até o fechamento oficial.</span>
+        </div>
+      )}
+
+      {uFonteMes === 'live' && !isMesFuturo && !isMesAtual && (
         <div className="flex items-center gap-1.5 text-[10px] bg-muted/40 text-muted-foreground rounded px-2 py-1 border">
           <Info className="h-3 w-3 shrink-0" />
           <span>{isGlobal ? 'Mês aberto: valores consolidados de todas as fazendas em cálculo live.' : 'Mês aberto: tabela, card e gráficos exibem cálculo live até o fechamento oficial.'}</span>
