@@ -66,7 +66,7 @@ function buildZooRows(
   lancamentos: Lancamento[],
   saldosIniciais: SaldoInicial[],
   ano: number,
-  ateMes: number,
+  _ateMes: number,
   areaProdutiva: number,
   pesosPorMes: Record<string, Record<string, number>>,
 ): ZooRow[] {
