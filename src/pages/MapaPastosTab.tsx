@@ -332,8 +332,8 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
 }) {
   const colWidths = useMemo(() => {
     const base = [60, 45, 100];
-    const cats = categorias.map(() => 30);
-    const tail = [38, 40, 35, 35, 25];
+    const cats = categorias.map(() => 34);
+    const tail = [38, 50, 42, 42, 34];
     return [...base, ...cats, ...tail];
   }, [categorias]);
 
