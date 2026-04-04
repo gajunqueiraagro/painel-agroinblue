@@ -598,7 +598,6 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
 
   const hasPrevistoSource = useCallback((indicadorId?: string): boolean => {
     if (!indicadorId) return false;
-    const { CATALOGO_INDICADORES } = require('@/lib/painelConsultor/indicadorCatalogo');
     const meta = CATALOGO_INDICADORES[indicadorId];
     if (!meta) return false;
     return meta.previsto.fonte_tipo !== 'sem_fonte';
