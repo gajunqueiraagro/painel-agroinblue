@@ -655,8 +655,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           )}
         </div>
 
-        {/* RIGHT — Summary Card */}
-        <div className="min-w-[200px] max-w-[340px] flex-1">
+        {/* RIGHT — Summary Card + Charts */}
+        <div className="min-w-[200px] max-w-[340px] flex-1 space-y-1.5">
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-3">
               <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-0">
@@ -665,12 +665,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               {fazendaNome && (
                 <p className="text-[10px] text-muted-foreground font-medium mb-1">{fazendaNome}</p>
               )}
-              <div className="flex items-baseline gap-2">
+              <div className="flex items-baseline gap-2 flex-wrap">
                 <p className="text-2xl font-extrabold text-foreground leading-tight">{formatMoeda(totalRebanho)}</p>
-                <div className="flex gap-1.5">
-                  <VariacaoBadge valor={varValorMes} label="vs mês anterior" />
-                  <VariacaoBadge valor={varValorAno} label="vs início do ano" />
-                </div>
+              </div>
+              <div className="flex gap-3 mt-0.5">
+                <VariacaoBadge valor={varValorMes} label="vs mês ant." showLabel />
+                <VariacaoBadge valor={varValorAno} label="vs ini. ano" showLabel />
               </div>
 
               <div className="mt-2 space-y-0.5 text-[11px]">
@@ -678,45 +678,45 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                   <span className="text-muted-foreground">Cabeças</span>
                   <div className="flex items-center gap-1.5">
                     <span className="font-bold text-foreground tabular-nums">{formatNum(totalCabecas)}</span>
-                    <VariacaoBadge valor={varCabMes} label="vs mês anterior" />
-                    <VariacaoBadge valor={varCabAno} label="vs início do ano" />
+                    <VariacaoBadge valor={varCabMes} label="vs mês ant." showLabel />
+                    <VariacaoBadge valor={varCabAno} label="vs ini. ano" showLabel />
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Peso médio</span>
                   <div className="flex items-center gap-1.5">
                     <span className="font-semibold text-foreground tabular-nums">{formatNum(pesoMedioGeral, 1)} kg</span>
-                    <VariacaoBadge valor={varPesoMes} label="vs mês anterior" />
-                    <VariacaoBadge valor={varPesoAno} label="vs início do ano" />
+                    <VariacaoBadge valor={varPesoMes} label="vs mês ant." showLabel />
+                    <VariacaoBadge valor={varPesoAno} label="vs ini. ano" showLabel />
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">R$/@ médio</span>
                   <div className="flex items-center gap-1.5">
                     <span className="font-semibold text-foreground tabular-nums">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '—'}</span>
-                    <VariacaoBadge valor={varArrobaMes} label="vs mês anterior" />
-                    <VariacaoBadge valor={varArrobaAno} label="vs início do ano" />
+                    <VariacaoBadge valor={varArrobaMes} label="vs mês ant." showLabel />
+                    <VariacaoBadge valor={varArrobaAno} label="vs ini. ano" showLabel />
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">R$/cab</span>
                   <div className="flex items-center gap-1.5">
                     <span className="font-semibold text-foreground tabular-nums">{formatMoeda(valorMedioCabeca)}</span>
-                    <VariacaoBadge valor={varCabValorMes} label="vs mês anterior" />
-                    <VariacaoBadge valor={varCabValorAno} label="vs início do ano" />
+                    <VariacaoBadge valor={varCabValorMes} label="vs mês ant." showLabel />
+                    <VariacaoBadge valor={varCabValorAno} label="vs ini. ano" showLabel />
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
-        </div>
-      </div>
 
-      {/* Charts — side by side, below table+card */}
-      <div className="flex gap-2 mt-1">
-        <MiniChart data={chartDataValor} color="hsl(var(--primary))" title="Valor do Rebanho" />
-        <MiniChart data={chartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
-        <MiniChart data={chartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio do Estoque" />
+          {/* Mini charts — stacked in right column */}
+          <div className="space-y-1">
+            <MiniChart data={chartDataValor} color="hsl(var(--primary))" title="Valor do Rebanho" />
+            <MiniChart data={chartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
+            <MiniChart data={chartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio do Estoque" />
+          </div>
+        </div>
       </div>
     </div>
   );
