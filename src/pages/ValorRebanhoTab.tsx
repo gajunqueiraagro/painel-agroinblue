@@ -583,20 +583,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const precoMedioArrobaExibido = metricasSelecionado.precoArroba;
   const valorMedioCabecaExibido = metricasSelecionado.valorCabeca;
 
-  const varValorMes = calcVariacaoNullable(metricasSelecionado.valor, metricasMesAnterior?.valor ?? null);
-  const varValorAno = calcVariacaoNullable(metricasSelecionado.valor, metricasInicioAno?.valor ?? null);
-  const varCabMes = calcVariacaoNullable(metricasSelecionado.cabecas, metricasMesAnterior?.cabecas ?? null);
-  const varCabAno = calcVariacaoNullable(metricasSelecionado.cabecas, metricasInicioAno?.cabecas ?? null);
-  const varPesoMes = calcVariacaoNullable(metricasSelecionado.pesoMedio, metricasMesAnterior?.pesoMedio ?? null);
-  const varPesoAno = calcVariacaoNullable(metricasSelecionado.pesoMedio, metricasInicioAno?.pesoMedio ?? null);
-  const varArrobaMes = calcVariacaoNullable(metricasSelecionado.precoArroba, metricasMesAnterior?.precoArroba ?? null);
-  const varArrobaAno = calcVariacaoNullable(metricasSelecionado.precoArroba, metricasInicioAno?.precoArroba ?? null);
-  const varCabValorMes = calcVariacaoNullable(metricasSelecionado.valorCabeca, metricasMesAnterior?.valorCabeca ?? null);
-  const varCabValorAno = calcVariacaoNullable(metricasSelecionado.valorCabeca, metricasInicioAno?.valorCabeca ?? null);
-  const varArrobasEstoqueMes = calcVariacaoNullable(metricasSelecionado.totalArrobas, metricasMesAnterior?.totalArrobas ?? null);
-  const varArrobasEstoqueAno = calcVariacaoNullable(metricasSelecionado.totalArrobas, metricasInicioAno?.totalArrobas ?? null);
-
-  const mesLabel = MESES_COLS.find(m => m.key === mesFiltro)?.label || mesFiltro;
+  // (variações individuais movidas para bloco unificado abaixo)
 
   const buildChartData = useCallback((getValue: (mes: number) => number | null) => {
     return CHART_LABELS.map((label, idx) => {
