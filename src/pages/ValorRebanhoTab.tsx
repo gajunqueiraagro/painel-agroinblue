@@ -661,71 +661,55 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           )}
         </div>
 
-        {/* RIGHT — Summary Card */}
+        {/* RIGHT — Summary Card + Charts */}
         <div className="min-w-[200px] max-w-[340px] flex-1 space-y-1.5">
           <Card className="bg-primary/5 border-primary/20">
-            <CardContent className="p-3">
-              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-0">
-                Valor do Rebanho — {mesLabel}/{anoFiltro}
-              </p>
-              {fazendaNome && (
-                <p className="text-[10px] text-muted-foreground font-medium mb-1">{fazendaNome}</p>
-              )}
-              <p className="text-2xl font-extrabold text-foreground leading-tight">{formatMoeda(totalRebanho)}</p>
-              <div className="flex gap-3 mt-0.5">
-                <VariacaoBadge valor={varValorMes} label="vs mês ant." showLabel />
-                <VariacaoBadge valor={varValorAno} label="vs ini. ano" showLabel />
-              </div>
-
-              {/* Indicators — compact list with inline variations */}
-              <div className="mt-2 space-y-0.5 text-[11px]">
-                <div className="flex items-center justify-end gap-2 mb-0.5">
-                  <span className="text-[8px] text-muted-foreground">vs mês ant.</span>
-                  <span className="text-[8px] text-muted-foreground">vs ini. ano</span>
+            <CardContent className="p-2.5">
+              <div className="flex gap-3">
+                {/* LEFT column — main value */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider">
+                    Valor do Rebanho — {mesLabel}/{anoFiltro}
+                  </p>
+                  {fazendaNome && (
+                    <p className="text-[9px] text-muted-foreground font-medium">{fazendaNome}</p>
+                  )}
+                  <p className="text-xl font-extrabold text-foreground leading-tight mt-0.5">{formatMoeda(totalRebanho)}</p>
+                  <div className="flex flex-col gap-0 mt-0.5">
+                    <VariacaoBadge valor={varValorMes} label="vs mês ant." showLabel />
+                    <VariacaoBadge valor={varValorAno} label="vs ini. ano" showLabel />
+                  </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Cabeças</span>
-                  <div className="flex items-center gap-1.5">
+                {/* RIGHT column — indicators */}
+                <div className="space-y-0.5 text-[10px] shrink-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Cabeças</span>
                     <span className="font-bold text-foreground tabular-nums">{formatNum(totalCabecas)}</span>
-                    <VariacaoBadge valor={varCabMes} label="" />
-                    <VariacaoBadge valor={varCabAno} label="" />
                   </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Peso médio</span>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Peso médio</span>
                     <span className="font-semibold text-foreground tabular-nums">{formatNum(pesoMedioGeral, 1)} kg</span>
-                    <VariacaoBadge valor={varPesoMes} label="" />
-                    <VariacaoBadge valor={varPesoAno} label="" />
                   </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">R$/@ médio</span>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">R$/@ médio</span>
                     <span className="font-semibold text-foreground tabular-nums">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '—'}</span>
-                    <VariacaoBadge valor={varArrobaMes} label="" />
-                    <VariacaoBadge valor={varArrobaAno} label="" />
                   </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">R$/cab</span>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">R$/cab</span>
                     <span className="font-semibold text-foreground tabular-nums">{formatMoeda(valorMedioCabeca)}</span>
-                    <VariacaoBadge valor={varCabValorMes} label="" />
-                    <VariacaoBadge valor={varCabValorAno} label="" />
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
-        </div>
-      </div>
 
-      {/* Charts — full width below, side by side */}
-      <div className="flex gap-3 mt-2">
-        <MiniChart data={chartDataValor} color="hsl(var(--primary))" title="Valor do Rebanho" />
-        <MiniChart data={chartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
-        <MiniChart data={chartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio" />
+          {/* Charts — below card, inside right column */}
+          <div className="flex gap-1.5">
+            <MiniChart data={chartDataValor} color="hsl(var(--primary))" title="Valor do Rebanho" />
+            <MiniChart data={chartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
+            <MiniChart data={chartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio" />
+          </div>
+        </div>
       </div>
     </div>
   );
