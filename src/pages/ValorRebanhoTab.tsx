@@ -684,7 +684,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             </p>
           </div>
 
-          {(temSugestao || temEstimativa) && (
+          {(temSugestao || temEstimativa || dezembroCompleto) && (
             <div className="px-1.5 pb-1 space-y-0.5">
               {temSugestao && (
                 <p className="text-[9px] text-amber-600 dark:text-amber-400">
@@ -694,6 +694,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               {temEstimativa && (
                 <p className="text-[9px] text-muted-foreground">
                   * Algumas categorias usam peso estimado (último lançamento ou saldo inicial).
+                </p>
+              )}
+              {dezembroCompleto && (
+                <p className="text-[9px] text-primary">
+                  ✔ Base anual completa. Todas as categorias têm preço informado para dezembro.
                 </p>
               )}
             </div>
