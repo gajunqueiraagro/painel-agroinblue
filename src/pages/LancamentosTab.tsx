@@ -12,6 +12,7 @@ import {
   isReclassificacao,
   kgToArrobas,
 } from '@/types/cattle';
+import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -183,6 +184,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const isAdministrativo = fazendaAtual?.tem_pecuaria === false;
   const bloqueado = isGlobal || isAdministrativo;
 
+  // ─── Governança P1: bloquear mês fechado ───
+  // We'll compute anoMes from the form's current `data` field (set on line ~195)
+  // But we need the state first, so the hook call uses a derived value below.
+
   const outrasFazendas = useMemo(() => {
     return fazendas.filter(f => f.id !== fazendaAtual?.id && f.id !== '__global__' && f.tem_pecuaria !== false);
   }, [fazendas, fazendaAtual]);
@@ -206,7 +211,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState('todos');
 
-  // Internal edit origin context — saves aba/filters before switching to form mode
+  // ─── P1 governance: derive anoMes from form date ───
+  const formAnoMes = useMemo(() => {
+    if (!data) return undefined;
+    return data.slice(0, 7); // 'yyyy-MM'
+  }, [data]);
+  const { status: statusPilaresForm } = useStatusPilares(fazendaAtual?.id, formAnoMes);
+  const p1Oficial = statusPilaresForm.p1_mapa_pastos.status === 'oficial';
+
   const internalEditOrigin = useRef<{ aba: Aba; anoFiltro: string; mesFiltro: string } | null>(null);
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
   const [statusOp, setStatusOp] = useState<StatusOperacional>('conciliado');
@@ -1216,6 +1228,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Validate form and open confirmation dialog
   const handleRequestRegister = () => {
+    // ── P1 governance block ──
+    if (p1Oficial) {
+      toast.error('Este mês está fechado no Mapa de Pastos (P1 oficial). Reabra o período para registrar lançamentos.');
+      return;
+    }
     if (!quantidade || Number(quantidade) <= 0) { toast.error('Informe a quantidade'); return; }
     if (!categoria) { toast.error('Selecione a categoria'); return; }
     if (!data) { toast.error('Informe a data'); return; }
@@ -2505,7 +2522,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </button>
       )}
 
-      {/* === 3-COLUMN DESKTOP GRID === */}
+      {/* ── P1 governance banner ── */}
+      {p1Oficial && aba !== 'historico' && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2 mb-2 flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+          <div className="text-[11px]">
+            <span className="font-bold text-destructive">Mês fechado (P1 oficial).</span>{' '}
+            <span className="text-muted-foreground">Reabra o período para alterar campos estruturais ou registrar novos lançamentos.</span>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-[11rem_minmax(0,1fr)_20rem] gap-3 items-start overflow-visible">
         {/* Left: Navigation sidebar */}
         {renderSidebar()}
@@ -2769,6 +2796,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onEditarVenda={loadVendaForEdit}
           onEditarCompra={loadCompraForEdit}
           onEditarTransferencia={loadTransferenciaForEdit}
+          fazendaId={fazendaAtual?.id}
         />
       )}
 
