@@ -837,8 +837,11 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                   <button
                     key={s.value}
                     type="button"
-                    onClick={() => setForm(f => ({ ...f, statusOperacional: s.value }))}
+                    onClick={() => !p1Oficial && setForm(f => ({ ...f, statusOperacional: s.value }))}
+                    disabled={p1Oficial}
                     className={`flex-1 py-2 rounded-lg text-xs font-bold border-2 transition-all ${
+                      p1Oficial ? 'opacity-50 cursor-not-allowed' : ''
+                    } ${
                       (form.statusOperacional || 'conciliado') === s.value
                         ? `${s.bg} text-white border-transparent shadow-md`
                         : 'border-border text-muted-foreground bg-muted/30'
