@@ -452,7 +452,7 @@ function getCurrentMonthCutoff(anoNum: number): number {
 // ─── Source Info Tooltip ───
 function SourceInfoTooltip({ indicadorId, cenario }: { indicadorId?: string; cenario: Cenario }) {
   if (!indicadorId) return null;
-  const catalogMeta = CATALOGO_INDICADORES_MAP[indicadorId];
+  const catalogMeta = CATALOGO_INDICADORES[indicadorId];
 
   if (!catalogMeta) return null;
 
