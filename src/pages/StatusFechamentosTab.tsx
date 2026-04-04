@@ -168,7 +168,8 @@ export function StatusFechamentosTab({ ano, onSelectMes }: Props) {
       nao_iniciado: `${nome} selecionado`,
     };
     toast(msgs[m.status]);
-    onSelectMes?.(`${ano}-${m.mes}`);
+    const destino = (m.status === 'bloqueado' || m.status === 'provisorio') ? 'painel_consultor' : 'resumo';
+    onSelectMes?.(`${ano}-${m.mes}`, destino);
   };
 
   /* ── loading ── */
