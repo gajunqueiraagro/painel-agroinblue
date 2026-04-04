@@ -427,7 +427,18 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
   const pesoIni = get('peso_inicio_kg');
   const pesoFin = get('peso_total_final_kg');
   const pesoMedFin = get('peso_medio_final_kg');
-  const gmd = get('gmd_kg_cab_dia');
+  // GMD: usar NaN como sentinela quando meta não projetou ganho de peso
+  // (gmd_numerador_kg=0 com rebanho presente = "sem projeção de GMD", não "GMD=0")
+  const gmd = Array.from({ length: 12 }, (_, i) => {
+    const m = byMes[String(i + 1).padStart(2, '0')];
+    if (!m) return NaN;
+    const gmdVal = Number(m.gmd_kg_cab_dia) || 0;
+    const gmdNumerador = Number(m.gmd_numerador_kg) || 0;
+    const temRebanho = Number(m.cabecas_inicio) > 0 || Number(m.cabecas_final) > 0;
+    // Se tem rebanho mas numerador é zero, meta não projetou ganho → sem base
+    if (temRebanho && gmdNumerador === 0 && gmdVal === 0) return NaN;
+    return gmdVal;
+  });
   const uaMedia = get('ua_media');
   const areaProd = get('area_produtiva_ha');
   const lotacao = get('lotacao_ua_ha');
@@ -436,9 +447,18 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
   const pesoMedIni = cabIni.map((c, i) => c > 0 ? pesoIni[i] / c : 0);
   const cabMedia = cabIni.map((v, i) => (v + cabFin[i]) / 2);
   const gmdNum = get('gmd_numerador_kg');
-  const arrobasProd = gmdNum.map(v => v / 30);
-  const prodKg = gmdNum;
-  const arrHa = arrobasProd.map((v, i) => areaProd[i] > 0 ? v / areaProd[i] : 0);
+  // Produção: se gmd_numerador é zero com rebanho, também sem base
+  const arrobasProd = gmdNum.map((v, i) => {
+    const temRebanho = cabIni[i] > 0 || cabFin[i] > 0;
+    if (temRebanho && v === 0) return NaN;
+    return v / 30;
+  });
+  const prodKg = gmdNum.map((v, i) => {
+    const temRebanho = cabIni[i] > 0 || cabFin[i] > 0;
+    if (temRebanho && v === 0) return NaN;
+    return v;
+  });
+  const arrHa = arrobasProd.map((v, i) => areaProd[i] > 0 && !isNaN(v) ? v / areaProd[i] : NaN);
   const desfruteCab = saidas;
   const desfrute_arr = saidas.map((v, i) => pesoMedFin[i] > 0 ? (v * pesoMedFin[i]) / 30 : 0);
 
