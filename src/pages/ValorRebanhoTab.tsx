@@ -597,7 +597,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       )}
 
       {/* Main content: table left + summary card right */}
-      <div className="flex gap-3 items-stretch relative">
+      <div className="flex gap-3 items-start relative">
         {/* Overlay for unclosed months */}
         {!mesSelecionadoFechado && (
           <div className="absolute inset-0 z-10 bg-background/60 backdrop-blur-[1px] rounded-lg flex items-center justify-center pointer-events-none">
