@@ -570,21 +570,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         })}
       </div>
 
-      {/* December-specific alerts */}
-      {isDezembro && (categoriasSemPreco.length > 0 || dezembroCompleto) && (
-        <div className="space-y-1">
-          {categoriasSemPreco.length > 0 && (
-            <div className="flex items-center gap-1.5 text-[10px] bg-destructive/10 text-destructive rounded px-2 py-0.5 border border-destructive/30">
-              <AlertTriangle className="h-3 w-3 shrink-0" />
-              <span><strong>Dezembro — base anual:</strong> {categoriasSemPreco.length} categoria(s) sem preço: {categoriasSemPreco.join(', ')}.</span>
-            </div>
-          )}
-          {dezembroCompleto && (
-            <div className="flex items-center gap-1.5 text-[10px] text-primary bg-primary/10 rounded px-2 py-0.5 border border-primary/30">
-              <Info className="h-3 w-3 shrink-0" />
-              <span><strong>Base anual completa.</strong> Todas as categorias têm preço informado para dezembro.</span>
-            </div>
-          )}
+      {/* December alert — only missing prices (shown above table) */}
+      {isDezembro && categoriasSemPreco.length > 0 && (
+        <div className="flex items-center gap-1.5 text-[10px] bg-destructive/10 text-destructive rounded px-2 py-0.5 border border-destructive/30">
+          <AlertTriangle className="h-3 w-3 shrink-0" />
+          <span><strong>Dezembro — base anual:</strong> {categoriasSemPreco.length} categoria(s) sem preço: {categoriasSemPreco.join(', ')}.</span>
         </div>
       )}
 
