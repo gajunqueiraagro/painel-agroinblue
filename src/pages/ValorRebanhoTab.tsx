@@ -613,25 +613,25 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           <table className="w-full text-[11px]">
             <thead>
               <tr className="border-b bg-primary/15">
-                <th className="text-left px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider bg-primary/25">Categoria</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Qtd</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Peso</th>
+                <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider bg-primary/25">Categoria</th>
+                <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Qtd</th>
+                <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Peso</th>
                 <th className="text-center px-1 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider w-[60px]">R$/kg</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">R$/@</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">R$/cab</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Valor Total</th>
+                <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">R$/@</th>
+                <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">R$/cab</th>
+                <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Valor Total</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r, i) => (
                 <tr key={r.codigo} className={`border-b ${i % 2 === 0 ? '' : 'bg-muted/20'}`}>
-                  <td className="px-1.5 py-0.5 text-foreground text-[11px] italic whitespace-nowrap bg-primary/10">
+                  <td className="px-1.5 py-0.5 text-foreground text-[9.5px] italic whitespace-nowrap bg-primary/10">
                     {r.nome}
                   </td>
-                  <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[11px]">
+                  <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
                     {r.saldo > 0 ? formatNum(r.saldo, 0) : '-'}
                   </td>
-                  <td className="px-1.5 py-0.5 text-right tabular-nums italic text-[11px]">
+                  <td className="px-1.5 py-0.5 text-right tabular-nums italic text-[9.5px]">
                     {r.saldo > 0 && r.pesoMedio > 0 ? (
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -653,7 +653,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                           <Input
                             type="text"
                             inputMode="decimal"
-                            className={`h-5 text-right !text-[10px] leading-none tabular-nums italic px-1 w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
+                            className={`h-5 text-right !text-[9px] leading-none tabular-nums italic px-1 w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
                             placeholder="0,00"
                             value={precosDisplay[r.codigo] !== undefined ? precosDisplay[r.codigo] : fmtKg(r.precoKg)}
                             onChange={e => handlePrecoChange(r.codigo, e.target.value)}
@@ -668,16 +668,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                         )}
                       </Tooltip>
                     ) : (
-                      <span className="block text-center text-[11px] italic text-muted-foreground">-</span>
+                      <span className="block text-center text-[9.5px] italic text-muted-foreground">-</span>
                     )}
                   </td>
-                  <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[11px]">
+                  <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
                     {r.precoArroba > 0 ? formatMoeda(r.precoArroba) : '-'}
                   </td>
-                  <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[11px]">
+                  <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
                     {r.valorCabeca > 0 ? formatMoeda(r.valorCabeca) : '-'}
                   </td>
-                  <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[11px]">
+                  <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
                     {r.valorTotal > 0 ? formatMoeda(r.valorTotal) : '-'}
                   </td>
                 </tr>
