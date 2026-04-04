@@ -744,25 +744,28 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                 </div>
                 {/* RIGHT column — indicators compact */}
                 <div className="flex-1 min-w-0 text-[10px]">
-                  <div className="flex items-center mb-0.5 text-[8px] text-muted-foreground font-medium justify-end">
-                    <span className="w-[50px] text-right">Valor</span>
-                    <span className="w-[38px] text-right">vs mês</span>
-                    <span className="w-[38px] text-right">vs ano</span>
+                  <div className="grid grid-cols-[auto_70px_56px_56px] gap-x-2 items-center">
+                    {/* Header */}
+                    <span className="text-[8px] text-muted-foreground font-medium">Indicador</span>
+                    <span className="text-[8px] text-muted-foreground font-medium text-right">Valor</span>
+                    <span className="text-[8px] text-muted-foreground font-medium text-right">vs mês</span>
+                    <span className="text-[8px] text-muted-foreground font-medium text-right">vs ano</span>
+                    {/* Rows */}
+                    {[
+                      { label: 'Cabeças', value: formatNum(totalCabecas, 0), varMes: varCabMes, varAno: varCabAno },
+                      { label: 'Peso médio', value: `${formatNum(pesoMedioGeral, 2)} kg`, varMes: varPesoMes, varAno: varPesoAno },
+                      { label: 'R$/@ médio', value: precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '—', varMes: varArrobaMes, varAno: varArrobaAno },
+                      { label: 'R$/cab', value: formatMoeda(valorMedioCabeca), varMes: varCabValorMes, varAno: varCabValorAno },
+                      { label: '@s estoque', value: formatNum(totalArrobas, 2), varMes: varArrobasEstoqueMes, varAno: varArrobasEstoqueAno },
+                    ].map(ind => (
+                      <React.Fragment key={ind.label}>
+                        <span className="text-muted-foreground text-[9px] truncate">{ind.label}</span>
+                        <span className="text-right font-semibold text-foreground tabular-nums">{ind.value}</span>
+                        <span className="text-right"><VariacaoBadge valor={ind.varMes} label="" /></span>
+                        <span className="text-right"><VariacaoBadge valor={ind.varAno} label="" /></span>
+                      </React.Fragment>
+                    ))}
                   </div>
-                  {[
-                    { label: 'Cabeças', value: formatNum(totalCabecas, 0), varMes: varCabMes, varAno: varCabAno },
-                    { label: 'Peso médio', value: `${formatNum(pesoMedioGeral, 2)} kg`, varMes: varPesoMes, varAno: varPesoAno },
-                    { label: 'R$/@ médio', value: precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '—', varMes: varArrobaMes, varAno: varArrobaAno },
-                    { label: 'R$/cab', value: formatMoeda(valorMedioCabeca), varMes: varCabValorMes, varAno: varCabValorAno },
-                    { label: '@s estoque', value: formatNum(totalArrobas, 2), varMes: varArrobasEstoqueMes, varAno: varArrobasEstoqueAno },
-                  ].map(ind => (
-                    <div key={ind.label} className="flex items-center py-px justify-end">
-                      <span className="text-muted-foreground truncate text-[9px] mr-1">{ind.label}</span>
-                      <span className="w-[50px] text-right font-semibold text-foreground tabular-nums">{ind.value}</span>
-                      <span className="w-[38px] text-right"><VariacaoBadge valor={ind.varMes} label="" /></span>
-                      <span className="w-[38px] text-right"><VariacaoBadge valor={ind.varAno} label="" /></span>
-                    </div>
-                  ))}
                 </div>
               </div>
             </CardContent>
