@@ -396,7 +396,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
   return (
     <div className="flex flex-1 min-h-0 flex-col overflow-hidden border-t border-border/30 bg-background">
       <div className="flex flex-1 min-h-0 overflow-x-auto">
-        <div className="flex min-h-0 min-w-full flex-col" style={{ width: tableWidth }}>
+        <div className="flex min-h-0 flex-col mx-auto" style={{ width: tableWidth }}>
           {/* ── THEAD ── */}
           <div className="flex-shrink-0">
             <table className="w-full border-separate border-spacing-0 text-[11px]" style={{ tableLayout: 'fixed' }}>
