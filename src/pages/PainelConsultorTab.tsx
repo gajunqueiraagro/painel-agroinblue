@@ -716,7 +716,12 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
 
   const fazendaId = fazendaAtual?.id;
 
-  // ─── Previsto: useZootMensal com cenario='meta' ───
+  // ─── Status dos pilares de governança (mês atual selecionado) ───
+  const mesAtualRef = useMemo(() => {
+    const m = filtroGlobal?.mes || new Date().getMonth() + 1;
+    return `${ano}-${String(m).padStart(2, '0')}`;
+  }, [ano, filtroGlobal?.mes]);
+  const { status: statusPilares } = useStatusPilares(fazendaId, mesAtualRef);
   const { data: zootMeta } = useZootMensal({ ano: anoNum, cenario: 'meta' });
 
   // Month cutoff: months > cutoff are blank
