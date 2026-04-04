@@ -498,8 +498,8 @@ function buildExcelSheet(rows: (ZooRow | FinRow)[], mesesHeaders: string[], incl
   return { rows: data, cols };
 }
 
-function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes: number, fazendaNome: string) {
-  const mesesHeaders = MESES_LABELS.slice(0, Math.max(1, Math.min(12, ateMes)));
+function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, _ateMes: number, fazendaNome: string) {
+  const mesesHeaders = [...MESES_LABELS, 'Total'];
   const filename = `Painel_Consultor_${fazendaNome.replace(/\s+/g, '_')}_${ano}.xlsx`;
 
   const zooSheet = buildExcelSheet(zooRows, mesesHeaders, true);
