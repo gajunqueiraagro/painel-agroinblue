@@ -491,7 +491,7 @@ const Index = () => {
           onNavigateToReclass={goToReclassFromFechamento}
         />
       )}
-      {activeTab === 'mapa_pastos' && <MapaPastosTab />}
+      {activeTab === 'mapa_pastos' && <ResumoPastosTab onTabChange={handleTabChange} />}
       {activeTab === 'mapa_geo_pastos' && <MapaGeoPastosTab />}
       {activeTab === 'resumo_pastos' && <ResumoPastosTab onTabChange={handleTabChange} />}
       {activeTab === 'analise_operacional' && <AnaliseOperacionalTab onNavigateToMovimentacao={navigateToMovimentacao} />}
