@@ -596,7 +596,22 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         </div>
       </div>
 
-      <div className="px-2 pt-2 pb-4">
+      <div className="px-2 pt-1.5 pb-4">
+
+      {/* Alert: all pastos closed */}
+      {!loading && pastosAtivos.length > 0 && fechadosCount === pastosAtivos.length && (
+        <div className="flex items-center gap-2 mb-1.5 px-1">
+          <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 text-[10px] font-bold gap-1">
+            <CheckCircle className="h-3 w-3" />
+            Categorias conciliadas
+          </Badge>
+          {onNavigateToValorRebanho && (
+            <Button size="sm" variant="outline" className="text-[10px] h-5 px-2 font-bold" onClick={onNavigateToValorRebanho}>
+              Inserir preço do rebanho
+            </Button>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-8 text-muted-foreground">Carregando...</div>
@@ -606,7 +621,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           <p className="text-xs mt-1">Cadastre pastos na aba "Pastos" e marque "Entra na conciliação".</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1">
           {pastosAtivos.map(p => {
             const fech = getFechamento(p.id);
             const status = fech?.status;
@@ -615,53 +630,50 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             const tipoNorm = normalizeTipoUso(p.tipo_uso);
             const isEmpty = resumo.totalCabecas === 0;
 
-            // Card background color by tipo_uso
             const cardBg = isEmpty
-              ? 'bg-muted/40 border-border/50'
+              ? 'bg-gray-100 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700'
               : tipoNorm === 'recria'
-              ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700'
+              ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-700'
               : tipoNorm === 'engorda'
-              ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700'
+              ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-700'
               : tipoNorm === 'cria'
-              ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-300 dark:border-orange-700'
+              ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-700'
               : 'bg-card border-border';
 
             return (
               <button
                 key={p.id}
                 onClick={() => handleOpenPasto(p)}
-                className={`w-full rounded-md border px-2 py-1.5 text-left hover:ring-1 hover:ring-primary/40 transition-all ${cardBg}`}
+                className={`w-full rounded border px-1.5 py-1 text-left hover:ring-1 hover:ring-primary/40 transition-all ${cardBg}`}
               >
-                {/* Line 1: Name + Status badge */}
-                <div className="flex items-center justify-between gap-1">
-                  <span className="font-bold text-[11px] text-foreground truncate">{p.nome}</span>
+                {/* Line 1: Name + Status */}
+                <div className="flex items-center justify-between gap-0.5">
+                  <span className="font-bold text-[10px] text-foreground truncate leading-tight">{p.nome}</span>
                   {status === 'fechado' ? (
                     adminClose ? (
-                      <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[8px] px-1 py-0 h-[14px] shrink-0">
-                        <Lock className="h-2.5 w-2.5 mr-0.5" />Global
+                      <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[7px] px-0.5 py-0 h-[12px] shrink-0 leading-none">
+                        <Lock className="h-2 w-2" />G
                       </Badge>
                     ) : (
-                      <Badge variant="default" className="text-[8px] px-1 py-0 h-[14px] shrink-0"><CheckCircle className="h-2.5 w-2.5 mr-0.5" />Fechado</Badge>
+                      <Badge variant="default" className="text-[7px] px-0.5 py-0 h-[12px] shrink-0 leading-none"><CheckCircle className="h-2 w-2" /></Badge>
                     )
                   ) : status === 'rascunho' ? (
-                    <Badge variant="secondary" className="text-[8px] px-1 py-0 h-[14px] shrink-0">Rasc.</Badge>
+                    <Badge variant="secondary" className="text-[7px] px-0.5 py-0 h-[12px] shrink-0 leading-none">R</Badge>
                   ) : null}
                 </div>
 
-                {/* Line 2: Cabeças (destaque) + Área + Tipo uso */}
-                <div className="flex items-baseline justify-between mt-0.5">
-                  <span className="font-extrabold text-sm tabular-nums text-foreground">
-                    {resumo.totalCabecas > 0 ? `${resumo.totalCabecas} cab` : '—'}
-                  </span>
+                {/* Line 2: Cabeças (principal) */}
+                <div className="font-extrabold text-[13px] tabular-nums text-foreground leading-tight mt-0.5">
+                  {resumo.totalCabecas > 0 ? `${resumo.totalCabecas} cab` : '—'}
+                </div>
+
+                {/* Line 3: Área + Tipo uso */}
+                <div className="flex items-center justify-between mt-0.5">
                   {p.area_produtiva_ha ? (
-                    <span className="text-[9px] text-muted-foreground">{formatNum(p.area_produtiva_ha, 1)} ha</span>
-                  ) : null}
-                </div>
-
-                {/* Tipo uso tag */}
-                {p.tipo_uso && (
-                  <div className="mt-0.5">
-                    <span className={`text-[8px] font-bold uppercase tracking-wider ${
+                    <span className="text-[8px] text-muted-foreground leading-none">{formatNum(p.area_produtiva_ha, 1)} ha</span>
+                  ) : <span />}
+                  {p.tipo_uso && (
+                    <span className={`text-[7px] font-bold uppercase tracking-wider leading-none ${
                       tipoNorm === 'recria' ? 'text-emerald-700 dark:text-emerald-400'
                       : tipoNorm === 'engorda' ? 'text-blue-700 dark:text-blue-400'
                       : tipoNorm === 'cria' ? 'text-orange-700 dark:text-orange-400'
@@ -669,8 +681,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                     }`}>
                       {p.tipo_uso.toUpperCase()}
                     </span>
-                  </div>
-                )}
+                  )}
+                </div>
               </button>
             );
           })}

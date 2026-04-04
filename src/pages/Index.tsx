@@ -489,6 +489,7 @@ const Index = () => {
           filtroMesInicial={filtroGlobal.mes}
           onBackToConciliacao={fechamentoFromConciliacao ? goToVisaoZooHub : undefined}
           onNavigateToReclass={goToReclassFromFechamento}
+          onNavigateToValorRebanho={() => setActiveTab('valor_rebanho')}
         />
       )}
       {activeTab === 'mapa_pastos' && <MapaPastosTab />}
