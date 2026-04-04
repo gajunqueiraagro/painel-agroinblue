@@ -632,7 +632,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                     {r.saldo > 0 ? formatNum(r.saldo, 0) : '-'}
                   </td>
                   <td className="px-1.5 py-0.5 text-right tabular-nums italic text-[11px]">
-                    {r.pesoMedio > 0 ? (
+                    {r.saldo > 0 && r.pesoMedio > 0 ? (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <span className={`cursor-help ${r.origemPeso === 'pastos' ? 'text-foreground' : 'text-muted-foreground'}`}>
@@ -647,25 +647,29 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                     ) : '-'}
                   </td>
                   <td className="px-0.5 py-0.5 w-[60px]">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Input
-                          type="text"
-                          inputMode="decimal"
-                          className={`h-5 text-right !text-[10px] leading-none tabular-nums italic px-1 w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
-                          placeholder="0,00"
-                          value={precosDisplay[r.codigo] !== undefined ? precosDisplay[r.codigo] : fmtKg(r.precoKg)}
-                          onChange={e => handlePrecoChange(r.codigo, e.target.value)}
-                          onBlur={() => handlePrecoBlur(r.codigo)}
-                          disabled={!canEdit}
-                        />
-                      </TooltipTrigger>
-                      {r.isSugerido && (
-                        <TooltipContent side="top" className="text-xs max-w-[200px]">
-                          Preço sugerido pelo mercado. Edite se necessário.
-                        </TooltipContent>
-                      )}
-                    </Tooltip>
+                    {r.saldo > 0 ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            className={`h-5 text-right !text-[10px] leading-none tabular-nums italic px-1 w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
+                            placeholder="0,00"
+                            value={precosDisplay[r.codigo] !== undefined ? precosDisplay[r.codigo] : fmtKg(r.precoKg)}
+                            onChange={e => handlePrecoChange(r.codigo, e.target.value)}
+                            onBlur={() => handlePrecoBlur(r.codigo)}
+                            disabled={!canEdit}
+                          />
+                        </TooltipTrigger>
+                        {r.isSugerido && (
+                          <TooltipContent side="top" className="text-xs max-w-[200px]">
+                            Preço sugerido pelo mercado. Edite se necessário.
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    ) : (
+                      <span className="block text-center text-[11px] italic text-muted-foreground">-</span>
+                    )}
                   </td>
                   <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[11px]">
                     {r.precoArroba > 0 ? formatMoeda(r.precoArroba) : '-'}
