@@ -357,7 +357,7 @@ const Index = () => {
             setActiveTab('resumo');
           }}
         />
-
+      )
       {/* Hubs */}
       {activeTab === 'lancar_zoo_hub' && (
         <LancarZooHubTab onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
