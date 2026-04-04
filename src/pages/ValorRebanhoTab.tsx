@@ -543,7 +543,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       {/* Main content: table left (~50%) + summary card + charts right */}
       <div className="flex gap-3 items-start">
         {/* LEFT — Table */}
-        <div className="flex-1 max-w-[50%] min-w-0 bg-card rounded-lg shadow-sm border overflow-x-auto">
+        <div className="flex-1 min-w-0 bg-card rounded-lg shadow-sm border overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
               <tr className="border-b bg-primary/15">
