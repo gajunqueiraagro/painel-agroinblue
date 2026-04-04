@@ -863,7 +863,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         )}
 
         <div className="ml-auto flex gap-1.5">
-          {!isGlobal && mesSelecionadoFechado && isAdmin && (
+          {!isGlobal && !isMesFuturo && mesSelecionadoFechado && isAdmin && (
             <Button variant="outline" size="sm" onClick={reabrirFechamento} className="gap-1 h-7 text-xs px-2">
               <Unlock className="h-3 w-3" /> Reabrir
             </Button>
