@@ -82,7 +82,7 @@ function VariacaoBadge({ valor, label, showLabel }: { valor: number | null; labe
 }
 
 /* ─── Mini sparkline chart (side-by-side) ─── */
-const CHART_LABELS = ['Ini', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+const CHART_LABELS = ['I', 'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
 
 function MiniChart({ data, color, title }: { data: { label: string; value: number | null }[]; color: string; title: string }) {
   return (
