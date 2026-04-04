@@ -360,13 +360,13 @@ interface FinRow {
   indicador: string;
   valores: number[];
   total: number;
-  format: 'money';
+  format: PainelFormatType;
 }
 
 function buildFinRows(
   lancamentos: FinanceiroLancamento[],
   ano: number,
-  ateMes: number,
+  _ateMes: number,
   arrobasProdAcum?: number[],
   valorRebanhoMes?: number[],
   pesoFinMes?: number[],
@@ -378,7 +378,7 @@ function buildFinRows(
   const doMes = (m: number) => doAno.filter(l => datePagtoMes(l) === m);
 
   const mkRow = (grupo: string, indicador: string, fn: (m: number) => number): FinRow => {
-    const valores = Array.from({ length: 12 }, (_, i) => i + 1 <= ateMes ? fn(i + 1) : 0);
+    const valores = Array.from({ length: 12 }, (_, i) => fn(i + 1));
     const total = valores.reduce((a, b) => a + b, 0);
     return { grupo, indicador, valores, total, format: 'money' };
   };
