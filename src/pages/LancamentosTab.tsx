@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import {
+import { useStatusPilares } from '@/hooks/useStatusPilares';
   Lancamento,
   CATEGORIAS,
   TIPOS_ENTRADA,
