@@ -20,7 +20,7 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/comp
 import { ArrowLeft, Download, ChevronDown, Info } from 'lucide-react';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useLancamentos } from '@/hooks/useLancamentos';
-import { useStatusPilares, BLOCO_PILAR_MAP, getPilarBadgeConfig } from '@/hooks/useStatusPilares';
+import { useStatusPilares, BLOCO_PILAR_MAP, getPilarBadgeConfig, getPilarTooltipText } from '@/hooks/useStatusPilares';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import { usePastos } from '@/hooks/usePastos';
 import { useZootMensal, indexByMes, type ZootMensal } from '@/hooks/useZootMensal';
@@ -1005,20 +1005,23 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
                     if (!pilarKey) return null;
                     const pilarInfo = statusPilares[pilarKey];
                     const badge = getPilarBadgeConfig(pilarInfo.status);
+                    const tooltipText = getPilarTooltipText(pilarKey, pilarInfo);
                     return (
-                      <span className={`inline-flex items-center text-[8px] font-semibold px-1.5 py-0 rounded-full border leading-relaxed normal-case tracking-normal ${badge.className}`}>
-                        {badge.label}
-                        {pilarInfo.modo_transitorio && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className={`inline-flex items-center text-[8px] font-semibold px-1.5 py-0 rounded-full border leading-relaxed normal-case tracking-normal cursor-help ${badge.className}`}>
+                            {badge.label}
+                            {(pilarInfo.modo_transitorio || pilarInfo.status === 'bloqueado') && (
                               <Info className="h-2.5 w-2.5 ml-0.5 opacity-60" />
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="text-[10px] max-w-[200px]">
-                              Oficial transitório — fechamento formal da competência ainda não implementado
-                            </TooltipContent>
-                          </Tooltip>
+                            )}
+                          </span>
+                        </TooltipTrigger>
+                        {tooltipText && (
+                          <TooltipContent side="top" className="text-[10px] max-w-[220px]">
+                            {tooltipText}
+                          </TooltipContent>
                         )}
-                      </span>
+                      </Tooltip>
                     );
                   })()}
                 </span>
