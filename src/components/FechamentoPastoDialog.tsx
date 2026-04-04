@@ -25,8 +25,15 @@ const TIPOS_USO_OPTIONS = [
 ];
 
 const TIPOS_USO_EXIGEM_REBANHO = ['cria', 'recria', 'engorda'];
-
 const QUALIDADE_OPTIONS = Array.from({ length: 10 }, (_, i) => i + 1);
+
+// ── Regra definitiva de separação MACHOS x FÊMEAS ──
+const MACHOS_CODIGOS = ['mamotes_m', 'desmama_m', 'garrotes', 'bois', 'touros'];
+const FEMEAS_CODIGOS = ['mamotes_f', 'desmama_f', 'novilhas', 'vacas'];
+
+function isMacho(codigo: string): boolean {
+  return MACHOS_CODIGOS.includes(codigo);
+}
 
 interface FechamentoItem {
   categoria_id: string;
@@ -92,9 +99,14 @@ export function FechamentoPastoDialog({
     });
   }, [open, fechamento, categorias, loadItens]);
 
-  const updateItem = (idx: number, field: string, value: any) => {
-    setItens(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value, origem_dado: item.origem_dado === 'copiado_mes_anterior' ? 'ajustado' : item.origem_dado } : item));
+  const updateItem = (catId: string, field: string, value: any) => {
+    setItens(prev => prev.map(item => item.categoria_id === catId
+      ? { ...item, [field]: value, origem_dado: item.origem_dado === 'copiado_mes_anterior' ? 'ajustado' : item.origem_dado }
+      : item
+    ));
   };
+
+  const getItem = (catId: string) => itens.find(i => i.categoria_id === catId);
 
   const handleSave = async () => {
     setSaving(true);
@@ -130,18 +142,22 @@ export function FechamentoPastoDialog({
 
   const [confirmOpen, setConfirmOpen] = useState(false);
 
+  // ── Cálculos ──
   const total = itens.reduce((s, i) => s + (i.quantidade || 0), 0);
-  const itensComQtd = itens
-    .map(item => ({ ...item, cat: categorias.find(c => c.id === item.categoria_id) }))
-    .filter(i => i.quantidade > 0)
-    .sort((a, b) => (a.cat?.ordem_exibicao ?? 99) - (b.cat?.ordem_exibicao ?? 99));
-
-  const pesoTotalEstoque = itensComQtd.reduce((s, i) => s + i.quantidade * (i.peso_medio_kg || 0), 0);
+  const pesoTotalEstoque = itens.reduce((s, i) => s + (i.quantidade || 0) * (i.peso_medio_kg || 0), 0);
   const pesoMedioPonderado = total > 0 ? pesoTotalEstoque / total : 0;
   const uaTotal = itens.reduce((s, i) => s + calcUA(i.quantidade, i.peso_medio_kg), 0);
   const uaHa = pasto.area_produtiva_ha && uaTotal > 0 ? uaTotal / pasto.area_produtiva_ha : null;
 
+  // ── Separação por grupo ──
+  const catsMachos = categorias.filter(c => isMacho(c.codigo));
+  const catsFemeas = categorias.filter(c => !isMacho(c.codigo));
+
+  const totalMachos = catsMachos.reduce((s, c) => s + (getItem(c.id)?.quantidade || 0), 0);
+  const totalFemeas = catsFemeas.reduce((s, c) => s + (getItem(c.id)?.quantidade || 0), 0);
+
   const exigeRebanho = TIPOS_USO_EXIGEM_REBANHO.includes(tipoUsoMes);
+  const itensComQtd = itens.filter(i => i.quantidade > 0).map(item => ({ ...item, cat: categorias.find(c => c.id === item.categoria_id) }));
 
   const avisos: string[] = [];
   if (total === 0 && exigeRebanho) avisos.push('Nenhum animal informado');
@@ -154,150 +170,197 @@ export function FechamentoPastoDialog({
     : true;
   const tipoUsoLabel = TIPOS_USO_OPTIONS.find(t => t.value === tipoUsoMes)?.label || tipoUsoMes;
 
-  // Separate categories into Machos / Fêmeas for summary
-  const machosCodigos = ['BZ', 'GA', 'NV', 'TO', 'BO'];
-  const summaryMachos = itensComQtd.filter(i => machosCodigos.includes(i.cat?.codigo || ''));
-  const summaryFemeas = itensComQtd.filter(i => !machosCodigos.includes(i.cat?.codigo || ''));
+  // ── Render de um grupo (machos ou fêmeas) ──
+  const renderGrupo = (label: string, cats: CategoriaRebanho[]) => (
+    <div className="space-y-0.5">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground px-1">{label}</div>
+      <div className="border rounded-lg overflow-hidden bg-background">
+        <table className="w-full table-fixed text-[10px]">
+          <colgroup>
+            <col className="w-[52px]" />
+            {cats.map(c => <col key={c.id} />)}
+          </colgroup>
+          <thead>
+            <tr className="border-b bg-muted/50">
+              <th className="text-left px-1.5 py-1 text-[8px] font-semibold text-muted-foreground"></th>
+              {cats.map(c => (
+                <th key={c.id} className="text-center px-0.5 py-1 text-[9px] font-semibold text-foreground whitespace-nowrap">
+                  {c.nome}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {/* Linha de quantidade */}
+            <tr className="border-b">
+              <td className="px-1.5 py-0.5 text-[8px] font-semibold text-muted-foreground">Qtde</td>
+              {cats.map(c => {
+                const item = getItem(c.id);
+                return (
+                  <td key={c.id} className="px-0.5 py-0.5 text-center">
+                    <div className="relative">
+                      <Input
+                        type="number" inputMode="numeric" min={0}
+                        value={item?.quantidade || ''}
+                        onChange={e => updateItem(c.id, 'quantidade', Number(e.target.value) || 0)}
+                        disabled={isFechado}
+                        className="h-6 text-[10px] font-bold px-1 text-center tabular-nums w-full"
+                        placeholder="0"
+                      />
+                      {item?.origem_dado === 'copiado_mes_anterior' && (
+                        <Badge variant="secondary" className="absolute -top-1.5 -right-1 text-[6px] h-3 px-0.5 leading-none">Cop</Badge>
+                      )}
+                    </div>
+                  </td>
+                );
+              })}
+            </tr>
+            {/* Linha de peso */}
+            <tr>
+              <td className="px-1.5 py-0.5 text-[8px] font-semibold text-muted-foreground">Peso</td>
+              {cats.map(c => {
+                const item = getItem(c.id);
+                return (
+                  <td key={c.id} className="px-0.5 py-0.5 text-center">
+                    <Input
+                      type="number" inputMode="decimal" step="0.1"
+                      value={item?.peso_medio_kg ?? ''}
+                      onChange={e => updateItem(c.id, 'peso_medio_kg', e.target.value ? Number(e.target.value) : null)}
+                      onBlur={e => {
+                        if (e.target.value) {
+                          updateItem(c.id, 'peso_medio_kg', Math.round(Number(e.target.value) * 10) / 10);
+                        }
+                      }}
+                      disabled={isFechado}
+                      className="h-6 text-[10px] px-1 text-center tabular-nums w-full"
+                      placeholder="kg"
+                    />
+                  </td>
+                );
+              })}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] flex flex-col max-w-lg p-0 gap-0 overflow-hidden">
-        {/* ── FIXED HEADER ── */}
-        <div className="shrink-0 bg-background border-b px-3 pt-2 pb-1.5 space-y-1">
-          {/* Row 1: Name + status + area + copy */}
+      <DialogContent className="max-h-[90vh] flex flex-col max-w-5xl p-0 gap-0 overflow-hidden">
+        {/* ── HEADER ── */}
+        <div className="shrink-0 bg-background border-b px-4 pt-3 pb-2 space-y-1.5">
+          {/* Row 1: Name + status + copy */}
           <div className="flex items-center gap-2">
             <span className="font-bold text-base leading-none">{pasto.nome}</span>
-            {pasto.area_produtiva_ha && <span className="text-[10px] text-muted-foreground">{pasto.area_produtiva_ha} ha</span>}
-            {isFechado && <Badge variant="default" className="h-4 text-[9px] px-1"><Lock className="h-2.5 w-2.5 mr-0.5" />Fechado</Badge>}
+            {pasto.area_produtiva_ha && <span className="text-xs text-muted-foreground">{pasto.area_produtiva_ha} ha</span>}
+            {isFechado && <Badge variant="default" className="h-5 text-[10px] px-1.5"><Lock className="h-3 w-3 mr-0.5" />Fechado</Badge>}
             <div className="flex-1" />
             {!isFechado && (
-              <Button variant="ghost" size="sm" onClick={handleCopiar} className="h-5 text-[9px] text-muted-foreground px-1.5 gap-0.5 mr-4">
-                <Copy className="h-2.5 w-2.5" />Copiar anterior
+              <Button variant="ghost" size="sm" onClick={handleCopiar} className="h-6 text-[10px] text-muted-foreground px-2 gap-1">
+                <Copy className="h-3 w-3" />Copiar anterior
               </Button>
             )}
           </div>
 
-          {/* Row 2: Lote + Qual + Tipo Uso */}
-          <div className="flex gap-1 items-end">
-            <div className="w-56 shrink-0">
+          {/* Row 2: Lote + Qual + Tipo Uso + Obs */}
+          <div className="flex gap-2 items-end">
+            <div className="flex-1 min-w-0 max-w-[220px]">
               <Label className="text-[9px] text-muted-foreground leading-none">Lote</Label>
-              <Input value={loteMes} onChange={e => setLoteMes(e.target.value)} disabled={isFechado} placeholder="Lote..." className="h-6 text-[9px] px-1.5 placeholder:text-[8px] placeholder:italic placeholder:text-muted-foreground/60" />
+              <Input value={loteMes} onChange={e => setLoteMes(e.target.value)} disabled={isFechado} placeholder="Lote..." className="h-7 text-xs px-2" />
             </div>
-            <div className="w-12 shrink-0">
+            <div className="w-14 shrink-0">
               <Label className="text-[9px] text-muted-foreground leading-none">Qual.</Label>
               <Select value={qualidadeMes?.toString() || 'none'} onValueChange={v => setQualidadeMes(v === 'none' ? null : Number(v))} disabled={isFechado}>
-                <SelectTrigger className="h-6 text-[10px] px-1.5"><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectTrigger className="h-7 text-xs px-2"><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">—</SelectItem>
                   {QUALIDADE_OPTIONS.map(q => <SelectItem key={q} value={q.toString()}>{q}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div className="w-[130px] shrink-0">
+            <div className="w-[140px] shrink-0">
               <Label className="text-[9px] text-muted-foreground leading-none">Tipo Uso</Label>
               <Select value={tipoUsoMes} onValueChange={setTipoUsoMes} disabled={isFechado}>
-                <SelectTrigger className="h-6 text-[10px] px-1.5 whitespace-nowrap"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger className="h-7 text-xs px-2"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {TIPOS_USO_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div className="w-24 shrink-0">
+            <div className="flex-1 min-w-0">
               <Label className="text-[9px] text-muted-foreground leading-none">Obs.</Label>
-              <Input value={observacaoMes} onChange={e => setObservacaoMes(e.target.value)} disabled={isFechado} placeholder="Observação..." className="h-6 text-[10px] px-1.5 placeholder:text-[9px] placeholder:italic placeholder:text-muted-foreground/60" />
+              <Input value={observacaoMes} onChange={e => setObservacaoMes(e.target.value)} disabled={isFechado} placeholder="Observação..." className="h-7 text-xs px-2" />
             </div>
           </div>
 
-          {/* Row 3: Current summary - Machos | Fêmeas | Total */}
-          {itensComQtd.length > 0 && (
-            <div className="border rounded bg-muted/40 px-2 py-0.5">
-              <div className="flex gap-3 text-[9px]">
-                {/* Machos */}
-                <div className="flex-1 min-w-0">
-                  <span className="text-muted-foreground font-semibold text-[8px] uppercase tracking-wider">Machos</span>
-                  {summaryMachos.length > 0 ? summaryMachos.map(i => (
-                    <div key={i.categoria_id} className="flex justify-between gap-1">
-                      <span className="truncate">{i.cat?.nome}</span>
-                      <span className="tabular-nums font-semibold shrink-0">{i.quantidade}</span>
-                    </div>
-                  )) : <div className="text-muted-foreground/50">—</div>}
-                </div>
-                {/* Fêmeas */}
-                <div className="flex-1 min-w-0 border-l border-border pl-2">
-                  <span className="text-muted-foreground font-semibold text-[8px] uppercase tracking-wider">Fêmeas</span>
-                  {summaryFemeas.length > 0 ? summaryFemeas.map(i => (
-                    <div key={i.categoria_id} className="flex justify-between gap-1">
-                      <span className="truncate">{i.cat?.nome}</span>
-                      <span className="tabular-nums font-semibold shrink-0">{i.quantidade}</span>
-                    </div>
-                  )) : <div className="text-muted-foreground/50">—</div>}
-                </div>
-                {/* Resumo */}
-                <div className="shrink-0 border-l border-border pl-2 text-right">
-                  <span className="text-muted-foreground font-semibold text-[8px] uppercase tracking-wider">Resumo</span>
-                  <div className="font-bold tabular-nums">{total} cab</div>
-                  <div className="text-muted-foreground tabular-nums">{pesoMedioPonderado > 0 ? `${formatNum(pesoMedioPonderado, 1)} kg` : '—'}</div>
-                </div>
-              </div>
+          {/* Row 3: Resumo compacto */}
+          <div className="flex items-center gap-4 rounded-md border bg-muted/40 px-3 py-1.5 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground font-medium">Machos:</span>
+              <span className="font-bold tabular-nums">{totalMachos}</span>
             </div>
-          )}
-
-          {/* Row 4: Action buttons */}
-          {!isFechado ? (
-            <div className="flex gap-1.5">
-              <Button onClick={handleSave} disabled={saving} size="sm" className="flex-1 h-5 text-[10px] px-2">
-                <Save className="h-2.5 w-2.5 mr-0.5" />{saving ? 'Salvando...' : 'Salvar'}
-              </Button>
-              <Button variant="default" size="sm" className="h-5 text-[10px] px-2" onClick={() => setConfirmOpen(true)}>
-                <Lock className="h-2.5 w-2.5 mr-0.5" />Fechar
-              </Button>
+            <div className="h-3 w-px bg-border" />
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground font-medium">Fêmeas:</span>
+              <span className="font-bold tabular-nums">{totalFemeas}</span>
             </div>
-          ) : (
-            <Button variant="outline" onClick={handleReabrir} size="sm" className="w-full h-5 text-[10px]">
-              <LockOpen className="h-2.5 w-2.5 mr-0.5" />Reabrir Pasto
-            </Button>
-          )}
+            <div className="h-3 w-px bg-border" />
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground font-medium">Total:</span>
+              <span className="font-extrabold tabular-nums text-sm">{total} cab</span>
+            </div>
+            <div className="h-3 w-px bg-border" />
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground font-medium">Peso médio:</span>
+              <span className="font-bold tabular-nums">{pesoMedioPonderado > 0 ? `${formatNum(pesoMedioPonderado, 1)} kg` : '—'}</span>
+            </div>
+            {pesoTotalEstoque > 0 && (
+              <>
+                <div className="h-3 w-px bg-border" />
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground font-medium">Peso total:</span>
+                  <span className="font-bold tabular-nums">{formatNum(pesoTotalEstoque, 0)} kg</span>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* ── SCROLLABLE: category rows ── */}
-        <div className="overflow-y-auto flex-1 px-3 py-1">
-          <div className="space-y-px">
-            {categorias.map((cat, idx) => (
-              <div key={cat.id} className="flex items-center gap-1 rounded border px-1.5 py-0.5">
-                <span className="text-[10px] font-medium flex-1 min-w-0 truncate">{cat.nome}</span>
-                {itens[idx]?.origem_dado === 'copiado_mes_anterior' && (
-                  <Badge variant="secondary" className="text-[7px] h-3 px-0.5 shrink-0">Cop</Badge>
-                )}
-                <Input
-                  type="number" inputMode="numeric" min={0}
-                  value={itens[idx]?.quantidade || ''}
-                  onChange={e => updateItem(idx, 'quantidade', Number(e.target.value) || 0)}
-                  disabled={isFechado}
-                  className="h-5 text-[9px] font-bold px-1 w-[72px] shrink-0 text-right placeholder:text-[8px] placeholder:italic placeholder:font-normal placeholder:text-muted-foreground/50"
-                  placeholder="Qtde"
-                />
-                <Input
-                  type="number" inputMode="decimal" step="0.1"
-                  value={itens[idx]?.peso_medio_kg ?? ''}
-                  onChange={e => updateItem(idx, 'peso_medio_kg', e.target.value ? Number(e.target.value) : null)}
-                  onBlur={e => {
-                    if (e.target.value) {
-                      updateItem(idx, 'peso_medio_kg', Math.round(Number(e.target.value) * 10) / 10);
-                    }
-                  }}
-                  disabled={isFechado}
-                  className="h-5 text-[9px] px-1 w-[80px] shrink-0 text-right placeholder:text-[8px] placeholder:italic placeholder:font-normal placeholder:text-muted-foreground/50"
-                  placeholder="Peso kg"
-                />
-              </div>
-            ))}
-          </div>
+        {/* ── GRADE PRINCIPAL ── */}
+        <div className="overflow-y-auto flex-1 px-4 py-3 space-y-3">
+          {renderGrupo('MACHOS', catsMachos)}
+          {renderGrupo('FÊMEAS', catsFemeas)}
 
           {/* Total bar */}
-          <div className="rounded bg-muted px-3 py-0.5 text-center mt-1">
-            <span className="text-[9px] text-muted-foreground">Total: </span>
-            <span className="text-xs font-bold">{total} cab</span>
+          <div className="rounded-md bg-muted px-4 py-1.5 flex items-center justify-center gap-3">
+            <span className="text-xs text-muted-foreground font-medium">Total:</span>
+            <span className="text-sm font-extrabold tabular-nums">{total} cab</span>
+            {pesoMedioPonderado > 0 && (
+              <>
+                <span className="text-muted-foreground">·</span>
+                <span className="text-xs font-semibold tabular-nums text-muted-foreground">{formatNum(pesoMedioPonderado, 1)} kg médio</span>
+              </>
+            )}
           </div>
+        </div>
+
+        {/* ── FOOTER ── */}
+        <div className="shrink-0 border-t bg-background px-4 py-2 flex gap-2">
+          {!isFechado ? (
+            <>
+              <Button onClick={handleSave} disabled={saving} size="sm" className="flex-1 h-8 text-xs">
+                <Save className="h-3.5 w-3.5 mr-1" />{saving ? 'Salvando...' : 'Salvar'}
+              </Button>
+              <Button variant="default" size="sm" className="h-8 text-xs px-4" onClick={() => setConfirmOpen(true)}>
+                <Lock className="h-3.5 w-3.5 mr-1" />Fechar
+              </Button>
+            </>
+          ) : (
+            <Button variant="outline" onClick={handleReabrir} size="sm" className="w-full h-8 text-xs">
+              <LockOpen className="h-3.5 w-3.5 mr-1" />Reabrir Pasto
+            </Button>
+          )}
         </div>
 
         {/* ── Confirm close dialog ── */}
@@ -328,6 +391,8 @@ export function FechamentoPastoDialog({
             )}
             <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
               <div className="font-semibold text-xs uppercase text-muted-foreground tracking-wide mb-1">Totais do pasto</div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Machos:</span><span className="font-bold">{totalMachos} cab</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Fêmeas:</span><span className="font-bold">{totalFemeas} cab</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Total de cabeças:</span><span className="font-bold">{total}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Peso médio:</span><span className="font-medium">{pesoMedioPonderado > 0 ? `${formatNum(pesoMedioPonderado, 1)} kg` : '—'}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Peso total estimado:</span><span className="font-medium">{pesoTotalEstoque > 0 ? `${formatNum(pesoTotalEstoque, 0)} kg` : '—'}</span></div>
@@ -335,7 +400,7 @@ export function FechamentoPastoDialog({
             </div>
             {avisos.length > 0 && (
               <div className={`rounded-lg border p-3 text-sm space-y-1 ${exigeRebanho && (total === 0 || itensComQtd.some(i => !i.peso_medio_kg)) ? 'border-yellow-500/30 bg-yellow-500/10' : 'border-blue-500/30 bg-blue-500/10'}`}>
-                <div className={`flex items-center gap-1 font-semibold text-xs uppercase tracking-wide mb-1 ${exigeRebanho && (total === 0 || itensComQtd.some(i => !i.peso_medio_kg)) ? 'text-yellow-700 dark:text-yellow-400' : 'text-blue-700 dark:text-blue-400'}`}>
+                <div className={`flex items-center gap-1 font-semibold text-xs uppercase tracking-wide mb-1 ${exigeRebanho && (total === 0 || itensComQtd.some(ii => !ii.peso_medio_kg)) ? 'text-yellow-700 dark:text-yellow-400' : 'text-blue-700 dark:text-blue-400'}`}>
                   <AlertTriangle className="h-3.5 w-3.5" />Avisos
                 </div>
                 {avisos.map((a, i) => (
