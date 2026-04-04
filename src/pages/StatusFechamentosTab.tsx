@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 
 interface Props {
   ano: string;
-  onSelectMes?: (anoMes: string) => void;
+  onSelectMes?: (anoMes: string, destino?: 'resumo' | 'painel_consultor') => void;
 }
 
 const MESES_COMPLETOS = [
