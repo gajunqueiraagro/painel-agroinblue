@@ -987,6 +987,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             <MiniChart data={chartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
             <MiniChart data={chartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio" />
           </div>
+          )}
         </div>
       </div>
     </div>
