@@ -703,7 +703,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     toast.success(`${prev.length} preços copiados do mês anterior`);
   };
 
-  const canEdit = fonteMes === 'live';
+  const canEdit = fonteMes === 'live' && !isMesFuturo;
   const tabelaUsaSnapshot = fonteMes === 'snapshot';
   const avisoSnapshotIncompleto = fonteMes === 'snapshot_incompleto';
   const fazendaNome = fazendaAtual?.nome || '';
