@@ -44,6 +44,103 @@ interface FechamentoItem {
   origem_dado: string;
 }
 
+// ── CategoriaCard extracted outside to prevent re-mount on parent re-render ──
+interface CategoriaCardProps {
+  c: CategoriaRebanho;
+  idx: number;
+  tabBase: number;
+  quantidade: number;
+  pesoMedioKg: number | null;
+  origemDado: string;
+  disabled: boolean;
+  onUpdateQtd: (catId: string, val: number) => void;
+  onUpdatePeso: (catId: string, val: number | null) => void;
+}
+
+const CategoriaCard = React.memo(function CategoriaCard({
+  c, idx, tabBase, quantidade, pesoMedioKg, origemDado, disabled, onUpdateQtd, onUpdatePeso
+}: CategoriaCardProps) {
+  const [qtdLocal, setQtdLocal] = useState(() => quantidade > 0 ? String(quantidade) : '');
+  const [pesoLocal, setPesoLocal] = useState(() =>
+    pesoMedioKg != null && pesoMedioKg !== 0 ? pesoMedioKg.toFixed(2).replace('.', ',') : ''
+  );
+  const [qtdFocused, setQtdFocused] = useState(false);
+  const [pesoFocused, setPesoFocused] = useState(false);
+
+  // Sync from external changes (e.g. "Copiar anterior") only when not focused
+  useEffect(() => {
+    if (!qtdFocused) {
+      setQtdLocal(quantidade > 0 ? String(quantidade) : '');
+    }
+  }, [quantidade, qtdFocused]);
+
+  useEffect(() => {
+    if (!pesoFocused) {
+      setPesoLocal(pesoMedioKg != null && pesoMedioKg !== 0 ? pesoMedioKg.toFixed(2).replace('.', ',') : '');
+    }
+  }, [pesoMedioKg, pesoFocused]);
+
+  return (
+    <div className="flex flex-col items-center gap-1" style={{ minWidth: '62px' }}>
+      <span className="text-[11px] font-semibold text-foreground whitespace-nowrap mb-0.5">{c.nome}</span>
+      <div className="relative">
+        <Input
+          type="text" inputMode="numeric"
+          tabIndex={tabBase + idx * 2}
+          value={qtdLocal}
+          onChange={e => setQtdLocal(e.target.value)}
+          onFocus={() => setQtdFocused(true)}
+          onBlur={() => {
+            setQtdFocused(false);
+            const parsed = parseInt(qtdLocal, 10);
+            if (!isNaN(parsed) && parsed > 0) {
+              onUpdateQtd(c.id, parsed);
+              setQtdLocal(String(parsed));
+            } else {
+              onUpdateQtd(c.id, 0);
+              setQtdLocal('');
+            }
+          }}
+          disabled={disabled}
+          className="h-8 text-xs font-bold px-1.5 text-center tabular-nums w-[58px]"
+          placeholder="0"
+        />
+        {origemDado === 'copiado_mes_anterior' && (
+          <Badge variant="secondary" className="absolute -top-1.5 -right-1.5 text-[6px] h-3 px-0.5 leading-none">Cop</Badge>
+        )}
+      </div>
+      <Input
+        type="text" inputMode="decimal"
+        tabIndex={tabBase + idx * 2 + 1}
+        value={pesoLocal}
+        onChange={e => setPesoLocal(e.target.value)}
+        onFocus={() => setPesoFocused(true)}
+        onBlur={() => {
+          setPesoFocused(false);
+          const raw = pesoLocal.replace(',', '.');
+          if (raw === '' || raw.trim() === '') {
+            onUpdatePeso(c.id, null);
+            setPesoLocal('');
+          } else {
+            const parsed = parseFloat(raw);
+            if (!isNaN(parsed)) {
+              const valorFinal = Math.round(parsed * 100) / 100;
+              onUpdatePeso(c.id, valorFinal);
+              setPesoLocal(valorFinal.toFixed(2).replace('.', ','));
+            } else {
+              onUpdatePeso(c.id, null);
+              setPesoLocal('');
+            }
+          }
+        }}
+        disabled={disabled}
+        className="h-8 text-xs px-1.5 text-center tabular-nums w-[58px]"
+        placeholder="kg"
+      />
+    </div>
+  );
+});
+
 interface Props {
   open: boolean;
   onOpenChange: (o: boolean) => void;
