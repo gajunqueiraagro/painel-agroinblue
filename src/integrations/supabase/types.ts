@@ -3523,7 +3523,6 @@ export type Database = {
           fechado_em: string | null
           fechado_por: string | null
           id: string
-          peso_total_kg: number | null
           reaberto_em: string | null
           reaberto_por: string | null
           status: string
@@ -3538,7 +3537,6 @@ export type Database = {
           fechado_em?: string | null
           fechado_por?: string | null
           id?: string
-          peso_total_kg?: number | null
           reaberto_em?: string | null
           reaberto_por?: string | null
           status?: string
@@ -3553,7 +3551,6 @@ export type Database = {
           fechado_em?: string | null
           fechado_por?: string | null
           id?: string
-          peso_total_kg?: number | null
           reaberto_em?: string | null
           reaberto_por?: string | null
           status?: string
