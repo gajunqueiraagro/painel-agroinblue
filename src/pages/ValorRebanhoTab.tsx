@@ -424,10 +424,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   // Peso total do mês selecionado (live, para mês aberto)
   const pesoTotalKgLive = useMemo(() => allRows.reduce((sum, r) => sum + (r.saldo * r.pesoMedio), 0), [allRows]);
 
-  // Card: SEMPRE usa o total calculado pela tabela (fonte oficial validada por categoria).
-  // A tabela desta tela é a referência definitiva — não usar valor_rebanho_fechamento aqui.
-  const valorRebanhoExibido = totalRebanho;
-  const pesoTotalKgExibido = pesoTotalKgLive;
+  // REGRA OFICIAL: Snapshot congelado (valor_rebanho_fechamento) é a fonte única.
+  // Mês fechado → card/gráfico usam snapshot. Mês aberto → usam cálculo live da tabela.
+  const valorRebanhoExibido = mesSelecionadoFechado
+    ? (frozenSelecionado?.valor ?? totalRebanho)
+    : totalRebanho;
+  const pesoTotalKgExibido = mesSelecionadoFechado
+    ? (frozenSelecionado?.pesoKg || pesoTotalKgLive)
+    : pesoTotalKgLive;
   const pesoMedioGeralExibido = totalCabecas > 0 ? pesoTotalKgExibido / totalCabecas : 0;
   const totalArrobasExibido = pesoTotalKgExibido > 0 ? pesoTotalKgExibido / 30 : 0;
   const precoMedioArrobaExibido = totalArrobasExibido > 0 ? valorRebanhoExibido / totalArrobasExibido : 0;
@@ -443,41 +447,44 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     });
   }, [mesNum]);
 
-  // VALOR DO REBANHO chart — mês selecionado usa total da tabela; histórico usa fechamento congelado
+  // VALOR DO REBANHO chart — snapshot congelado para meses fechados; live para mês aberto
   const chartDataValor = useMemo(() => {
     return buildChartData((mes) => {
       const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
-      if (mes === mesNum) {
+      if (mes === mesNum && !mesSelecionadoFechado) {
         return totalRebanho > 0 ? totalRebanho : null;
       }
-      return getFrozen(key)?.valor ?? null;
+      return getFrozen(key)?.valor ?? (mes === mesNum ? (totalRebanho > 0 ? totalRebanho : null) : null);
     });
-  }, [buildChartData, historicoPorMes, anoFiltro, mesNum, totalRebanho]);
+  }, [buildChartData, historicoPorMes, anoFiltro, mesNum, totalRebanho, mesSelecionadoFechado]);
 
-  // ARROBAS EM ESTOQUE chart — mês selecionado usa peso live da tabela
+  // ARROBAS EM ESTOQUE chart — snapshot para fechados; live para aberto
   const chartDataArrobas = useMemo(() => {
     return buildChartData((mes) => {
       const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
-      if (mes === mesNum) {
+      if (mes === mesNum && !mesSelecionadoFechado) {
         return pesoTotalKgLive > 0 ? pesoTotalKgLive / 30 : null;
       }
       const frozen = getFrozen(key);
-      return frozen && frozen.pesoKg > 0 ? frozen.pesoKg / 30 : null;
+      if (frozen && frozen.pesoKg > 0) return frozen.pesoKg / 30;
+      if (mes === mesNum) return pesoTotalKgLive > 0 ? pesoTotalKgLive / 30 : null;
+      return null;
     });
-  }, [buildChartData, historicoPorMes, anoFiltro, mesNum, pesoTotalKgLive]);
+  }, [buildChartData, historicoPorMes, anoFiltro, mesNum, mesSelecionadoFechado, pesoTotalKgLive]);
 
-  // R$/@ MÉDIO chart — mês selecionado usa cálculo live da tabela
+  // R$/@ MÉDIO chart — snapshot para fechados; live para aberto
   const chartDataPrecoArroba = useMemo(() => {
     return buildChartData((mes) => {
       const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
-      if (mes === mesNum) {
+      if (mes === mesNum && !mesSelecionadoFechado) {
         return precoMedioArroba > 0 ? precoMedioArroba : null;
       }
       const frozen = getFrozen(key);
       if (frozen && frozen.pesoKg > 0 && frozen.valor > 0) return frozen.valor / (frozen.pesoKg / 30);
+      if (mes === mesNum) return precoMedioArroba > 0 ? precoMedioArroba : null;
       return null;
     });
-  }, [buildChartData, historicoPorMes, anoFiltro, precoMedioArroba, mesNum]);
+  }, [buildChartData, historicoPorMes, anoFiltro, precoMedioArroba, mesNum, mesSelecionadoFechado]);
 
   const handlePrecoChange = (codigo: string, value: string) => {
     const sanitized = value.replace(/[^0-9.,]/g, '');
