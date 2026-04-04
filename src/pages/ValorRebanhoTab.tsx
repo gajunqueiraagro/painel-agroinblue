@@ -9,7 +9,7 @@ import { Save, Copy, Info, Lock, Unlock, AlertTriangle, ShieldAlert, TrendingUp,
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
-import { useValorRebanho } from '@/hooks/useValorRebanho';
+import { useValorRebanho, type SnapshotDetalheCategoria } from '@/hooks/useValorRebanho';
 import { usePrecoMercado } from '@/hooks/usePrecoMercado';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_COLS } from '@/lib/calculos/labels';
@@ -27,6 +27,38 @@ interface Props {
   filtroMesInicial?: number;
 }
 
+interface LinhaTabelaValor {
+  categoriaId: string;
+  codigo: string;
+  nome: string;
+  saldo: number;
+  pesoMedio: number;
+  origemPeso: OrigemPeso;
+  precoKg: number;
+  valorCabeca: number;
+  precoArroba: number;
+  valorTotal: number;
+  isSugerido: boolean;
+}
+
+interface HistoricoMes {
+  valor: number;
+  pesoKg: number;
+}
+
+interface MetricasExibicao {
+  valor: number | null;
+  cabecas: number | null;
+  pesoTotalKg: number | null;
+  pesoMedio: number | null;
+  totalArrobas: number | null;
+  precoArroba: number | null;
+  valorCabeca: number | null;
+  precoKg: number | null;
+}
+
+type FonteMes = 'live' | 'snapshot' | 'snapshot_incompleto';
+
 const ORIGEM_LABEL: Record<OrigemPeso, string> = {
   pastos: 'Fechamento do mês',
   lancamento: 'Último lançamento',
@@ -37,13 +69,13 @@ const ORIGEM_LABEL: Record<OrigemPeso, string> = {
 const MAPA_PRECO_MERCADO: Record<string, { bloco: string; categoria: string; unidade: 'kg' | 'arroba' }> = {
   mamotes_m: { bloco: 'magro_macho', categoria: '200 kg média', unidade: 'kg' },
   desmama_m: { bloco: 'magro_macho', categoria: '200 kg média', unidade: 'kg' },
-  garrotes:  { bloco: 'magro_macho', categoria: 'Garrotes 350 kg média', unidade: 'kg' },
-  bois:      { bloco: 'frigorifico', categoria: 'Boi Gordo', unidade: 'arroba' },
-  touros:    { bloco: 'frigorifico', categoria: 'Vaca', unidade: 'arroba' },
+  garrotes: { bloco: 'magro_macho', categoria: 'Garrotes 350 kg média', unidade: 'kg' },
+  bois: { bloco: 'frigorifico', categoria: 'Boi Gordo', unidade: 'arroba' },
+  touros: { bloco: 'frigorifico', categoria: 'Vaca', unidade: 'arroba' },
   mamotes_f: { bloco: 'magro_femea', categoria: '200 kg média', unidade: 'kg' },
   desmama_f: { bloco: 'magro_femea', categoria: '200 kg média', unidade: 'kg' },
-  novilhas:  { bloco: 'frigorifico', categoria: 'Novilha', unidade: 'arroba' },
-  vacas:     { bloco: 'frigorifico', categoria: 'Vaca', unidade: 'arroba' },
+  novilhas: { bloco: 'frigorifico', categoria: 'Novilha', unidade: 'arroba' },
+  vacas: { bloco: 'frigorifico', categoria: 'Vaca', unidade: 'arroba' },
 };
 
 const ORDEM_CATEGORIAS_FIXA = [
@@ -58,10 +90,70 @@ const MESES_SHORT = [
   { key: '10', label: 'Out' }, { key: '11', label: 'Nov' }, { key: '12', label: 'Dez' },
 ];
 
-/* ─── Variation helpers ─── */
-function calcVariacao(atual: number, anterior: number): number | null {
-  if (!anterior || anterior === 0) return null;
+const CHART_LABELS = ['I', 'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+
+function calcVariacaoNullable(atual: number | null, anterior: number | null): number | null {
+  if (atual === null || anterior === null || anterior === 0) return null;
   return ((atual - anterior) / Math.abs(anterior)) * 100;
+}
+
+function formatNumNullable(valor: number | null, casas: number) {
+  return valor === null ? '—' : formatNum(valor, casas);
+}
+
+function formatMoedaNullable(valor: number | null) {
+  return valor === null ? '—' : formatMoeda(valor);
+}
+
+function buildMetricsFromTotals(valor: number | null, cabecas: number | null, pesoTotalKg: number | null): MetricasExibicao {
+  const pesoMedio = cabecas !== null && pesoTotalKg !== null
+    ? (cabecas > 0 ? pesoTotalKg / cabecas : 0)
+    : null;
+  const totalArrobas = pesoTotalKg !== null ? pesoTotalKg / 30 : null;
+  const precoArroba = valor !== null && totalArrobas !== null
+    ? (totalArrobas > 0 ? valor / totalArrobas : 0)
+    : null;
+  const valorCabeca = valor !== null && cabecas !== null
+    ? (cabecas > 0 ? valor / cabecas : 0)
+    : null;
+  const precoKg = valor !== null && pesoTotalKg !== null
+    ? (pesoTotalKg > 0 ? valor / pesoTotalKg : 0)
+    : null;
+
+  return {
+    valor,
+    cabecas,
+    pesoTotalKg,
+    pesoMedio,
+    totalArrobas,
+    precoArroba,
+    valorCabeca,
+    precoKg,
+  };
+}
+
+function aggregateMetricsFromTableRows(rows: LinhaTabelaValor[]): MetricasExibicao {
+  if (rows.length === 0) return buildMetricsFromTotals(null, null, null);
+
+  const cabecas = rows.reduce((sum, row) => sum + row.saldo, 0);
+  const pesoTotalKg = rows.reduce((sum, row) => sum + (row.saldo * row.pesoMedio), 0);
+  const valor = rows.reduce((sum, row) => sum + row.valorTotal, 0);
+
+  return buildMetricsFromTotals(valor, cabecas, pesoTotalKg);
+}
+
+function aggregateMetricsFromSnapshotItems(items: SnapshotDetalheCategoria[]): MetricasExibicao | null {
+  if (items.length === 0) return null;
+
+  const cabecas = items.reduce((sum, item) => sum + (Number(item.quantidade) || 0), 0);
+  const pesoTotalKg = items.reduce((sum, item) => {
+    const quantidade = Number(item.quantidade) || 0;
+    const pesoMedio = Number(item.peso_medio_kg) || 0;
+    return sum + quantidade * pesoMedio;
+  }, 0);
+  const valor = items.reduce((sum, item) => sum + (Number(item.valor_total_categoria) || 0), 0);
+
+  return buildMetricsFromTotals(valor, cabecas, pesoTotalKg);
 }
 
 function VariacaoBadge({ valor, label, showLabel }: { valor: number | null; label: string; showLabel?: boolean }) {
@@ -72,8 +164,8 @@ function VariacaoBadge({ valor, label, showLabel }: { valor: number | null; labe
   const color = isNeutral
     ? 'text-muted-foreground'
     : isPositive
-    ? 'text-emerald-600 dark:text-emerald-400'
-    : 'text-destructive';
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : 'text-destructive';
 
   const formattedVal = Math.abs(valor).toFixed(1).replace('.', ',');
 
@@ -85,9 +177,6 @@ function VariacaoBadge({ valor, label, showLabel }: { valor: number | null; labe
     </span>
   );
 }
-
-/* ─── Mini sparkline chart ─── */
-const CHART_LABELS = ['I', 'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
 
 function MiniChart({ data, color, title }: { data: { label: string; value: number | null }[]; color: string; title: string }) {
   return (
@@ -132,7 +221,6 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
     if (filtroMesInicial) setMesFiltro(String(filtroMesInicial).padStart(2, '0'));
   }, [filtroAnoInicial, filtroMesInicial]);
-  
 
   const anoMes = `${anoFiltro}-${mesFiltro}`;
   const isDezembro = mesFiltro === '12';
@@ -143,11 +231,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const bloqueadoPorConciliacao = !categoriasConciliadas && !isGlobal && !statusZoo.loading;
 
   const {
-    precos, loading, saving, salvarPrecos, loadPrecosMesAnterior,
-    isFechado, isAdmin, reabrirFechamento,
+    precos,
+    saving,
+    salvarPrecos,
+    loadPrecosMesAnterior,
+    isFechado,
+    isAdmin,
+    reabrirFechamento,
   } = useValorRebanho(anoMes);
 
-  const { itens: precosMercado, isValidado: mercadoValidado } = usePrecoMercado(anoMes);
+  const { itens: precosMercado } = usePrecoMercado(anoMes);
 
   const precosSugeridos = useMemo(() => {
     const map: Record<string, number> = {};
@@ -155,21 +248,21 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       const item = precosMercado.find(p => p.bloco === ref.bloco && p.categoria === ref.categoria);
       if (!item || item.valor <= 0) return;
       const valorComAgio = item.valor * (1 + (item.agio_perc || 0) / 100);
-      if (ref.unidade === 'arroba') {
-        map[codigo] = valorComAgio / 30;
-      } else {
-        map[codigo] = valorComAgio;
-      }
+      map[codigo] = ref.unidade === 'arroba' ? valorComAgio / 30 : valorComAgio;
     });
     return map;
   }, [precosMercado]);
 
   const [precosLocal, setPrecosLocal] = useState<Record<string, number>>({});
   const [precosDisplay, setPrecosDisplay] = useState<Record<string, string>>({});
-  const [sugestaoAplicada, setSugestaoAplicada] = useState(false);
 
   const resumoOficial = useFechamentoCategoria(
-    fazendaId, Number(anoFiltro), Number(mesFiltro), lancamentos, saldosIniciais, categorias,
+    fazendaId,
+    Number(anoFiltro),
+    Number(mesFiltro),
+    lancamentos,
+    saldosIniciais,
+    categorias,
   );
 
   const categoriasComSugestao = useMemo(() => {
@@ -187,185 +280,154 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const temSugestao = categoriasComSugestao.size > 0;
 
-  const allRows = useMemo(() => {
+  const allRows = useMemo<LinhaTabelaValor[]>(() => {
     return resumoOficial.rows.map(row => {
       const precoKg = precosLocal[row.categoriaCodigo] ?? 0;
       const valorTotal = row.quantidadeFinal * (row.pesoMedioFinalKg || 0) * precoKg;
       const valorCabeca = row.quantidadeFinal > 0 && row.pesoMedioFinalKg && precoKg > 0
-        ? row.pesoMedioFinalKg * precoKg : 0;
+        ? row.pesoMedioFinalKg * precoKg
+        : 0;
       const arrobasLinha = row.quantidadeFinal * (row.pesoMedioFinalKg || 0) / 30;
       const precoArroba = arrobasLinha > 0 ? valorTotal / arrobasLinha : 0;
+
       return {
-        categoriaId: row.categoriaId, codigo: row.categoriaCodigo, nome: row.categoriaNome,
-        saldo: row.quantidadeFinal, pesoMedio: row.pesoMedioFinalKg || 0,
-        origemPeso: row.origemPeso, precoKg, valorCabeca, precoArroba, valorTotal,
+        categoriaId: row.categoriaId,
+        codigo: row.categoriaCodigo,
+        nome: row.categoriaNome,
+        saldo: row.quantidadeFinal,
+        pesoMedio: row.pesoMedioFinalKg || 0,
+        origemPeso: row.origemPeso,
+        precoKg,
+        valorCabeca,
+        precoArroba,
+        valorTotal,
         isSugerido: categoriasComSugestao.has(row.categoriaCodigo),
       };
     });
   }, [resumoOficial.rows, precosLocal, categoriasComSugestao]);
 
-  // Always show all categories in fixed order
-  const rows = useMemo(() => {
+  const liveRows = useMemo<LinhaTabelaValor[]>(() => {
     return ORDEM_CATEGORIAS_FIXA.map(codigo => {
       const existing = allRows.find(r => r.codigo === codigo);
       if (existing) return existing;
       const cat = categorias.find(c => c.codigo === codigo);
       return {
-        categoriaId: cat?.id || codigo, codigo, nome: cat?.nome || codigo,
-        saldo: 0, pesoMedio: 0, origemPeso: 'sem_base' as OrigemPeso,
-        precoKg: precosLocal[codigo] ?? 0, valorCabeca: 0, precoArroba: 0, valorTotal: 0,
+        categoriaId: cat?.id || codigo,
+        codigo,
+        nome: cat?.nome || codigo,
+        saldo: 0,
+        pesoMedio: 0,
+        origemPeso: 'sem_base' as OrigemPeso,
+        precoKg: precosLocal[codigo] ?? 0,
+        valorCabeca: 0,
+        precoArroba: 0,
+        valorTotal: 0,
         isSugerido: false,
       };
     });
   }, [allRows, categorias, precosLocal]);
 
-  const temEstimativa = rows.some(r => r.saldo > 0 && r.pesoMedio > 0 && r.origemPeso !== 'pastos');
-
-  const totalRebanho = useMemo(() => allRows.reduce((sum, r) => sum + r.valorTotal, 0), [allRows]);
-  const totalCabecas = useMemo(() => allRows.reduce((sum, r) => sum + r.saldo, 0), [allRows]);
-  const pesoMedioGeral = useMemo(() => {
-    const totalPeso = allRows.reduce((sum, r) => sum + (r.saldo * r.pesoMedio), 0);
-    return totalCabecas > 0 ? totalPeso / totalCabecas : 0;
-  }, [allRows, totalCabecas]);
-  const valorMedioCabeca = totalCabecas > 0 ? totalRebanho / totalCabecas : 0;
-
-  const precoMedioKg = useMemo(() => {
-    const pesoTotal = allRows.reduce((sum, r) => sum + (r.saldo * r.pesoMedio), 0);
-    return pesoTotal > 0 ? totalRebanho / pesoTotal : 0;
-  }, [allRows, totalRebanho]);
-
-  const totalArrobas = useMemo(() => allRows.reduce((sum, r) => sum + (r.saldo * r.pesoMedio / 30), 0), [allRows]);
-  const precoMedioArroba = totalArrobas > 0 ? totalRebanho / totalArrobas : 0;
-  const mesLabel = MESES_COLS.find(m => m.key === mesFiltro)?.label || mesFiltro;
+  const temEstimativa = liveRows.some(r => r.saldo > 0 && r.pesoMedio > 0 && r.origemPeso !== 'pastos');
+  const totalRebanhoLive = useMemo(() => liveRows.reduce((sum, r) => sum + r.valorTotal, 0), [liveRows]);
+  const totalCabecasLive = useMemo(() => liveRows.reduce((sum, r) => sum + r.saldo, 0), [liveRows]);
+  const pesoTotalKgLive = useMemo(() => liveRows.reduce((sum, r) => sum + (r.saldo * r.pesoMedio), 0), [liveRows]);
+  const metricasLiveSelecionado = useMemo(
+    () => buildMetricsFromTotals(totalRebanhoLive, totalCabecasLive, pesoTotalKgLive),
+    [totalRebanhoLive, totalCabecasLive, pesoTotalKgLive],
+  );
 
   const categoriasSemPreco = useMemo(() => {
     if (!isDezembro) return [];
-    return allRows.filter(r => r.precoKg <= 0).map(r => r.nome);
-  }, [allRows, isDezembro]);
+    return liveRows.filter(r => r.precoKg <= 0).map(r => r.nome);
+  }, [liveRows, isDezembro]);
 
   const dezembroCompleto = isDezembro && categoriasSemPreco.length === 0;
-
   const fmtKg = (v: number) => v.toFixed(2).replace('.', ',');
 
   useEffect(() => {
     const numMap: Record<string, number> = {};
     const strMap: Record<string, string> = {};
+
     precos.forEach(p => {
       const v = Number(p.preco_kg) || 0;
       numMap[p.categoria] = v;
       strMap[p.categoria] = v > 0 ? fmtKg(v) : '0,00';
     });
-    let aplicouSugestao = false;
+
     Object.entries(precosSugeridos).forEach(([codigo, valor]) => {
       if (!numMap[codigo] || numMap[codigo] <= 0) {
         const v = Number(valor.toFixed(4));
         numMap[codigo] = v;
         strMap[codigo] = v > 0 ? fmtKg(v) : '0,00';
-        aplicouSugestao = true;
       }
     });
+
     setPrecosLocal(numMap);
     setPrecosDisplay(strMap);
-    setSugestaoAplicada(aplicouSugestao);
   }, [precos, precosSugeridos]);
 
-  /* ─── Compute historical data for variations and charts ─── */
-  // We'll compute data for all months up to current using the same hooks approach
-  // For now, generate chart data from available data (placeholder for months without data)
   const mesNum = Number(mesFiltro);
   const mesAnteriorKey = mesNum > 1 ? String(mesNum - 1).padStart(2, '0') : '12';
   const anoMesAnterior = mesNum > 1 ? `${anoFiltro}-${mesAnteriorKey}` : `${Number(anoFiltro) - 1}-12`;
+  const anoMesJan = `${anoFiltro}-01`;
 
-  // Load previous month data for variations
   const resumoMesAnterior = useFechamentoCategoria(
-    fazendaId, mesNum > 1 ? Number(anoFiltro) : Number(anoFiltro) - 1,
+    fazendaId,
+    mesNum > 1 ? Number(anoFiltro) : Number(anoFiltro) - 1,
     mesNum > 1 ? mesNum - 1 : 12,
-    lancamentos, saldosIniciais, categorias,
+    lancamentos,
+    saldosIniciais,
+    categorias,
   );
   const { precos: precosMesAnterior } = useValorRebanho(anoMesAnterior);
 
-  // Load January data for YTD variation
-  const anoMesJan = `${anoFiltro}-01`;
   const resumoJan = useFechamentoCategoria(
-    fazendaId, Number(anoFiltro), 1, lancamentos, saldosIniciais, categorias,
+    fazendaId,
+    Number(anoFiltro),
+    1,
+    lancamentos,
+    saldosIniciais,
+    categorias,
   );
   const { precos: precosJan } = useValorRebanho(anoMesJan);
 
-  // Compute prev month totals
-  const prevTotals = useMemo(() => {
-    let valor = 0, cabecas = 0, pesoTotal = 0, arrobas = 0;
+  const metricasMesAnteriorLive = useMemo(() => {
+    let valor = 0;
+    let cabecas = 0;
+    let pesoTotalKg = 0;
+
     resumoMesAnterior.rows.forEach(row => {
-      const pk = precosMesAnterior.find(p => p.categoria === row.categoriaCodigo)?.preco_kg || 0;
-      const vt = row.quantidadeFinal * (row.pesoMedioFinalKg || 0) * pk;
-      valor += vt;
+      const precoKg = precosMesAnterior.find(p => p.categoria === row.categoriaCodigo)?.preco_kg || 0;
+      valor += row.quantidadeFinal * (row.pesoMedioFinalKg || 0) * precoKg;
       cabecas += row.quantidadeFinal;
-      pesoTotal += row.quantidadeFinal * (row.pesoMedioFinalKg || 0);
-      arrobas += row.quantidadeFinal * (row.pesoMedioFinalKg || 0) / 30;
+      pesoTotalKg += row.quantidadeFinal * (row.pesoMedioFinalKg || 0);
     });
-    return {
-      valor, cabecas,
-      pesoMedio: cabecas > 0 ? pesoTotal / cabecas : 0,
-      precoArroba: arrobas > 0 ? valor / arrobas : 0,
-      valorCab: cabecas > 0 ? valor / cabecas : 0,
-    };
+
+    return buildMetricsFromTotals(valor, cabecas, pesoTotalKg);
   }, [resumoMesAnterior.rows, precosMesAnterior]);
 
-  // Compute January totals
-  const janTotals = useMemo(() => {
-    let valor = 0, cabecas = 0, pesoTotal = 0, arrobas = 0;
+  const metricasJaneiroLive = useMemo(() => {
+    let valor = 0;
+    let cabecas = 0;
+    let pesoTotalKg = 0;
+
     resumoJan.rows.forEach(row => {
-      const pk = precosJan.find(p => p.categoria === row.categoriaCodigo)?.preco_kg || 0;
-      const vt = row.quantidadeFinal * (row.pesoMedioFinalKg || 0) * pk;
-      valor += vt;
+      const precoKg = precosJan.find(p => p.categoria === row.categoriaCodigo)?.preco_kg || 0;
+      valor += row.quantidadeFinal * (row.pesoMedioFinalKg || 0) * precoKg;
       cabecas += row.quantidadeFinal;
-      pesoTotal += row.quantidadeFinal * (row.pesoMedioFinalKg || 0);
-      arrobas += row.quantidadeFinal * (row.pesoMedioFinalKg || 0) / 30;
+      pesoTotalKg += row.quantidadeFinal * (row.pesoMedioFinalKg || 0);
     });
-    return {
-      valor, cabecas,
-      pesoMedio: cabecas > 0 ? pesoTotal / cabecas : 0,
-      precoArroba: arrobas > 0 ? valor / arrobas : 0,
-      valorCab: cabecas > 0 ? valor / cabecas : 0,
-    };
+
+    return buildMetricsFromTotals(valor, cabecas, pesoTotalKg);
   }, [resumoJan.rows, precosJan]);
 
-  // Variations
-  const varValorMes = calcVariacao(totalRebanho, prevTotals.valor);
-  const varValorAno = calcVariacao(totalRebanho, janTotals.valor);
-  const varCabMes = calcVariacao(totalCabecas, prevTotals.cabecas);
-  const varCabAno = calcVariacao(totalCabecas, janTotals.cabecas);
-  const varPesoMes = calcVariacao(pesoMedioGeral, prevTotals.pesoMedio);
-  const varPesoAno = calcVariacao(pesoMedioGeral, janTotals.pesoMedio);
-  const varArrobaMes = calcVariacao(precoMedioArroba, prevTotals.precoArroba);
-  const varArrobaAno = calcVariacao(precoMedioArroba, janTotals.precoArroba);
-  const varCabValorMes = calcVariacao(valorMedioCabeca, prevTotals.valorCab);
-  const varCabValorAno = calcVariacao(valorMedioCabeca, janTotals.valorCab);
-
-  // Arrobas em estoque variations
-  const prevArrobas = useMemo(() => {
-    let arrobas = 0;
-    resumoMesAnterior.rows.forEach(row => {
-      arrobas += row.quantidadeFinal * (row.pesoMedioFinalKg || 0) / 30;
-    });
-    return arrobas;
-  }, [resumoMesAnterior.rows]);
-  const janArrobas = useMemo(() => {
-    let arrobas = 0;
-    resumoJan.rows.forEach(row => {
-      arrobas += row.quantidadeFinal * (row.pesoMedioFinalKg || 0) / 30;
-    });
-    return arrobas;
-  }, [resumoJan.rows]);
-  const varArrobasEstoqueMes = calcVariacao(totalArrobas, prevArrobas);
-  const varArrobasEstoqueAno = calcVariacao(totalArrobas, janArrobas);
-
-  // Snapshot congelado: valor_rebanho_fechamento é a fonte única oficial.
-  // Contém valor_total e peso_total_kg gravados no momento do "Salvar e Fechar".
-  const [historicoPorMes, setHistoricoPorMes] = useState<Record<string, { valor: number; pesoKg: number }>>({});
+  const [historicoPorMes, setHistoricoPorMes] = useState<Record<string, HistoricoMes>>({});
+  const [historicoDetalhadoPorMes, setHistoricoDetalhadoPorMes] = useState<Record<string, SnapshotDetalheCategoria[]>>({});
 
   useEffect(() => {
     if (!fazendaId || fazendaId === '__global__') {
       setHistoricoPorMes({});
+      setHistoricoDetalhadoPorMes({});
       return;
     }
 
@@ -373,57 +435,155 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       const anoMeses = Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`);
 
       try {
-        // Fonte única: valor_rebanho_fechamento contém snapshot congelado (valor + peso)
-        const { data, error } = await supabase
-          .from('valor_rebanho_fechamento')
-          .select('ano_mes, valor_total, peso_total_kg')
-          .eq('fazenda_id', fazendaId)
-          .in('ano_mes', anoMeses);
+        const [fechamentoRes, itensRes] = await Promise.all([
+          supabase
+            .from('valor_rebanho_fechamento')
+            .select('ano_mes, valor_total, peso_total_kg')
+            .eq('fazenda_id', fazendaId)
+            .eq('status', 'fechado')
+            .in('ano_mes', anoMeses),
+          supabase
+            .from('valor_rebanho_fechamento_itens')
+            .select('ano_mes, categoria, quantidade, peso_medio_kg, preco_kg, valor_total_categoria')
+            .eq('fazenda_id', fazendaId)
+            .in('ano_mes', anoMeses),
+        ]);
 
-        if (error) throw error;
+        if (fechamentoRes.error) throw fechamentoRes.error;
+        if (itensRes.error) throw itensRes.error;
 
-        const map: Record<string, { valor: number; pesoKg: number }> = {};
-        (data || []).forEach((d: any) => {
-          map[d.ano_mes] = {
-            valor: Number(d.valor_total) || 0,
-            pesoKg: Number(d.peso_total_kg) || 0,
+        const mapFechado: Record<string, HistoricoMes> = {};
+        (fechamentoRes.data || []).forEach((item: any) => {
+          mapFechado[item.ano_mes] = {
+            valor: Number(item.valor_total) || 0,
+            pesoKg: Number(item.peso_total_kg) || 0,
           };
         });
 
-        setHistoricoPorMes(map);
+        const mapDetalhado: Record<string, SnapshotDetalheCategoria[]> = {};
+        (itensRes.data || []).forEach((item: any) => {
+          if (!mapDetalhado[item.ano_mes]) mapDetalhado[item.ano_mes] = [];
+          mapDetalhado[item.ano_mes].push({
+            categoria: item.categoria,
+            quantidade: Number(item.quantidade) || 0,
+            peso_medio_kg: Number(item.peso_medio_kg) || 0,
+            preco_kg: Number(item.preco_kg) || 0,
+            valor_total_categoria: Number(item.valor_total_categoria) || 0,
+          });
+        });
+
+        setHistoricoPorMes(mapFechado);
+        setHistoricoDetalhadoPorMes(mapDetalhado);
       } catch (error) {
-        console.error('Erro ao carregar histórico oficial do valor do rebanho:', error);
+        console.error('Erro ao carregar snapshots oficiais do valor do rebanho:', error);
         setHistoricoPorMes({});
+        setHistoricoDetalhadoPorMes({});
       }
     };
 
     fetchHistorico();
-  }, [fazendaId, anoFiltro]);
+  }, [fazendaId, anoFiltro, isFechado]);
 
-  // Determine if selected month is fechado using the official frozen source.
-  const mesSelecionadoFechado = isFechado || Object.prototype.hasOwnProperty.call(historicoPorMes, anoMes);
+  const getFrozen = useCallback((mesKey: string) => historicoPorMes[mesKey] ?? null, [historicoPorMes]);
+  const getFrozenDetalhado = useCallback((mesKey: string) => historicoDetalhadoPorMes[mesKey] ?? [], [historicoDetalhadoPorMes]);
 
-  // Helper to get frozen data for a given month key
-  const getFrozen = (mesKey: string) => historicoPorMes[mesKey] ?? null;
   const frozenSelecionado = getFrozen(anoMes);
+  const mesSelecionadoFechado = isFechado || frozenSelecionado !== null;
+  const frozenDetalhadoSelecionado = getFrozenDetalhado(anoMes);
 
-  // Peso total do mês selecionado (live, para mês aberto)
-  const pesoTotalKgLive = useMemo(() => allRows.reduce((sum, r) => sum + (r.saldo * r.pesoMedio), 0), [allRows]);
+  const fonteMes: FonteMes = !mesSelecionadoFechado
+    ? 'live'
+    : frozenDetalhadoSelecionado.length > 0
+      ? 'snapshot'
+      : 'snapshot_incompleto';
 
-  // REGRA OFICIAL: Snapshot congelado (valor_rebanho_fechamento) é a fonte única.
-  // Mês fechado → card/gráfico usam snapshot. Mês aberto → usam cálculo live da tabela.
-  const valorRebanhoExibido = mesSelecionadoFechado
-    ? (frozenSelecionado?.valor ?? totalRebanho)
-    : totalRebanho;
-  const pesoTotalKgExibido = mesSelecionadoFechado
-    ? (frozenSelecionado?.pesoKg || pesoTotalKgLive)
-    : pesoTotalKgLive;
-  const pesoMedioGeralExibido = totalCabecas > 0 ? pesoTotalKgExibido / totalCabecas : 0;
-  const totalArrobasExibido = pesoTotalKgExibido > 0 ? pesoTotalKgExibido / 30 : 0;
-  const precoMedioArrobaExibido = totalArrobasExibido > 0 ? valorRebanhoExibido / totalArrobasExibido : 0;
-  const valorMedioCabecaExibido = totalCabecas > 0 ? valorRebanhoExibido / totalCabecas : 0;
+  const snapshotRowsSelecionado = useMemo<LinhaTabelaValor[]>(() => {
+    const itensPorCategoria = new Map(frozenDetalhadoSelecionado.map(item => [item.categoria, item]));
 
-  // Build 13-point fixed chart data (Ini, Jan–Dez)
+    return ORDEM_CATEGORIAS_FIXA.map(codigo => {
+      const item = itensPorCategoria.get(codigo);
+      const cat = categorias.find(c => c.codigo === codigo);
+      const saldo = Number(item?.quantidade) || 0;
+      const pesoMedio = Number(item?.peso_medio_kg) || 0;
+      const precoKg = Number(item?.preco_kg) || 0;
+      const valorTotal = Number(item?.valor_total_categoria) || 0;
+      const arrobasLinha = saldo > 0 ? (saldo * pesoMedio) / 30 : 0;
+
+      return {
+        categoriaId: cat?.id || codigo,
+        codigo,
+        nome: cat?.nome || codigo,
+        saldo,
+        pesoMedio,
+        origemPeso: 'pastos',
+        precoKg,
+        valorCabeca: saldo > 0 ? valorTotal / saldo : 0,
+        precoArroba: arrobasLinha > 0 ? valorTotal / arrobasLinha : 0,
+        valorTotal,
+        isSugerido: false,
+      };
+    });
+  }, [frozenDetalhadoSelecionado, categorias]);
+
+  const buildFrozenMetrics = useCallback((mesKey: string): MetricasExibicao | null => {
+    const snapshotCabecalho = historicoPorMes[mesKey] ?? null;
+    const snapshotDetalhado = historicoDetalhadoPorMes[mesKey] ?? [];
+    const metricasDetalhadas = aggregateMetricsFromSnapshotItems(snapshotDetalhado);
+
+    if (!snapshotCabecalho && !metricasDetalhadas) return null;
+
+    return buildMetricsFromTotals(
+      snapshotCabecalho?.valor ?? metricasDetalhadas?.valor ?? null,
+      metricasDetalhadas?.cabecas ?? null,
+      snapshotCabecalho?.pesoKg ?? metricasDetalhadas?.pesoTotalKg ?? null,
+    );
+  }, [historicoPorMes, historicoDetalhadoPorMes]);
+
+  const metricasSelecionado = useMemo(() => {
+    if (fonteMes === 'live') return metricasLiveSelecionado;
+    return buildFrozenMetrics(anoMes) ?? buildMetricsFromTotals(null, null, null);
+  }, [fonteMes, metricasLiveSelecionado, buildFrozenMetrics, anoMes]);
+
+  const metricasMesAnterior = useMemo(() => {
+    if (fonteMes === 'live') return metricasMesAnteriorLive;
+    return buildFrozenMetrics(anoMesAnterior);
+  }, [fonteMes, metricasMesAnteriorLive, buildFrozenMetrics, anoMesAnterior]);
+
+  const metricasInicioAno = useMemo(() => {
+    if (fonteMes === 'live') return metricasJaneiroLive;
+    return buildFrozenMetrics(anoMesJan);
+  }, [fonteMes, metricasJaneiroLive, buildFrozenMetrics, anoMesJan]);
+
+  const rowsExibicao = fonteMes === 'snapshot' ? snapshotRowsSelecionado : liveRows;
+  const metricasTabela = useMemo(() => {
+    if (fonteMes === 'snapshot') return aggregateMetricsFromTableRows(snapshotRowsSelecionado);
+    if (fonteMes === 'live') return metricasLiveSelecionado;
+    return buildMetricsFromTotals(null, null, null);
+  }, [fonteMes, snapshotRowsSelecionado, metricasLiveSelecionado]);
+
+  const valorRebanhoExibido = metricasSelecionado.valor;
+  const pesoTotalKgExibido = metricasSelecionado.pesoTotalKg;
+  const pesoMedioGeralExibido = metricasSelecionado.pesoMedio;
+  const totalCabecasExibido = metricasSelecionado.cabecas;
+  const totalArrobasExibido = metricasSelecionado.totalArrobas;
+  const precoMedioArrobaExibido = metricasSelecionado.precoArroba;
+  const valorMedioCabecaExibido = metricasSelecionado.valorCabeca;
+
+  const varValorMes = calcVariacaoNullable(metricasSelecionado.valor, metricasMesAnterior?.valor ?? null);
+  const varValorAno = calcVariacaoNullable(metricasSelecionado.valor, metricasInicioAno?.valor ?? null);
+  const varCabMes = calcVariacaoNullable(metricasSelecionado.cabecas, metricasMesAnterior?.cabecas ?? null);
+  const varCabAno = calcVariacaoNullable(metricasSelecionado.cabecas, metricasInicioAno?.cabecas ?? null);
+  const varPesoMes = calcVariacaoNullable(metricasSelecionado.pesoMedio, metricasMesAnterior?.pesoMedio ?? null);
+  const varPesoAno = calcVariacaoNullable(metricasSelecionado.pesoMedio, metricasInicioAno?.pesoMedio ?? null);
+  const varArrobaMes = calcVariacaoNullable(metricasSelecionado.precoArroba, metricasMesAnterior?.precoArroba ?? null);
+  const varArrobaAno = calcVariacaoNullable(metricasSelecionado.precoArroba, metricasInicioAno?.precoArroba ?? null);
+  const varCabValorMes = calcVariacaoNullable(metricasSelecionado.valorCabeca, metricasMesAnterior?.valorCabeca ?? null);
+  const varCabValorAno = calcVariacaoNullable(metricasSelecionado.valorCabeca, metricasInicioAno?.valorCabeca ?? null);
+  const varArrobasEstoqueMes = calcVariacaoNullable(metricasSelecionado.totalArrobas, metricasMesAnterior?.totalArrobas ?? null);
+  const varArrobasEstoqueAno = calcVariacaoNullable(metricasSelecionado.totalArrobas, metricasInicioAno?.totalArrobas ?? null);
+
+  const mesLabel = MESES_COLS.find(m => m.key === mesFiltro)?.label || mesFiltro;
+
   const buildChartData = useCallback((getValue: (mes: number) => number | null) => {
     return CHART_LABELS.map((label, idx) => {
       if (idx === 0) return { label, value: getValue(0) };
@@ -433,44 +593,37 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     });
   }, [mesNum]);
 
-  // VALOR DO REBANHO chart — snapshot congelado para meses fechados; live para mês aberto
   const chartDataValor = useMemo(() => {
     return buildChartData((mes) => {
       const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
-      if (mes === mesNum && !mesSelecionadoFechado) {
-        return totalRebanho > 0 ? totalRebanho : null;
+      if (mes === mesNum && fonteMes === 'live') {
+        return metricasLiveSelecionado.valor;
       }
-      return getFrozen(key)?.valor ?? (mes === mesNum ? (totalRebanho > 0 ? totalRebanho : null) : null);
+      return getFrozen(key)?.valor ?? null;
     });
-  }, [buildChartData, historicoPorMes, anoFiltro, mesNum, totalRebanho, mesSelecionadoFechado]);
+  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.valor, getFrozen]);
 
-  // ARROBAS EM ESTOQUE chart — snapshot para fechados; live para aberto
   const chartDataArrobas = useMemo(() => {
     return buildChartData((mes) => {
       const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
-      if (mes === mesNum && !mesSelecionadoFechado) {
-        return pesoTotalKgLive > 0 ? pesoTotalKgLive / 30 : null;
+      if (mes === mesNum && fonteMes === 'live') {
+        return metricasLiveSelecionado.totalArrobas;
       }
       const frozen = getFrozen(key);
-      if (frozen && frozen.pesoKg > 0) return frozen.pesoKg / 30;
-      if (mes === mesNum) return pesoTotalKgLive > 0 ? pesoTotalKgLive / 30 : null;
-      return null;
+      return frozen ? frozen.pesoKg / 30 : null;
     });
-  }, [buildChartData, historicoPorMes, anoFiltro, mesNum, mesSelecionadoFechado, pesoTotalKgLive]);
+  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.totalArrobas, getFrozen]);
 
-  // R$/@ MÉDIO chart — snapshot para fechados; live para aberto
   const chartDataPrecoArroba = useMemo(() => {
     return buildChartData((mes) => {
       const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
-      if (mes === mesNum && !mesSelecionadoFechado) {
-        return precoMedioArroba > 0 ? precoMedioArroba : null;
+      if (mes === mesNum && fonteMes === 'live') {
+        return metricasLiveSelecionado.precoArroba;
       }
       const frozen = getFrozen(key);
-      if (frozen && frozen.pesoKg > 0 && frozen.valor > 0) return frozen.valor / (frozen.pesoKg / 30);
-      if (mes === mesNum) return precoMedioArroba > 0 ? precoMedioArroba : null;
-      return null;
+      return frozen && frozen.pesoKg > 0 ? frozen.valor / (frozen.pesoKg / 30) : null;
     });
-  }, [buildChartData, historicoPorMes, anoFiltro, precoMedioArroba, mesNum, mesSelecionadoFechado]);
+  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.precoArroba, getFrozen]);
 
   const handlePrecoChange = (codigo: string, value: string) => {
     const sanitized = value.replace(/[^0-9.,]/g, '');
@@ -489,27 +642,43 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       toast.error('Não é possível salvar. Existem categorias desconciliadas entre Pasto e Sistema.');
       return;
     }
+
     const items = Object.entries(precosLocal).map(([categoria, preco_kg]) => ({ categoria, preco_kg }));
-    const pesoTotalKg = allRows.reduce((sum, r) => sum + (r.saldo * r.pesoMedio), 0);
-    await salvarPrecos(items, totalRebanho, pesoTotalKg);
+    const snapshotDetalhado: SnapshotDetalheCategoria[] = liveRows.map(row => ({
+      categoria: row.codigo,
+      quantidade: row.saldo,
+      peso_medio_kg: row.pesoMedio,
+      preco_kg: row.precoKg,
+      valor_total_categoria: row.valorTotal,
+    }));
+
+    await salvarPrecos(items, totalRebanhoLive, pesoTotalKgLive, snapshotDetalhado);
   };
 
   const handleCopiarMesAnterior = async () => {
     const prev = await loadPrecosMesAnterior();
-    if (prev.length === 0) { toast.info('Nenhum preço encontrado no mês anterior'); return; }
+    if (prev.length === 0) {
+      toast.info('Nenhum preço encontrado no mês anterior');
+      return;
+    }
+
     const numMap: Record<string, number> = { ...precosLocal };
     const strMap: Record<string, string> = { ...precosDisplay };
+
     prev.forEach(p => {
       const v = Number(p.preco_kg) || 0;
       numMap[p.categoria] = v;
       strMap[p.categoria] = fmtKg(v);
     });
+
     setPrecosLocal(numMap);
     setPrecosDisplay(strMap);
     toast.success(`${prev.length} preços copiados do mês anterior`);
   };
 
-  const canEdit = !isFechado;
+  const canEdit = fonteMes === 'live';
+  const tabelaUsaSnapshot = fonteMes === 'snapshot';
+  const avisoSnapshotIncompleto = fonteMes === 'snapshot_incompleto';
   const fazendaNome = fazendaAtual?.nome || '';
 
   if (isGlobal) {
@@ -522,7 +691,6 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   return (
     <div className="p-2 w-full space-y-1.5 animate-fade-in pb-16">
-      {/* Ano filter + actions + inline blocking alert */}
       <div className="flex gap-1.5 items-center flex-wrap">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
           <SelectTrigger className="w-20 h-7 text-xs font-bold">
@@ -548,14 +716,20 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           </span>
         )}
 
-        {isFechado && (
+        {mesSelecionadoFechado && (
           <Badge variant="secondary" className="gap-1 text-xs">
             <Lock className="h-3 w-3" /> Fechado
           </Badge>
         )}
 
+        {!mesSelecionadoFechado && (
+          <Badge variant="outline" className="gap-1 text-xs">
+            <Info className="h-3 w-3" /> Live
+          </Badge>
+        )}
+
         <div className="ml-auto flex gap-1.5">
-          {isFechado && isAdmin && (
+          {mesSelecionadoFechado && isAdmin && (
             <Button variant="outline" size="sm" onClick={reabrirFechamento} className="gap-1 h-7 text-xs px-2">
               <Unlock className="h-3 w-3" /> Reabrir
             </Button>
@@ -569,7 +743,6 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         </div>
       </div>
 
-      {/* Month bar — green=fechado, red=aberto */}
       <div className="flex gap-0.5 bg-muted/30 rounded-md p-0.5 border">
         {MESES_SHORT.map(m => {
           const mesKey = `${anoFiltro}-${m.key}`;
@@ -593,27 +766,28 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         })}
       </div>
 
-      {/* December alert — only missing prices (shown above table) */}
-      {isDezembro && categoriasSemPreco.length > 0 && (
+      {fonteMes === 'live' && (
+        <div className="flex items-center gap-1.5 text-[10px] bg-muted/40 text-muted-foreground rounded px-2 py-1 border">
+          <Info className="h-3 w-3 shrink-0" />
+          <span>Mês aberto: tabela, card e gráficos exibem cálculo live até o fechamento oficial.</span>
+        </div>
+      )}
+
+      {avisoSnapshotIncompleto && (
+        <div className="flex items-center gap-1.5 text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded px-2 py-1 border border-amber-500/30">
+          <AlertTriangle className="h-3 w-3 shrink-0" />
+          <span>Mês fechado sem snapshot detalhado. Reabra e salve novamente para consolidar a base oficial.</span>
+        </div>
+      )}
+
+      {fonteMes === 'live' && isDezembro && categoriasSemPreco.length > 0 && (
         <div className="flex items-center gap-1.5 text-[10px] bg-destructive/10 text-destructive rounded px-2 py-0.5 border border-destructive/30">
           <AlertTriangle className="h-3 w-3 shrink-0" />
           <span><strong>Dezembro — base anual:</strong> {categoriasSemPreco.length} categoria(s) sem preço: {categoriasSemPreco.join(', ')}.</span>
         </div>
       )}
 
-      {/* Main content: table left + summary card right */}
-      <div className="flex gap-3 items-start relative">
-        {/* Overlay for unclosed months */}
-        {!mesSelecionadoFechado && (
-          <div className="absolute inset-0 z-10 bg-background/60 backdrop-blur-[1px] rounded-lg flex items-center justify-center pointer-events-none">
-            <div className="bg-card border border-border shadow-lg rounded-lg px-4 py-2 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium text-muted-foreground">Rebanho e pasto ainda não fechados</span>
-            </div>
-          </div>
-        )}
-
-        {/* LEFT — Table */}
+      <div className="flex gap-3 items-start">
         <div className="flex-1 max-w-[50%] min-w-0 bg-card rounded-lg shadow-sm border overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
@@ -628,90 +802,107 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               </tr>
             </thead>
             <tbody>
-              {rows.map((r, i) => (
-                <tr key={r.codigo} className={`border-b ${i % 2 === 0 ? '' : 'bg-muted/20'}`}>
-                  <td className="px-1.5 py-0.5 text-foreground text-[9.5px] italic whitespace-nowrap bg-primary/10">
-                    {r.nome}
-                  </td>
-                  <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
-                    {r.saldo > 0 ? formatNum(r.saldo, 0) : '-'}
-                  </td>
-                  <td className="px-1.5 py-0.5 text-right tabular-nums italic text-[9.5px]">
-                    {r.saldo > 0 && r.pesoMedio > 0 ? (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className={`cursor-help ${r.origemPeso === 'pastos' ? 'text-foreground' : 'text-muted-foreground'}`}>
-                            {formatNum(r.pesoMedio, 2)}
-                            {r.origemPeso !== 'pastos' && ' *'}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="text-xs">
-                          Fonte: {ORIGEM_LABEL[r.origemPeso]}
-                        </TooltipContent>
-                      </Tooltip>
-                    ) : '-'}
-                  </td>
-                  <td className="px-0.5 py-0.5 w-[60px]">
-                    {r.saldo > 0 ? (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Input
-                            type="text"
-                            inputMode="decimal"
-                            className={`h-5 text-right !text-[9px] leading-none tabular-nums italic px-1 w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
-                            placeholder="0,00"
-                            value={precosDisplay[r.codigo] !== undefined ? precosDisplay[r.codigo] : fmtKg(r.precoKg)}
-                            onChange={e => handlePrecoChange(r.codigo, e.target.value)}
-                            onBlur={() => handlePrecoBlur(r.codigo)}
-                            disabled={!canEdit}
-                          />
-                        </TooltipTrigger>
-                        {r.isSugerido && (
-                          <TooltipContent side="top" className="text-xs max-w-[200px]">
-                            Preço sugerido pelo mercado. Edite se necessário.
-                          </TooltipContent>
-                        )}
-                      </Tooltip>
-                    ) : (
-                      <span className="block text-center text-[9.5px] italic text-muted-foreground">-</span>
-                    )}
-                  </td>
-                  <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
-                    {r.precoArroba > 0 ? formatMoeda(r.precoArroba) : '-'}
-                  </td>
-                  <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
-                    {r.valorCabeca > 0 ? formatMoeda(r.valorCabeca) : '-'}
-                  </td>
-                  <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
-                    {r.valorTotal > 0 ? formatMoeda(r.valorTotal) : '-'}
+              {avisoSnapshotIncompleto ? (
+                <tr>
+                  <td colSpan={7} className="px-3 py-4 text-center text-[10px] text-muted-foreground">
+                    Mês fechado sem snapshot detalhado. Reabra e salve novamente para consolidar a base oficial.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                rowsExibicao.map((r, i) => (
+                  <tr key={r.codigo} className={`border-b ${i % 2 === 0 ? '' : 'bg-muted/20'}`}>
+                    <td className="px-1.5 py-0.5 text-foreground text-[9.5px] italic whitespace-nowrap bg-primary/10">
+                      {r.nome}
+                    </td>
+                    <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
+                      {r.saldo > 0 ? formatNum(r.saldo, 0) : '-'}
+                    </td>
+                    <td className="px-1.5 py-0.5 text-right tabular-nums italic text-[9.5px]">
+                      {r.saldo > 0 && r.pesoMedio > 0 ? (
+                        tabelaUsaSnapshot ? (
+                          <span className="text-foreground">{formatNum(r.pesoMedio, 2)}</span>
+                        ) : (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className={`cursor-help ${r.origemPeso === 'pastos' ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                {formatNum(r.pesoMedio, 2)}
+                                {r.origemPeso !== 'pastos' && ' *'}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">
+                              Fonte: {ORIGEM_LABEL[r.origemPeso]}
+                            </TooltipContent>
+                          </Tooltip>
+                        )
+                      ) : '-'}
+                    </td>
+                    <td className="px-0.5 py-0.5 w-[60px]">
+                      {tabelaUsaSnapshot ? (
+                        <span className="block text-right text-[9.5px] italic text-foreground tabular-nums px-1">
+                          {r.saldo > 0 && r.precoKg > 0 ? formatNum(r.precoKg, 2) : '-'}
+                        </span>
+                      ) : r.saldo > 0 ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              className={`h-5 text-right !text-[9px] leading-none tabular-nums italic px-1 w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
+                              placeholder="0,00"
+                              value={precosDisplay[r.codigo] !== undefined ? precosDisplay[r.codigo] : fmtKg(r.precoKg)}
+                              onChange={e => handlePrecoChange(r.codigo, e.target.value)}
+                              onBlur={() => handlePrecoBlur(r.codigo)}
+                              disabled={!canEdit}
+                            />
+                          </TooltipTrigger>
+                          {r.isSugerido && (
+                            <TooltipContent side="top" className="text-xs max-w-[200px]">
+                              Preço sugerido pelo mercado. Edite se necessário.
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
+                      ) : (
+                        <span className="block text-center text-[9.5px] italic text-muted-foreground">-</span>
+                      )}
+                    </td>
+                    <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
+                      {r.precoArroba > 0 ? formatMoeda(r.precoArroba) : '-'}
+                    </td>
+                    <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
+                      {r.valorCabeca > 0 ? formatMoeda(r.valorCabeca) : '-'}
+                    </td>
+                    <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
+                      {r.valorTotal > 0 ? formatMoeda(r.valorTotal) : '-'}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
             <tfoot>
               <tr className="border-t-2 bg-primary/25">
                 <td className="px-1.5 py-1 font-bold text-foreground text-[11px] italic bg-primary/30">TOTAL</td>
-                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{formatNum(totalCabecas, 0)}</td>
-                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatNum(pesoMedioGeral, 2)}</td>
+                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{formatNumNullable(metricasTabela.cabecas, 0)}</td>
+                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatNumNullable(metricasTabela.pesoMedio, 2)}</td>
                 <td className="px-1 py-1 text-center text-foreground tabular-nums italic text-[11px] w-[60px]">
-                  {precoMedioKg > 0 ? formatNum(precoMedioKg, 2) : ''}
+                  {formatNumNullable(metricasTabela.precoKg, 2)}
                 </td>
-                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '-'}</td>
-                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatMoeda(valorMedioCabeca)}</td>
-                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{formatMoeda(totalRebanho)}</td>
+                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatMoedaNullable(metricasTabela.precoArroba)}</td>
+                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatMoedaNullable(metricasTabela.valorCabeca)}</td>
+                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{formatMoedaNullable(metricasTabela.valor)}</td>
               </tr>
             </tfoot>
           </table>
 
-          {/* Footer inside table area */}
-          <div className="flex items-center justify-end px-1.5 py-0.5 border-t">
-            <p className="text-[9px] text-muted-foreground">
-              * Peso estimado
-              {isDezembro && ' • Dez = base anual'}
-            </p>
-          </div>
+          {fonteMes === 'live' && (
+            <div className="flex items-center justify-end px-1.5 py-0.5 border-t">
+              <p className="text-[9px] text-muted-foreground">
+                * Peso estimado
+                {isDezembro && ' • Dez = base anual'}
+              </p>
+            </div>
+          )}
 
-          {(temSugestao || temEstimativa || dezembroCompleto) && (
+          {fonteMes === 'live' && (temSugestao || temEstimativa || dezembroCompleto) && (
             <div className="px-1.5 pb-1 space-y-0.5">
               {temSugestao && (
                 <p className="text-[9px] text-amber-600 dark:text-amber-400">
@@ -732,12 +923,10 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           )}
         </div>
 
-        {/* RIGHT — Summary Card + Charts below */}
         <div className="min-w-[200px] flex-1 space-y-1.5">
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-2.5">
               <div className="flex gap-3">
-                {/* LEFT column — main value */}
                 <div className="shrink-0">
                   <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider">
                     Valor do Rebanho — {mesLabel}/{anoFiltro}
@@ -745,27 +934,26 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                   {fazendaNome && (
                     <p className="text-[9px] text-muted-foreground font-medium">{fazendaNome}</p>
                   )}
-                  <p className="text-xl font-extrabold text-foreground leading-tight mt-0.5">{formatMoeda(valorRebanhoExibido)}</p>
+                  <p className="text-xl font-extrabold text-foreground leading-tight mt-0.5">{formatMoedaNullable(valorRebanhoExibido)}</p>
                   <div className="flex flex-col gap-0 mt-0.5">
                     <VariacaoBadge valor={varValorMes} label="vs mês ant." showLabel />
                     <VariacaoBadge valor={varValorAno} label="vs ini. ano" showLabel />
                   </div>
                 </div>
-                {/* RIGHT column — indicators compact */}
+
                 <div className="flex-1 min-w-0 text-[10px] ml-7">
                   <div className="grid grid-cols-[auto_70px_56px_56px] gap-x-2 items-center">
-                    {/* Header */}
                     <span className="text-[8px] text-muted-foreground font-medium">Indicador</span>
                     <span className="text-[8px] text-muted-foreground font-medium text-right">Valor</span>
                     <span className="text-[8px] text-muted-foreground font-medium text-right">vs mês</span>
                     <span className="text-[8px] text-muted-foreground font-medium text-right">vs ano</span>
-                    {/* Rows */}
+
                     {[
-                      { label: 'Cabeças', value: formatNum(totalCabecas, 0), varMes: varCabMes, varAno: varCabAno },
-                      { label: 'Peso médio', value: `${formatNum(pesoMedioGeral, 2)} kg`, varMes: varPesoMes, varAno: varPesoAno },
-                      { label: 'R$/@ médio', value: precoMedioArrobaExibido > 0 ? formatMoeda(precoMedioArrobaExibido) : '—', varMes: varArrobaMes, varAno: varArrobaAno },
-                      { label: 'R$/cab', value: formatMoeda(valorMedioCabecaExibido), varMes: varCabValorMes, varAno: varCabValorAno },
-                      { label: '@s estoque', value: formatNum(totalArrobas, 2), varMes: varArrobasEstoqueMes, varAno: varArrobasEstoqueAno },
+                      { label: 'Cabeças', value: formatNumNullable(totalCabecasExibido, 0), varMes: varCabMes, varAno: varCabAno },
+                      { label: 'Peso médio', value: pesoMedioGeralExibido === null ? '—' : `${formatNum(pesoMedioGeralExibido, 2)} kg`, varMes: varPesoMes, varAno: varPesoAno },
+                      { label: 'R$/@ médio', value: formatMoedaNullable(precoMedioArrobaExibido), varMes: varArrobaMes, varAno: varArrobaAno },
+                      { label: 'R$/cab', value: formatMoedaNullable(valorMedioCabecaExibido), varMes: varCabValorMes, varAno: varCabValorAno },
+                      { label: '@s estoque', value: formatNumNullable(totalArrobasExibido, 2), varMes: varArrobasEstoqueMes, varAno: varArrobasEstoqueAno },
                     ].map(ind => (
                       <React.Fragment key={ind.label}>
                         <span className="text-muted-foreground text-[9px] truncate">{ind.label}</span>
@@ -780,7 +968,6 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             </CardContent>
           </Card>
 
-          {/* Charts — inside right column, below card */}
           <div className="flex gap-3">
             <MiniChart data={chartDataValor} color="hsl(var(--primary))" title="Valor do Rebanho" />
             <MiniChart data={chartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
