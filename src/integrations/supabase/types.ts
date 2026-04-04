@@ -3747,6 +3747,35 @@ export type Database = {
           },
         ]
       }
+      vw_valor_rebanho_auditoria: {
+        Row: {
+          ano_mes: string | null
+          cabecas_final_zoot: number | null
+          cliente_id: string | null
+          fazenda_id: string | null
+          peso_total_kg: number | null
+          peso_total_zoot_kg: number | null
+          preco_arroba_com_peso_zoot: number | null
+          preco_arroba_fechado: number | null
+          valor_total: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "valor_rebanho_fechamento_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "valor_rebanho_fechamento_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vw_zoot_fazenda_mensal: {
         Row: {
           ano: number | null
