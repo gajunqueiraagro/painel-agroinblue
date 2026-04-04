@@ -1,8 +1,12 @@
 /**
- * Painel do Consultor — ferramenta de gestão completa.
+ * Painel do Consultor — PC-100 (modelo oficial de auditoria)
+ *
  * Abas: Valores Mensais | Médios do Mês | Acumulados | Média do Período
  * Cenários: Realizado | Previsto | Comparativo
- * Blocos colapsáveis: Rebanho, Produção, Financeiro no Caixa, Financeiro por Competência
+ * Blocos colapsáveis por aba com indicadores oficiais.
+ *
+ * Regra de fonte: "Fechamento sempre vence."
+ * Formatação: cab=inteiro, med2=2 casas, gmd=3 casas, peso3=3 casas, money=R$
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -22,7 +26,6 @@ import {
   calcAreaProdutivaPecuaria,
   calcSaldoPorCategoriaLegado,
 } from '@/lib/calculos/zootecnicos';
-import { calcArrobasSafe, calcValorTotal } from '@/lib/calculos/economicos';
 import { supabase } from '@/integrations/supabase/client';
 import { isConciliado as isLancConciliado } from '@/lib/statusOperacional';
 import { loadPesosPastosPorCategoria, resolverPesoOficial } from '@/hooks/useFechamentoCategoria';
@@ -57,23 +60,46 @@ interface Props {
   filtroGlobal?: { ano: string; mes: number };
 }
 
-// ─── Indicator row definition ───
-interface IndicatorRow {
-  bloco: string;
+// ─── Row definition ───
+interface Row {
   indicador: string;
   format: PainelFormatType;
-  /** Monthly raw values (12 items) */
-  mensal: number[];
-  /** Monthly average (value / divisor) */
-  medio: number[];
-  /** Accumulated up to month */
-  acumulado: number[];
-  /** Rolling average of the period */
-  mediaPeriodo: number[];
+  valores: number[]; // 12 values
 }
 
-// ─── Build all indicators ───
-function buildIndicators(
+interface Bloco {
+  nome: string;
+  rows: Row[];
+}
+
+// ─── Monthly raw data struct ───
+interface MonthlyData {
+  cabIni: number[];
+  cabFin: number[];
+  entradas: number[];
+  saidas: number[];
+  pesoTotalIni: number[];
+  pesoTotalFin: number[];
+  pesoMedioIni: number[];
+  pesoMedioFin: number[];
+  gmd: number[];
+  arrobasProd: number[];
+  prodKg: number[];
+  areaProd: number;
+  valorRebIni: number[];
+  valorRebFin: number[];
+  entFin: number[];
+  saiFin: number[];
+  recPec: number[];
+  custOper: number[];
+  resCaixa: number[];
+  recPecComp: number[];
+  resOper: number[];
+  ebitda: number[];
+  varValorReb: number[];
+}
+
+function buildMonthlyData(
   lancPec: Lancamento[],
   saldosIniciais: SaldoInicial[],
   lancFin: FinanceiroLancamento[],
@@ -81,10 +107,7 @@ function buildIndicators(
   areaProdutiva: number,
   pesosPorMes: Record<string, Record<string, number>>,
   valorRebanhoMes: number[],
-): IndicatorRow[] {
-  const rows: IndicatorRow[] = [];
-
-  // ═══ Zootécnico helpers ═══
+): MonthlyData {
   const { saldoInicioMes, saldoFinalAno, saldoInicialAno } = calcSaldoMensalAcumulado(saldosIniciais, lancPec, ano);
 
   const saldoFimMes = (m: number): number => {
@@ -107,7 +130,6 @@ function buildIndicators(
     return m === 1 ? saldoInicialAno : (saldoInicioMes[k] ?? 0);
   };
   const cabFinMes = (m: number) => saldoFimMes(m);
-  const cabMediaMes = (m: number) => (cabIniMes(m) + cabFinMes(m)) / 2;
 
   const entradasCabMes = (m: number) => {
     const resumo = calcResumoMovimentacoes(lancPec, `${ano}-${String(m).padStart(2, '0')}`);
@@ -132,32 +154,17 @@ function buildIndicators(
     return total;
   });
 
-  const pesoIniMes = (m: number) => {
+  const pesoIniMesCalc = (m: number) => {
     if (m === 1) return saldosIniciais.filter(s => s.ano === ano).reduce((s, si) => s + si.quantidade * (si.pesoMedioKg || 0), 0);
     return pesoFinKgArr[m - 2] ?? 0;
   };
-  const pesoFinMes = (m: number) => pesoFinKgArr[m - 1] ?? 0;
-  const pesoMedioMes = (m: number) => { const c = cabFinMes(m); return c > 0 ? pesoFinMes(m) / c : 0; };
+  const pesoFinMesCalc = (m: number) => pesoFinKgArr[m - 1] ?? 0;
   const diasNoMes = (m: number): number => new Date(ano, m, 0).getDate();
 
   const entradasKgMes = (m: number) => lancMes(m).filter(l => tiposEntrada.includes(l.tipo)).reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
   const saidasKgMes = (m: number) => lancMes(m).filter(l => tiposSaida.includes(l.tipo)).reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
 
-  const arrobasProduzidasMesFn = (m: number): number => {
-    const pFin = pesoFinMes(m);
-    const pIni = pesoIniMes(m);
-    if (pFin <= 0 || pIni <= 0) return 0;
-    return (pFin - pIni - entradasKgMes(m) + saidasKgMes(m)) / 30;
-  };
-
-  const gmdMesFn = (m: number): number => {
-    const rebMedio = cabMediaMes(m);
-    const dias = diasNoMes(m);
-    if (rebMedio <= 0 || dias <= 0) return 0;
-    return (pesoFinMes(m) - pesoIniMes(m) - entradasKgMes(m) + saidasKgMes(m)) / rebMedio / dias;
-  };
-
-  // ═══ Financeiro helpers ═══
+  // Financeiro helpers
   const concFin = lancFin.filter(l => isFinConciliado(l));
   const finDoAno = concFin.filter(l => datePagtoAno(l) === ano);
   const finDoMes = (m: number) => finDoAno.filter(l => datePagtoMes(l) === m);
@@ -168,144 +175,271 @@ function buildIndicators(
   const deducMes = (m: number) => finDoMes(m).filter(l => isFinSaida(l) && classificarSaida(l) === 'Dedução de Receitas').reduce((s, l) => s + Math.abs(l.valor), 0);
   const desembPecMes = (m: number) => finDoMes(m).filter(l => isFinSaida(l) && classificarSaida(l) === 'Desemb. Produtivo Pec.').reduce((s, l) => s + Math.abs(l.valor), 0);
 
-  // ─── Helper: create a full IndicatorRow from a monthly value function ───
-  const mkRow = (
-    bloco: string,
-    indicador: string,
-    fn: (m: number) => number,
-    format: PainelFormatType = 'padrao',
-    opts?: { acumMode?: 'sum' | 'avg'; medioDiv?: (m: number) => number },
-  ): IndicatorRow => {
-    const mensal = Array.from({ length: 12 }, (_, i) => fn(i + 1));
-    const acumMode = opts?.acumMode ?? 'sum';
+  // Build arrays
+  const mk = (fn: (m: number) => number) => Array.from({ length: 12 }, (_, i) => fn(i + 1));
 
-    // Medio: value / divisor (default = dias do mês for daily, or just the value)
-    const medio = mensal.map((v, i) => {
-      if (opts?.medioDiv) {
-        const d = opts.medioDiv(i + 1);
-        return d > 0 ? v / d : 0;
-      }
-      return v; // for items like GMD, peso medio already IS the average
-    });
+  const cabIni = mk(cabIniMes);
+  const cabFin = mk(cabFinMes);
+  const entradas = mk(entradasCabMes);
+  const saidas = mk(saidasCabMes);
+  const pesoTotalIni = mk(pesoIniMesCalc);
+  const pesoTotalFin = mk(pesoFinMesCalc);
+  const pesoMedioIni = mk(m => { const c = cabIniMes(m); return c > 0 ? pesoIniMesCalc(m) / c : 0; });
+  const pesoMedioFin = mk(m => { const c = cabFinMes(m); return c > 0 ? pesoFinMesCalc(m) / c : 0; });
 
-    // Acumulado
-    const acumulado: number[] = [];
-    if (acumMode === 'sum') {
-      let acc = 0;
-      for (const v of mensal) { acc += v; acumulado.push(acc); }
-    } else {
-      // rolling average
-      let sum = 0, n = 0;
-      for (const v of mensal) {
-        if (v !== 0) { sum += v; n++; }
-        acumulado.push(n > 0 ? sum / n : 0);
-      }
-    }
+  const arrobasProd = mk(m => {
+    const pFin = pesoFinMesCalc(m);
+    const pIni = pesoIniMesCalc(m);
+    if (pFin <= 0 || pIni <= 0) return 0;
+    return (pFin - pIni - entradasKgMes(m) + saidasKgMes(m)) / 30;
+  });
+  const prodKg = arrobasProd.map(v => v * 30);
 
-    // Média do período: rolling average
-    const mediaPeriodo: number[] = [];
-    let mpSum = 0, mpN = 0;
-    for (const v of mensal) {
-      if (v !== 0) { mpSum += v; mpN++; }
-      mediaPeriodo.push(mpN > 0 ? mpSum / mpN : 0);
-    }
+  const gmd = mk(m => {
+    const rebMedio = (cabIniMes(m) + cabFinMes(m)) / 2;
+    const dias = diasNoMes(m);
+    if (rebMedio <= 0 || dias <= 0) return 0;
+    return (pesoFinMesCalc(m) - pesoIniMesCalc(m) - entradasKgMes(m) + saidasKgMes(m)) / rebMedio / dias;
+  });
 
-    return { bloco, indicador, format, mensal, medio, acumulado, mediaPeriodo };
+  const valorRebFin = valorRebanhoMes;
+  const valorRebIni = Array.from({ length: 12 }, (_, i) => i === 0 ? 0 : (valorRebanhoMes[i - 1] || 0));
+
+  const entFinArr = mk(entFinMes);
+  const saiFinArr = mk(saiFinMes);
+  const recPecArr = mk(recPecMes);
+  const custOperArr = mk(desembPecMes);
+  const resCaixaArr = mk(m => entFinMes(m) - saiFinMes(m));
+  const recPecCompArr = mk(recPecMes);
+  const resOperArr = mk(m => recPecMes(m) - deducMes(m) - desembPecMes(m));
+  const ebitdaArr = mk(m => recPecMes(m) - deducMes(m) - desembPecMes(m));
+  const varValorRebArr = mk(m => {
+    const atual = valorRebanhoMes[m - 1] || 0;
+    const anterior = m === 1 ? 0 : (valorRebanhoMes[m - 2] || 0);
+    return atual - anterior;
+  });
+
+  return {
+    cabIni, cabFin, entradas, saidas,
+    pesoTotalIni, pesoTotalFin, pesoMedioIni, pesoMedioFin,
+    gmd, arrobasProd, prodKg, areaProd: areaProdutiva,
+    valorRebIni, valorRebFin,
+    entFin: entFinArr, saiFin: saiFinArr, recPec: recPecArr,
+    custOper: custOperArr, resCaixa: resCaixaArr,
+    recPecComp: recPecCompArr, resOper: resOperArr,
+    ebitda: ebitdaArr, varValorReb: varValorRebArr,
   };
-
-  // ═══════════════════════════════════════════════
-  // BLOCO: REBANHO
-  // ═══════════════════════════════════════════════
-  rows.push(mkRow('Rebanho', 'Rebanho inicial (cab)', cabIniMes, 'cab'));
-  rows.push(mkRow('Rebanho', 'Rebanho final (cab)', cabFinMes, 'cab'));
-  rows.push(mkRow('Rebanho', 'Rebanho médio (cab)', cabMediaMes, 'cab', { acumMode: 'avg' }));
-  rows.push(mkRow('Rebanho', 'Entradas (cab)', entradasCabMes, 'cab'));
-  rows.push(mkRow('Rebanho', 'Saídas (cab)', saidasCabMes, 'cab'));
-
-  // ═══════════════════════════════════════════════
-  // BLOCO: PRODUÇÃO
-  // ═══════════════════════════════════════════════
-  rows.push(mkRow('Produção', 'Área produtiva (ha)', () => areaProdutiva, 'padrao', { acumMode: 'avg' }));
-  rows.push(mkRow('Produção', 'Arrobas produzidas (@)', arrobasProduzidasMesFn, 'padrao'));
-  rows.push(mkRow('Produção', 'Arrobas por hectare (@/ha)', m => areaProdutiva > 0 ? arrobasProduzidasMesFn(m) / areaProdutiva : 0, 'padrao'));
-  rows.push(mkRow('Produção', 'GMD (kg/cab/dia)', gmdMesFn, 'gmd', { acumMode: 'avg' }));
-  rows.push(mkRow('Produção', 'Peso médio final (kg/cab)', pesoMedioMes, 'padrao', { acumMode: 'avg' }));
-  rows.push(mkRow('Produção', 'Produção total (kg)', m => arrobasProduzidasMesFn(m) * 30, 'padrao'));
-
-  // ═══════════════════════════════════════════════
-  // BLOCO: FINANCEIRO NO CAIXA
-  // ═══════════════════════════════════════════════
-  rows.push(mkRow('Financeiro no Caixa', 'Entradas financeiras (R$)', entFinMes, 'money'));
-  rows.push(mkRow('Financeiro no Caixa', 'Saídas financeiras (R$)', saiFinMes, 'money'));
-  rows.push(mkRow('Financeiro no Caixa', 'Receitas pecuárias (R$)', recPecMes, 'money'));
-  rows.push(mkRow('Financeiro no Caixa', 'Custos operacionais (R$)', desembPecMes, 'money'));
-  rows.push(mkRow('Financeiro no Caixa', 'Resultado de caixa (R$)', m => entFinMes(m) - saiFinMes(m), 'money'));
-
-  // ═══════════════════════════════════════════════
-  // BLOCO: FINANCEIRO POR COMPETÊNCIA
-  // ═══════════════════════════════════════════════
-  rows.push(mkRow('Financeiro por Competência', 'Receita pecuária (R$)', recPecMes, 'money'));
-  rows.push(mkRow('Financeiro por Competência', 'Variação valor rebanho (R$)', m => {
-    const vrAtual = valorRebanhoMes[m - 1] || 0;
-    const vrAnterior = m === 1 ? 0 : (valorRebanhoMes[m - 2] || 0);
-    return vrAtual - vrAnterior;
-  }, 'money'));
-  rows.push(mkRow('Financeiro por Competência', 'Resultado operacional (R$)', m => {
-    return recPecMes(m) - deducMes(m) - desembPecMes(m);
-  }, 'money'));
-  rows.push(mkRow('Financeiro por Competência', 'Margem (R$)', m => {
-    const arrProd = arrobasProduzidasMesFn(m);
-    if (arrProd <= 0) return 0;
-    return (recPecMes(m) - desembPecMes(m)) / arrProd;
-  }, 'money'));
-  rows.push(mkRow('Financeiro por Competência', 'EBITDA (R$)', m => {
-    return recPecMes(m) - deducMes(m) - desembPecMes(m);
-  }, 'money'));
-
-  return rows;
 }
 
-// ─── View data selector ───
-function getViewData(row: IndicatorRow, view: ViewTab): number[] {
-  switch (view) {
-    case 'mensal': return row.mensal;
-    case 'medio': return row.medio;
-    case 'acumulado': return row.acumulado;
-    case 'media_periodo': return row.mediaPeriodo;
+// ─── Build blocks for each tab ───
+function cumSum(arr: number[]): number[] {
+  const r: number[] = [];
+  let acc = 0;
+  for (const v of arr) { acc += v; r.push(acc); }
+  return r;
+}
+function rollingAvg(arr: number[]): number[] {
+  const r: number[] = [];
+  let sum = 0, n = 0;
+  for (const v of arr) { sum += v; n++; r.push(n > 0 ? sum / n : 0); }
+  return r;
+}
+
+function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
+  const r = (indicador: string, format: PainelFormatType, raw: number[]): Row => {
+    let valores: number[];
+    switch (tab) {
+      case 'mensal': valores = raw; break;
+      case 'medio': valores = raw; break;
+      case 'acumulado': valores = cumSum(raw); break;
+      case 'media_periodo': valores = rollingAvg(raw); break;
+    }
+    return { indicador, format, valores };
+  };
+
+  const cabMedia = d.cabIni.map((v, i) => (v + d.cabFin[i]) / 2);
+  const uaMedia = cabMedia.map((v, i) => {
+    const pm = d.pesoMedioFin[i];
+    return pm > 0 ? (v * pm) / 450 : 0;
+  });
+  const lotUaHa = uaMedia.map(v => d.areaProd > 0 ? v / d.areaProd : 0);
+  const arrHa = d.arrobasProd.map(v => d.areaProd > 0 ? v / d.areaProd : 0);
+  const desfruteCab = d.saidas;
+  const desfrute_arr = d.saidas.map((v, i) => {
+    const pm = d.pesoMedioFin[i];
+    return pm > 0 ? (v * pm) / 30 : 0;
+  });
+  const valorPorCab = d.valorRebFin.map((v, i) => {
+    const c = d.cabFin[i];
+    return c > 0 ? v / c : 0;
+  });
+  const valorPorArr = d.valorRebFin.map((v, i) => {
+    const pf = d.pesoTotalFin[i];
+    return pf > 0 ? v / (pf / 30) : 0;
+  });
+
+  switch (tab) {
+    case 'mensal':
+      return [
+        {
+          nome: 'Rebanho',
+          rows: [
+            r('Rebanho inicial (cab)', 'cab', d.cabIni),
+            r('Rebanho final (cab)', 'cab', d.cabFin),
+            r('Entradas no mês (cab)', 'cab', d.entradas),
+            r('Saídas no mês (cab)', 'cab', d.saidas),
+          ],
+        },
+        {
+          nome: 'Peso',
+          rows: [
+            r('Peso total inicial (kg)', 'peso3', d.pesoTotalIni),
+            r('Peso total final (kg)', 'peso3', d.pesoTotalFin),
+            r('Peso total inicial (@)', 'peso3', d.pesoTotalIni.map(v => v / 30)),
+            r('Peso total final (@)', 'peso3', d.pesoTotalFin.map(v => v / 30)),
+            r('Peso médio inicial (kg/cab)', 'med2', d.pesoMedioIni),
+            r('Peso médio final (kg/cab)', 'med2', d.pesoMedioFin),
+          ],
+        },
+        {
+          nome: 'Valor do Rebanho',
+          rows: [
+            r('Valor do rebanho inicial', 'money', d.valorRebIni),
+            r('Valor do rebanho final', 'money', d.valorRebFin),
+            r('Valor por cabeça final', 'money', valorPorCab),
+            r('Valor por arroba final', 'money', valorPorArr),
+          ],
+        },
+      ];
+    case 'medio':
+      return [
+        {
+          nome: 'Desempenho',
+          rows: [
+            r('GMD do mês (kg/cab/dia)', 'gmd', d.gmd),
+            r('Peso médio do rebanho (kg/cab)', 'med2', d.pesoMedioFin),
+            r('UA média do mês', 'med2', uaMedia),
+            r('Lotação média (UA/ha)', 'med2', lotUaHa),
+          ],
+        },
+        {
+          nome: 'Produção',
+          rows: [
+            r('Arrobas produzidas no mês', 'peso3', d.arrobasProd),
+            r('Produção em kg no mês', 'peso3', d.prodKg),
+            r('Arrobas por hectare no mês', 'med2', arrHa),
+            r('Desfrute no mês (cab)', 'cab', desfruteCab),
+            r('Desfrute no mês (@)', 'peso3', desfrute_arr),
+          ],
+        },
+        {
+          nome: 'Estrutura',
+          rows: [
+            r('Área produtiva média (ha)', 'med2', Array(12).fill(d.areaProd)),
+            r('Rebanho médio do mês (cab)', 'cab', cabMedia.map(Math.round)),
+          ],
+        },
+      ];
+    case 'acumulado':
+      return [
+        {
+          nome: 'Rebanho',
+          rows: [
+            r('Entradas acumuladas (cab)', 'cab', d.entradas),
+            r('Saídas acumuladas (cab)', 'cab', d.saidas),
+            r('Saldo acumulado do rebanho', 'cab', d.entradas.map((v, i) => v - d.saidas[i])),
+          ],
+        },
+        {
+          nome: 'Produção',
+          rows: [
+            r('Arrobas produzidas acum.', 'peso3', d.arrobasProd),
+            r('Produção em kg acum.', 'peso3', d.prodKg),
+            r('Arrobas/ha acum.', 'med2', arrHa),
+            r('Desfrute acum. (cab)', 'cab', desfruteCab),
+            r('Desfrute acum. (@)', 'peso3', desfrute_arr),
+          ],
+        },
+        {
+          nome: 'Financeiro no Caixa',
+          rows: [
+            r('Entradas financeiras acum.', 'money', d.entFin),
+            r('Saídas financeiras acum.', 'money', d.saiFin),
+            r('Receitas pecuárias acum.', 'money', d.recPec),
+            r('Resultado caixa acum.', 'money', d.resCaixa),
+          ],
+        },
+        {
+          nome: 'Financeiro por Competência',
+          rows: [
+            r('Receita pecuária acum.', 'money', d.recPecComp),
+            r('Resultado operacional acum.', 'money', d.resOper),
+            r('EBITDA acum.', 'money', d.ebitda),
+            r('Variação valor rebanho acum.', 'money', d.varValorReb),
+          ],
+        },
+      ];
+    case 'media_periodo':
+      return [
+        {
+          nome: 'Desempenho Médio',
+          rows: [
+            r('GMD médio do período', 'gmd', d.gmd),
+            r('Peso médio do período', 'med2', d.pesoMedioFin),
+            r('UA média do período', 'med2', uaMedia),
+            r('Lotação média do período', 'med2', lotUaHa),
+          ],
+        },
+        {
+          nome: 'Produção Média',
+          rows: [
+            r('Arrobas/ha média do período', 'med2', arrHa),
+            r('Produção média mensal (@)', 'peso3', d.arrobasProd),
+            r('Produção média mensal (kg)', 'peso3', d.prodKg),
+            r('Desfrute médio do período', 'cab', desfruteCab),
+          ],
+        },
+        {
+          nome: 'Financeiro Médio',
+          rows: [
+            r('Receita média mensal', 'money', d.recPec),
+            r('Resultado oper. médio mensal', 'money', d.resOper),
+            r('EBITDA médio mensal', 'money', d.ebitda),
+            r('Resultado caixa médio mensal', 'money', d.resCaixa),
+          ],
+        },
+      ];
   }
 }
 
+// ─── Total logic ───
+function totalForRow(row: Row, tab: ViewTab): number {
+  if (tab === 'acumulado' || tab === 'media_periodo') {
+    // last non-zero or last value
+    return row.valores[11] ?? 0;
+  }
+  return row.valores.reduce((a, b) => a + b, 0);
+}
+
 // ─── Export ───
-function exportToExcel(
-  indicators: IndicatorRow[],
-  ano: number,
-  fazendaNome: string,
-  view: ViewTab,
-) {
-  const mesesHeaders = [...MESES_LABELS, 'Total'];
+function exportToExcel(blocos: Bloco[], ano: number, fazendaNome: string, tab: ViewTab) {
   const filename = `Painel_Consultor_${fazendaNome.replace(/\s+/g, '_')}_${ano}.xlsx`;
-
-  const sheetRows = indicators.map(row => {
-    const vals = getViewData(row, view);
-    const base: Record<string, string | number> = {
-      Bloco: row.bloco,
-      Indicador: row.indicador,
-    };
-    MESES_LABELS.forEach((mes, i) => { base[mes] = vals[i] ?? 0; });
-    base['Total'] = vals.reduce((a, b) => a + b, 0);
-    return base;
-  });
-
-  const cols = [{ wch: 24 }, { wch: 30 }, ...mesesHeaders.map(() => ({ wch: 14 }))];
-
-  triggerXlsxDownload({
-    filename,
-    sheets: [{ name: 'Painel', rows: sheetRows, cols }],
-  });
+  const sheetRows = blocos.flatMap(b =>
+    b.rows.map(row => {
+      const base: Record<string, string | number> = {
+        Bloco: b.nome,
+        Indicador: row.indicador,
+      };
+      MESES_LABELS.forEach((mes, i) => { base[mes] = row.valores[i] ?? 0; });
+      base['Total'] = totalForRow(row, tab);
+      return base;
+    }),
+  );
+  const cols = [{ wch: 24 }, { wch: 30 }, ...Array(13).fill(null).map(() => ({ wch: 14 }))];
+  triggerXlsxDownload({ filename, sheets: [{ name: 'Painel', rows: sheetRows, cols }] });
 }
 
 // ─── Component ───
-
 export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { pastos, categorias } = usePastos();
@@ -318,12 +452,7 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
   const [cenario, setCenario] = useState<Cenario>('realizado');
   const [pesosPorMes, setPesosPorMes] = useState<Record<string, Record<string, number>>>({});
   const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(Array(12).fill(0));
-  const [openBlocos, setOpenBlocos] = useState<Record<string, boolean>>({
-    'Rebanho': true,
-    'Produção': false,
-    'Financeiro no Caixa': false,
-    'Financeiro por Competência': false,
-  });
+  const [openBlocos, setOpenBlocos] = useState<Record<string, boolean>>({});
 
   const anoNum = Number(ano);
   const anosDisponiveis = useMemo(() => {
@@ -336,12 +465,9 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
 
   const fazendaId = fazendaAtual?.id;
 
-  // Load peso data from fechamento_pastos
+  // Load peso data
   useEffect(() => {
-    if (!fazendaId || fazendaId === '__global__' || categorias.length === 0) {
-      setPesosPorMes({});
-      return;
-    }
+    if (!fazendaId || fazendaId === '__global__' || categorias.length === 0) { setPesosPorMes({}); return; }
     (async () => {
       const result: Record<string, Record<string, number>> = {};
       for (let m = 1; m <= 12; m++) {
@@ -358,19 +484,14 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
     (async () => {
       const meses = Array.from({ length: 12 }, (_, i) => `${anoNum}-${String(i + 1).padStart(2, '0')}`);
       const fazendaIds = fazendaId === '__global__'
-        ? fazendas.filter(f => f.tem_pecuaria !== false).map(f => f.id)
-        : [fazendaId];
-
+        ? fazendas.filter(f => f.tem_pecuaria !== false).map(f => f.id) : [fazendaId];
       if (fazendaIds.length === 0) { setValorRebanhoMes(Array(12).fill(0)); return; }
-
       const { data, error } = await supabase
         .from('valor_rebanho_fechamento')
         .select('ano_mes, valor_total')
         .in('fazenda_id', fazendaIds)
         .in('ano_mes', meses);
-
       if (error) { setValorRebanhoMes(Array(12).fill(0)); return; }
-
       const totais = new Map(meses.map(mes => [mes, 0]));
       (data || []).forEach(row => {
         totais.set(row.ano_mes, (totais.get(row.ano_mes) || 0) + (Number(row.valor_total) || 0));
@@ -381,34 +502,34 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
 
   const areaProdutiva = useMemo(() => calcAreaProdutivaPecuaria(pastos), [pastos]);
 
-  const indicators = useMemo(() =>
-    buildIndicators(lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes),
+  const monthlyData = useMemo(() =>
+    buildMonthlyData(lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes),
     [lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes],
   );
+
+  const blocos = useMemo(() => buildBlocosForTab(monthlyData, viewTab), [monthlyData, viewTab]);
+
+  // Default first block open
+  useEffect(() => {
+    if (blocos.length > 0) {
+      setOpenBlocos(prev => {
+        const next: Record<string, boolean> = {};
+        blocos.forEach((b, i) => {
+          next[b.nome] = prev[b.nome] !== undefined ? prev[b.nome] : i === 0;
+        });
+        return next;
+      });
+    }
+  }, [blocos]);
 
   const fazendaNome = isGlobal ? 'Global' : (fazendaAtual?.nome || 'Fazenda');
 
   const handleExport = useCallback(() => {
-    try {
-      exportToExcel(indicators, anoNum, fazendaNome, viewTab);
-    } catch {
-      toast.error('Não foi possível exportar.');
-    }
-  }, [indicators, anoNum, fazendaNome, viewTab]);
+    try { exportToExcel(blocos, anoNum, fazendaNome, viewTab); }
+    catch { toast.error('Não foi possível exportar.'); }
+  }, [blocos, anoNum, fazendaNome, viewTab]);
 
-  const toggleBloco = (bloco: string) => {
-    setOpenBlocos(prev => ({ ...prev, [bloco]: !prev[bloco] }));
-  };
-
-  // Group indicators by bloco
-  const blocos = useMemo(() => {
-    const map = new Map<string, IndicatorRow[]>();
-    indicators.forEach(row => {
-      if (!map.has(row.bloco)) map.set(row.bloco, []);
-      map.get(row.bloco)!.push(row);
-    });
-    return Array.from(map.entries());
-  }, [indicators]);
+  const toggleBloco = (nome: string) => setOpenBlocos(prev => ({ ...prev, [nome]: !prev[nome] }));
 
   const VIEW_TABS: { id: ViewTab; label: string }[] = [
     { id: 'mensal', label: 'Valores Mensais' },
@@ -417,65 +538,60 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
     { id: 'media_periodo', label: 'Média do Período' },
   ];
 
-  const renderBlocoTable = (blocoRows: IndicatorRow[]) => {
-    return (
-      <div className="overflow-x-auto border rounded border-border/40">
-        <table className="w-full text-[10px] border-collapse" style={{ tableLayout: 'fixed' }}>
-          <colgroup>
-            <col style={{ width: '180px' }} />
-            {MESES_LABELS.map((_, i) => <col key={i} />)}
-            <col />
-          </colgroup>
-          <thead className="sticky top-0 z-10">
-            <tr className="bg-muted border-b">
-              <th className="sticky left-0 z-20 bg-muted text-left text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5">Indicador</th>
-              {MESES_LABELS.map(m => (
-                <th key={m} className="text-right text-[9px] font-semibold uppercase tracking-wider px-0.5 py-0.5">{m}</th>
-              ))}
-              <th className="text-right text-[9px] font-bold uppercase tracking-wider px-0.5 py-0.5">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {blocoRows.map((row, idx) => {
-              const vals = getViewData(row, viewTab);
-              const total = viewTab === 'mensal' || viewTab === 'acumulado'
-                ? vals.reduce((a, b) => a + b, 0)
-                : vals[ateMes - 1] || 0;
-
-              return (
-                <tr key={idx} className={`border-b border-border/20 hover:bg-muted/20 ${idx % 2 !== 0 ? 'bg-muted/10' : ''}`}>
-                  <td className="sticky left-0 z-10 bg-card text-[10px] font-medium py-0.5 px-1.5 leading-tight truncate">
-                    {row.indicador}
-                  </td>
-                  {vals.map((v, i) => {
-                    // Comparativo: color coding
-                    let colorClass = '';
-                    if (cenario === 'comparativo') {
-                      if (v > 0) colorClass = 'text-emerald-600';
-                      else if (v < 0) colorClass = 'text-red-500';
-                    }
-                    return (
-                      <td key={i} className={`text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px] ${colorClass}`}>
-                        {formatPainel(v, row.format)}
-                      </td>
-                    );
-                  })}
-                  <td className="text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px] font-bold">
-                    {formatPainel(viewTab === 'mensal' ? vals.reduce((a, b) => a + b, 0) : vals[ateMes - 1] || 0, row.format)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
+  // ─── Table render ───
+  const renderBlocoTable = (blocoRows: Row[]) => (
+    <div className="overflow-x-auto border rounded border-border/40">
+      <table className="w-full text-[10px] border-collapse" style={{ tableLayout: 'fixed' }}>
+        <colgroup>
+          <col style={{ width: '160px', minWidth: '160px' }} />
+          {MESES_LABELS.map((_, i) => <col key={i} style={{ minWidth: '52px' }} />)}
+          <col style={{ minWidth: '60px' }} />
+        </colgroup>
+        <thead className="sticky top-0 z-10">
+          <tr className="bg-muted border-b">
+            <th className="sticky left-0 z-20 bg-muted text-left text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border-r border-border/30">Indicador</th>
+            {MESES_LABELS.map(m => (
+              <th key={m} className="text-right text-[9px] font-semibold uppercase tracking-wider px-0.5 py-0.5">{m}</th>
+            ))}
+            <th className="text-right text-[9px] font-bold uppercase tracking-wider px-0.5 py-0.5 border-l border-border/30">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {blocoRows.map((row, idx) => {
+            const tot = totalForRow(row, viewTab);
+            return (
+              <tr key={idx} className={`border-b border-border/20 hover:bg-muted/20 ${idx % 2 !== 0 ? 'bg-muted/10' : ''}`}>
+                <td className="sticky left-0 z-10 bg-card text-[10px] font-medium py-0.5 px-1.5 leading-tight truncate border-r border-border/20">
+                  {row.indicador}
+                </td>
+                {row.valores.map((v, i) => {
+                  let colorClass = '';
+                  if (cenario === 'comparativo') {
+                    if (v > 0) colorClass = 'text-emerald-600';
+                    else if (v < 0) colorClass = 'text-red-500';
+                  }
+                  return (
+                    <td key={i} className={`text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px] ${colorClass}`}>
+                      {formatPainel(v, row.format)}
+                    </td>
+                  );
+                })}
+                <td className="text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px] font-bold border-l border-border/20">
+                  {formatPainel(tot, row.format)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 
   return (
-    <div className="max-w-full mx-auto animate-fade-in pb-16">
-      <div className="px-2 pt-2 space-y-1.5">
-        {/* ── Toolbar ── */}
+    <div className="max-w-full mx-auto animate-fade-in pb-16 flex flex-col h-full">
+      {/* ── Sticky toolbar + tabs ── */}
+      <div className="sticky top-0 z-30 bg-background border-b border-border/40 px-2 pt-2 pb-0 space-y-1">
+        {/* Toolbar */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <Button variant="ghost" size="icon" onClick={onBack} className="h-7 w-7">
             <ArrowLeft className="h-4 w-4" />
@@ -533,8 +649,8 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
           </div>
         </div>
 
-        {/* ── View tabs ── */}
-        <div className="flex gap-0 overflow-x-auto border-b border-border/40">
+        {/* View tabs */}
+        <div className="flex gap-0 overflow-x-auto">
           {VIEW_TABS.map(t => (
             <button
               key={t.id}
@@ -549,25 +665,25 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
             </button>
           ))}
         </div>
+      </div>
 
-        {/* ── Collapsible blocks ── */}
-        <div className="space-y-1 mt-1">
-          {blocos.map(([blocoName, blocoRows]) => (
-            <Collapsible
-              key={blocoName}
-              open={openBlocos[blocoName] ?? false}
-              onOpenChange={() => toggleBloco(blocoName)}
-            >
-              <CollapsibleTrigger className="flex items-center justify-between w-full px-2 py-1 bg-muted/60 rounded text-[11px] font-bold text-primary uppercase tracking-wider hover:bg-muted transition-colors">
-                <span>{blocoName}</span>
-                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${openBlocos[blocoName] ? 'rotate-180' : ''}`} />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-0.5">
-                {renderBlocoTable(blocoRows)}
-              </CollapsibleContent>
-            </Collapsible>
-          ))}
-        </div>
+      {/* ── Content: collapsible blocks ── */}
+      <div className="px-2 space-y-1 mt-1 flex-1 overflow-auto">
+        {blocos.map(b => (
+          <Collapsible
+            key={b.nome}
+            open={openBlocos[b.nome] ?? false}
+            onOpenChange={() => toggleBloco(b.nome)}
+          >
+            <CollapsibleTrigger className="flex items-center justify-between w-full px-2 py-1 bg-muted/60 rounded text-[11px] font-bold text-primary uppercase tracking-wider hover:bg-muted transition-colors">
+              <span>{b.nome}</span>
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${openBlocos[b.nome] ? 'rotate-180' : ''}`} />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-0.5">
+              {renderBlocoTable(b.rows)}
+            </CollapsibleContent>
+          </Collapsible>
+        ))}
       </div>
     </div>
   );
