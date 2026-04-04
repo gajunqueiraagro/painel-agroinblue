@@ -285,8 +285,8 @@ export function FechamentoPastoDialog({
               </Select>
             </div>
             <div className="flex-1 min-w-0">
-              <Label className="text-[9px] text-white/50 leading-none">Obs.</Label>
-              <Input value={observacaoMes} onChange={e => setObservacaoMes(e.target.value)} disabled={isFechado} placeholder="Observação..." className="h-6 text-[11px] px-2 bg-white/10 border-white/15 text-white placeholder:text-white/30" />
+              <Label className="text-[10px] text-white/50 leading-none">Obs.</Label>
+              <Input value={observacaoMes} onChange={e => setObservacaoMes(e.target.value)} disabled={isFechado} placeholder="Observação..." className="h-7 text-xs px-2 bg-white/10 border-white/15 text-white placeholder:text-white/30" />
             </div>
           </div>
 
