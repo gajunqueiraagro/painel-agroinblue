@@ -377,7 +377,9 @@ export function useStatusZootecnico(
       };
     }
 
-    // ── 1. Conciliação do Financeiro (determinístico) ──
+    // ── Compute all statuses first, then build in STANDARD ORDER ──
+
+    // Financeiro
     const finFechArr = finFechamentoStatus === 'fechado'
       ? [{ status_fechamento: 'fechado' }]
       : finFechamentoStatus === 'parcial'
@@ -394,14 +396,12 @@ export function useStatusZootecnico(
     else if (statusFin === 'parcial') descFin = 'Parcialmente realizado';
     else if (finTemLancamentos) descFin = 'Pendente de conciliação';
     else descFin = 'Sem lançamentos no período';
-    pendencias.push({ id: 'financeiro', label: 'Conciliação do Financeiro', descricao: descFin, status: statusFin, resolverTab: 'fin_caixa' });
 
-    // ── 3. Conciliação de Categorias (via calcStatusCategorias — fonte única) ──
+    // Categorias
     const statusCats: StatusItem = categoriasStatusResult.status;
     const descCats = categoriasStatusResult.descricao;
-    pendencias.push({ id: 'categorias', label: 'Conciliação de Categorias', descricao: descCats, status: statusCats, resolverTab: 'fechamento' });
 
-    // ── 2. Fechamento de Pastos (depende de categorias) ──
+    // Pastos
     const fazendasComPastos = pastosPorFazenda.filter(f => f.totalPastos > 0);
     const totalPastosGeral = fazendasComPastos.reduce((s, f) => s + f.totalPastos, 0);
     const totalFechados = fazendasComPastos.reduce((s, f) => s + f.fechados, 0);
@@ -438,10 +438,8 @@ export function useStatusZootecnico(
         descPastos = parts.length ? parts.join(' · ') : 'Sem fechamento no período';
       }
     }
-    // Insert at position 1 (after financeiro)
-    pendencias.splice(1, 0, { id: 'pastos', label: 'Fechamento de Pastos', descricao: descPastos, status: statusPastosCalc, resolverTab: 'fechamento' });
 
-    // ── 4. Valor do Rebanho ──
+    // Valor do Rebanho
     const statusValorCalc: StatusItem = calcStatusValor({
       precosDefinidos,
       categoriasComSaldo,
@@ -450,7 +448,16 @@ export function useStatusZootecnico(
     if (statusValorCalc === 'aberto') descValor = 'Nenhum preço definido';
     else if (statusValorCalc === 'parcial') descValor = `${precosDefinidos}/${categoriasComSaldo} categorias com preço`;
     else descValor = 'Preços completos';
+
+    /**
+     * ORDEM OFICIAL DOS PILARES (padronizada em todas as telas):
+     *   1. Pastos  2. Rebanho conciliado  3. Valor do rebanho
+     *   4. Financeiro caixa (INFORMATIVO)  5. Resultado final (DERIVADO)
+     */
+    pendencias.push({ id: 'pastos', label: 'Fechamento de Pastos', descricao: descPastos, status: statusPastosCalc, resolverTab: 'fechamento' });
+    pendencias.push({ id: 'categorias', label: 'Conciliação de Categorias', descricao: descCats, status: statusCats, resolverTab: 'fechamento' });
     pendencias.push({ id: 'valor', label: 'Valor do Rebanho', descricao: descValor, status: statusValorCalc, resolverTab: 'valor_rebanho' });
+    pendencias.push({ id: 'financeiro', label: 'Conciliação do Financeiro', descricao: descFin, status: statusFin, resolverTab: 'fin_caixa' });
 
     // ── 5. Econômico (DERIVADO dos pilares operacionais — reflete a base, não decide) ──
     // Econômico = síntese de Pastos + Categorias + Valor. Não inclui Financeiro.
