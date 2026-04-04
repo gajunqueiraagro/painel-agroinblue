@@ -20,7 +20,8 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/comp
 import { ArrowLeft, Download, ChevronDown, Info } from 'lucide-react';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useLancamentos } from '@/hooks/useLancamentos';
-import { useStatusPilares, BLOCO_PILAR_MAP, getPilarBadgeConfig, getPilarTooltipText } from '@/hooks/useStatusPilares';
+import { useStatusPilares, BLOCO_PILAR_MAP, getPilarBadgeConfig, getPilarTooltipText, type StatusPilares as StatusPilaresType } from '@/hooks/useStatusPilares';
+import { DivergenciaP1Dialog } from '@/components/DivergenciaP1Dialog';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import { usePastos } from '@/hooks/usePastos';
 import { useZootMensal, indexByMes, type ZootMensal } from '@/hooks/useZootMensal';
@@ -59,6 +60,7 @@ type Cenario = 'realizado' | 'previsto';
 
 interface Props {
   onBack: () => void;
+  onTabChange?: (tab: string) => void;
   filtroGlobal?: { ano: string; mes: number };
 }
 
@@ -692,7 +694,7 @@ function SourceInfoTooltip({ indicadorId, cenario }: { indicadorId?: string; cen
 }
 
 // ─── Component ───
-export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
+export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { pastos, categorias } = usePastos();
   const { lancamentos: lancPec, saldosIniciais } = useLancamentos();
@@ -704,6 +706,7 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
   const [pesosPorMes, setPesosPorMes] = useState<Record<string, Record<string, number>>>({});
   const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(Array(12).fill(0));
   const [openBlocos, setOpenBlocos] = useState<Record<string, boolean>>({});
+  const [showDivP1, setShowDivP1] = useState(false);
 
   const anoNum = Number(ano);
   const anosDisponiveis = useMemo(() => {
@@ -1006,10 +1009,14 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
                     const pilarInfo = statusPilares[pilarKey];
                     const badge = getPilarBadgeConfig(pilarInfo.status);
                     const tooltipText = getPilarTooltipText(pilarKey, pilarInfo);
+                    const isP1Bloqueado = pilarKey === 'p1_mapa_pastos' && pilarInfo.status === 'bloqueado';
                     return (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <span className={`inline-flex items-center text-[8px] font-semibold px-1.5 py-0 rounded-full border leading-relaxed normal-case tracking-normal cursor-help ${badge.className}`}>
+                          <span
+                            className={`inline-flex items-center text-[8px] font-semibold px-1.5 py-0 rounded-full border leading-relaxed normal-case tracking-normal ${isP1Bloqueado ? 'cursor-pointer' : 'cursor-help'} ${badge.className}`}
+                            onClick={isP1Bloqueado ? (e) => { e.stopPropagation(); setShowDivP1(true); } : undefined}
+                          >
                             {badge.label}
                             {(pilarInfo.modo_transitorio || pilarInfo.status === 'bloqueado') && (
                               <Info className="h-2.5 w-2.5 ml-0.5 opacity-60" />
@@ -1019,6 +1026,7 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
                         {tooltipText && (
                           <TooltipContent side="top" className="text-[10px] max-w-[220px]">
                             {tooltipText}
+                            {isP1Bloqueado && <span className="block mt-0.5 opacity-70">Clique para ver detalhes</span>}
                           </TooltipContent>
                         )}
                       </Tooltip>
@@ -1034,6 +1042,17 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
           ))}
         </div>
       </div>
+
+      {/* Modal de divergência P1 */}
+      <DivergenciaP1Dialog
+        open={showDivP1}
+        onOpenChange={setShowDivP1}
+        divergencias={
+          ((statusPilares.p1_mapa_pastos.detalhe as Record<string, unknown> | undefined)?.divergencias as Array<{categoria: string; saldo_sistema: number; saldo_pastos: number; diferenca: number}>) || []
+        }
+        onIrMovimentacoes={onTabChange ? () => { setShowDivP1(false); onTabChange('lancamentos'); } : undefined}
+        onIrMapaPastos={onTabChange ? () => { setShowDivP1(false); onTabChange('mapa_pastos'); } : undefined}
+      />
     </TooltipProvider>
   );
 }
