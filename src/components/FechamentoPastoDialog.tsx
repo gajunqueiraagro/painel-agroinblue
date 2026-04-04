@@ -201,71 +201,7 @@ export function FechamentoPastoDialog({
     : true;
   const tipoUsoLabel = TIPOS_USO_OPTIONS.find(t => t.value === tipoUsoMes)?.label || tipoUsoMes;
 
-  // ── Card de categoria com estado local para peso ──
-  const CategoriaCard = ({ c, idx, tabBase }: { c: CategoriaRebanho; idx: number; tabBase: number }) => {
-    const item = getItem(c.id);
-    const pesoNum = item?.peso_medio_kg;
-
-    const [pesoLocal, setPesoLocal] = useState(() =>
-      pesoNum != null && pesoNum !== 0 ? pesoNum.toFixed(2).replace('.', ',') : ''
-    );
-    const [pesoFocused, setPesoFocused] = useState(false);
-
-    // Sync from external changes (e.g. "Copiar anterior") only when not focused
-    useEffect(() => {
-      if (!pesoFocused) {
-        setPesoLocal(pesoNum != null && pesoNum !== 0 ? pesoNum.toFixed(2).replace('.', ',') : '');
-      }
-    }, [pesoNum, pesoFocused]);
-
-    return (
-      <div className="flex flex-col items-center gap-1" style={{ minWidth: '62px' }}>
-        <span className="text-[11px] font-semibold text-foreground whitespace-nowrap mb-0.5">{c.nome}</span>
-        <div className="relative">
-          <Input
-            type="number" inputMode="numeric" min={0}
-            tabIndex={tabBase + idx * 2}
-            value={item?.quantidade || ''}
-            onChange={e => updateItem(c.id, 'quantidade', Number(e.target.value) || 0)}
-            disabled={isFechado}
-            className="h-8 text-xs font-bold px-1.5 text-center tabular-nums w-[58px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            placeholder="0"
-          />
-          {item?.origem_dado === 'copiado_mes_anterior' && (
-            <Badge variant="secondary" className="absolute -top-1.5 -right-1.5 text-[6px] h-3 px-0.5 leading-none">Cop</Badge>
-          )}
-        </div>
-        <Input
-          type="text" inputMode="decimal"
-          tabIndex={tabBase + idx * 2 + 1}
-          value={pesoLocal}
-          onChange={e => setPesoLocal(e.target.value)}
-          onFocus={() => setPesoFocused(true)}
-          onBlur={() => {
-            setPesoFocused(false);
-            const raw = pesoLocal.replace(',', '.');
-            if (raw === '' || raw.trim() === '') {
-              updateItem(c.id, 'peso_medio_kg', null);
-              setPesoLocal('');
-            } else {
-              const parsed = parseFloat(raw);
-              if (!isNaN(parsed)) {
-                const valorFinal = Math.round(parsed * 100) / 100;
-                updateItem(c.id, 'peso_medio_kg', valorFinal);
-                setPesoLocal(valorFinal.toFixed(2).replace('.', ','));
-              } else {
-                updateItem(c.id, 'peso_medio_kg', null);
-                setPesoLocal('');
-              }
-            }
-          }}
-          disabled={isFechado}
-          className="h-8 text-xs px-1.5 text-center tabular-nums w-[58px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-          placeholder="kg"
-        />
-      </div>
-    );
-  };
+  // CategoriaCard is defined outside the component to avoid re-mount on parent re-render
 
   // ── Render de um grupo (machos ou fêmeas) ──
   const renderGrupo = (label: string, cats: CategoriaRebanho[], colorAccent: string, tabBase: number) => (
