@@ -753,13 +753,13 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
       const todasMeses = [dezAnoAnterior, ...meses];
       const fazendaIds = fazendaId === '__global__'
         ? fazendas.filter(f => f.tem_pecuaria !== false).map(f => f.id) : [fazendaId];
-      if (fazendaIds.length === 0) { setValorRebanhoMes(Array(12).fill(0)); return; }
+      if (fazendaIds.length === 0) { setValorRebanhoMes(Array(13).fill(0)); return; }
       const { data, error } = await supabase
         .from('valor_rebanho_fechamento')
         .select('ano_mes, valor_total')
         .in('fazenda_id', fazendaIds)
         .in('ano_mes', todasMeses);
-      if (error) { setValorRebanhoMes(Array(12).fill(0)); return; }
+      if (error) { setValorRebanhoMes(Array(13).fill(0)); return; }
       const totais = new Map(todasMeses.map(mes => [mes, 0]));
       (data || []).forEach(row => {
         totais.set(row.ano_mes, (totais.get(row.ano_mes) || 0) + (Number(row.valor_total) || 0));
