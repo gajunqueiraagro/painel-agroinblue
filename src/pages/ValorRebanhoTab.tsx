@@ -373,34 +373,22 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       const anoMeses = Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`);
 
       try {
-        const [valorRes, pesoRes] = await Promise.all([
-          supabase
-            .from('valor_rebanho_fechamento')
-            .select('ano_mes, valor_total')
-            .eq('fazenda_id', fazendaId)
-            .in('ano_mes', anoMeses),
-          supabase
-            .from('vw_zoot_fazenda_mensal' as any)
-            .select('ano_mes, peso_total_final_kg')
-            .eq('fazenda_id', fazendaId)
-            .eq('ano', Number(anoFiltro))
-            .eq('cenario', 'realizado')
-            .in('ano_mes', anoMeses),
-        ]);
+        // Fonte única: valor_rebanho_fechamento contém snapshot congelado (valor + peso)
+        const { data, error } = await supabase
+          .from('valor_rebanho_fechamento')
+          .select('ano_mes, valor_total, peso_total_kg')
+          .eq('fazenda_id', fazendaId)
+          .in('ano_mes', anoMeses);
 
-        if (valorRes.error) throw valorRes.error;
-        if (pesoRes.error) throw pesoRes.error;
-
-        const pesoPorMes = new Map<string, number>();
-        (pesoRes.data || []).forEach((d: any) => {
-          pesoPorMes.set(d.ano_mes, Number(d.peso_total_final_kg) || 0);
-        });
+        if (error) throw error;
 
         const map: Record<string, { valor: number; pesoKg: number }> = {};
-        (valorRes.data || []).forEach((d: any) => {
+        (data || []).forEach((d: any) => {
           map[d.ano_mes] = {
             valor: Number(d.valor_total) || 0,
-            pesoKg: pesoPorMes.get(d.ano_mes) ?? 0,
+            pesoKg: Number(d.peso_total_kg) || 0,
+          };
+        });
           };
         });
 
