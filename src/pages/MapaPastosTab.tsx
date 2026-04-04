@@ -396,7 +396,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
                   {t && t.quantidade > 0 ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="cursor-default">{formatNum(t.quantity, 0)}</span>
+                        <span className="cursor-default">{formatNum(t.quantidade, 0)}</span>
                       </TooltipTrigger>
                       <TooltipContent>
                         <p>{cat.nome}: {formatNum(t.quantidade, 0)} cab</p>
