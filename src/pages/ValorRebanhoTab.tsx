@@ -394,15 +394,15 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   );
   const { precos: precosMesAnterior } = useValorRebanho(anoMesAnterior);
 
-  const resumoJan = useFechamentoCategoria(
+  const resumoDezAnterior = useFechamentoCategoria(
     fazendaId,
-    Number(anoFiltro),
-    1,
+    Number(anoFiltro) - 1,
+    12,
     lancamentos,
     saldosIniciais,
     categorias,
   );
-  const { precos: precosJan } = useValorRebanho(anoMesJan);
+  const { precos: precosDezAnterior } = useValorRebanho(anoMesDezAnterior);
 
   const metricasMesAnteriorLive = useMemo(() => {
     let valor = 0;
