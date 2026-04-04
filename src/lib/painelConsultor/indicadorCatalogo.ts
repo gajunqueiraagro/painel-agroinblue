@@ -194,30 +194,30 @@ export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
   'var_valor_reb': { id: 'var_valor_reb', nome: 'Var. valor reb.', aba: 'acumulado', bloco: 'Financeiro por Competência', realizado: FONTE_VALOR_REB_REAL, previsto: SEM_PREVISTO },
 
   // ─── Média do Período ───
-  'gmd_medio': { id: 'gmd_medio', nome: 'GMD médio período', aba: 'media_periodo', bloco: 'Desempenho Médio', realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
-  'peso_medio_periodo': { id: 'peso_medio_periodo', nome: 'Peso médio período', aba: 'media_periodo', bloco: 'Desempenho Médio', realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
-  'ua_media_periodo': { id: 'ua_media_periodo', nome: 'UA média período', aba: 'media_periodo', bloco: 'Desempenho Médio', realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
-  'lotacao_media': { id: 'lotacao_media', nome: 'Lotação média', aba: 'media_periodo', bloco: 'Desempenho Médio', realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
-  'arr_ha_media': { id: 'arr_ha_media', nome: '@/ha média período', aba: 'media_periodo', bloco: 'Produção Média', realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
-  'prod_media_arr': { id: 'prod_media_arr', nome: 'Prod. média (@)', aba: 'media_periodo', bloco: 'Produção Média', realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
-  'prod_media_kg': { id: 'prod_media_kg', nome: 'Prod. média (kg)', aba: 'media_periodo', bloco: 'Produção Média', realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
-  'desfrute_medio': { id: 'desfrute_medio', nome: 'Desfrute médio', aba: 'media_periodo', bloco: 'Produção Média', realizado: FONTE_REBANHO_REAL, previsto: SEM_PREVISTO },
+  'gmd_medio': { id: 'gmd_medio', nome: 'GMD médio período', aba: 'media_periodo', bloco: 'Desempenho Médio', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'peso_medio_periodo': { id: 'peso_medio_periodo', nome: 'Peso médio período', aba: 'media_periodo', bloco: 'Desempenho Médio', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'ua_media_periodo': { id: 'ua_media_periodo', nome: 'UA média período', aba: 'media_periodo', bloco: 'Desempenho Médio', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'lotacao_media': { id: 'lotacao_media', nome: 'Lotação média', aba: 'media_periodo', bloco: 'Desempenho Médio', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'arr_ha_media': { id: 'arr_ha_media', nome: '@/ha média período', aba: 'media_periodo', bloco: 'Produção Média', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'prod_media_arr': { id: 'prod_media_arr', nome: 'Prod. média (@)', aba: 'media_periodo', bloco: 'Produção Média', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'prod_media_kg': { id: 'prod_media_kg', nome: 'Prod. média (kg)', aba: 'media_periodo', bloco: 'Produção Média', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'desfrute_medio': { id: 'desfrute_medio', nome: 'Desfrute médio', aba: 'media_periodo', bloco: 'Produção Média', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },
   'receita_media': { id: 'receita_media', nome: 'Receita média', aba: 'media_periodo', bloco: 'Financeiro Médio', realizado: FONTE_FIN_CAIXA_REAL, previsto: SEM_PREVISTO },
   'res_oper_medio': { id: 'res_oper_medio', nome: 'Res. oper. médio', aba: 'media_periodo', bloco: 'Financeiro Médio', realizado: FONTE_FIN_COMP_REAL, previsto: SEM_PREVISTO },
   'ebitda_medio': { id: 'ebitda_medio', nome: 'EBITDA médio', aba: 'media_periodo', bloco: 'Financeiro Médio', realizado: FONTE_FIN_COMP_REAL, previsto: SEM_PREVISTO },
   'res_caixa_medio': { id: 'res_caixa_medio', nome: 'Res. caixa médio', aba: 'media_periodo', bloco: 'Financeiro Médio', realizado: FONTE_FIN_CAIXA_REAL, previsto: SEM_PREVISTO },
 
   // ─── Acumulado > Rebanho ───
-  'entradas_acum': { id: 'entradas_acum', nome: 'Entradas acum. (cab)', aba: 'acumulado', bloco: 'Rebanho', realizado: FONTE_REBANHO_REAL, previsto: SEM_PREVISTO },
-  'saidas_acum': { id: 'saidas_acum', nome: 'Saídas acum. (cab)', aba: 'acumulado', bloco: 'Rebanho', realizado: FONTE_REBANHO_REAL, previsto: SEM_PREVISTO },
-  'saldo_acum': { id: 'saldo_acum', nome: 'Saldo acum. reb.', aba: 'acumulado', bloco: 'Rebanho', realizado: FONTE_REBANHO_REAL, previsto: SEM_PREVISTO },
+  'entradas_acum': { id: 'entradas_acum', nome: 'Entradas acum. (cab)', aba: 'acumulado', bloco: 'Rebanho', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },
+  'saidas_acum': { id: 'saidas_acum', nome: 'Saídas acum. (cab)', aba: 'acumulado', bloco: 'Rebanho', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },
+  'saldo_acum': { id: 'saldo_acum', nome: 'Saldo acum. reb.', aba: 'acumulado', bloco: 'Rebanho', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },
 
   // ─── Acumulado > Produção ───
-  'arrobas_acum': { id: 'arrobas_acum', nome: '@ produzidas acum.', aba: 'acumulado', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
-  'prod_kg_acum': { id: 'prod_kg_acum', nome: 'Produção kg acum.', aba: 'acumulado', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
-  'arr_ha_acum': { id: 'arr_ha_acum', nome: '@/ha acum.', aba: 'acumulado', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
-  'desfrute_acum_cab': { id: 'desfrute_acum_cab', nome: 'Desfrute acum. (cab)', aba: 'acumulado', bloco: 'Produção', realizado: FONTE_REBANHO_REAL, previsto: SEM_PREVISTO },
-  'desfrute_acum_arr': { id: 'desfrute_acum_arr', nome: 'Desfrute acum. (@)', aba: 'acumulado', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
+  'arrobas_acum': { id: 'arrobas_acum', nome: '@ produzidas acum.', aba: 'acumulado', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'prod_kg_acum': { id: 'prod_kg_acum', nome: 'Produção kg acum.', aba: 'acumulado', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'arr_ha_acum': { id: 'arr_ha_acum', nome: '@/ha acum.', aba: 'acumulado', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'desfrute_acum_cab': { id: 'desfrute_acum_cab', nome: 'Desfrute acum. (cab)', aba: 'acumulado', bloco: 'Produção', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },
+  'desfrute_acum_arr': { id: 'desfrute_acum_arr', nome: 'Desfrute acum. (@)', aba: 'acumulado', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
 };
 
 /** Lookup by indicator name (display name) */
