@@ -928,6 +928,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         </div>
       )}
 
+      <div className="relative">
+        {isMesFuturo && (
+          <div className="absolute inset-0 z-10 bg-background/80 backdrop-blur-[1px] rounded-lg flex flex-col items-center justify-center gap-1.5">
+            <Lock className="h-6 w-6 text-muted-foreground" />
+            <p className="text-sm font-semibold text-muted-foreground">Mês ainda não aberto</p>
+            <p className="text-[10px] text-muted-foreground/70">Apenas o mês vigente pode ser alimentado.</p>
+          </div>
+        )}
       <div className="flex gap-3 items-start">
         <div className="flex-1 max-w-[50%] min-w-0 bg-card rounded-lg shadow-sm border overflow-x-auto">
           <table className="w-full text-[11px]">
