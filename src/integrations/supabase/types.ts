@@ -3804,6 +3804,10 @@ export type Database = {
         Args: { _target_user_id: string; _viewer_id: string }
         Returns: boolean
       }
+      validar_conciliacao_rebanho: {
+        Args: { _ano_mes: string; _fazenda_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       perfil_acesso:
