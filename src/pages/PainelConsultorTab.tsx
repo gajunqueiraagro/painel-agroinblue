@@ -20,6 +20,7 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/comp
 import { ArrowLeft, Download, ChevronDown, Info } from 'lucide-react';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useLancamentos } from '@/hooks/useLancamentos';
+import { useStatusPilares, BLOCO_PILAR_MAP, getPilarBadgeConfig } from '@/hooks/useStatusPilares';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import { usePastos } from '@/hooks/usePastos';
 import { useZootMensal, indexByMes, type ZootMensal } from '@/hooks/useZootMensal';
