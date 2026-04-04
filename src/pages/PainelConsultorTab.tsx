@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
-import { ArrowLeft, Download, ChevronDown, Info } from 'lucide-react';
+import { ArrowLeft, Download, ChevronDown, Info, ClipboardCheck } from 'lucide-react';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useStatusPilares, BLOCO_PILAR_MAP, getPilarBadgeConfig, getPilarTooltipText, type StatusPilares as StatusPilaresType } from '@/hooks/useStatusPilares';
@@ -960,6 +960,12 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
 
             <div className="ml-auto flex items-center gap-1.5">
               <span className="text-[10px] text-muted-foreground hidden sm:inline">{fazendaNome} · {ano}</span>
+              {onTabChange && (
+                <Button variant="outline" size="sm" onClick={() => onTabChange('status_fechamentos')} className="h-7 gap-1 text-[11px] px-2">
+                  <ClipboardCheck className="h-3 w-3" />
+                  Fechamentos
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={handleExport} className="h-7 gap-1 text-[11px] px-2">
                 <Download className="h-3 w-3" />
                 Excel
