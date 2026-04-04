@@ -3660,6 +3660,7 @@ export type Database = {
           dias_mes: number | null
           entradas: number | null
           fazenda_id: string | null
+          fonte_oficial_mes: string | null
           gmd_kg_cab_dia: number | null
           gmd_numerador_kg: number | null
           lotacao_ua_ha: number | null
