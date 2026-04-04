@@ -247,6 +247,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     reabrirFechamento,
   } = useValorRebanho(anoMes);
 
+  // Global hook — sempre chamado para manter ordem dos hooks
+  const globalData = useValorRebanhoGlobal(
+    isGlobal ? fazendaIdsPecuaria : [],
+    lancamentos, saldosIniciais, categorias, anoFiltro, mesFiltro,
+  );
+
   const { itens: precosMercado } = usePrecoMercado(anoMes);
 
   const precosSugeridos = useMemo(() => {
