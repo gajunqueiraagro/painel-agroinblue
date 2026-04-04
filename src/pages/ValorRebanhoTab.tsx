@@ -383,7 +383,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           .eq('cenario', 'realizado'),
       ]);
       const map: Record<string, number> = {};
-      (vrRes.data || []).forEach((d: any) => { map[d.ano_mes] = d.valor_total; });
+      (vrRes.data || []).forEach((d: any) => { map[d.ano_mes] = Number(d.valor_total) || 0; });
       setHistoricoPorMes(map);
 
       const zMap: Record<number, { pesoTotalKg: number; cabecas: number }> = {};
@@ -415,19 +415,21 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   }, [mesNum]);
 
   // VALOR DO REBANHO chart — fonte oficial: valor_rebanho_fechamento.valor_total
-  // Para o mês selecionado: usa valor frozen se existe, senão live totalRebanho
+  // Para o mês selecionado: SEMPRE usar totalRebanho (= valor exibido no card)
+  // Para outros meses: usar valor frozen da tabela valor_rebanho_fechamento
   const chartDataValor = useMemo(() => {
     return buildChartData((mes) => {
       if (mes === 0) {
         // "Ini" = valor de janeiro (frozen)
         return historicoPorMes[`${anoFiltro}-01`] ?? null;
       }
+      // Mês selecionado: usar EXATAMENTE o valor do card (totalRebanho)
+      if (mes === mesNum) {
+        return totalRebanho > 0 ? totalRebanho : (historicoPorMes[`${anoFiltro}-${String(mes).padStart(2, '0')}`] ?? null);
+      }
+      // Outros meses: valor frozen oficial
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
-      // Sempre preferir valor frozen oficial
-      if (historicoPorMes[key] != null) return historicoPorMes[key];
-      // Para o mês selecionado sem frozen, usar live
-      if (mes === mesNum && totalRebanho > 0) return totalRebanho;
-      return null;
+      return historicoPorMes[key] ?? null;
     });
   }, [buildChartData, historicoPorMes, anoFiltro, mesNum, totalRebanho]);
 
@@ -439,16 +441,20 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         const z = zootPorMes[1];
         return z && z.pesoTotalKg > 0 ? z.pesoTotalKg / 30 : null;
       }
+      // Mês selecionado: usar valor live (= card)
+      if (mes === mesNum) {
+        if (totalArrobas > 0) return totalArrobas;
+        const z = zootPorMes[mes];
+        return z && z.pesoTotalKg > 0 ? z.pesoTotalKg / 30 : null;
+      }
       const z = zootPorMes[mes];
       if (z && z.pesoTotalKg > 0) return z.pesoTotalKg / 30;
-      // Fallback para mês selecionado
-      if (mes === mesNum && totalArrobas > 0) return totalArrobas;
       return null;
     });
   }, [buildChartData, zootPorMes, totalArrobas, mesNum]);
 
-  // R$/@ MÉDIO chart — derivado: valor_rebanho_fechamento / arrobas_zoot
-  // Para o mês selecionado, usar live precoMedioArroba
+  // R$/@ MÉDIO chart — derivado: valor / arrobas
+  // Para o mês selecionado, usar live precoMedioArroba (= card)
   const chartDataPrecoArroba = useMemo(() => {
     return buildChartData((mes) => {
       if (mes === 0) {
@@ -457,13 +463,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         if (z && z.pesoTotalKg > 0 && v) return v / (z.pesoTotalKg / 30);
         return null;
       }
+      // Mês selecionado: usar valor live (= card)
+      if (mes === mesNum) {
+        if (precoMedioArroba > 0) return precoMedioArroba;
+      }
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
       const z = zootPorMes[mes];
       const v = historicoPorMes[key];
-      // Derivar de fontes oficiais
       if (z && z.pesoTotalKg > 0 && v) return v / (z.pesoTotalKg / 30);
-      // Fallback para mês selecionado
-      if (mes === mesNum && precoMedioArroba > 0) return precoMedioArroba;
       return null;
     });
   }, [buildChartData, zootPorMes, historicoPorMes, anoFiltro, precoMedioArroba, mesNum]);
