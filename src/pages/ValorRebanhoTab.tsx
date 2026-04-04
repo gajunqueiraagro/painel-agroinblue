@@ -10,6 +10,7 @@ import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
 import { useValorRebanho, type SnapshotDetalheCategoria } from '@/hooks/useValorRebanho';
+import { useValorRebanhoGlobal } from '@/hooks/useValorRebanhoGlobal';
 import { usePrecoMercado } from '@/hooks/usePrecoMercado';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_COLS } from '@/lib/calculos/labels';
@@ -201,9 +202,15 @@ function MiniChart({ data, color, title }: { data: { label: string; value: numbe
 }
 
 export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAnoInicial, filtroMesInicial }: Props) {
-  const { fazendaAtual, isGlobal } = useFazenda();
+  const { fazendaAtual, isGlobal, fazendas } = useFazenda();
   const { categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
+
+  // IDs de fazendas pecuárias (para Global)
+  const fazendaIdsPecuaria = useMemo(
+    () => fazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false).map(f => f.id),
+    [fazendas],
+  );
 
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
@@ -225,7 +232,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const anoMes = `${anoFiltro}-${mesFiltro}`;
   const isDezembro = mesFiltro === '12';
 
-  const statusZoo = useStatusZootecnico(fazendaId, Number(anoFiltro), Number(mesFiltro), lancamentos, saldosIniciais);
+  const statusZoo = useStatusZootecnico(isGlobal ? undefined : fazendaId, Number(anoFiltro), Number(mesFiltro), lancamentos, saldosIniciais);
   const categoriasStatus = statusZoo.pendencias.find(p => p.id === 'categorias');
   const categoriasConciliadas = categoriasStatus?.status === 'fechado';
   const bloqueadoPorConciliacao = !categoriasConciliadas && !isGlobal && !statusZoo.loading;
@@ -239,6 +246,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     isAdmin,
     reabrirFechamento,
   } = useValorRebanho(anoMes);
+
+  // Global hook — sempre chamado para manter ordem dos hooks
+  const globalData = useValorRebanhoGlobal(
+    isGlobal ? fazendaIdsPecuaria : [],
+    lancamentos, saldosIniciais, categorias, anoFiltro, mesFiltro,
+  );
 
   const { itens: precosMercado } = usePrecoMercado(anoMes);
 
@@ -570,20 +583,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const precoMedioArrobaExibido = metricasSelecionado.precoArroba;
   const valorMedioCabecaExibido = metricasSelecionado.valorCabeca;
 
-  const varValorMes = calcVariacaoNullable(metricasSelecionado.valor, metricasMesAnterior?.valor ?? null);
-  const varValorAno = calcVariacaoNullable(metricasSelecionado.valor, metricasInicioAno?.valor ?? null);
-  const varCabMes = calcVariacaoNullable(metricasSelecionado.cabecas, metricasMesAnterior?.cabecas ?? null);
-  const varCabAno = calcVariacaoNullable(metricasSelecionado.cabecas, metricasInicioAno?.cabecas ?? null);
-  const varPesoMes = calcVariacaoNullable(metricasSelecionado.pesoMedio, metricasMesAnterior?.pesoMedio ?? null);
-  const varPesoAno = calcVariacaoNullable(metricasSelecionado.pesoMedio, metricasInicioAno?.pesoMedio ?? null);
-  const varArrobaMes = calcVariacaoNullable(metricasSelecionado.precoArroba, metricasMesAnterior?.precoArroba ?? null);
-  const varArrobaAno = calcVariacaoNullable(metricasSelecionado.precoArroba, metricasInicioAno?.precoArroba ?? null);
-  const varCabValorMes = calcVariacaoNullable(metricasSelecionado.valorCabeca, metricasMesAnterior?.valorCabeca ?? null);
-  const varCabValorAno = calcVariacaoNullable(metricasSelecionado.valorCabeca, metricasInicioAno?.valorCabeca ?? null);
-  const varArrobasEstoqueMes = calcVariacaoNullable(metricasSelecionado.totalArrobas, metricasMesAnterior?.totalArrobas ?? null);
-  const varArrobasEstoqueAno = calcVariacaoNullable(metricasSelecionado.totalArrobas, metricasInicioAno?.totalArrobas ?? null);
-
-  const mesLabel = MESES_COLS.find(m => m.key === mesFiltro)?.label || mesFiltro;
+  // (variações individuais movidas para bloco unificado abaixo)
 
   const buildChartData = useCallback((getValue: (mes: number) => number | null) => {
     return CHART_LABELS.map((label, idx) => {
@@ -682,13 +682,98 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const avisoSnapshotIncompleto = fonteMes === 'snapshot_incompleto';
   const fazendaNome = fazendaAtual?.nome || '';
 
-  if (isGlobal) {
-    return (
-      <div className="p-4 text-center text-muted-foreground">
-        Selecione uma fazenda para ver o valor do rebanho.
-      </div>
-    );
-  }
+  // ---------------------------------------------------------------------------
+  // Unified data: Global vs Individual
+  // ---------------------------------------------------------------------------
+
+  const uRows = isGlobal ? globalData.rows : rowsExibicao;
+  const uMetricas = isGlobal ? globalData.metricas : metricasSelecionado;
+  const uMetricasMesAnt = isGlobal ? globalData.metricasMesAnterior : metricasMesAnterior;
+  const uMetricasInicioAno = isGlobal ? globalData.metricasInicioAno : metricasInicioAno;
+  const uFonteMes = isGlobal ? globalData.fonteMes : fonteMes;
+  const uHistoricoPorMes = isGlobal ? globalData.historicoPorMes : historicoPorMes;
+  const uCanEdit = isGlobal ? false : canEdit;
+  const uTabelaUsaSnapshot = isGlobal
+    ? (globalData.fonteMes === 'snapshot')
+    : tabelaUsaSnapshot;
+  const uAvisoSnapshotIncompleto = isGlobal
+    ? (globalData.fonteMes === 'snapshot_incompleto')
+    : avisoSnapshotIncompleto;
+  const uFazendaNome = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || '');
+  const uMesFechado = isGlobal
+    ? (globalData.fonteMes === 'snapshot' || globalData.fonteMes === 'snapshot_incompleto')
+    : mesSelecionadoFechado;
+
+  // Variações
+  const uVarValorMes = calcVariacaoNullable(uMetricas.valor, uMetricasMesAnt?.valor ?? null);
+  const uVarValorAno = calcVariacaoNullable(uMetricas.valor, uMetricasInicioAno?.valor ?? null);
+  const uVarCabMes = calcVariacaoNullable(uMetricas.cabecas, uMetricasMesAnt?.cabecas ?? null);
+  const uVarCabAno = calcVariacaoNullable(uMetricas.cabecas, uMetricasInicioAno?.cabecas ?? null);
+  const uVarPesoMes = calcVariacaoNullable(uMetricas.pesoMedio, uMetricasMesAnt?.pesoMedio ?? null);
+  const uVarPesoAno = calcVariacaoNullable(uMetricas.pesoMedio, uMetricasInicioAno?.pesoMedio ?? null);
+  const uVarArrobaMes = calcVariacaoNullable(uMetricas.precoArroba, uMetricasMesAnt?.precoArroba ?? null);
+  const uVarArrobaAno = calcVariacaoNullable(uMetricas.precoArroba, uMetricasInicioAno?.precoArroba ?? null);
+  const uVarCabValorMes = calcVariacaoNullable(uMetricas.valorCabeca, uMetricasMesAnt?.valorCabeca ?? null);
+  const uVarCabValorAno = calcVariacaoNullable(uMetricas.valorCabeca, uMetricasInicioAno?.valorCabeca ?? null);
+  const uVarArrobasEstoqueMes = calcVariacaoNullable(uMetricas.totalArrobas, uMetricasMesAnt?.totalArrobas ?? null);
+  const uVarArrobasEstoqueAno = calcVariacaoNullable(uMetricas.totalArrobas, uMetricasInicioAno?.totalArrobas ?? null);
+
+  // Métricas da tabela
+  const uMetricasTabela = isGlobal
+    ? (uFonteMes === 'snapshot_incompleto' ? buildMetricsFromTotals(null, null, null) : (() => {
+        const cabecas = uRows.reduce((s, r) => s + r.saldo, 0);
+        const pesoTotalKg = uRows.reduce((s, r) => s + r.saldo * r.pesoMedio, 0);
+        const valor = uRows.reduce((s, r) => s + r.valorTotal, 0);
+        return buildMetricsFromTotals(cabecas > 0 ? valor : null, cabecas > 0 ? cabecas : null, cabecas > 0 ? pesoTotalKg : null);
+      })())
+    : metricasTabela;
+
+  // Charts — global
+  const uChartDataValor = useMemo(() => {
+    if (!isGlobal) return chartDataValor;
+    return CHART_LABELS.map((label, idx) => {
+      if (idx === 0) return { label, value: null };
+      const mes = idx;
+      if (mes > mesNum) return { label, value: null };
+      const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
+      if (mes === mesNum && globalData.fonteMes === 'live') {
+        return { label, value: uMetricas.valor };
+      }
+      return { label, value: uHistoricoPorMes[key]?.valor ?? null };
+    });
+  }, [isGlobal, chartDataValor, anoFiltro, mesNum, globalData.fonteMes, uMetricas.valor, uHistoricoPorMes]);
+
+  const uChartDataArrobas = useMemo(() => {
+    if (!isGlobal) return chartDataArrobas;
+    return CHART_LABELS.map((label, idx) => {
+      if (idx === 0) return { label, value: null };
+      const mes = idx;
+      if (mes > mesNum) return { label, value: null };
+      const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
+      if (mes === mesNum && globalData.fonteMes === 'live') {
+        return { label, value: uMetricas.totalArrobas };
+      }
+      const frozen = uHistoricoPorMes[key];
+      return { label, value: frozen ? frozen.pesoKg / 30 : null };
+    });
+  }, [isGlobal, chartDataArrobas, anoFiltro, mesNum, globalData.fonteMes, uMetricas.totalArrobas, uHistoricoPorMes]);
+
+  const uChartDataPrecoArroba = useMemo(() => {
+    if (!isGlobal) return chartDataPrecoArroba;
+    return CHART_LABELS.map((label, idx) => {
+      if (idx === 0) return { label, value: null };
+      const mes = idx;
+      if (mes > mesNum) return { label, value: null };
+      const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
+      if (mes === mesNum && globalData.fonteMes === 'live') {
+        return { label, value: uMetricas.precoArroba };
+      }
+      const frozen = uHistoricoPorMes[key];
+      return { label, value: frozen && frozen.pesoKg > 0 ? frozen.valor / (frozen.pesoKg / 30) : null };
+    });
+  }, [isGlobal, chartDataPrecoArroba, anoFiltro, mesNum, globalData.fonteMes, uMetricas.precoArroba, uHistoricoPorMes]);
+
+  const mesLabel = MESES_COLS.find(m => m.key === mesFiltro)?.label || mesFiltro;
 
   return (
     <div className="p-2 w-full space-y-1.5 animate-fade-in pb-16">
@@ -704,38 +789,45 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           </SelectContent>
         </Select>
 
-        {canEdit && (
+        {uCanEdit && !isGlobal && (
           <Button variant="outline" size="sm" onClick={handleCopiarMesAnterior} className="gap-1 h-7 text-xs px-2">
             <Copy className="h-3 w-3" /> Mês anterior
           </Button>
         )}
 
-        {bloqueadoPorConciliacao && (
+        {bloqueadoPorConciliacao && !isGlobal && (
           <span className="inline-flex items-center gap-1 text-[10px] text-destructive font-medium">
             <ShieldAlert className="h-3 w-3 shrink-0" />
             Bloqueado: divergências na Conciliação{categoriasStatus?.descricao && ` (${categoriasStatus.descricao})`}
           </span>
         )}
 
-        {mesSelecionadoFechado && (
+        {uMesFechado && (
           <Badge variant="secondary" className="gap-1 text-xs">
             <Lock className="h-3 w-3" /> Fechado
+            {isGlobal && ` (${globalData.fazendasFechadas}/${globalData.fazendasTotal})`}
           </Badge>
         )}
 
-        {!mesSelecionadoFechado && (
+        {!uMesFechado && (
           <Badge variant="outline" className="gap-1 text-xs">
             <Info className="h-3 w-3" /> Live
           </Badge>
         )}
 
+        {isGlobal && globalData.fonteMes === 'misto' && (
+          <Badge variant="outline" className="gap-1 text-xs border-amber-500/50 text-amber-700 dark:text-amber-400">
+            <AlertTriangle className="h-3 w-3" /> Misto ({globalData.fazendasFechadas}/{globalData.fazendasTotal} fechadas)
+          </Badge>
+        )}
+
         <div className="ml-auto flex gap-1.5">
-          {mesSelecionadoFechado && isAdmin && (
+          {!isGlobal && mesSelecionadoFechado && isAdmin && (
             <Button variant="outline" size="sm" onClick={reabrirFechamento} className="gap-1 h-7 text-xs px-2">
               <Unlock className="h-3 w-3" /> Reabrir
             </Button>
           )}
-          {canEdit && (
+          {uCanEdit && !isGlobal && (
             <Button size="sm" onClick={handleSalvar} disabled={saving || bloqueadoPorConciliacao} className="gap-1 h-7 text-xs px-3">
               <Save className="h-3 w-3" />
               {bloqueadoPorConciliacao ? 'Bloqueado' : saving ? 'Salvando...' : 'Salvar e Fechar'}
@@ -747,7 +839,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       <div className="flex gap-0.5 bg-muted/30 rounded-md p-0.5 border">
         {MESES_SHORT.map(m => {
           const mesKey = `${anoFiltro}-${m.key}`;
-          const isClosed = !!historicoPorMes[mesKey];
+          const isClosed = isGlobal ? !!uHistoricoPorMes[mesKey] : !!historicoPorMes[mesKey];
           const isSelected = mesFiltro === m.key;
           return (
             <button
@@ -767,21 +859,23 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         })}
       </div>
 
-      {fonteMes === 'live' && (
+      {uFonteMes === 'live' && (
         <div className="flex items-center gap-1.5 text-[10px] bg-muted/40 text-muted-foreground rounded px-2 py-1 border">
           <Info className="h-3 w-3 shrink-0" />
-          <span>Mês aberto: tabela, card e gráficos exibem cálculo live até o fechamento oficial.</span>
+          <span>{isGlobal ? 'Mês aberto: valores consolidados de todas as fazendas em cálculo live.' : 'Mês aberto: tabela, card e gráficos exibem cálculo live até o fechamento oficial.'}</span>
         </div>
       )}
 
-      {avisoSnapshotIncompleto && (
+      {uAvisoSnapshotIncompleto && (
         <div className="flex items-center gap-1.5 text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded px-2 py-1 border border-amber-500/30">
           <AlertTriangle className="h-3 w-3 shrink-0" />
-          <span>Mês fechado sem snapshot detalhado. Reabra e salve novamente para consolidar a base oficial.</span>
+          <span>{isGlobal
+            ? 'Nem todas as fazendas possuem snapshot detalhado para este mês. Reabra e salve em cada fazenda individualmente.'
+            : 'Mês fechado sem snapshot detalhado. Reabra e salve novamente para consolidar a base oficial.'}</span>
         </div>
       )}
 
-      {fonteMes === 'live' && isDezembro && categoriasSemPreco.length > 0 && (
+      {uFonteMes === 'live' && isDezembro && !isGlobal && categoriasSemPreco.length > 0 && (
         <div className="flex items-center gap-1.5 text-[10px] bg-destructive/10 text-destructive rounded px-2 py-0.5 border border-destructive/30">
           <AlertTriangle className="h-3 w-3 shrink-0" />
           <span><strong>Dezembro — base anual:</strong> {categoriasSemPreco.length} categoria(s) sem preço: {categoriasSemPreco.join(', ')}.</span>
@@ -803,14 +897,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               </tr>
             </thead>
             <tbody>
-              {avisoSnapshotIncompleto ? (
+              {uAvisoSnapshotIncompleto ? (
                 <tr>
                   <td colSpan={7} className="px-3 py-4 text-center text-[10px] text-muted-foreground">
-                    Mês fechado sem snapshot detalhado. Reabra e salve novamente para consolidar a base oficial.
+                    {isGlobal
+                      ? 'Nem todas as fazendas possuem snapshot detalhado. Reabra e salve em cada fazenda.'
+                      : 'Mês fechado sem snapshot detalhado. Reabra e salve novamente para consolidar a base oficial.'}
                   </td>
                 </tr>
               ) : (
-                rowsExibicao.map((r, i) => (
+                uRows.map((r, i) => (
                   <tr key={r.codigo} className={`border-b ${i % 2 === 0 ? '' : 'bg-muted/20'}`}>
                     <td className="px-1.5 py-0.5 text-foreground text-[9.5px] italic whitespace-nowrap bg-primary/10">
                       {r.nome}
@@ -820,7 +916,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                     </td>
                     <td className="px-1.5 py-0.5 text-right tabular-nums italic text-[9.5px]">
                       {r.saldo > 0 && r.pesoMedio > 0 ? (
-                        tabelaUsaSnapshot ? (
+                        (uTabelaUsaSnapshot || isGlobal) ? (
                           <span className="text-foreground">{formatNum(r.pesoMedio, 2)}</span>
                         ) : (
                           <Tooltip>
@@ -838,7 +934,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                       ) : '-'}
                     </td>
                     <td className="px-0.5 py-0.5 w-[60px]">
-                      {tabelaUsaSnapshot ? (
+                      {(uTabelaUsaSnapshot || isGlobal) ? (
                         <span className="block text-right text-[9.5px] italic text-foreground tabular-nums px-1">
                           {r.saldo > 0 && r.precoKg > 0 ? formatNum(r.precoKg, 2) : '-'}
                         </span>
@@ -853,7 +949,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                               value={precosDisplay[r.codigo] !== undefined ? precosDisplay[r.codigo] : fmtKg(r.precoKg)}
                               onChange={e => handlePrecoChange(r.codigo, e.target.value)}
                               onBlur={() => handlePrecoBlur(r.codigo)}
-                              disabled={!canEdit}
+                              disabled={!uCanEdit}
                             />
                           </TooltipTrigger>
                           {r.isSugerido && (
@@ -882,19 +978,19 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             <tfoot>
               <tr className="border-t-2 bg-primary/25">
                 <td className="px-1.5 py-1 font-bold text-foreground text-[11px] italic bg-primary/30">TOTAL</td>
-                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{formatNumNullable(metricasTabela.cabecas, 0)}</td>
-                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatNumNullable(metricasTabela.pesoMedio, 2)}</td>
+                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{formatNumNullable(uMetricasTabela.cabecas, 0)}</td>
+                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatNumNullable(uMetricasTabela.pesoMedio, 2)}</td>
                 <td className="px-1 py-1 text-center text-foreground tabular-nums italic text-[11px] w-[60px]">
-                  {formatNumNullable(metricasTabela.precoKg, 2)}
+                  {formatNumNullable(uMetricasTabela.precoKg, 2)}
                 </td>
-                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatMoedaNullable(metricasTabela.precoArroba)}</td>
-                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatMoedaNullable(metricasTabela.valorCabeca)}</td>
-                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{formatMoedaNullable(metricasTabela.valor)}</td>
+                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatMoedaNullable(uMetricasTabela.precoArroba)}</td>
+                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatMoedaNullable(uMetricasTabela.valorCabeca)}</td>
+                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{formatMoedaNullable(uMetricasTabela.valor)}</td>
               </tr>
             </tfoot>
           </table>
 
-          {fonteMes === 'live' && (
+          {uFonteMes === 'live' && !isGlobal && (
             <div className="flex items-center justify-end px-1.5 py-0.5 border-t">
               <p className="text-[9px] text-muted-foreground">
                 * Peso estimado
@@ -903,7 +999,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             </div>
           )}
 
-          {fonteMes === 'live' && (temSugestao || temEstimativa || dezembroCompleto) && (
+          {uFonteMes === 'live' && !isGlobal && (temSugestao || temEstimativa || dezembroCompleto) && (
             <div className="px-1.5 pb-1 space-y-0.5">
               {temSugestao && (
                 <p className="text-[9px] text-amber-600 dark:text-amber-400">
@@ -925,15 +1021,17 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         </div>
 
         <div className="min-w-[200px] flex-1 space-y-1.5">
-          {avisoSnapshotIncompleto ? (
+          {uAvisoSnapshotIncompleto ? (
             <Card className="bg-amber-500/10 border-amber-500/30">
               <CardContent className="p-4 flex flex-col items-center justify-center gap-2 text-center">
                 <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
                 <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
-                  Mês fechado sem snapshot detalhado
+                  {isGlobal ? 'Snapshot incompleto' : 'Mês fechado sem snapshot detalhado'}
                 </p>
                 <p className="text-[10px] text-muted-foreground">
-                  Reabra e salve novamente para consolidar a base oficial. Nenhum valor será exibido até que o snapshot completo seja gerado.
+                  {isGlobal
+                    ? 'Nem todas as fazendas possuem snapshot detalhado. Acesse cada fazenda individualmente para reabrir e salvar.'
+                    : 'Reabra e salve novamente para consolidar a base oficial. Nenhum valor será exibido até que o snapshot completo seja gerado.'}
                 </p>
               </CardContent>
             </Card>
@@ -946,13 +1044,13 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                   <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider">
                     Valor do Rebanho — {mesLabel}/{anoFiltro}
                   </p>
-                  {fazendaNome && (
-                    <p className="text-[9px] text-muted-foreground font-medium">{fazendaNome}</p>
+                  {uFazendaNome && (
+                    <p className="text-[9px] text-muted-foreground font-medium">{uFazendaNome}</p>
                   )}
-                  <p className="text-xl font-extrabold text-foreground leading-tight mt-0.5">{formatMoedaNullable(valorRebanhoExibido)}</p>
+                  <p className="text-xl font-extrabold text-foreground leading-tight mt-0.5">{formatMoedaNullable(uMetricas.valor)}</p>
                   <div className="flex flex-col gap-0 mt-0.5">
-                    <VariacaoBadge valor={varValorMes} label="vs mês ant." showLabel />
-                    <VariacaoBadge valor={varValorAno} label="vs ini. ano" showLabel />
+                    <VariacaoBadge valor={uVarValorMes} label="vs mês ant." showLabel />
+                    <VariacaoBadge valor={uVarValorAno} label="vs ini. ano" showLabel />
                   </div>
                 </div>
 
@@ -964,11 +1062,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                     <span className="text-[8px] text-muted-foreground font-medium text-right">vs ano</span>
 
                     {[
-                      { label: 'Cabeças', value: formatNumNullable(totalCabecasExibido, 0), varMes: varCabMes, varAno: varCabAno },
-                      { label: 'Peso médio', value: pesoMedioGeralExibido === null ? '—' : `${formatNum(pesoMedioGeralExibido, 2)} kg`, varMes: varPesoMes, varAno: varPesoAno },
-                      { label: 'R$/@ médio', value: formatMoedaNullable(precoMedioArrobaExibido), varMes: varArrobaMes, varAno: varArrobaAno },
-                      { label: 'R$/cab', value: formatMoedaNullable(valorMedioCabecaExibido), varMes: varCabValorMes, varAno: varCabValorAno },
-                      { label: '@s estoque', value: formatNumNullable(totalArrobasExibido, 2), varMes: varArrobasEstoqueMes, varAno: varArrobasEstoqueAno },
+                      { label: 'Cabeças', value: formatNumNullable(uMetricas.cabecas, 0), varMes: uVarCabMes, varAno: uVarCabAno },
+                      { label: 'Peso médio', value: uMetricas.pesoMedio === null ? '—' : `${formatNum(uMetricas.pesoMedio, 2)} kg`, varMes: uVarPesoMes, varAno: uVarPesoAno },
+                      { label: 'R$/@ médio', value: formatMoedaNullable(uMetricas.precoArroba), varMes: uVarArrobaMes, varAno: uVarArrobaAno },
+                      { label: 'R$/cab', value: formatMoedaNullable(uMetricas.valorCabeca), varMes: uVarCabValorMes, varAno: uVarCabValorAno },
+                      { label: '@s estoque', value: formatNumNullable(uMetricas.totalArrobas, 2), varMes: uVarArrobasEstoqueMes, varAno: uVarArrobasEstoqueAno },
                     ].map(ind => (
                       <React.Fragment key={ind.label}>
                         <span className="text-muted-foreground text-[9px] truncate">{ind.label}</span>
@@ -984,9 +1082,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           </Card>
 
           <div className="flex gap-3">
-            <MiniChart data={chartDataValor} color="hsl(var(--primary))" title="Valor do Rebanho" />
-            <MiniChart data={chartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
-            <MiniChart data={chartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio" />
+            <MiniChart data={uChartDataValor} color="hsl(var(--primary))" title="Valor do Rebanho" />
+            <MiniChart data={uChartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
+            <MiniChart data={uChartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio" />
           </div>
           </>
           )}
