@@ -747,7 +747,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                   </div>
                 </div>
                 {/* RIGHT column — indicators compact */}
-                <div className="flex-1 min-w-0 text-[10px] ml-3">
+                <div className="flex-1 min-w-0 text-[10px] ml-5">
                   <div className="grid grid-cols-[auto_70px_56px_56px] gap-x-2 items-center">
                     {/* Header */}
                     <span className="text-[8px] text-muted-foreground font-medium">Indicador</span>
