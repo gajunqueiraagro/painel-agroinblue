@@ -247,8 +247,7 @@ export function MapaPastosTab() {
           </div>
         </div>
 
-        {/* Tabela - ocupa todo o espaço restante */}
-        <div className="flex-1 min-h-0 px-2 pt-2 pb-16 flex flex-col">
+        {/* Tabela - ocupa todo o espaço restante, scroll apenas aqui */}
         {loading ? (
           <div className="text-center py-8 text-muted-foreground">Carregando mapa...</div>
         ) : rows.length === 0 ? (
@@ -262,7 +261,6 @@ export function MapaPastosTab() {
             getQualidadeColor={getQualidadeColor}
           />
         )}
-        </div>
       </div>
 
       <ImportMapaPastos
@@ -306,7 +304,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
   const thCls = "px-0.5 py-0.5 text-center text-[11px] font-bold border-b border-r border-border/40 whitespace-nowrap bg-muted";
 
   return (
-    <div className="flex-1 min-h-0 rounded-lg border bg-background overflow-auto relative">
+    <div className="flex-1 min-h-0 overflow-auto border-t border-border/30">
       <table className="w-max min-w-full border-separate border-spacing-0 text-[11px]" style={{ tableLayout: 'fixed' }}>
         <colgroup>
           {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
