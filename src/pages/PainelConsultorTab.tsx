@@ -471,12 +471,8 @@ function buildFinRows(
   return rows;
 }
 
-function fmtVal(v: number, format: string): string {
-  if (format === 'money') return formatMoeda(v);
-  if (format === 'dec1') return v === 0 ? '-' : v.toFixed(1);
-  if (format === 'dec2') return v === 0 ? '-' : v.toFixed(2);
-  if (format === 'kg') return v === 0 ? '-' : formatNum(v);
-  return v === 0 ? '-' : formatNum(v);
+function fmtVal(v: number, format: PainelFormatType): string {
+  return formatPainel(v, format);
 }
 
 // ─── Export ───
