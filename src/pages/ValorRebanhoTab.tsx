@@ -232,6 +232,15 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const anoMes = `${anoFiltro}-${mesFiltro}`;
   const isDezembro = mesFiltro === '12';
 
+  // Regra temporal: mês atual, passado ou futuro
+  const hoje = new Date();
+  const mesAtualSistema = hoje.getMonth() + 1;
+  const anoAtualSistema = hoje.getFullYear();
+  const mesNumFiltro = Number(mesFiltro);
+  const anoNumFiltro = Number(anoFiltro);
+  const isMesFuturo = anoNumFiltro > anoAtualSistema || (anoNumFiltro === anoAtualSistema && mesNumFiltro > mesAtualSistema);
+  const isMesAtual = anoNumFiltro === anoAtualSistema && mesNumFiltro === mesAtualSistema;
+
   const statusZoo = useStatusZootecnico(isGlobal ? undefined : fazendaId, Number(anoFiltro), Number(mesFiltro), lancamentos, saldosIniciais);
   const categoriasStatus = statusZoo.pendencias.find(p => p.id === 'categorias');
   const categoriasConciliadas = categoriasStatus?.status === 'fechado';
