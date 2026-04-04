@@ -204,12 +204,21 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     });
   }, [resumoOficial.rows, precosLocal, categoriasComSugestao]);
 
+  // Always show all categories in fixed order
   const rows = useMemo(() => {
-    if (mostrarZerados || isDezembro) return allRows;
-    return allRows.filter(r => r.saldo > 0);
-  }, [allRows, mostrarZerados, isDezembro]);
+    return ORDEM_CATEGORIAS_FIXA.map(codigo => {
+      const existing = allRows.find(r => r.codigo === codigo);
+      if (existing) return existing;
+      const cat = categorias.find(c => c.codigo === codigo);
+      return {
+        categoriaId: cat?.id || codigo, codigo, nome: cat?.nome || codigo,
+        saldo: 0, pesoMedio: 0, origemPeso: 'sem_base' as OrigemPeso,
+        precoKg: precosLocal[codigo] ?? 0, valorCabeca: 0, precoArroba: 0, valorTotal: 0,
+        isSugerido: false,
+      };
+    });
+  }, [allRows, categorias, precosLocal]);
 
-  const categoriasOcultas = allRows.length - allRows.filter(r => r.saldo > 0).length;
   const temEstimativa = rows.some(r => r.saldo > 0 && r.pesoMedio > 0 && r.origemPeso !== 'pastos');
 
   const totalRebanho = useMemo(() => allRows.reduce((sum, r) => sum + r.valorTotal, 0), [allRows]);
