@@ -1170,6 +1170,45 @@ export type Database = {
           },
         ]
       }
+      fechamento_reaberturas_log: {
+        Row: {
+          acao: string
+          ano_mes: string
+          cliente_id: string
+          created_at: string
+          fazenda_id: string
+          id: string
+          motivo: string | null
+          pilar: string
+          pilares_invalidados: string[] | null
+          usuario_id: string | null
+        }
+        Insert: {
+          acao: string
+          ano_mes: string
+          cliente_id: string
+          created_at?: string
+          fazenda_id: string
+          id?: string
+          motivo?: string | null
+          pilar: string
+          pilares_invalidados?: string[] | null
+          usuario_id?: string | null
+        }
+        Update: {
+          acao?: string
+          ano_mes?: string
+          cliente_id?: string
+          created_at?: string
+          fazenda_id?: string
+          id?: string
+          motivo?: string | null
+          pilar?: string
+          pilares_invalidados?: string[] | null
+          usuario_id?: string | null
+        }
+        Relationships: []
+      }
       fechamento_textos: {
         Row: {
           created_at: string
@@ -3729,6 +3768,10 @@ export type Database = {
         }
         Returns: string
       }
+      get_status_pilares_fechamento: {
+        Args: { _ano_mes: string; _fazenda_id: string }
+        Returns: Json
+      }
       get_user_cliente_id: { Args: { _user_id?: string }; Returns: string }
       get_user_cliente_ids: { Args: { _user_id?: string }; Returns: string[] }
       get_user_perfil: {
@@ -3743,6 +3786,15 @@ export type Database = {
       is_fazenda_member: {
         Args: { _fazenda_id: string; _user_id: string }
         Returns: boolean
+      }
+      reabrir_pilar_fechamento: {
+        Args: {
+          _ano_mes: string
+          _fazenda_id: string
+          _motivo?: string
+          _pilar: string
+        }
+        Returns: Json
       }
       resolve_transfer_destination_fazenda: {
         Args: { _destino_nome: string; _origem_fazenda_id: string }
