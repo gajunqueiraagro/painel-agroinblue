@@ -385,11 +385,18 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     fetchHistorico();
   }, [fazendaId, anoFiltro]);
 
-  // Determine if selected month is fechado (has valor_rebanho_fechamento)
-  const mesSelecionadoFechado = !!historicoPorMes[anoMes] || isFechado;
+  // Determine if selected month is fechado (has valor_rebanho_fechamento with status fechado)
+  const mesSelecionadoFechado = isFechado || !!(historicoPorMes[anoMes]?.valor);
 
   // Helper to get frozen data for a given month key
   const getFrozen = (mesKey: string) => historicoPorMes[mesKey] ?? null;
+
+  // --- VALOR EXIBIDO NO CARD: fonte oficial quando fechado, live quando aberto ---
+  const valorRebanhoExibido = mesSelecionadoFechado
+    ? (getFrozen(anoMes)?.valor || 0)
+    : totalRebanho;
+  const precoMedioArrobaExibido = totalArrobas > 0 ? valorRebanhoExibido / totalArrobas : 0;
+  const valorMedioCabecaExibido = totalCabecas > 0 ? valorRebanhoExibido / totalCabecas : 0;
 
   // Build 13-point fixed chart data (Ini, Jan–Dez)
   const buildChartData = useCallback((getValue: (mes: number) => number | null) => {
@@ -409,11 +416,13 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     return buildChartData((mes) => {
       const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
       if (mes === mesNum) {
-        return totalRebanho > 0 ? totalRebanho : (getFrozen(key)?.valor ?? null);
+        return mesSelecionadoFechado
+          ? (getFrozen(key)?.valor ?? null)
+          : (totalRebanho > 0 ? totalRebanho : null);
       }
       return getFrozen(key)?.valor ?? null;
     });
-  }, [buildChartData, historicoPorMes, anoFiltro, mesNum, totalRebanho]);
+  }, [buildChartData, historicoPorMes, anoFiltro, mesNum, totalRebanho, mesSelecionadoFechado]);
 
   // ARROBAS EM ESTOQUE chart — fonte: valor_rebanho_fechamento.peso_total_kg / 30
   const chartDataArrobas = useMemo(() => {
