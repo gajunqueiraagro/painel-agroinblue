@@ -533,6 +533,7 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
   const [ano, setAno] = useState(filtroGlobal?.ano || String(new Date().getFullYear()));
   const [ateMes, setAteMes] = useState(filtroGlobal?.mes || new Date().getMonth() + 1);
   const [tab, setTab] = useState<'zoo' | 'fin'>('zoo');
+  const [cenario, setCenario] = useState<'realizado' | 'previsto'>('realizado');
   const [pesosPorMes, setPesosPorMes] = useState<Record<string, Record<string, number>>>({});
   const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(Array(12).fill(0));
 
@@ -719,18 +720,30 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
             </SelectContent>
           </Select>
 
-          <Select value={String(ateMes)} onValueChange={v => setAteMes(Number(v))}>
-            <SelectTrigger className="w-[90px] h-7 text-[11px] px-2 border-border/50">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MESES_LABELS.map((m, i) => (
-                <SelectItem key={i} value={String(i + 1)} className="text-xs">Até {m}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center rounded-md border border-border/50 overflow-hidden h-7">
+            <button
+              onClick={() => setCenario('realizado')}
+              className={`px-2.5 text-[11px] font-semibold h-full transition-colors ${
+                cenario === 'realizado'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-card text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              Realizado
+            </button>
+            <button
+              onClick={() => setCenario('previsto')}
+              className={`px-2.5 text-[11px] font-semibold h-full transition-colors ${
+                cenario === 'previsto'
+                  ? 'bg-muted text-foreground'
+                  : 'bg-card text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              Previsto
+            </button>
+          </div>
 
-          <div className="flex items-center rounded border border-border/50 overflow-hidden h-7">
+          <div className="flex items-center rounded-md border border-border/50 overflow-hidden h-7">
             <button
               onClick={() => setTab('zoo')}
               className={`px-2.5 text-[11px] font-semibold h-full transition-colors ${
