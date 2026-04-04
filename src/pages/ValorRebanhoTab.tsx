@@ -86,7 +86,7 @@ const CHART_LABELS = ['I', 'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N'
 
 function MiniChart({ data, color, title }: { data: { label: string; value: number | null }[]; color: string; title: string }) {
   return (
-    <div className="min-w-0">
+    <div className="flex-1 min-w-0">
       <p className="text-[8px] font-semibold text-muted-foreground uppercase tracking-wider mb-0 truncate">{title}</p>
       <div className="h-[55px] w-full">
         <ResponsiveContainer width="100%" height="100%">
