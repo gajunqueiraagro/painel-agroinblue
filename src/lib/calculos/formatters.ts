@@ -63,3 +63,45 @@ export function formatCabecas(val: number | null | undefined): string {
   if (val === null || val === undefined || isNaN(val)) return '-';
   return `${val.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} cab`;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Formatadores do Painel do Consultor (auditoria)
+// Regra global: formato único por tipo de dado.
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Cabeças (cab): inteiro com separador de milhar — ex: 1.219
+ * Zero → "0"
+ */
+export function formatCabPainel(val: number): string {
+  return Math.round(val).toLocaleString('pt-BR');
+}
+
+/**
+ * GMD (kg/cab/dia): 3 casas decimais — ex: 2,071
+ * Zero → "0,000"
+ */
+export function formatGMD(val: number): string {
+  return val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+}
+
+/**
+ * Padrão geral (kg, @, valores técnicos): separador milhar + 3 decimais — ex: 398.425,000
+ * Zero → "0,000"
+ */
+export function formatPadrao(val: number): string {
+  return val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+}
+
+/**
+ * Formatador único do painel do consultor.
+ * tipo: 'cab' | 'gmd' | 'money' | 'padrao'
+ */
+export type PainelFormatType = 'cab' | 'gmd' | 'money' | 'padrao';
+
+export function formatPainel(val: number, tipo: PainelFormatType): string {
+  if (tipo === 'cab') return formatCabPainel(val);
+  if (tipo === 'gmd') return formatGMD(val);
+  if (tipo === 'money') return formatMoeda(val);
+  return formatPadrao(val);
+}

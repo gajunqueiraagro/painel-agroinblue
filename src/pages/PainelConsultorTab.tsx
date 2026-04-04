@@ -16,7 +16,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import { usePastos } from '@/hooks/usePastos';
-import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
+import { formatNum, formatMoeda, formatPainel, type PainelFormatType } from '@/lib/calculos/formatters';
 import {
   calcSaldoMensalAcumulado,
   calcResumoMovimentacoes,
@@ -59,14 +59,14 @@ interface ZooRow {
   indicador: string;
   valores: number[];
   total: number;
-  format: 'int' | 'dec1' | 'dec2' | 'money' | 'kg';
+  format: PainelFormatType;
 }
 
 function buildZooRows(
   lancamentos: Lancamento[],
   saldosIniciais: SaldoInicial[],
   ano: number,
-  ateMes: number,
+  _ateMes: number,
   areaProdutiva: number,
   pesosPorMes: Record<string, Record<string, number>>,
 ): ZooRow[] {
@@ -86,8 +86,8 @@ function buildZooRows(
     return lancAno.filter(l => l.data.startsWith(prefix));
   };
 
-  const mkRow = (grupo: string, indicador: string, fn: (m: number) => number, format: ZooRow['format'] = 'int'): ZooRow => {
-    const valores = Array.from({ length: 12 }, (_, i) => i + 1 <= ateMes ? fn(i + 1) : 0);
+  const mkRow = (grupo: string, indicador: string, fn: (m: number) => number, format: PainelFormatType = 'cab'): ZooRow => {
+    const valores = Array.from({ length: 12 }, (_, i) => fn(i + 1));
     const total = valores.reduce((a, b) => a + b, 0);
     return { grupo, indicador, valores, total, format };
   };
@@ -95,7 +95,6 @@ function buildZooRows(
   // Pre-compute peso final per month
   const pesoFinKgRow_valores = Array.from({ length: 12 }, (_, i) => {
     const m = i + 1;
-    if (m > ateMes) return 0;
     const anoMes = `${ano}-${String(m).padStart(2, '0')}`;
     const pesosMap = pesosPorMes[anoMes] || {};
     const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, m);
@@ -144,26 +143,26 @@ function buildZooRows(
 
   // ── Base Início do Mês ──
   const cabIniRow = mkRow('Base — Início do Mês', 'Cabeças iniciais\n(cab)', cabIniMes);
-  const pesoIniKgRow = mkRow('Base — Início do Mês', 'Peso total inicial\n(kg)', pesoIniMes, 'kg');
-  const pesoIniArrobasRow = mkRow('Base — Início do Mês', 'Peso total inicial\n(@)', m => pesoIniMes(m) / 30, 'dec1');
+  const pesoIniKgRow = mkRow('Base — Início do Mês', 'Peso total inicial\n(kg)', pesoIniMes, 'padrao');
+  const pesoIniArrobasRow = mkRow('Base — Início do Mês', 'Peso total inicial\n(@)', m => pesoIniMes(m) / 30, 'padrao');
   const pesoMedioIniRow = mkRow('Base — Início do Mês', 'Peso médio inicial\n(kg/cab)', m => {
     const c = cabIniMes(m); return c > 0 ? pesoIniMes(m) / c : 0;
-  }, 'dec2');
+  }, 'padrao');
 
   rows.push(cabIniRow, pesoIniKgRow, pesoIniArrobasRow, pesoMedioIniRow);
 
   // ── Base Final do Mês ──
   const cabFinRow = mkRow('Base — Final do Mês', 'Cabeças finais\n(cab)', cabFinMes);
-  const pesoFinKgRow = mkRow('Base — Final do Mês', 'Peso total final\n(kg)', pesoFinMes, 'kg');
-  const pesoFinArrobasRow = mkRow('Base — Final do Mês', 'Peso total final\n(@)', m => pesoFinMes(m) / 30, 'dec1');
-  const pesoMedioFinRow = mkRow('Base — Final do Mês', 'Peso médio final\n(kg/cab)', pesoMedioMes, 'dec2');
+  const pesoFinKgRow = mkRow('Base — Final do Mês', 'Peso total final\n(kg)', pesoFinMes, 'padrao');
+  const pesoFinArrobasRow = mkRow('Base — Final do Mês', 'Peso total final\n(@)', m => pesoFinMes(m) / 30, 'padrao');
+  const pesoMedioFinRow = mkRow('Base — Final do Mês', 'Peso médio final\n(kg/cab)', pesoMedioMes, 'padrao');
 
   rows.push(cabFinRow, pesoFinKgRow, pesoFinArrobasRow, pesoMedioFinRow);
 
   // ── Base Média do Mês ──
-  const cabMediaMesRow = mkRow('Base — Média do Mês', 'Rebanho médio do mês\n(cab)', cabMediaMes, 'dec1');
-  const pesoMedioRebMesRow = mkRow('Base — Média do Mês', 'Peso médio do rebanho — no mês\n(kg/cab)', pesoMedioMes, 'dec2');
-  const areaMesRow = mkRow('Base — Média do Mês', 'Área produtiva — no mês\n(ha)', _m => areaProdutiva, 'dec1');
+  const cabMediaMesRow = mkRow('Base — Média do Mês', 'Rebanho médio do mês\n(cab)', cabMediaMes, 'padrao');
+  const pesoMedioRebMesRow = mkRow('Base — Média do Mês', 'Peso médio do rebanho — no mês\n(kg/cab)', pesoMedioMes, 'padrao');
+  const areaMesRow = mkRow('Base — Média do Mês', 'Área produtiva — no mês\n(ha)', _m => areaProdutiva, 'padrao');
 
   rows.push(cabMediaMesRow, pesoMedioRebMesRow, areaMesRow);
 
@@ -172,19 +171,19 @@ function buildZooRows(
     let soma = 0, n = 0;
     for (let i = 1; i <= m; i++) { const v = cabMediaMes(i); if (v > 0) { soma += v; n++; } }
     return n > 0 ? soma / n : 0;
-  }, 'dec1');
+  }, 'padrao');
 
   const pesoMedioPeriodoRow = mkRow('Base — Média do Período', 'Peso médio no período\n(kg/cab)', m => {
     let soma = 0, n = 0;
     for (let i = 1; i <= m; i++) { const v = pesoMedioMes(i); if (v > 0) { soma += v; n++; } }
     return n > 0 ? soma / n : 0;
-  }, 'dec2');
+  }, 'padrao');
 
   const areaPeriodoRow = mkRow('Base — Média do Período', 'Área produtiva — média no período\n(ha)', m => {
     let soma = 0, n = 0;
     for (let i = 1; i <= m; i++) { const v = areaMesRow.valores[i - 1]; if (v > 0) { soma += v; n++; } }
     return n > 0 ? soma / n : 0;
-  }, 'dec1');
+  }, 'padrao');
 
   rows.push(cabMediaPeriodoRow, pesoMedioPeriodoRow, areaPeriodoRow);
 
@@ -203,9 +202,9 @@ function buildZooRows(
     rows.push(mkRow('Movimentações — Entradas', `${label}\n(cab)`, m =>
       lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade, 0)));
     rows.push(mkRow('Movimentações — Entradas', `${label}\n(kg)`, m =>
-      lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0), 'kg'));
+      lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0), 'padrao'));
     rows.push(mkRow('Movimentações — Entradas', `${label}\n(@)`, m =>
-      lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + calcArrobasSafe(l), 0), 'dec1'));
+      lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + calcArrobasSafe(l), 0), 'padrao'));
     if (temValor) {
       rows.push(mkRow('Movimentações — Entradas', `${label}\n(R$)`, m =>
         lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + calcValorTotal(l), 0), 'money'));
@@ -225,10 +224,10 @@ function buildZooRows(
     rows.push(mkRow('Movimentações — Saídas', `${label}\n(cab)`, m =>
       lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade, 0)));
     rows.push(mkRow('Movimentações — Saídas', `${label}\n(kg)`, m =>
-      lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0), 'kg'));
+      lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0), 'padrao'));
     if (temArroba) {
       rows.push(mkRow('Movimentações — Saídas', `${label}\n(@)`, m =>
-        lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + calcArrobasSafe(l), 0), 'dec1'));
+        lancMes(m).filter(l => l.tipo === tipo).reduce((s, l) => s + calcArrobasSafe(l), 0), 'padrao'));
     }
     if (temValor) {
       rows.push(mkRow('Movimentações — Saídas', `${label}\n(R$)`, m =>
@@ -251,55 +250,55 @@ function buildZooRows(
   // ═══════════════════════════════════════════════
 
   // ── Área e Peso ──
-  const indAreaMesRow = mkRow('Indicadores — Área e Peso', 'Área produtiva — média no mês\n(ha)', _m => areaProdutiva, 'dec1');
+  const indAreaMesRow = mkRow('Indicadores — Área e Peso', 'Área produtiva — média no mês\n(ha)', _m => areaProdutiva, 'padrao');
   const indAreaPeriodoRow = mkRow('Indicadores — Área e Peso', 'Área produtiva — média no período\n(ha)', m => {
     let soma = 0, n = 0;
     for (let i = 1; i <= m; i++) { const v = indAreaMesRow.valores[i - 1]; if (v > 0) { soma += v; n++; } }
     return n > 0 ? soma / n : 0;
-  }, 'dec1');
-  const indPesoMesRow = mkRow('Indicadores — Área e Peso', 'Peso médio do rebanho — no mês\n(kg/cab)', pesoMedioMes, 'dec2');
+  }, 'padrao');
+  const indPesoMesRow = mkRow('Indicadores — Área e Peso', 'Peso médio do rebanho — no mês\n(kg/cab)', pesoMedioMes, 'padrao');
   const indPesoPeriodoRow = mkRow('Indicadores — Área e Peso', 'Peso médio do rebanho — no período\n(kg/cab)', m => {
     let soma = 0, n = 0;
     for (let i = 1; i <= m; i++) { const v = pesoMedioMes(i); if (v > 0) { soma += v; n++; } }
     return n > 0 ? soma / n : 0;
-  }, 'dec2');
+  }, 'padrao');
 
   rows.push(indAreaMesRow, indAreaPeriodoRow, indPesoMesRow, indPesoPeriodoRow);
 
   // ── Lotação ──
   const lotCabHaRow = mkRow('Indicadores — Lotação', 'Lotação — rebanho médio do mês\n(cab/ha)', m => {
     return areaProdutiva > 0 ? cabMediaMes(m) / areaProdutiva : 0;
-  }, 'dec2');
+  }, 'padrao');
   const lotCabHaAcumRow = mkRow('Indicadores — Lotação', 'Lotação — rebanho médio no período\n(cab/ha)', m => {
     let soma = 0, n = 0;
     for (let i = 1; i <= m; i++) { const v = lotCabHaRow.valores[i - 1]; if (v > 0) { soma += v; n++; } }
     return n > 0 ? soma / n : 0;
-  }, 'dec2');
+  }, 'padrao');
 
-  const uaRow = mkRow('Indicadores — Lotação', 'UA — rebanho médio do mês\n(UA)', m => calcUA(cabMediaMes(m), 450), 'dec1');
+  const uaRow = mkRow('Indicadores — Lotação', 'UA — rebanho médio do mês\n(UA)', m => calcUA(cabMediaMes(m), 450), 'padrao');
   const uaAcumRow = mkRow('Indicadores — Lotação', 'UA — rebanho médio no período\n(UA)', m => {
     let soma = 0, n = 0;
     for (let i = 1; i <= m; i++) { const v = uaRow.valores[i - 1]; if (v > 0) { soma += v; n++; } }
     return n > 0 ? soma / n : 0;
-  }, 'dec1');
+  }, 'padrao');
 
   const lotUaHaRow = mkRow('Indicadores — Lotação', 'Lotação — rebanho médio do mês\n(UA/ha)', m => {
     return areaProdutiva > 0 ? uaRow.valores[m - 1] / areaProdutiva : 0;
-  }, 'dec2');
+  }, 'padrao');
   const lotUaHaAcumRow = mkRow('Indicadores — Lotação', 'Lotação — rebanho médio no período\n(UA/ha)', m => {
     let soma = 0, n = 0;
     for (let i = 1; i <= m; i++) { const v = lotUaHaRow.valores[i - 1]; if (v > 0) { soma += v; n++; } }
     return n > 0 ? soma / n : 0;
-  }, 'dec2');
+  }, 'padrao');
 
   const lotKgHaRow = mkRow('Indicadores — Lotação', 'Lotação — peso médio do mês\n(kg/ha)', m => {
     return areaProdutiva > 0 ? pesoFinMes(m) / areaProdutiva : 0;
-  }, 'dec1');
+  }, 'padrao');
   const lotKgHaAcumRow = mkRow('Indicadores — Lotação', 'Lotação — peso médio no período\n(kg/ha)', m => {
     let soma = 0, n = 0;
     for (let i = 1; i <= m; i++) { const v = lotKgHaRow.valores[i - 1]; if (v > 0) { soma += v; n++; } }
     return n > 0 ? soma / n : 0;
-  }, 'dec1');
+  }, 'padrao');
 
   rows.push(lotCabHaRow, lotCabHaAcumRow, uaRow, uaAcumRow, lotUaHaRow, lotUaHaAcumRow, lotKgHaRow, lotKgHaAcumRow);
 
@@ -312,25 +311,25 @@ function buildZooRows(
     return (pFin - pIni - entradasKgMes(m) + saidasKgMes(m)) / 30;
   };
 
-  const arrobasMesRow = mkRow('Indicadores — Produção', 'Produção de arrobas — no mês\n(@)', arrobasProduzidasMesFn, 'dec1');
+  const arrobasMesRow = mkRow('Indicadores — Produção', 'Produção de arrobas — no mês\n(@)', arrobasProduzidasMesFn, 'padrao');
   const arrobasPeriodoRow = mkRow('Indicadores — Produção', 'Produção de arrobas — no período\n(@)', m => {
     let acum = 0; for (let i = 1; i <= m; i++) acum += arrobasProduzidasMesFn(i); return acum;
-  }, 'dec1');
+  }, 'padrao');
   const arrobasHaMesRow = mkRow('Indicadores — Produção', 'Produção de arrobas por ha — no mês\n(@/ha)', m => {
     return areaProdutiva > 0 ? arrobasProduzidasMesFn(m) / areaProdutiva : 0;
-  }, 'dec2');
+  }, 'padrao');
   const arrobasHaPeriodoRow = mkRow('Indicadores — Produção', 'Produção de arrobas por ha — no período\n(@/ha)', m => {
     let acum = 0; for (let i = 1; i <= m; i++) acum += arrobasProduzidasMesFn(i);
     return areaProdutiva > 0 ? acum / areaProdutiva : 0;
-  }, 'dec2');
+  }, 'padrao');
 
   rows.push(arrobasMesRow, arrobasPeriodoRow, arrobasHaMesRow, arrobasHaPeriodoRow);
 
   // ── Desfrute (realização — arrobas das saídas) ──
-  const desfruteMesRow = mkRow('Indicadores — Desfrute', 'Arrobas desfrutadas — no mês\n(@)', saidasArrobasMes, 'dec1');
+  const desfruteMesRow = mkRow('Indicadores — Desfrute', 'Arrobas desfrutadas — no mês\n(@)', saidasArrobasMes, 'padrao');
   const desfrutePeriodoRow = mkRow('Indicadores — Desfrute', 'Arrobas desfrutadas — no período\n(@)', m => {
     let acum = 0; for (let i = 1; i <= m; i++) acum += saidasArrobasMes(i); return acum;
-  }, 'dec1');
+  }, 'padrao');
 
   rows.push(desfruteMesRow, desfrutePeriodoRow);
 
@@ -340,13 +339,13 @@ function buildZooRows(
     const dias = diasNoMes(m);
     if (rebMedio <= 0 || dias <= 0) return 0;
     return (pesoFinMes(m) - pesoIniMes(m) - entradasKgMes(m) + saidasKgMes(m)) / rebMedio / dias;
-  }, 'dec2');
+  }, 'gmd');
 
   const gmdPeriodoRow = mkRow('Indicadores — Desempenho', 'GMD — no período\n(kg/cab/dia)', m => {
     let soma = 0, n = 0;
     for (let i = 1; i <= m; i++) { const v = gmdMesRow.valores[i - 1]; if (v !== 0 || cabMediaMes(i) > 0) { soma += v; n++; } }
     return n > 0 ? soma / n : 0;
-  }, 'dec2');
+  }, 'gmd');
 
   rows.push(gmdMesRow, gmdPeriodoRow);
 
@@ -360,13 +359,13 @@ interface FinRow {
   indicador: string;
   valores: number[];
   total: number;
-  format: 'money';
+  format: PainelFormatType;
 }
 
 function buildFinRows(
   lancamentos: FinanceiroLancamento[],
   ano: number,
-  ateMes: number,
+  _ateMes: number,
   arrobasProdAcum?: number[],
   valorRebanhoMes?: number[],
   pesoFinMes?: number[],
@@ -378,7 +377,7 @@ function buildFinRows(
   const doMes = (m: number) => doAno.filter(l => datePagtoMes(l) === m);
 
   const mkRow = (grupo: string, indicador: string, fn: (m: number) => number): FinRow => {
-    const valores = Array.from({ length: 12 }, (_, i) => i + 1 <= ateMes ? fn(i + 1) : 0);
+    const valores = Array.from({ length: 12 }, (_, i) => fn(i + 1));
     const total = valores.reduce((a, b) => a + b, 0);
     return { grupo, indicador, valores, total, format: 'money' };
   };
@@ -471,12 +470,8 @@ function buildFinRows(
   return rows;
 }
 
-function fmtVal(v: number, format: string): string {
-  if (format === 'money') return formatMoeda(v);
-  if (format === 'dec1') return v === 0 ? '-' : v.toFixed(1);
-  if (format === 'dec2') return v === 0 ? '-' : v.toFixed(2);
-  if (format === 'kg') return v === 0 ? '-' : formatNum(v);
-  return v === 0 ? '-' : formatNum(v);
+function fmtVal(v: number, format: PainelFormatType): string {
+  return formatPainel(v, format);
 }
 
 // ─── Export ───
@@ -488,7 +483,11 @@ function buildExcelSheet(rows: (ZooRow | FinRow)[], mesesHeaders: string[], incl
       : { Indicador: row.indicador };
 
     mesesHeaders.forEach((mes, index) => {
-      base[mes] = row.valores[index] ?? 0;
+      if (mes === 'Total') {
+        base[mes] = row.total;
+      } else {
+        base[mes] = row.valores[index] ?? 0;
+      }
     });
 
     
@@ -502,8 +501,8 @@ function buildExcelSheet(rows: (ZooRow | FinRow)[], mesesHeaders: string[], incl
   return { rows: data, cols };
 }
 
-function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, ateMes: number, fazendaNome: string) {
-  const mesesHeaders = MESES_LABELS.slice(0, Math.max(1, Math.min(12, ateMes)));
+function exportToExcel(zooRows: ZooRow[], finRows: FinRow[], ano: number, _ateMes: number, fazendaNome: string) {
+  const mesesHeaders = [...MESES_LABELS, 'Total'];
   const filename = `Painel_Consultor_${fazendaNome.replace(/\s+/g, '_')}_${ano}.xlsx`;
 
   const zooSheet = buildExcelSheet(zooRows, mesesHeaders, true);
@@ -637,26 +636,26 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
     }
   }, [zooRows, finRows, anoNum, ateMes, fazendaNome]);
 
-  const mesesVisiveis = MESES_LABELS.slice(0, ateMes);
-
   const renderTable = (rows: (ZooRow | FinRow)[]) => {
     let lastGrupo = '';
-    const colCount = mesesVisiveis.length + 1;
+    const colCount = 14; // indicator + 12 months + total
     return (
       <div className="overflow-x-auto border rounded">
         <table className="w-full text-[10px] border-collapse" style={{ tableLayout: 'fixed' }}>
           <colgroup>
-            <col style={{ width: '200px' }} />
-            {mesesVisiveis.map((_, i) => (
-              <col key={i} style={{ width: `${Math.max(52, Math.floor((100 - 20) / mesesVisiveis.length))}px` }} />
+            <col style={{ width: '160px' }} />
+            {MESES_LABELS.map((_, i) => (
+              <col key={i} />
             ))}
+            <col style={{ fontWeight: 'bold' }} />
           </colgroup>
           <thead className="sticky top-0 z-10">
             <tr className="bg-muted border-b">
               <th className="sticky left-0 z-20 bg-muted text-left text-[9px] font-semibold uppercase tracking-wider px-1.5 py-1">Indicador</th>
-              {mesesVisiveis.map(m => (
-                <th key={m} className="text-center text-[9px] font-semibold uppercase tracking-wider px-0.5 py-1">{m}</th>
+              {MESES_LABELS.map(m => (
+                <th key={m} className="text-right text-[9px] font-semibold uppercase tracking-wider px-0.5 py-1">{m}</th>
               ))}
+              <th className="text-right text-[9px] font-bold uppercase tracking-wider px-0.5 py-1">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -685,11 +684,14 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
                         </>
                       ) : row.indicador}
                     </td>
-                    {row.valores.slice(0, ateMes).map((v, i) => (
+                    {row.valores.map((v, i) => (
                       <td key={i} className="text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px]">
                         {fmtVal(v, row.format)}
                       </td>
                     ))}
+                    <td className="text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px] font-bold">
+                      {fmtVal(row.total, row.format)}
+                    </td>
                   </tr>
                 </React.Fragment>
               );
