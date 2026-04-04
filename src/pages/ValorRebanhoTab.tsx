@@ -83,22 +83,24 @@ function VariacaoBadge({ valor, label }: { valor: number | null; label: string }
   );
 }
 
-/* ─── Mini sparkline chart ─── */
-function MiniChart({ data, dataKey, color, title }: { data: { label: string; value: number }[]; dataKey: string; color: string; title: string }) {
+/* ─── Mini sparkline chart (side-by-side) ─── */
+const CHART_LABELS = ['Ini', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+function MiniChart({ data, color, title }: { data: { label: string; value: number | null }[]; color: string; title: string }) {
   return (
-    <div className="space-y-0.5">
-      <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">{title}</p>
-      <div className="h-[60px] w-full">
+    <div className="flex-1 min-w-0">
+      <p className="text-[8px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5 truncate">{title}</p>
+      <div className="h-[70px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 2, right: 4, bottom: 0, left: 4 }}>
-            <XAxis dataKey="label" tick={{ fontSize: 7 }} interval="preserveStartEnd" tickLine={false} axisLine={false} />
+          <LineChart data={data} margin={{ top: 2, right: 2, bottom: 0, left: 2 }}>
+            <XAxis dataKey="label" tick={{ fontSize: 6 }} interval={0} tickLine={false} axisLine={false} />
             <YAxis hide domain={['auto', 'auto']} />
             <RechartsTooltip
               contentStyle={{ fontSize: 10, padding: '2px 6px' }}
               labelStyle={{ fontSize: 9 }}
               formatter={(v: number) => [formatNum(v, 1), '']}
             />
-            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.5} dot={false} />
+            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.5} dot={false} connectNulls={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
