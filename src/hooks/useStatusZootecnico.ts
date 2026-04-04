@@ -452,7 +452,8 @@ export function useStatusZootecnico(
     else descValor = 'Preços completos';
     pendencias.push({ id: 'valor', label: 'Valor do Rebanho', descricao: descValor, status: statusValorCalc, resolverTab: 'valor_rebanho' });
 
-    // ── 5. Econômico (derivado dos pilares operacionais — financeiro é informativo, não trava) ──
+    // ── 5. Econômico (DERIVADO dos pilares operacionais — reflete a base, não decide) ──
+    // Econômico = síntese de Pastos + Categorias + Valor. Não inclui Financeiro.
     const pilaresOperacionais = [statusPastosCalc, statusCats, statusValorCalc];
     const statusEcon: StatusItem = pilaresOperacionais.every(s => s === 'fechado') ? 'fechado'
       : pilaresOperacionais.every(s => s === 'aberto') ? 'aberto' : 'parcial';
@@ -460,15 +461,20 @@ export function useStatusZootecnico(
       : statusEcon === 'parcial' ? 'Aguardando fechamento das bases' : 'Bases não fechadas';
     pendencias.push({ id: 'economico', label: 'Econômico', descricao: descEcon, status: statusEcon });
 
-    // Contadores
+    // Contadores (todos os 5 itens, para exibição na checklist)
     const contadores = { aberto: 0, parcial: 0, fechado: 0 };
     pendencias.forEach(p => contadores[p.status]++);
 
-    // Status geral (financeiro é informativo — não trava fechamento)
-    const pilaresDecisivos = [statusPastosCalc, statusCats, statusValorCalc, statusEcon];
+    // ── STATUS GERAL DO MÊS ──
+    // REGRA DE PRODUTO:
+    //   • Apenas os 3 PILARES OPERACIONAIS definem o status geral:
+    //     1. Pastos  2. Categorias (Rebanho conciliado)  3. Valor do Rebanho
+    //   • Financeiro é INFORMATIVO — aparece na checklist mas NÃO trava fechamento.
+    //   • Econômico é DERIVADO dos 3 pilares — não entra de novo no critério
+    //     para evitar contagem dupla.
     let status: StatusGeral = 'parcial';
-    if (pilaresDecisivos.every(s => s === 'fechado')) status = 'fechado';
-    else if (pilaresDecisivos.every(s => s === 'aberto')) status = 'aberto';
+    if (pilaresOperacionais.every(s => s === 'fechado')) status = 'fechado';
+    else if (pilaresOperacionais.every(s => s === 'aberto')) status = 'aberto';
 
     return { status, pendencias, contadores, loading, pastosPorFazenda };
   }, [

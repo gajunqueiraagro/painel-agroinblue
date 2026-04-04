@@ -256,7 +256,7 @@ export function useStatusFechamentosAno(
         else if (statusValorCalc === 'parcial') descValor = `${precosDefinidos}/${categoriasComSaldo} categorias com preço`;
         else descValor = 'Preços completos';
 
-        // ── 5. Econômico (financeiro é informativo, não trava — IDENTICAL to useStatusZootecnico) ──
+        // ── 5. Econômico (DERIVADO dos pilares operacionais — reflete a base, não decide) ──
         const pilaresOperacionais = [statusPastosCalc, catsResult.status, statusValorCalc];
         const statusEcon = pilaresOperacionais.every((s) => s === 'fechado')
           ? 'fechado'
@@ -282,11 +282,13 @@ export function useStatusFechamentosAno(
         const contadores = { aberto: 0, parcial: 0, fechado: 0 };
         pendencias.forEach((p) => contadores[p.status]++);
 
-        // ── StatusGeral (financeiro é informativo — IDENTICAL to useStatusZootecnico) ──
-        const pilaresDecisivos = [statusPastosCalc, catsResult.status, statusValorCalc, statusEcon];
+        // ── STATUS GERAL DO MÊS ──
+        // REGRA DE PRODUTO (IDENTICAL to useStatusZootecnico):
+        //   • Apenas os 3 PILARES OPERACIONAIS: Pastos, Categorias, Valor
+        //   • Financeiro = informativo. Econômico = derivado. Nenhum trava.
         let statusGeral: StatusGeral = 'parcial';
-        if (pilaresDecisivos.every((s) => s === 'fechado')) statusGeral = 'fechado';
-        else if (pilaresDecisivos.every((s) => s === 'aberto')) statusGeral = 'aberto';
+        if (pilaresOperacionais.every((s) => s === 'fechado')) statusGeral = 'fechado';
+        else if (pilaresOperacionais.every((s) => s === 'aberto')) statusGeral = 'aberto';
 
         // ── StatusMes (UI classification derived from statusGeral) ──
         const hasAnyStarted =
