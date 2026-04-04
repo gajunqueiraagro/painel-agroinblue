@@ -10,6 +10,7 @@ import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
 import { useValorRebanho, type SnapshotDetalheCategoria } from '@/hooks/useValorRebanho';
+import { useValorRebanhoGlobal } from '@/hooks/useValorRebanhoGlobal';
 import { usePrecoMercado } from '@/hooks/usePrecoMercado';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_COLS } from '@/lib/calculos/labels';
