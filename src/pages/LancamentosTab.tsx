@@ -2796,6 +2796,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onEditarVenda={loadVendaForEdit}
           onEditarCompra={loadCompraForEdit}
           onEditarTransferencia={loadTransferenciaForEdit}
+          fazendaId={fazendaAtual?.id}
         />
       )}
 
