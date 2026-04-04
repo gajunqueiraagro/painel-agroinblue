@@ -247,8 +247,7 @@ export function MapaPastosTab() {
           </div>
         </div>
 
-        {/* Tabela - ocupa todo o espaço restante */}
-        <div className="flex-1 min-h-0 px-2 pt-2 pb-16 flex flex-col">
+        {/* Tabela - ocupa todo o espaço restante, scroll apenas aqui */}
         {loading ? (
           <div className="text-center py-8 text-muted-foreground">Carregando mapa...</div>
         ) : rows.length === 0 ? (
@@ -262,7 +261,6 @@ export function MapaPastosTab() {
             getQualidadeColor={getQualidadeColor}
           />
         )}
-        </div>
       </div>
 
       <ImportMapaPastos
