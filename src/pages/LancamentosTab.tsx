@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import { useStatusPilares } from '@/hooks/useStatusPilares';
+import {
   Lancamento,
   CATEGORIAS,
   TIPOS_ENTRADA,
@@ -12,6 +12,7 @@ import { useStatusPilares } from '@/hooks/useStatusPilares';
   isReclassificacao,
   kgToArrobas,
 } from '@/types/cattle';
+import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
