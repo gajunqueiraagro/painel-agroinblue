@@ -433,7 +433,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         {/* Container superior: tabela esquerda + botões direita */}
         <div className="flex items-start justify-between gap-4">
           {/* Tabela resumo conciliação - 50% no desktop */}
-          <div className="flex items-start gap-1 w-full md:w-[70%] shrink-0">
+          <div className="flex items-start gap-1 w-full md:w-[50%] shrink-0">
             <div className="overflow-x-auto flex-1">
               <table className="w-full text-[10px] border-collapse">
                 <thead>
@@ -595,7 +595,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         </div>
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="px-2 pt-2 pb-4">
 
       {loading ? (
         <div className="text-center py-8 text-muted-foreground">Carregando...</div>
@@ -605,84 +605,71 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           <p className="text-xs mt-1">Cadastre pastos na aba "Pastos" e marque "Entra na conciliação".</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1.5">
           {pastosAtivos.map(p => {
             const fech = getFechamento(p.id);
             const status = fech?.status;
             const resumo = getResumo(fech, p);
             const adminClose = isAdminClosed(fech);
-            const tipoStyle = getTipoUsoStyle(p.tipo_uso);
+            const tipoNorm = normalizeTipoUso(p.tipo_uso);
+            const isEmpty = resumo.totalCabecas === 0;
+
+            // Card background color by tipo_uso
+            const cardBg = isEmpty
+              ? 'bg-muted/40 border-border/50'
+              : tipoNorm === 'recria'
+              ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700'
+              : tipoNorm === 'engorda'
+              ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700'
+              : tipoNorm === 'cria'
+              ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-300 dark:border-orange-700'
+              : 'bg-card border-border';
+
             return (
               <button
                 key={p.id}
                 onClick={() => handleOpenPasto(p)}
-                className={`w-full rounded-lg border px-2.5 py-2 text-left hover:bg-accent/50 transition-colors border-l-4 ${tipoStyle.border} ${tipoStyle.bg}`}
+                className={`w-full rounded-md border px-2 py-1.5 text-left hover:ring-1 hover:ring-primary/40 transition-all ${cardBg}`}
               >
-                {/* Header: nome + badge */}
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-sm truncate mr-1">{p.nome}</span>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {status === 'fechado' ? (
-                      adminClose ? (
-                        <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[10px] px-1.5 py-0 h-[18px]">
-                          <Lock className="h-3 w-3 mr-0.5" />Global
-                        </Badge>
-                      ) : (
-                        <Badge variant="default" className="text-[10px] px-1.5 py-0 h-[18px]"><CheckCircle className="h-3 w-3 mr-0.5" />Fechado</Badge>
-                      )
-                    ) : status === 'rascunho' ? (
-                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-[18px]"><Circle className="h-3 w-3 mr-0.5" />Rascunho</Badge>
+                {/* Line 1: Name + Status badge */}
+                <div className="flex items-center justify-between gap-1">
+                  <span className="font-bold text-[11px] text-foreground truncate">{p.nome}</span>
+                  {status === 'fechado' ? (
+                    adminClose ? (
+                      <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[8px] px-1 py-0 h-[14px] shrink-0">
+                        <Lock className="h-2.5 w-2.5 mr-0.5" />Global
+                      </Badge>
                     ) : (
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-[18px]"><Circle className="h-3 w-3 mr-0.5" />Não iniciado</Badge>
-                    )}
-                  </div>
+                      <Badge variant="default" className="text-[8px] px-1 py-0 h-[14px] shrink-0"><CheckCircle className="h-2.5 w-2.5 mr-0.5" />Fechado</Badge>
+                    )
+                  ) : status === 'rascunho' ? (
+                    <Badge variant="secondary" className="text-[8px] px-1 py-0 h-[14px] shrink-0">Rasc.</Badge>
+                  ) : null}
                 </div>
 
-                {/* Compact info row: lote + categorias */}
-                {(fech?.lote_mes || (fech && resumo.catBreakdown.length > 0)) && (
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0 text-[10px] text-muted-foreground mt-0.5">
-                    {fech?.lote_mes && <span className="font-medium">Lote: {fech.lote_mes}</span>}
-                    {fech && resumo.catBreakdown.length > 0 && resumo.catBreakdown.map(cb => (
-                      <span key={cb.sigla}>
-                        <span className="font-medium text-foreground">{cb.sigla}</span> {cb.qty}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Indicadores compactos */}
-                {fech && resumo.totalCabecas > 0 && (
-                  <div className="flex flex-wrap gap-x-3 gap-y-0 text-[10px] text-muted-foreground mt-0.5">
-                    {fech.qualidade_mes && (
-                      <span>Qual: <span className="font-medium text-foreground">{fech.qualidade_mes}</span></span>
-                    )}
-                    {resumo.uaHa && (
-                      <span>UA/ha: <span className="font-medium text-foreground">{formatNum(resumo.uaHa, 2)}</span></span>
-                    )}
-                    {resumo.lotacaoKgHa && (
-                      <span>Lotação: <span className="font-medium text-foreground">{formatNum(resumo.lotacaoKgHa, 0)} kg/ha</span></span>
-                    )}
-                  </div>
-                )}
-
-                {/* Footer: área | cabeças | tipo uso */}
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/30 pt-1 mt-1">
-                  <div className="flex items-center">
-                    <span>{p.area_produtiva_ha ? `📍 ${formatNum(p.area_produtiva_ha, 1)} ha` : '—'}</span>
-                    {resumo.totalCabecas > 0 && (
-                      <>
-                        <span className="mx-1.5 text-border">|</span>
-                        <span className="font-medium text-foreground">{resumo.totalCabecas} cab</span>
-                      </>
-                    )}
-                  </div>
-                  {p.tipo_uso && (
-                    <Badge variant="outline" className={`text-[9px] px-1 py-0 h-4 font-bold uppercase tracking-wide ${tipoStyle.text} border-current/30`}>
-                      {tipoStyle.icon === 'plant' && <Sprout className="h-3 w-3 mr-0.5" />}
-                      {p.tipo_uso}
-                    </Badge>
-                  )}
+                {/* Line 2: Cabeças (destaque) + Área + Tipo uso */}
+                <div className="flex items-baseline justify-between mt-0.5">
+                  <span className="font-extrabold text-sm tabular-nums text-foreground">
+                    {resumo.totalCabecas > 0 ? `${resumo.totalCabecas} cab` : '—'}
+                  </span>
+                  {p.area_produtiva_ha ? (
+                    <span className="text-[9px] text-muted-foreground">{formatNum(p.area_produtiva_ha, 1)} ha</span>
+                  ) : null}
                 </div>
+
+                {/* Tipo uso tag */}
+                {p.tipo_uso && (
+                  <div className="mt-0.5">
+                    <span className={`text-[8px] font-bold uppercase tracking-wider ${
+                      tipoNorm === 'recria' ? 'text-emerald-700 dark:text-emerald-400'
+                      : tipoNorm === 'engorda' ? 'text-blue-700 dark:text-blue-400'
+                      : tipoNorm === 'cria' ? 'text-orange-700 dark:text-orange-400'
+                      : 'text-muted-foreground'
+                    }`}>
+                      {p.tipo_uso.toUpperCase()}
+                    </span>
+                  </div>
+                )}
               </button>
             );
           })}
