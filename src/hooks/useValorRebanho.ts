@@ -9,6 +9,14 @@ export interface PrecoCategoria {
   preco_kg: number;
 }
 
+export interface SnapshotDetalheCategoria {
+  categoria: string;
+  quantidade: number;
+  peso_medio_kg: number;
+  preco_kg: number;
+  valor_total_categoria: number;
+}
+
 export interface FechamentoStatus {
   status: 'aberto' | 'fechado';
   fechado_por?: string | null;
@@ -26,11 +34,9 @@ export function useValorRebanho(anoMes: string) {
 
   const isFechado = fechamento.status === 'fechado';
 
-  // Check if user can edit (dono or gerente)
   const papel = fazendaAtual?.papel;
   const isAdmin = papel === 'dono' || papel === 'gerente';
 
-  // Load fechamento status
   const loadFechamentoStatus = useCallback(async () => {
     if (!fazendaId || fazendaId === '__global__') return;
     try {
@@ -44,7 +50,7 @@ export function useValorRebanho(anoMes: string) {
       if (error) throw error;
       if (data) {
         setFechamento({
-          status: data.status as 'aberto' | 'fechado',
+          status: data.status === 'fechado' ? 'fechado' : 'aberto',
           fechado_por: data.fechado_por,
           fechado_em: data.fechado_em,
         });
@@ -56,7 +62,6 @@ export function useValorRebanho(anoMes: string) {
     }
   }, [fazendaId, anoMes]);
 
-  // Load prices for the month
   const loadPrecos = useCallback(async () => {
     if (!fazendaId || fazendaId === '__global__') return;
     setLoading(true);
@@ -76,14 +81,16 @@ export function useValorRebanho(anoMes: string) {
     }
   }, [fazendaId, anoMes]);
 
-  // Load previous month prices as suggestion
   const loadPrecosMesAnterior = useCallback(async (): Promise<PrecoCategoria[]> => {
     if (!fazendaId || fazendaId === '__global__') return [];
     try {
       const [anoStr, mesStr] = anoMes.split('-');
       let ano = Number(anoStr);
       let mes = Number(mesStr) - 1;
-      if (mes < 1) { mes = 12; ano--; }
+      if (mes < 1) {
+        mes = 12;
+        ano--;
+      }
       const prevAnoMes = `${ano}-${String(mes).padStart(2, '0')}`;
 
       const { data, error } = await supabase
@@ -99,7 +106,6 @@ export function useValorRebanho(anoMes: string) {
     }
   }, [fazendaId, anoMes]);
 
-  // Load December prices of previous year (base for "sem efeito de mercado")
   const loadPrecosBaseAnual = useCallback(async (): Promise<PrecoCategoria[]> => {
     if (!fazendaId || fazendaId === '__global__') return [];
     try {
@@ -124,12 +130,16 @@ export function useValorRebanho(anoMes: string) {
     loadFechamentoStatus();
   }, [loadPrecos, loadFechamentoStatus]);
 
-  // Save/upsert prices and close the month
-  const salvarPrecos = useCallback(async (items: PrecoCategoria[], valorTotal?: number, pesoTotalKg?: number) => {
-    if (!fazendaId || fazendaId === '__global__') return;
+  const salvarPrecos = useCallback(async (
+    items: PrecoCategoria[],
+    valorTotal?: number,
+    pesoTotalKg?: number,
+    itensFechamento: SnapshotDetalheCategoria[] = [],
+  ) => {
+    if (!fazendaId || fazendaId === '__global__' || !fazendaAtual?.cliente_id) return;
+
     setSaving(true);
     try {
-      // Delete existing for this month, then insert
       await supabase
         .from('valor_rebanho_mensal')
         .delete()
@@ -140,7 +150,7 @@ export function useValorRebanho(anoMes: string) {
         .filter(i => i.preco_kg > 0)
         .map(i => ({
           fazenda_id: fazendaId,
-          cliente_id: fazendaAtual?.cliente_id!,
+          cliente_id: fazendaAtual.cliente_id,
           ano_mes: anoMes,
           categoria: i.categoria,
           preco_kg: i.preco_kg,
@@ -153,21 +163,50 @@ export function useValorRebanho(anoMes: string) {
         if (error) throw error;
       }
 
-      // Upsert fechamento status to 'fechado' with the computed total and weight snapshot
-      const { error: fErr } = await supabase
+      const { error: deleteDetalheError } = await supabase
+        .from('valor_rebanho_fechamento_itens')
+        .delete()
+        .eq('fazenda_id', fazendaId)
+        .eq('ano_mes', anoMes);
+
+      if (deleteDetalheError) throw deleteDetalheError;
+
+      const fechadoEm = new Date().toISOString();
+      const detalheRows = itensFechamento.map(item => ({
+        fazenda_id: fazendaId,
+        cliente_id: fazendaAtual.cliente_id,
+        ano_mes: anoMes,
+        categoria: item.categoria,
+        quantidade: item.quantidade ?? 0,
+        peso_medio_kg: item.peso_medio_kg ?? 0,
+        preco_kg: item.preco_kg ?? 0,
+        valor_total_categoria: item.valor_total_categoria ?? 0,
+        fechado_em: fechadoEm,
+        fechado_por: user?.id || null,
+      }));
+
+      if (detalheRows.length > 0) {
+        const { error: detalheError } = await supabase
+          .from('valor_rebanho_fechamento_itens')
+          .insert(detalheRows);
+
+        if (detalheError) throw detalheError;
+      }
+
+      const { error: fechamentoError } = await supabase
         .from('valor_rebanho_fechamento')
         .upsert({
           fazenda_id: fazendaId,
-          cliente_id: fazendaAtual?.cliente_id!,
+          cliente_id: fazendaAtual.cliente_id,
           ano_mes: anoMes,
           status: 'fechado',
           fechado_por: user?.id || null,
-          fechado_em: new Date().toISOString(),
+          fechado_em: fechadoEm,
           valor_total: valorTotal ?? 0,
           peso_total_kg: pesoTotalKg ?? 0,
         } as any, { onConflict: 'fazenda_id,ano_mes' });
 
-      if (fErr) throw fErr;
+      if (fechamentoError) throw fechamentoError;
 
       toast.success('Valores salvos e fechamento registrado');
       await loadPrecos();
@@ -177,9 +216,8 @@ export function useValorRebanho(anoMes: string) {
     } finally {
       setSaving(false);
     }
-  }, [fazendaId, anoMes, user, loadPrecos, loadFechamentoStatus]);
+  }, [fazendaId, anoMes, user, fazendaAtual?.cliente_id, loadPrecos, loadFechamentoStatus]);
 
-  // Reopen the month (admin only)
   const reabrirFechamento = useCallback(async () => {
     if (!fazendaId || fazendaId === '__global__' || !isAdmin) return;
     try {

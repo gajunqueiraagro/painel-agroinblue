@@ -3577,6 +3577,69 @@ export type Database = {
           },
         ]
       }
+      valor_rebanho_fechamento_itens: {
+        Row: {
+          ano_mes: string
+          categoria: string
+          cliente_id: string
+          created_at: string
+          fazenda_id: string
+          fechado_em: string | null
+          fechado_por: string | null
+          id: string
+          peso_medio_kg: number
+          preco_kg: number
+          quantidade: number
+          updated_at: string
+          valor_total_categoria: number
+        }
+        Insert: {
+          ano_mes: string
+          categoria: string
+          cliente_id: string
+          created_at?: string
+          fazenda_id: string
+          fechado_em?: string | null
+          fechado_por?: string | null
+          id?: string
+          peso_medio_kg?: number
+          preco_kg?: number
+          quantidade?: number
+          updated_at?: string
+          valor_total_categoria?: number
+        }
+        Update: {
+          ano_mes?: string
+          categoria?: string
+          cliente_id?: string
+          created_at?: string
+          fazenda_id?: string
+          fechado_em?: string | null
+          fechado_por?: string | null
+          id?: string
+          peso_medio_kg?: number
+          preco_kg?: number
+          quantidade?: number
+          updated_at?: string
+          valor_total_categoria?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "valor_rebanho_fechamento_itens_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "valor_rebanho_fechamento_itens_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       valor_rebanho_mensal: {
         Row: {
           ano_mes: string
