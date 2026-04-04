@@ -784,7 +784,6 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
    * tem fonte prevista configurada. Se fonte_tipo === 'sem_fonte',
    * retornar string vazia — NUNCA copiar valor do Realizado.
    */
-  const isPrevisto = cenario === 'previsto';
 
   const hasPrevistoSource = useCallback((indicadorId?: string): boolean => {
     if (!indicadorId) return false;
