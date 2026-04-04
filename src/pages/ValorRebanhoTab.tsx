@@ -837,14 +837,20 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           </span>
         )}
 
-        {uMesFechado && (
+        {isMesFuturo && (
+          <Badge variant="outline" className="gap-1 text-xs text-muted-foreground">
+            <Lock className="h-3 w-3" /> Futuro
+          </Badge>
+        )}
+
+        {!isMesFuturo && uMesFechado && (
           <Badge variant="secondary" className="gap-1 text-xs">
             <Lock className="h-3 w-3" /> Fechado
             {isGlobal && ` (${globalData.fazendasFechadas}/${globalData.fazendasTotal})`}
           </Badge>
         )}
 
-        {!uMesFechado && (
+        {!isMesFuturo && !uMesFechado && (
           <Badge variant="outline" className="gap-1 text-xs">
             <Info className="h-3 w-3" /> Live
           </Badge>
