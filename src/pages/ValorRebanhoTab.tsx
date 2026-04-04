@@ -748,8 +748,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   // Charts — global
   const uChartDataValor = useMemo(() => {
     if (!isGlobal) return chartDataValor;
+    const dezKey = `${Number(anoFiltro) - 1}-12`;
     return CHART_LABELS.map((label, idx) => {
-      if (idx === 0) return { label, value: null };
+      if (idx === 0) return { label, value: uHistoricoPorMes[dezKey]?.valor ?? null };
       const mes = idx;
       if (mes > mesNum) return { label, value: null };
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
@@ -762,8 +763,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const uChartDataArrobas = useMemo(() => {
     if (!isGlobal) return chartDataArrobas;
+    const dezKey = `${Number(anoFiltro) - 1}-12`;
     return CHART_LABELS.map((label, idx) => {
-      if (idx === 0) return { label, value: null };
+      if (idx === 0) {
+        const frozen = uHistoricoPorMes[dezKey];
+        return { label, value: frozen ? frozen.pesoKg / 30 : null };
+      }
       const mes = idx;
       if (mes > mesNum) return { label, value: null };
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
@@ -777,8 +782,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const uChartDataPrecoArroba = useMemo(() => {
     if (!isGlobal) return chartDataPrecoArroba;
+    const dezKey = `${Number(anoFiltro) - 1}-12`;
     return CHART_LABELS.map((label, idx) => {
-      if (idx === 0) return { label, value: null };
+      if (idx === 0) {
+        const frozen = uHistoricoPorMes[dezKey];
+        return { label, value: frozen && frozen.pesoKg > 0 ? frozen.valor / (frozen.pesoKg / 30) : null };
+      }
       const mes = idx;
       if (mes > mesNum) return { label, value: null };
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;

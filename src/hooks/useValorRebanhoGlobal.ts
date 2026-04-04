@@ -356,8 +356,12 @@ export function useValorRebanhoGlobal(
   // Historico for month bar + charts
   const historicoPorMes = useMemo(() => {
     const map: Record<string, HistoricoMesGlobal> = {};
-    for (let m = 1; m <= 12; m++) {
-      const key = `${anoFiltro}-${String(m).padStart(2, '0')}`;
+    // Include Dec(ano-1) for chart "I" point
+    const allKeys = [
+      `${Number(anoFiltro) - 1}-12`,
+      ...Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`),
+    ];
+    for (const key of allKeys) {
       let totalValor = 0;
       let totalPeso = 0;
       let todasFechadas = true;
