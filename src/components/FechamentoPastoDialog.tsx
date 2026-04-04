@@ -74,27 +74,33 @@ export function FechamentoPastoDialog({
 
   useEffect(() => {
     setStatus(fechamento.status);
-    setLoteMes(fechamento.lote_mes || '');
-    setTipoUsoMes(fechamento.tipo_uso_mes || '');
-    setQualidadeMes(fechamento.qualidade_mes);
-    setObservacaoMes(fechamento.observacao_mes || '');
   }, [fechamento]);
 
-  useEffect(() => {
-    if (!open) return;
-    setItens(categorias.map(c => ({ categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: null, observacoes: null, origem_dado: 'manual' })));
-  }, [open, categorias]);
-
+  // Load items + meta when modal opens
   useEffect(() => {
     if (!open || !fechamento) return;
+    const blank = categorias.map(c => ({ categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: null, observacoes: null, origem_dado: 'manual' }));
+    setItens(blank);
+
     loadItens(fechamento.id).then(existing => {
       if (existing.length > 0) {
+        // Has saved data — load items + meta from DB record
         setItens(categorias.map(c => {
           const found = existing.find(e => e.categoria_id === c.id);
           return found
             ? { categoria_id: c.id, quantidade: found.quantidade, peso_medio_kg: found.peso_medio_kg, lote: found.lote, observacoes: found.observacoes, origem_dado: found.origem_dado }
             : { categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: null, observacoes: null, origem_dado: 'manual' };
         }));
+        setLoteMes(fechamento.lote_mes || '');
+        setTipoUsoMes(fechamento.tipo_uso_mes || '');
+        setQualidadeMes(fechamento.qualidade_mes);
+        setObservacaoMes(fechamento.observacao_mes || '');
+      } else {
+        // No saved items — pasto não iniciado → everything blank
+        setLoteMes('');
+        setTipoUsoMes('');
+        setQualidadeMes(null);
+        setObservacaoMes('');
       }
     });
   }, [open, fechamento, categorias, loadItens]);
@@ -196,19 +202,27 @@ export function FechamentoPastoDialog({
   const tipoUsoLabel = TIPOS_USO_OPTIONS.find(t => t.value === tipoUsoMes)?.label || tipoUsoMes;
 
   // ── Render de um grupo (machos ou fêmeas) ──
+  const formatPeso = (v: number | null) => {
+    if (v == null || v === 0) return '';
+    return v.toFixed(2).replace('.', ',');
+  };
+
   const renderGrupo = (label: string, cats: CategoriaRebanho[], colorAccent: string, tabBase: number) => (
     <div>
       <div className={`text-xs font-bold uppercase tracking-widest mb-2 ${colorAccent}`}>{label}</div>
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-4 pl-8">
         {/* Labels column */}
         <div className="flex flex-col pt-[22px] gap-1 shrink-0 w-[40px]">
           <span className="text-[11px] font-bold text-muted-foreground h-8 flex items-center">Qtde</span>
           <span className="text-[11px] font-bold text-muted-foreground h-8 flex items-center">Peso</span>
         </div>
         {/* Category cards */}
-        <div className="flex gap-3 flex-wrap">
+        <div className="flex gap-4 flex-wrap">
           {cats.map((c, idx) => {
             const item = getItem(c.id);
+            const pesoDisplay = item?.peso_medio_kg != null && item.peso_medio_kg !== 0
+              ? item.peso_medio_kg.toFixed(2)
+              : '';
             return (
               <div key={c.id} className="flex flex-col items-center gap-1" style={{ minWidth: '62px' }}>
                 <span className="text-[11px] font-semibold text-foreground whitespace-nowrap mb-0.5">{c.nome}</span>
@@ -227,13 +241,18 @@ export function FechamentoPastoDialog({
                   )}
                 </div>
                 <Input
-                  type="number" inputMode="decimal" step="0.01"
+                  type="text" inputMode="decimal"
                   tabIndex={tabBase + idx * 2 + 1}
-                  value={item?.peso_medio_kg ?? ''}
-                  onChange={e => updateItem(c.id, 'peso_medio_kg', e.target.value ? Number(e.target.value) : null)}
+                  value={pesoDisplay}
+                  onChange={e => {
+                    const raw = e.target.value.replace(',', '.');
+                    updateItem(c.id, 'peso_medio_kg', raw === '' ? null : Number(raw) || null);
+                  }}
                   onBlur={e => {
-                    if (e.target.value) {
-                      updateItem(c.id, 'peso_medio_kg', Math.round(Number(e.target.value) * 100) / 100);
+                    const raw = e.target.value.replace(',', '.');
+                    if (raw) {
+                      const n = Math.round(parseFloat(raw) * 100) / 100;
+                      if (!isNaN(n)) updateItem(c.id, 'peso_medio_kg', n);
                     }
                   }}
                   disabled={isFechado}
