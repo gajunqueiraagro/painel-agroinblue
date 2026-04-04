@@ -382,7 +382,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const mesNum = Number(mesFiltro);
   const mesAnteriorKey = mesNum > 1 ? String(mesNum - 1).padStart(2, '0') : '12';
   const anoMesAnterior = mesNum > 1 ? `${anoFiltro}-${mesAnteriorKey}` : `${Number(anoFiltro) - 1}-12`;
-  const anoMesJan = `${anoFiltro}-01`;
+  const anoMesDezAnterior = `${Number(anoFiltro) - 1}-12`;
 
   const resumoMesAnterior = useFechamentoCategoria(
     fazendaId,
@@ -394,15 +394,15 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   );
   const { precos: precosMesAnterior } = useValorRebanho(anoMesAnterior);
 
-  const resumoJan = useFechamentoCategoria(
+  const resumoDezAnterior = useFechamentoCategoria(
     fazendaId,
-    Number(anoFiltro),
-    1,
+    Number(anoFiltro) - 1,
+    12,
     lancamentos,
     saldosIniciais,
     categorias,
   );
-  const { precos: precosJan } = useValorRebanho(anoMesJan);
+  const { precos: precosDezAnterior } = useValorRebanho(anoMesDezAnterior);
 
   const metricasMesAnteriorLive = useMemo(() => {
     let valor = 0;
@@ -419,20 +419,20 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     return buildMetricsFromTotals(valor, cabecas, pesoTotalKg);
   }, [resumoMesAnterior.rows, precosMesAnterior]);
 
-  const metricasJaneiroLive = useMemo(() => {
+  const metricasDezAnteriorLive = useMemo(() => {
     let valor = 0;
     let cabecas = 0;
     let pesoTotalKg = 0;
 
-    resumoJan.rows.forEach(row => {
-      const precoKg = precosJan.find(p => p.categoria === row.categoriaCodigo)?.preco_kg || 0;
+    resumoDezAnterior.rows.forEach(row => {
+      const precoKg = precosDezAnterior.find(p => p.categoria === row.categoriaCodigo)?.preco_kg || 0;
       valor += row.quantidadeFinal * (row.pesoMedioFinalKg || 0) * precoKg;
       cabecas += row.quantidadeFinal;
       pesoTotalKg += row.quantidadeFinal * (row.pesoMedioFinalKg || 0);
     });
 
     return buildMetricsFromTotals(valor, cabecas, pesoTotalKg);
-  }, [resumoJan.rows, precosJan]);
+  }, [resumoDezAnterior.rows, precosDezAnterior]);
 
   const [historicoPorMes, setHistoricoPorMes] = useState<Record<string, HistoricoMes>>({});
   const [historicoDetalhadoPorMes, setHistoricoDetalhadoPorMes] = useState<Record<string, SnapshotDetalheCategoria[]>>({});
@@ -445,7 +445,10 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     }
 
     const fetchHistorico = async () => {
-      const anoMeses = Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`);
+      const anoMeses = [
+        `${Number(anoFiltro) - 1}-12`,
+        ...Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`),
+      ];
 
       try {
         const [fechamentoRes, itensRes] = await Promise.all([
@@ -564,9 +567,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   }, [fonteMes, metricasMesAnteriorLive, buildFrozenMetrics, anoMesAnterior]);
 
   const metricasInicioAno = useMemo(() => {
-    if (fonteMes === 'live') return metricasJaneiroLive;
-    return buildFrozenMetrics(anoMesJan);
-  }, [fonteMes, metricasJaneiroLive, buildFrozenMetrics, anoMesJan]);
+    if (fonteMes === 'live') return metricasDezAnteriorLive;
+    return buildFrozenMetrics(anoMesDezAnterior);
+  }, [fonteMes, metricasDezAnteriorLive, buildFrozenMetrics, anoMesDezAnterior]);
 
   const rowsExibicao = fonteMes === 'snapshot' ? snapshotRowsSelecionado : liveRows;
   const metricasTabela = useMemo(() => {
@@ -596,7 +599,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const chartDataValor = useMemo(() => {
     return buildChartData((mes) => {
-      const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
+      if (mes === 0) {
+        const dezKey = `${Number(anoFiltro) - 1}-12`;
+        return getFrozen(dezKey)?.valor ?? null;
+      }
+      const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
       if (mes === mesNum && fonteMes === 'live') {
         return metricasLiveSelecionado.valor;
       }
@@ -606,7 +613,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const chartDataArrobas = useMemo(() => {
     return buildChartData((mes) => {
-      const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
+      if (mes === 0) {
+        const dezKey = `${Number(anoFiltro) - 1}-12`;
+        const frozen = getFrozen(dezKey);
+        return frozen ? frozen.pesoKg / 30 : null;
+      }
+      const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
       if (mes === mesNum && fonteMes === 'live') {
         return metricasLiveSelecionado.totalArrobas;
       }
@@ -617,7 +629,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const chartDataPrecoArroba = useMemo(() => {
     return buildChartData((mes) => {
-      const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
+      if (mes === 0) {
+        const dezKey = `${Number(anoFiltro) - 1}-12`;
+        const frozen = getFrozen(dezKey);
+        return frozen && frozen.pesoKg > 0 ? frozen.valor / (frozen.pesoKg / 30) : null;
+      }
+      const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
       if (mes === mesNum && fonteMes === 'live') {
         return metricasLiveSelecionado.precoArroba;
       }
@@ -731,8 +748,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   // Charts — global
   const uChartDataValor = useMemo(() => {
     if (!isGlobal) return chartDataValor;
+    const dezKey = `${Number(anoFiltro) - 1}-12`;
     return CHART_LABELS.map((label, idx) => {
-      if (idx === 0) return { label, value: null };
+      if (idx === 0) return { label, value: uHistoricoPorMes[dezKey]?.valor ?? null };
       const mes = idx;
       if (mes > mesNum) return { label, value: null };
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
@@ -745,8 +763,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const uChartDataArrobas = useMemo(() => {
     if (!isGlobal) return chartDataArrobas;
+    const dezKey = `${Number(anoFiltro) - 1}-12`;
     return CHART_LABELS.map((label, idx) => {
-      if (idx === 0) return { label, value: null };
+      if (idx === 0) {
+        const frozen = uHistoricoPorMes[dezKey];
+        return { label, value: frozen ? frozen.pesoKg / 30 : null };
+      }
       const mes = idx;
       if (mes > mesNum) return { label, value: null };
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
@@ -760,8 +782,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const uChartDataPrecoArroba = useMemo(() => {
     if (!isGlobal) return chartDataPrecoArroba;
+    const dezKey = `${Number(anoFiltro) - 1}-12`;
     return CHART_LABELS.map((label, idx) => {
-      if (idx === 0) return { label, value: null };
+      if (idx === 0) {
+        const frozen = uHistoricoPorMes[dezKey];
+        return { label, value: frozen && frozen.pesoKg > 0 ? frozen.valor / (frozen.pesoKg / 30) : null };
+      }
       const mes = idx;
       if (mes > mesNum) return { label, value: null };
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;

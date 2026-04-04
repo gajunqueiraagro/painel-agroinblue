@@ -178,7 +178,10 @@ export function useValorRebanhoGlobal(
 
     setLoading(true);
     try {
-      const anoMeses = Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`);
+      const anoMeses = [
+        `${Number(anoFiltro) - 1}-12`,
+        ...Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`),
+      ];
 
       const [headersRes, itensRes, precosRes, pesosResults] = await Promise.all([
         supabase
@@ -341,20 +344,24 @@ export function useValorRebanhoGlobal(
     return metricsFromRows(prevRows);
   }, [getGlobalFonteMes, getAggregatedRowsForMonth, anoMesAnterior, anoNum, mesNum]);
 
-  // January
-  const anoMesJan = `${anoFiltro}-01`;
+  // Início do ano = valor final de Dez do ano anterior
+  const anoMesDezAnterior = `${Number(anoFiltro) - 1}-12`;
   const metricasInicioAno = useMemo(() => {
-    const fonte = getGlobalFonteMes(anoMesJan);
+    const fonte = getGlobalFonteMes(anoMesDezAnterior);
     if (fonte === 'snapshot_incompleto') return null;
-    const janRows = getAggregatedRowsForMonth(anoMesJan, anoNum, 1);
-    return metricsFromRows(janRows);
-  }, [getGlobalFonteMes, getAggregatedRowsForMonth, anoMesJan, anoNum]);
+    const dezRows = getAggregatedRowsForMonth(anoMesDezAnterior, Number(anoFiltro) - 1, 12);
+    return metricsFromRows(dezRows);
+  }, [getGlobalFonteMes, getAggregatedRowsForMonth, anoMesDezAnterior, anoFiltro]);
 
   // Historico for month bar + charts
   const historicoPorMes = useMemo(() => {
     const map: Record<string, HistoricoMesGlobal> = {};
-    for (let m = 1; m <= 12; m++) {
-      const key = `${anoFiltro}-${String(m).padStart(2, '0')}`;
+    // Include Dec(ano-1) for chart "I" point
+    const allKeys = [
+      `${Number(anoFiltro) - 1}-12`,
+      ...Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`),
+    ];
+    for (const key of allKeys) {
       let totalValor = 0;
       let totalPeso = 0;
       let todasFechadas = true;
