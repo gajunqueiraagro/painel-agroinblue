@@ -41,6 +41,31 @@ const SEM_PREVISTO: FonteIndicador = {
   observacao: 'Previsto ainda não implementado para este indicador',
 };
 
+// ─── Previsto Zootécnico (fonte oficial: vw_zoot_fazenda_mensal cenario=meta) ───
+const FONTE_ZOOT_VIEW_PREVISTO: FonteIndicador = {
+  fonte_tipo: 'view_sql',
+  fonte_tabela: 'vw_zoot_fazenda_mensal',
+  fonte_campo: 'cenario = meta',
+  regra_calculo: 'Dados de projeção/meta da view zootécnica oficial',
+  regra_prioridade: '1. Meta oficial da view; 2. Vazio se não houver',
+  tela_origem: '/fluxo-anual',
+  tela_label: 'Fluxo Anual / Meta',
+  permite_fallback: false,
+  observacao: 'Mesma fonte usada no Fluxo Anual — cenario meta',
+};
+
+const FONTE_REBANHO_PREVISTO: FonteIndicador = {
+  ...FONTE_ZOOT_VIEW_PREVISTO,
+  fonte_campo: 'cabecas_inicio, cabecas_final, entradas, saidas (cenario=meta)',
+  regra_calculo: 'Rebanho previsto da view zootécnica oficial',
+};
+
+const FONTE_PESO_PREVISTO: FonteIndicador = {
+  ...FONTE_ZOOT_VIEW_PREVISTO,
+  fonte_campo: 'peso_inicio_kg, peso_total_final_kg, peso_medio_final_kg (cenario=meta)',
+  regra_calculo: 'Peso previsto da view zootécnica oficial',
+};
+
 // ─── Rebanho ───
 const FONTE_REBANHO_REAL: FonteIndicador = {
   fonte_tipo: 'fechamento',
