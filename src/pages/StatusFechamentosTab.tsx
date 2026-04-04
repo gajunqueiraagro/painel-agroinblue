@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 
 interface Props {
   ano: string;
-  onSelectMes?: (anoMes: string) => void;
+  onSelectMes?: (anoMes: string, destino?: 'resumo' | 'painel_consultor') => void;
 }
 
 const MESES_COMPLETOS = [
@@ -128,10 +128,10 @@ export function StatusFechamentosTab({ ano, onSelectMes }: Props) {
 
     return [
       { label: 'Pastos', done: p1.status === 'oficial' || (!hasDiverg && p1.status !== 'bloqueado' && p1.status !== 'provisorio'), blocked: p1.status === 'bloqueado' && !hasDiverg },
-      { label: 'Rebanho', done: p1.status === 'oficial', blocked: hasDiverg },
-      { label: 'Valor do Gado', done: p2.status === 'oficial', blocked: p2.status === 'bloqueado' },
-      { label: 'Financeiro', done: p3.status === 'oficial', blocked: p3.status === 'bloqueado' },
-      { label: 'Resultado Final', done: p5.status === 'oficial', blocked: p5.status === 'bloqueado' },
+      { label: 'Rebanho conciliado', done: p1.status === 'oficial', blocked: hasDiverg },
+      { label: 'Valor do rebanho', done: p2.status === 'oficial', blocked: p2.status === 'bloqueado' },
+      { label: 'Financeiro caixa', done: p3.status === 'oficial', blocked: p3.status === 'bloqueado' },
+      { label: 'Resultado final', done: p5.status === 'oficial', blocked: p5.status === 'bloqueado' },
     ];
   }, [pilares]);
 
@@ -168,7 +168,8 @@ export function StatusFechamentosTab({ ano, onSelectMes }: Props) {
       nao_iniciado: `${nome} selecionado`,
     };
     toast(msgs[m.status]);
-    onSelectMes?.(`${ano}-${m.mes}`);
+    const destino = (m.status === 'bloqueado' || m.status === 'provisorio') ? 'painel_consultor' : 'resumo';
+    onSelectMes?.(`${ano}-${m.mes}`, destino);
   };
 
   /* ── loading ── */
@@ -345,7 +346,7 @@ export function StatusFechamentosTab({ ano, onSelectMes }: Props) {
                 onClick={() => {
                   const nome = MESES_COMPLETOS[parseInt(a.mes) - 1];
                   toast(`${nome} selecionado`);
-                  onSelectMes?.(`${ano}-${a.mes}`);
+                  onSelectMes?.(`${ano}-${a.mes}`, 'painel_consultor');
                 }}
               >
                 {a.tipo === 'erro' ? <AlertTriangle className="h-3 w-3 flex-shrink-0" /> : <Clock className="h-3 w-3 flex-shrink-0" />}

@@ -116,7 +116,7 @@ const TITLES: Record<TabId, string> = {
   painel_consultor: 'Painel do Consultor',
   auditoria: 'Central de Auditoria',
   conta_boitel: 'Conta Boitel',
-  status_fechamentos: 'Status dos Fechamentos',
+  status_fechamentos: 'Central de Fechamento',
 };
 
 const Index = () => {
@@ -351,10 +351,10 @@ const Index = () => {
       {activeTab === 'status_fechamentos' && (
         <StatusFechamentosTab
           ano={filtroGlobal.ano}
-          onSelectMes={(anoMes) => {
+          onSelectMes={(anoMes, destino) => {
             const [a, m] = anoMes.split('-');
             handleFiltroChange({ ano: a, mes: parseInt(m) });
-            setActiveTab('resumo');
+            setActiveTab((destino === 'painel_consultor' ? 'painel_consultor' : 'resumo') as TabId);
           }}
         />
       )}
