@@ -108,6 +108,26 @@ export function FechamentoPastoDialog({
 
   const getItem = (catId: string) => itens.find(i => i.categoria_id === catId);
 
+  // Snapshot of initial data for dirty-checking
+  const [initialItens, setInitialItens] = useState<string>('');
+  const [initialMeta, setInitialMeta] = useState<string>('');
+
+  useEffect(() => {
+    if (open) {
+      // Set snapshot after items load (slight delay)
+      const t = setTimeout(() => {
+        setInitialItens(JSON.stringify(itens));
+        setInitialMeta(JSON.stringify({ loteMes, tipoUsoMes, qualidadeMes, observacaoMes }));
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [open, fechamento]);
+
+  const isDirty = () => {
+    return JSON.stringify(itens) !== initialItens ||
+      JSON.stringify({ loteMes, tipoUsoMes, qualidadeMes, observacaoMes }) !== initialMeta;
+  };
+
   const handleSave = async () => {
     setSaving(true);
     await atualizarCamposMensais(fechamento.id, {
@@ -117,6 +137,8 @@ export function FechamentoPastoDialog({
       observacao_mes: observacaoMes || null,
     });
     await onSave(itens);
+    await onFechar();
+    setStatus('fechado');
     setSaving(false);
     onOpenChange(false);
   };
@@ -130,18 +152,20 @@ export function FechamentoPastoDialog({
     if (dadosMes.observacao_mes) setObservacaoMes(dadosMes.observacao_mes);
   };
 
-  const handleFechar = async () => {
-    await handleSave();
-    const ok = await onFechar();
-    if (ok) setStatus('fechado');
-  };
-
   const handleReabrir = async () => {
     const ok = await onReabrir();
     if (ok) setStatus('rascunho');
   };
 
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [cancelAlertOpen, setCancelAlertOpen] = useState(false);
+
+  const handleCancel = () => {
+    if (isDirty()) {
+      setCancelAlertOpen(true);
+    } else {
+      onOpenChange(false);
+    }
+  };
 
   // ── Cálculos ──
   const total = itens.reduce((s, i) => s + (i.quantidade || 0), 0);
