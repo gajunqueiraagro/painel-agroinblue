@@ -2522,7 +2522,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </button>
       )}
 
-      {/* === 3-COLUMN DESKTOP GRID === */}
+      {/* ── P1 governance banner ── */}
+      {p1Oficial && aba !== 'historico' && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2 mb-2 flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+          <div className="text-[11px]">
+            <span className="font-bold text-destructive">Mês fechado (P1 oficial).</span>{' '}
+            <span className="text-muted-foreground">Reabra o período para alterar campos estruturais ou registrar novos lançamentos.</span>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-[11rem_minmax(0,1fr)_20rem] gap-3 items-start overflow-visible">
         {/* Left: Navigation sidebar */}
         {renderSidebar()}
