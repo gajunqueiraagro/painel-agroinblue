@@ -248,8 +248,8 @@ export function FechamentoPastoDialog({
         <div className="shrink-0 bg-[hsl(215,30%,18%)] text-white px-5 pt-4 pb-3 space-y-2">
           {/* Row 1: Name + status + copy */}
           <div className="flex items-center gap-2">
-            <span className="font-extrabold text-xl leading-none tracking-tight">{pasto.nome}</span>
-            {pasto.area_produtiva_ha && <span className="text-sm font-medium text-white/70">{pasto.area_produtiva_ha} ha</span>}
+            <span className="font-extrabold text-2xl leading-none tracking-tight">{pasto.nome}</span>
+            {pasto.area_produtiva_ha && <span className="text-base font-medium text-white/70">{pasto.area_produtiva_ha} ha</span>}
             {isFechado && <Badge className="h-5 text-[10px] px-1.5 bg-white/15 text-white border-white/20"><Lock className="h-3 w-3 mr-0.5" />Fechado</Badge>}
             <div className="flex-1" />
             {!isFechado && (
