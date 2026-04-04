@@ -431,13 +431,17 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
             <p className="text-[8px] text-muted-foreground text-center leading-tight">Conferência e fechamento</p>
           </button>
 
-          {/* CARD EM BRANCO — reservado */}
-          <div className="rounded-lg border border-border/40 border-dashed bg-muted/20 px-2 py-3 flex flex-col items-center justify-center gap-1.5">
-            <div className="h-8 w-8 rounded-md bg-muted/30 flex items-center justify-center">
-              <span className="text-muted-foreground/40 text-sm">+</span>
+          {/* STATUS DOS FECHAMENTOS */}
+          <button
+            onClick={() => onTabChange('status_fechamentos' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
+            className="rounded-lg border border-primary/30 bg-primary/5 px-2 py-3 flex flex-col items-center justify-center gap-1.5 transition-colors hover:bg-primary/10 active:bg-primary/15"
+          >
+            <div className="h-8 w-8 rounded-md bg-primary/15 flex items-center justify-center">
+              <ClipboardCheck className="h-4 w-4 text-primary" />
             </div>
-            <span className="text-[10px] font-medium text-muted-foreground/50">Em breve</span>
-          </div>
+            <span className="text-[10px] font-bold text-foreground text-center">Fechamentos</span>
+            <p className="text-[8px] text-muted-foreground text-center leading-tight">Status do ano</p>
+          </button>
         </div>
       </div>
 

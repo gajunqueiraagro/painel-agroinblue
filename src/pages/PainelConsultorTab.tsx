@@ -960,6 +960,12 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
 
             <div className="ml-auto flex items-center gap-1.5">
               <span className="text-[10px] text-muted-foreground hidden sm:inline">{fazendaNome} · {ano}</span>
+              {onTabChange && (
+                <Button variant="outline" size="sm" onClick={() => onTabChange('status_fechamentos')} className="h-7 gap-1 text-[11px] px-2">
+                  <ClipboardCheck className="h-3 w-3" />
+                  Fechamentos
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={handleExport} className="h-7 gap-1 text-[11px] px-2">
                 <Download className="h-3 w-3" />
                 Excel
