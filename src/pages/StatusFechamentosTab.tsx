@@ -346,7 +346,7 @@ export function StatusFechamentosTab({ ano, onSelectMes }: Props) {
                 onClick={() => {
                   const nome = MESES_COMPLETOS[parseInt(a.mes) - 1];
                   toast(`${nome} selecionado`);
-                  onSelectMes?.(`${ano}-${a.mes}`);
+                  onSelectMes?.(`${ano}-${a.mes}`, 'painel_consultor');
                 }}
               >
                 {a.tipo === 'erro' ? <AlertTriangle className="h-3 w-3 flex-shrink-0" /> : <Clock className="h-3 w-3 flex-shrink-0" />}
