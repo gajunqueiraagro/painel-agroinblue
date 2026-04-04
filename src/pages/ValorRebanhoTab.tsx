@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,7 @@ import { MESES_COLS } from '@/lib/calculos/labels';
 import { toast } from 'sonner';
 import { useFechamentoCategoria, type OrigemPeso } from '@/hooks/useFechamentoCategoria';
 import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
+import { supabase } from '@/integrations/supabase/client';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 
 interface Props {
@@ -82,22 +83,24 @@ function VariacaoBadge({ valor, label }: { valor: number | null; label: string }
   );
 }
 
-/* ─── Mini sparkline chart ─── */
-function MiniChart({ data, dataKey, color, title }: { data: { label: string; value: number }[]; dataKey: string; color: string; title: string }) {
+/* ─── Mini sparkline chart (side-by-side) ─── */
+const CHART_LABELS = ['Ini', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+function MiniChart({ data, color, title }: { data: { label: string; value: number | null }[]; color: string; title: string }) {
   return (
-    <div className="space-y-0.5">
-      <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">{title}</p>
-      <div className="h-[60px] w-full">
+    <div className="flex-1 min-w-0">
+      <p className="text-[8px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5 truncate">{title}</p>
+      <div className="h-[70px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 2, right: 4, bottom: 0, left: 4 }}>
-            <XAxis dataKey="label" tick={{ fontSize: 7 }} interval="preserveStartEnd" tickLine={false} axisLine={false} />
+          <LineChart data={data} margin={{ top: 2, right: 2, bottom: 0, left: 2 }}>
+            <XAxis dataKey="label" tick={{ fontSize: 6 }} interval={0} tickLine={false} axisLine={false} />
             <YAxis hide domain={['auto', 'auto']} />
             <RechartsTooltip
               contentStyle={{ fontSize: 10, padding: '2px 6px' }}
               labelStyle={{ fontSize: 9 }}
               formatter={(v: number) => [formatNum(v, 1), '']}
             />
-            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.5} dot={false} />
+            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.5} dot={false} connectNulls={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -326,34 +329,80 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const varCabValorMes = calcVariacao(valorMedioCabeca, prevTotals.valorCab);
   const varCabValorAno = calcVariacao(valorMedioCabeca, janTotals.valorCab);
 
-  // Chart data: build from all months up to current using available hooks
-  // For a lightweight approach, use current + prev + jan as data points
+  // Chart data: query valor_rebanho_fechamento for all months of the year
+  const [historicoPorMes, setHistoricoPorMes] = useState<Record<string, number>>({});
+  const mesAtualNum = new Date().getMonth() + 1;
+  const anoAtualNum = new Date().getFullYear();
+
+  useEffect(() => {
+    if (!fazendaId || fazendaId === '__global__') return;
+    const fetchHistorico = async () => {
+      const anoMeses = Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`);
+      const { data } = await supabase
+        .from('valor_rebanho_fechamento')
+        .select('ano_mes, valor_total')
+        .eq('fazenda_id', fazendaId)
+        .in('ano_mes', anoMeses);
+      const map: Record<string, number> = {};
+      (data || []).forEach(d => { map[d.ano_mes] = d.valor_total; });
+      setHistoricoPorMes(map);
+    };
+    fetchHistorico();
+  }, [fazendaId, anoFiltro]);
+
+  // Build 13-point fixed chart data (Ini, Jan–Dez), blank for future months
+  const buildChartData = useCallback((getValue: (mes: number) => number | null) => {
+    return CHART_LABELS.map((label, idx) => {
+      if (idx === 0) {
+        // "Ini" = saldo inicial / jan value
+        const v = getValue(0);
+        return { label, value: v };
+      }
+      const mes = idx;
+      // Future months = blank
+      if (Number(anoFiltro) > anoAtualNum || (Number(anoFiltro) === anoAtualNum && mes > mesAtualNum)) {
+        return { label, value: null };
+      }
+      return { label, value: getValue(mes) };
+    });
+  }, [anoFiltro, anoAtualNum, mesAtualNum]);
+
   const chartDataValor = useMemo(() => {
-    const points: { label: string; value: number }[] = [];
-    if (janTotals.valor > 0 && mesNum > 1) points.push({ label: 'Jan', value: janTotals.valor });
-    if (prevTotals.valor > 0 && mesNum > 2) points.push({ label: MESES_SHORT[mesNum - 2]?.label || '', value: prevTotals.valor });
-    if (prevTotals.valor > 0 && mesNum === 2) {} // Jan already added
-    points.push({ label: MESES_SHORT[mesNum - 1]?.label || '', value: totalRebanho });
-    return points.length >= 2 ? points : [];
-  }, [janTotals, prevTotals, totalRebanho, mesNum]);
+    return buildChartData((mes) => {
+      if (mes === 0) {
+        // Use Jan or saldo inicial as "início"
+        const janKey = `${anoFiltro}-01`;
+        return historicoPorMes[janKey] ?? null;
+      }
+      const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
+      // For current selected month, use live computed value
+      if (mes === mesNum) return totalRebanho > 0 ? totalRebanho : historicoPorMes[key] ?? null;
+      return historicoPorMes[key] ?? null;
+    });
+  }, [buildChartData, historicoPorMes, anoFiltro, mesNum, totalRebanho]);
 
   const chartDataArrobas = useMemo(() => {
+    // We only have arrobas for jan, prev, and current — others null
     const janArr = resumoJan.rows.reduce((s, r) => s + r.quantidadeFinal * (r.pesoMedioFinalKg || 0) / 30, 0);
     const prevArr = resumoMesAnterior.rows.reduce((s, r) => s + r.quantidadeFinal * (r.pesoMedioFinalKg || 0) / 30, 0);
-    const points: { label: string; value: number }[] = [];
-    if (janArr > 0 && mesNum > 1) points.push({ label: 'Jan', value: janArr });
-    if (prevArr > 0 && mesNum > 2) points.push({ label: MESES_SHORT[mesNum - 2]?.label || '', value: prevArr });
-    points.push({ label: MESES_SHORT[mesNum - 1]?.label || '', value: totalArrobas });
-    return points.length >= 2 ? points : [];
-  }, [resumoJan.rows, resumoMesAnterior.rows, totalArrobas, mesNum]);
+    return buildChartData((mes) => {
+      if (mes === 0) return janArr > 0 ? janArr : null;
+      if (mes === 1) return janArr > 0 ? janArr : null;
+      if (mes === mesNum) return totalArrobas > 0 ? totalArrobas : null;
+      if (mes === mesNum - 1) return prevArr > 0 ? prevArr : null;
+      return null;
+    });
+  }, [buildChartData, resumoJan.rows, resumoMesAnterior.rows, totalArrobas, mesNum]);
 
   const chartDataPrecoArroba = useMemo(() => {
-    const points: { label: string; value: number }[] = [];
-    if (janTotals.precoArroba > 0 && mesNum > 1) points.push({ label: 'Jan', value: janTotals.precoArroba });
-    if (prevTotals.precoArroba > 0 && mesNum > 2) points.push({ label: MESES_SHORT[mesNum - 2]?.label || '', value: prevTotals.precoArroba });
-    points.push({ label: MESES_SHORT[mesNum - 1]?.label || '', value: precoMedioArroba });
-    return points.length >= 2 ? points : [];
-  }, [janTotals, prevTotals, precoMedioArroba, mesNum]);
+    return buildChartData((mes) => {
+      if (mes === 0) return janTotals.precoArroba > 0 ? janTotals.precoArroba : null;
+      if (mes === 1) return janTotals.precoArroba > 0 ? janTotals.precoArroba : null;
+      if (mes === mesNum) return precoMedioArroba > 0 ? precoMedioArroba : null;
+      if (mes === mesNum - 1) return prevTotals.precoArroba > 0 ? prevTotals.precoArroba : null;
+      return null;
+    });
+  }, [buildChartData, janTotals, prevTotals, precoMedioArroba, mesNum]);
 
   const handlePrecoChange = (codigo: string, value: string) => {
     const sanitized = value.replace(/[^0-9.,]/g, '');
@@ -608,8 +657,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           )}
         </div>
 
-        {/* RIGHT — Summary Card + Charts */}
-        <div className="min-w-[200px] max-w-[340px] flex-1 space-y-2">
+        {/* RIGHT — Summary Card */}
+        <div className="min-w-[200px] max-w-[340px] flex-1">
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-3">
               <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-0">
@@ -662,25 +711,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               </div>
             </CardContent>
           </Card>
-
-          {/* Mini charts */}
-          <Card className="border">
-            <CardContent className="p-2 space-y-2">
-              {chartDataValor.length >= 2 && (
-                <MiniChart data={chartDataValor} dataKey="value" color="hsl(var(--primary))" title="Valor do Rebanho" />
-              )}
-              {chartDataArrobas.length >= 2 && (
-                <MiniChart data={chartDataArrobas} dataKey="value" color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
-              )}
-              {chartDataPrecoArroba.length >= 2 && (
-                <MiniChart data={chartDataPrecoArroba} dataKey="value" color="hsl(217, 91%, 60%)" title="R$/@ Médio do Estoque" />
-              )}
-              {chartDataValor.length < 2 && chartDataArrobas.length < 2 && chartDataPrecoArroba.length < 2 && (
-                <p className="text-[9px] text-muted-foreground text-center py-2">Gráficos disponíveis a partir do 2º mês com dados.</p>
-              )}
-            </CardContent>
-          </Card>
         </div>
+      </div>
+
+      {/* Charts — side by side, below table+card */}
+      <div className="flex gap-2 mt-1">
+        <MiniChart data={chartDataValor} color="hsl(var(--primary))" title="Valor do Rebanho" />
+        <MiniChart data={chartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
+        <MiniChart data={chartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio do Estoque" />
       </div>
     </div>
   );
