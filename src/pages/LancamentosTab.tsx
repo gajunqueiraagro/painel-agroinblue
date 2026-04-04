@@ -216,8 +216,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (!data) return undefined;
     return data.slice(0, 7); // 'yyyy-MM'
   }, [data]);
-  const { status: statusPilaresForm } = useStatusPilares(fazendaAtual?.id, formAnoMes);
+  const { status: statusPilaresForm, refetch: refetchPilares } = useStatusPilares(fazendaAtual?.id, formAnoMes);
   const p1Oficial = statusPilaresForm.p1_mapa_pastos.status === 'oficial';
+  const [showReabrirP1, setShowReabrirP1] = useState(false);
 
   const internalEditOrigin = useRef<{ aba: Aba; anoFiltro: string; mesFiltro: string } | null>(null);
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
