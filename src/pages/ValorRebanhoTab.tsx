@@ -613,13 +613,13 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           <table className="w-full text-[11px]">
             <thead>
               <tr className="border-b bg-primary/15">
-                <th className="text-left px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider bg-primary/25">Categoria</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Qtd</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Peso</th>
+                <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider bg-primary/25">Categoria</th>
+                <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Qtd</th>
+                <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Peso</th>
                 <th className="text-center px-1 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider w-[60px]">R$/kg</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">R$/@</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">R$/cab</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Valor Total</th>
+                <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">R$/@</th>
+                <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">R$/cab</th>
+                <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Valor Total</th>
               </tr>
             </thead>
             <tbody>
