@@ -661,11 +661,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           )}
         </div>
 
-        {/* RIGHT — Summary Card */}
+        {/* RIGHT — Summary Card + Charts below */}
         <div className="min-w-[200px] flex-1 space-y-1.5">
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-2.5">
-              <div className="flex gap-4">
+              <div className="flex gap-3">
                 {/* LEFT column — main value */}
                 <div className="shrink-0">
                   <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider">
@@ -680,14 +680,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                     <VariacaoBadge valor={varValorAno} label="vs ini. ano" showLabel />
                   </div>
                 </div>
-                {/* RIGHT column — indicators with variations */}
+                {/* RIGHT column — indicators compact */}
                 <div className="flex-1 min-w-0 text-[10px]">
-                  {/* Header row */}
-                  <div className="flex items-center gap-1 mb-0.5 text-[8px] text-muted-foreground font-medium">
-                    <span className="flex-1" />
-                    <span className="w-16 text-right">Valor</span>
-                    <span className="w-12 text-right">vs mês</span>
-                    <span className="w-12 text-right">vs ano</span>
+                  <div className="flex items-center gap-0.5 mb-0.5 text-[8px] text-muted-foreground font-medium justify-end">
+                    <span className="w-[52px] text-right">Valor</span>
+                    <span className="w-[40px] text-right">vs mês</span>
+                    <span className="w-[40px] text-right">vs ano</span>
                   </div>
                   {[
                     { label: 'Cabeças', value: formatNum(totalCabecas), varMes: varCabMes, varAno: varCabAno },
@@ -695,26 +693,25 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                     { label: 'R$/@ médio', value: precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '—', varMes: varArrobaMes, varAno: varArrobaAno },
                     { label: 'R$/cab', value: formatMoeda(valorMedioCabeca), varMes: varCabValorMes, varAno: varCabValorAno },
                   ].map(ind => (
-                    <div key={ind.label} className="flex items-center gap-1 py-px">
-                      <span className="flex-1 text-muted-foreground truncate">{ind.label}</span>
-                      <span className="w-16 text-right font-semibold text-foreground tabular-nums">{ind.value}</span>
-                      <span className="w-12 text-right"><VariacaoBadge valor={ind.varMes} label="" /></span>
-                      <span className="w-12 text-right"><VariacaoBadge valor={ind.varAno} label="" /></span>
+                    <div key={ind.label} className="flex items-center gap-0.5 py-px justify-end">
+                      <span className="text-muted-foreground truncate mr-auto">{ind.label}</span>
+                      <span className="w-[52px] text-right font-semibold text-foreground tabular-nums">{ind.value}</span>
+                      <span className="w-[40px] text-right"><VariacaoBadge valor={ind.varMes} label="" /></span>
+                      <span className="w-[40px] text-right"><VariacaoBadge valor={ind.varAno} label="" /></span>
                     </div>
                   ))}
                 </div>
               </div>
             </CardContent>
           </Card>
-        </div>
-      </div>
 
-      {/* Charts — full width below, aligned right of table */}
-      <div className="flex gap-2">
-        <MiniChart data={chartDataValor} color="hsl(var(--primary))" title="Valor do Rebanho" />
-        <MiniChart data={chartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
-        <MiniChart data={chartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio" />
-      </div>
+          {/* Charts — inside right column, below card */}
+          <div className="flex gap-1.5">
+            <MiniChart data={chartDataValor} color="hsl(var(--primary))" title="Valor do Rebanho" />
+            <MiniChart data={chartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
+            <MiniChart data={chartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio" />
+          </div>
+        </div>
     </div>
   );
 }
