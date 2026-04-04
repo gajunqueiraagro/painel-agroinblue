@@ -409,6 +409,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
         },
       ];
 }
+}
 
 // ─── Build blocos from vw_zoot_fazenda_mensal (for Previsto cenário) ───
 function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
