@@ -360,23 +360,6 @@ export function FechamentoPastoDialog({
               <LockOpen className="h-3 w-3 mr-1" />Reabrir
             </Button>
           )}
-
-        {/* ── FOOTER ── */}
-        <div className="shrink-0 border-t bg-background px-4 py-2 flex gap-2">
-          {!isFechado ? (
-            <>
-              <Button onClick={handleSave} disabled={saving} size="sm" className="flex-1 h-8 text-xs">
-                <Save className="h-3.5 w-3.5 mr-1" />{saving ? 'Salvando...' : 'Salvar'}
-              </Button>
-              <Button variant="default" size="sm" className="h-8 text-xs px-4" onClick={() => setConfirmOpen(true)}>
-                <Lock className="h-3.5 w-3.5 mr-1" />Fechar
-              </Button>
-            </>
-          ) : (
-            <Button variant="outline" onClick={handleReabrir} size="sm" className="w-full h-8 text-xs">
-              <LockOpen className="h-3.5 w-3.5 mr-1" />Reabrir Pasto
-            </Button>
-          )}
         </div>
 
         {/* ── Confirm close dialog ── */}
