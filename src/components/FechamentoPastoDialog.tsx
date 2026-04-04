@@ -171,16 +171,16 @@ export function FechamentoPastoDialog({
   const tipoUsoLabel = TIPOS_USO_OPTIONS.find(t => t.value === tipoUsoMes)?.label || tipoUsoMes;
 
   // ── Render de um grupo (machos ou fêmeas) ──
-  const renderGrupo = (label: string, cats: CategoriaRebanho[], colorAccent: string) => (
+  const renderGrupo = (label: string, cats: CategoriaRebanho[], colorAccent: string, tabBase: number) => (
     <div>
-      <div className={`text-[9px] font-bold uppercase tracking-widest mb-0.5 ${colorAccent}`}>{label}</div>
+      <div className={`text-[11px] font-bold uppercase tracking-widest mb-1 ${colorAccent}`}>{label}</div>
       <div className="border rounded bg-background inline-block">
-        <table className="text-[11px]" style={{ borderCollapse: 'collapse' }}>
+        <table className="text-xs" style={{ borderCollapse: 'collapse' }}>
           <thead>
             <tr className="border-b bg-muted/40">
-              <th className="px-1 py-0.5 w-[38px]"></th>
+              <th className="px-1.5 py-1 w-[42px]"></th>
               {cats.map(c => (
-                <th key={c.id} className="text-center px-1 py-0.5 text-[9px] font-semibold text-foreground whitespace-nowrap" style={{ minWidth: '52px', maxWidth: '64px' }}>
+                <th key={c.id} className="text-center px-1.5 py-1 text-[11px] font-semibold text-foreground whitespace-nowrap" style={{ minWidth: '56px', maxWidth: '68px' }}>
                   {c.nome}
                 </th>
               ))}
@@ -188,18 +188,19 @@ export function FechamentoPastoDialog({
           </thead>
           <tbody>
             <tr className="border-b">
-              <td className="px-1 py-0.5 text-[10px] font-bold text-muted-foreground/80">Qtde</td>
-              {cats.map(c => {
+              <td className="px-1.5 py-1 text-[12px] font-bold text-muted-foreground">Qtde</td>
+              {cats.map((c, idx) => {
                 const item = getItem(c.id);
                 return (
-                  <td key={c.id} className="px-0.5 py-0.5 text-center">
+                  <td key={c.id} className="px-1 py-1 text-center">
                     <div className="relative">
                       <Input
                         type="number" inputMode="numeric" min={0}
+                        tabIndex={tabBase + idx * 2}
                         value={item?.quantidade || ''}
                         onChange={e => updateItem(c.id, 'quantidade', Number(e.target.value) || 0)}
                         disabled={isFechado}
-                        className="h-6 text-[11px] font-bold px-0.5 text-center tabular-nums w-[48px]"
+                        className="h-7 text-xs font-bold px-1 text-center tabular-nums w-[52px]"
                         placeholder="0"
                       />
                       {item?.origem_dado === 'copiado_mes_anterior' && (
@@ -211,22 +212,23 @@ export function FechamentoPastoDialog({
               })}
             </tr>
             <tr>
-              <td className="px-1 py-0.5 text-[10px] font-bold text-muted-foreground/80">Peso</td>
-              {cats.map(c => {
+              <td className="px-1.5 py-1 text-[12px] font-bold text-muted-foreground">Peso</td>
+              {cats.map((c, idx) => {
                 const item = getItem(c.id);
                 return (
-                  <td key={c.id} className="px-0.5 py-0.5 text-center">
+                  <td key={c.id} className="px-1 py-1 text-center">
                     <Input
-                      type="number" inputMode="decimal" step="0.1"
+                      type="number" inputMode="decimal" step="0.01"
+                      tabIndex={tabBase + idx * 2 + 1}
                       value={item?.peso_medio_kg ?? ''}
                       onChange={e => updateItem(c.id, 'peso_medio_kg', e.target.value ? Number(e.target.value) : null)}
                       onBlur={e => {
                         if (e.target.value) {
-                          updateItem(c.id, 'peso_medio_kg', Math.round(Number(e.target.value) * 10) / 10);
+                          updateItem(c.id, 'peso_medio_kg', Math.round(Number(e.target.value) * 100) / 100);
                         }
                       }}
                       disabled={isFechado}
-                      className="h-6 text-[11px] px-0.5 text-center tabular-nums w-[48px]"
+                      className="h-7 text-xs px-1 text-center tabular-nums w-[52px]"
                       placeholder="kg"
                     />
                   </td>
