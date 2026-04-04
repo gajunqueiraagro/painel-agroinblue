@@ -1,0 +1,1 @@
+ALTER TABLE public.valor_rebanho_fechamento ALTER COLUMN peso_total_kg DROP DEFAULT;

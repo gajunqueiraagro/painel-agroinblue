@@ -1,0 +1,1 @@
+DROP VIEW IF EXISTS public.vw_valor_rebanho_auditoria;
