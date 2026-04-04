@@ -419,20 +419,20 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     return buildMetricsFromTotals(valor, cabecas, pesoTotalKg);
   }, [resumoMesAnterior.rows, precosMesAnterior]);
 
-  const metricasJaneiroLive = useMemo(() => {
+  const metricasDezAnteriorLive = useMemo(() => {
     let valor = 0;
     let cabecas = 0;
     let pesoTotalKg = 0;
 
-    resumoJan.rows.forEach(row => {
-      const precoKg = precosJan.find(p => p.categoria === row.categoriaCodigo)?.preco_kg || 0;
+    resumoDezAnterior.rows.forEach(row => {
+      const precoKg = precosDezAnterior.find(p => p.categoria === row.categoriaCodigo)?.preco_kg || 0;
       valor += row.quantidadeFinal * (row.pesoMedioFinalKg || 0) * precoKg;
       cabecas += row.quantidadeFinal;
       pesoTotalKg += row.quantidadeFinal * (row.pesoMedioFinalKg || 0);
     });
 
     return buildMetricsFromTotals(valor, cabecas, pesoTotalKg);
-  }, [resumoJan.rows, precosJan]);
+  }, [resumoDezAnterior.rows, precosDezAnterior]);
 
   const [historicoPorMes, setHistoricoPorMes] = useState<Record<string, HistoricoMes>>({});
   const [historicoDetalhadoPorMes, setHistoricoDetalhadoPorMes] = useState<Record<string, SnapshotDetalheCategoria[]>>({});
