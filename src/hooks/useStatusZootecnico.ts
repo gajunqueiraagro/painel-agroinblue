@@ -452,10 +452,10 @@ export function useStatusZootecnico(
     else descValor = 'Preços completos';
     pendencias.push({ id: 'valor', label: 'Valor do Rebanho', descricao: descValor, status: statusValorCalc, resolverTab: 'valor_rebanho' });
 
-    // ── 5. Econômico (derivado dos 4 anteriores) ──
-    const allPendStatuses = [statusFin, statusPastosCalc, statusCats, statusValorCalc];
-    const statusEcon: StatusItem = allPendStatuses.every(s => s === 'fechado') ? 'fechado'
-      : allPendStatuses.every(s => s === 'aberto') ? 'aberto' : 'parcial';
+    // ── 5. Econômico (derivado dos pilares operacionais — financeiro é informativo, não trava) ──
+    const pilaresOperacionais = [statusPastosCalc, statusCats, statusValorCalc];
+    const statusEcon: StatusItem = pilaresOperacionais.every(s => s === 'fechado') ? 'fechado'
+      : pilaresOperacionais.every(s => s === 'aberto') ? 'aberto' : 'parcial';
     const descEcon = statusEcon === 'fechado' ? 'Base validada'
       : statusEcon === 'parcial' ? 'Aguardando fechamento das bases' : 'Bases não fechadas';
     pendencias.push({ id: 'economico', label: 'Econômico', descricao: descEcon, status: statusEcon });
@@ -464,10 +464,11 @@ export function useStatusZootecnico(
     const contadores = { aberto: 0, parcial: 0, fechado: 0 };
     pendencias.forEach(p => contadores[p.status]++);
 
-    // Status geral
+    // Status geral (financeiro é informativo — não trava fechamento)
+    const pilaresDecisivos = [statusPastosCalc, statusCats, statusValorCalc, statusEcon];
     let status: StatusGeral = 'parcial';
-    if (contadores.fechado === 5) status = 'fechado';
-    else if (contadores.aberto === 5) status = 'aberto';
+    if (pilaresDecisivos.every(s => s === 'fechado')) status = 'fechado';
+    else if (pilaresDecisivos.every(s => s === 'aberto')) status = 'aberto';
 
     return { status, pendencias, contadores, loading, pastosPorFazenda };
   }, [

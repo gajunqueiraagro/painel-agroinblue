@@ -256,11 +256,11 @@ export function useStatusFechamentosAno(
         else if (statusValorCalc === 'parcial') descValor = `${precosDefinidos}/${categoriasComSaldo} categorias com preço`;
         else descValor = 'Preços completos';
 
-        // ── 5. Econômico (IDENTICAL to useStatusZootecnico) ──
-        const allStatuses = [statusFin, statusPastosCalc, catsResult.status, statusValorCalc];
-        const statusEcon = allStatuses.every((s) => s === 'fechado')
+        // ── 5. Econômico (financeiro é informativo, não trava — IDENTICAL to useStatusZootecnico) ──
+        const pilaresOperacionais = [statusPastosCalc, catsResult.status, statusValorCalc];
+        const statusEcon = pilaresOperacionais.every((s) => s === 'fechado')
           ? 'fechado'
-          : allStatuses.every((s) => s === 'aberto')
+          : pilaresOperacionais.every((s) => s === 'aberto')
             ? 'aberto'
             : 'parcial';
         const descEcon = statusEcon === 'fechado'
