@@ -249,18 +249,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   return (
     <div className="p-2 w-full space-y-1.5 animate-fade-in pb-16">
-      {/* Bloqueio por conciliação */}
-      {bloqueadoPorConciliacao && (
-        <Alert variant="destructive" className="border-destructive/50 py-1.5">
-          <ShieldAlert className="h-3.5 w-3.5" />
-          <AlertDescription className="text-[11px] font-medium">
-            Fechamento bloqueado: existem divergências na Conciliação de Categorias.
-            {categoriasStatus?.descricao && ` (${categoriasStatus.descricao})`}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Ano filter + actions */}
+      {/* Ano filter + actions + inline blocking alert */}
       <div className="flex gap-1.5 items-center flex-wrap">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
           <SelectTrigger className="w-20 h-7 text-xs font-bold">
@@ -277,6 +266,13 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           <Button variant="outline" size="sm" onClick={handleCopiarMesAnterior} className="gap-1 h-7 text-xs px-2">
             <Copy className="h-3 w-3" /> Mês anterior
           </Button>
+        )}
+
+        {bloqueadoPorConciliacao && (
+          <span className="inline-flex items-center gap-1 text-[10px] text-destructive font-medium">
+            <ShieldAlert className="h-3 w-3 shrink-0" />
+            Bloqueado: divergências na Conciliação{categoriasStatus?.descricao && ` (${categoriasStatus.descricao})`}
+          </span>
         )}
 
         {isFechado && (
@@ -317,29 +313,17 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         ))}
       </div>
 
-      {/* Alerts row — compact */}
-      {(temSugestao || temEstimativa || (isDezembro && categoriasSemPreco.length > 0) || (isDezembro && dezembroCompleto)) && (
+      {/* December-specific alerts (keep above table) */}
+      {isDezembro && (categoriasSemPreco.length > 0 || dezembroCompleto) && (
         <div className="space-y-1">
-          {temSugestao && (
-            <div className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 rounded px-2 py-1 border border-amber-200 dark:border-amber-800">
-              <Info className="h-3 w-3 shrink-0" />
-              <span><strong>Preço de mercado sugerido.</strong> Valor definitivo após validação do fechamento.</span>
-            </div>
-          )}
-          {temEstimativa && (
-            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/40 rounded px-2 py-1 border border-border">
-              <Info className="h-3 w-3 shrink-0" />
-              <span>Algumas categorias usam peso estimado (último lançamento ou saldo inicial).</span>
-            </div>
-          )}
-          {isDezembro && categoriasSemPreco.length > 0 && (
-            <div className="flex items-center gap-1.5 text-[11px] bg-destructive/10 text-destructive rounded px-2 py-1 border border-destructive/30">
+          {categoriasSemPreco.length > 0 && (
+            <div className="flex items-center gap-1.5 text-[10px] bg-destructive/10 text-destructive rounded px-2 py-0.5 border border-destructive/30">
               <AlertTriangle className="h-3 w-3 shrink-0" />
               <span><strong>Dezembro — base anual:</strong> {categoriasSemPreco.length} categoria(s) sem preço: {categoriasSemPreco.join(', ')}.</span>
             </div>
           )}
-          {isDezembro && dezembroCompleto && (
-            <div className="flex items-center gap-1.5 text-[11px] text-primary bg-primary/10 rounded px-2 py-1 border border-primary/30">
+          {dezembroCompleto && (
+            <div className="flex items-center gap-1.5 text-[10px] text-primary bg-primary/10 rounded px-2 py-0.5 border border-primary/30">
               <Info className="h-3 w-3 shrink-0" />
               <span><strong>Base anual completa.</strong> Todas as categorias têm preço informado para dezembro.</span>
             </div>
@@ -347,10 +331,10 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         </div>
       )}
 
-      {/* Main content: table left (60%) + summary card right (40%) */}
-      <div className="flex gap-2 items-start">
+      {/* Main content: table left (~50%) + summary card right */}
+      <div className="flex gap-3 items-start">
         {/* LEFT — Table */}
-        <div className="flex-[3] min-w-0 bg-card rounded-lg shadow-sm border overflow-x-auto">
+        <div className="flex-1 max-w-[50%] min-w-0 bg-card rounded-lg shadow-sm border overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
               <tr className="border-b bg-muted/50">
@@ -437,7 +421,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           </table>
 
           {/* Footer inside table area */}
-          <div className="flex items-center justify-between px-1.5 py-1 border-t">
+          <div className="flex items-center justify-between px-1.5 py-0.5 border-t">
             <div className="flex items-center gap-1">
               {categoriasOcultas > 0 && !isDezembro && (
                 <Button variant="ghost" size="sm" onClick={() => setMostrarZerados(!mostrarZerados)} className="gap-1 text-[10px] text-muted-foreground h-5 px-1">
@@ -451,10 +435,26 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               {isDezembro && ' • Dez = base anual'}
             </p>
           </div>
+
+          {/* Info alerts moved below table */}
+          {(temSugestao || temEstimativa) && (
+            <div className="px-1.5 pb-1 space-y-0.5">
+              {temSugestao && (
+                <p className="text-[9px] text-amber-600 dark:text-amber-400">
+                  ⚠ Preço de mercado sugerido. Valor definitivo após validação do fechamento.
+                </p>
+              )}
+              {temEstimativa && (
+                <p className="text-[9px] text-muted-foreground">
+                  * Algumas categorias usam peso estimado (último lançamento ou saldo inicial).
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* RIGHT — Summary Card */}
-        <div className="flex-[2] min-w-[200px] max-w-[320px]">
+        <div className="min-w-[200px] max-w-[300px]">
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-3">
               <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-0.5">
