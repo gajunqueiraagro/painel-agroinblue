@@ -383,7 +383,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           .eq('cenario', 'realizado'),
       ]);
       const map: Record<string, number> = {};
-      (vrRes.data || []).forEach((d: any) => { map[d.ano_mes] = d.valor_total; });
+      (vrRes.data || []).forEach((d: any) => { map[d.ano_mes] = Number(d.valor_total) || 0; });
       setHistoricoPorMes(map);
 
       const zMap: Record<number, { pesoTotalKg: number; cabecas: number }> = {};
