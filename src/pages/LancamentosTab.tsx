@@ -1228,6 +1228,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Validate form and open confirmation dialog
   const handleRequestRegister = () => {
+    // ── P1 governance block ──
+    if (p1Oficial) {
+      toast.error('Este mês está fechado no Mapa de Pastos (P1 oficial). Reabra o período para registrar lançamentos.');
+      return;
+    }
     if (!quantidade || Number(quantidade) <= 0) { toast.error('Informe a quantidade'); return; }
     if (!categoria) { toast.error('Selecione a categoria'); return; }
     if (!data) { toast.error('Informe a data'); return; }
