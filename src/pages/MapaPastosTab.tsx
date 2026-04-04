@@ -306,6 +306,23 @@ export function MapaPastosTab() {
   );
 }
 
+const MACHOS_CODES = new Set(['mamotes_m', 'desmama_m', 'garrotes', 'bois', 'touros']);
+const FEMEAS_CODES = new Set(['mamotes_f', 'desmama_f', 'novilhas', 'vacas']);
+
+function isMacho(cat: CategoriaRebanho) { return MACHOS_CODES.has(cat.codigo); }
+function isFemea(cat: CategoriaRebanho) { return FEMEAS_CODES.has(cat.codigo); }
+
+// Block separator: stronger border between Lote|MM, T|MF, V|Total, Total|Peso
+function isBlockSeparator(catIdx: number, categorias: CategoriaRebanho[]) {
+  if (catIdx === 0) return true; // Lote → first cat
+  const prev = categorias[catIdx - 1];
+  const cur = categorias[catIdx];
+  if (!prev || !cur) return false;
+  // T→MF boundary
+  if (isMacho(prev) && isFemea(cur)) return true;
+  return false;
+}
+
 function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }: {
   rows: PastoMapaRow[];
   categorias: CategoriaRebanho[];
@@ -314,24 +331,47 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
   getQualidadeColor: (v: number | null) => string;
 }) {
   const colWidths = useMemo(() => {
-    const base = [
-      60,
-      45,
-      100,
-    ];
+    const base = [60, 45, 100];
     const cats = categorias.map(() => 30);
-    const tail = [
-      38,
-      52,
-      42,
-      42,
-      34,
-    ];
+    const tail = [38, 52, 42, 42, 34];
     return [...base, ...cats, ...tail];
   }, [categorias]);
 
   const tableWidth = useMemo(() => colWidths.reduce((sum, width) => sum + width, 0), [colWidths]);
-  const thCls = "px-0.5 py-0.5 text-center text-[11px] font-bold border-b border-r border-border/40 whitespace-nowrap bg-muted";
+
+  // Determine last macho and last femea index for V|Total separator
+  const lastFemeaIdx = useMemo(() => {
+    for (let i = categorias.length - 1; i >= 0; i--) {
+      if (isFemea(categorias[i])) return i;
+    }
+    return -1;
+  }, [categorias]);
+
+  // Header/footer backgrounds per group
+  const hdrBg = 'hsl(220 14% 82%)'; // darker grey for header
+  const hdrBgMacho = 'hsl(213 35% 86%)'; // subtle blue-grey
+  const hdrBgFemea = 'hsl(340 25% 88%)'; // subtle rosé
+  const ftBg = 'hsl(220 14% 85%)';
+  const ftBgMacho = 'hsl(213 35% 88%)';
+  const ftBgFemea = 'hsl(340 25% 90%)';
+
+  // Text colors for body values
+  const txtMacho = 'hsl(213 55% 30%)'; // dark blue
+  const txtFemea = 'hsl(340 40% 35%)'; // dark rosé/wine
+
+  // Block separator border style
+  const blockBorder = '2px solid hsl(220 13% 75%)';
+  const normalBorder = '1px solid hsl(var(--border) / 0.4)';
+
+  const getCatBorderLeft = (catIdx: number) => {
+    if (isBlockSeparator(catIdx, categorias)) return blockBorder;
+    return undefined;
+  };
+
+  // Total column gets block separator on left (after last femea)
+  const totalLeftBorder = blockBorder;
+  // Peso column gets block separator on left (after Total)
+  const pesoLeftBorder = blockBorder;
 
   const renderColGroup = () => (
     <colgroup>
@@ -339,31 +379,53 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
     </colgroup>
   );
 
+  // Compute peso médio per category from totais (for the new "Peso Kg" row)
+  const pesosPorCategoria = useMemo(() => {
+    const map = new Map<string, number | null>();
+    categorias.forEach(cat => {
+      const t = totais.catTotals.get(cat.id);
+      if (t && t.qtdComPeso > 0) {
+        map.set(cat.id, t.pesoTotal / t.qtdComPeso);
+      } else {
+        map.set(cat.id, null);
+      }
+    });
+    return map;
+  }, [categorias, totais]);
+
   return (
     <div className="flex flex-1 min-h-0 flex-col overflow-hidden border-t border-border/30 bg-background">
       <div className="flex flex-1 min-h-0 overflow-x-auto">
         <div className="flex min-h-0 min-w-full flex-col" style={{ width: tableWidth }}>
-          <div className="flex-shrink-0 bg-background">
+          {/* ── THEAD ── */}
+          <div className="flex-shrink-0">
             <table className="w-full border-separate border-spacing-0 text-[11px]" style={{ tableLayout: 'fixed' }}>
               {renderColGroup()}
               <thead>
                 <tr className="h-7">
-                  <th className="sticky left-0 z-20 bg-muted px-1.5 py-0.5 text-left text-[11px] font-semibold border-b border-r border-border/40">Pasto</th>
-                  <th className={`${thCls} text-left font-medium`}>Atividade</th>
-                  <th className={`${thCls} text-left font-medium text-[10px]`}>Lote</th>
-                  {categorias.map(cat => (
-                    <th key={cat.id} className={thCls}>{CAT_SIGLAS[cat.codigo] || cat.codigo}</th>
-                  ))}
-                  <th className="px-0.5 py-0.5 text-center text-[11px] font-semibold border-b border-r border-border/40 whitespace-nowrap bg-primary/10">Total</th>
-                  <th className={`${thCls} font-medium`}>Peso</th>
-                  <th className={`${thCls} font-medium`}>Área</th>
-                  <th className={`${thCls} font-medium`}>UA/ha</th>
-                  <th className="px-0.5 py-0.5 text-center text-[11px] font-medium border-b whitespace-nowrap bg-muted">Qual.</th>
+                  <th className="sticky left-0 z-20 px-1.5 py-0.5 text-left text-[11px] font-semibold border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Pasto</th>
+                  <th className="px-0.5 py-0.5 text-center text-[11px] font-bold border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Atividade</th>
+                  <th className="px-0.5 py-0.5 text-center text-[10px] font-bold border-b whitespace-nowrap" style={{ backgroundColor: hdrBg, borderRightStyle: 'solid', borderRightWidth: 2, borderRightColor: 'hsl(220 13% 75%)', borderBottomWidth: 1, borderBottomColor: 'hsl(220 13% 75%)' }}>Lote</th>
+                  {categorias.map((cat, idx) => {
+                    const bg = isMacho(cat) ? hdrBgMacho : isFemea(cat) ? hdrBgFemea : hdrBg;
+                    const leftBdr = getCatBorderLeft(idx);
+                    return (
+                      <th key={cat.id} className="px-0.5 py-0.5 text-center text-[11px] font-bold border-b border-r whitespace-nowrap" style={{ backgroundColor: bg, borderColor: 'hsl(220 13% 75%)', ...(leftBdr ? { borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' } : {}) }}>
+                        {CAT_SIGLAS[cat.codigo] || cat.codigo}
+                      </th>
+                    );
+                  })}
+                  <th className="px-0.5 py-0.5 text-center text-[11px] font-semibold border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>Total</th>
+                  <th className="px-0.5 py-0.5 text-center text-[11px] font-medium border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>Peso</th>
+                  <th className="px-0.5 py-0.5 text-center text-[11px] font-medium border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Área</th>
+                  <th className="px-0.5 py-0.5 text-center text-[11px] font-medium border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>UA/ha</th>
+                  <th className="px-0.5 py-0.5 text-center text-[11px] font-medium border-b whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Qual.</th>
                 </tr>
               </thead>
             </table>
           </div>
 
+          {/* ── TBODY + TFOOT ── */}
           <div className="flex-1 min-h-0 overflow-y-auto pb-3">
             <table className="w-full border-separate border-spacing-0 text-[11px]" style={{ tableLayout: 'fixed' }}>
               {renderColGroup()}
@@ -376,19 +438,21 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
                         {row.pasto.nome}
                       </td>
                       <td className="px-1 py-0.5 text-[11px] border-r border-border/30 text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">{tipoUsoLabel(row.tipoUso)}</td>
-                      <td className="px-1 py-0.5 text-[10px] text-muted-foreground border-r border-border/30 whitespace-nowrap overflow-hidden text-ellipsis max-w-0" title={row.lote || ''}>
+                      <td className="px-1 py-0.5 text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis max-w-0" title={row.lote || ''} style={{ borderRight: blockBorder }}>
                         {row.lote || <span className="opacity-20">—</span>}
                       </td>
-                      {categorias.map(cat => {
+                      {categorias.map((cat, catIdx) => {
                         const val = row.categorias.get(cat.id);
                         const qty = val?.quantidade || 0;
                         const peso = val?.peso_medio_kg;
+                        const leftBdr = getCatBorderLeft(catIdx);
+                        const color = isMacho(cat) ? txtMacho : isFemea(cat) ? txtFemea : undefined;
                         return (
-                          <td key={cat.id} className="px-0.5 py-0.5 text-center text-[11px] border-r border-border/30">
+                          <td key={cat.id} className="px-0.5 py-0.5 text-center text-[11px] border-r border-border/30" style={leftBdr ? { borderLeft: leftBdr } : undefined}>
                             {qty > 0 ? (
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <span className="font-semibold cursor-default">{formatNum(qty, 0)}</span>
+                                  <span className="font-semibold cursor-default" style={color ? { color } : undefined}>{formatNum(qty, 0)}</span>
                                 </TooltipTrigger>
                                 <TooltipContent>
                                   <p>{cat.nome}: {formatNum(qty, 0)} cab</p>
@@ -401,14 +465,14 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
                           </td>
                         );
                       })}
-                      <td className="px-0.5 py-0.5 text-center text-[11px] font-bold border-r border-border/30 bg-primary/5">
+                      <td className="px-0.5 py-0.5 text-center text-[11px] font-bold border-r border-border/30 bg-primary/5" style={{ borderLeft: totalLeftBorder }}>
                         {row.totalCabecas ? formatNum(row.totalCabecas, 0) : <span className="opacity-15">—</span>}
                       </td>
-                      <td className="px-0.5 py-0.5 text-center text-[11px] border-r border-border/30 tabular-nums">
+                      <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r border-border/30 tabular-nums text-muted-foreground" style={{ borderLeft: pesoLeftBorder }}>
                         {row.pesoMedio ? formatNum(row.pesoMedio, 2) : <span className="opacity-15">—</span>}
                       </td>
-                      <td className="px-0.5 py-0.5 text-center text-[11px] border-r border-border/30">{row.pasto.area_produtiva_ha ? formatNum(row.pasto.area_produtiva_ha, 1) : <span className="opacity-15">—</span>}</td>
-                      <td className={`px-0.5 py-0.5 text-center text-[11px] border-r border-border/30 ${getUaHaColor(row.uaHa)}`}>{row.uaHa ? formatNum(row.uaHa, 2) : <span className="opacity-15">—</span>}</td>
+                      <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r border-border/30 text-muted-foreground">{row.pasto.area_produtiva_ha ? formatNum(row.pasto.area_produtiva_ha, 1) : <span className="opacity-15">—</span>}</td>
+                      <td className={`px-0.5 py-0.5 text-center text-[10px] italic border-r border-border/30 ${getUaHaColor(row.uaHa)}`}>{row.uaHa ? formatNum(row.uaHa, 2) : <span className="opacity-15">—</span>}</td>
                       <td className="px-0.5 py-0.5 text-center text-[11px]">
                         {row.qualidade ? (
                           <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold ${getQualidadeColor(row.qualidade)}`}>
@@ -421,17 +485,21 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
                 })}
               </tbody>
               <tfoot>
-                <tr className="bg-muted/80 font-bold h-7 border-t-2 border-border">
-                  <td className="sticky left-0 z-10 bg-muted px-1.5 py-0.5 text-[11px] border-r border-border/40" colSpan={3}>TOTAL / MÉDIA</td>
-                  {categorias.map(cat => {
+                {/* ── TOTAL / MÉDIA ── */}
+                <tr className="font-bold h-7" style={{ borderTop: '2px solid hsl(220 13% 75%)' }}>
+                  <td className="sticky left-0 z-10 px-1.5 py-0.5 text-[11px] border-r" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)' }} colSpan={3}>TOTAL / MÉDIA</td>
+                  {categorias.map((cat, catIdx) => {
                     const t = totais.catTotals.get(cat.id);
                     const pesoMed = t && t.qtdComPeso > 0 ? t.pesoTotal / t.qtdComPeso : null;
+                    const bg = isMacho(cat) ? ftBgMacho : isFemea(cat) ? ftBgFemea : ftBg;
+                    const color = isMacho(cat) ? txtMacho : isFemea(cat) ? txtFemea : undefined;
+                    const leftBdr = getCatBorderLeft(catIdx);
                     return (
-                      <td key={cat.id} className="px-0.5 py-0.5 text-center text-[11px] border-r border-border/40">
+                      <td key={cat.id} className="px-0.5 py-0.5 text-center text-[11px] border-r" style={{ backgroundColor: bg, borderColor: 'hsl(220 13% 75%)', ...(leftBdr ? { borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' } : {}) }}>
                         {t && t.quantidade > 0 ? (
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <span className="cursor-default">{formatNum(t.quantidade, 0)}</span>
+                              <span className="cursor-default font-bold" style={color ? { color } : undefined}>{formatNum(t.quantidade, 0)}</span>
                             </TooltipTrigger>
                             <TooltipContent>
                               <p>{cat.nome}: {formatNum(t.quantidade, 0)} cab</p>
@@ -442,19 +510,42 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
                       </td>
                     );
                   })}
-                  <td className="px-0.5 py-0.5 text-center text-[11px] font-extrabold border-r border-border/40 bg-primary/10">{formatNum(totais.totalCab, 0)}</td>
-                  <td className="px-0.5 py-0.5 text-center text-[11px] border-r border-border/40 tabular-nums">{totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 2) : '—'}</td>
-                  <td className="px-0.5 py-0.5 text-center text-[11px] border-r border-border/40">{formatNum(totais.areaTotal, 1)}</td>
-                  <td className={`px-0.5 py-0.5 text-center text-[11px] border-r border-border/40 ${getUaHaColor(totais.uaHaGeral)}`}>
+                  <td className="px-0.5 py-0.5 text-center text-[11px] font-extrabold border-r" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>{formatNum(totais.totalCab, 0)}</td>
+                  <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r tabular-nums" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>{totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 2) : '—'}</td>
+                  <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)' }}>{formatNum(totais.areaTotal, 1)}</td>
+                  <td className={`px-0.5 py-0.5 text-center text-[10px] italic border-r ${getUaHaColor(totais.uaHaGeral)}`} style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)' }}>
                     {totais.uaHaGeral ? formatNum(totais.uaHaGeral, 2) : '—'}
                   </td>
-                  <td className="px-0.5 py-0.5 text-center text-[11px]">
+                  <td className="px-0.5 py-0.5 text-center text-[11px]" style={{ backgroundColor: ftBg }}>
                     {totais.qualidadeMedia ? (
                       <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold ${getQualidadeColor(totais.qualidadeMedia)}`}>
                         {formatNum(totais.qualidadeMedia, 1)}
                       </span>
                     ) : '—'}
                   </td>
+                </tr>
+                {/* ── PESO KG (nova linha) ── */}
+                <tr className="h-6" style={{ backgroundColor: 'hsl(220 14% 92%)' }}>
+                  <td className="sticky left-0 z-10 px-1.5 py-0.5 text-[10px] font-semibold border-r italic text-muted-foreground" style={{ backgroundColor: 'hsl(220 14% 92%)', borderColor: 'hsl(220 13% 80%)' }} colSpan={3}>Peso Kg</td>
+                  {categorias.map((cat, catIdx) => {
+                    const pesoMed = pesosPorCategoria.get(cat.id);
+                    const color = isMacho(cat) ? txtMacho : isFemea(cat) ? txtFemea : undefined;
+                    const leftBdr = getCatBorderLeft(catIdx);
+                    return (
+                      <td key={cat.id} className="px-0.5 py-0.5 text-center text-[10px] italic tabular-nums border-r" style={{ borderColor: 'hsl(220 13% 80%)', ...(leftBdr ? { borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' } : {}) }}>
+                        {pesoMed ? (
+                          <span style={color ? { color } : undefined}>{formatNum(pesoMed, 1)}</span>
+                        ) : <span className="opacity-20">—</span>}
+                      </td>
+                    );
+                  })}
+                  <td className="px-0.5 py-0.5 text-center text-[10px] italic tabular-nums border-r" style={{ borderColor: 'hsl(220 13% 80%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>
+                    {totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 1) : '—'}
+                  </td>
+                  <td className="border-r" style={{ borderColor: 'hsl(220 13% 80%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }} />
+                  <td className="border-r" style={{ borderColor: 'hsl(220 13% 80%)' }} />
+                  <td className="border-r" style={{ borderColor: 'hsl(220 13% 80%)' }} />
+                  <td />
                 </tr>
               </tfoot>
             </table>
