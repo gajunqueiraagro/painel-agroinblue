@@ -59,7 +59,7 @@ interface ZooRow {
   indicador: string;
   valores: number[];
   total: number;
-  format: 'int' | 'dec1' | 'dec2' | 'money' | 'kg';
+  format: PainelFormatType;
 }
 
 function buildZooRows(
