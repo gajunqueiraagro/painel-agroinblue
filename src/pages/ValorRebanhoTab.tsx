@@ -388,6 +388,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             valor: Number(d.valor_total) || 0,
             pesoKg: Number(d.peso_total_kg) || 0,
           };
+        });
 
         setHistoricoPorMes(map);
       } catch (error) {
