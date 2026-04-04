@@ -324,9 +324,9 @@ export function FechamentoPastoDialog({
         </div>
 
         {/* ── GRADE PRINCIPAL ── */}
-        <div className="overflow-y-auto flex-1 px-4 py-2 space-y-2 bg-background">
-          {renderGrupo('MACHOS', catsMachos, 'text-blue-600 dark:text-blue-400')}
-          {renderGrupo('FÊMEAS', catsFemeas, 'text-pink-600 dark:text-pink-400')}
+        <div className="overflow-y-auto flex-1 px-5 py-3 space-y-4 bg-background">
+          {renderGrupo('MACHOS', catsMachos, 'text-blue-600 dark:text-blue-400', 100)}
+          {renderGrupo('FÊMEAS', catsFemeas, 'text-pink-600 dark:text-pink-400', 200)}
         </div>
 
         {/* ── FOOTER ── */}
