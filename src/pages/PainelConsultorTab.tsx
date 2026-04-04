@@ -16,7 +16,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import { usePastos } from '@/hooks/usePastos';
-import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
+import { formatNum, formatMoeda, formatPainel, type PainelFormatType } from '@/lib/calculos/formatters';
 import {
   calcSaldoMensalAcumulado,
   calcResumoMovimentacoes,
