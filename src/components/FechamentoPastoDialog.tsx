@@ -206,7 +206,6 @@ export function FechamentoPastoDialog({
                   type="number" inputMode="decimal" step="0.01"
                   tabIndex={tabBase + idx * 2 + 1}
                   value={item?.peso_medio_kg ?? ''}
-                  onFocus={e => { /* keep raw value while editing */ }}
                   onChange={e => updateItem(c.id, 'peso_medio_kg', e.target.value ? Number(e.target.value) : null)}
                   onBlur={e => {
                     if (e.target.value) {
