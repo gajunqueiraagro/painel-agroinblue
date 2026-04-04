@@ -567,9 +567,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   }, [fonteMes, metricasMesAnteriorLive, buildFrozenMetrics, anoMesAnterior]);
 
   const metricasInicioAno = useMemo(() => {
-    if (fonteMes === 'live') return metricasJaneiroLive;
-    return buildFrozenMetrics(anoMesJan);
-  }, [fonteMes, metricasJaneiroLive, buildFrozenMetrics, anoMesJan]);
+    if (fonteMes === 'live') return metricasDezAnteriorLive;
+    return buildFrozenMetrics(anoMesDezAnterior);
+  }, [fonteMes, metricasDezAnteriorLive, buildFrozenMetrics, anoMesDezAnterior]);
 
   const rowsExibicao = fonteMes === 'snapshot' ? snapshotRowsSelecionado : liveRows;
   const metricasTabela = useMemo(() => {
