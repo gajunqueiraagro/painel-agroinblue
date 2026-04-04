@@ -98,7 +98,7 @@ function MiniChart({ data, color, title }: { data: { label: string; value: numbe
               labelStyle={{ fontSize: 9 }}
               formatter={(v: number) => [formatNum(v, 1), '']}
             />
-            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.5} dot={false} connectNulls={false} />
+            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.5} dot={{ r: 2.5, fill: color, strokeWidth: 0 }} activeDot={{ r: 4 }} connectNulls={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
