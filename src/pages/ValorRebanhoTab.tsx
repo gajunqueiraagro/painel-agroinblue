@@ -329,36 +329,80 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const varCabValorMes = calcVariacao(valorMedioCabeca, prevTotals.valorCab);
   const varCabValorAno = calcVariacao(valorMedioCabeca, janTotals.valorCab);
 
-  // Chart data: build from all months up to current using available hooks
-  // For a lightweight approach, use current + prev + jan as data points
+  // Chart data: query valor_rebanho_fechamento for all months of the year
+  const [historicoPorMes, setHistoricoPorMes] = useState<Record<string, number>>({});
+  const mesAtualNum = new Date().getMonth() + 1;
+  const anoAtualNum = new Date().getFullYear();
+
+  useEffect(() => {
+    if (!fazendaId || fazendaId === '__global__') return;
+    const fetchHistorico = async () => {
+      const anoMeses = Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`);
+      const { data } = await supabase
+        .from('valor_rebanho_fechamento')
+        .select('ano_mes, valor_total')
+        .eq('fazenda_id', fazendaId)
+        .in('ano_mes', anoMeses);
+      const map: Record<string, number> = {};
+      (data || []).forEach(d => { map[d.ano_mes] = d.valor_total; });
+      setHistoricoPorMes(map);
+    };
+    fetchHistorico();
+  }, [fazendaId, anoFiltro]);
+
+  // Build 13-point fixed chart data (Ini, Jan–Dez), blank for future months
+  const buildChartData = useCallback((getValue: (mes: number) => number | null) => {
+    return CHART_LABELS.map((label, idx) => {
+      if (idx === 0) {
+        // "Ini" = saldo inicial / jan value
+        const v = getValue(0);
+        return { label, value: v };
+      }
+      const mes = idx;
+      // Future months = blank
+      if (Number(anoFiltro) > anoAtualNum || (Number(anoFiltro) === anoAtualNum && mes > mesAtualNum)) {
+        return { label, value: null };
+      }
+      return { label, value: getValue(mes) };
+    });
+  }, [anoFiltro, anoAtualNum, mesAtualNum]);
+
   const chartDataValor = useMemo(() => {
-    const points: { label: string; value: number }[] = [];
-    if (janTotals.valor > 0 && mesNum > 1) points.push({ label: 'Jan', value: janTotals.valor });
-    if (prevTotals.valor > 0 && mesNum > 2) points.push({ label: MESES_SHORT[mesNum - 2]?.label || '', value: prevTotals.valor });
-    if (prevTotals.valor > 0 && mesNum === 2) {} // Jan already added
-    points.push({ label: MESES_SHORT[mesNum - 1]?.label || '', value: totalRebanho });
-    return points.length >= 2 ? points : [];
-  }, [janTotals, prevTotals, totalRebanho, mesNum]);
+    return buildChartData((mes) => {
+      if (mes === 0) {
+        // Use Jan or saldo inicial as "início"
+        const janKey = `${anoFiltro}-01`;
+        return historicoPorMes[janKey] ?? null;
+      }
+      const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
+      // For current selected month, use live computed value
+      if (mes === mesNum) return totalRebanho > 0 ? totalRebanho : historicoPorMes[key] ?? null;
+      return historicoPorMes[key] ?? null;
+    });
+  }, [buildChartData, historicoPorMes, anoFiltro, mesNum, totalRebanho]);
 
   const chartDataArrobas = useMemo(() => {
+    // We only have arrobas for jan, prev, and current — others null
     const janArr = resumoJan.rows.reduce((s, r) => s + r.quantidadeFinal * (r.pesoMedioFinalKg || 0) / 30, 0);
     const prevArr = resumoMesAnterior.rows.reduce((s, r) => s + r.quantidadeFinal * (r.pesoMedioFinalKg || 0) / 30, 0);
-    const points: { label: string; value: number }[] = [];
-    if (janArr > 0 && mesNum > 1) points.push({ label: 'Jan', value: janArr });
-    if (prevArr > 0 && mesNum > 2) points.push({ label: MESES_SHORT[mesNum - 2]?.label || '', value: prevArr });
-    points.push({ label: MESES_SHORT[mesNum - 1]?.label || '', value: totalArrobas });
-    return points.length >= 2 ? points : [];
-  }, [resumoJan.rows, resumoMesAnterior.rows, totalArrobas, mesNum]);
+    return buildChartData((mes) => {
+      if (mes === 0) return janArr > 0 ? janArr : null;
+      if (mes === 1) return janArr > 0 ? janArr : null;
+      if (mes === mesNum) return totalArrobas > 0 ? totalArrobas : null;
+      if (mes === mesNum - 1) return prevArr > 0 ? prevArr : null;
+      return null;
+    });
+  }, [buildChartData, resumoJan.rows, resumoMesAnterior.rows, totalArrobas, mesNum]);
 
   const chartDataPrecoArroba = useMemo(() => {
-    const points: { label: string; value: number }[] = [];
-    if (janTotals.precoArroba > 0 && mesNum > 1) points.push({ label: 'Jan', value: janTotals.precoArroba });
-    if (prevTotals.precoArroba > 0 && mesNum > 2) points.push({ label: MESES_SHORT[mesNum - 2]?.label || '', value: prevTotals.precoArroba });
-    points.push({ label: MESES_SHORT[mesNum - 1]?.label || '', value: precoMedioArroba });
-    return points.length >= 2 ? points : [];
-  }, [janTotals, prevTotals, precoMedioArroba, mesNum]);
-
-  const handlePrecoChange = (codigo: string, value: string) => {
+    return buildChartData((mes) => {
+      if (mes === 0) return janTotals.precoArroba > 0 ? janTotals.precoArroba : null;
+      if (mes === 1) return janTotals.precoArroba > 0 ? janTotals.precoArroba : null;
+      if (mes === mesNum) return precoMedioArroba > 0 ? precoMedioArroba : null;
+      if (mes === mesNum - 1) return prevTotals.precoArroba > 0 ? prevTotals.precoArroba : null;
+      return null;
+    });
+  }, [buildChartData, janTotals, prevTotals, precoMedioArroba, mesNum]);
     const sanitized = value.replace(/[^0-9.,]/g, '');
     setPrecosDisplay(prev => ({ ...prev, [codigo]: sanitized }));
     const num = parseFloat(sanitized.replace(',', '.'));
