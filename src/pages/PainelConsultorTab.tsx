@@ -5,15 +5,12 @@
  * Blocos colapsáveis: Rebanho, Produção, Financeiro no Caixa, Financeiro por Competência
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import React from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ArrowLeft, Download, ChevronDown } from 'lucide-react';
-import { TabId } from '@/components/BottomNav';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { useCliente } from '@/contexts/ClienteContext';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import { usePastos } from '@/hooks/usePastos';
