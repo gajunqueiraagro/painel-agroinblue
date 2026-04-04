@@ -39,12 +39,18 @@ interface Props {
   onEditarVenda?: (lancamento: Lancamento) => void;
   onEditarCompra?: (lancamento: Lancamento) => void;
   onEditarTransferencia?: (lancamento: Lancamento) => void;
+  fazendaId?: string;
 }
 
-export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover, onCountFinanceiros, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia }: Props) {
+export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover, onCountFinanceiros, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia, fazendaId }: Props) {
   const { fazendaAtual, fazendas } = useFazenda();
   const nomeFazenda = fazendaAtual?.nome || '';
   const outrasFazendas = useMemo(() => fazendas.filter(f => f.id !== fazendaAtual?.id), [fazendas, fazendaAtual]);
+
+  // ─── P1 governance for this lancamento's month ───
+  const lancAnoMes = useMemo(() => lancamento.data?.slice(0, 7), [lancamento.data]);
+  const { status: statusPilaresLanc } = useStatusPilares(fazendaId, lancAnoMes);
+  const p1Oficial = statusPilaresLanc.p1_mapa_pastos.status === 'oficial';
 
   const [editando, setEditando] = useState(false);
   const [form, setForm] = useState({ ...lancamento });
