@@ -125,7 +125,7 @@ export function useValorRebanho(anoMes: string) {
   }, [loadPrecos, loadFechamentoStatus]);
 
   // Save/upsert prices and close the month
-  const salvarPrecos = useCallback(async (items: PrecoCategoria[], valorTotal?: number) => {
+  const salvarPrecos = useCallback(async (items: PrecoCategoria[], valorTotal?: number, pesoTotalKg?: number) => {
     if (!fazendaId || fazendaId === '__global__') return;
     setSaving(true);
     try {
