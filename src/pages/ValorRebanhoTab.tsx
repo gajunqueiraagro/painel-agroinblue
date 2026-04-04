@@ -388,82 +388,59 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   // Determine if selected month is fechado (has valor_rebanho_fechamento)
   const mesSelecionadoFechado = !!historicoPorMes[anoMes] || isFechado;
 
+  // Helper to get frozen data for a given month key
+  const getFrozen = (mesKey: string) => historicoPorMes[mesKey] ?? null;
+
   // Build 13-point fixed chart data (Ini, Jan–Dez)
-  // Only show data up to the selected month — future months blank
   const buildChartData = useCallback((getValue: (mes: number) => number | null) => {
     return CHART_LABELS.map((label, idx) => {
-      if (idx === 0) {
-        return { label, value: getValue(0) };
-      }
+      if (idx === 0) return { label, value: getValue(0) };
       const mes = idx;
-      // Blank out months AFTER the selected month
-      if (mes > mesNum) {
-        return { label, value: null };
-      }
+      if (mes > mesNum) return { label, value: null };
       return { label, value: getValue(mes) };
     });
   }, [mesNum]);
 
-  // VALOR DO REBANHO chart — fonte oficial: valor_rebanho_fechamento.valor_total
-  // Para o mês selecionado: SEMPRE usar totalRebanho (= valor exibido no card)
-  // Para outros meses: usar valor frozen da tabela valor_rebanho_fechamento
+  // Peso total do mês selecionado (live, para card)
+  const pesoTotalKgLive = useMemo(() => allRows.reduce((sum, r) => sum + (r.saldo * r.pesoMedio), 0), [allRows]);
+
+  // VALOR DO REBANHO chart — fonte oficial ÚNICA: valor_rebanho_fechamento.valor_total
   const chartDataValor = useMemo(() => {
     return buildChartData((mes) => {
-      if (mes === 0) {
-        // "Ini" = valor de janeiro (frozen)
-        return historicoPorMes[`${anoFiltro}-01`] ?? null;
-      }
-      // Mês selecionado: usar EXATAMENTE o valor do card (totalRebanho)
+      const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
       if (mes === mesNum) {
-        return totalRebanho > 0 ? totalRebanho : (historicoPorMes[`${anoFiltro}-${String(mes).padStart(2, '0')}`] ?? null);
+        return totalRebanho > 0 ? totalRebanho : (getFrozen(key)?.valor ?? null);
       }
-      // Outros meses: valor frozen oficial
-      const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
-      return historicoPorMes[key] ?? null;
+      return getFrozen(key)?.valor ?? null;
     });
   }, [buildChartData, historicoPorMes, anoFiltro, mesNum, totalRebanho]);
 
-  // ARROBAS EM ESTOQUE chart — fonte: vw_zoot_fazenda_mensal (peso_total_final_kg / 30)
-  // Para o mês selecionado sem dados no zoot, usar live totalArrobas
+  // ARROBAS EM ESTOQUE chart — fonte: valor_rebanho_fechamento.peso_total_kg / 30
   const chartDataArrobas = useMemo(() => {
     return buildChartData((mes) => {
-      if (mes === 0) {
-        const z = zootPorMes[1];
-        return z && z.pesoTotalKg > 0 ? z.pesoTotalKg / 30 : null;
-      }
-      // Mês selecionado: usar valor live (= card)
+      const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
       if (mes === mesNum) {
-        if (totalArrobas > 0) return totalArrobas;
-        const z = zootPorMes[mes];
-        return z && z.pesoTotalKg > 0 ? z.pesoTotalKg / 30 : null;
+        if (pesoTotalKgLive > 0) return pesoTotalKgLive / 30;
+        const f = getFrozen(key);
+        return f && f.pesoKg > 0 ? f.pesoKg / 30 : null;
       }
-      const z = zootPorMes[mes];
-      if (z && z.pesoTotalKg > 0) return z.pesoTotalKg / 30;
-      return null;
+      const f = getFrozen(key);
+      return f && f.pesoKg > 0 ? f.pesoKg / 30 : null;
     });
-  }, [buildChartData, zootPorMes, totalArrobas, mesNum]);
+  }, [buildChartData, historicoPorMes, pesoTotalKgLive, anoFiltro, mesNum]);
 
-  // R$/@ MÉDIO chart — derivado: valor / arrobas
-  // Para o mês selecionado, usar live precoMedioArroba (= card)
+  // R$/@ MÉDIO chart — derivado: valor_total / (peso_total_kg / 30)
   const chartDataPrecoArroba = useMemo(() => {
     return buildChartData((mes) => {
-      if (mes === 0) {
-        const z = zootPorMes[1];
-        const v = historicoPorMes[`${anoFiltro}-01`];
-        if (z && z.pesoTotalKg > 0 && v) return v / (z.pesoTotalKg / 30);
-        return null;
-      }
-      // Mês selecionado: usar valor live (= card)
+      const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
       if (mes === mesNum) {
         if (precoMedioArroba > 0) return precoMedioArroba;
       }
-      const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
-      const z = zootPorMes[mes];
-      const v = historicoPorMes[key];
-      if (z && z.pesoTotalKg > 0 && v) return v / (z.pesoTotalKg / 30);
+      const f = getFrozen(key);
+      if (f && f.pesoKg > 0 && f.valor > 0) return f.valor / (f.pesoKg / 30);
       return null;
     });
-  }, [buildChartData, zootPorMes, historicoPorMes, anoFiltro, precoMedioArroba, mesNum]);
+  }, [buildChartData, historicoPorMes, anoFiltro, precoMedioArroba, mesNum]);
 
   const handlePrecoChange = (codigo: string, value: string) => {
     const sanitized = value.replace(/[^0-9.,]/g, '');
