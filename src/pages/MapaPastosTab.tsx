@@ -331,9 +331,9 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
   getQualidadeColor: (v: number | null) => string;
 }) {
   const colWidths = useMemo(() => {
-    const base = [60, 45, 100];
-    const cats = categorias.map(() => 30);
-    const tail = [38, 52, 42, 42, 34];
+    const base = [55, 40, 90];
+    const cats = categorias.map(() => 28);
+    const tail = [36, 40, 34, 34, 28];
     return [...base, ...cats, ...tail];
   }, [categorias]);
 
@@ -395,8 +395,8 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
 
   return (
     <div className="flex flex-1 min-h-0 flex-col overflow-hidden border-t border-border/30 bg-background">
-      <div className="flex flex-1 min-h-0 overflow-x-auto">
-        <div className="flex min-h-0 min-w-full flex-col" style={{ width: tableWidth }}>
+      <div className="flex flex-1 min-h-0 overflow-x-auto justify-center">
+        <div className="flex min-h-0 flex-col" style={{ width: tableWidth }}>
           {/* ── THEAD ── */}
           <div className="flex-shrink-0">
             <table className="w-full border-separate border-spacing-0 text-[11px]" style={{ tableLayout: 'fixed' }}>
