@@ -174,70 +174,52 @@ export function FechamentoPastoDialog({
   // ── Render de um grupo (machos ou fêmeas) ──
   const renderGrupo = (label: string, cats: CategoriaRebanho[], colorAccent: string, tabBase: number) => (
     <div>
-      <div className={`text-[11px] font-bold uppercase tracking-widest mb-1 ${colorAccent}`}>{label}</div>
-      <div className="border rounded bg-background inline-block">
-        <table className="text-xs" style={{ borderCollapse: 'collapse' }}>
-          <thead>
-            <tr className="border-b bg-muted/40">
-              <th className="px-1.5 py-1 w-[42px]"></th>
-              {cats.map(c => (
-                <th key={c.id} className="text-center px-1.5 py-1 text-[11px] font-semibold text-foreground whitespace-nowrap" style={{ minWidth: '56px', maxWidth: '68px' }}>
-                  {c.nome}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-b">
-              <td className="px-1.5 py-1 text-[12px] font-bold text-muted-foreground">Qtde</td>
-              {cats.map((c, idx) => {
-                const item = getItem(c.id);
-                return (
-                  <td key={c.id} className="px-1 py-1 text-center">
-                    <div className="relative">
-                      <Input
-                        type="number" inputMode="numeric" min={0}
-                        tabIndex={tabBase + idx * 2}
-                        value={item?.quantidade || ''}
-                        onChange={e => updateItem(c.id, 'quantidade', Number(e.target.value) || 0)}
-                        disabled={isFechado}
-                        className="h-7 text-xs font-bold px-1 text-center tabular-nums w-[52px]"
-                        placeholder="0"
-                      />
-                      {item?.origem_dado === 'copiado_mes_anterior' && (
-                        <Badge variant="secondary" className="absolute -top-1.5 -right-1.5 text-[6px] h-3 px-0.5 leading-none">Cop</Badge>
-                      )}
-                    </div>
-                  </td>
-                );
-              })}
-            </tr>
-            <tr>
-              <td className="px-1.5 py-1 text-[12px] font-bold text-muted-foreground">Peso</td>
-              {cats.map((c, idx) => {
-                const item = getItem(c.id);
-                return (
-                  <td key={c.id} className="px-1 py-1 text-center">
-                    <Input
-                      type="number" inputMode="decimal" step="0.01"
-                      tabIndex={tabBase + idx * 2 + 1}
-                      value={item?.peso_medio_kg ?? ''}
-                      onChange={e => updateItem(c.id, 'peso_medio_kg', e.target.value ? Number(e.target.value) : null)}
-                      onBlur={e => {
-                        if (e.target.value) {
-                          updateItem(c.id, 'peso_medio_kg', Math.round(Number(e.target.value) * 100) / 100);
-                        }
-                      }}
-                      disabled={isFechado}
-                      className="h-7 text-xs px-1 text-center tabular-nums w-[52px]"
-                      placeholder="kg"
-                    />
-                  </td>
-                );
-              })}
-            </tr>
-          </tbody>
-        </table>
+      <div className={`text-xs font-bold uppercase tracking-widest mb-2 ${colorAccent}`}>{label}</div>
+      <div className="flex items-start gap-3">
+        {/* Labels column */}
+        <div className="flex flex-col pt-[22px] gap-1 shrink-0 w-[40px]">
+          <span className="text-[11px] font-bold text-muted-foreground h-8 flex items-center">Qtde</span>
+          <span className="text-[11px] font-bold text-muted-foreground h-8 flex items-center">Peso</span>
+        </div>
+        {/* Category cards */}
+        <div className="flex gap-3 flex-wrap">
+          {cats.map((c, idx) => {
+            const item = getItem(c.id);
+            return (
+              <div key={c.id} className="flex flex-col items-center gap-1" style={{ minWidth: '62px' }}>
+                <span className="text-[11px] font-semibold text-foreground whitespace-nowrap mb-0.5">{c.nome}</span>
+                <div className="relative">
+                  <Input
+                    type="number" inputMode="numeric" min={0}
+                    tabIndex={tabBase + idx * 2}
+                    value={item?.quantidade || ''}
+                    onChange={e => updateItem(c.id, 'quantidade', Number(e.target.value) || 0)}
+                    disabled={isFechado}
+                    className="h-8 text-xs font-bold px-1.5 text-center tabular-nums w-[58px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    placeholder="0"
+                  />
+                  {item?.origem_dado === 'copiado_mes_anterior' && (
+                    <Badge variant="secondary" className="absolute -top-1.5 -right-1.5 text-[6px] h-3 px-0.5 leading-none">Cop</Badge>
+                  )}
+                </div>
+                <Input
+                  type="number" inputMode="decimal" step="0.01"
+                  tabIndex={tabBase + idx * 2 + 1}
+                  value={item?.peso_medio_kg != null ? item.peso_medio_kg.toFixed(2) : ''}
+                  onChange={e => updateItem(c.id, 'peso_medio_kg', e.target.value ? Number(e.target.value) : null)}
+                  onBlur={e => {
+                    if (e.target.value) {
+                      updateItem(c.id, 'peso_medio_kg', Math.round(Number(e.target.value) * 100) / 100);
+                    }
+                  }}
+                  disabled={isFechado}
+                  className="h-8 text-xs px-1.5 text-center tabular-nums w-[58px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  placeholder="kg"
+                />
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
