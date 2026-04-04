@@ -471,6 +471,15 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 </div>
               )}
 
+              {/* ── P1 governance banner ── */}
+              {p1Oficial && (
+                <div className="bg-destructive/10 border border-destructive/30 rounded px-2 py-1">
+                  <p className="text-[9px] text-destructive font-medium">
+                    🔒 Mês fechado (P1 oficial). Reabra o período para alterar campos estruturais ou excluir.
+                  </p>
+                </div>
+              )}
+
               {/* ── Ações ── */}
               <div className="flex gap-2 pt-0.5">
                 {!isTransferenciaEntrada && (
@@ -478,7 +487,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                     <Button variant="default" size="sm" className="flex-1 h-7 text-[10px] font-bold" onClick={handleEditClick}>
                       <Pencil className="h-3 w-3 mr-1" /> Editar
                     </Button>
-                    <Button variant="destructive" size="sm" className="h-7 text-[10px]" onClick={handleRemoverClick} disabled={checkingVinculos}>
+                    <Button variant="destructive" size="sm" className="h-7 text-[10px]" onClick={handleRemoverClick} disabled={checkingVinculos || p1Oficial}>
                       <Trash2 className="h-3 w-3 mr-1" /> Apagar
                     </Button>
                   </>
