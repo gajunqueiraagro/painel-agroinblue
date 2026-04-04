@@ -202,12 +202,26 @@ export function FechamentoPastoDialog({
     });
   }, [open, fechamento, categorias, loadItens]);
 
-  const updateItem = (catId: string, field: string, value: any) => {
+  const updateItem = useCallback((catId: string, field: string, value: any) => {
     setItens(prev => prev.map(item => item.categoria_id === catId
       ? { ...item, [field]: value, origem_dado: item.origem_dado === 'copiado_mes_anterior' ? 'ajustado' : item.origem_dado }
       : item
     ));
-  };
+  }, []);
+
+  const onUpdateQtd = useCallback((catId: string, val: number) => {
+    setItens(prev => prev.map(item => item.categoria_id === catId
+      ? { ...item, quantidade: val, origem_dado: item.origem_dado === 'copiado_mes_anterior' ? 'ajustado' : item.origem_dado }
+      : item
+    ));
+  }, []);
+
+  const onUpdatePeso = useCallback((catId: string, val: number | null) => {
+    setItens(prev => prev.map(item => item.categoria_id === catId
+      ? { ...item, peso_medio_kg: val, origem_dado: item.origem_dado === 'copiado_mes_anterior' ? 'ajustado' : item.origem_dado }
+      : item
+    ));
+  }, []);
 
   const getItem = (catId: string) => itens.find(i => i.categoria_id === catId);
 
