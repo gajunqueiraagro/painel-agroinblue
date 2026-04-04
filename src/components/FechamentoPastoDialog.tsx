@@ -241,13 +241,13 @@ export function FechamentoPastoDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] flex flex-col max-w-5xl p-0 gap-0 overflow-hidden">
+      <DialogContent className="max-h-[90vh] flex flex-col max-w-3xl p-0 gap-0 overflow-hidden">
         {/* ── HEADER ESCURO ── */}
-        <div className="shrink-0 bg-[hsl(215,30%,18%)] text-white px-4 pt-3 pb-2.5 space-y-2">
+        <div className="shrink-0 bg-[hsl(215,30%,18%)] text-white px-4 pt-3 pb-2.5 space-y-1.5">
           {/* Row 1: Name + status + copy */}
           <div className="flex items-center gap-2">
-            <span className="font-bold text-sm leading-none">{pasto.nome}</span>
-            {pasto.area_produtiva_ha && <span className="text-[11px] text-white/60">{pasto.area_produtiva_ha} ha</span>}
+            <span className="font-extrabold text-xl leading-none tracking-tight">{pasto.nome}</span>
+            {pasto.area_produtiva_ha && <span className="text-sm font-medium text-white/70">{pasto.area_produtiva_ha} ha</span>}
             {isFechado && <Badge className="h-5 text-[10px] px-1.5 bg-white/15 text-white border-white/20"><Lock className="h-3 w-3 mr-0.5" />Fechado</Badge>}
             <div className="flex-1" />
             {!isFechado && (
