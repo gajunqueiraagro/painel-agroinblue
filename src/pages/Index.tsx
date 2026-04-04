@@ -348,6 +348,15 @@ const Index = () => {
       {activeTab === 'painel_consultor' && (
         <PainelConsultorTab onBack={() => setActiveTab('resumo')} onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
       )}
+      {activeTab === 'status_fechamentos' && (
+        <StatusFechamentosTab
+          ano={filtroGlobal.ano}
+          onSelectMes={(anoMes) => {
+            const [a, m] = anoMes.split('-');
+            handleFiltroChange({ ano: a, mes: parseInt(m) });
+            setActiveTab('resumo');
+          }}
+        />
 
       {/* Hubs */}
       {activeTab === 'lancar_zoo_hub' && (
