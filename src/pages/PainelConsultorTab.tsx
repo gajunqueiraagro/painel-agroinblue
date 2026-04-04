@@ -533,6 +533,7 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
   const [ano, setAno] = useState(filtroGlobal?.ano || String(new Date().getFullYear()));
   const [ateMes, setAteMes] = useState(filtroGlobal?.mes || new Date().getMonth() + 1);
   const [tab, setTab] = useState<'zoo' | 'fin'>('zoo');
+  const [cenario, setCenario] = useState<'realizado' | 'previsto'>('realizado');
   const [pesosPorMes, setPesosPorMes] = useState<Record<string, Record<string, number>>>({});
   const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(Array(12).fill(0));
 
