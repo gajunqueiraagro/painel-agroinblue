@@ -95,7 +95,6 @@ function buildZooRows(
   // Pre-compute peso final per month
   const pesoFinKgRow_valores = Array.from({ length: 12 }, (_, i) => {
     const m = i + 1;
-    if (m > ateMes) return 0;
     const anoMes = `${ano}-${String(m).padStart(2, '0')}`;
     const pesosMap = pesosPorMes[anoMes] || {};
     const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, m);
