@@ -333,7 +333,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
             </table>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto pb-2">
+          <div className="flex-1 min-h-0 overflow-y-auto pb-16">
             <table className="w-full border-separate border-spacing-0 text-[11px]" style={{ tableLayout: 'fixed' }}>
               {renderColGroup()}
               <tbody>
