@@ -22,6 +22,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useStatusPilares, BLOCO_PILAR_MAP, getPilarBadgeConfig, getPilarTooltipText, type StatusPilares as StatusPilaresType } from '@/hooks/useStatusPilares';
 import { DivergenciaP1Dialog } from '@/components/DivergenciaP1Dialog';
+import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import { usePastos } from '@/hooks/usePastos';
 import { useZootMensal, indexByMes, type ZootMensal } from '@/hooks/useZootMensal';
@@ -707,6 +708,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
   const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(Array(12).fill(0));
   const [openBlocos, setOpenBlocos] = useState<Record<string, boolean>>({});
   const [showDivP1, setShowDivP1] = useState(false);
+  const [showReabrirP1, setShowReabrirP1] = useState(false);
 
   const anoNum = Number(ano);
   const anosDisponiveis = useMemo(() => {
@@ -724,7 +726,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
     const m = filtroGlobal?.mes || new Date().getMonth() + 1;
     return `${ano}-${String(m).padStart(2, '0')}`;
   }, [ano, filtroGlobal?.mes]);
-  const { status: statusPilares } = useStatusPilares(fazendaId, mesAtualRef);
+  const { status: statusPilares, refetch: refetchPilares } = useStatusPilares(fazendaId, mesAtualRef);
   const { data: zootMeta } = useZootMensal({ ano: anoNum, cenario: 'meta' });
 
   // Month cutoff: months > cutoff are blank
@@ -1010,12 +1012,14 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
                     const badge = getPilarBadgeConfig(pilarInfo.status);
                     const tooltipText = getPilarTooltipText(pilarKey, pilarInfo);
                     const isP1Bloqueado = pilarKey === 'p1_mapa_pastos' && pilarInfo.status === 'bloqueado';
+                    const isP1Oficial = pilarKey === 'p1_mapa_pastos' && pilarInfo.status === 'oficial';
+                    const isClickable = isP1Bloqueado || isP1Oficial;
                     return (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <span
-                            className={`inline-flex items-center text-[8px] font-semibold px-1.5 py-0 rounded-full border leading-relaxed normal-case tracking-normal ${isP1Bloqueado ? 'cursor-pointer' : 'cursor-help'} ${badge.className}`}
-                            onClick={isP1Bloqueado ? (e) => { e.stopPropagation(); setShowDivP1(true); } : undefined}
+                            className={`inline-flex items-center text-[8px] font-semibold px-1.5 py-0 rounded-full border leading-relaxed normal-case tracking-normal ${isClickable ? 'cursor-pointer' : 'cursor-help'} ${badge.className}`}
+                            onClick={isP1Bloqueado ? (e) => { e.stopPropagation(); setShowDivP1(true); } : isP1Oficial ? (e) => { e.stopPropagation(); setShowReabrirP1(true); } : undefined}
                           >
                             {badge.label}
                             {(pilarInfo.modo_transitorio || pilarInfo.status === 'bloqueado') && (
@@ -1027,6 +1031,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
                           <TooltipContent side="top" className="text-[10px] max-w-[220px]">
                             {tooltipText}
                             {isP1Bloqueado && <span className="block mt-0.5 opacity-70">Clique para ver detalhes</span>}
+                            {isP1Oficial && <span className="block mt-0.5 opacity-70">Clique para reabrir</span>}
                           </TooltipContent>
                         )}
                       </Tooltip>
@@ -1053,7 +1058,17 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
         onIrMovimentacoes={onTabChange ? () => { setShowDivP1(false); onTabChange('lancamentos'); } : undefined}
         onIrMapaPastos={onTabChange ? () => { setShowDivP1(false); onTabChange('mapa_pastos'); } : undefined}
       />
+
+      {/* Modal de reabertura P1 */}
+      {fazendaId && (
+        <ReabrirP1Dialog
+          open={showReabrirP1}
+          onOpenChange={setShowReabrirP1}
+          fazendaId={fazendaId}
+          anoMes={mesAtualRef}
+          onReaberto={refetchPilares}
+        />
+      )}
     </TooltipProvider>
   );
 }
-
