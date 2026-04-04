@@ -59,7 +59,7 @@ function calcVariacao(atual: number, anterior: number): number | null {
   return ((atual - anterior) / Math.abs(anterior)) * 100;
 }
 
-function VariacaoBadge({ valor, label }: { valor: number | null; label: string }) {
+function VariacaoBadge({ valor, label, showLabel }: { valor: number | null; label: string; showLabel?: boolean }) {
   if (valor === null) return null;
   const isPositive = valor > 0;
   const isNeutral = Math.abs(valor) < 0.1;
@@ -70,16 +70,14 @@ function VariacaoBadge({ valor, label }: { valor: number | null; label: string }
     ? 'text-emerald-600 dark:text-emerald-400'
     : 'text-destructive';
 
+  const formattedVal = Math.abs(valor).toFixed(1).replace('.', ',');
+
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className={`inline-flex items-center gap-0.5 text-[9px] font-semibold tabular-nums ${color}`}>
-          <Icon className="h-2.5 w-2.5" />
-          {Math.abs(valor).toFixed(1)}%
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top" className="text-[10px]">{label}</TooltipContent>
-    </Tooltip>
+    <span className={`inline-flex items-center gap-0.5 text-[8px] font-semibold tabular-nums ${color}`}>
+      <Icon className="h-2.5 w-2.5" />
+      {formattedVal}%
+      {showLabel && <span className="font-normal text-muted-foreground ml-0.5">{label}</span>}
+    </span>
   );
 }
 
