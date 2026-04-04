@@ -128,3 +128,48 @@ export function getPilarBadgeConfig(status: StatusPilar): {
       return { label: 'Bloqueado', className: 'bg-red-500/15 text-red-700 border-red-500/30' };
   }
 }
+
+/**
+ * Build a human-readable tooltip from PilarInfo.detalhe
+ */
+export function getPilarTooltipText(pilarKey: keyof StatusPilares, info: PilarInfo): string | null {
+  const d = info.detalhe as Record<string, unknown> | undefined;
+
+  if (pilarKey === 'p1_mapa_pastos') {
+    if (info.status === 'bloqueado' && d) {
+      const motivo = d.motivo as string | undefined;
+      const divs = d.divergencias as unknown[] | undefined;
+      if (motivo === 'divergencia_rebanho' && divs) {
+        return `Bloqueado — divergência de rebanho em ${divs.length} categoria(s)`;
+      }
+      if (motivo === 'sem_pastos_fechados') {
+        return 'Bloqueado — nenhum pasto fechado neste mês';
+      }
+      if (motivo) return `Bloqueado — ${motivo}`;
+      return 'Bloqueado';
+    }
+    if (info.status === 'provisorio' && d) {
+      const fechados = d.pastos_fechados as number | undefined;
+      const total = d.pastos_total as number | undefined;
+      if (typeof fechados === 'number' && typeof total === 'number' && total > 0) {
+        return `Provisório — ${fechados} de ${total} pastos fechados`;
+      }
+      return 'Provisório — fechamento pendente';
+    }
+    if (info.status === 'oficial') {
+      return 'Oficial — conciliado e fechado';
+    }
+  }
+
+  if (info.modo_transitorio) {
+    return 'Oficial transitório — fechamento formal ainda não implementado';
+  }
+
+  if (info.status === 'oficial') return 'Oficial';
+  if (info.status === 'provisorio') return 'Provisório — fechamento pendente';
+  if (info.status === 'bloqueado') {
+    const motivo = d?.motivo as string | undefined;
+    return motivo ? `Bloqueado — ${motivo}` : 'Bloqueado — dependência pendente';
+  }
+  return null;
+}
