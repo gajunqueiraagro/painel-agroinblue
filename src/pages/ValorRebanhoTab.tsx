@@ -341,6 +341,24 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const varCabValorMes = calcVariacao(valorMedioCabeca, prevTotals.valorCab);
   const varCabValorAno = calcVariacao(valorMedioCabeca, janTotals.valorCab);
 
+  // Arrobas em estoque variations
+  const prevArrobas = useMemo(() => {
+    let arrobas = 0;
+    resumoMesAnterior.rows.forEach(row => {
+      arrobas += row.quantidadeFinal * (row.pesoMedioFinalKg || 0) / 30;
+    });
+    return arrobas;
+  }, [resumoMesAnterior.rows]);
+  const janArrobas = useMemo(() => {
+    let arrobas = 0;
+    resumoJan.rows.forEach(row => {
+      arrobas += row.quantidadeFinal * (row.pesoMedioFinalKg || 0) / 30;
+    });
+    return arrobas;
+  }, [resumoJan.rows]);
+  const varArrobasEstoqueMes = calcVariacao(totalArrobas, prevArrobas);
+  const varArrobasEstoqueAno = calcVariacao(totalArrobas, janArrobas);
+
   // Chart data: query valor_rebanho_fechamento + vw_zoot_fazenda_mensal for all months
   const [historicoPorMes, setHistoricoPorMes] = useState<Record<string, number>>({});
   const [zootPorMes, setZootPorMes] = useState<Record<number, { pesoTotalKg: number; cabecas: number }>>({});
