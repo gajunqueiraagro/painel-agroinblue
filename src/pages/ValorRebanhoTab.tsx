@@ -925,6 +925,19 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         </div>
 
         <div className="min-w-[200px] flex-1 space-y-1.5">
+          {avisoSnapshotIncompleto ? (
+            <Card className="bg-amber-500/10 border-amber-500/30">
+              <CardContent className="p-4 flex flex-col items-center justify-center gap-2 text-center">
+                <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                  Mês fechado sem snapshot detalhado
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  Reabra e salve novamente para consolidar a base oficial. Nenhum valor será exibido até que o snapshot completo seja gerado.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-2.5">
               <div className="flex gap-3">
