@@ -359,8 +359,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const varArrobasEstoqueMes = calcVariacao(totalArrobas, prevArrobas);
   const varArrobasEstoqueAno = calcVariacao(totalArrobas, janArrobas);
 
-  // Card/gráficos: valor oficial vem de valor_rebanho_fechamento;
-  // peso oficial mensal vem de vw_zoot_fazenda_mensal (cenário realizado).
+  // Snapshot congelado: valor_rebanho_fechamento é a fonte única oficial.
+  // Contém valor_total e peso_total_kg gravados no momento do "Salvar e Fechar".
   const [historicoPorMes, setHistoricoPorMes] = useState<Record<string, { valor: number; pesoKg: number }>>({});
 
   useEffect(() => {
