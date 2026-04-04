@@ -115,6 +115,7 @@ const TITLES: Record<TabId, string> = {
   painel_consultor: 'Painel do Consultor',
   auditoria: 'Central de Auditoria',
   conta_boitel: 'Conta Boitel',
+  status_fechamentos: 'Status dos Fechamentos',
 };
 
 const Index = () => {
