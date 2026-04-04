@@ -443,18 +443,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     });
   }, [mesNum]);
 
-  // VALOR DO REBANHO chart — mesma fonte oficial do Painel do Consultor
+  // VALOR DO REBANHO chart — mês selecionado usa total da tabela; histórico usa fechamento congelado
   const chartDataValor = useMemo(() => {
     return buildChartData((mes) => {
       const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
       if (mes === mesNum) {
-        return mesSelecionadoFechado
-          ? (getFrozen(key)?.valor ?? null)
-          : (totalRebanho > 0 ? totalRebanho : null);
+        return totalRebanho > 0 ? totalRebanho : null;
       }
       return getFrozen(key)?.valor ?? null;
     });
-  }, [buildChartData, historicoPorMes, anoFiltro, mesNum, totalRebanho, mesSelecionadoFechado]);
+  }, [buildChartData, historicoPorMes, anoFiltro, mesNum, totalRebanho]);
 
   // ARROBAS EM ESTOQUE chart — peso oficial da view zootécnica quando fechado
   const chartDataArrobas = useMemo(() => {
