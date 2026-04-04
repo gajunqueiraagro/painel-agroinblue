@@ -264,6 +264,7 @@ const Index = () => {
     // Resumo sub-screens
     operacao_hub: goToResumo,
     painel_consultor: goToResumo,
+    status_fechamentos: goToResumo,
     analise: () => setActiveTab('operacao_hub'),
     analise_entradas: () => setActiveTab('analise'),
     analise_saidas: () => setActiveTab('analise'),
