@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,7 @@ import { MESES_COLS } from '@/lib/calculos/labels';
 import { toast } from 'sonner';
 import { useFechamentoCategoria, type OrigemPeso } from '@/hooks/useFechamentoCategoria';
 import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
+import { supabase } from '@/integrations/supabase/client';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 
 interface Props {
