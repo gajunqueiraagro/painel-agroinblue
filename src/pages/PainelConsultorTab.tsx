@@ -621,7 +621,7 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
 
           {/* Cenário toggle */}
           <div className="flex items-center rounded-md border border-border/50 overflow-hidden h-7">
-            {(['realizado', 'previsto', 'comparativo'] as Cenario[]).map(c => (
+            {(['realizado', 'previsto'] as Cenario[]).map(c => (
               <button
                 key={c}
                 onClick={() => setCenario(c)}
@@ -629,13 +629,11 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
                   cenario === c
                     ? c === 'realizado'
                       ? 'bg-emerald-600 text-white'
-                      : c === 'comparativo'
-                        ? 'bg-amber-500 text-white'
-                        : 'bg-muted text-foreground'
+                      : 'bg-muted text-foreground'
                     : 'bg-card text-muted-foreground hover:bg-muted'
                 }`}
               >
-                {c === 'comparativo' ? 'Compar.' : c.charAt(0).toUpperCase() + c.slice(1)}
+                {c.charAt(0).toUpperCase() + c.slice(1)}
               </button>
             ))}
           </div>
