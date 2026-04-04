@@ -599,7 +599,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const chartDataValor = useMemo(() => {
     return buildChartData((mes) => {
-      const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
+      if (mes === 0) {
+        const dezKey = `${Number(anoFiltro) - 1}-12`;
+        return getFrozen(dezKey)?.valor ?? null;
+      }
+      const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
       if (mes === mesNum && fonteMes === 'live') {
         return metricasLiveSelecionado.valor;
       }
