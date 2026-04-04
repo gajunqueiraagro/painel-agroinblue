@@ -291,7 +291,7 @@ export function FechamentoPastoDialog({
           </div>
 
           {/* Row 3: Resumo */}
-          <div className="flex items-center gap-3 rounded bg-white/8 px-3 py-1.5 text-[11px]">
+          <div className="flex items-center gap-3 rounded bg-white/8 px-3 py-2 text-xs">
             <div className="flex items-center gap-1">
               <span className="text-white/50 font-medium">Machos:</span>
               <span className="font-bold tabular-nums">{totalMachos}</span>
