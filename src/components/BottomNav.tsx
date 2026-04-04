@@ -2,7 +2,7 @@ import { LayoutDashboard, PenSquare, BarChart3, DollarSign, Settings, Wallet } f
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 
-export type TabId = 'resumo' | 'operacao_hub' | 'movimentacao' | 'lancamentos' | 'financeiro' | 'evolucao' | 'evolucao_categoria' | 'fluxo_anual' | 'acessos' | 'analise' | 'analise_entradas' | 'analise_saidas' | 'desfrute' | 'cadastros' | 'chuvas' | 'pastos' | 'conciliacao' | 'fin_caixa' | 'zootecnico' | 'zootecnico_hub' | 'analise_economica' | 'valor_rebanho' | 'analise_operacional' | 'resumo_pastos' | 'mapa_pastos' | 'mapa_geo_pastos' | 'fechamento' | 'visao_anual_zoo' | 'lancar_zoo_hub' | 'visao_zoo_hub' | 'lancar_fin_hub' | 'visao_fin_hub' | 'indicadores' | 'evolucao_rebanho_hub' | 'fechamento_executivo' | 'analise_consultor' | 'preco_mercado' | 'graficos_analise' | 'financeiro_v2' | 'financeiro_v2_hub' | 'fin_v2_contas' | 'fin_v2_fornecedores' | 'fin_v2_plano' | 'fin_v2_saldos' | 'contratos' | 'conciliacao_bancaria' | 'painel_consultor' | 'auditoria' | 'conta_boitel';
+export type TabId = 'resumo' | 'operacao_hub' | 'movimentacao' | 'lancamentos' | 'financeiro' | 'evolucao' | 'evolucao_categoria' | 'fluxo_anual' | 'acessos' | 'analise' | 'analise_entradas' | 'analise_saidas' | 'desfrute' | 'cadastros' | 'chuvas' | 'pastos' | 'conciliacao' | 'fin_caixa' | 'zootecnico' | 'zootecnico_hub' | 'analise_economica' | 'valor_rebanho' | 'analise_operacional' | 'resumo_pastos' | 'mapa_pastos' | 'mapa_geo_pastos' | 'fechamento' | 'visao_anual_zoo' | 'lancar_zoo_hub' | 'visao_zoo_hub' | 'lancar_fin_hub' | 'visao_fin_hub' | 'indicadores' | 'evolucao_rebanho_hub' | 'fechamento_executivo' | 'analise_consultor' | 'preco_mercado' | 'graficos_analise' | 'financeiro_v2' | 'financeiro_v2_hub' | 'fin_v2_contas' | 'fin_v2_fornecedores' | 'fin_v2_plano' | 'fin_v2_saldos' | 'contratos' | 'conciliacao_bancaria' | 'painel_consultor' | 'auditoria' | 'conta_boitel' | 'status_fechamentos';
 
 interface BottomNavProps {
   activeTab: TabId;
@@ -31,7 +31,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     // Financeiro (analysis) sub-screens
     const finTabs: TabId[] = ['fin_caixa', 'lancar_fin_hub', 'visao_fin_hub', 'analise_economica', 'financeiro', 'analise_operacional'];
     // Resumo sub-screens
-    const resumoTabs: TabId[] = ['resumo', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute', 'operacao_hub', 'painel_consultor'];
+    const resumoTabs: TabId[] = ['resumo', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute', 'operacao_hub', 'painel_consultor', 'status_fechamentos'];
     // Cadastros
     const cadTabs: TabId[] = ['cadastros', 'acessos', 'auditoria'];
     if (lancarZooTabs.includes(tab)) return 'lancar_zoo_hub';

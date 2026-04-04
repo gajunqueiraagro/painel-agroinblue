@@ -49,6 +49,7 @@ import { ConciliacaoBancariaTab } from './ConciliacaoBancariaTab';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { AuditoriaTab } from './AuditoriaTab';
 import { ContaBoitelTab } from './ContaBoitelTab';
+import { StatusFechamentosTab } from './StatusFechamentosTab';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { SyncStatus } from '@/components/SyncStatus';
 import { useLancamentos } from '@/hooks/useLancamentos';
@@ -115,6 +116,7 @@ const TITLES: Record<TabId, string> = {
   painel_consultor: 'Painel do Consultor',
   auditoria: 'Central de Auditoria',
   conta_boitel: 'Conta Boitel',
+  status_fechamentos: 'Status dos Fechamentos',
 };
 
 const Index = () => {
@@ -262,6 +264,7 @@ const Index = () => {
     // Resumo sub-screens
     operacao_hub: goToResumo,
     painel_consultor: goToResumo,
+    status_fechamentos: goToResumo,
     analise: () => setActiveTab('operacao_hub'),
     analise_entradas: () => setActiveTab('analise'),
     analise_saidas: () => setActiveTab('analise'),
@@ -345,7 +348,16 @@ const Index = () => {
       {activeTab === 'painel_consultor' && (
         <PainelConsultorTab onBack={() => setActiveTab('resumo')} onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
       )}
-
+      {activeTab === 'status_fechamentos' && (
+        <StatusFechamentosTab
+          ano={filtroGlobal.ano}
+          onSelectMes={(anoMes) => {
+            const [a, m] = anoMes.split('-');
+            handleFiltroChange({ ano: a, mes: parseInt(m) });
+            setActiveTab('resumo');
+          }}
+        />
+      )}
       {/* Hubs */}
       {activeTab === 'lancar_zoo_hub' && (
         <LancarZooHubTab onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
