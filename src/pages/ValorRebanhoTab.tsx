@@ -359,9 +359,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const varArrobasEstoqueMes = calcVariacao(totalArrobas, prevArrobas);
   const varArrobasEstoqueAno = calcVariacao(totalArrobas, janArrobas);
 
-  // Chart data: query valor_rebanho_fechamento + vw_zoot_fazenda_mensal for all months
-  const [historicoPorMes, setHistoricoPorMes] = useState<Record<string, number>>({});
-  const [zootPorMes, setZootPorMes] = useState<Record<number, { pesoTotalKg: number; cabecas: number }>>({});
+  // Chart data: query valor_rebanho_fechamento for all months (ÚNICA FONTE OFICIAL)
+  const [historicoPorMes, setHistoricoPorMes] = useState<Record<string, { valor: number; pesoKg: number }>>({});
   const mesAtualNum = new Date().getMonth() + 1;
   const anoAtualNum = new Date().getFullYear();
 
@@ -369,28 +368,19 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     if (!fazendaId || fazendaId === '__global__') return;
     const fetchHistorico = async () => {
       const anoMeses = Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`);
-      const [vrRes, zootRes] = await Promise.all([
-        supabase
-          .from('valor_rebanho_fechamento')
-          .select('ano_mes, valor_total')
-          .eq('fazenda_id', fazendaId)
-          .in('ano_mes', anoMeses),
-        supabase
-          .from('vw_zoot_fazenda_mensal' as any)
-          .select('mes, peso_total_final_kg, cabecas_final')
-          .eq('fazenda_id', fazendaId)
-          .eq('ano', Number(anoFiltro))
-          .eq('cenario', 'realizado'),
-      ]);
-      const map: Record<string, number> = {};
-      (vrRes.data || []).forEach((d: any) => { map[d.ano_mes] = Number(d.valor_total) || 0; });
-      setHistoricoPorMes(map);
-
-      const zMap: Record<number, { pesoTotalKg: number; cabecas: number }> = {};
-      ((zootRes.data as any[]) || []).forEach((d: any) => {
-        zMap[d.mes] = { pesoTotalKg: Number(d.peso_total_final_kg) || 0, cabecas: Number(d.cabecas_final) || 0 };
+      const { data } = await supabase
+        .from('valor_rebanho_fechamento')
+        .select('ano_mes, valor_total, peso_total_kg')
+        .eq('fazenda_id', fazendaId)
+        .in('ano_mes', anoMeses);
+      const map: Record<string, { valor: number; pesoKg: number }> = {};
+      (data || []).forEach((d: any) => {
+        map[d.ano_mes] = {
+          valor: Number(d.valor_total) || 0,
+          pesoKg: Number(d.peso_total_kg) || 0,
+        };
       });
-      setZootPorMes(zMap);
+      setHistoricoPorMes(map);
     };
     fetchHistorico();
   }, [fazendaId, anoFiltro]);
@@ -398,82 +388,59 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   // Determine if selected month is fechado (has valor_rebanho_fechamento)
   const mesSelecionadoFechado = !!historicoPorMes[anoMes] || isFechado;
 
+  // Helper to get frozen data for a given month key
+  const getFrozen = (mesKey: string) => historicoPorMes[mesKey] ?? null;
+
   // Build 13-point fixed chart data (Ini, Jan–Dez)
-  // Only show data up to the selected month — future months blank
   const buildChartData = useCallback((getValue: (mes: number) => number | null) => {
     return CHART_LABELS.map((label, idx) => {
-      if (idx === 0) {
-        return { label, value: getValue(0) };
-      }
+      if (idx === 0) return { label, value: getValue(0) };
       const mes = idx;
-      // Blank out months AFTER the selected month
-      if (mes > mesNum) {
-        return { label, value: null };
-      }
+      if (mes > mesNum) return { label, value: null };
       return { label, value: getValue(mes) };
     });
   }, [mesNum]);
 
-  // VALOR DO REBANHO chart — fonte oficial: valor_rebanho_fechamento.valor_total
-  // Para o mês selecionado: SEMPRE usar totalRebanho (= valor exibido no card)
-  // Para outros meses: usar valor frozen da tabela valor_rebanho_fechamento
+  // Peso total do mês selecionado (live, para card)
+  const pesoTotalKgLive = useMemo(() => allRows.reduce((sum, r) => sum + (r.saldo * r.pesoMedio), 0), [allRows]);
+
+  // VALOR DO REBANHO chart — fonte oficial ÚNICA: valor_rebanho_fechamento.valor_total
   const chartDataValor = useMemo(() => {
     return buildChartData((mes) => {
-      if (mes === 0) {
-        // "Ini" = valor de janeiro (frozen)
-        return historicoPorMes[`${anoFiltro}-01`] ?? null;
-      }
-      // Mês selecionado: usar EXATAMENTE o valor do card (totalRebanho)
+      const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
       if (mes === mesNum) {
-        return totalRebanho > 0 ? totalRebanho : (historicoPorMes[`${anoFiltro}-${String(mes).padStart(2, '0')}`] ?? null);
+        return totalRebanho > 0 ? totalRebanho : (getFrozen(key)?.valor ?? null);
       }
-      // Outros meses: valor frozen oficial
-      const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
-      return historicoPorMes[key] ?? null;
+      return getFrozen(key)?.valor ?? null;
     });
   }, [buildChartData, historicoPorMes, anoFiltro, mesNum, totalRebanho]);
 
-  // ARROBAS EM ESTOQUE chart — fonte: vw_zoot_fazenda_mensal (peso_total_final_kg / 30)
-  // Para o mês selecionado sem dados no zoot, usar live totalArrobas
+  // ARROBAS EM ESTOQUE chart — fonte: valor_rebanho_fechamento.peso_total_kg / 30
   const chartDataArrobas = useMemo(() => {
     return buildChartData((mes) => {
-      if (mes === 0) {
-        const z = zootPorMes[1];
-        return z && z.pesoTotalKg > 0 ? z.pesoTotalKg / 30 : null;
-      }
-      // Mês selecionado: usar valor live (= card)
+      const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
       if (mes === mesNum) {
-        if (totalArrobas > 0) return totalArrobas;
-        const z = zootPorMes[mes];
-        return z && z.pesoTotalKg > 0 ? z.pesoTotalKg / 30 : null;
+        if (pesoTotalKgLive > 0) return pesoTotalKgLive / 30;
+        const f = getFrozen(key);
+        return f && f.pesoKg > 0 ? f.pesoKg / 30 : null;
       }
-      const z = zootPorMes[mes];
-      if (z && z.pesoTotalKg > 0) return z.pesoTotalKg / 30;
-      return null;
+      const f = getFrozen(key);
+      return f && f.pesoKg > 0 ? f.pesoKg / 30 : null;
     });
-  }, [buildChartData, zootPorMes, totalArrobas, mesNum]);
+  }, [buildChartData, historicoPorMes, pesoTotalKgLive, anoFiltro, mesNum]);
 
-  // R$/@ MÉDIO chart — derivado: valor / arrobas
-  // Para o mês selecionado, usar live precoMedioArroba (= card)
+  // R$/@ MÉDIO chart — derivado: valor_total / (peso_total_kg / 30)
   const chartDataPrecoArroba = useMemo(() => {
     return buildChartData((mes) => {
-      if (mes === 0) {
-        const z = zootPorMes[1];
-        const v = historicoPorMes[`${anoFiltro}-01`];
-        if (z && z.pesoTotalKg > 0 && v) return v / (z.pesoTotalKg / 30);
-        return null;
-      }
-      // Mês selecionado: usar valor live (= card)
+      const key = `${anoFiltro}-${String(mes === 0 ? 1 : mes).padStart(2, '0')}`;
       if (mes === mesNum) {
         if (precoMedioArroba > 0) return precoMedioArroba;
       }
-      const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
-      const z = zootPorMes[mes];
-      const v = historicoPorMes[key];
-      if (z && z.pesoTotalKg > 0 && v) return v / (z.pesoTotalKg / 30);
+      const f = getFrozen(key);
+      if (f && f.pesoKg > 0 && f.valor > 0) return f.valor / (f.pesoKg / 30);
       return null;
     });
-  }, [buildChartData, zootPorMes, historicoPorMes, anoFiltro, precoMedioArroba, mesNum]);
+  }, [buildChartData, historicoPorMes, anoFiltro, precoMedioArroba, mesNum]);
 
   const handlePrecoChange = (codigo: string, value: string) => {
     const sanitized = value.replace(/[^0-9.,]/g, '');
@@ -493,7 +460,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       return;
     }
     const items = Object.entries(precosLocal).map(([categoria, preco_kg]) => ({ categoria, preco_kg }));
-    await salvarPrecos(items, totalRebanho);
+    const pesoTotalKg = allRows.reduce((sum, r) => sum + (r.saldo * r.pesoMedio), 0);
+    await salvarPrecos(items, totalRebanho, pesoTotalKg);
   };
 
   const handleCopiarMesAnterior = async () => {
