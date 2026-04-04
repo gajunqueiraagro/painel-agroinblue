@@ -747,7 +747,9 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
   useEffect(() => {
     if (!fazendaId) { setValorRebanhoMes(Array(12).fill(0)); return; }
     (async () => {
+      const dezAnoAnterior = `${anoNum - 1}-12`;
       const meses = Array.from({ length: 12 }, (_, i) => `${anoNum}-${String(i + 1).padStart(2, '0')}`);
+      const todasMeses = [dezAnoAnterior, ...meses];
       const fazendaIds = fazendaId === '__global__'
         ? fazendas.filter(f => f.tem_pecuaria !== false).map(f => f.id) : [fazendaId];
       if (fazendaIds.length === 0) { setValorRebanhoMes(Array(12).fill(0)); return; }
@@ -755,13 +757,13 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
         .from('valor_rebanho_fechamento')
         .select('ano_mes, valor_total')
         .in('fazenda_id', fazendaIds)
-        .in('ano_mes', meses);
+        .in('ano_mes', todasMeses);
       if (error) { setValorRebanhoMes(Array(12).fill(0)); return; }
-      const totais = new Map(meses.map(mes => [mes, 0]));
+      const totais = new Map(todasMeses.map(mes => [mes, 0]));
       (data || []).forEach(row => {
         totais.set(row.ano_mes, (totais.get(row.ano_mes) || 0) + (Number(row.valor_total) || 0));
       });
-      setValorRebanhoMes(meses.map(mes => totais.get(mes) || 0));
+      setValorRebanhoMes(todasMeses.map(mes => totais.get(mes) || 0));
     })();
   }, [fazendaId, anoNum, fazendas]);
 
