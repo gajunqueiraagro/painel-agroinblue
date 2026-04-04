@@ -7,13 +7,17 @@
  *
  * Regra de fonte: "Fechamento sempre vence."
  * Formatação: cab=inteiro, gmd=3 casas, padrao/med2=2 casas, money=R$
+ *
+ * REGRA CRÍTICA: Previsto NUNCA faz fallback para Realizado.
+ * Se não há fonte prevista, a célula fica vazia.
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ArrowLeft, Download, ChevronDown } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+import { ArrowLeft, Download, ChevronDown, Info } from 'lucide-react';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
@@ -40,20 +44,13 @@ import {
 } from '@/lib/financeiro/classificacao';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
+import { getIndicadorMeta, getFonteStatusLabel, type FonteIndicador } from '@/lib/painelConsultor/indicadorCatalogo';
 
 // ─── Constants ───
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-const MESES_FILTRO = [
-  { value: '1', label: 'Janeiro' }, { value: '2', label: 'Fevereiro' },
-  { value: '3', label: 'Março' }, { value: '4', label: 'Abril' },
-  { value: '5', label: 'Maio' }, { value: '6', label: 'Junho' },
-  { value: '7', label: 'Julho' }, { value: '8', label: 'Agosto' },
-  { value: '9', label: 'Setembro' }, { value: '10', label: 'Outubro' },
-  { value: '11', label: 'Novembro' }, { value: '12', label: 'Dezembro' },
-];
 
-// Trimester border: before Apr(3), Jul(6), Set→Out(9), and Total
-const TRIM_BORDER_INDEXES = new Set([3, 6, 9]); // 0-indexed month columns that get left border
+// Trimester border: before Apr(3), Jul(6), Out(9)
+const TRIM_BORDER_INDEXES = new Set([3, 6, 9]);
 
 type ViewTab = 'mensal' | 'medio' | 'acumulado' | 'media_periodo';
 type Cenario = 'realizado' | 'previsto';
@@ -66,8 +63,9 @@ interface Props {
 // ─── Row definition ───
 interface Row {
   indicador: string;
+  indicadorId?: string;  // maps to CATALOGO_INDICADORES
   format: PainelFormatType;
-  valores: number[]; // 12 values
+  valores: number[];     // 12 values
 }
 
 interface Bloco {
@@ -246,7 +244,7 @@ function rollingAvg(arr: number[]): number[] {
 }
 
 function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
-  const r = (indicador: string, format: PainelFormatType, raw: number[]): Row => {
+  const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string): Row => {
     let valores: number[];
     switch (tab) {
       case 'mensal': valores = raw; break;
@@ -254,7 +252,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
       case 'acumulado': valores = cumSum(raw); break;
       case 'media_periodo': valores = rollingAvg(raw); break;
     }
-    return { indicador, format, valores };
+    return { indicador, format, valores, indicadorId };
   };
 
   const cabMedia = d.cabIni.map((v, i) => (v + d.cabFin[i]) / 2);
@@ -284,30 +282,30 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
         {
           nome: 'Rebanho',
           rows: [
-            r('Reb. inicial (cab)', 'cab', d.cabIni),
-            r('Reb. final (cab)', 'cab', d.cabFin),
-            r('Entradas (cab)', 'cab', d.entradas),
-            r('Saídas (cab)', 'cab', d.saidas),
+            r('Reb. inicial (cab)', 'cab', d.cabIni, 'reb_inicial'),
+            r('Reb. final (cab)', 'cab', d.cabFin, 'reb_final'),
+            r('Entradas (cab)', 'cab', d.entradas, 'entradas_cab'),
+            r('Saídas (cab)', 'cab', d.saidas, 'saidas_cab'),
           ],
         },
         {
           nome: 'Peso',
           rows: [
-            r('Peso ini. (kg)', 'padrao', d.pesoTotalIni),
-            r('Peso final (kg)', 'padrao', d.pesoTotalFin),
-            r('Peso ini. (@)', 'padrao', d.pesoTotalIni.map(v => v / 30)),
-            r('Peso final (@)', 'padrao', d.pesoTotalFin.map(v => v / 30)),
-            r('Peso méd. ini.', 'med2', d.pesoMedioIni),
-            r('Peso méd. final', 'med2', d.pesoMedioFin),
+            r('Peso ini. (kg)', 'padrao', d.pesoTotalIni, 'peso_ini_kg'),
+            r('Peso final (kg)', 'padrao', d.pesoTotalFin, 'peso_fin_kg'),
+            r('Peso ini. (@)', 'padrao', d.pesoTotalIni.map(v => v / 30), 'peso_ini_arr'),
+            r('Peso final (@)', 'padrao', d.pesoTotalFin.map(v => v / 30), 'peso_fin_arr'),
+            r('Peso méd. ini.', 'med2', d.pesoMedioIni, 'peso_med_ini'),
+            r('Peso méd. final', 'med2', d.pesoMedioFin, 'peso_med_fin'),
           ],
         },
         {
           nome: 'Valor do Rebanho',
           rows: [
-            r('Valor reb. inicial', 'money', d.valorRebIni),
-            r('Valor reb. final', 'money', d.valorRebFin),
-            r('Valor/cab final', 'money', valorPorCab),
-            r('Valor/@ final', 'money', valorPorArr),
+            r('Valor reb. inicial', 'money', d.valorRebIni, 'valor_reb_ini'),
+            r('Valor reb. final', 'money', d.valorRebFin, 'valor_reb_fin'),
+            r('Valor/cab final', 'money', valorPorCab, 'valor_cab_fin'),
+            r('Valor/@ final', 'money', valorPorArr, 'valor_arr_fin'),
           ],
         },
       ];
@@ -316,27 +314,27 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
         {
           nome: 'Desempenho',
           rows: [
-            r('GMD (kg/cab/dia)', 'gmd', d.gmd),
-            r('Peso méd. reb.', 'med2', d.pesoMedioFin),
-            r('UA média', 'med2', uaMedia),
-            r('Lotação (UA/ha)', 'med2', lotUaHa),
+            r('GMD (kg/cab/dia)', 'gmd', d.gmd, 'gmd'),
+            r('Peso méd. reb.', 'med2', d.pesoMedioFin, 'peso_med_reb'),
+            r('UA média', 'med2', uaMedia, 'ua_media'),
+            r('Lotação (UA/ha)', 'med2', lotUaHa, 'lotacao'),
           ],
         },
         {
           nome: 'Produção',
           rows: [
-            r('@ produzidas', 'padrao', d.arrobasProd),
-            r('Produção (kg)', 'padrao', d.prodKg),
-            r('@/ha', 'med2', arrHa),
-            r('Desfrute (cab)', 'cab', desfruteCab),
-            r('Desfrute (@)', 'padrao', desfrute_arr),
+            r('@ produzidas', 'padrao', d.arrobasProd, 'arrobas_prod'),
+            r('Produção (kg)', 'padrao', d.prodKg, 'prod_kg'),
+            r('@/ha', 'med2', arrHa, 'arr_ha'),
+            r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
+            r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
         {
           nome: 'Estrutura',
           rows: [
-            r('Área prod. (ha)', 'med2', Array(12).fill(d.areaProd)),
-            r('Reb. médio (cab)', 'cab', cabMedia.map(Math.round)),
+            r('Área prod. (ha)', 'med2', Array(12).fill(d.areaProd), 'area_prod'),
+            r('Reb. médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio'),
           ],
         },
       ];
@@ -345,37 +343,37 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
         {
           nome: 'Rebanho',
           rows: [
-            r('Entradas acum. (cab)', 'cab', d.entradas),
-            r('Saídas acum. (cab)', 'cab', d.saidas),
-            r('Saldo acum. reb.', 'cab', d.entradas.map((v, i) => v - d.saidas[i])),
+            r('Entradas acum. (cab)', 'cab', d.entradas, 'entradas_acum'),
+            r('Saídas acum. (cab)', 'cab', d.saidas, 'saidas_acum'),
+            r('Saldo acum. reb.', 'cab', d.entradas.map((v, i) => v - d.saidas[i]), 'saldo_acum'),
           ],
         },
         {
           nome: 'Produção',
           rows: [
-            r('@ produzidas acum.', 'padrao', d.arrobasProd),
-            r('Produção kg acum.', 'padrao', d.prodKg),
-            r('@/ha acum.', 'med2', arrHa),
-            r('Desfrute acum. (cab)', 'cab', desfruteCab),
-            r('Desfrute acum. (@)', 'padrao', desfrute_arr),
+            r('@ produzidas acum.', 'padrao', d.arrobasProd, 'arrobas_acum'),
+            r('Produção kg acum.', 'padrao', d.prodKg, 'prod_kg_acum'),
+            r('@/ha acum.', 'med2', arrHa, 'arr_ha_acum'),
+            r('Desfrute acum. (cab)', 'cab', desfruteCab, 'desfrute_acum_cab'),
+            r('Desfrute acum. (@)', 'padrao', desfrute_arr, 'desfrute_acum_arr'),
           ],
         },
         {
           nome: 'Financeiro no Caixa',
           rows: [
-            r('Entradas fin. acum.', 'money', d.entFin),
-            r('Saídas fin. acum.', 'money', d.saiFin),
-            r('Rec. pec. acum.', 'money', d.recPec),
-            r('Res. caixa acum.', 'money', d.resCaixa),
+            r('Entradas fin. acum.', 'money', d.entFin, 'ent_fin_acum'),
+            r('Saídas fin. acum.', 'money', d.saiFin, 'sai_fin_acum'),
+            r('Rec. pec. acum.', 'money', d.recPec, 'rec_pec_acum'),
+            r('Res. caixa acum.', 'money', d.resCaixa, 'res_caixa_acum'),
           ],
         },
         {
           nome: 'Financeiro por Competência',
           rows: [
-            r('Rec. pec. comp. acum.', 'money', d.recPecComp),
-            r('Res. oper. acum.', 'money', d.resOper),
-            r('EBITDA acum.', 'money', d.ebitda),
-            r('Var. valor reb.', 'money', d.varValorReb),
+            r('Rec. pec. comp. acum.', 'money', d.recPecComp, 'rec_pec_comp_acum'),
+            r('Res. oper. acum.', 'money', d.resOper, 'res_oper_acum'),
+            r('EBITDA acum.', 'money', d.ebitda, 'ebitda_acum'),
+            r('Var. valor reb.', 'money', d.varValorReb, 'var_valor_reb'),
           ],
         },
       ];
@@ -384,28 +382,28 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
         {
           nome: 'Desempenho Médio',
           rows: [
-            r('GMD médio período', 'gmd', d.gmd),
-            r('Peso médio período', 'med2', d.pesoMedioFin),
-            r('UA média período', 'med2', uaMedia),
-            r('Lotação média', 'med2', lotUaHa),
+            r('GMD médio período', 'gmd', d.gmd, 'gmd_medio'),
+            r('Peso médio período', 'med2', d.pesoMedioFin, 'peso_medio_periodo'),
+            r('UA média período', 'med2', uaMedia, 'ua_media_periodo'),
+            r('Lotação média', 'med2', lotUaHa, 'lotacao_media'),
           ],
         },
         {
           nome: 'Produção Média',
           rows: [
-            r('@/ha média período', 'med2', arrHa),
-            r('Prod. média (@)', 'padrao', d.arrobasProd),
-            r('Prod. média (kg)', 'padrao', d.prodKg),
-            r('Desfrute médio', 'cab', desfruteCab),
+            r('@/ha média período', 'med2', arrHa, 'arr_ha_media'),
+            r('Prod. média (@)', 'padrao', d.arrobasProd, 'prod_media_arr'),
+            r('Prod. média (kg)', 'padrao', d.prodKg, 'prod_media_kg'),
+            r('Desfrute médio', 'cab', desfruteCab, 'desfrute_medio'),
           ],
         },
         {
           nome: 'Financeiro Médio',
           rows: [
-            r('Receita média', 'money', d.recPec),
-            r('Res. oper. médio', 'money', d.resOper),
-            r('EBITDA médio', 'money', d.ebitda),
-            r('Res. caixa médio', 'money', d.resCaixa),
+            r('Receita média', 'money', d.recPec, 'receita_media'),
+            r('Res. oper. médio', 'money', d.resOper, 'res_oper_medio'),
+            r('EBITDA médio', 'money', d.ebitda, 'ebitda_medio'),
+            r('Res. caixa médio', 'money', d.resCaixa, 'res_caixa_medio'),
           ],
         },
       ];
@@ -415,7 +413,6 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
 // ─── Total logic ───
 function totalForRow(row: Row, tab: ViewTab, maxMonth: number): number {
   if (tab === 'acumulado' || tab === 'media_periodo') {
-    // Use last valid month
     const idx = Math.min(maxMonth - 1, 11);
     return row.valores[idx] ?? 0;
   }
@@ -446,10 +443,55 @@ function exportToExcel(blocos: Bloco[], ano: number, fazendaNome: string, tab: V
 function getCurrentMonthCutoff(anoNum: number): number {
   const now = new Date();
   const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1; // 1-12
+  const currentMonth = now.getMonth() + 1;
   if (anoNum < currentYear) return 12;
   if (anoNum > currentYear) return 0;
   return currentMonth;
+}
+
+// ─── Source Info Tooltip ───
+function SourceInfoTooltip({ indicadorId, cenario }: { indicadorId?: string; cenario: Cenario }) {
+  const meta = indicadorId ? getIndicadorMeta(undefined as any) : undefined;
+  // Lookup by id from catalog
+  const catalogMeta = indicadorId ? (() => {
+    const { CATALOGO_INDICADORES } = require('@/lib/painelConsultor/indicadorCatalogo');
+    return CATALOGO_INDICADORES[indicadorId] as import('@/lib/painelConsultor/indicadorCatalogo').IndicadorMeta | undefined;
+  })() : undefined;
+
+  if (!catalogMeta) return null;
+
+  const fonte: FonteIndicador = cenario === 'realizado' ? catalogMeta.realizado : catalogMeta.previsto;
+  const statusInfo = getFonteStatusLabel(fonte);
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button className="inline-flex items-center justify-center h-3 w-3 ml-0.5 opacity-40 hover:opacity-100 transition-opacity">
+          <Info className="h-2.5 w-2.5" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="max-w-[280px] text-[10px] space-y-1 p-2">
+        <div className="font-bold text-[11px]">{catalogMeta.nome}</div>
+        <div className="flex items-center gap-1">
+          <span className="text-muted-foreground">Status:</span>
+          <span className={`font-semibold ${statusInfo.color}`}>● {statusInfo.label}</span>
+        </div>
+        <div><span className="text-muted-foreground">Fonte:</span> {fonte.fonte_tipo === 'sem_fonte' ? 'Sem base configurada' : fonte.fonte_tabela}</div>
+        {fonte.fonte_campo && <div><span className="text-muted-foreground">Campo:</span> {fonte.fonte_campo}</div>}
+        <div><span className="text-muted-foreground">Regra:</span> {fonte.regra_calculo}</div>
+        <div><span className="text-muted-foreground">Prioridade:</span> {fonte.regra_prioridade}</div>
+        <div><span className="text-muted-foreground">Cenário:</span> {cenario}</div>
+        {fonte.tela_label && (
+          <div className="text-muted-foreground text-[9px] pt-0.5 border-t border-border/30">
+            Tela origem: {fonte.tela_label}
+          </div>
+        )}
+        {fonte.observacao && (
+          <div className="text-muted-foreground/70 italic text-[9px]">{fonte.observacao}</div>
+        )}
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 // ─── Component ───
@@ -460,7 +502,6 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
   const { lancamentos: lancFin } = useFinanceiro();
 
   const [ano, setAno] = useState(filtroGlobal?.ano || String(new Date().getFullYear()));
-  const [ateMes, setAteMes] = useState(filtroGlobal?.mes || new Date().getMonth() + 1);
   const [viewTab, setViewTab] = useState<ViewTab>('mensal');
   const [cenario, setCenario] = useState<Cenario>('realizado');
   const [pesosPorMes, setPesosPorMes] = useState<Record<string, Record<string, number>>>({});
@@ -521,6 +562,7 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
     [lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes],
   );
 
+  // Blocos only for Realizado — Previsto uses same structure but values are blanked
   const blocos = useMemo(() => buildBlocosForTab(monthlyData, viewTab), [monthlyData, viewTab]);
 
   useEffect(() => {
@@ -550,6 +592,21 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
     { id: 'acumulado', label: 'Acumulados' },
     { id: 'media_periodo', label: 'Média do Período' },
   ];
+
+  /**
+   * REGRA CRÍTICA: No cenário "Previsto", verificar se o indicador
+   * tem fonte prevista configurada. Se fonte_tipo === 'sem_fonte',
+   * retornar string vazia — NUNCA copiar valor do Realizado.
+   */
+  const isPrevisto = cenario === 'previsto';
+
+  const hasPrevistoSource = useCallback((indicadorId?: string): boolean => {
+    if (!indicadorId) return false;
+    const { CATALOGO_INDICADORES } = require('@/lib/painelConsultor/indicadorCatalogo');
+    const meta = CATALOGO_INDICADORES[indicadorId];
+    if (!meta) return false;
+    return meta.previsto.fonte_tipo !== 'sem_fonte';
+  }, []);
 
   // ─── Table render ───
   const renderBlocoTable = (blocoRows: Row[]) => (
@@ -582,121 +639,145 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
         </thead>
         <tbody>
           {blocoRows.map((row, idx) => {
-            const tot = totalForRow(row, viewTab, monthCutoff);
+            // REGRA: Previsto sem fonte = toda linha vazia
+            const previstoSemFonte = isPrevisto && !hasPrevistoSource(row.indicadorId);
+            const tot = previstoSemFonte ? null : totalForRow(row, viewTab, monthCutoff);
+
             return (
               <tr key={idx} className={`border-b border-border/20 hover:bg-muted/20 ${idx % 2 !== 0 ? 'bg-muted/10' : ''}`}>
-                <td className="sticky left-0 z-10 bg-card text-[10px] font-medium py-0.5 px-1.5 leading-tight truncate border-r border-border/30" title={row.indicador}>
-                  {row.indicador}
+                <td className="sticky left-0 z-10 bg-card text-[10px] font-medium py-0.5 px-1.5 leading-tight border-r border-border/30" title={row.indicador}>
+                  <span className="truncate inline-block max-w-[90px] align-middle">{row.indicador}</span>
+                  <SourceInfoTooltip indicadorId={row.indicadorId} cenario={cenario} />
                 </td>
                 {row.valores.map((v, i) => {
                   const isFuture = (i + 1) > monthCutoff;
+                  let cellContent = '';
+                  if (previstoSemFonte) {
+                    cellContent = '';  // sem base prevista
+                  } else if (isFuture) {
+                    cellContent = '';  // mês futuro
+                  } else {
+                    cellContent = formatPainel(v, row.format);
+                  }
                   return (
                     <td
                       key={i}
                       className={`text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px]${
                         TRIM_BORDER_INDEXES.has(i) ? ' border-l border-border/20' : ''
-                      }`}
+                      }${previstoSemFonte ? ' text-muted-foreground/30' : ''}`}
                     >
-                      {isFuture ? '' : formatPainel(v, row.format)}
+                      {cellContent}
                     </td>
                   );
                 })}
-                <td className="text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px] font-bold border-l border-border/30 bg-muted/5">
-                  {monthCutoff > 0 ? formatPainel(tot, row.format) : ''}
+                <td className={`text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px] font-bold border-l border-border/30 bg-muted/5${
+                  previstoSemFonte ? ' text-muted-foreground/30' : ''
+                }`}>
+                  {previstoSemFonte
+                    ? ''
+                    : (monthCutoff > 0 && tot !== null ? formatPainel(tot, row.format) : '')}
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
+      {/* Previsto banner when all rows have no source */}
+      {isPrevisto && blocoRows.every(r => !hasPrevistoSource(r.indicadorId)) && (
+        <div className="text-center text-[10px] text-muted-foreground py-2 bg-muted/20 border-t border-border/20">
+          Sem base prevista configurada para este bloco
+        </div>
+      )}
     </div>
   );
 
   return (
-    <div className="max-w-full mx-auto animate-fade-in pb-16 flex flex-col h-full">
-      {/* ── Sticky toolbar + tabs ── */}
-      <div className="sticky top-0 z-30 bg-background border-b border-border/40 px-2 pt-2 pb-0 space-y-1">
-        {/* Toolbar */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <Button variant="ghost" size="icon" onClick={onBack} className="h-7 w-7">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+    <TooltipProvider delayDuration={200}>
+      <div className="max-w-full mx-auto animate-fade-in pb-16 flex flex-col h-full">
+        {/* ── Sticky toolbar + tabs ── */}
+        <div className="sticky top-0 z-30 bg-background border-b border-border/40 px-2 pt-2 pb-0 space-y-1">
+          {/* Toolbar */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Button variant="ghost" size="icon" onClick={onBack} className="h-7 w-7">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
 
-          <Select value={ano} onValueChange={setAno}>
-            <SelectTrigger className="w-[72px] h-7 text-[11px] px-2 border-border/50">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {anosDisponiveis.map(a => (
-                <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>
+            <Select value={ano} onValueChange={setAno}>
+              <SelectTrigger className="w-[72px] h-7 text-[11px] px-2 border-border/50">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {anosDisponiveis.map(a => (
+                  <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Cenário toggle */}
+            <div className="flex items-center rounded-md border border-border/50 overflow-hidden h-7">
+              {(['realizado', 'previsto'] as Cenario[]).map(c => (
+                <button
+                  key={c}
+                  onClick={() => setCenario(c)}
+                  className={`px-2 text-[11px] font-semibold h-full transition-colors capitalize ${
+                    cenario === c
+                      ? c === 'realizado'
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-blue-600 text-white'
+                      : 'bg-card text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  {c.charAt(0).toUpperCase() + c.slice(1)}
+                </button>
               ))}
-            </SelectContent>
-          </Select>
+            </div>
 
-          {/* Cenário toggle */}
-          <div className="flex items-center rounded-md border border-border/50 overflow-hidden h-7">
-            {(['realizado', 'previsto'] as Cenario[]).map(c => (
+            <div className="ml-auto flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground hidden sm:inline">{fazendaNome} · {ano}</span>
+              <Button variant="outline" size="sm" onClick={handleExport} className="h-7 gap-1 text-[11px] px-2">
+                <Download className="h-3 w-3" />
+                Excel
+              </Button>
+            </div>
+          </div>
+
+          {/* View tabs */}
+          <div className="flex gap-0 overflow-x-auto">
+            {VIEW_TABS.map(t => (
               <button
-                key={c}
-                onClick={() => setCenario(c)}
-                className={`px-2 text-[11px] font-semibold h-full transition-colors capitalize ${
-                  cenario === c
-                    ? c === 'realizado'
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-muted text-foreground'
-                    : 'bg-card text-muted-foreground hover:bg-muted'
+                key={t.id}
+                onClick={() => setViewTab(t.id)}
+                className={`px-3 py-1 text-[11px] font-semibold whitespace-nowrap border-b-2 transition-colors ${
+                  viewTab === t.id
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {c.charAt(0).toUpperCase() + c.slice(1)}
+                {t.label}
               </button>
             ))}
           </div>
-
-          <div className="ml-auto flex items-center gap-1.5">
-            <span className="text-[10px] text-muted-foreground hidden sm:inline">{fazendaNome} · {ano}</span>
-            <Button variant="outline" size="sm" onClick={handleExport} className="h-7 gap-1 text-[11px] px-2">
-              <Download className="h-3 w-3" />
-              Excel
-            </Button>
-          </div>
         </div>
 
-        {/* View tabs */}
-        <div className="flex gap-0 overflow-x-auto">
-          {VIEW_TABS.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setViewTab(t.id)}
-              className={`px-3 py-1 text-[11px] font-semibold whitespace-nowrap border-b-2 transition-colors ${
-                viewTab === t.id
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
+        {/* ── Content: collapsible blocks ── */}
+        <div className="px-2 space-y-1 mt-1 flex-1 overflow-auto">
+          {blocos.map(b => (
+            <Collapsible
+              key={b.nome}
+              open={openBlocos[b.nome] ?? false}
+              onOpenChange={() => toggleBloco(b.nome)}
             >
-              {t.label}
-            </button>
+              <CollapsibleTrigger className="flex items-center justify-between w-full px-2 py-1 bg-muted/60 rounded text-[11px] font-bold text-primary uppercase tracking-wider hover:bg-muted transition-colors">
+                <span>{b.nome}</span>
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${openBlocos[b.nome] ? 'rotate-180' : ''}`} />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-0.5">
+                {renderBlocoTable(b.rows)}
+              </CollapsibleContent>
+            </Collapsible>
           ))}
         </div>
       </div>
-
-      {/* ── Content: collapsible blocks ── */}
-      <div className="px-2 space-y-1 mt-1 flex-1 overflow-auto">
-        {blocos.map(b => (
-          <Collapsible
-            key={b.nome}
-            open={openBlocos[b.nome] ?? false}
-            onOpenChange={() => toggleBloco(b.nome)}
-          >
-            <CollapsibleTrigger className="flex items-center justify-between w-full px-2 py-1 bg-muted/60 rounded text-[11px] font-bold text-primary uppercase tracking-wider hover:bg-muted transition-colors">
-              <span>{b.nome}</span>
-              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${openBlocos[b.nome] ? 'rotate-180' : ''}`} />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-0.5">
-              {renderBlocoTable(b.rows)}
-            </CollapsibleContent>
-          </Collapsible>
-        ))}
-      </div>
-    </div>
+    </TooltipProvider>
   );
 }
