@@ -938,6 +938,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               </CardContent>
             </Card>
           ) : (
+          <>
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-2.5">
               <div className="flex gap-3">
@@ -987,6 +988,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             <MiniChart data={chartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
             <MiniChart data={chartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio" />
           </div>
+          </>
           )}
         </div>
       </div>
