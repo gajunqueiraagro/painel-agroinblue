@@ -81,17 +81,17 @@ function VariacaoBadge({ valor, label, showLabel }: { valor: number | null; labe
   );
 }
 
-/* ─── Mini sparkline chart (side-by-side) ─── */
+/* ─── Mini sparkline chart ─── */
 const CHART_LABELS = ['I', 'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
 
 function MiniChart({ data, color, title }: { data: { label: string; value: number | null }[]; color: string; title: string }) {
   return (
     <div className="flex-1 min-w-0">
-      <p className="text-[8px] font-semibold text-muted-foreground uppercase tracking-wider mb-0 truncate">{title}</p>
-      <div className="h-[55px] w-full">
+      <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5 truncate">{title}</p>
+      <div className="h-[100px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 2, right: 2, bottom: 0, left: 2 }}>
-            <XAxis dataKey="label" tick={{ fontSize: 6 }} interval={0} tickLine={false} axisLine={false} />
+          <LineChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+            <XAxis dataKey="label" tick={{ fontSize: 8 }} interval={0} tickLine={false} axisLine={false} />
             <YAxis hide domain={['auto', 'auto']} />
             <RechartsTooltip
               contentStyle={{ fontSize: 10, padding: '2px 6px' }}
@@ -498,21 +498,28 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         </div>
       </div>
 
-      {/* Month bar */}
+      {/* Month bar — green=fechado, red=aberto */}
       <div className="flex gap-0.5 bg-muted/30 rounded-md p-0.5 border">
-        {MESES_SHORT.map(m => (
-          <button
-            key={m.key}
-            onClick={() => setMesFiltro(m.key)}
-            className={`flex-1 text-center text-[11px] font-semibold py-1 rounded transition-colors
-              ${mesFiltro === m.key
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-              }`}
-          >
-            {m.label}
-          </button>
-        ))}
+        {MESES_SHORT.map(m => {
+          const mesKey = `${anoFiltro}-${m.key}`;
+          const isClosed = !!historicoPorMes[mesKey];
+          const isSelected = mesFiltro === m.key;
+          return (
+            <button
+              key={m.key}
+              onClick={() => setMesFiltro(m.key)}
+              className={`flex-1 text-center text-[11px] font-semibold py-1 rounded transition-colors
+                ${isSelected
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : isClosed
+                    ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50'
+                    : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40'
+                }`}
+            >
+              {m.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* December-specific alerts */}
@@ -536,7 +543,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       {/* Main content: table left (~50%) + summary card + charts right */}
       <div className="flex gap-3 items-start">
         {/* LEFT — Table */}
-        <div className="flex-1 max-w-[50%] min-w-0 bg-card rounded-lg shadow-sm border overflow-x-auto">
+        <div className="flex-1 min-w-0 bg-card rounded-lg shadow-sm border overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
               <tr className="border-b bg-primary/15">
@@ -656,7 +663,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         </div>
 
         {/* RIGHT — Summary Card + Charts */}
-        <div className="min-w-[200px] max-w-[340px] flex-1 space-y-1.5">
+        <div className="min-w-[240px] flex-[0.65] space-y-1.5">
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-3">
               <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-0">
@@ -665,53 +672,43 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               {fazendaNome && (
                 <p className="text-[10px] text-muted-foreground font-medium mb-1">{fazendaNome}</p>
               )}
-              <div className="flex items-baseline gap-2 flex-wrap">
-                <p className="text-2xl font-extrabold text-foreground leading-tight">{formatMoeda(totalRebanho)}</p>
-              </div>
-              <div className="flex gap-3 mt-0.5">
+              <p className="text-2xl font-extrabold text-foreground leading-tight">{formatMoeda(totalRebanho)}</p>
+              <div className="flex gap-3 mt-0.5 mb-2">
                 <VariacaoBadge valor={varValorMes} label="vs mês ant." showLabel />
                 <VariacaoBadge valor={varValorAno} label="vs ini. ano" showLabel />
               </div>
 
-              <div className="mt-2 space-y-0.5 text-[11px]">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Cabeças</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-foreground tabular-nums">{formatNum(totalCabecas)}</span>
-                    <VariacaoBadge valor={varCabMes} label="vs mês ant." showLabel />
-                    <VariacaoBadge valor={varCabAno} label="vs ini. ano" showLabel />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Peso médio</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-semibold text-foreground tabular-nums">{formatNum(pesoMedioGeral, 1)} kg</span>
-                    <VariacaoBadge valor={varPesoMes} label="vs mês ant." showLabel />
-                    <VariacaoBadge valor={varPesoAno} label="vs ini. ano" showLabel />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">R$/@ médio</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-semibold text-foreground tabular-nums">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '—'}</span>
-                    <VariacaoBadge valor={varArrobaMes} label="vs mês ant." showLabel />
-                    <VariacaoBadge valor={varArrobaAno} label="vs ini. ano" showLabel />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">R$/cab</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-semibold text-foreground tabular-nums">{formatMoeda(valorMedioCabeca)}</span>
-                    <VariacaoBadge valor={varCabValorMes} label="vs mês ant." showLabel />
-                    <VariacaoBadge valor={varCabValorAno} label="vs ini. ano" showLabel />
-                  </div>
-                </div>
-              </div>
+              {/* Indicator table */}
+              <table className="w-full text-[10px]">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-0.5 font-medium text-muted-foreground">Indicador</th>
+                    <th className="text-right py-0.5 font-medium text-muted-foreground">Valor</th>
+                    <th className="text-right py-0.5 font-medium text-muted-foreground">vs mês ant.</th>
+                    <th className="text-right py-0.5 font-medium text-muted-foreground">vs ini. ano</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { label: 'Cabeças', value: formatNum(totalCabecas), varMes: varCabMes, varAno: varCabAno },
+                    { label: 'Peso médio', value: `${formatNum(pesoMedioGeral, 1)} kg`, varMes: varPesoMes, varAno: varPesoAno },
+                    { label: 'R$/@ médio', value: precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '—', varMes: varArrobaMes, varAno: varArrobaAno },
+                    { label: 'R$/cab', value: formatMoeda(valorMedioCabeca), varMes: varCabValorMes, varAno: varCabValorAno },
+                  ].map((row) => (
+                    <tr key={row.label} className="border-b border-muted/30">
+                      <td className="py-0.5 text-muted-foreground">{row.label}</td>
+                      <td className="py-0.5 text-right font-semibold text-foreground tabular-nums">{row.value}</td>
+                      <td className="py-0.5 text-right"><VariacaoBadge valor={row.varMes} label="" /></td>
+                      <td className="py-0.5 text-right"><VariacaoBadge valor={row.varAno} label="" /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </CardContent>
           </Card>
 
-          {/* Mini charts — side by side in right column */}
-          <div className="flex gap-1.5">
+          {/* Charts — side by side, full width of right column */}
+          <div className="flex gap-2">
             <MiniChart data={chartDataValor} color="hsl(var(--primary))" title="Valor do Rebanho" />
             <MiniChart data={chartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
             <MiniChart data={chartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio" />
