@@ -262,8 +262,8 @@ export function FechamentoPastoDialog({
           {/* Row 2: Lote + Qual + Tipo Uso + Obs */}
           <div className="flex gap-2 items-end">
             <div className="flex-1 min-w-0 max-w-[200px]">
-              <Label className="text-[9px] text-white/50 leading-none">Lote</Label>
-              <Input value={loteMes} onChange={e => setLoteMes(e.target.value)} disabled={isFechado} placeholder="Lote..." className="h-6 text-[11px] px-2 bg-white/10 border-white/15 text-white placeholder:text-white/30" />
+              <Label className="text-[10px] text-white/50 leading-none">Lote</Label>
+              <Input value={loteMes} onChange={e => setLoteMes(e.target.value)} disabled={isFechado} placeholder="Lote..." className="h-7 text-xs px-2 bg-white/10 border-white/15 text-white placeholder:text-white/30" />
             </div>
             <div className="w-12 shrink-0">
               <Label className="text-[9px] text-white/50 leading-none">Qual.</Label>
