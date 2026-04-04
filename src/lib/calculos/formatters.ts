@@ -94,19 +94,19 @@ export function formatGMD(val: number): string {
 }
 
 /**
- * Pesos totais / produção com 3 casas — ex: 398.425,000
+ * Pesos totais / produção com 2 casas — ex: 398.425,00
  * Usar para: peso total kg, peso total @, produção kg, produção @
  */
 export function formatPeso3(val: number): string {
-  return val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  return val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /**
- * Padrão geral (kg, @, valores técnicos): separador milhar + 3 decimais — ex: 398.425,000
- * Zero → "0,000"
+ * Padrão geral (kg, @, valores técnicos): separador milhar + 2 decimais — ex: 398.425,00
+ * Zero → "0,00"
  */
 export function formatPadrao(val: number): string {
-  return val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  return val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /**
