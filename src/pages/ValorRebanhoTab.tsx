@@ -46,6 +46,11 @@ const MAPA_PRECO_MERCADO: Record<string, { bloco: string; categoria: string; uni
   vacas:     { bloco: 'frigorifico', categoria: 'Vaca', unidade: 'arroba' },
 };
 
+const ORDEM_CATEGORIAS_FIXA = [
+  'mamotes_m', 'desmama_m', 'garrotes', 'bois', 'touros',
+  'mamotes_f', 'desmama_f', 'novilhas', 'vacas',
+];
+
 const MESES_SHORT = [
   { key: '01', label: 'Jan' }, { key: '02', label: 'Fev' }, { key: '03', label: 'Mar' },
   { key: '04', label: 'Abr' }, { key: '05', label: 'Mai' }, { key: '06', label: 'Jun' },
