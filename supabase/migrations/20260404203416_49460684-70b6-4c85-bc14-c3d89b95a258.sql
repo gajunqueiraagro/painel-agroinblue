@@ -1,0 +1,1 @@
+ALTER TABLE public.valor_rebanho_fechamento DROP COLUMN IF EXISTS peso_total_kg;

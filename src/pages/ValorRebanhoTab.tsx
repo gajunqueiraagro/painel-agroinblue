@@ -664,11 +664,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                 <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{formatNum(totalCabecas, 0)}</td>
                 <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatNum(pesoMedioGeral, 2)}</td>
                 <td className="px-1 py-1 text-center text-foreground tabular-nums italic text-[11px] w-[60px]">
-                  {precoMedioKg > 0 ? formatNum(precoMedioKg, 2) : ''}
+                  {precoMedioKgCalculado > 0 ? formatNum(precoMedioKgCalculado, 2) : ''}
                 </td>
-                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '-'}</td>
-                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatMoeda(valorMedioCabeca)}</td>
-                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{formatMoeda(totalRebanho)}</td>
+                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{precoMedioArrobaCalculado > 0 ? formatMoeda(precoMedioArrobaCalculado) : '-'}</td>
+                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatMoeda(valorMedioCabecaCalculado)}</td>
+                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{formatMoeda(totalRebanhoCalculado)}</td>
               </tr>
             </tfoot>
           </table>
@@ -715,7 +715,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                   {fazendaNome && (
                     <p className="text-[9px] text-muted-foreground font-medium">{fazendaNome}</p>
                   )}
-                  <p className="text-xl font-extrabold text-foreground leading-tight mt-0.5">{formatMoeda(totalRebanho)}</p>
+                  <p className="text-xl font-extrabold text-foreground leading-tight mt-0.5">{formatMoeda(valorRebanhoExibido)}</p>
                   <div className="flex flex-col gap-0 mt-0.5">
                     <VariacaoBadge valor={varValorMes} label="vs mês ant." showLabel />
                     <VariacaoBadge valor={varValorAno} label="vs ini. ano" showLabel />
@@ -733,8 +733,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                     {[
                       { label: 'Cabeças', value: formatNum(totalCabecas, 0), varMes: varCabMes, varAno: varCabAno },
                       { label: 'Peso médio', value: `${formatNum(pesoMedioGeral, 2)} kg`, varMes: varPesoMes, varAno: varPesoAno },
-                      { label: 'R$/@ médio', value: precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '—', varMes: varArrobaMes, varAno: varArrobaAno },
-                      { label: 'R$/cab', value: formatMoeda(valorMedioCabeca), varMes: varCabValorMes, varAno: varCabValorAno },
+                      { label: 'R$/@ médio', value: precoMedioArrobaExibido > 0 ? formatMoeda(precoMedioArrobaExibido) : '—', varMes: varArrobaMes, varAno: varArrobaAno },
+                      { label: 'R$/cab', value: formatMoeda(valorMedioCabecaExibido), varMes: varCabValorMes, varAno: varCabValorAno },
                       { label: '@s estoque', value: formatNum(totalArrobas, 2), varMes: varArrobasEstoqueMes, varAno: varArrobasEstoqueAno },
                     ].map(ind => (
                       <React.Fragment key={ind.label}>

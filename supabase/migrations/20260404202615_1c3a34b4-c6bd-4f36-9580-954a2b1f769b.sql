@@ -1,0 +1,1 @@
+ALTER VIEW public.vw_valor_rebanho_auditoria SET (security_invoker = true);

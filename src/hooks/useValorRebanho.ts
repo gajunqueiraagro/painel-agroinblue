@@ -125,7 +125,7 @@ export function useValorRebanho(anoMes: string) {
   }, [loadPrecos, loadFechamentoStatus]);
 
   // Save/upsert prices and close the month
-  const salvarPrecos = useCallback(async (items: PrecoCategoria[], valorTotal?: number, pesoTotalKg?: number) => {
+  const salvarPrecos = useCallback(async (items: PrecoCategoria[], valorTotal?: number) => {
     if (!fazendaId || fazendaId === '__global__') return;
     setSaving(true);
     try {
@@ -164,8 +164,7 @@ export function useValorRebanho(anoMes: string) {
           fechado_por: user?.id || null,
           fechado_em: new Date().toISOString(),
           valor_total: valorTotal ?? 0,
-          peso_total_kg: pesoTotalKg ?? 0,
-        } as any, { onConflict: 'fazenda_id,ano_mes' });
+        }, { onConflict: 'fazenda_id,ano_mes' });
 
       if (fErr) throw fErr;
 
