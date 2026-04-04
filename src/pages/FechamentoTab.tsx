@@ -433,7 +433,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         {/* Container superior: tabela esquerda + botões direita */}
         <div className="flex items-start justify-between gap-4">
           {/* Tabela resumo conciliação - 50% no desktop */}
-          <div className="flex items-start gap-1 w-full md:w-[70%] shrink-0">
+          <div className="flex items-start gap-1 w-full md:w-[50%] shrink-0">
             <div className="overflow-x-auto flex-1">
               <table className="w-full text-[10px] border-collapse">
                 <thead>
