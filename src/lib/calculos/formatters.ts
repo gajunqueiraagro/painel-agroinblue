@@ -78,10 +78,26 @@ export function formatCabPainel(val: number): string {
 }
 
 /**
+ * Médias zootécnicas com 2 casas — ex: 339,08 / 1,51
+ * Usar para: peso médio, UA, UA/ha, @/ha, médias físicas
+ */
+export function formatMed2(val: number): string {
+  return val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/**
  * GMD (kg/cab/dia): 3 casas decimais — ex: 2,071
  * Zero → "0,000"
  */
 export function formatGMD(val: number): string {
+  return val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+}
+
+/**
+ * Pesos totais / produção com 3 casas — ex: 398.425,000
+ * Usar para: peso total kg, peso total @, produção kg, produção @
+ */
+export function formatPeso3(val: number): string {
   return val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 }
 
@@ -95,13 +111,15 @@ export function formatPadrao(val: number): string {
 
 /**
  * Formatador único do painel do consultor.
- * tipo: 'cab' | 'gmd' | 'money' | 'padrao'
+ * tipo: 'cab' | 'gmd' | 'med2' | 'peso3' | 'money' | 'padrao'
  */
-export type PainelFormatType = 'cab' | 'gmd' | 'money' | 'padrao';
+export type PainelFormatType = 'cab' | 'gmd' | 'med2' | 'peso3' | 'money' | 'padrao';
 
 export function formatPainel(val: number, tipo: PainelFormatType): string {
   if (tipo === 'cab') return formatCabPainel(val);
   if (tipo === 'gmd') return formatGMD(val);
+  if (tipo === 'med2') return formatMed2(val);
+  if (tipo === 'peso3') return formatPeso3(val);
   if (tipo === 'money') return formatMoeda(val);
   return formatPadrao(val);
 }
