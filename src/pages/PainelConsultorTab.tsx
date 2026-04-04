@@ -205,8 +205,9 @@ function buildMonthlyData(
     return (pesoFinMesCalc(m) - pesoIniMesCalc(m) - entradasKgMes(m) + saidasKgMes(m)) / rebMedio / dias;
   });
 
-  const valorRebFin = valorRebanhoMes;
-  const valorRebIni = Array.from({ length: 12 }, (_, i) => i === 0 ? 0 : (valorRebanhoMes[i - 1] || 0));
+  // valorRebanhoMes has 13 elements: [0]=Dec prev year, [1]=Jan, ..., [12]=Dec
+  const valorRebFin = valorRebanhoMes.slice(1); // 12 elements: Jan-Dec
+  const valorRebIni = valorRebanhoMes.slice(0, 12); // 12 elements: Dec(prev)→Nov = initial for Jan→Dec
 
   const entFinArr = mk(entFinMes);
   const saiFinArr = mk(saiFinMes);
@@ -217,8 +218,8 @@ function buildMonthlyData(
   const resOperArr = mk(m => recPecMes(m) - deducMes(m) - desembPecMes(m));
   const ebitdaArr = mk(m => recPecMes(m) - deducMes(m) - desembPecMes(m));
   const varValorRebArr = mk(m => {
-    const atual = valorRebanhoMes[m - 1] || 0;
-    const anterior = m === 1 ? 0 : (valorRebanhoMes[m - 2] || 0);
+    const atual = valorRebFin[m - 1] || 0;
+    const anterior = valorRebIni[m - 1] || 0;
     return atual - anterior;
   });
 
@@ -705,7 +706,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
   const [viewTab, setViewTab] = useState<ViewTab>('mensal');
   const [cenario, setCenario] = useState<Cenario>('realizado');
   const [pesosPorMes, setPesosPorMes] = useState<Record<string, Record<string, number>>>({});
-  const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(Array(12).fill(0));
+  const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(Array(13).fill(0));
   const [openBlocos, setOpenBlocos] = useState<Record<string, boolean>>({});
   const [showDivP1, setShowDivP1] = useState(false);
   const [showReabrirP1, setShowReabrirP1] = useState(false);
@@ -745,23 +746,25 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
   }, [fazendaId, anoNum, categorias]);
 
   useEffect(() => {
-    if (!fazendaId) { setValorRebanhoMes(Array(12).fill(0)); return; }
+    if (!fazendaId) { setValorRebanhoMes(Array(13).fill(0)); return; }
     (async () => {
+      const dezAnoAnterior = `${anoNum - 1}-12`;
       const meses = Array.from({ length: 12 }, (_, i) => `${anoNum}-${String(i + 1).padStart(2, '0')}`);
+      const todasMeses = [dezAnoAnterior, ...meses];
       const fazendaIds = fazendaId === '__global__'
         ? fazendas.filter(f => f.tem_pecuaria !== false).map(f => f.id) : [fazendaId];
-      if (fazendaIds.length === 0) { setValorRebanhoMes(Array(12).fill(0)); return; }
+      if (fazendaIds.length === 0) { setValorRebanhoMes(Array(13).fill(0)); return; }
       const { data, error } = await supabase
         .from('valor_rebanho_fechamento')
         .select('ano_mes, valor_total')
         .in('fazenda_id', fazendaIds)
-        .in('ano_mes', meses);
-      if (error) { setValorRebanhoMes(Array(12).fill(0)); return; }
-      const totais = new Map(meses.map(mes => [mes, 0]));
+        .in('ano_mes', todasMeses);
+      if (error) { setValorRebanhoMes(Array(13).fill(0)); return; }
+      const totais = new Map(todasMeses.map(mes => [mes, 0]));
       (data || []).forEach(row => {
         totais.set(row.ano_mes, (totais.get(row.ano_mes) || 0) + (Number(row.valor_total) || 0));
       });
-      setValorRebanhoMes(meses.map(mes => totais.get(mes) || 0));
+      setValorRebanhoMes(todasMeses.map(mes => totais.get(mes) || 0));
     })();
   }, [fazendaId, anoNum, fazendas]);
 
