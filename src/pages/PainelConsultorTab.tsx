@@ -22,6 +22,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import { usePastos } from '@/hooks/usePastos';
+import { useZootMensal, indexByMes, type ZootMensal } from '@/hooks/useZootMensal';
 import { formatPainel, type PainelFormatType } from '@/lib/calculos/formatters';
 import {
   calcSaldoMensalAcumulado,
@@ -407,6 +408,185 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
           ],
         },
       ];
+}
+}
+
+// ─── Build blocos from vw_zoot_fazenda_mensal (for Previsto cenário) ───
+function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
+  const byMes = indexByMes(rows);
+  const get = (field: keyof ZootMensal): number[] =>
+    Array.from({ length: 12 }, (_, i) => {
+      const m = byMes[String(i + 1).padStart(2, '0')];
+      return m ? (Number(m[field]) || 0) : 0;
+    });
+
+  const cabIni = get('cabecas_inicio');
+  const cabFin = get('cabecas_final');
+  const entradas = get('entradas');
+  const saidas = get('saidas');
+  const pesoIni = get('peso_inicio_kg');
+  const pesoFin = get('peso_total_final_kg');
+  const pesoMedFin = get('peso_medio_final_kg');
+  const gmd = get('gmd_kg_cab_dia');
+  const uaMedia = get('ua_media');
+  const areaProd = get('area_produtiva_ha');
+  const lotacao = get('lotacao_ua_ha');
+
+  // Derived
+  const pesoMedIni = cabIni.map((c, i) => c > 0 ? pesoIni[i] / c : 0);
+  const cabMedia = cabIni.map((v, i) => (v + cabFin[i]) / 2);
+  const gmdNum = get('gmd_numerador_kg');
+  const arrobasProd = gmdNum.map(v => v / 30);
+  const prodKg = gmdNum;
+  const arrHa = arrobasProd.map((v, i) => areaProd[i] > 0 ? v / areaProd[i] : 0);
+  const desfruteCab = saidas;
+  const desfrute_arr = saidas.map((v, i) => pesoMedFin[i] > 0 ? (v * pesoMedFin[i]) / 30 : 0);
+
+  const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string): Row => {
+    let valores: number[];
+    switch (tab) {
+      case 'mensal': valores = raw; break;
+      case 'medio': valores = raw; break;
+      case 'acumulado': valores = cumSum(raw); break;
+      case 'media_periodo': valores = rollingAvg(raw); break;
+    }
+    return { indicador, format, valores, indicadorId };
+  };
+
+  // Financial rows are empty for previsto (sem_fonte)
+  const emptyMoney = Array(12).fill(0);
+
+  switch (tab) {
+    case 'mensal':
+      return [
+        {
+          nome: 'Rebanho',
+          rows: [
+            r('Reb. inicial (cab)', 'cab', cabIni, 'reb_inicial'),
+            r('Reb. final (cab)', 'cab', cabFin, 'reb_final'),
+            r('Entradas (cab)', 'cab', entradas, 'entradas_cab'),
+            r('Saídas (cab)', 'cab', saidas, 'saidas_cab'),
+          ],
+        },
+        {
+          nome: 'Peso',
+          rows: [
+            r('Peso ini. (kg)', 'padrao', pesoIni, 'peso_ini_kg'),
+            r('Peso final (kg)', 'padrao', pesoFin, 'peso_fin_kg'),
+            r('Peso ini. (@)', 'padrao', pesoIni.map(v => v / 30), 'peso_ini_arr'),
+            r('Peso final (@)', 'padrao', pesoFin.map(v => v / 30), 'peso_fin_arr'),
+            r('Peso méd. ini.', 'med2', pesoMedIni, 'peso_med_ini'),
+            r('Peso méd. final', 'med2', pesoMedFin, 'peso_med_fin'),
+          ],
+        },
+        {
+          nome: 'Valor do Rebanho',
+          rows: [
+            r('Valor reb. inicial', 'money', emptyMoney, 'valor_reb_ini'),
+            r('Valor reb. final', 'money', emptyMoney, 'valor_reb_fin'),
+            r('Valor/cab final', 'money', emptyMoney, 'valor_cab_fin'),
+            r('Valor/@ final', 'money', emptyMoney, 'valor_arr_fin'),
+          ],
+        },
+      ];
+    case 'medio':
+      return [
+        {
+          nome: 'Desempenho',
+          rows: [
+            r('GMD (kg/cab/dia)', 'gmd', gmd, 'gmd'),
+            r('Peso méd. reb.', 'med2', pesoMedFin, 'peso_med_reb'),
+            r('UA média', 'med2', uaMedia, 'ua_media'),
+            r('Lotação (UA/ha)', 'med2', lotacao, 'lotacao'),
+          ],
+        },
+        {
+          nome: 'Produção',
+          rows: [
+            r('@ produzidas', 'padrao', arrobasProd, 'arrobas_prod'),
+            r('Produção (kg)', 'padrao', prodKg, 'prod_kg'),
+            r('@/ha', 'med2', arrHa, 'arr_ha'),
+            r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
+            r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
+          ],
+        },
+        {
+          nome: 'Estrutura',
+          rows: [
+            r('Área prod. (ha)', 'med2', areaProd, 'area_prod'),
+            r('Reb. médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio'),
+          ],
+        },
+      ];
+    case 'acumulado':
+      return [
+        {
+          nome: 'Rebanho',
+          rows: [
+            r('Entradas acum. (cab)', 'cab', entradas, 'entradas_acum'),
+            r('Saídas acum. (cab)', 'cab', saidas, 'saidas_acum'),
+            r('Saldo acum. reb.', 'cab', entradas.map((v, i) => v - saidas[i]), 'saldo_acum'),
+          ],
+        },
+        {
+          nome: 'Produção',
+          rows: [
+            r('@ produzidas acum.', 'padrao', arrobasProd, 'arrobas_acum'),
+            r('Produção kg acum.', 'padrao', prodKg, 'prod_kg_acum'),
+            r('@/ha acum.', 'med2', arrHa, 'arr_ha_acum'),
+            r('Desfrute acum. (cab)', 'cab', desfruteCab, 'desfrute_acum_cab'),
+            r('Desfrute acum. (@)', 'padrao', desfrute_arr, 'desfrute_acum_arr'),
+          ],
+        },
+        {
+          nome: 'Financeiro no Caixa',
+          rows: [
+            r('Entradas fin. acum.', 'money', emptyMoney, 'ent_fin_acum'),
+            r('Saídas fin. acum.', 'money', emptyMoney, 'sai_fin_acum'),
+            r('Rec. pec. acum.', 'money', emptyMoney, 'rec_pec_acum'),
+            r('Res. caixa acum.', 'money', emptyMoney, 'res_caixa_acum'),
+          ],
+        },
+        {
+          nome: 'Financeiro por Competência',
+          rows: [
+            r('Rec. pec. comp. acum.', 'money', emptyMoney, 'rec_pec_comp_acum'),
+            r('Res. oper. acum.', 'money', emptyMoney, 'res_oper_acum'),
+            r('EBITDA acum.', 'money', emptyMoney, 'ebitda_acum'),
+            r('Var. valor reb.', 'money', emptyMoney, 'var_valor_reb'),
+          ],
+        },
+      ];
+    case 'media_periodo':
+      return [
+        {
+          nome: 'Desempenho Médio',
+          rows: [
+            r('GMD médio período', 'gmd', gmd, 'gmd_medio'),
+            r('Peso médio período', 'med2', pesoMedFin, 'peso_medio_periodo'),
+            r('UA média período', 'med2', uaMedia, 'ua_media_periodo'),
+            r('Lotação média', 'med2', lotacao, 'lotacao_media'),
+          ],
+        },
+        {
+          nome: 'Produção Média',
+          rows: [
+            r('@/ha média período', 'med2', arrHa, 'arr_ha_media'),
+            r('Prod. média (@)', 'padrao', arrobasProd, 'prod_media_arr'),
+            r('Prod. média (kg)', 'padrao', prodKg, 'prod_media_kg'),
+            r('Desfrute médio', 'cab', desfruteCab, 'desfrute_medio'),
+          ],
+        },
+        {
+          nome: 'Financeiro Médio',
+          rows: [
+            r('Receita média', 'money', emptyMoney, 'receita_media'),
+            r('Res. oper. médio', 'money', emptyMoney, 'res_oper_medio'),
+            r('EBITDA médio', 'money', emptyMoney, 'ebitda_medio'),
+            r('Res. caixa médio', 'money', emptyMoney, 'res_caixa_medio'),
+          ],
+        },
+      ];
   }
 }
 
@@ -515,6 +695,9 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
 
   const fazendaId = fazendaAtual?.id;
 
+  // ─── Previsto: useZootMensal com cenario='meta' ───
+  const { data: zootMeta } = useZootMensal({ ano: anoNum, cenario: 'meta' });
+
   // Month cutoff: months > cutoff are blank
   const monthCutoff = useMemo(() => getCurrentMonthCutoff(anoNum), [anoNum]);
 
@@ -558,8 +741,15 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
     [lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes],
   );
 
-  // Blocos only for Realizado — Previsto uses same structure but values are blanked
-  const blocos = useMemo(() => buildBlocosForTab(monthlyData, viewTab), [monthlyData, viewTab]);
+  const isPrevisto = cenario === 'previsto';
+
+  // Blocos: Realizado usa buildMonthlyData, Previsto usa vw_zoot_fazenda_mensal (meta)
+  const blocos = useMemo(() => {
+    if (isPrevisto) {
+      return buildBlocosFromZootMensal(zootMeta || [], viewTab);
+    }
+    return buildBlocosForTab(monthlyData, viewTab);
+  }, [isPrevisto, monthlyData, zootMeta, viewTab]);
 
   useEffect(() => {
     if (blocos.length > 0) {
@@ -594,7 +784,6 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
    * tem fonte prevista configurada. Se fonte_tipo === 'sem_fonte',
    * retornar string vazia — NUNCA copiar valor do Realizado.
    */
-  const isPrevisto = cenario === 'previsto';
 
   const hasPrevistoSource = useCallback((indicadorId?: string): boolean => {
     if (!indicadorId) return false;
@@ -776,3 +965,4 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
     </TooltipProvider>
   );
 }
+
