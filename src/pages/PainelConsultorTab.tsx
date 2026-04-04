@@ -694,7 +694,7 @@ function SourceInfoTooltip({ indicadorId, cenario }: { indicadorId?: string; cen
 }
 
 // ─── Component ───
-export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
+export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { pastos, categorias } = usePastos();
   const { lancamentos: lancPec, saldosIniciais } = useLancamentos();
@@ -706,6 +706,7 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
   const [pesosPorMes, setPesosPorMes] = useState<Record<string, Record<string, number>>>({});
   const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(Array(12).fill(0));
   const [openBlocos, setOpenBlocos] = useState<Record<string, boolean>>({});
+  const [showDivP1, setShowDivP1] = useState(false);
 
   const anoNum = Number(ano);
   const anosDisponiveis = useMemo(() => {
