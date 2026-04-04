@@ -91,9 +91,9 @@ const CHART_LABELS = ['I', 'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N'
 
 function MiniChart({ data, color, title }: { data: { label: string; value: number | null }[]; color: string; title: string }) {
   return (
-    <div className="flex-1 min-w-0 flex flex-col">
-      <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5 truncate shrink-0">{title}</p>
-      <div className="flex-1 min-h-0 w-full">
+    <div className="flex-1 min-w-0">
+      <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5 truncate">{title}</p>
+      <div className="h-[150px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
             <XAxis dataKey="label" tick={{ fontSize: 8 }} interval={0} tickLine={false} axisLine={false} />
