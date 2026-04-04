@@ -445,7 +445,10 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     }
 
     const fetchHistorico = async () => {
-      const anoMeses = Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`);
+      const anoMeses = [
+        `${Number(anoFiltro) - 1}-12`,
+        ...Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`),
+      ];
 
       try {
         const [fechamentoRes, itensRes] = await Promise.all([
