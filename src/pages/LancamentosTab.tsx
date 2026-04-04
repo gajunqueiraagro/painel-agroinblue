@@ -211,7 +211,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState('todos');
 
-  // Internal edit origin context — saves aba/filters before switching to form mode
+  // ─── P1 governance: derive anoMes from form date ───
+  const formAnoMes = useMemo(() => {
+    if (!data) return undefined;
+    return data.slice(0, 7); // 'yyyy-MM'
+  }, [data]);
+  const { status: statusPilaresForm } = useStatusPilares(fazendaAtual?.id, formAnoMes);
+  const p1Oficial = statusPilaresForm.p1_mapa_pastos.status === 'oficial';
+
   const internalEditOrigin = useRef<{ aba: Aba; anoFiltro: string; mesFiltro: string } | null>(null);
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
   const [statusOp, setStatusOp] = useState<StatusOperacional>('conciliado');
