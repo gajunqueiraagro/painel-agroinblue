@@ -276,9 +276,9 @@ export function FechamentoPastoDialog({
               </Select>
             </div>
             <div className="w-[130px] shrink-0">
-              <Label className="text-[9px] text-white/50 leading-none">Tipo Uso</Label>
+              <Label className="text-[10px] text-white/50 leading-none">Tipo Uso</Label>
               <Select value={tipoUsoMes} onValueChange={setTipoUsoMes} disabled={isFechado}>
-                <SelectTrigger className="h-6 text-[11px] px-1.5 bg-white/10 border-white/15 text-white"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger className="h-7 text-xs px-1.5 bg-white/10 border-white/15 text-white"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {TIPOS_USO_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                 </SelectContent>
