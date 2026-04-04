@@ -3847,13 +3847,6 @@ export type Database = {
         Args: { _fazenda_id: string; _user_id: string }
         Returns: boolean
       }
-      list_security_definer_views: {
-        Args: never
-        Returns: {
-          view_name: string
-          view_schema: string
-        }[]
-      }
       reabrir_pilar_fechamento:
         | {
             Args: {

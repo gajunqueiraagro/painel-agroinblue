@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.list_security_definer_views();
