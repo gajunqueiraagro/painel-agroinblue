@@ -5,8 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Save, Copy, Eye, EyeOff, Info, Lock, Unlock, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { Save, Copy, Eye, EyeOff, Info, Lock, Unlock, AlertTriangle, ShieldAlert, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
@@ -17,6 +16,7 @@ import { MESES_COLS } from '@/lib/calculos/labels';
 import { toast } from 'sonner';
 import { useFechamentoCategoria, type OrigemPeso } from '@/hooks/useFechamentoCategoria';
 import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -51,6 +51,59 @@ const MESES_SHORT = [
   { key: '07', label: 'Jul' }, { key: '08', label: 'Ago' }, { key: '09', label: 'Set' },
   { key: '10', label: 'Out' }, { key: '11', label: 'Nov' }, { key: '12', label: 'Dez' },
 ];
+
+/* ─── Variation helpers ─── */
+function calcVariacao(atual: number, anterior: number): number | null {
+  if (!anterior || anterior === 0) return null;
+  return ((atual - anterior) / Math.abs(anterior)) * 100;
+}
+
+function VariacaoBadge({ valor, label }: { valor: number | null; label: string }) {
+  if (valor === null) return null;
+  const isPositive = valor > 0;
+  const isNeutral = Math.abs(valor) < 0.1;
+  const Icon = isNeutral ? Minus : isPositive ? TrendingUp : TrendingDown;
+  const color = isNeutral
+    ? 'text-muted-foreground'
+    : isPositive
+    ? 'text-emerald-600 dark:text-emerald-400'
+    : 'text-destructive';
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className={`inline-flex items-center gap-0.5 text-[9px] font-semibold tabular-nums ${color}`}>
+          <Icon className="h-2.5 w-2.5" />
+          {Math.abs(valor).toFixed(1)}%
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-[10px]">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/* ─── Mini sparkline chart ─── */
+function MiniChart({ data, dataKey, color, title }: { data: { label: string; value: number }[]; dataKey: string; color: string; title: string }) {
+  return (
+    <div className="space-y-0.5">
+      <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">{title}</p>
+      <div className="h-[60px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 2, right: 4, bottom: 0, left: 4 }}>
+            <XAxis dataKey="label" tick={{ fontSize: 7 }} interval="preserveStartEnd" tickLine={false} axisLine={false} />
+            <YAxis hide domain={['auto', 'auto']} />
+            <RechartsTooltip
+              contentStyle={{ fontSize: 10, padding: '2px 6px' }}
+              labelStyle={{ fontSize: 9 }}
+              formatter={(v: number) => [formatNum(v, 1), '']}
+            />
+            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.5} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
 
 export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAnoInicial, filtroMesInicial }: Props) {
   const { fazendaAtual, isGlobal } = useFazenda();
@@ -201,6 +254,107 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     setSugestaoAplicada(aplicouSugestao);
   }, [precos, precosSugeridos]);
 
+  /* ─── Compute historical data for variations and charts ─── */
+  // We'll compute data for all months up to current using the same hooks approach
+  // For now, generate chart data from available data (placeholder for months without data)
+  const mesNum = Number(mesFiltro);
+  const mesAnteriorKey = mesNum > 1 ? String(mesNum - 1).padStart(2, '0') : '12';
+  const anoMesAnterior = mesNum > 1 ? `${anoFiltro}-${mesAnteriorKey}` : `${Number(anoFiltro) - 1}-12`;
+
+  // Load previous month data for variations
+  const resumoMesAnterior = useFechamentoCategoria(
+    fazendaId, mesNum > 1 ? Number(anoFiltro) : Number(anoFiltro) - 1,
+    mesNum > 1 ? mesNum - 1 : 12,
+    lancamentos, saldosIniciais, categorias,
+  );
+  const { precos: precosMesAnterior } = useValorRebanho(anoMesAnterior);
+
+  // Load January data for YTD variation
+  const anoMesJan = `${anoFiltro}-01`;
+  const resumoJan = useFechamentoCategoria(
+    fazendaId, Number(anoFiltro), 1, lancamentos, saldosIniciais, categorias,
+  );
+  const { precos: precosJan } = useValorRebanho(anoMesJan);
+
+  // Compute prev month totals
+  const prevTotals = useMemo(() => {
+    let valor = 0, cabecas = 0, pesoTotal = 0, arrobas = 0;
+    resumoMesAnterior.rows.forEach(row => {
+      const pk = precosMesAnterior.find(p => p.categoria === row.categoriaCodigo)?.preco_kg || 0;
+      const vt = row.quantidadeFinal * (row.pesoMedioFinalKg || 0) * pk;
+      valor += vt;
+      cabecas += row.quantidadeFinal;
+      pesoTotal += row.quantidadeFinal * (row.pesoMedioFinalKg || 0);
+      arrobas += row.quantidadeFinal * (row.pesoMedioFinalKg || 0) / 30;
+    });
+    return {
+      valor, cabecas,
+      pesoMedio: cabecas > 0 ? pesoTotal / cabecas : 0,
+      precoArroba: arrobas > 0 ? valor / arrobas : 0,
+      valorCab: cabecas > 0 ? valor / cabecas : 0,
+    };
+  }, [resumoMesAnterior.rows, precosMesAnterior]);
+
+  // Compute January totals
+  const janTotals = useMemo(() => {
+    let valor = 0, cabecas = 0, pesoTotal = 0, arrobas = 0;
+    resumoJan.rows.forEach(row => {
+      const pk = precosJan.find(p => p.categoria === row.categoriaCodigo)?.preco_kg || 0;
+      const vt = row.quantidadeFinal * (row.pesoMedioFinalKg || 0) * pk;
+      valor += vt;
+      cabecas += row.quantidadeFinal;
+      pesoTotal += row.quantidadeFinal * (row.pesoMedioFinalKg || 0);
+      arrobas += row.quantidadeFinal * (row.pesoMedioFinalKg || 0) / 30;
+    });
+    return {
+      valor, cabecas,
+      pesoMedio: cabecas > 0 ? pesoTotal / cabecas : 0,
+      precoArroba: arrobas > 0 ? valor / arrobas : 0,
+      valorCab: cabecas > 0 ? valor / cabecas : 0,
+    };
+  }, [resumoJan.rows, precosJan]);
+
+  // Variations
+  const varValorMes = calcVariacao(totalRebanho, prevTotals.valor);
+  const varValorAno = calcVariacao(totalRebanho, janTotals.valor);
+  const varCabMes = calcVariacao(totalCabecas, prevTotals.cabecas);
+  const varCabAno = calcVariacao(totalCabecas, janTotals.cabecas);
+  const varPesoMes = calcVariacao(pesoMedioGeral, prevTotals.pesoMedio);
+  const varPesoAno = calcVariacao(pesoMedioGeral, janTotals.pesoMedio);
+  const varArrobaMes = calcVariacao(precoMedioArroba, prevTotals.precoArroba);
+  const varArrobaAno = calcVariacao(precoMedioArroba, janTotals.precoArroba);
+  const varCabValorMes = calcVariacao(valorMedioCabeca, prevTotals.valorCab);
+  const varCabValorAno = calcVariacao(valorMedioCabeca, janTotals.valorCab);
+
+  // Chart data: build from all months up to current using available hooks
+  // For a lightweight approach, use current + prev + jan as data points
+  const chartDataValor = useMemo(() => {
+    const points: { label: string; value: number }[] = [];
+    if (janTotals.valor > 0 && mesNum > 1) points.push({ label: 'Jan', value: janTotals.valor });
+    if (prevTotals.valor > 0 && mesNum > 2) points.push({ label: MESES_SHORT[mesNum - 2]?.label || '', value: prevTotals.valor });
+    if (prevTotals.valor > 0 && mesNum === 2) {} // Jan already added
+    points.push({ label: MESES_SHORT[mesNum - 1]?.label || '', value: totalRebanho });
+    return points.length >= 2 ? points : [];
+  }, [janTotals, prevTotals, totalRebanho, mesNum]);
+
+  const chartDataArrobas = useMemo(() => {
+    const janArr = resumoJan.rows.reduce((s, r) => s + r.quantidadeFinal * (r.pesoMedioFinalKg || 0) / 30, 0);
+    const prevArr = resumoMesAnterior.rows.reduce((s, r) => s + r.quantidadeFinal * (r.pesoMedioFinalKg || 0) / 30, 0);
+    const points: { label: string; value: number }[] = [];
+    if (janArr > 0 && mesNum > 1) points.push({ label: 'Jan', value: janArr });
+    if (prevArr > 0 && mesNum > 2) points.push({ label: MESES_SHORT[mesNum - 2]?.label || '', value: prevArr });
+    points.push({ label: MESES_SHORT[mesNum - 1]?.label || '', value: totalArrobas });
+    return points.length >= 2 ? points : [];
+  }, [resumoJan.rows, resumoMesAnterior.rows, totalArrobas, mesNum]);
+
+  const chartDataPrecoArroba = useMemo(() => {
+    const points: { label: string; value: number }[] = [];
+    if (janTotals.precoArroba > 0 && mesNum > 1) points.push({ label: 'Jan', value: janTotals.precoArroba });
+    if (prevTotals.precoArroba > 0 && mesNum > 2) points.push({ label: MESES_SHORT[mesNum - 2]?.label || '', value: prevTotals.precoArroba });
+    points.push({ label: MESES_SHORT[mesNum - 1]?.label || '', value: precoMedioArroba });
+    return points.length >= 2 ? points : [];
+  }, [janTotals, prevTotals, precoMedioArroba, mesNum]);
+
   const handlePrecoChange = (codigo: string, value: string) => {
     const sanitized = value.replace(/[^0-9.,]/g, '');
     setPrecosDisplay(prev => ({ ...prev, [codigo]: sanitized }));
@@ -238,6 +392,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   };
 
   const canEdit = !isFechado;
+  const fazendaNome = fazendaAtual?.nome || '';
 
   if (isGlobal) {
     return (
@@ -313,7 +468,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         ))}
       </div>
 
-      {/* December-specific alerts (keep above table) */}
+      {/* December-specific alerts */}
       {isDezembro && (categoriasSemPreco.length > 0 || dezembroCompleto) && (
         <div className="space-y-1">
           {categoriasSemPreco.length > 0 && (
@@ -331,14 +486,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         </div>
       )}
 
-      {/* Main content: table left (~50%) + summary card right */}
+      {/* Main content: table left (~50%) + summary card + charts right */}
       <div className="flex gap-3 items-start">
         {/* LEFT — Table */}
         <div className="flex-1 max-w-[50%] min-w-0 bg-card rounded-lg shadow-sm border overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
-              <tr className="border-b bg-muted/50">
-                <th className="text-left px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Categoria</th>
+              <tr className="border-b bg-primary/15">
+                <th className="text-left px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider bg-primary/25">Categoria</th>
                 <th className="text-right px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Qtd</th>
                 <th className="text-right px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Peso</th>
                 <th className="text-center px-1 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider w-[60px]">R$/kg</th>
@@ -350,18 +505,18 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             <tbody>
               {rows.map((r, i) => (
                 <tr key={r.codigo} className={`border-b ${i % 2 === 0 ? '' : 'bg-muted/20'}`}>
-                  <td className="px-1.5 py-0.5 font-medium text-foreground text-[11px] whitespace-nowrap">
+                  <td className="px-1.5 py-0.5 font-medium text-foreground text-[11px] whitespace-nowrap bg-primary/10">
                     {r.nome}
                     {isDezembro && r.saldo === 0 && <span className="text-[9px] text-muted-foreground ml-1">(0)</span>}
                   </td>
-                  <td className="px-1.5 py-0.5 text-right text-foreground font-semibold tabular-nums">
+                  <td className="px-1.5 py-0.5 text-right text-foreground font-semibold tabular-nums italic">
                     {r.saldo > 0 ? r.saldo : '-'}
                   </td>
-                  <td className="px-1.5 py-0.5 text-right tabular-nums">
+                  <td className="px-1.5 py-0.5 text-right tabular-nums italic">
                     {r.pesoMedio > 0 ? (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <span className={`cursor-help ${r.origemPeso === 'pastos' ? 'text-foreground' : 'text-muted-foreground italic'}`}>
+                          <span className={`cursor-help ${r.origemPeso === 'pastos' ? 'text-foreground' : 'text-muted-foreground'}`}>
                             {formatNum(r.pesoMedio, 1)}
                             {r.origemPeso !== 'pastos' && ' *'}
                           </span>
@@ -378,7 +533,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                         <Input
                           type="text"
                           inputMode="decimal"
-                          className={`h-5 text-right !text-[10px] leading-none font-normal tabular-nums px-1 w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
+                          className={`h-5 text-right !text-[10px] leading-none font-normal tabular-nums italic px-1 w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
                           placeholder="0,00"
                           value={precosDisplay[r.codigo] !== undefined ? precosDisplay[r.codigo] : fmtKg(r.precoKg)}
                           onChange={e => handlePrecoChange(r.codigo, e.target.value)}
@@ -393,28 +548,28 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                       )}
                     </Tooltip>
                   </td>
-                  <td className="px-1.5 py-0.5 text-right text-muted-foreground tabular-nums">
+                  <td className="px-1.5 py-0.5 text-right text-muted-foreground tabular-nums italic">
                     {r.precoArroba > 0 ? formatMoeda(r.precoArroba) : '-'}
                   </td>
-                  <td className="px-1.5 py-0.5 text-right text-muted-foreground tabular-nums">
+                  <td className="px-1.5 py-0.5 text-right text-muted-foreground tabular-nums italic">
                     {r.valorCabeca > 0 ? formatMoeda(r.valorCabeca) : '-'}
                   </td>
-                  <td className="px-1.5 py-0.5 text-right font-semibold text-foreground tabular-nums">
+                  <td className="px-1.5 py-0.5 text-right font-semibold text-foreground tabular-nums italic">
                     {r.valorTotal > 0 ? formatMoeda(r.valorTotal) : '-'}
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
-              <tr className="border-t-2 bg-primary/10">
-                <td className="px-1.5 py-1 font-extrabold text-foreground text-[11px]">TOTAL</td>
+              <tr className="border-t-2 bg-primary/25">
+                <td className="px-1.5 py-1 font-extrabold text-foreground text-[11px] bg-primary/30">TOTAL</td>
                 <td className="px-1.5 py-1 text-right font-extrabold text-foreground tabular-nums">{totalCabecas}</td>
-                <td className="px-1.5 py-1 text-right text-muted-foreground tabular-nums">{formatNum(pesoMedioGeral, 1)}</td>
-                <td className="px-1 py-1 text-center text-muted-foreground tabular-nums w-[60px]">
+                <td className="px-1.5 py-1 text-right text-foreground tabular-nums font-semibold">{formatNum(pesoMedioGeral, 1)}</td>
+                <td className="px-1 py-1 text-center text-foreground tabular-nums font-semibold w-[60px]">
                   {precoMedioKg > 0 ? formatNum(precoMedioKg, 2) : ''}
                 </td>
-                <td className="px-1.5 py-1 text-right font-semibold text-foreground tabular-nums">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '-'}</td>
-                <td className="px-1.5 py-1 text-right font-semibold text-foreground tabular-nums">{formatMoeda(valorMedioCabeca)}</td>
+                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '-'}</td>
+                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums">{formatMoeda(valorMedioCabeca)}</td>
                 <td className="px-1.5 py-1 text-right font-extrabold text-foreground tabular-nums">{formatMoeda(totalRebanho)}</td>
               </tr>
             </tfoot>
@@ -453,33 +608,76 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           )}
         </div>
 
-        {/* RIGHT — Summary Card */}
-        <div className="min-w-[200px] max-w-[300px]">
+        {/* RIGHT — Summary Card + Charts */}
+        <div className="min-w-[200px] max-w-[340px] flex-1 space-y-2">
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-3">
-              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-0.5">
+              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-0">
                 Valor do Rebanho — {mesLabel}/{anoFiltro}
               </p>
-              <p className="text-xl font-extrabold text-foreground leading-tight">{formatMoeda(totalRebanho)}</p>
-
-              <div className="mt-2 space-y-0.5 text-[11px]">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Cabeças</span>
-                  <span className="font-bold text-foreground tabular-nums">{formatNum(totalCabecas)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Peso médio</span>
-                  <span className="font-semibold text-foreground tabular-nums">{formatNum(pesoMedioGeral, 1)} kg</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">R$/@ médio</span>
-                  <span className="font-semibold text-foreground tabular-nums">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '—'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">R$/cab</span>
-                  <span className="font-semibold text-foreground tabular-nums">{formatMoeda(valorMedioCabeca)}</span>
+              {fazendaNome && (
+                <p className="text-[10px] text-muted-foreground font-medium mb-1">{fazendaNome}</p>
+              )}
+              <div className="flex items-baseline gap-2">
+                <p className="text-2xl font-extrabold text-foreground leading-tight">{formatMoeda(totalRebanho)}</p>
+                <div className="flex gap-1.5">
+                  <VariacaoBadge valor={varValorMes} label="vs mês anterior" />
+                  <VariacaoBadge valor={varValorAno} label="vs início do ano" />
                 </div>
               </div>
+
+              <div className="mt-2 space-y-0.5 text-[11px]">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Cabeças</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-foreground tabular-nums">{formatNum(totalCabecas)}</span>
+                    <VariacaoBadge valor={varCabMes} label="vs mês anterior" />
+                    <VariacaoBadge valor={varCabAno} label="vs início do ano" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Peso médio</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-foreground tabular-nums">{formatNum(pesoMedioGeral, 1)} kg</span>
+                    <VariacaoBadge valor={varPesoMes} label="vs mês anterior" />
+                    <VariacaoBadge valor={varPesoAno} label="vs início do ano" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">R$/@ médio</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-foreground tabular-nums">{precoMedioArroba > 0 ? formatMoeda(precoMedioArroba) : '—'}</span>
+                    <VariacaoBadge valor={varArrobaMes} label="vs mês anterior" />
+                    <VariacaoBadge valor={varArrobaAno} label="vs início do ano" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">R$/cab</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-foreground tabular-nums">{formatMoeda(valorMedioCabeca)}</span>
+                    <VariacaoBadge valor={varCabValorMes} label="vs mês anterior" />
+                    <VariacaoBadge valor={varCabValorAno} label="vs início do ano" />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Mini charts */}
+          <Card className="border">
+            <CardContent className="p-2 space-y-2">
+              {chartDataValor.length >= 2 && (
+                <MiniChart data={chartDataValor} dataKey="value" color="hsl(var(--primary))" title="Valor do Rebanho" />
+              )}
+              {chartDataArrobas.length >= 2 && (
+                <MiniChart data={chartDataArrobas} dataKey="value" color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
+              )}
+              {chartDataPrecoArroba.length >= 2 && (
+                <MiniChart data={chartDataPrecoArroba} dataKey="value" color="hsl(217, 91%, 60%)" title="R$/@ Médio do Estoque" />
+              )}
+              {chartDataValor.length < 2 && chartDataArrobas.length < 2 && chartDataPrecoArroba.length < 2 && (
+                <p className="text-[9px] text-muted-foreground text-center py-2">Gráficos disponíveis a partir do 2º mês com dados.</p>
+              )}
             </CardContent>
           </Card>
         </div>
