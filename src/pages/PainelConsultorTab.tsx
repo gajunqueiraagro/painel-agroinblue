@@ -564,18 +564,11 @@ export function PainelConsultorTab({ onBack, filtroGlobal }: Props) {
                 <td className="sticky left-0 z-10 bg-card text-[10px] font-medium py-0.5 px-1.5 leading-tight truncate border-r border-border/20">
                   {row.indicador}
                 </td>
-                {row.valores.map((v, i) => {
-                  let colorClass = '';
-                  if (cenario === 'comparativo') {
-                    if (v > 0) colorClass = 'text-emerald-600';
-                    else if (v < 0) colorClass = 'text-red-500';
-                  }
-                  return (
-                    <td key={i} className={`text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px] ${colorClass}`}>
+                {row.valores.map((v, i) => (
+                    <td key={i} className="text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px]">
                       {formatPainel(v, row.format)}
                     </td>
-                  );
-                })}
+                ))}
                 <td className="text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px] font-bold border-l border-border/20">
                   {formatPainel(tot, row.format)}
                 </td>
