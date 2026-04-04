@@ -1,20 +1,23 @@
 import { useMemo } from 'react';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { AlertTriangle, CheckCircle2, Clock, Circle, ArrowRight, ChevronRight } from 'lucide-react';
-import { useStatusFechamentosAno, type StatusMes } from '@/hooks/useStatusFechamentosAno';
-import { useStatusPilares } from '@/hooks/useStatusPilares';
+import { useStatusFechamentosAno, type MesAcao, type MesStatus, type StatusMes } from '@/hooks/useStatusFechamentosAno';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { MESES_NOMES } from '@/lib/calculos/labels';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import type { Lancamento, SaldoInicial } from '@/types/cattle';
+import type { StatusCor } from '@/lib/calculos/statusMensal';
 
 interface Props {
   ano: string;
-  onSelectMes?: (anoMes: string, destino?: 'resumo' | 'painel_consultor') => void;
+  mesSelecionado: number;
+  lancamentos: Lancamento[];
+  saldosIniciais: SaldoInicial[];
+  onSelectMes?: (anoMes: string, destino?: 'zootecnico') => void;
 }
 
 const MESES_COMPLETOS = [
@@ -22,190 +25,188 @@ const MESES_COMPLETOS = [
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
 ];
 
-/* ── helpers ── */
+type OrdemStatus = StatusCor | 'nao_iniciado';
 
-function friendlyMotivo(motivo: string | undefined): string {
-  if (!motivo) return 'problema identificado';
-  if (motivo === 'divergencia_rebanho') return 'rebanho não bate com os pastos';
-  if (motivo === 'sem_pastos_fechados') return 'pastos ainda não foram fechados';
-  if (motivo === 'sem_pastos_ativos') return 'nenhum pasto ativo encontrado';
-  return motivo;
+function getStatusLabel(status: StatusMes) {
+  if (status === 'oficial') return 'Fechado';
+  if (status === 'bloqueado') return 'Em aberto';
+  if (status === 'provisorio') return 'Em andamento';
+  return 'Não iniciado';
 }
 
-function friendlyMotivoAcao(motivo: string | undefined): string {
-  if (!motivo) return 'resolver pendência';
-  if (motivo === 'divergencia_rebanho') return 'corrigir divergência de rebanho';
-  if (motivo === 'sem_pastos_fechados') return 'fechar pastos do período';
-  if (motivo === 'sem_pastos_ativos') return 'cadastrar pastos ativos';
-  return motivo;
+function countPendencias(m: MesStatus) {
+  return m.acoes?.length ?? ((m.contadores?.aberto || 0) + (m.contadores?.parcial || 0));
 }
 
-function countPendencias(m: { status: StatusMes; divergencias?: number; detalheFechados?: number; detalheTotal?: number }) {
-  let n = 0;
-  if (m.status === 'bloqueado') n++;
-  if (m.status === 'provisorio' && typeof m.detalheFechados === 'number' && typeof m.detalheTotal === 'number' && m.detalheFechados < m.detalheTotal) n++;
-  if (m.divergencias && m.divergencias > 0) n++;
-  return n;
-}
-
-function monthTooltip(m: { status: StatusMes; motivo?: string; divergencias?: number; detalheFechados?: number; detalheTotal?: number }): string | null {
-  if (m.status === 'oficial') return 'Mês fechado e conciliado';
-  if (m.status === 'bloqueado') {
-    if (m.motivo === 'divergencia_rebanho') return `Rebanho não bate com os pastos${m.divergencias ? ` (${m.divergencias} cat.)` : ''}`;
-    if (m.motivo === 'sem_pastos_fechados') return 'Pastos ainda não foram fechados';
-    if (m.motivo) return friendlyMotivo(m.motivo);
-    return 'Problema identificado';
+function monthTooltip(m: MesStatus): string {
+  if (m.status === 'oficial') return 'Mês fechado e validado';
+  if (m.motivo === 'divergencia_rebanho') {
+    return `Rebanho não bate com os pastos${m.divergencias ? ` (${m.divergencias} categoria${m.divergencias > 1 ? 's' : ''})` : ''}`;
   }
-  if (m.status === 'provisorio') {
-    if (typeof m.detalheFechados === 'number' && typeof m.detalheTotal === 'number' && m.detalheTotal > 0)
+  if (m.motivo === 'sem_pastos_fechados' || m.motivo === 'pastos_pendentes') {
+    if (typeof m.detalheFechados === 'number' && typeof m.detalheTotal === 'number' && m.detalheTotal > 0) {
       return `${m.detalheFechados} de ${m.detalheTotal} pastos fechados`;
-    return 'Fechamento em andamento';
+    }
+    return 'Pastos pendentes';
   }
-  return null;
+  if (m.motivo === 'valor_rebanho_pendente') return 'Valor do rebanho pendente';
+  if (m.motivo === 'financeiro_pendente') return 'Financeiro caixa pendente';
+  if (m.motivo === 'resultado_pendente') return 'Resultado final pendente';
+  return m.proximaAcao || (m.status === 'nao_iniciado' ? 'Nenhuma etapa iniciada' : 'Abrir status do mês');
 }
 
-/* ── component ── */
+function buildAcaoTexto(mes: MesStatus, acao: MesAcao) {
+  const nomeMes = MESES_COMPLETOS[parseInt(mes.mes, 10) - 1];
 
-export function StatusFechamentosTab({ ano, onSelectMes }: Props) {
+  if (acao.id === 'categorias') {
+    if (mes.divergencias && mes.divergencias > 0) {
+      return `${nomeMes} — corrigir divergência de rebanho (${mes.divergencias} categoria${mes.divergencias > 1 ? 's' : ''})`;
+    }
+    return `${nomeMes} — conciliar rebanho do mês`;
+  }
+
+  if (acao.id === 'pastos') {
+    const restantes = Math.max((mes.detalheTotal || 0) - (mes.detalheFechados || 0), 0);
+    return restantes > 0
+      ? `${nomeMes} — fechar ${restantes} pasto${restantes > 1 ? 's' : ''} restante${restantes > 1 ? 's' : ''}`
+      : `${nomeMes} — fechar pastos do período`;
+  }
+
+  if (acao.id === 'valor') return `${nomeMes} — informar valor do rebanho`;
+  if (acao.id === 'financeiro') return `${nomeMes} — finalizar financeiro caixa`;
+  if (acao.id === 'economico') return `${nomeMes} — concluir resultado final`;
+  return `${nomeMes} — ${acao.descricao}`;
+}
+
+export function StatusFechamentosTab({ ano, mesSelecionado, lancamentos, saldosIniciais, onSelectMes }: Props) {
   const { fazendaAtual } = useFazenda();
-  const { meses, loading } = useStatusFechamentosAno(fazendaAtual?.id, ano);
+  const { meses, loading } = useStatusFechamentosAno(fazendaAtual?.id, ano, lancamentos, saldosIniciais);
 
-  const now = new Date();
-  const mesAtualStr = String(now.getMonth() + 1).padStart(2, '0');
-  const isAnoAtual = ano === String(now.getFullYear());
+  const mesFoco = String(mesSelecionado).padStart(2, '0');
+  const mesFocoData = useMemo(() => {
+    return meses.find((m) => m.mes === mesFoco) ?? meses.find((m) => m.status !== 'oficial') ?? meses[0] ?? null;
+  }, [meses, mesFoco]);
 
-  const proximoPendente = useMemo(() => meses.find(m => m.status !== 'oficial') ?? null, [meses]);
-  const mesFoco = proximoPendente?.mes ?? mesAtualStr;
-  const anoMesFoco = `${ano}-${mesFoco}`;
-
-  const { status: pilares, loading: loadingPilares } = useStatusPilares(fazendaAtual?.id, anoMesFoco);
-
-  const totalFechados = useMemo(() => meses.filter(m => m.status === 'oficial').length, [meses]);
+  const totalFechados = useMemo(() => meses.filter((m) => m.status === 'oficial').length, [meses]);
   const progressPct = meses.length > 0 ? Math.round((totalFechados / 12) * 100) : 0;
 
   const ultimoFechado = useMemo(() => {
-    const f = meses.filter(m => m.status === 'oficial');
-    return f.length ? f[f.length - 1] : null;
+    const fechados = meses.filter((m) => m.status === 'oficial');
+    return fechados.length ? fechados[fechados.length - 1] : null;
   }, [meses]);
 
-  const mesFocoData = useMemo(() => meses.find(m => m.mes === mesFoco), [meses, mesFoco]);
+  const proximoPendente = useMemo(() => meses.find((m) => m.status !== 'oficial') ?? null, [meses]);
 
-  /* executive status */
   const exec = useMemo(() => {
-    if (!mesFocoData || mesFocoData.status === 'nao_iniciado')
-      return { cor: 'muted' as const, label: 'Não iniciado', sub: 'Nenhum dado registrado', acao: null };
-    if (mesFocoData.status === 'oficial')
+    if (!mesFocoData) {
+      return {
+        cor: 'muted' as const,
+        label: 'Não iniciado',
+        sub: 'Nenhuma etapa iniciada',
+        acao: null as string | null,
+      };
+    }
+
+    if (mesFocoData.status === 'oficial') {
       return { cor: 'green' as const, label: 'Fechado', sub: 'Mês conciliado e validado', acao: null };
+    }
     if (mesFocoData.status === 'bloqueado') {
-      const p = countPendencias(mesFocoData);
       return {
         cor: 'red' as const,
         label: 'Em aberto',
-        sub: `${p} pendência${p > 1 ? 's' : ''} crítica${p > 1 ? 's' : ''}`,
-        acao: friendlyMotivoAcao(mesFocoData.motivo),
+        sub: 'Pendências impedem o fechamento do mês',
+        acao: mesFocoData.proximaAcao || 'Corrigir pendências do mês',
       };
     }
-    // provisorio
-    const p = countPendencias(mesFocoData);
+    if (mesFocoData.status === 'provisorio') {
+      return {
+        cor: 'yellow' as const,
+        label: 'Em andamento',
+        sub: 'Fechamento parcial em andamento',
+        acao: mesFocoData.proximaAcao || 'Concluir etapas pendentes',
+      };
+    }
     return {
-      cor: 'yellow' as const,
-      label: 'Em andamento',
-      sub: p > 0 ? `Fechamento parcial — ${p} item${p > 1 ? 'ns' : ''} pendente${p > 1 ? 's' : ''}` : 'Fechamento parcial em andamento',
-      acao: typeof mesFocoData.detalheFechados === 'number' && typeof mesFocoData.detalheTotal === 'number'
-        ? `Fechar ${mesFocoData.detalheTotal - mesFocoData.detalheFechados} pasto${mesFocoData.detalheTotal - mesFocoData.detalheFechados > 1 ? 's' : ''} restante${mesFocoData.detalheTotal - mesFocoData.detalheFechados > 1 ? 's' : ''}`
-        : 'Completar fechamento dos pastos',
+      cor: 'muted' as const,
+      label: 'Não iniciado',
+      sub: 'Nenhuma etapa iniciada',
+      acao: mesFocoData.proximaAcao || 'Iniciar fechamento do mês',
     };
   }, [mesFocoData]);
 
-  /* ordem de fechamento */
   const ordemSteps = useMemo(() => {
-    const p1 = pilares.p1_mapa_pastos;
-    const p2 = pilares.p2_valor_rebanho;
-    const p3 = pilares.p3_financeiro_caixa;
-    const p5 = pilares.p5_economico_consolidado;
-    const p1d = p1.detalhe as Record<string, unknown> | undefined;
-    const hasDiverg = p1.status === 'bloqueado' && p1d?.motivo === 'divergencia_rebanho';
+    if (!mesFocoData?.etapas) return [] as Array<{ label: string; status: OrdemStatus }>;
+    const notStarted = mesFocoData.status === 'nao_iniciado';
+    const mapStatus = (status: StatusCor): OrdemStatus => (notStarted ? 'nao_iniciado' : status);
 
     return [
-      { label: 'Pastos', done: p1.status === 'oficial' || (!hasDiverg && p1.status !== 'bloqueado' && p1.status !== 'provisorio'), blocked: p1.status === 'bloqueado' && !hasDiverg },
-      { label: 'Rebanho conciliado', done: p1.status === 'oficial', blocked: hasDiverg },
-      { label: 'Valor do rebanho', done: p2.status === 'oficial', blocked: p2.status === 'bloqueado' },
-      { label: 'Financeiro caixa', done: p3.status === 'oficial', blocked: p3.status === 'bloqueado' },
-      { label: 'Resultado final', done: p5.status === 'oficial', blocked: p5.status === 'bloqueado' },
+      { label: 'Pastos', status: mapStatus(mesFocoData.etapas.pastos) },
+      { label: 'Rebanho conciliado', status: mapStatus(mesFocoData.etapas.categorias) },
+      { label: 'Valor do rebanho', status: mapStatus(mesFocoData.etapas.valor) },
+      { label: 'Financeiro caixa', status: mapStatus(mesFocoData.etapas.financeiro) },
+      { label: 'Resultado final', status: mapStatus(mesFocoData.etapas.economico) },
     ];
-  }, [pilares]);
+  }, [mesFocoData]);
 
-  /* ações pendentes (max 5) */
-  const acoes = useMemo(() => {
-    const items: { mes: string; texto: string; tipo: 'erro' | 'aviso' }[] = [];
-    for (const m of meses) {
-      if (items.length >= 5) break;
-      const nome = MESES_COMPLETOS[parseInt(m.mes) - 1];
-      if (m.status === 'bloqueado') {
-        items.push({
-          mes: m.mes,
-          texto: `${nome} — ${friendlyMotivoAcao(m.motivo)}${m.divergencias ? ` (${m.divergencias} categoria${m.divergencias > 1 ? 's' : ''})` : ''}`,
-          tipo: 'erro',
-        });
-      } else if (m.status === 'provisorio' && typeof m.detalheFechados === 'number' && typeof m.detalheTotal === 'number' && m.detalheFechados < m.detalheTotal) {
-        const rest = m.detalheTotal - m.detalheFechados;
-        items.push({
-          mes: m.mes,
-          texto: `${nome} — fechar ${rest} pasto${rest > 1 ? 's' : ''} restante${rest > 1 ? 's' : ''}`,
-          tipo: 'aviso',
-        });
-      }
-    }
-    return items;
+  const acoesPendentes = useMemo(() => {
+    const prioridadeAcao: Record<MesAcao['id'], number> = {
+      categorias: 0,
+      pastos: 1,
+      valor: 2,
+      financeiro: 3,
+      economico: 4,
+    };
+
+    return meses
+      .flatMap((mes) =>
+        (mes.acoes || []).map((acao) => ({
+          mes: mes.mes,
+          statusMes: mes.status,
+          tipo: acao.status === 'aberto' ? 'erro' as const : 'aviso' as const,
+          texto: buildAcaoTexto(mes, acao),
+          prioridade: (acao.status === 'aberto' ? 0 : 1) * 10 + prioridadeAcao[acao.id],
+        })),
+      )
+      .sort((a, b) => a.prioridade - b.prioridade || Number(a.mes) - Number(b.mes))
+      .slice(0, 5);
   }, [meses]);
 
-  const handleClickMes = (m: typeof meses[0]) => {
-    const nome = MESES_COMPLETOS[parseInt(m.mes) - 1];
-    const msgs: Record<StatusMes, string> = {
-      bloqueado: `${nome} selecionado — ${friendlyMotivo(m.motivo)}`,
-      provisorio: `${nome} selecionado — fechamento em andamento`,
-      oficial: `${nome} selecionado — mês fechado`,
-      nao_iniciado: `${nome} selecionado`,
-    };
-    toast(msgs[m.status]);
-    const destino = (m.status === 'bloqueado' || m.status === 'provisorio') ? 'painel_consultor' : 'resumo';
-    onSelectMes?.(`${ano}-${m.mes}`, destino);
+  const handleOpenMes = (mes: MesStatus) => {
+    const nomeMes = MESES_COMPLETOS[parseInt(mes.mes, 10) - 1];
+    toast(`${nomeMes} aberto no fechamento`);
+    onSelectMes?.(`${ano}-${mes.mes}`, 'zootecnico');
   };
 
-  /* ── loading ── */
   if (loading) {
     return (
       <div className="p-3 space-y-3">
         <Skeleton className="h-16 rounded-lg" />
         <div className="grid grid-cols-6 gap-2">
-          {Array.from({ length: 12 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}
+          {Array.from({ length: 12 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 rounded-lg" />
+          ))}
         </div>
       </div>
     );
   }
 
   const corMap = {
-    green:  { bg: 'bg-emerald-600/10', border: 'border-emerald-600/40', text: 'text-emerald-700', dot: 'bg-emerald-500' },
-    red:    { bg: 'bg-red-500/10',      border: 'border-red-500/40',     text: 'text-red-700',     dot: 'bg-red-500' },
-    yellow: { bg: 'bg-amber-500/10',    border: 'border-amber-500/40',   text: 'text-amber-700',   dot: 'bg-amber-500' },
-    muted:  { bg: 'bg-muted',           border: 'border-border',         text: 'text-muted-foreground', dot: 'bg-muted-foreground' },
+    green: { bg: 'bg-emerald-600/10', border: 'border-emerald-600/40', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+    red: { bg: 'bg-red-500/10', border: 'border-red-500/40', text: 'text-red-700', dot: 'bg-red-500' },
+    yellow: { bg: 'bg-amber-500/10', border: 'border-amber-500/40', text: 'text-amber-700', dot: 'bg-amber-500' },
+    muted: { bg: 'bg-muted', border: 'border-border', text: 'text-muted-foreground', dot: 'bg-muted-foreground' },
   };
   const c = corMap[exec.cor];
-
-  const showOrdem = !loadingPilares && mesFocoData && mesFocoData.status !== 'oficial' && mesFocoData.status !== 'nao_iniciado';
 
   return (
     <TooltipProvider delayDuration={200}>
       <div className="p-3 flex flex-col gap-2.5 h-full">
-
-        {/* ═══ LINHA 1: Status + Próxima ação + Progresso ═══ */}
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2.5">
-          {/* Card executivo */}
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-2.5">
           <Card className={cn('px-4 py-3 border-2 flex items-center gap-3', c.bg, c.border)}>
             <div className={cn('h-3.5 w-3.5 rounded-full flex-shrink-0', c.dot)} />
             <div className="flex-1 min-w-0">
               <p className="text-[10px] text-muted-foreground font-medium leading-none mb-0.5">
-                {fazendaAtual?.nome} · {MESES_COMPLETOS[parseInt(mesFoco) - 1]} {ano}
+                {fazendaAtual?.nome} · {mesFocoData ? MESES_COMPLETOS[parseInt(mesFocoData.mes, 10) - 1] : MESES_COMPLETOS[mesSelecionado - 1]} {ano}
               </p>
               <p className={cn('text-base font-bold leading-tight', c.text)}>{exec.label}</p>
               <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">{exec.sub}</p>
@@ -221,7 +222,6 @@ export function StatusFechamentosTab({ ano, onSelectMes }: Props) {
             )}
           </Card>
 
-          {/* Progresso anual */}
           <Card className="px-4 py-3 flex flex-col justify-center gap-1 min-w-[180px]">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Progresso {ano}</span>
@@ -232,125 +232,130 @@ export function StatusFechamentosTab({ ano, onSelectMes }: Props) {
               {ultimoFechado && (
                 <span className="flex items-center gap-1 text-emerald-700">
                   <CheckCircle2 className="h-3 w-3" />
-                  Último: {MESES_NOMES[parseInt(ultimoFechado.mes) - 1]}
+                  Último: {MESES_NOMES[parseInt(ultimoFechado.mes, 10) - 1]}
                 </span>
               )}
               {proximoPendente && (
                 <span className="flex items-center gap-1 text-red-600">
                   <AlertTriangle className="h-3 w-3" />
-                  Próximo: {MESES_NOMES[parseInt(proximoPendente.mes) - 1]}
+                  Próximo: {MESES_NOMES[parseInt(proximoPendente.mes, 10) - 1]}
                 </span>
               )}
             </div>
           </Card>
         </div>
 
-        {/* ═══ LINHA 2: Ordem de fechamento + Grid de meses ═══ */}
-        <div className={cn('grid gap-2.5', showOrdem ? 'grid-cols-1 md:grid-cols-[220px_1fr]' : 'grid-cols-1')}>
-          {/* Ordem de fechamento */}
-          {showOrdem && (
-            <Card className="px-3 py-2.5 flex flex-col gap-1.5">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-                Ordem de fechamento
-              </span>
-              <div className="flex flex-col gap-1">
-                {ordemSteps.map((step, i) => (
-                  <div key={step.label} className={cn(
-                    'flex items-center gap-2 px-2 py-1 rounded text-[11px] font-medium',
-                    step.done
-                      ? 'text-emerald-700'
-                      : step.blocked
-                        ? 'text-red-700 bg-red-500/5'
-                        : 'text-muted-foreground',
-                  )}>
+        <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-2.5">
+          <Card className="px-3 py-2.5 flex flex-col gap-1.5">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+              Ordem de fechamento
+            </span>
+            <div className="flex flex-col gap-1">
+              {ordemSteps.map((step) => {
+                const isDone = step.status === 'fechado';
+                const isPartial = step.status === 'parcial';
+                const isNotStarted = step.status === 'nao_iniciado';
+                return (
+                  <div
+                    key={step.label}
+                    className={cn(
+                      'flex items-center gap-2 px-2 py-1 rounded text-[11px] font-medium',
+                      isDone && 'text-emerald-700',
+                      isPartial && 'text-amber-700 bg-amber-500/5',
+                      !isDone && !isPartial && !isNotStarted && 'text-red-700 bg-red-500/5',
+                      isNotStarted && 'text-muted-foreground',
+                    )}
+                  >
                     <span className="w-4 flex-shrink-0 flex items-center justify-center">
-                      {step.done ? (
+                      {isDone ? (
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                      ) : step.blocked ? (
-                        <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
-                      ) : (
+                      ) : isPartial ? (
+                        <Clock className="h-3.5 w-3.5 text-amber-600" />
+                      ) : isNotStarted ? (
                         <Circle className="h-3.5 w-3.5 text-muted-foreground/50" />
+                      ) : (
+                        <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
                       )}
                     </span>
-                    <span className={cn(step.done && 'line-through opacity-60')}>{step.label}</span>
+                    <span>{step.label}</span>
                   </div>
-                ))}
-              </div>
-            </Card>
-          )}
+                );
+              })}
+            </div>
+          </Card>
 
-          {/* Grid de meses */}
           <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-6 gap-1.5">
-            {meses.map((m) => {
-              const isOficial = m.status === 'oficial';
-              const isBloqueado = m.status === 'bloqueado';
-              const isProvisorio = m.status === 'provisorio';
-              const isMesAtual = isAnoAtual && m.mes === mesAtualStr;
-              const pend = countPendencias(m);
-              const tip = monthTooltip(m);
-
-              const statusLabel = isOficial ? 'Fechado' : isBloqueado ? 'Com problema' : isProvisorio ? 'Em andamento' : 'Não iniciado';
-              const statusColor = isOficial ? 'text-emerald-600' : isBloqueado ? 'text-red-600' : isProvisorio ? 'text-amber-600' : 'text-muted-foreground';
+            {meses.map((mes) => {
+              const isSelecionado = parseInt(mes.mes, 10) === mesSelecionado;
+              const pendencias = countPendencias(mes);
+              const statusLabel = getStatusLabel(mes.status);
+              const isOficial = mes.status === 'oficial';
+              const isBloqueado = mes.status === 'bloqueado';
+              const isProvisorio = mes.status === 'provisorio';
               const Icon = isOficial ? CheckCircle2 : isBloqueado ? AlertTriangle : isProvisorio ? Clock : Circle;
+              const statusColor = isOficial
+                ? 'text-emerald-600'
+                : isBloqueado
+                  ? 'text-red-600'
+                  : isProvisorio
+                    ? 'text-amber-600'
+                    : 'text-muted-foreground';
 
               const card = (
                 <Card
-                  key={m.mes}
+                  key={mes.mes}
                   className={cn(
-                    'flex flex-col items-center justify-center gap-0.5 py-2.5 px-1 cursor-pointer hover:shadow-md transition-shadow border',
+                    'flex flex-col items-center justify-center gap-0.5 py-2.5 px-1 cursor-pointer hover:shadow-md transition-shadow border h-[82px]',
                     isOficial && 'border-emerald-600/25 bg-emerald-600/5',
                     isBloqueado && 'border-red-500/25 bg-red-500/5',
                     isProvisorio && 'border-amber-500/25 bg-amber-500/5',
-                    isMesAtual && 'ring-2 ring-primary ring-offset-1',
+                    isSelecionado && 'ring-2 ring-primary ring-offset-1',
                   )}
-                  onClick={() => handleClickMes(m)}
+                  onClick={() => handleOpenMes(mes)}
                 >
                   <span className="text-[11px] font-bold text-foreground leading-none">
-                    {MESES_NOMES[parseInt(m.mes) - 1]}
+                    {MESES_NOMES[parseInt(mes.mes, 10) - 1]}
                   </span>
                   <Icon className={cn('h-3.5 w-3.5 mt-0.5', statusColor)} />
                   <span className={cn('text-[8px] font-semibold leading-none mt-0.5', statusColor)}>
                     {statusLabel}
                   </span>
-                  {pend > 0 && (
+                  {pendencias > 0 && (
                     <span className="text-[8px] text-muted-foreground leading-none mt-0.5">
-                      {pend} pend.
+                      {pendencias} pend.
                     </span>
                   )}
                 </Card>
               );
 
-              return tip ? (
-                <Tooltip key={m.mes}>
+              return (
+                <Tooltip key={mes.mes}>
                   <TooltipTrigger asChild>{card}</TooltipTrigger>
-                  <TooltipContent side="top" className="text-[11px] max-w-[200px]">{tip}</TooltipContent>
+                  <TooltipContent side="top" className="text-[11px] max-w-[220px]">
+                    {monthTooltip(mes)}
+                  </TooltipContent>
                 </Tooltip>
-              ) : card;
+              );
             })}
           </div>
         </div>
 
-        {/* ═══ LINHA 3: Ações pendentes ═══ */}
-        {acoes.length > 0 && (
+        {acoesPendentes.length > 0 && (
           <div className="flex flex-col gap-1">
             <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
               O que falta fazer
             </span>
-            {acoes.map((a, i) => (
+            {acoesPendentes.map((acao, index) => (
               <div
-                key={i}
+                key={`${acao.mes}-${index}`}
                 className={cn(
                   'flex items-center gap-2 px-2.5 py-1.5 rounded text-[11px] font-medium cursor-pointer hover:opacity-80 transition-opacity',
-                  a.tipo === 'erro' ? 'bg-red-500/8 text-red-700' : 'bg-amber-500/8 text-amber-700',
+                  acao.tipo === 'erro' ? 'bg-red-500/8 text-red-700' : 'bg-amber-500/8 text-amber-700',
                 )}
-                onClick={() => {
-                  const nome = MESES_COMPLETOS[parseInt(a.mes) - 1];
-                  toast(`${nome} selecionado`);
-                  onSelectMes?.(`${ano}-${a.mes}`, 'painel_consultor');
-                }}
+                onClick={() => handleOpenMes({ mes: acao.mes, status: acao.statusMes })}
               >
-                {a.tipo === 'erro' ? <AlertTriangle className="h-3 w-3 flex-shrink-0" /> : <Clock className="h-3 w-3 flex-shrink-0" />}
-                <span className="flex-1 truncate">{a.texto}</span>
+                {acao.tipo === 'erro' ? <AlertTriangle className="h-3 w-3 flex-shrink-0" /> : <Clock className="h-3 w-3 flex-shrink-0" />}
+                <span className="flex-1 truncate">{acao.texto}</span>
                 <ChevronRight className="h-3 w-3 flex-shrink-0 opacity-40" />
               </div>
             ))}
