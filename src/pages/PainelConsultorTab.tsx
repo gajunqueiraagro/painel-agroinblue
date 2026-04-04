@@ -726,7 +726,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
     const m = filtroGlobal?.mes || new Date().getMonth() + 1;
     return `${ano}-${String(m).padStart(2, '0')}`;
   }, [ano, filtroGlobal?.mes]);
-  const { status: statusPilares } = useStatusPilares(fazendaId, mesAtualRef);
+  const { status: statusPilares, refetch: refetchPilares } = useStatusPilares(fazendaId, mesAtualRef);
   const { data: zootMeta } = useZootMensal({ ano: anoNum, cenario: 'meta' });
 
   // Month cutoff: months > cutoff are blank
