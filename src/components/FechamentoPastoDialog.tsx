@@ -74,27 +74,33 @@ export function FechamentoPastoDialog({
 
   useEffect(() => {
     setStatus(fechamento.status);
-    setLoteMes(fechamento.lote_mes || '');
-    setTipoUsoMes(fechamento.tipo_uso_mes || '');
-    setQualidadeMes(fechamento.qualidade_mes);
-    setObservacaoMes(fechamento.observacao_mes || '');
   }, [fechamento]);
 
-  useEffect(() => {
-    if (!open) return;
-    setItens(categorias.map(c => ({ categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: null, observacoes: null, origem_dado: 'manual' })));
-  }, [open, categorias]);
-
+  // Load items + meta when modal opens
   useEffect(() => {
     if (!open || !fechamento) return;
+    const blank = categorias.map(c => ({ categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: null, observacoes: null, origem_dado: 'manual' }));
+    setItens(blank);
+
     loadItens(fechamento.id).then(existing => {
       if (existing.length > 0) {
+        // Has saved data — load items + meta from DB record
         setItens(categorias.map(c => {
           const found = existing.find(e => e.categoria_id === c.id);
           return found
             ? { categoria_id: c.id, quantidade: found.quantidade, peso_medio_kg: found.peso_medio_kg, lote: found.lote, observacoes: found.observacoes, origem_dado: found.origem_dado }
             : { categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: null, observacoes: null, origem_dado: 'manual' };
         }));
+        setLoteMes(fechamento.lote_mes || '');
+        setTipoUsoMes(fechamento.tipo_uso_mes || '');
+        setQualidadeMes(fechamento.qualidade_mes);
+        setObservacaoMes(fechamento.observacao_mes || '');
+      } else {
+        // No saved items — pasto não iniciado → everything blank
+        setLoteMes('');
+        setTipoUsoMes('');
+        setQualidadeMes(null);
+        setObservacaoMes('');
       }
     });
   }, [open, fechamento, categorias, loadItens]);
