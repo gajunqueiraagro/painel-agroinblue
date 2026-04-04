@@ -483,7 +483,11 @@ function buildExcelSheet(rows: (ZooRow | FinRow)[], mesesHeaders: string[], incl
       : { Indicador: row.indicador };
 
     mesesHeaders.forEach((mes, index) => {
-      base[mes] = row.valores[index] ?? 0;
+      if (mes === 'Total') {
+        base[mes] = row.total;
+      } else {
+        base[mes] = row.valores[index] ?? 0;
+      }
     });
 
     
