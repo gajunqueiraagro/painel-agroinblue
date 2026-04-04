@@ -382,7 +382,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const mesNum = Number(mesFiltro);
   const mesAnteriorKey = mesNum > 1 ? String(mesNum - 1).padStart(2, '0') : '12';
   const anoMesAnterior = mesNum > 1 ? `${anoFiltro}-${mesAnteriorKey}` : `${Number(anoFiltro) - 1}-12`;
-  const anoMesJan = `${anoFiltro}-01`;
+  const anoMesDezAnterior = `${Number(anoFiltro) - 1}-12`;
 
   const resumoMesAnterior = useFechamentoCategoria(
     fazendaId,
