@@ -45,6 +45,8 @@ interface LancamentoResumo {
   status_transacao: string | null;
   favorecido_id: string | null;
   nota_fiscal: string | null;
+  conta_bancaria_id: string | null;
+  conta_destino_id: string | null;
 }
 
 interface FornecedorRef {
