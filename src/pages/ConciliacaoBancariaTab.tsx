@@ -470,7 +470,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                 </div>
 
                 {/* ── COL 2: Movimento Financeiro ── */}
-                <div className="space-y-2">
+                <div className="space-y-0.5">
                   <div className="px-2 py-1.5 flex items-center justify-between">
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-medium">Saldo Inicial</p>
                     <p className="text-sm font-bold tabular-nums">{formatMoeda(card.saldoInicial)}</p>
