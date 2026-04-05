@@ -392,19 +392,17 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
     </colgroup>
   );
 
-  // Compute peso médio per category from totais (for the new "Peso Kg" row)
+  // ── Peso oficial por categoria: fonte única = useFechamentoCategoria (mesma do Painel do Consultor) ──
   const pesosPorCategoria = useMemo(() => {
     const map = new Map<string, number | null>();
-    categorias.forEach(cat => {
-      const t = totais.catTotals.get(cat.id);
-      if (t && t.qtdComPeso > 0) {
-        map.set(cat.id, t.pesoTotal / t.qtdComPeso);
-      } else {
-        map.set(cat.id, null);
-      }
+    resumoOficial.rows.forEach(row => {
+      map.set(row.categoriaId, row.pesoMedioFinalKg);
     });
     return map;
-  }, [categorias, totais]);
+  }, [resumoOficial.rows]);
+
+  // Peso médio geral oficial (ponderado pelo saldo conciliado, não pelo pasto)
+  const pesoMedioOficial = resumoOficial.pesoMedioGeral;
 
   return (
     <div className="flex flex-1 min-h-0 flex-col overflow-hidden border-t border-border/30 bg-background">
