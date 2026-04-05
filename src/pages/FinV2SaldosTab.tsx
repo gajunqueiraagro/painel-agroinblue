@@ -508,7 +508,7 @@ export function FinV2SaldosTab() {
                   <TableHead className="text-right text-[10px]">Saldo Inicial</TableHead>
                   <TableHead className="text-right text-[10px]">Saldo Final</TableHead>
                   <TableHead className="text-center text-[10px]">Orig.</TableHead>
-                  <TableHead className="text-[10px]">Status</TableHead>
+                  <TableHead className="text-[10px]">Conciliação</TableHead>
                   <TableHead className="w-20 text-[10px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -560,23 +560,32 @@ export function FinV2SaldosTab() {
                             </Tooltip>
                           </TableCell>
                           <TableCell className="py-1">
-                            <div className="flex items-center gap-1">
-                              <Badge className={`text-[9px] px-1.5 py-0 font-medium border-0 ${STATUS_COLORS[s.status_mes] || ''}`}>
-                                {s.status_mes === 'travado' && <LockKeyhole className="h-2.5 w-2.5 mr-0.5" />}
-                                {s.status_mes === 'fechado' && <Lock className="h-2.5 w-2.5 mr-0.5" />}
-                                {STATUS_LABELS[s.status_mes] || s.status_mes}
-                              </Badge>
-                              {inconsistency && (
+                            {(() => {
+                              const key = `${s.conta_bancaria_id}|${s.ano_mes}`;
+                              const mov = movSummary[key];
+                              const saldoCalculado = s.saldo_inicial + (mov ? mov.entradas - mov.saidas : 0);
+                              const diff = Math.abs(s.saldo_final - saldoCalculado);
+                              const isConciliado = diff < 0.01;
+
+                              return (
                                 <Tooltip>
                                   <TooltipTrigger>
-                                    <AlertTriangle className="h-3 w-3 text-amber-500" />
+                                    <Badge className={`text-[9px] px-1.5 py-0 font-medium border-0 ${
+                                      isConciliado
+                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                        : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                    }`}>
+                                      {isConciliado ? '✅ Conciliado' : '❌ Não conciliado'}
+                                    </Badge>
                                   </TooltipTrigger>
-                                  <TooltipContent className="text-[10px] max-w-[200px]">
-                                    Inconsistência: diferença de {formatMoeda(inconsistency)} entre saldo calculado e registrado
+                                  <TooltipContent className="text-[10px]">
+                                    {isConciliado
+                                      ? 'Saldo extrato = Saldo calculado'
+                                      : `Diferença: ${formatMoeda(diff)}`}
                                   </TooltipContent>
                                 </Tooltip>
-                              )}
-                            </div>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell className="py-1">
                             <div className="flex items-center gap-0.5">
