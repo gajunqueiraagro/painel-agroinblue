@@ -237,6 +237,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
       let transferenciasRecebidas = 0;
       let saidasTerceiros = 0;
       let transferenciasEnviadas = 0;
+      const isAllContas = contaId === '__all__';
 
       for (const l of mesLancs) {
         const tipo = (l.tipo_operacao || '').toLowerCase().replace(/[\s\-–—]/g, '');
@@ -244,8 +245,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
         const isTransf = tipo.startsWith('3') || tipo.includes('transfer');
 
         if (isTransf) {
-          // For transfers, determine direction based on which account matches
-          const isDestino = contaId !== '__all__' && l.conta_destino_id === contaId;
+          if (isAllContas) {
+            // No consolidado, transferências se anulam — ignorar completamente
+            continue;
+          }
+          const isDestino = l.conta_destino_id === contaId;
           if (isDestino) {
             transferenciasRecebidas += valor;
           } else {
@@ -267,7 +271,40 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
         : null;
 
       const diferenca = saldoExtrato !== null ? saldoExtrato - saldoCalculado : 0;
-      const status = getStatus(diferenca, saldoExtrato);
+
+      // For "Todas as contas", derive status from per-account conciliation
+      let status: MesCard['status'];
+      if (isAllContas && contas.length > 0) {
+        const perAccountStatuses = contas.map(conta => {
+          const accSaldoRow = saldos.find(s => s.ano_mes === anoMes && s.conta_bancaria_id === conta.id);
+          if (!accSaldoRow) return 'pendente' as const;
+          const accSaldoInicial = accSaldoRow.saldo_inicial || 0;
+          let accEntradas = 0;
+          let accSaidas = 0;
+          for (const l of mesLancs) {
+            const t = (l.tipo_operacao || '').toLowerCase().replace(/[\s\-–—]/g, '');
+            const v = Math.abs(l.valor);
+            const isTr = t.startsWith('3') || t.includes('transfer');
+            if (isTr) {
+              if (l.conta_destino_id === conta.id) accEntradas += v;
+              else if (l.conta_bancaria_id === conta.id) accSaidas += v;
+            } else if (t.startsWith('1') || t.includes('entrada')) {
+              if (l.conta_bancaria_id === conta.id) accEntradas += v;
+            } else {
+              if (l.conta_bancaria_id === conta.id) accSaidas += v;
+            }
+          }
+          const accCalc = accSaldoInicial + accEntradas - accSaidas;
+          const accDiff = Math.abs((accSaldoRow.saldo_final || 0) - accCalc);
+          return accDiff < 0.01 ? 'conciliado' as const : accDiff <= 100 ? 'atencao' as const : 'nao_conciliado' as const;
+        });
+        const hasPendente = perAccountStatuses.some(s => s === 'pendente');
+        const hasNaoConc = perAccountStatuses.some(s => s === 'nao_conciliado');
+        const hasAtencao = perAccountStatuses.some(s => s === 'atencao');
+        status = hasNaoConc ? 'nao_conciliado' : hasAtencao ? 'atencao' : hasPendente ? 'pendente' : 'conciliado';
+      } else {
+        status = getStatus(diferenca, saldoExtrato);
+      }
 
       saldoAcumulado += (totalEntradas - totalSaidas);
 
@@ -481,14 +518,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Entradas</p>
                       <p className="text-sm font-bold tabular-nums text-green-600">{formatMoeda(card.totalEntradas)}</p>
                     </div>
-                    <div className="mt-0.5 space-y-0.5 border-t pt-0.5">
-                      <p className="text-[9px] text-muted-foreground flex justify-between">
-                        <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.entradasTerceiros)}</span>
-                      </p>
-                      <p className="text-[9px] text-muted-foreground flex justify-between">
-                        <span>Transferências</span><span className="tabular-nums">{formatMoeda(card.transferenciasRecebidas)}</span>
-                      </p>
-                    </div>
+                    {contaId !== '__all__' && (
+                      <div className="mt-0.5 space-y-0.5 border-t pt-0.5">
+                        <p className="text-[9px] text-muted-foreground flex justify-between">
+                          <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.entradasTerceiros)}</span>
+                        </p>
+                        <p className="text-[9px] text-muted-foreground flex justify-between">
+                          <span>Transferências</span><span className="tabular-nums">{formatMoeda(card.transferenciasRecebidas)}</span>
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="px-2.5 py-1">
@@ -496,14 +535,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Saídas</p>
                       <p className="text-sm font-bold tabular-nums text-red-600">{formatMoeda(card.totalSaidas)}</p>
                     </div>
-                    <div className="mt-0.5 space-y-0.5 border-t pt-0.5">
-                      <p className="text-[9px] text-muted-foreground flex justify-between">
-                        <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.saidasTerceiros)}</span>
-                      </p>
-                      <p className="text-[9px] text-muted-foreground flex justify-between">
-                        <span>Transferências</span><span className="tabular-nums">{formatMoeda(card.transferenciasEnviadas)}</span>
-                      </p>
-                    </div>
+                    {contaId !== '__all__' && (
+                      <div className="mt-0.5 space-y-0.5 border-t pt-0.5">
+                        <p className="text-[9px] text-muted-foreground flex justify-between">
+                          <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.saidasTerceiros)}</span>
+                        </p>
+                        <p className="text-[9px] text-muted-foreground flex justify-between">
+                          <span>Transferências</span><span className="tabular-nums">{formatMoeda(card.transferenciasEnviadas)}</span>
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="px-2.5 pt-0.5 border-t">
