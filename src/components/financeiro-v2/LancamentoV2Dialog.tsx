@@ -786,14 +786,14 @@ export function LancamentoV2Dialog({
   return (
     <>
       <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-        <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col p-0 bg-[#f4f5f7] dark:bg-[hsl(var(--card))] rounded-xl shadow-2xl border border-border/50 overflow-hidden">
+        <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col p-0 bg-card dark:bg-card rounded-xl shadow-2xl border border-border overflow-hidden">
           {/* Header */}
-          <DialogHeader className="px-5 pt-4 pb-2.5 border-b border-border/40 bg-[hsl(var(--muted))] dark:bg-[hsl(var(--muted)/0.6)]">
-            <DialogTitle className="text-[13px] font-bold tracking-tight">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
+          <DialogHeader className="px-5 pt-3 pb-2.5 border-b border-primary/20 bg-primary">
+            <DialogTitle className="text-[13px] font-bold tracking-tight text-primary-foreground">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
           </DialogHeader>
 
           {/* Scrollable body */}
-          <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
+          <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2 bg-background">
 
             {/* ── BLOCO 1 — Tipo e Datas ── */}
             <section className={sectionClass}>
@@ -1109,7 +1109,7 @@ export function LancamentoV2Dialog({
                       </div>
                       <div className="px-3 py-1.5 bg-muted/40 flex justify-between items-center text-xs">
                         <span className="text-muted-foreground font-medium">Total parcelas:</span>
-                        <span className={cn("font-bold font-mono", Math.abs(parcelasTotal - Math.abs(valorNum)) < 0.01 ? "text-green-600 dark:text-green-400" : "text-destructive")}>
+                        <span className={cn("font-bold font-mono", Math.abs(parcelasTotal - Math.abs(valorNum)) < 0.01 ? "text-success" : "text-destructive")}>
                           {formatMoeda(parcelasTotal)}
                         </span>
                       </div>
@@ -1215,7 +1215,7 @@ export function LancamentoV2Dialog({
           </div>
 
           {/* Sticky footer */}
-          <div className="px-5 py-2.5 border-t border-border/40 bg-[hsl(var(--muted))] dark:bg-[hsl(var(--muted)/0.6)] flex items-center gap-2">
+          <div className="px-5 py-2.5 border-t border-border bg-accent flex items-center gap-2">
             <Button variant="outline" onClick={onClose} className="px-5" tabIndex={16}>Cancelar</Button>
             <div className="flex-1" />
             {isEdit && onDelete && (
