@@ -15,6 +15,8 @@ import { exportMapaPastosPdf } from '@/lib/exportMapaPastosPdf';
 import { calcUA, calcUAHa, calcPesoMedioPonderado } from '@/lib/calculos/zootecnicos';
 import { formatNum } from '@/lib/calculos/formatters';
 import { tipoUsoLabel } from '@/lib/calculos/labels';
+import { useLancamentos } from '@/hooks/useLancamentos';
+import { useFechamentoCategoria } from '@/hooks/useFechamentoCategoria';
 
 export interface PastoMapaRow {
   pasto: Pasto;
