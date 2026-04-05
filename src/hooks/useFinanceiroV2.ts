@@ -219,18 +219,25 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       query = query.gte('ano_mes', `${filtros.ano}-01`).lte('ano_mes', `${filtros.ano}-12`);
     }
 
-    if (filtros.conta_bancaria_id && filtros.conta_destino_id) {
-      // Both origin AND destination selected: exact match
+    const contaOrigemId = filtros.conta_bancaria_id?.trim();
+    const contaDestinoId = filtros.conta_destino_id?.trim();
+    const filtrarTransferenciaExata = Boolean(contaOrigemId && contaDestinoId);
+
+    if (filtrarTransferenciaExata) {
       query = query
-        .eq('conta_bancaria_id', filtros.conta_bancaria_id)
-        .eq('conta_destino_id', filtros.conta_destino_id);
-    } else if (filtros.conta_bancaria_id) {
-      // Only one account selected: show where it participates as origin OR destination
-      query = query.or(`conta_bancaria_id.eq.${filtros.conta_bancaria_id},conta_destino_id.eq.${filtros.conta_bancaria_id}`);
-    } else if (filtros.conta_destino_id) {
-      query = query.or(`conta_bancaria_id.eq.${filtros.conta_destino_id},conta_destino_id.eq.${filtros.conta_destino_id}`);
+        .eq('tipo_operacao', '3-Transferência')
+        .eq('conta_bancaria_id', contaOrigemId)
+        .eq('conta_destino_id', contaDestinoId);
+    } else {
+      const contaParticipanteId = contaOrigemId || contaDestinoId;
+
+      if (contaParticipanteId) {
+        query = query.or(`conta_bancaria_id.eq.${contaParticipanteId},conta_destino_id.eq.${contaParticipanteId}`);
+      }
+
+      if (filtros.tipo_operacao) query = query.eq('tipo_operacao', filtros.tipo_operacao);
     }
-    if (filtros.tipo_operacao) query = query.eq('tipo_operacao', filtros.tipo_operacao);
+
     if (filtros.status_transacao) query = query.eq('status_transacao', filtros.status_transacao);
     if (filtros.macro_custo) query = query.eq('macro_custo', filtros.macro_custo);
     if (filtros.centro_custo) query = query.eq('centro_custo', filtros.centro_custo);
