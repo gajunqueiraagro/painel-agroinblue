@@ -433,15 +433,15 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
               {/* ═══ 3 COLUNAS ═══ */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
 
-                {/* ── COL 1: Conciliação (era col 2) ── */}
-                <div className="rounded-md p-3 space-y-3">
+                {/* ── COL 1: Conciliação ── */}
+                <div className="rounded-md p-3 space-y-2">
                   <p className="text-[10px] font-bold text-foreground uppercase tracking-wider">Conciliação</p>
 
-                  <div className="space-y-2">
-                    <div>
-                      <p className="text-[9px] text-muted-foreground">Saldo Extrato</p>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] text-muted-foreground">Saldo Extrato</p>
                       <div className="flex items-center gap-1">
-                        <p className="text-sm font-medium tabular-nums text-muted-foreground/70">
+                        <p className="text-xs font-medium tabular-nums text-muted-foreground/70">
                           {card.saldoExtrato !== null ? formatMoeda(card.saldoExtrato) : '—'}
                         </p>
                         {contaId !== '__all__' && canEditSaldoFinal(card.anoMes) && (
@@ -455,60 +455,65 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                       </div>
                     </div>
 
-                    <div>
-                      <p className="text-[9px] text-muted-foreground">Saldo Calculado</p>
-                      <p className="text-sm font-bold tabular-nums">{formatMoeda(card.saldoCalculado)}</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] text-muted-foreground">Saldo Calculado</p>
+                      <p className="text-xs font-medium tabular-nums">{formatMoeda(card.saldoCalculado)}</p>
                     </div>
 
-                    <div className="border-t pt-2">
-                      <p className="text-[9px] text-muted-foreground">Diferença para Conciliar</p>
-                      <p className={`text-sm font-bold tabular-nums ${diffAbs < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
+                    <div className="border-t pt-1.5 flex items-center justify-between">
+                      <p className="text-[10px] text-muted-foreground">Diferença para Conciliar</p>
+                      <p className={`text-xs font-bold tabular-nums ${diffAbs < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
                         {formatMoeda(card.diferenca)}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* ── COL 2: Movimento Financeiro (era col 1) ── */}
+                {/* ── COL 2: Movimento Financeiro ── */}
                 <div className="space-y-2">
-                  <div className="px-2 py-1.5">
+                  <div className="px-2 py-1.5 flex items-center justify-between">
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-medium">Saldo Inicial</p>
                     <p className="text-sm font-bold tabular-nums">{formatMoeda(card.saldoInicial)}</p>
                   </div>
 
-                  <Card>
-                    <CardContent className="p-2.5">
-                      <div className="flex items-baseline justify-between">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Entradas</p>
-                        <p className="text-sm font-bold tabular-nums">{formatMoeda(card.totalEntradas)}</p>
-                      </div>
-                      <div className="mt-1.5 space-y-0.5 border-t pt-1">
-                        <p className="text-[9px] text-muted-foreground flex justify-between">
-                          <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.entradasTerceiros)}</span>
-                        </p>
-                        <p className="text-[9px] text-muted-foreground flex justify-between">
-                          <span>Transferências</span><span className="tabular-nums">{formatMoeda(card.transferenciasRecebidas)}</span>
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <div className="p-2.5">
+                    <div className="flex items-baseline justify-between">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Entradas</p>
+                      <p className="text-sm font-bold tabular-nums text-green-600">{formatMoeda(card.totalEntradas)}</p>
+                    </div>
+                    <div className="mt-1.5 space-y-0.5 border-t pt-1">
+                      <p className="text-[9px] text-muted-foreground flex justify-between">
+                        <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.entradasTerceiros)}</span>
+                      </p>
+                      <p className="text-[9px] text-muted-foreground flex justify-between">
+                        <span>Transferências</span><span className="tabular-nums">{formatMoeda(card.transferenciasRecebidas)}</span>
+                      </p>
+                    </div>
+                  </div>
 
-                  <Card>
-                    <CardContent className="p-2.5">
-                      <div className="flex items-baseline justify-between">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Saídas</p>
-                        <p className="text-sm font-bold tabular-nums">{formatMoeda(card.totalSaidas)}</p>
-                      </div>
-                      <div className="mt-1.5 space-y-0.5 border-t pt-1">
-                        <p className="text-[9px] text-muted-foreground flex justify-between">
-                          <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.saidasTerceiros)}</span>
-                        </p>
-                        <p className="text-[9px] text-muted-foreground flex justify-between">
-                          <span>Transferências</span><span className="tabular-nums">{formatMoeda(card.transferenciasEnviadas)}</span>
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <div className="p-2.5">
+                    <div className="flex items-baseline justify-between">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Saídas</p>
+                      <p className="text-sm font-bold tabular-nums text-red-600">{formatMoeda(card.totalSaidas)}</p>
+                    </div>
+                    <div className="mt-1.5 space-y-0.5 border-t pt-1">
+                      <p className="text-[9px] text-muted-foreground flex justify-between">
+                        <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.saidasTerceiros)}</span>
+                      </p>
+                      <p className="text-[9px] text-muted-foreground flex justify-between">
+                        <span>Transferências</span><span className="tabular-nums">{formatMoeda(card.transferenciasEnviadas)}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="px-2.5 pt-1 border-t">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-medium">Saldo Calculado</p>
+                      <p className={`text-xs font-bold tabular-nums ${card.saldoCalculado >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatMoeda(card.saldoCalculado)}
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 {/* ── COL 3: Status da Conciliação (sem borda, mais leve) ── */}
