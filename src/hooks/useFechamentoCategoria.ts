@@ -33,7 +33,9 @@ export interface FechamentoCategoriaRow {
 
 export interface PesosPastosResult {
   porCategoria: Record<string, number>;
+  quantidadePorCategoria: Record<string, number>;
   pesoMedioGeralPastos: number | null;
+  totalCabecasPastos: number;
 }
 
 export interface FechamentoCategoriaResumo {
