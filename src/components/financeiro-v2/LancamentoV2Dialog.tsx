@@ -1051,10 +1051,10 @@ export function LancamentoV2Dialog({
 
               {/* Frequency + Installment — only for new */}
               {!isEdit && (
-                <div className="space-y-2.5 pt-1">
-                  <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5 pt-0.5">
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <Label className="text-xs">Frequência</Label>
+                      <Label className="text-[10px]">Frequência</Label>
                       <Select value={frequencia} onValueChange={(v: 'pontual' | 'recorrente') => setFrequencia(v)}>
                         <SelectTrigger className={cn("h-9", fieldBg)}><SelectValue /></SelectTrigger>
                         <SelectContent>
