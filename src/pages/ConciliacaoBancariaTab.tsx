@@ -271,7 +271,40 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
         : null;
 
       const diferenca = saldoExtrato !== null ? saldoExtrato - saldoCalculado : 0;
-      const status = getStatus(diferenca, saldoExtrato);
+
+      // For "Todas as contas", derive status from per-account conciliation
+      let status: MesCard['status'];
+      if (isAllContas && contas.length > 0) {
+        const perAccountStatuses = contas.map(conta => {
+          const accSaldoRow = saldos.find(s => s.ano_mes === anoMes && s.conta_bancaria_id === conta.id);
+          if (!accSaldoRow) return 'pendente' as const;
+          const accSaldoInicial = accSaldoRow.saldo_inicial || 0;
+          let accEntradas = 0;
+          let accSaidas = 0;
+          for (const l of mesLancs) {
+            const t = (l.tipo_operacao || '').toLowerCase().replace(/[\s\-–—]/g, '');
+            const v = Math.abs(l.valor);
+            const isTr = t.startsWith('3') || t.includes('transfer');
+            if (isTr) {
+              if (l.conta_destino_id === conta.id) accEntradas += v;
+              else if (l.conta_bancaria_id === conta.id) accSaidas += v;
+            } else if (t.startsWith('1') || t.includes('entrada')) {
+              if (l.conta_bancaria_id === conta.id) accEntradas += v;
+            } else {
+              if (l.conta_bancaria_id === conta.id) accSaidas += v;
+            }
+          }
+          const accCalc = accSaldoInicial + accEntradas - accSaidas;
+          const accDiff = Math.abs((accSaldoRow.saldo_final || 0) - accCalc);
+          return accDiff < 0.01 ? 'conciliado' as const : accDiff <= 100 ? 'atencao' as const : 'nao_conciliado' as const;
+        });
+        const hasPendente = perAccountStatuses.some(s => s === 'pendente');
+        const hasNaoConc = perAccountStatuses.some(s => s === 'nao_conciliado');
+        const hasAtencao = perAccountStatuses.some(s => s === 'atencao');
+        status = hasNaoConc ? 'nao_conciliado' : hasAtencao ? 'atencao' : hasPendente ? 'pendente' : 'conciliado';
+      } else {
+        status = getStatus(diferenca, saldoExtrato);
+      }
 
       saldoAcumulado += (totalEntradas - totalSaidas);
 
