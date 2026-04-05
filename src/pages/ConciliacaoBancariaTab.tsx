@@ -483,19 +483,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <p className="text-[10px] text-muted-foreground">Saldo Extrato</p>
-                      <div className="flex items-center gap-1">
-                        <p className="text-xs font-medium tabular-nums text-muted-foreground/70">
+                      <p className="text-xs font-medium tabular-nums text-muted-foreground/70">
                           {card.saldoExtrato !== null ? formatMoeda(card.saldoExtrato) : '—'}
                         </p>
-                        {contaId !== '__all__' && canEditSaldoFinal(card.anoMes) && (
-                          <button
-                            onClick={() => handleEditSaldo(card.anoMes, contaId, card.saldoExtrato || 0)}
-                            className="p-0.5 hover:bg-muted rounded"
-                          >
-                            <Pencil className="h-3 w-3 text-muted-foreground" />
-                          </button>
-                        )}
-                      </div>
                     </div>
 
                     <div className="flex items-center justify-between">
