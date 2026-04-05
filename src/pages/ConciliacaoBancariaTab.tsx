@@ -476,12 +476,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                     <p className="text-sm font-bold tabular-nums">{formatMoeda(card.saldoInicial)}</p>
                   </div>
 
-                  <div className="p-2.5">
+                  <div className="px-2.5 py-1">
                     <div className="flex items-baseline justify-between">
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Entradas</p>
                       <p className="text-sm font-bold tabular-nums text-green-600">{formatMoeda(card.totalEntradas)}</p>
                     </div>
-                    <div className="mt-1.5 space-y-0.5 border-t pt-1">
+                    <div className="mt-0.5 space-y-0.5 border-t pt-0.5">
                       <p className="text-[9px] text-muted-foreground flex justify-between">
                         <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.entradasTerceiros)}</span>
                       </p>
