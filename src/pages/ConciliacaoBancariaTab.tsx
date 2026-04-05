@@ -433,56 +433,15 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
               {/* ═══ 3 COLUNAS ═══ */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
 
-                {/* ── COL 1: Movimento Financeiro ── */}
-                <div className="space-y-2">
-                  {/* Saldo Inicial — texto simples */}
-                  <div className="px-2 py-1.5">
-                    <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-medium">Saldo Inicial</p>
-                    <p className="text-sm font-bold tabular-nums">{formatMoeda(card.saldoInicial)}</p>
-                  </div>
-
-                  {/* Entradas */}
-                  <div className="bg-green-50 dark:bg-green-950/30 rounded-md p-2.5 border border-green-200 dark:border-green-800/50">
-                    <div className="flex items-baseline justify-between">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-green-800 dark:text-green-300">Entradas</p>
-                      <p className="text-base font-extrabold tabular-nums text-green-700 dark:text-green-400">{formatMoeda(card.totalEntradas)}</p>
-                    </div>
-                    <div className="mt-1.5 space-y-0.5 border-t border-green-200/60 dark:border-green-800/40 pt-1">
-                      <p className="text-[9px] text-green-700/80 dark:text-green-400/70 flex justify-between">
-                        <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.entradasTerceiros)}</span>
-                      </p>
-                      <p className="text-[9px] text-green-700/80 dark:text-green-400/70 flex justify-between">
-                        <span>Transferências</span><span className="tabular-nums">{formatMoeda(card.transferenciasRecebidas)}</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Saídas */}
-                  <div className="bg-red-50 dark:bg-red-950/30 rounded-md p-2.5 border border-red-200 dark:border-red-800/50">
-                    <div className="flex items-baseline justify-between">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-red-800 dark:text-red-300">Saídas</p>
-                      <p className="text-base font-extrabold tabular-nums text-red-700 dark:text-red-400">{formatMoeda(card.totalSaidas)}</p>
-                    </div>
-                    <div className="mt-1.5 space-y-0.5 border-t border-red-200/60 dark:border-red-800/40 pt-1">
-                      <p className="text-[9px] text-red-700/80 dark:text-red-400/70 flex justify-between">
-                        <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.saidasTerceiros)}</span>
-                      </p>
-                      <p className="text-[9px] text-red-700/80 dark:text-red-400/70 flex justify-between">
-                        <span>Transferências</span><span className="tabular-nums">{formatMoeda(card.transferenciasEnviadas)}</span>
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── COL 2: Conciliação ── */}
-                <div className="bg-background rounded-md p-3 border space-y-3">
+                {/* ── COL 1: Conciliação (era col 2) ── */}
+                <div className="rounded-md p-3 space-y-3">
                   <p className="text-[10px] font-bold text-foreground uppercase tracking-wider">Conciliação</p>
 
                   <div className="space-y-2">
                     <div>
                       <p className="text-[9px] text-muted-foreground">Saldo Extrato</p>
                       <div className="flex items-center gap-1">
-                        <p className="text-sm font-bold tabular-nums">
+                        <p className="text-sm font-medium tabular-nums text-muted-foreground/70">
                           {card.saldoExtrato !== null ? formatMoeda(card.saldoExtrato) : '—'}
                         </p>
                         {contaId !== '__all__' && canEditSaldoFinal(card.anoMes) && (
@@ -502,7 +461,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                     </div>
 
                     <div className="border-t pt-2">
-                      <p className="text-[9px] text-muted-foreground">Diferença</p>
+                      <p className="text-[9px] text-muted-foreground">Diferença para Conciliar</p>
                       <p className={`text-sm font-bold tabular-nums ${diffAbs < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
                         {formatMoeda(card.diferenca)}
                       </p>
@@ -510,15 +469,57 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                   </div>
                 </div>
 
-                {/* ── COL 3: Status da Conciliação ── */}
-                <div className={`rounded-md p-3 border flex flex-col items-center justify-center text-center space-y-1.5 ${
+                {/* ── COL 2: Movimento Financeiro (era col 1) ── */}
+                <div className="space-y-2">
+                  <div className="px-2 py-1.5">
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-medium">Saldo Inicial</p>
+                    <p className="text-sm font-bold tabular-nums">{formatMoeda(card.saldoInicial)}</p>
+                  </div>
+
+                  <Card>
+                    <CardContent className="p-2.5">
+                      <div className="flex items-baseline justify-between">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Entradas</p>
+                        <p className="text-sm font-bold tabular-nums">{formatMoeda(card.totalEntradas)}</p>
+                      </div>
+                      <div className="mt-1.5 space-y-0.5 border-t pt-1">
+                        <p className="text-[9px] text-muted-foreground flex justify-between">
+                          <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.entradasTerceiros)}</span>
+                        </p>
+                        <p className="text-[9px] text-muted-foreground flex justify-between">
+                          <span>Transferências</span><span className="tabular-nums">{formatMoeda(card.transferenciasRecebidas)}</span>
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="p-2.5">
+                      <div className="flex items-baseline justify-between">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Saídas</p>
+                        <p className="text-sm font-bold tabular-nums">{formatMoeda(card.totalSaidas)}</p>
+                      </div>
+                      <div className="mt-1.5 space-y-0.5 border-t pt-1">
+                        <p className="text-[9px] text-muted-foreground flex justify-between">
+                          <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.saidasTerceiros)}</span>
+                        </p>
+                        <p className="text-[9px] text-muted-foreground flex justify-between">
+                          <span>Transferências</span><span className="tabular-nums">{formatMoeda(card.transferenciasEnviadas)}</span>
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* ── COL 3: Status da Conciliação (sem borda, mais leve) ── */}
+                <div className={`rounded-lg p-4 flex flex-col items-center justify-center text-center space-y-2 ${
                   isConciliado
-                    ? 'bg-green-50 border-green-300 dark:bg-green-950/40 dark:border-green-700'
+                    ? 'bg-green-50/60 dark:bg-green-950/20'
                     : isPendente
-                      ? 'bg-muted/50 border-muted'
+                      ? 'bg-muted/30'
                       : card.status === 'atencao'
-                        ? 'bg-yellow-50 border-yellow-300 dark:bg-yellow-950/40 dark:border-yellow-700'
-                        : 'bg-red-50 border-red-300 dark:bg-red-950/40 dark:border-red-700'
+                        ? 'bg-yellow-50/60 dark:bg-yellow-950/20'
+                        : 'bg-red-50/60 dark:bg-red-950/20'
                 }`}>
                   <StatusIcon className={`h-8 w-8 ${cfg.iconColor}`} />
                   <p className={`text-sm font-extrabold ${
