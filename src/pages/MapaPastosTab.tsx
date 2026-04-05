@@ -58,6 +58,7 @@ export function MapaPastosTab() {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
   const { fechamentos, loadFechamentos, loadItens } = useFechamento();
+  const { lancamentos, saldosIniciais } = useLancamentos();
 
   const curYear = new Date().getFullYear();
   const anosDisp = useMemo(() => {
