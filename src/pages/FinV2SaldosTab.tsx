@@ -280,8 +280,10 @@ export function FinV2SaldosTab() {
     if (!dialogOpen || !contaId || !anoMes) return;
     const prevFinal = findPrevSaldoFinal(contaId, anoMes);
     setAutoSaldoInicial(prevFinal);
-    if (prevFinal !== null && !editing && !overrideInicial) {
+    // Always auto-fill from previous month — no override allowed
+    if (prevFinal !== null) {
       setSaldoInicial(toBRL(prevFinal));
+      setOverrideInicial(false);
     }
   }, [contaId, anoMes, dialogOpen, allSaldos]);
 
