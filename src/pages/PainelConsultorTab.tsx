@@ -742,14 +742,18 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
   const monthCutoff = useMemo(() => getCurrentMonthCutoff(anoNum), [anoNum]);
 
   useEffect(() => {
-    if (!fazendaId || fazendaId === '__global__' || categorias.length === 0) { setPesosPorMes({}); return; }
+    if (!fazendaId || fazendaId === '__global__' || categorias.length === 0) { setPesosPorMes({}); setPesoMedioGeralPorMes({}); return; }
     (async () => {
       const result: Record<string, Record<string, number>> = {};
+      const pmResult: Record<string, number | null> = {};
       for (let m = 1; m <= 12; m++) {
         const anoMes = `${anoNum}-${String(m).padStart(2, '0')}`;
-        result[anoMes] = await loadPesosPastosPorCategoria(fazendaId, anoMes, categorias);
+        const { porCategoria, pesoMedioGeralPastos } = await loadPesosPastosCompleto(fazendaId, anoMes, categorias);
+        result[anoMes] = porCategoria;
+        pmResult[anoMes] = pesoMedioGeralPastos;
       }
       setPesosPorMes(result);
+      setPesoMedioGeralPorMes(pmResult);
     })();
   }, [fazendaId, anoNum, categorias]);
 
