@@ -704,6 +704,7 @@ export function LancamentoV2Dialog({
     const form: LancamentoV2Form = {
       fazenda_id: fazendaId,
       conta_bancaria_id: contaBancariaId,
+      conta_destino_id: isTransferencia && contaDestinoId && contaDestinoId !== '__none__' ? contaDestinoId : null,
       data_competencia: dataCompetencia,
       data_pagamento: dataPagamento || null,
       valor: Math.abs(valorNum),
@@ -719,6 +720,8 @@ export function LancamentoV2Dialog({
       forma_pagamento: formaPgto || null,
       dados_pagamento: dadosPagamento || null,
     };
+
+    console.log('[FinV2]', currentIsEdit ? 'UPDATE' : 'INSERT', 'lancamento id=', currentEditId, 'payload=', form);
 
     // CRITICAL: pass the stable ID for edits — ensures UPDATE, never INSERT
     const ok = await onSave(form, currentEditId || undefined);
