@@ -304,13 +304,30 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const handleSave = async (form: any, id?: string) => {
     let ok: boolean;
     if (id) {
+      console.log('[FinV2] before save', {
+        id,
+        tipo_operacao: editingLanc?.tipo_operacao,
+        conta_bancaria_id: editingLanc?.conta_bancaria_id,
+        conta_destino_id: editingLanc?.conta_destino_id,
+        status_transacao: editingLanc?.status_transacao,
+      });
       console.log('[FinV2] UPDATE lancamento id=', id);
       ok = await hook.editarLancamento(id, form);
     } else {
       console.log('[FinV2] INSERT new lancamento');
       ok = await hook.criarLancamento(form);
     }
-    if (ok) hook.loadLancamentos(filtros, hook.page);
+    if (ok) {
+      await hook.loadLancamentos(filtros, hook.page);
+      const refreshed = hook.lancamentos.find(l => l.id === id);
+      console.log('[FinV2] after save reload', {
+        id,
+        tipo_operacao: refreshed?.tipo_operacao,
+        conta_bancaria_id: refreshed?.conta_bancaria_id,
+        conta_destino_id: refreshed?.conta_destino_id,
+        status_transacao: refreshed?.status_transacao,
+      });
+    }
     return ok;
   };
   const handleDelete = async (id: string) => {
@@ -324,7 +341,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   };
 
   const openNew = () => { setEditingLanc(null); setDialogOpen(true); };
-  const openEdit = (l: LancamentoV2) => { setEditingLanc(l); setDialogOpen(true); };
+  const openEdit = (l: LancamentoV2) => {
+    console.log('[FinV2] reopen edit object', {
+      id: l.id,
+      tipo_operacao: l.tipo_operacao,
+      conta_bancaria_id: l.conta_bancaria_id,
+      conta_destino_id: l.conta_destino_id,
+      status_transacao: l.status_transacao,
+      origem_lida_de: 'conta_bancaria_id',
+      destino_lido_de: 'conta_destino_id',
+    });
+    setEditingLanc(l);
+    setDialogOpen(true);
+  };
 
   const fornecedoresMap = useMemo(
     () => new Map(hook.fornecedores.map(f => [f.id, f.nome])),
