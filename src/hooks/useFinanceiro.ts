@@ -602,6 +602,7 @@ export function useFinanceiro() {
     clienteId: string, fazendaId: string,
     dataPagamento: string | null, valor: number,
     tipoOperacao: string | null, contaBancariaId: string | null,
+    descricao?: string | null, observacao?: string | null,
   ): string => {
     const parts = [
       clienteId,
@@ -610,6 +611,8 @@ export function useFinanceiro() {
       valor.toFixed(2),
       (tipoOperacao || '').trim().toLowerCase(),
       contaBancariaId || '',
+      normalizeImportText(descricao),
+      normalizeImportText(observacao),
     ];
     return parts.join('|');
   };
