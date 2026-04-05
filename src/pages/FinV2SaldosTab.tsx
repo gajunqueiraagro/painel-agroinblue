@@ -721,47 +721,38 @@ export function FinV2SaldosTab() {
                 </Select>
               </div>
 
-              {/* Saldo Inicial */}
+              {/* Saldo Inicial — always automatic except first month (admin only) */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs">Saldo Inicial</Label>
-                  {autoSaldoInicial !== null && (editing ? canEditSaldoInicial(editing) || isAdmin : true) && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-muted-foreground">Editar manual</span>
-                      <Switch
-                        checked={overrideInicial}
-                        onCheckedChange={(v) => {
-                          setOverrideInicial(v);
-                          if (!v && autoSaldoInicial !== null) {
-                            setSaldoInicial(toBRL(autoSaldoInicial));
-                          }
-                        }}
-                        className="scale-75"
-                      />
-                    </div>
+                  {autoSaldoInicial !== null && (
+                    <span className="text-[10px] text-emerald-600 flex items-center gap-1">
+                      <Link2 className="h-3 w-3" /> Automático
+                    </span>
                   )}
                 </div>
                 <Input
                   value={saldoInicial}
                   onChange={e => setSaldoInicial(e.target.value)}
                   className="h-9"
-                  disabled={saldoInicialIsAuto}
+                  disabled={autoSaldoInicial !== null || (editing ? !canEditSaldoInicial(editing) : !isAdmin)}
                 />
-                {autoSaldoInicial !== null && !overrideInicial && (
+                {autoSaldoInicial !== null && (
                   <p className="text-[10px] text-emerald-600 flex items-center gap-1">
                     <Link2 className="h-3 w-3" />
-                    Saldo inicial herdado automaticamente do mês anterior ({formatMoeda(autoSaldoInicial)})
+                    Herdado do mês anterior ({formatMoeda(autoSaldoInicial)}) — não editável
                   </p>
                 )}
-                {autoSaldoInicial !== null && overrideInicial && (
+                {autoSaldoInicial === null && isAdmin && (
                   <p className="text-[10px] text-amber-600 flex items-center gap-1">
-                    <PenLine className="h-3 w-3" />
-                    Saldo inicial definido manualmente (override)
+                    <ShieldCheck className="h-3 w-3" />
+                    Primeiro mês da conta — defina o saldo inicial (somente administrador)
                   </p>
                 )}
-                {autoSaldoInicial === null && (
-                  <p className="text-[10px] text-muted-foreground">
-                    Sem histórico anterior — preencha manualmente (início da série).
+                {autoSaldoInicial === null && !isAdmin && (
+                  <p className="text-[10px] text-red-500 flex items-center gap-1">
+                    <ShieldAlert className="h-3 w-3" />
+                    Saldo inicial só pode ser definido pelo administrador
                   </p>
                 )}
               </div>
