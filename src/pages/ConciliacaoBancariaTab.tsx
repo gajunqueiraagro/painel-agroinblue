@@ -237,6 +237,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
       let transferenciasRecebidas = 0;
       let saidasTerceiros = 0;
       let transferenciasEnviadas = 0;
+      const isAllContas = contaId === '__all__';
 
       for (const l of mesLancs) {
         const tipo = (l.tipo_operacao || '').toLowerCase().replace(/[\s\-–—]/g, '');
@@ -244,8 +245,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
         const isTransf = tipo.startsWith('3') || tipo.includes('transfer');
 
         if (isTransf) {
-          // For transfers, determine direction based on which account matches
-          const isDestino = contaId !== '__all__' && l.conta_destino_id === contaId;
+          if (isAllContas) {
+            // No consolidado, transferências se anulam — ignorar completamente
+            continue;
+          }
+          const isDestino = l.conta_destino_id === contaId;
           if (isDestino) {
             transferenciasRecebidas += valor;
           } else {
