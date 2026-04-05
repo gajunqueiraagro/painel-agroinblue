@@ -53,7 +53,7 @@ export async function loadPesosPastosPorCategoria(
   fazendaId: string,
   anoMes: string,
   categorias: CategoriaRebanho[],
-): Promise<Record<string, number>> {
+): Promise<PesosPastosResult> {
   const idToCodigo = new Map(categorias.map(c => [c.id, c.codigo]));
 
   const { data: fechamentos } = await supabase
@@ -62,16 +62,19 @@ export async function loadPesosPastosPorCategoria(
     .eq('fazenda_id', fazendaId)
     .eq('ano_mes', anoMes);
 
-  if (!fechamentos?.length) return {};
+  if (!fechamentos?.length) return { porCategoria: {}, pesoMedioGeralPastos: null };
 
   const { data: itens } = await supabase
     .from('fechamento_pasto_itens')
     .select('categoria_id, quantidade, peso_medio_kg')
     .in('fechamento_id', fechamentos.map(f => f.id));
 
-  if (!itens) return {};
+  if (!itens) return { porCategoria: {}, pesoMedioGeralPastos: null };
 
   const acum: Record<string, { totalPeso: number; totalQtd: number }> = {};
+  let geralPeso = 0;
+  let geralQtd = 0;
+
   itens.forEach(item => {
     if (!item.peso_medio_kg || item.peso_medio_kg <= 0 || item.quantidade <= 0) return;
     const codigo = idToCodigo.get(item.categoria_id);
@@ -79,13 +82,18 @@ export async function loadPesosPastosPorCategoria(
     if (!acum[codigo]) acum[codigo] = { totalPeso: 0, totalQtd: 0 };
     acum[codigo].totalPeso += item.peso_medio_kg * item.quantidade;
     acum[codigo].totalQtd += item.quantidade;
+    geralPeso += item.peso_medio_kg * item.quantidade;
+    geralQtd += item.quantidade;
   });
 
-  const map: Record<string, number> = {};
+  const porCategoria: Record<string, number> = {};
   Object.entries(acum).forEach(([codigo, { totalPeso, totalQtd }]) => {
-    if (totalQtd > 0) map[codigo] = totalPeso / totalQtd;
+    if (totalQtd > 0) porCategoria[codigo] = totalPeso / totalQtd;
   });
-  return map;
+
+  const pesoMedioGeralPastos = geralQtd > 0 ? geralPeso / geralQtd : null;
+
+  return { porCategoria, pesoMedioGeralPastos };
 }
 
 // ---------------------------------------------------------------------------
