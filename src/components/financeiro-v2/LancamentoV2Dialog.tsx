@@ -770,58 +770,73 @@ export function LancamentoV2Dialog({
     return 'Criar Lançamento';
   };
 
+  const firstFieldRef = useRef<HTMLButtonElement>(null);
+
+  // Auto-focus first field on open
+  useEffect(() => {
+    if (open) {
+      setTimeout(() => firstFieldRef.current?.focus(), 100);
+    }
+  }, [open]);
+
+  const sectionClass = "rounded-lg bg-muted/20 dark:bg-muted/10 border border-border/20 p-3 space-y-2.5";
+  const sectionTitle = "text-[9px] font-bold text-muted-foreground uppercase tracking-widest";
+  const fieldBg = "bg-background dark:bg-muted border-border/40";
+
   return (
     <>
       <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 bg-white dark:bg-card rounded-2xl shadow-2xl border-0 overflow-hidden">
+        <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col p-0 bg-[#fafbfc] dark:bg-card rounded-xl shadow-2xl border-0 overflow-hidden">
           {/* Header */}
-          <DialogHeader className="px-5 pt-5 pb-3 border-b border-border/40">
+          <DialogHeader className="px-6 pt-5 pb-3 border-b border-border/30 bg-background dark:bg-card">
             <DialogTitle className="text-base font-semibold">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
           </DialogHeader>
 
           {/* Scrollable body */}
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
 
-            {/* ── DATAS ── */}
-            <section>
-              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Datas</p>
-              {isEdit && lancamento?.status_transacao && (() => {
-                const stKey = lancamento.status_transacao.toLowerCase();
-                const stLabel = STATUS_OPTIONS.find(s => s.value === stKey)?.label || lancamento.status_transacao;
-                const colorMap: Record<string, string> = {
-                  previsto: 'text-orange-500',
-                  agendado: 'text-emerald-400',
-                  confirmado: 'text-sky-500',
-                  conciliado: 'text-green-700 dark:text-green-400',
-                };
-                return (
-                  <p className={`text-center text-sm font-bold mb-2 ${colorMap[stKey] || 'text-muted-foreground'}`}>
-                    {stLabel}
-                  </p>
-                );
-              })()}
-              <div className="grid grid-cols-2 gap-3">
+            {/* ── BLOCO 1 — Tipo e Datas ── */}
+            <section className={sectionClass}>
+              <p className={sectionTitle}>Tipo e Datas</p>
+              <div className="grid grid-cols-4 gap-3">
+                <div>
+                  <Label className="text-xs">Tipo Operação *</Label>
+                  <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigemId(''); setContaDestinoId(''); setSubcentro(''); setMacroCusto(''); setCentroCusto(''); setSubcentroSearch(''); }}>
+                    <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-9", fieldBg)}><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {TIPOS_OPERACAO.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div>
                   <Label className="text-xs">Data Competência *</Label>
-                  <Input tabIndex={1} type="date" value={dataCompetencia} onChange={e => setDataCompetencia(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" />
+                  <Input tabIndex={2} type="date" value={dataCompetencia} onChange={e => setDataCompetencia(e.target.value)} className={cn("h-9", fieldBg)} />
                 </div>
                 <div>
                   <Label className="text-xs">Data Pagamento *</Label>
-                  <Input tabIndex={2} type="date" value={dataPagamento} onChange={e => handleDataPagamentoChange(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" />
+                  <Input tabIndex={3} type="date" value={dataPagamento} onChange={e => handleDataPagamentoChange(e.target.value)} className={cn("h-9", fieldBg)} />
+                </div>
+                <div>
+                  <Label className="text-xs">Status *</Label>
+                  <Select value={statusTransacao} onValueChange={setStatusTransacao}>
+                    <SelectTrigger tabIndex={4} className={cn("h-9", fieldBg)}><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </section>
 
-            <hr className="border-border/30" />
-
-            {/* ── IDENTIFICAÇÃO ── */}
-            <section>
-              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Identificação</p>
-              <div className="space-y-3">
+            {/* ── BLOCO 2 — Identificação ── */}
+            <section className={sectionClass}>
+              <p className={sectionTitle}>Identificação</p>
+              <div className="grid grid-cols-2 gap-3">
+                {/* Produto */}
                 <div ref={produtoWrapperRef} className="relative">
-                  <Label className="text-xs">Produto *</Label>
+                  <Label className="text-xs">Produto / Descrição *</Label>
                   <Input
-                    tabIndex={3}
+                    tabIndex={5}
                     value={descricao}
                     onChange={e => {
                       setDescricao(e.target.value);
@@ -830,7 +845,7 @@ export function LancamentoV2Dialog({
                     }}
                     onFocus={() => { if (descricao.trim().length >= 2) setProdutoOpen(true); }}
                     onKeyDown={handleProdutoKeyDown}
-                    className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"
+                    className={cn("h-9", fieldBg)}
                     placeholder="Descrição do produto"
                     autoComplete="off"
                   />
@@ -857,321 +872,76 @@ export function LancamentoV2Dialog({
                     </div>
                   )}
                 </div>
+
+                {/* Fornecedor */}
                 <div>
                   <Label className="text-xs">Fornecedor *</Label>
                   <div className="flex gap-1.5">
                     <Popover open={fornecedorOpen} onOpenChange={v => { setFornecedorOpen(v); if (!v) setFornecedorSearch(''); }}>
                       <PopoverTrigger asChild>
-                        <Button tabIndex={4} variant="outline" role="combobox" aria-expanded={fornecedorOpen} className="flex-1 h-9 justify-between font-normal text-sm bg-[#f5f6f8] dark:bg-muted border-border/50">
-                          <span className="truncate">{selectedFornecedorNome || 'Selecione o fornecedor...'}</span>
+                        <Button tabIndex={6} variant="outline" role="combobox" aria-expanded={fornecedorOpen} className={cn("flex-1 h-9 justify-between font-normal text-sm", fieldBg)}>
+                          <span className="truncate">{selectedFornecedorNome || 'Selecione fornecedor...'}</span>
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                         <div className="flex items-center border-b px-3 py-2">
                           <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                          <input ref={fornecedorInputRef} className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" placeholder="Buscar fornecedor..." value={fornecedorSearch} onChange={e => setFornecedorSearch(e.target.value)} onKeyDown={handleFornecedorKeyDown} autoFocus />
+                          <input
+                            ref={fornecedorInputRef}
+                            className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                            placeholder="Buscar fornecedor..."
+                            value={fornecedorSearch}
+                            onChange={e => setFornecedorSearch(e.target.value)}
+                            onKeyDown={handleFornecedorKeyDown}
+                            autoFocus
+                          />
                         </div>
                         <div className="max-h-48 overflow-y-auto p-1">
+                          {filteredFornecedores.length === 0 && <p className="p-2 text-center text-sm text-muted-foreground">Nenhum fornecedor encontrado</p>}
                           {filteredFornecedores.map((f, idx) => (
-                            <button key={f.id} ref={el => { fornecedorItemRefs.current[idx] = el; }} className={cn("relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none", idx === fornecedorHighlight ? "bg-accent text-accent-foreground" : "hover:bg-accent hover:text-accent-foreground", favorecidoId === f.id && "font-semibold")} onClick={() => handleFornecedorSelect(f.id)} onMouseEnter={() => setFornecedorHighlight(idx)}>
+                            <button
+                              key={f.id}
+                              ref={el => { fornecedorItemRefs.current[idx] = el; }}
+                              className={cn(
+                                "relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
+                                idx === fornecedorHighlight ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
+                                favorecidoId === f.id && idx !== fornecedorHighlight && "bg-accent/30"
+                              )}
+                              onClick={() => handleFornecedorSelect(f.id)}
+                              onMouseEnter={() => setFornecedorHighlight(idx)}
+                            >
                               <Check className={cn("mr-2 h-4 w-4", favorecidoId === f.id ? "opacity-100" : "opacity-0")} />
                               <span className="truncate">{f.nome}</span>
                             </button>
                           ))}
-                          {filteredFornecedores.length === 0 && fornecedorSearch.trim() && (
-                            <div className="p-2 text-center space-y-1">
-                              <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground">
-                                <AlertCircle className="h-3.5 w-3.5" />
-                                <span>Nenhum fornecedor encontrado</span>
-                              </div>
-                              <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => { setFornecedorOpen(false); setFornecedorDialogOpen(true); }}>
-                                <Plus className="h-3 w-3 mr-1" />Cadastrar novo
-                              </Button>
-                            </div>
-                          )}
                         </div>
                       </PopoverContent>
                     </Popover>
-                    <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setFornecedorDialogOpen(true)} title="Novo fornecedor" tabIndex={-1}>
+                    <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setFornecedorDialogOpen(true)} title="Novo Fornecedor">
                       <Plus className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
-              </div>
-            </section>
 
-            <hr className="border-border/30" />
-
-            {/* ── PAGAMENTO ── */}
-            <section>
-              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Pagamento</p>
-              <div className="space-y-3">
+                {/* Fazenda */}
                 <div>
-                  <Label className="text-xs">Forma de Pagamento</Label>
-                  <Select value={formaPgto || '__none_fp__'} onValueChange={handleFormaPgtoChange}>
-                    <SelectTrigger tabIndex={5} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <Label className="text-xs">Fazenda *</Label>
+                  <Select value={fazendaId} onValueChange={v => { setFazendaId(v); setContaOrigemId(''); setContaDestinoId(''); }}>
+                    <SelectTrigger tabIndex={7} className={cn("h-9", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none_fp__">Nenhuma</SelectItem>
-                      <SelectItem value="PIX">PIX</SelectItem>
-                      <SelectItem value="Cartão">Cartão</SelectItem>
-                      <SelectItem value="Boleto">Boleto</SelectItem>
-                      <SelectItem value="Débito Automático">Débito Automático</SelectItem>
-                      <SelectItem value="Débito">Débito</SelectItem>
-                      <SelectItem value="Transferência">Transferência</SelectItem>
-                      <SelectItem value="Dinheiro">Dinheiro</SelectItem>
-                      <SelectItem value="Outro">Outro</SelectItem>
+                      {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <Label className="text-xs">Dados para Pagamento</Label>
-                    <div className="flex gap-1">
-                      {formaPgto === 'PIX' && dadosPagamento && (() => {
-                        const chaveMatch = dadosPagamento.match(/Chave:\s*(.+)/i);
-                        return chaveMatch ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 px-2 text-[10px] gap-1 text-primary hover:text-primary"
-                            onClick={() => {
-                              navigator.clipboard.writeText(chaveMatch[1].trim());
-                              toast.success('Chave PIX copiada');
-                            }}
-                          >
-                            <KeyRound className="h-3 w-3" /> Copiar PIX
-                          </Button>
-                        ) : null;
-                      })()}
-                      {dadosPagamento && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 px-2 text-[10px] gap-1 text-muted-foreground hover:text-foreground"
-                          onClick={() => {
-                            navigator.clipboard.writeText(dadosPagamento);
-                            toast.success('Dados copiados');
-                          }}
-                        >
-                          <Copy className="h-3 w-3" /> Copiar dados
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  <Textarea
-                    tabIndex={6}
-                    value={dadosPagamento}
-                    onChange={e => setDadosPagamento(e.target.value)}
-                    rows={3}
-                    placeholder="Chave PIX, dados bancários, código de boleto..."
-                    className="bg-[#f5f6f8] dark:bg-muted border-border/50 text-xs"
-                  />
-                </div>
-              </div>
-            </section>
 
-            <hr className="border-border/30" />
-            <section>
-              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Financeiro</p>
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Valor (R$) *</Label>
-                    <Input tabIndex={7} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" placeholder="0,00" inputMode="numeric" />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Status *</Label>
-                    <Select value={statusTransacao} onValueChange={setStatusTransacao}>
-                      <SelectTrigger tabIndex={8} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Frequency + Installment — only for new */}
-                {!isEdit && (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-xs">Frequência</Label>
-                        <Select value={frequencia} onValueChange={(v: 'pontual' | 'recorrente') => setFrequencia(v)}>
-                          <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="pontual">Pontual</SelectItem>
-                            <SelectItem value="recorrente">Recorrente</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      {frequencia === 'pontual' && (
-                        <div>
-                          <Label className="text-xs">Modalidade</Label>
-                          <Select value={formaPagamentoParc} onValueChange={(v: 'avista' | 'parcelada') => setFormaPagamentoParc(v)}>
-                            <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="avista">À vista</SelectItem>
-                              <SelectItem value="parcelada">Parcelada</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-                      {frequencia === 'pontual' && formaPagamentoParc === 'parcelada' && (
-                        <div>
-                          <Label className="text-xs">Nº de Parcelas *</Label>
-                          <Input
-                            type="number"
-                            min={2}
-                            max={24}
-                            value={numParcelas}
-                            onChange={e => setNumParcelas(Math.max(2, Math.min(24, parseInt(e.target.value) || 2)))}
-                            className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"
-                          />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* ── EDITABLE PARCELA GRID ── */}
-                    {frequencia === 'pontual' && formaPagamentoParc === 'parcelada' && parcelaRows.length > 0 && (
-                      <div className="rounded-lg border border-border/50 bg-muted/30 overflow-hidden">
-                        <div className="grid grid-cols-[48px_1fr_1fr] gap-1 px-3 py-1.5 bg-muted/60 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                          <span>Parc.</span>
-                          <span>Vencimento</span>
-                          <span>Valor (R$)</span>
-                        </div>
-                        <div className="divide-y divide-border/30">
-                          {parcelaRows.map((row, idx) => (
-                            <div key={idx} className="grid grid-cols-[48px_1fr_1fr] gap-1 px-3 py-1.5 items-center">
-                              <span className="text-xs font-semibold text-muted-foreground">{idx + 1}/{numParcelas}</span>
-                              <Input
-                                type="date"
-                                value={row.dataPagamento}
-                                onChange={e => handleParcelaDateChange(idx, e.target.value)}
-                                className="h-7 text-xs bg-white dark:bg-card border-border/40"
-                              />
-                              <Input
-                                value={row.valorDisplay}
-                                onChange={e => handleParcelaValorChange(idx, e)}
-                                onFocus={e => e.target.select()}
-                                inputMode="numeric"
-                                className="h-7 text-xs bg-white dark:bg-card border-border/40 text-right font-mono"
-                              />
-                            </div>
-                          ))}
-                        </div>
-                        <div className="px-3 py-1.5 bg-muted/60 flex justify-between items-center text-xs">
-                          <span className="text-muted-foreground font-medium">Total parcelas:</span>
-                          <span className={cn(
-                            "font-bold font-mono",
-                            Math.abs(parcelasTotal - Math.abs(valorNum)) < 0.01
-                              ? "text-green-600 dark:text-green-400"
-                              : "text-destructive"
-                          )}>
-                            {formatMoeda(parcelasTotal)}
-                          </span>
-                        </div>
-                        {Math.abs(parcelasTotal - Math.abs(valorNum)) >= 0.01 && (
-                          <div className="px-3 py-1 bg-destructive/10 text-destructive text-[10px] flex items-center gap-1">
-                            <AlertCircle className="h-3 w-3" />
-                            A soma das parcelas difere do valor total ({formatMoeda(Math.abs(valorNum))})
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* ── RECURRENCE GRID ── */}
-                    {frequencia === 'recorrente' && recorrenciaRows.length > 0 && (
-                      <div className="rounded-lg border border-border/50 bg-muted/30 overflow-hidden">
-                        <div className="grid grid-cols-[60px_1fr_1fr_100px] gap-1 px-3 py-1.5 bg-muted/60 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                          <span>Mês</span>
-                          <span>Competência</span>
-                          <span>Pagamento</span>
-                          <span className="text-right">Valor (R$)</span>
-                        </div>
-                        <div className="divide-y divide-border/30 max-h-52 overflow-y-auto">
-                          {recorrenciaRows.map((row, idx) => (
-                            <div key={idx} className="grid grid-cols-[60px_1fr_1fr_100px] gap-1 px-3 py-1.5 items-center">
-                              <span className="text-[10px] font-semibold text-muted-foreground capitalize">{row.mesLabel}</span>
-                              <Input
-                                type="date"
-                                value={row.dataCompetencia}
-                                onChange={e => handleRecorrenciaCompChange(idx, e.target.value)}
-                                className="h-7 text-xs bg-white dark:bg-card border-border/40"
-                              />
-                              <Input
-                                type="date"
-                                value={row.dataPagamento}
-                                onChange={e => handleRecorrenciaPgtoChange(idx, e.target.value)}
-                                className="h-7 text-xs bg-white dark:bg-card border-border/40"
-                              />
-                              <Input
-                                value={row.valorDisplay}
-                                onChange={e => handleRecorrenciaValorChange(idx, e)}
-                                onFocus={e => e.target.select()}
-                                inputMode="numeric"
-                                className="h-7 text-xs bg-white dark:bg-card border-border/40 text-right font-mono"
-                              />
-                            </div>
-                          ))}
-                        </div>
-                        <div className="px-3 py-1.5 bg-muted/60 flex justify-between items-center text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground font-medium">Total ({recorrenciaRows.length}x):</span>
-                            <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-[10px] gap-1" onClick={handleRecalcularRecorrencia}>
-                              <RefreshCw className="h-3 w-3" /> Recalcular
-                            </Button>
-                          </div>
-                          <span className="font-bold font-mono text-foreground">
-                            {formatMoeda(recorrenciaTotal)}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Fazenda *</Label>
-                    <Select value={fazendaId} onValueChange={v => { setFazendaId(v); setContaOrigemId(''); setContaDestinoId(''); }}>
-                      <SelectTrigger tabIndex={9} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent>
-                        {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs">Nota Fiscal</Label>
-                    <Input tabIndex={10} value={notaFiscalDisplay} onChange={handleNotaFiscalChange} inputMode="numeric" className="h-9 font-mono bg-[#f5f6f8] dark:bg-muted border-border/50" placeholder="000.000.000" />
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <hr className="border-border/30" />
-
-            {/* ── CONTA BANCÁRIA ── */}
-            <section>
-              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Conta Bancária</p>
-              <div className="space-y-2">
-                <div>
-                  <Label className="text-xs">Tipo Operação *</Label>
-                  <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigemId(''); setContaDestinoId(''); setSubcentro(''); setMacroCusto(''); setCentroCusto(''); setSubcentroSearch(''); }}>
-                    <SelectTrigger tabIndex={11} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {TIPOS_OPERACAO.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {/* Conta Bancária */}
                 {isTransferencia ? (
-                  <div className="grid grid-cols-2 gap-3">
+                  <>
                     <div>
                       <Label className="text-xs">Conta Origem *</Label>
                       <Select value={contaOrigemId} onValueChange={setContaOrigemId}>
-                        <SelectTrigger tabIndex={12} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectTrigger tabIndex={8} className={cn("h-9", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__">Nenhuma</SelectItem>
                           {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
@@ -1181,19 +951,19 @@ export function LancamentoV2Dialog({
                     <div>
                       <Label className="text-xs">Conta Destino *</Label>
                       <Select value={contaDestinoId} onValueChange={setContaDestinoId}>
-                        <SelectTrigger tabIndex={13} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectTrigger tabIndex={9} className={cn("h-9", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__">Nenhuma</SelectItem>
                           {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
+                  </>
                 ) : isEntrada ? (
                   <div>
                     <Label className="text-xs">Conta Destino *</Label>
                     <Select value={contaDestinoId} onValueChange={setContaDestinoId}>
-                      <SelectTrigger tabIndex={12} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectTrigger tabIndex={8} className={cn("h-9", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">Nenhuma</SelectItem>
                         {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
@@ -1204,7 +974,7 @@ export function LancamentoV2Dialog({
                   <div>
                     <Label className="text-xs">Conta Origem *</Label>
                     <Select value={contaOrigemId} onValueChange={setContaOrigemId}>
-                      <SelectTrigger tabIndex={12} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectTrigger tabIndex={8} className={cn("h-9", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">Nenhuma</SelectItem>
                         {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
@@ -1215,17 +985,19 @@ export function LancamentoV2Dialog({
               </div>
             </section>
 
-            <hr className="border-border/30" />
-
-            {/* ── CLASSIFICAÇÃO ── */}
-            <section>
-              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Classificação</p>
-              <div className="space-y-2">
+            {/* ── BLOCO 3 — Valor e Classificação ── */}
+            <section className={sectionClass}>
+              <p className={sectionTitle}>Valor e Classificação</p>
+              <div className="grid grid-cols-3 gap-3">
                 <div>
+                  <Label className="text-xs">Valor (R$) *</Label>
+                  <Input tabIndex={10} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className={cn("h-9 text-right font-mono", fieldBg)} placeholder="0,00" inputMode="numeric" />
+                </div>
+                <div className="col-span-2">
                   <Label className="text-xs">Subcentro *</Label>
                   <Popover open={subcentroOpen} onOpenChange={v => { setSubcentroOpen(v); if (!v) { setSubcentroSearch(''); setSubcentroHighlight(0); } }}>
                     <PopoverTrigger asChild>
-                      <Button tabIndex={14} variant="outline" role="combobox" aria-expanded={subcentroOpen} className="w-full h-9 justify-between font-normal text-sm bg-[#f5f6f8] dark:bg-muted border-border/50">
+                      <Button tabIndex={11} variant="outline" role="combobox" aria-expanded={subcentroOpen} className={cn("w-full h-9 justify-between font-normal text-sm", fieldBg)}>
                         <span className="truncate">{subcentro || 'Selecione o subcentro...'}</span>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
@@ -1265,40 +1037,191 @@ export function LancamentoV2Dialog({
                     </PopoverContent>
                   </Popover>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Macro Custo (auto)</Label>
-                    <Input value={macroCusto} readOnly disabled className="h-9 bg-muted/80 dark:bg-muted border-border/30 text-muted-foreground cursor-default" />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Centro Custo (auto)</Label>
-                    <Input value={centroCusto} readOnly disabled className="h-9 bg-muted/80 dark:bg-muted border-border/30 text-muted-foreground cursor-default" />
-                  </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Centro Custo (auto)</Label>
+                  <Input value={centroCusto} readOnly disabled className="h-9 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-default" />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Macro Custo (auto)</Label>
+                  <Input value={macroCusto} readOnly disabled className="h-9 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-default" />
                 </div>
               </div>
+
+              {/* Frequency + Installment — only for new */}
+              {!isEdit && (
+                <div className="space-y-2.5 pt-1">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <Label className="text-xs">Frequência</Label>
+                      <Select value={frequencia} onValueChange={(v: 'pontual' | 'recorrente') => setFrequencia(v)}>
+                        <SelectTrigger className={cn("h-9", fieldBg)}><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pontual">Pontual</SelectItem>
+                          <SelectItem value="recorrente">Recorrente</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {frequencia === 'pontual' && (
+                      <div>
+                        <Label className="text-xs">Modalidade</Label>
+                        <Select value={formaPagamentoParc} onValueChange={(v: 'avista' | 'parcelada') => setFormaPagamentoParc(v)}>
+                          <SelectTrigger className={cn("h-9", fieldBg)}><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="avista">À vista</SelectItem>
+                            <SelectItem value="parcelada">Parcelada</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    {frequencia === 'pontual' && formaPagamentoParc === 'parcelada' && (
+                      <div>
+                        <Label className="text-xs">Nº de Parcelas *</Label>
+                        <Input
+                          type="number"
+                          min={2}
+                          max={24}
+                          value={numParcelas}
+                          onChange={e => setNumParcelas(Math.max(2, Math.min(24, parseInt(e.target.value) || 2)))}
+                          className={cn("h-9", fieldBg)}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Parcela grid */}
+                  {frequencia === 'pontual' && formaPagamentoParc === 'parcelada' && parcelaRows.length > 0 && (
+                    <div className="rounded-lg border border-border/30 bg-background dark:bg-muted/20 overflow-hidden">
+                      <div className="grid grid-cols-[48px_1fr_1fr] gap-1 px-3 py-1.5 bg-muted/40 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                        <span>Parc.</span>
+                        <span>Vencimento</span>
+                        <span>Valor (R$)</span>
+                      </div>
+                      <div className="divide-y divide-border/20">
+                        {parcelaRows.map((row, idx) => (
+                          <div key={idx} className="grid grid-cols-[48px_1fr_1fr] gap-1 px-3 py-1.5 items-center">
+                            <span className="text-xs font-semibold text-muted-foreground">{idx + 1}/{numParcelas}</span>
+                            <Input type="date" value={row.dataPagamento} onChange={e => handleParcelaDateChange(idx, e.target.value)} className="h-7 text-xs bg-background dark:bg-card border-border/30" />
+                            <Input value={row.valorDisplay} onChange={e => handleParcelaValorChange(idx, e)} onFocus={e => e.target.select()} inputMode="numeric" className="h-7 text-xs bg-background dark:bg-card border-border/30 text-right font-mono" />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="px-3 py-1.5 bg-muted/40 flex justify-between items-center text-xs">
+                        <span className="text-muted-foreground font-medium">Total parcelas:</span>
+                        <span className={cn("font-bold font-mono", Math.abs(parcelasTotal - Math.abs(valorNum)) < 0.01 ? "text-green-600 dark:text-green-400" : "text-destructive")}>
+                          {formatMoeda(parcelasTotal)}
+                        </span>
+                      </div>
+                      {Math.abs(parcelasTotal - Math.abs(valorNum)) >= 0.01 && (
+                        <div className="px-3 py-1 bg-destructive/10 text-destructive text-[10px] flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          A soma das parcelas difere do valor total ({formatMoeda(Math.abs(valorNum))})
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Recurrence grid */}
+                  {frequencia === 'recorrente' && recorrenciaRows.length > 0 && (
+                    <div className="rounded-lg border border-border/30 bg-background dark:bg-muted/20 overflow-hidden">
+                      <div className="grid grid-cols-[60px_1fr_1fr_100px] gap-1 px-3 py-1.5 bg-muted/40 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                        <span>Mês</span>
+                        <span>Competência</span>
+                        <span>Pagamento</span>
+                        <span className="text-right">Valor (R$)</span>
+                      </div>
+                      <div className="divide-y divide-border/20 max-h-52 overflow-y-auto">
+                        {recorrenciaRows.map((row, idx) => (
+                          <div key={idx} className="grid grid-cols-[60px_1fr_1fr_100px] gap-1 px-3 py-1.5 items-center">
+                            <span className="text-[10px] font-semibold text-muted-foreground capitalize">{row.mesLabel}</span>
+                            <Input type="date" value={row.dataCompetencia} onChange={e => handleRecorrenciaCompChange(idx, e.target.value)} className="h-7 text-xs bg-background dark:bg-card border-border/30" />
+                            <Input type="date" value={row.dataPagamento} onChange={e => handleRecorrenciaPgtoChange(idx, e.target.value)} className="h-7 text-xs bg-background dark:bg-card border-border/30" />
+                            <Input value={row.valorDisplay} onChange={e => handleRecorrenciaValorChange(idx, e)} onFocus={e => e.target.select()} inputMode="numeric" className="h-7 text-xs bg-background dark:bg-card border-border/30 text-right font-mono" />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="px-3 py-1.5 bg-muted/40 flex justify-between items-center text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground font-medium">Total ({recorrenciaRows.length}x):</span>
+                          <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-[10px] gap-1" onClick={handleRecalcularRecorrencia}>
+                            <RefreshCw className="h-3 w-3" /> Recalcular
+                          </Button>
+                        </div>
+                        <span className="font-bold font-mono text-foreground">
+                          {formatMoeda(recorrenciaTotal)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </section>
 
-            <hr className="border-border/30" />
-
-            {/* ── COMPLEMENTO ── */}
-            <section>
-              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Complemento</p>
+            {/* ── BLOCO 4 — Complementares ── */}
+            <section className={sectionClass}>
+              <p className={sectionTitle}>Complementares</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-xs">Nota Fiscal</Label>
+                  <Input tabIndex={12} value={notaFiscalDisplay} onChange={handleNotaFiscalChange} inputMode="numeric" className={cn("h-9 font-mono", fieldBg)} placeholder="000.000.000" />
+                </div>
+                <div>
+                  <Label className="text-xs">Forma de Pagamento</Label>
+                  <Select value={formaPgto || '__none_fp__'} onValueChange={handleFormaPgtoChange}>
+                    <SelectTrigger tabIndex={13} className={cn("h-9", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none_fp__">Nenhuma</SelectItem>
+                      <SelectItem value="PIX">PIX</SelectItem>
+                      <SelectItem value="Cartão">Cartão</SelectItem>
+                      <SelectItem value="Boleto">Boleto</SelectItem>
+                      <SelectItem value="Débito Automático">Débito Automático</SelectItem>
+                      <SelectItem value="Débito">Débito</SelectItem>
+                      <SelectItem value="Transferência">Transferência</SelectItem>
+                      <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                      <SelectItem value="Outro">Outro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <Label className="text-xs">Dados Pagamento</Label>
+                    <div className="flex gap-1">
+                      {formaPgto === 'PIX' && dadosPagamento && (() => {
+                        const chaveMatch = dadosPagamento.match(/Chave:\s*(.+)/i);
+                        return chaveMatch ? (
+                          <Button type="button" variant="ghost" size="sm" className="h-5 px-1.5 text-[9px] gap-0.5 text-primary hover:text-primary"
+                            onClick={() => { navigator.clipboard.writeText(chaveMatch[1].trim()); toast.success('Chave PIX copiada'); }}>
+                            <KeyRound className="h-2.5 w-2.5" /> PIX
+                          </Button>
+                        ) : null;
+                      })()}
+                      {dadosPagamento && (
+                        <Button type="button" variant="ghost" size="sm" className="h-5 px-1.5 text-[9px] gap-0.5 text-muted-foreground hover:text-foreground"
+                          onClick={() => { navigator.clipboard.writeText(dadosPagamento); toast.success('Dados copiados'); }}>
+                          <Copy className="h-2.5 w-2.5" /> Copiar
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <Textarea tabIndex={14} value={dadosPagamento} onChange={e => setDadosPagamento(e.target.value)} rows={1} placeholder="Chave PIX, dados bancários..." className={cn("text-xs resize-none", fieldBg)} />
+                </div>
+              </div>
               <div>
                 <Label className="text-xs">Observação</Label>
-                <Textarea tabIndex={15} value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Observações adicionais" className="bg-[#f5f6f8] dark:bg-muted border-border/50" />
+                <Textarea tabIndex={15} value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Observações adicionais" className={cn("text-xs", fieldBg)} />
               </div>
             </section>
           </div>
 
           {/* Sticky footer */}
-          <div className="px-5 py-3 border-t border-border/40 bg-white dark:bg-card flex items-center gap-2">
-            <Button variant="outline" onClick={onClose} className="px-4" tabIndex={16}>Cancelar</Button>
-            <Button tabIndex={17} onClick={handleSubmit} disabled={saving || !canSave} className="flex-1">
-              {getSubmitLabel()}
-            </Button>
+          <div className="px-6 py-3 border-t border-border/30 bg-background dark:bg-card flex items-center gap-2">
+            <Button variant="outline" onClick={onClose} className="px-5" tabIndex={16}>Cancelar</Button>
+            <div className="flex-1" />
             {isEdit && onDelete && (
               <Button
                 variant="destructive"
+                size="sm"
                 onClick={async () => {
                   if (!confirm('Tem certeza que deseja excluir este lançamento?')) return;
                   const ok = await onDelete(lancamento!.id);
@@ -1309,6 +1232,9 @@ export function LancamentoV2Dialog({
                 Excluir
               </Button>
             )}
+            <Button tabIndex={17} onClick={handleSubmit} disabled={saving || !canSave} className="px-8 font-semibold">
+              {getSubmitLabel()}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
