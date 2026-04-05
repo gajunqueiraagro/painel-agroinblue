@@ -797,7 +797,7 @@ export function LancamentoV2Dialog({
 
             {/* ── BLOCO 1 — Tipo e Datas ── */}
             <section className={sectionClass}>
-              <p className={sectionTitle}>Tipo e Datas</p>
+              <p className={sectionTitleClass}><CalendarDays className="h-3.5 w-3.5" /> Tipo e Datas</p>
               <div className="grid grid-cols-4 gap-2">
                 <div>
                   <Label className="text-[10px]">Tipo Operação *</Label>
