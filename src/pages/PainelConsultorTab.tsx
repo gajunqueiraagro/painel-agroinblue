@@ -36,7 +36,7 @@ import {
 } from '@/lib/calculos/zootecnicos';
 import { supabase } from '@/integrations/supabase/client';
 import { isConciliado as isLancConciliado } from '@/lib/statusOperacional';
-import { loadPesosPastosPorCategoria, resolverPesoOficial } from '@/hooks/useFechamentoCategoria';
+import { loadPesosPastosCompleto, resolverPesoOficial } from '@/hooks/useFechamentoCategoria';
 import {
   isConciliado as isFinConciliado,
   isEntrada as isFinEntrada,
