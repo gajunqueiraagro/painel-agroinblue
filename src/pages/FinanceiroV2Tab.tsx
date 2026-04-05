@@ -372,15 +372,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
   const filteredLancamentos = useMemo(() => {
     let items = hook.lancamentos;
-
-    // Client-side filter for conta destino vs origem
-    // Must match Conciliação logic: conta_bancaria_id identifies the account,
-    // sinal determines the role (>=0 = destination/entry, <0 = origin/exit)
-    if (contaDestino !== '__all__') {
-      items = items.filter(l => l.conta_bancaria_id === contaDestino && l.sinal >= 0);
-    } else if (contaOrigem !== '__all__') {
-      items = items.filter(l => l.conta_bancaria_id === contaOrigem && l.sinal < 0);
-    }
+    // Client-side filters already handled server-side via buildLancamentosQuery.
+    // No additional client-side conta filtering needed.
 
     if (produtoFiltro.trim()) {
       const q = produtoFiltro.toLowerCase();
