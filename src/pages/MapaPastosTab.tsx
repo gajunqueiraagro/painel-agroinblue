@@ -15,8 +15,6 @@ import { exportMapaPastosPdf } from '@/lib/exportMapaPastosPdf';
 import { calcUA, calcUAHa, calcPesoMedioPonderado } from '@/lib/calculos/zootecnicos';
 import { formatNum } from '@/lib/calculos/formatters';
 import { tipoUsoLabel } from '@/lib/calculos/labels';
-import { useLancamentos } from '@/hooks/useLancamentos';
-import { useFechamentoCategoria } from '@/hooks/useFechamentoCategoria';
 
 export interface PastoMapaRow {
   pasto: Pasto;
@@ -58,7 +56,6 @@ export function MapaPastosTab() {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
   const { fechamentos, loadFechamentos, loadItens } = useFechamento();
-  const { lancamentos, saldosIniciais } = useLancamentos();
 
   const curYear = new Date().getFullYear();
   const anosDisp = useMemo(() => {
@@ -70,16 +67,6 @@ export function MapaPastosTab() {
   const [anoFiltro, setAnoFiltro] = useState(String(curYear));
   const [mesFiltro, setMesFiltro] = useState(new Date().getMonth() + 1);
   const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
-
-  // ── Fonte oficial de peso: mesma base do Painel do Consultor ──
-  const resumoOficial = useFechamentoCategoria(
-    fazendaAtual?.id,
-    Number(anoFiltro),
-    mesFiltro,
-    lancamentos,
-    saldosIniciais,
-    categorias,
-  );
 
   const [rows, setRows] = useState<PastoMapaRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -392,17 +379,19 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
     </colgroup>
   );
 
-  // ── Peso oficial por categoria: fonte única = useFechamentoCategoria (mesma do Painel do Consultor) ──
+  // Compute peso médio per category from totais (for the new "Peso Kg" row)
   const pesosPorCategoria = useMemo(() => {
     const map = new Map<string, number | null>();
-    resumoOficial.rows.forEach(row => {
-      map.set(row.categoriaId, row.pesoMedioFinalKg);
+    categorias.forEach(cat => {
+      const t = totais.catTotals.get(cat.id);
+      if (t && t.qtdComPeso > 0) {
+        map.set(cat.id, t.pesoTotal / t.qtdComPeso);
+      } else {
+        map.set(cat.id, null);
+      }
     });
     return map;
-  }, [resumoOficial.rows]);
-
-  // Peso médio geral oficial (ponderado pelo saldo conciliado, não pelo pasto)
-  const pesoMedioOficial = resumoOficial.pesoMedioGeral;
+  }, [categorias, totais]);
 
   return (
     <div className="flex flex-1 min-h-0 flex-col overflow-hidden border-t border-border/30 bg-background">
@@ -522,7 +511,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
                     );
                   })}
                   <td className="px-0.5 py-0.5 text-center text-[11px] font-extrabold border-r" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>{formatNum(totais.totalCab, 0)}</td>
-                  <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r tabular-nums" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>{pesoMedioOficial ? formatNum(pesoMedioOficial, 2) : '—'}</td>
+                  <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r tabular-nums" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>{totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 2) : '—'}</td>
                   <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)' }}>{formatNum(totais.areaTotal, 1)}</td>
                   <td className={`px-0.5 py-0.5 text-center text-[10px] italic border-r ${getUaHaColor(totais.uaHaGeral)}`} style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)' }}>
                     {totais.uaHaGeral ? formatNum(totais.uaHaGeral, 2) : '—'}
@@ -551,7 +540,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
                     );
                   })}
                   <td className="px-0.5 py-0.5 text-center text-[10px] italic tabular-nums border-r" style={{ borderColor: 'hsl(220 13% 80%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>
-                    {pesoMedioOficial ? formatNum(pesoMedioOficial, 2) : '—'}
+                    {totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 2) : '—'}
                   </td>
                   <td className="border-r" style={{ borderColor: 'hsl(220 13% 80%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }} />
                   <td className="border-r" style={{ borderColor: 'hsl(220 13% 80%)' }} />
