@@ -617,6 +617,17 @@ export function LancamentoV2Dialog({
 
   const handleSubmit = async () => {
     if (!canSave) return;
+    // Extra validation for transfers
+    if (isTransferencia) {
+      if (!contaOrigemId || contaOrigemId === '__none__' || !contaDestinoId || contaDestinoId === '__none__') {
+        toast.error('Transferência exige conta de origem e conta de destino.');
+        return;
+      }
+      if (contaOrigemId === contaDestinoId) {
+        toast.error('Conta de origem e destino devem ser diferentes.');
+        return;
+      }
+    }
     setSaving(true);
 
     // Capture the editing ID from the stable ref — prevents stale closure issues
