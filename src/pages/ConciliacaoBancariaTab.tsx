@@ -651,18 +651,22 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                       >
                         Saídas ({saidas.length})
                       </button>
-                      <button
-                        onClick={() => setFiltroTipoLanc(filtroTipoLanc === 'transf_entrada' ? 'todos' : 'transf_entrada')}
-                        className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipoLanc === 'transf_entrada' ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 hover:opacity-80'}`}
-                      >
-                        Transf. Ent. ({transfEntrada.length})
-                      </button>
-                      <button
-                        onClick={() => setFiltroTipoLanc(filtroTipoLanc === 'transf_saida' ? 'todos' : 'transf_saida')}
-                        className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipoLanc === 'transf_saida' ? 'bg-orange-600 text-white' : 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300 hover:opacity-80'}`}
-                      >
-                        Transf. Saída ({transfSaida.length})
-                      </button>
+                      {contaId !== '__all__' && (
+                        <>
+                          <button
+                            onClick={() => setFiltroTipoLanc(filtroTipoLanc === 'transf_entrada' ? 'todos' : 'transf_entrada')}
+                            className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipoLanc === 'transf_entrada' ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 hover:opacity-80'}`}
+                          >
+                            Transf. Ent. ({transfEntrada.length})
+                          </button>
+                          <button
+                            onClick={() => setFiltroTipoLanc(filtroTipoLanc === 'transf_saida' ? 'todos' : 'transf_saida')}
+                            className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipoLanc === 'transf_saida' ? 'bg-orange-600 text-white' : 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300 hover:opacity-80'}`}
+                          >
+                            Transf. Saída ({transfSaida.length})
+                          </button>
+                        </>
+                      )}
                     </div>
                     <div className="max-h-[300px] overflow-y-auto rounded border">
                       <Table>
