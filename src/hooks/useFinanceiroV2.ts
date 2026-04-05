@@ -95,6 +95,7 @@ export interface FiltrosV2 {
   mes?: string;           // single month or 'todos'
   meses?: string[];       // multi-month select
   conta_bancaria_id?: string;
+  conta_destino_id?: string;
   tipo_operacao?: string;
   status_transacao?: string;
   macro_custo?: string;
