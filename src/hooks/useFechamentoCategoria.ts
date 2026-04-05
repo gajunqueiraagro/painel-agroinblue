@@ -31,11 +31,17 @@ export interface FechamentoCategoriaRow {
   origemPeso: OrigemPeso;
 }
 
+export interface PesosPastosResult {
+  porCategoria: Record<string, number>;
+  pesoMedioGeralPastos: number | null;
+}
+
 export interface FechamentoCategoriaResumo {
   rows: FechamentoCategoriaRow[];
   totalCabecas: number;
   pesoMedioGeral: number | null;
   pesoTotalGeral: number;
+  pesoMedioGeralPastos: number | null;
   loading: boolean;
 }
 
