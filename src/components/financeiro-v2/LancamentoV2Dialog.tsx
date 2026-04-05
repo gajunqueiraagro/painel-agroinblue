@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Plus, Search, Check, ChevronsUpDown, AlertCircle, Copy, KeyRound, RefreshCw } from 'lucide-react';
+import { Plus, Search, Check, ChevronsUpDown, AlertCircle, Copy, KeyRound, RefreshCw, CalendarDays, User, DollarSign, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
@@ -779,9 +779,9 @@ export function LancamentoV2Dialog({
     }
   }, [open]);
 
-  const sectionClass = "rounded-md bg-muted/30 dark:bg-muted/15 border border-border/30 px-3 py-2 space-y-1.5";
-  const sectionTitle = "text-[9px] font-bold text-muted-foreground/80 uppercase tracking-[0.12em] mb-0.5";
-  const fieldBg = "bg-background dark:bg-muted border-border/40";
+  const sectionClass = "rounded-lg border border-[hsl(var(--border))] bg-[hsl(210_33%_97%)] dark:bg-muted/20 px-3.5 py-2.5 space-y-2";
+  const sectionTitleClass = "flex items-center gap-1.5 text-[11px] font-bold text-primary uppercase tracking-[0.08em]";
+  const fieldBg = "bg-background border-[hsl(210_20%_80%)] focus-visible:border-primary focus-visible:ring-primary/20 focus-visible:shadow-[0_0_0_3px_hsl(var(--primary)/0.08)]";
 
   return (
     <>
@@ -797,7 +797,7 @@ export function LancamentoV2Dialog({
 
             {/* ── BLOCO 1 — Tipo e Datas ── */}
             <section className={sectionClass}>
-              <p className={sectionTitle}>Tipo e Datas</p>
+              <p className={sectionTitleClass}><CalendarDays className="h-3.5 w-3.5" /> Tipo e Datas</p>
               <div className="grid grid-cols-4 gap-2">
                 <div>
                   <Label className="text-[10px]">Tipo Operação *</Label>
@@ -830,7 +830,7 @@ export function LancamentoV2Dialog({
 
             {/* ── BLOCO 2 — Identificação ── */}
             <section className={sectionClass}>
-              <p className={sectionTitle}>Identificação</p>
+              <p className={sectionTitleClass}><User className="h-3.5 w-3.5" /> Identificação</p>
               <div className="grid grid-cols-2 gap-2">
                 {/* Produto */}
                 <div ref={produtoWrapperRef} className="relative col-span-2">
@@ -987,7 +987,7 @@ export function LancamentoV2Dialog({
 
             {/* ── BLOCO 3 — Valor e Classificação ── */}
             <section className={sectionClass}>
-              <p className={sectionTitle}>Valor e Classificação</p>
+              <p className={sectionTitleClass}><DollarSign className="h-3.5 w-3.5" /> Valor e Classificação</p>
               <div className="grid grid-cols-[140px_1fr] gap-2">
                 <div>
                   <Label className="text-[10px]">Valor (R$) *</Label>
@@ -1160,7 +1160,7 @@ export function LancamentoV2Dialog({
 
             {/* ── BLOCO 4 — Complementares ── */}
             <section className={sectionClass}>
-              <p className={sectionTitle}>Complementares</p>
+              <p className={sectionTitleClass}><FileText className="h-3.5 w-3.5" /> Complementares</p>
               <div className="grid grid-cols-[120px_1fr_1fr] gap-2">
                 <div>
                   <Label className="text-[10px]">Nota Fiscal</Label>
