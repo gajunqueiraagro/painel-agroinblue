@@ -1160,7 +1160,7 @@ export function LancamentoV2Dialog({
 
             {/* ── BLOCO 4 — Complementares ── */}
             <section className={sectionClass}>
-              <p className={sectionTitle}>Complementares</p>
+              <p className={sectionTitleClass}><FileText className="h-3.5 w-3.5" /> Complementares</p>
               <div className="grid grid-cols-[120px_1fr_1fr] gap-2">
                 <div>
                   <Label className="text-[10px]">Nota Fiscal</Label>
