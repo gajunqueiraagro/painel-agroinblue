@@ -798,9 +798,9 @@ export function LancamentoV2Dialog({
             {/* ── BLOCO 1 — Tipo e Datas ── */}
             <section className={sectionClass}>
               <p className={sectionTitle}>Tipo e Datas</p>
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-4 gap-2">
                 <div>
-                  <Label className="text-xs">Tipo Operação *</Label>
+                  <Label className="text-[10px]">Tipo Operação *</Label>
                   <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigemId(''); setContaDestinoId(''); setSubcentro(''); setMacroCusto(''); setCentroCusto(''); setSubcentroSearch(''); }}>
                     <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-9", fieldBg)}><SelectValue /></SelectTrigger>
                     <SelectContent>
