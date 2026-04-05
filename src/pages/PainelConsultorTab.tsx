@@ -113,6 +113,7 @@ function buildMonthlyData(
   areaProdutiva: number,
   pesosPorMes: Record<string, Record<string, number>>,
   valorRebanhoMes: number[],
+  pesoMedioGeralPorMes: Record<string, number | null>,
 ): MonthlyData {
   const { saldoInicioMes, saldoFinalAno, saldoInicialAno } = calcSaldoMensalAcumulado(saldosIniciais, lancPec, ano);
 
