@@ -530,14 +530,28 @@ export function FinV2SaldosTab() {
                       const isAuto = s.origem_saldo_inicial === 'automatico';
                       const editable = canEditSaldoFinal(s);
                       const blockReason = getEditBlockReason(s);
+                      // Chain integrity check
+                      const prevFinal = findPrevSaldoFinal(s.conta_bancaria_id, s.ano_mes);
+                      const chainBroken = prevFinal !== null && Math.abs(prevFinal - s.saldo_inicial) > 0.01;
 
                       return (
-                        <TableRow key={s.id} className={`text-[11px] ${inconsistency ? 'bg-red-50/50 dark:bg-red-950/20' : ''}`}>
+                        <TableRow key={s.id} className={`text-[11px] ${inconsistency || chainBroken ? 'bg-red-50/50 dark:bg-red-950/20' : ''}`}>
                           <TableCell className="py-1">{mesLabel(s.ano_mes)}</TableCell>
                           <TableCell className="py-1">{contaNome(s.conta_bancaria_id)}</TableCell>
                           <TableCell className="text-right tabular-nums py-1">
                             <div className="flex items-center justify-end gap-1">
-                              {isAuto && <Link2 className="h-3 w-3 text-emerald-500 shrink-0" />}
+                              {chainBroken ? (
+                                <Tooltip>
+                                  <TooltipTrigger>
+                                    <AlertTriangle className="h-3 w-3 text-red-500 shrink-0" />
+                                  </TooltipTrigger>
+                                  <TooltipContent className="text-[10px] max-w-[200px]">
+                                    Inconsistência de saldo entre meses. Esperado: {formatMoeda(prevFinal!)} | Atual: {formatMoeda(s.saldo_inicial)}
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : isAuto ? (
+                                <Link2 className="h-3 w-3 text-emerald-500 shrink-0" />
+                              ) : null}
                               {formatMoeda(s.saldo_inicial)}
                             </div>
                           </TableCell>
