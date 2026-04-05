@@ -241,25 +241,20 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
       for (const l of mesLancs) {
         const tipo = (l.tipo_operacao || '').toLowerCase().replace(/[\s\-–—]/g, '');
         const valor = Math.abs(l.valor);
+        const isTransf = tipo.startsWith('3') || tipo.includes('transfer');
 
-        if (tipo.startsWith('1') || tipo.includes('entrada')) {
-          if (tipo.includes('transfer')) {
-            transferenciasRecebidas += valor;
-          } else {
-            entradasTerceiros += valor;
-          }
-        } else if (tipo.startsWith('2') || tipo.includes('saida') || tipo.includes('saída')) {
-          if (tipo.includes('transfer')) {
-            transferenciasEnviadas += valor;
-          } else {
-            saidasTerceiros += valor;
-          }
-        } else if (tipo.startsWith('3') || tipo.includes('transfer')) {
-          if (l.sinal >= 0) {
+        if (isTransf) {
+          // For transfers, determine direction based on which account matches
+          const isDestino = contaId !== '__all__' && l.conta_destino_id === contaId;
+          if (isDestino) {
             transferenciasRecebidas += valor;
           } else {
             transferenciasEnviadas += valor;
           }
+        } else if (tipo.startsWith('1') || tipo.includes('entrada')) {
+          entradasTerceiros += valor;
+        } else {
+          saidasTerceiros += valor;
         }
       }
 
