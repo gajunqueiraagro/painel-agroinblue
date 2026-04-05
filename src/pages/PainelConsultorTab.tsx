@@ -737,6 +737,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
   const [viewTab, setViewTab] = useState<ViewTab>('mensal');
   const [cenario, setCenario] = useState<Cenario>('realizado');
   const [pesosPorMes, setPesosPorMes] = useState<Record<string, Record<string, number>>>({});
+  const [qtdPorMes, setQtdPorMes] = useState<Record<string, Record<string, number>>>({});
   const [pesoMedioGeralPorMes, setPesoMedioGeralPorMes] = useState<Record<string, number | null>>({});
   const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(Array(13).fill(0));
   const [openBlocos, setOpenBlocos] = useState<Record<string, boolean>>({});
