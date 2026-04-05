@@ -189,7 +189,13 @@ function buildMonthlyData(
   const pesoTotalIni = mk(pesoIniMesCalc);
   const pesoTotalFin = mk(pesoFinMesCalc);
   const pesoMedioIni = mk(m => { const c = cabIniMes(m); return c > 0 ? pesoIniMesCalc(m) / c : 0; });
-  const pesoMedioFin = mk(m => { const c = cabFinMes(m); return c > 0 ? pesoFinMesCalc(m) / c : 0; });
+  const pesoMedioFin = mk(m => {
+    const anoMesKey = `${ano}-${String(m).padStart(2, '0')}`;
+    const pmPastos = pesoMedioGeralPorMes[anoMesKey];
+    if (pmPastos !== null && pmPastos !== undefined && pmPastos > 0) return pmPastos;
+    const c = cabFinMes(m);
+    return c > 0 ? pesoFinMesCalc(m) / c : 0;
+  });
 
   const arrobasProd = mk(m => {
     const pFin = pesoFinMesCalc(m);
