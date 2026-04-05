@@ -77,38 +77,49 @@ export async function loadPesosPastosCompleto(
     .eq('fazenda_id', fazendaId)
     .eq('ano_mes', anoMes);
 
-  if (!fechamentos?.length) return { porCategoria: {}, pesoMedioGeralPastos: null };
+  if (!fechamentos?.length) return { porCategoria: {}, quantidadePorCategoria: {}, pesoMedioGeralPastos: null, totalCabecasPastos: 0 };
 
   const { data: itens } = await supabase
     .from('fechamento_pasto_itens')
     .select('categoria_id, quantidade, peso_medio_kg')
     .in('fechamento_id', fechamentos.map(f => f.id));
 
-  if (!itens) return { porCategoria: {}, pesoMedioGeralPastos: null };
+  if (!itens) return { porCategoria: {}, quantidadePorCategoria: {}, pesoMedioGeralPastos: null, totalCabecasPastos: 0 };
 
-  const acum: Record<string, { totalPeso: number; totalQtd: number }> = {};
+  // Accumulate quantities (all items) and weights (only items with valid weight)
+  const acumQtd: Record<string, number> = {};
+  const acumPeso: Record<string, { totalPeso: number; totalQtd: number }> = {};
   let geralPeso = 0;
   let geralQtd = 0;
+  let totalCabecas = 0;
 
   itens.forEach(item => {
-    if (!item.peso_medio_kg || item.peso_medio_kg <= 0 || item.quantidade <= 0) return;
+    if (item.quantidade <= 0) return;
     const codigo = idToCodigo.get(item.categoria_id);
     if (!codigo) return;
-    if (!acum[codigo]) acum[codigo] = { totalPeso: 0, totalQtd: 0 };
-    acum[codigo].totalPeso += item.peso_medio_kg * item.quantidade;
-    acum[codigo].totalQtd += item.quantidade;
-    geralPeso += item.peso_medio_kg * item.quantidade;
-    geralQtd += item.quantidade;
+
+    // Always accumulate quantity
+    acumQtd[codigo] = (acumQtd[codigo] || 0) + item.quantidade;
+    totalCabecas += item.quantidade;
+
+    // Accumulate weight only when valid
+    if (item.peso_medio_kg && item.peso_medio_kg > 0) {
+      if (!acumPeso[codigo]) acumPeso[codigo] = { totalPeso: 0, totalQtd: 0 };
+      acumPeso[codigo].totalPeso += item.peso_medio_kg * item.quantidade;
+      acumPeso[codigo].totalQtd += item.quantidade;
+      geralPeso += item.peso_medio_kg * item.quantidade;
+      geralQtd += item.quantidade;
+    }
   });
 
   const porCategoria: Record<string, number> = {};
-  Object.entries(acum).forEach(([codigo, { totalPeso, totalQtd }]) => {
+  Object.entries(acumPeso).forEach(([codigo, { totalPeso, totalQtd }]) => {
     if (totalQtd > 0) porCategoria[codigo] = totalPeso / totalQtd;
   });
 
   const pesoMedioGeralPastos = geralQtd > 0 ? geralPeso / geralQtd : null;
 
-  return { porCategoria, pesoMedioGeralPastos };
+  return { porCategoria, quantidadePorCategoria: acumQtd, pesoMedioGeralPastos, totalCabecasPastos: totalCabecas };
 }
 
 // ---------------------------------------------------------------------------
