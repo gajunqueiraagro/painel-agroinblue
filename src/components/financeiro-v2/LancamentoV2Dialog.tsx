@@ -988,10 +988,10 @@ export function LancamentoV2Dialog({
             {/* ── BLOCO 3 — Valor e Classificação ── */}
             <section className={sectionClass}>
               <p className={sectionTitle}>Valor e Classificação</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-[140px_1fr] gap-2">
                 <div>
-                  <Label className="text-xs">Valor (R$) *</Label>
-                  <Input tabIndex={10} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className={cn("h-9 text-right font-mono", fieldBg)} placeholder="0,00" inputMode="numeric" />
+                  <Label className="text-[10px]">Valor (R$) *</Label>
+                  <Input tabIndex={10} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className={cn("h-8 text-right font-mono", fieldBg)} placeholder="0,00" inputMode="numeric" />
                 </div>
                 <div className="col-span-2">
                   <Label className="text-xs">Subcentro *</Label>
