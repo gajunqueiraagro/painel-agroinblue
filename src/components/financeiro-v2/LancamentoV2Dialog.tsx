@@ -802,7 +802,7 @@ export function LancamentoV2Dialog({
                 <div>
                   <Label className="text-[10px]">Tipo Operação *</Label>
                   <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigemId(''); setContaDestinoId(''); setSubcentro(''); setMacroCusto(''); setCentroCusto(''); setSubcentroSearch(''); }}>
-                    <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-9", fieldBg)}><SelectValue /></SelectTrigger>
+                    <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {TIPOS_OPERACAO.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                     </SelectContent>
