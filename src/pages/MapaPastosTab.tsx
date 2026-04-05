@@ -551,7 +551,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
                     );
                   })}
                   <td className="px-0.5 py-0.5 text-center text-[10px] italic tabular-nums border-r" style={{ borderColor: 'hsl(220 13% 80%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>
-                    {totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 2) : '—'}
+                    {pesoMedioOficial ? formatNum(pesoMedioOficial, 2) : '—'}
                   </td>
                   <td className="border-r" style={{ borderColor: 'hsl(220 13% 80%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }} />
                   <td className="border-r" style={{ borderColor: 'hsl(220 13% 80%)' }} />
