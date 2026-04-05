@@ -876,7 +876,7 @@ export function LancamentoV2Dialog({
                 {/* Fornecedor */}
                 <div>
                   <Label className="text-[10px]">Fornecedor *</Label>
-                  <div className="flex gap-1.5">
+                  <div className="flex gap-1">
                     <Popover open={fornecedorOpen} onOpenChange={v => { setFornecedorOpen(v); if (!v) setFornecedorSearch(''); }}>
                       <PopoverTrigger asChild>
                         <Button tabIndex={6} variant="outline" role="combobox" aria-expanded={fornecedorOpen} className={cn("flex-1 h-9 justify-between font-normal text-sm", fieldBg)}>
