@@ -221,20 +221,19 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
     const contaOrigemId = filtros.conta_bancaria_id?.trim();
     const contaDestinoId = filtros.conta_destino_id?.trim();
-    const filtrarTransferenciaExata = Boolean(contaOrigemId && contaDestinoId);
 
-    if (filtrarTransferenciaExata) {
+    if (contaOrigemId && contaDestinoId) {
       query = query
         .eq('tipo_operacao', '3-Transferência')
         .eq('conta_bancaria_id', contaOrigemId)
         .eq('conta_destino_id', contaDestinoId);
     } else {
-      const contaParticipanteId = contaOrigemId || contaDestinoId;
-
-      if (contaParticipanteId) {
-        query = query.or(`conta_bancaria_id.eq.${contaParticipanteId},conta_destino_id.eq.${contaParticipanteId}`);
+      if (contaOrigemId) {
+        query = query.eq('conta_bancaria_id', contaOrigemId);
       }
-
+      if (contaDestinoId) {
+        query = query.eq('conta_destino_id', contaDestinoId);
+      }
       if (filtros.tipo_operacao) query = query.eq('tipo_operacao', filtros.tipo_operacao);
     }
 
