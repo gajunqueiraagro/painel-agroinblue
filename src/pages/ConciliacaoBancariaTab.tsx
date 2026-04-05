@@ -581,6 +581,15 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                   {isPendente && (
                     <p className="text-[10px] text-muted-foreground">Informe o saldo do extrato</p>
                   )}
+                  {!isConciliado && !isPendente && onNavigateToLancamentos && (
+                    <Button
+                      size="sm"
+                      className="mt-1 h-7 text-[11px] gap-1.5 px-3 bg-cta text-cta-foreground hover:bg-cta-hover font-semibold shadow-sm"
+                      onClick={() => onNavigateToLancamentos(ano, parseInt(selectedMes))}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" /> Conciliar
+                    </Button>
+                  )}
                 </div>
               </div>
 
