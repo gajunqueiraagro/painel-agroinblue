@@ -779,8 +779,8 @@ export function LancamentoV2Dialog({
     }
   }, [open]);
 
-  const sectionClass = "rounded-lg bg-muted/20 dark:bg-muted/10 border border-border/20 p-3 space-y-2.5";
-  const sectionTitle = "text-[9px] font-bold text-muted-foreground uppercase tracking-widest";
+  const sectionClass = "rounded-md bg-muted/30 dark:bg-muted/15 border border-border/30 px-3 py-2 space-y-1.5";
+  const sectionTitle = "text-[9px] font-bold text-muted-foreground/80 uppercase tracking-[0.12em] mb-0.5";
   const fieldBg = "bg-background dark:bg-muted border-border/40";
 
   return (
