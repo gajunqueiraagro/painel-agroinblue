@@ -45,6 +45,8 @@ interface LancamentoResumo {
   status_transacao: string | null;
   favorecido_id: string | null;
   nota_fiscal: string | null;
+  conta_bancaria_id: string | null;
+  conta_destino_id: string | null;
 }
 
 interface FornecedorRef {
@@ -189,12 +191,15 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
     while (true) {
       let lQuery = supabase
         .from('financeiro_lancamentos_v2')
-        .select('tipo_operacao, valor, sinal, data_competencia, data_pagamento, descricao, status_transacao, favorecido_id, nota_fiscal')
+        .select('tipo_operacao, valor, sinal, data_competencia, data_pagamento, descricao, status_transacao, favorecido_id, nota_fiscal, conta_bancaria_id, conta_destino_id')
         .eq('cliente_id', clienteId)
         .eq('cancelado', false)
         .gte('ano_mes', anoMesMin)
         .lte('ano_mes', anoMesMax);
-      if (contaId !== '__all__') lQuery = lQuery.eq('conta_bancaria_id', contaId);
+      if (contaId !== '__all__') {
+        // Fetch records where this account is origin OR destination
+        lQuery = lQuery.or(`conta_bancaria_id.eq.${contaId},conta_destino_id.eq.${contaId}`);
+      }
       lQuery = lQuery.order('data_competencia').range(from, from + batchSize - 1);
       const { data: lData } = await lQuery;
       if (!lData || lData.length === 0) break;
@@ -236,25 +241,20 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
       for (const l of mesLancs) {
         const tipo = (l.tipo_operacao || '').toLowerCase().replace(/[\s\-–—]/g, '');
         const valor = Math.abs(l.valor);
+        const isTransf = tipo.startsWith('3') || tipo.includes('transfer');
 
-        if (tipo.startsWith('1') || tipo.includes('entrada')) {
-          if (tipo.includes('transfer')) {
-            transferenciasRecebidas += valor;
-          } else {
-            entradasTerceiros += valor;
-          }
-        } else if (tipo.startsWith('2') || tipo.includes('saida') || tipo.includes('saída')) {
-          if (tipo.includes('transfer')) {
-            transferenciasEnviadas += valor;
-          } else {
-            saidasTerceiros += valor;
-          }
-        } else if (tipo.startsWith('3') || tipo.includes('transfer')) {
-          if (l.sinal >= 0) {
+        if (isTransf) {
+          // For transfers, determine direction based on which account matches
+          const isDestino = contaId !== '__all__' && l.conta_destino_id === contaId;
+          if (isDestino) {
             transferenciasRecebidas += valor;
           } else {
             transferenciasEnviadas += valor;
           }
+        } else if (tipo.startsWith('1') || tipo.includes('entrada')) {
+          entradasTerceiros += valor;
+        } else {
+          saidasTerceiros += valor;
         }
       }
 
@@ -512,13 +512,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
               {card.lancamentos.length > 0 && (() => {
                 const classifyLanc = (l: LancamentoResumo) => {
                   const tipo = (l.tipo_operacao || '').toLowerCase().replace(/[\s\-–—]/g, '');
-                  if (tipo.startsWith('1') || tipo.includes('entrada')) {
-                    return tipo.includes('transfer') ? 'transf_entrada' : 'entrada';
-                  } else if (tipo.startsWith('2') || tipo.includes('saida') || tipo.includes('saída')) {
-                    return tipo.includes('transfer') ? 'transf_saida' : 'saida';
-                  } else if (tipo.startsWith('3') || tipo.includes('transfer')) {
-                    return l.sinal >= 0 ? 'transf_entrada' : 'transf_saida';
+                  const isTransf = tipo.startsWith('3') || tipo.includes('transfer');
+
+                  if (isTransf) {
+                    const isDestino = contaId !== '__all__' && l.conta_destino_id === contaId;
+                    return isDestino ? 'transf_entrada' : 'transf_saida';
                   }
+                  if (tipo.startsWith('1') || tipo.includes('entrada')) return 'entrada';
                   return 'saida';
                 };
 
