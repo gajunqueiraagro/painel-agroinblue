@@ -275,33 +275,39 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
       // For "Todas as contas", derive status from per-account conciliation
       let status: MesCard['status'];
       if (isAllContas && contas.length > 0) {
-        const perAccountStatuses = contas.map(conta => {
-          const accSaldoRow = saldos.find(s => s.ano_mes === anoMes && s.conta_bancaria_id === conta.id);
-          if (!accSaldoRow) return 'pendente' as const;
-          const accSaldoInicial = accSaldoRow.saldo_inicial || 0;
-          let accEntradas = 0;
-          let accSaidas = 0;
-          for (const l of mesLancs) {
-            const t = (l.tipo_operacao || '').toLowerCase().replace(/[\s\-–—]/g, '');
-            const v = Math.abs(l.valor);
-            const isTr = t.startsWith('3') || t.includes('transfer');
-            if (isTr) {
-              if (l.conta_destino_id === conta.id) accEntradas += v;
-              else if (l.conta_bancaria_id === conta.id) accSaidas += v;
-            } else if (t.startsWith('1') || t.includes('entrada')) {
-              if (l.conta_bancaria_id === conta.id) accEntradas += v;
-            } else {
-              if (l.conta_bancaria_id === conta.id) accSaidas += v;
+        // Only evaluate accounts that have saldo data for this month
+        const accountsWithSaldo = contas.filter(conta =>
+          saldos.some(s => s.ano_mes === anoMes && s.conta_bancaria_id === conta.id)
+        );
+        if (accountsWithSaldo.length === 0) {
+          status = 'pendente';
+        } else {
+          const perAccountStatuses = accountsWithSaldo.map(conta => {
+            const accSaldoRow = saldos.find(s => s.ano_mes === anoMes && s.conta_bancaria_id === conta.id)!;
+            const accSaldoInicial = accSaldoRow.saldo_inicial || 0;
+            let accEntradas = 0;
+            let accSaidas = 0;
+            for (const l of mesLancs) {
+              const t = (l.tipo_operacao || '').toLowerCase().replace(/[\s\-–—]/g, '');
+              const v = Math.abs(l.valor);
+              const isTr = t.startsWith('3') || t.includes('transfer');
+              if (isTr) {
+                if (l.conta_destino_id === conta.id) accEntradas += v;
+                else if (l.conta_bancaria_id === conta.id) accSaidas += v;
+              } else if (t.startsWith('1') || t.includes('entrada')) {
+                if (l.conta_bancaria_id === conta.id) accEntradas += v;
+              } else {
+                if (l.conta_bancaria_id === conta.id) accSaidas += v;
+              }
             }
-          }
-          const accCalc = accSaldoInicial + accEntradas - accSaidas;
-          const accDiff = Math.abs((accSaldoRow.saldo_final || 0) - accCalc);
-          return accDiff < 0.01 ? 'conciliado' as const : accDiff <= 100 ? 'atencao' as const : 'nao_conciliado' as const;
-        });
-        const hasPendente = perAccountStatuses.some(s => s === 'pendente');
-        const hasNaoConc = perAccountStatuses.some(s => s === 'nao_conciliado');
-        const hasAtencao = perAccountStatuses.some(s => s === 'atencao');
-        status = hasNaoConc ? 'nao_conciliado' : hasAtencao ? 'atencao' : hasPendente ? 'pendente' : 'conciliado';
+            const accCalc = accSaldoInicial + accEntradas - accSaidas;
+            const accDiff = Math.abs((accSaldoRow.saldo_final || 0) - accCalc);
+            return accDiff < 0.01 ? 'conciliado' as const : accDiff <= 100 ? 'atencao' as const : 'nao_conciliado' as const;
+          });
+          const hasNaoConc = perAccountStatuses.some(s => s === 'nao_conciliado');
+          const hasAtencao = perAccountStatuses.some(s => s === 'atencao');
+          status = hasNaoConc ? 'nao_conciliado' : hasAtencao ? 'atencao' : 'conciliado';
+        }
       } else {
         status = getStatus(diferenca, saldoExtrato);
       }
@@ -645,18 +651,22 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                       >
                         Saídas ({saidas.length})
                       </button>
-                      <button
-                        onClick={() => setFiltroTipoLanc(filtroTipoLanc === 'transf_entrada' ? 'todos' : 'transf_entrada')}
-                        className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipoLanc === 'transf_entrada' ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 hover:opacity-80'}`}
-                      >
-                        Transf. Ent. ({transfEntrada.length})
-                      </button>
-                      <button
-                        onClick={() => setFiltroTipoLanc(filtroTipoLanc === 'transf_saida' ? 'todos' : 'transf_saida')}
-                        className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipoLanc === 'transf_saida' ? 'bg-orange-600 text-white' : 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300 hover:opacity-80'}`}
-                      >
-                        Transf. Saída ({transfSaida.length})
-                      </button>
+                      {contaId !== '__all__' && (
+                        <>
+                          <button
+                            onClick={() => setFiltroTipoLanc(filtroTipoLanc === 'transf_entrada' ? 'todos' : 'transf_entrada')}
+                            className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipoLanc === 'transf_entrada' ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 hover:opacity-80'}`}
+                          >
+                            Transf. Ent. ({transfEntrada.length})
+                          </button>
+                          <button
+                            onClick={() => setFiltroTipoLanc(filtroTipoLanc === 'transf_saida' ? 'todos' : 'transf_saida')}
+                            className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${filtroTipoLanc === 'transf_saida' ? 'bg-orange-600 text-white' : 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300 hover:opacity-80'}`}
+                          >
+                            Transf. Saída ({transfSaida.length})
+                          </button>
+                        </>
+                      )}
                     </div>
                     <div className="max-h-[300px] overflow-y-auto rounded border">
                       <Table>
