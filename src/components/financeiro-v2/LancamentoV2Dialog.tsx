@@ -789,11 +789,11 @@ export function LancamentoV2Dialog({
         <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col p-0 bg-card dark:bg-card rounded-xl shadow-2xl border border-border overflow-hidden">
           {/* Header */}
           <DialogHeader className="px-5 pt-3 pb-2.5 border-b border-primary/20 bg-primary">
-            <DialogTitle className="text-[13px] font-bold tracking-tight">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
+            <DialogTitle className="text-[13px] font-bold tracking-tight text-primary-foreground">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
           </DialogHeader>
 
           {/* Scrollable body */}
-          <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
+          <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2 bg-background">
 
             {/* ── BLOCO 1 — Tipo e Datas ── */}
             <section className={sectionClass}>
