@@ -53,6 +53,19 @@ export async function loadPesosPastosPorCategoria(
   fazendaId: string,
   anoMes: string,
   categorias: CategoriaRebanho[],
+): Promise<Record<string, number>> {
+  const result = await loadPesosPastosCompleto(fazendaId, anoMes, categorias);
+  return result.porCategoria;
+}
+
+/**
+ * Retorna pesos por categoria E peso médio geral calculado
+ * exclusivamente a partir de fechamento_pasto_itens (fonte oficial).
+ */
+export async function loadPesosPastosCompleto(
+  fazendaId: string,
+  anoMes: string,
+  categorias: CategoriaRebanho[],
 ): Promise<PesosPastosResult> {
   const idToCodigo = new Map(categorias.map(c => [c.id, c.codigo]));
 
