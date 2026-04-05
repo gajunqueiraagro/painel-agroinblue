@@ -506,9 +506,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                     </div>
                   </div>
 
-                  <div className="px-2.5 pt-1 border-t">
+                  <div className="px-2.5 pt-0.5 border-t">
                     <div className="flex items-center justify-between">
-                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-medium">Saldo Calculado</p>
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-medium">Saldo no Sistema</p>
                       <p className={`text-xs font-bold tabular-nums ${card.saldoCalculado >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {formatMoeda(card.saldoCalculado)}
                       </p>
