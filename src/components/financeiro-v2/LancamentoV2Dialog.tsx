@@ -246,7 +246,7 @@ export function LancamentoV2Dialog({
       setMacroCusto(lancamento.macro_custo || '');
       setCentroCusto(lancamento.centro_custo || '');
       setTipoOperacao(lancamento.tipo_operacao);
-      setStatusTransacao(lancamento.status_transacao || 'previsto');
+      setStatusTransacao(normalizeStatusTransacao(lancamento.status_transacao));
       setValorDisplay(toBRL(lancamento.valor));
       // For transfers: origin = conta_bancaria_id, destination = conta_destino_id
       // For entries: destination = conta_bancaria_id
