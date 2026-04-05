@@ -1161,15 +1161,15 @@ export function LancamentoV2Dialog({
             {/* ── BLOCO 4 — Complementares ── */}
             <section className={sectionClass}>
               <p className={sectionTitle}>Complementares</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-[120px_1fr_1fr] gap-2">
                 <div>
-                  <Label className="text-xs">Nota Fiscal</Label>
-                  <Input tabIndex={12} value={notaFiscalDisplay} onChange={handleNotaFiscalChange} inputMode="numeric" className={cn("h-9 font-mono", fieldBg)} placeholder="000.000.000" />
+                  <Label className="text-[10px]">Nota Fiscal</Label>
+                  <Input tabIndex={12} value={notaFiscalDisplay} onChange={handleNotaFiscalChange} inputMode="numeric" className={cn("h-8 font-mono text-xs", fieldBg)} placeholder="000.000.000" />
                 </div>
                 <div>
-                  <Label className="text-xs">Forma de Pagamento</Label>
+                  <Label className="text-[10px]">Forma de Pagamento</Label>
                   <Select value={formaPgto || '__none_fp__'} onValueChange={handleFormaPgtoChange}>
-                    <SelectTrigger tabIndex={13} className={cn("h-9", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectTrigger tabIndex={13} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none_fp__">Nenhuma</SelectItem>
                       <SelectItem value="PIX">PIX</SelectItem>
@@ -1185,7 +1185,7 @@ export function LancamentoV2Dialog({
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-0.5">
-                    <Label className="text-xs">Dados Pagamento</Label>
+                    <Label className="text-[10px]">Dados Pagamento</Label>
                     <div className="flex gap-1">
                       {formaPgto === 'PIX' && dadosPagamento && (() => {
                         const chaveMatch = dadosPagamento.match(/Chave:\s*(.+)/i);
@@ -1204,18 +1204,18 @@ export function LancamentoV2Dialog({
                       )}
                     </div>
                   </div>
-                  <Textarea tabIndex={14} value={dadosPagamento} onChange={e => setDadosPagamento(e.target.value)} rows={1} placeholder="Chave PIX, dados bancários..." className={cn("text-xs resize-none", fieldBg)} />
+                  <Textarea tabIndex={14} value={dadosPagamento} onChange={e => setDadosPagamento(e.target.value)} rows={1} placeholder="Chave PIX, dados bancários..." className={cn("text-xs resize-none min-h-[32px]", fieldBg)} />
                 </div>
               </div>
               <div>
-                <Label className="text-xs">Observação</Label>
-                <Textarea tabIndex={15} value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Observações adicionais" className={cn("text-xs", fieldBg)} />
+                <Label className="text-[10px]">Observação</Label>
+                <Textarea tabIndex={15} value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Observações adicionais" className={cn("text-xs min-h-[48px]", fieldBg)} />
               </div>
             </section>
           </div>
 
           {/* Sticky footer */}
-          <div className="px-6 py-3 border-t border-border/30 bg-background dark:bg-card flex items-center gap-2">
+          <div className="px-5 py-2.5 border-t border-border/40 bg-[hsl(var(--muted))] dark:bg-[hsl(var(--muted)/0.6)] flex items-center gap-2">
             <Button variant="outline" onClick={onClose} className="px-5" tabIndex={16}>Cancelar</Button>
             <div className="flex-1" />
             {isEdit && onDelete && (
