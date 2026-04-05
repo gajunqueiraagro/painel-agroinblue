@@ -382,8 +382,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
               ))}
             </SelectContent>
           </Select>
-          <div className="flex-1" />
-          <div className="flex gap-0.5 rounded-md overflow-hidden">
+          <div className="flex flex-1 gap-0.5 rounded-md overflow-hidden ml-2">
             {mesCards.map(c => {
               const cfg = STATUS_CONFIG[c.status];
               const isSelected = selectedMes === c.mes;
@@ -391,7 +390,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                 <button
                   key={c.mes}
                   onClick={() => setSelectedMes(c.mes)}
-                  className={`w-[38px] py-1.5 text-center text-[9px] font-bold transition-all ${cfg.color} hover:opacity-80 ${isSelected ? 'ring-2 ring-primary scale-105 z-10' : 'opacity-70'}`}
+                  className={`flex-1 py-1.5 text-center text-[9px] font-bold transition-all ${cfg.color} hover:opacity-80 ${isSelected ? 'ring-2 ring-primary scale-105 z-10' : 'opacity-70'}`}
                   title={`${c.label}: ${cfg.label}`}
                 >
                   {c.label}
