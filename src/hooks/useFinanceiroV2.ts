@@ -29,6 +29,7 @@ export interface LancamentoV2 {
   historico: string | null;
   nota_fiscal: string | null;
   favorecido_id: string | null;
+  conta_destino_id: string | null;
   origem_lancamento: string;
   lote_importacao_id: string | null;
   forma_pagamento: string | null;
@@ -288,12 +289,14 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     const anoMes = form.data_pagamento
       ? form.data_pagamento.substring(0, 7)
       : form.data_competencia.substring(0, 7);
-    const sinal = (form.tipo_operacao || '').startsWith('1') ? 1 : -1;
+    const sinal = (form.tipo_operacao || '').startsWith('1') ? 1
+      : (form.tipo_operacao || '').startsWith('3') ? 0 : -1;
 
     return {
       cliente_id: clienteId!,
       fazenda_id: form.fazenda_id,
       conta_bancaria_id: form.conta_bancaria_id || null,
+      conta_destino_id: form.conta_destino_id || null,
       data_competencia: form.data_competencia,
       data_pagamento: form.data_pagamento || null,
       valor: form.valor,
@@ -320,7 +323,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     if (!clienteId || !user) return false;
 
     const row = buildInsertRow(form, user.id);
-    const { error } = await supabase.from('financeiro_lancamentos_v2').insert(row);
+    const { error } = await supabase.from('financeiro_lancamentos_v2').insert(row as any);
 
     if (error) {
       toast.error('Erro ao criar lançamento');
@@ -337,11 +340,13 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     const anoMes = form.data_pagamento
       ? form.data_pagamento.substring(0, 7)
       : form.data_competencia.substring(0, 7);
-    const sinal = (form.tipo_operacao || '').startsWith('1') ? 1 : -1;
+    const sinal = (form.tipo_operacao || '').startsWith('1') ? 1
+      : (form.tipo_operacao || '').startsWith('3') ? 0 : -1;
 
     const { error } = await supabase.from('financeiro_lancamentos_v2').update({
       fazenda_id: form.fazenda_id,
       conta_bancaria_id: form.conta_bancaria_id || null,
+      conta_destino_id: form.conta_destino_id || null,
       data_competencia: form.data_competencia,
       data_pagamento: form.data_pagamento || null,
       valor: form.valor,
@@ -361,7 +366,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       ano_mes: anoMes,
       editado_manual: true,
       updated_by: user.id,
-    }).eq('id', id);
+    } as any).eq('id', id);
 
     if (error) {
       toast.error('Erro ao editar lançamento');

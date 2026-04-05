@@ -2233,6 +2233,7 @@ export type Database = {
           cliente_id: string
           conciliado_em: string | null
           conta_bancaria_id: string | null
+          conta_destino_id: string | null
           contrato_id: string | null
           created_at: string
           created_by: string | null
@@ -2278,6 +2279,7 @@ export type Database = {
           cliente_id: string
           conciliado_em?: string | null
           conta_bancaria_id?: string | null
+          conta_destino_id?: string | null
           contrato_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -2323,6 +2325,7 @@ export type Database = {
           cliente_id?: string
           conciliado_em?: string | null
           conta_bancaria_id?: string | null
+          conta_destino_id?: string | null
           contrato_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -2382,6 +2385,13 @@ export type Database = {
           {
             foreignKeyName: "financeiro_lancamentos_v2_conta_bancaria_id_fkey"
             columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_contas_bancarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_lancamentos_v2_conta_destino_id_fkey"
+            columns: ["conta_destino_id"]
             isOneToOne: false
             referencedRelation: "financeiro_contas_bancarias"
             referencedColumns: ["id"]

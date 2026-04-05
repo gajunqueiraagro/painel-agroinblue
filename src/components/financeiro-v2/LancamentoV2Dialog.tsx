@@ -247,8 +247,19 @@ export function LancamentoV2Dialog({
       setTipoOperacao(lancamento.tipo_operacao);
       setStatusTransacao(lancamento.status_transacao || 'previsto');
       setValorDisplay(toBRL(lancamento.valor));
-      setContaOrigemId(lancamento.conta_bancaria_id || '');
-      setContaDestinoId('');
+      // For transfers: origin = conta_bancaria_id, destination = conta_destino_id
+      // For entries: destination = conta_bancaria_id
+      // For exits: origin = conta_bancaria_id
+      if (lancamento.tipo_operacao === '3-Transferência') {
+        setContaOrigemId(lancamento.conta_bancaria_id || '');
+        setContaDestinoId((lancamento as any).conta_destino_id || '');
+      } else if (lancamento.tipo_operacao === '1-Entradas') {
+        setContaOrigemId('');
+        setContaDestinoId(lancamento.conta_bancaria_id || '');
+      } else {
+        setContaOrigemId(lancamento.conta_bancaria_id || '');
+        setContaDestinoId('');
+      }
       setNotaFiscal(lancamento.nota_fiscal || '');
       setObservacao(lancamento.observacao || '');
       setFormaPgto(lancamento.forma_pagamento || '');
@@ -606,6 +617,17 @@ export function LancamentoV2Dialog({
 
   const handleSubmit = async () => {
     if (!canSave) return;
+    // Extra validation for transfers
+    if (isTransferencia) {
+      if (!contaOrigemId || contaOrigemId === '__none__' || !contaDestinoId || contaDestinoId === '__none__') {
+        toast.error('Transferência exige conta de origem e conta de destino.');
+        return;
+      }
+      if (contaOrigemId === contaDestinoId) {
+        toast.error('Conta de origem e destino devem ser diferentes.');
+        return;
+      }
+    }
     setSaving(true);
 
     // Capture the editing ID from the stable ref — prevents stale closure issues
@@ -693,6 +715,7 @@ export function LancamentoV2Dialog({
     const form: LancamentoV2Form = {
       fazenda_id: fazendaId,
       conta_bancaria_id: contaBancariaId,
+      conta_destino_id: isTransferencia && contaDestinoId && contaDestinoId !== '__none__' ? contaDestinoId : null,
       data_competencia: dataCompetencia,
       data_pagamento: dataPagamento || null,
       valor: Math.abs(valorNum),
@@ -708,6 +731,8 @@ export function LancamentoV2Dialog({
       forma_pagamento: formaPgto || null,
       dados_pagamento: dadosPagamento || null,
     };
+
+    console.log('[FinV2]', currentIsEdit ? 'UPDATE' : 'INSERT', 'lancamento id=', currentEditId, 'payload=', form);
 
     // CRITICAL: pass the stable ID for edits — ensures UPDATE, never INSERT
     const ok = await onSave(form, currentEditId || undefined);
