@@ -114,6 +114,7 @@ function buildMonthlyData(
   pesosPorMes: Record<string, Record<string, number>>,
   valorRebanhoMes: number[],
   pesoMedioGeralPorMes: Record<string, number | null>,
+  qtdPorMes: Record<string, Record<string, number>>,
 ): MonthlyData {
   const { saldoInicioMes, saldoFinalAno, saldoInicialAno } = calcSaldoMensalAcumulado(saldosIniciais, lancPec, ano);
 
@@ -136,7 +137,16 @@ function buildMonthlyData(
     const k = String(m).padStart(2, '0');
     return m === 1 ? saldoInicialAno : (saldoInicioMes[k] ?? 0);
   };
-  const cabFinMes = (m: number) => saldoFimMes(m);
+
+  // cabFinMes: use fechamento_pastos quantities when available
+  const cabFinMes = (m: number) => {
+    const anoMesKey = `${ano}-${String(m).padStart(2, '0')}`;
+    const qtdMap = qtdPorMes[anoMesKey];
+    if (qtdMap && Object.keys(qtdMap).length > 0) {
+      return Object.values(qtdMap).reduce((s, v) => s + v, 0);
+    }
+    return saldoFimMes(m);
+  };
 
   const entradasCabMes = (m: number) => {
     const resumo = calcResumoMovimentacoes(lancPec, `${ano}-${String(m).padStart(2, '0')}`);
@@ -147,10 +157,24 @@ function buildMonthlyData(
     return resumo.totalSaidas;
   };
 
+  // pesoFinKgArr: use fechamento_pastos quantities + weights when available
   const pesoFinKgArr = Array.from({ length: 12 }, (_, i) => {
     const m = i + 1;
-    const anoMes = `${ano}-${String(m).padStart(2, '0')}`;
-    const pesosMap = pesosPorMes[anoMes] || {};
+    const anoMesKey = `${ano}-${String(m).padStart(2, '0')}`;
+    const pesosMap = pesosPorMes[anoMesKey] || {};
+    const qtdMap = qtdPorMes[anoMesKey];
+
+    // If fechamento data exists, use its quantities and weights exclusively
+    if (qtdMap && Object.keys(qtdMap).length > 0) {
+      let total = 0;
+      Object.entries(qtdMap).forEach(([cat, qtd]) => {
+        const peso = pesosMap[cat] || 0;
+        total += qtd * peso;
+      });
+      return total;
+    }
+
+    // Fallback for months without fechamento: use saldo conciliado
     const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancPec, ano, m);
     let total = 0;
     saldoMap.forEach((qtd, cat) => {
@@ -713,6 +737,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
   const [viewTab, setViewTab] = useState<ViewTab>('mensal');
   const [cenario, setCenario] = useState<Cenario>('realizado');
   const [pesosPorMes, setPesosPorMes] = useState<Record<string, Record<string, number>>>({});
+  const [qtdPorMes, setQtdPorMes] = useState<Record<string, Record<string, number>>>({});
   const [pesoMedioGeralPorMes, setPesoMedioGeralPorMes] = useState<Record<string, number | null>>({});
   const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(Array(13).fill(0));
   const [openBlocos, setOpenBlocos] = useState<Record<string, boolean>>({});
@@ -742,18 +767,21 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
   const monthCutoff = useMemo(() => getCurrentMonthCutoff(anoNum), [anoNum]);
 
   useEffect(() => {
-    if (!fazendaId || fazendaId === '__global__' || categorias.length === 0) { setPesosPorMes({}); setPesoMedioGeralPorMes({}); return; }
+    if (!fazendaId || fazendaId === '__global__' || categorias.length === 0) { setPesosPorMes({}); setPesoMedioGeralPorMes({}); setQtdPorMes({}); return; }
     (async () => {
       const result: Record<string, Record<string, number>> = {};
       const pmResult: Record<string, number | null> = {};
+      const qtdResult: Record<string, Record<string, number>> = {};
       for (let m = 1; m <= 12; m++) {
         const anoMes = `${anoNum}-${String(m).padStart(2, '0')}`;
-        const { porCategoria, pesoMedioGeralPastos } = await loadPesosPastosCompleto(fazendaId, anoMes, categorias);
-        result[anoMes] = porCategoria;
-        pmResult[anoMes] = pesoMedioGeralPastos;
+        const r = await loadPesosPastosCompleto(fazendaId, anoMes, categorias);
+        result[anoMes] = r.porCategoria;
+        pmResult[anoMes] = r.pesoMedioGeralPastos;
+        qtdResult[anoMes] = r.quantidadePorCategoria;
       }
       setPesosPorMes(result);
       setPesoMedioGeralPorMes(pmResult);
+      setQtdPorMes(qtdResult);
     })();
   }, [fazendaId, anoNum, categorias]);
 
@@ -783,8 +811,8 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
   const areaProdutiva = useMemo(() => calcAreaProdutivaPecuaria(pastos), [pastos]);
 
   const monthlyData = useMemo(() =>
-    buildMonthlyData(lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes, pesoMedioGeralPorMes),
-    [lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes, pesoMedioGeralPorMes],
+    buildMonthlyData(lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes, pesoMedioGeralPorMes, qtdPorMes),
+    [lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes, pesoMedioGeralPorMes, qtdPorMes],
   );
 
   const isPrevisto = cenario === 'previsto';
