@@ -737,6 +737,7 @@ export function useFinanceiro() {
           cid, l.fazendaId || '',
           l.dataPagamento || l.anoMes + '-01', l.valor,
           l.tipoOperacao, l.contaBancariaId,
+          l.produto, l.obs,
         );
         if (existingHashes.has(hash)) {
           duplicados++;
