@@ -71,6 +71,16 @@ export function MapaPastosTab() {
   const [mesFiltro, setMesFiltro] = useState(new Date().getMonth() + 1);
   const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
 
+  // ── Fonte oficial de peso: mesma base do Painel do Consultor ──
+  const resumoOficial = useFechamentoCategoria(
+    fazendaAtual?.id,
+    Number(anoFiltro),
+    mesFiltro,
+    lancamentos,
+    saldosIniciais,
+    categorias,
+  );
+
   const [rows, setRows] = useState<PastoMapaRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
