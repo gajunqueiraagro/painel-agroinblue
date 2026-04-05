@@ -1215,7 +1215,7 @@ export function LancamentoV2Dialog({
           </div>
 
           {/* Sticky footer */}
-          <div className="px-5 py-2.5 border-t border-border/40 bg-[hsl(var(--muted))] dark:bg-[hsl(var(--muted)/0.6)] flex items-center gap-2">
+          <div className="px-5 py-2.5 border-t border-border bg-accent flex items-center gap-2">
             <Button variant="outline" onClick={onClose} className="px-5" tabIndex={16}>Cancelar</Button>
             <div className="flex-1" />
             {isEdit && onDelete && (
