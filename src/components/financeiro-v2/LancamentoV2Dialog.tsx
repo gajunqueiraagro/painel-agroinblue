@@ -809,15 +809,15 @@ export function LancamentoV2Dialog({
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs">Data Competência *</Label>
-                  <Input tabIndex={2} type="date" value={dataCompetencia} onChange={e => setDataCompetencia(e.target.value)} className={cn("h-9", fieldBg)} />
+                  <Label className="text-[10px]">Data Competência *</Label>
+                  <Input tabIndex={2} type="date" value={dataCompetencia} onChange={e => setDataCompetencia(e.target.value)} className={cn("h-8", fieldBg)} />
                 </div>
                 <div>
-                  <Label className="text-xs">Data Pagamento *</Label>
-                  <Input tabIndex={3} type="date" value={dataPagamento} onChange={e => handleDataPagamentoChange(e.target.value)} className={cn("h-9", fieldBg)} />
+                  <Label className="text-[10px]">Data Pagamento *</Label>
+                  <Input tabIndex={3} type="date" value={dataPagamento} onChange={e => handleDataPagamentoChange(e.target.value)} className={cn("h-8", fieldBg)} />
                 </div>
                 <div>
-                  <Label className="text-xs">Status *</Label>
+                  <Label className="text-[10px]">Status *</Label>
                   <Select value={statusTransacao} onValueChange={setStatusTransacao}>
                     <SelectTrigger tabIndex={4} className={cn("h-9", fieldBg)}><SelectValue /></SelectTrigger>
                     <SelectContent>
