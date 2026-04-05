@@ -518,14 +518,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Entradas</p>
                       <p className="text-sm font-bold tabular-nums text-green-600">{formatMoeda(card.totalEntradas)}</p>
                     </div>
-                    <div className="mt-0.5 space-y-0.5 border-t pt-0.5">
-                      <p className="text-[9px] text-muted-foreground flex justify-between">
-                        <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.entradasTerceiros)}</span>
-                      </p>
-                      <p className="text-[9px] text-muted-foreground flex justify-between">
-                        <span>Transferências</span><span className="tabular-nums">{formatMoeda(card.transferenciasRecebidas)}</span>
-                      </p>
-                    </div>
+                    {contaId !== '__all__' && (
+                      <div className="mt-0.5 space-y-0.5 border-t pt-0.5">
+                        <p className="text-[9px] text-muted-foreground flex justify-between">
+                          <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.entradasTerceiros)}</span>
+                        </p>
+                        <p className="text-[9px] text-muted-foreground flex justify-between">
+                          <span>Transferências</span><span className="tabular-nums">{formatMoeda(card.transferenciasRecebidas)}</span>
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="px-2.5 py-1">
@@ -533,14 +535,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Saídas</p>
                       <p className="text-sm font-bold tabular-nums text-red-600">{formatMoeda(card.totalSaidas)}</p>
                     </div>
-                    <div className="mt-0.5 space-y-0.5 border-t pt-0.5">
-                      <p className="text-[9px] text-muted-foreground flex justify-between">
-                        <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.saidasTerceiros)}</span>
-                      </p>
-                      <p className="text-[9px] text-muted-foreground flex justify-between">
-                        <span>Transferências</span><span className="tabular-nums">{formatMoeda(card.transferenciasEnviadas)}</span>
-                      </p>
-                    </div>
+                    {contaId !== '__all__' && (
+                      <div className="mt-0.5 space-y-0.5 border-t pt-0.5">
+                        <p className="text-[9px] text-muted-foreground flex justify-between">
+                          <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.saidasTerceiros)}</span>
+                        </p>
+                        <p className="text-[9px] text-muted-foreground flex justify-between">
+                          <span>Transferências</span><span className="tabular-nums">{formatMoeda(card.transferenciasEnviadas)}</span>
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="px-2.5 pt-0.5 border-t">
