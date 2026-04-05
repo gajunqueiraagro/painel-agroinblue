@@ -522,16 +522,23 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       ? 'snapshot'
       : 'snapshot_incompleto';
 
+  // Snapshot rows: use OFFICIAL closure data (resumoOficial) for qty/weight,
+  // snapshot only for pricing. This ensures consistency with Mapa do Rebanho / Painel.
   const snapshotRowsSelecionado = useMemo<LinhaTabelaValor[]>(() => {
     const itensPorCategoria = new Map(frozenDetalhadoSelecionado.map(item => [item.categoria, item]));
+    const oficialPorCodigo = new Map(resumoOficial.rows.map(r => [r.categoriaCodigo, r]));
 
     return ORDEM_CATEGORIAS_FIXA.map(codigo => {
-      const item = itensPorCategoria.get(codigo);
+      const snapshotItem = itensPorCategoria.get(codigo);
+      const oficialRow = oficialPorCodigo.get(codigo);
       const cat = categorias.find(c => c.codigo === codigo);
-      const saldo = Number(item?.quantidade) || 0;
-      const pesoMedio = Number(item?.peso_medio_kg) || 0;
-      const precoKg = Number(item?.preco_kg) || 0;
-      const valorTotal = Number(item?.valor_total_categoria) || 0;
+
+      // Quantities and weights ALWAYS from fechamento_pasto_itens (official source)
+      const saldo = oficialRow?.quantidadeFinal ?? 0;
+      const pesoMedio = oficialRow?.pesoMedioFinalKg ?? 0;
+      // Price from snapshot (user-entered)
+      const precoKg = Number(snapshotItem?.preco_kg) || 0;
+      const valorTotal = saldo * pesoMedio * precoKg;
       const arrobasLinha = saldo > 0 ? (saldo * pesoMedio) / 30 : 0;
 
       return {
@@ -540,15 +547,15 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         nome: cat?.nome || codigo,
         saldo,
         pesoMedio,
-        origemPeso: 'pastos',
+        origemPeso: oficialRow?.origemPeso ?? ('pastos' as OrigemPeso),
         precoKg,
-        valorCabeca: saldo > 0 ? valorTotal / saldo : 0,
+        valorCabeca: saldo > 0 && pesoMedio > 0 ? pesoMedio * precoKg : 0,
         precoArroba: arrobasLinha > 0 ? valorTotal / arrobasLinha : 0,
         valorTotal,
         isSugerido: false,
       };
     });
-  }, [frozenDetalhadoSelecionado, categorias]);
+  }, [frozenDetalhadoSelecionado, categorias, resumoOficial.rows]);
 
   const buildFrozenMetrics = useCallback((mesKey: string): MetricasExibicao | null => {
     const snapshotCabecalho = historicoPorMes[mesKey] ?? null;
