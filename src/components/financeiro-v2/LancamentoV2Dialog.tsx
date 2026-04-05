@@ -779,9 +779,9 @@ export function LancamentoV2Dialog({
     }
   }, [open]);
 
-  const sectionClass = "rounded-md bg-muted/30 dark:bg-muted/15 border border-border/30 px-3 py-2 space-y-1.5";
-  const sectionTitle = "text-[9px] font-bold text-muted-foreground/80 uppercase tracking-[0.12em] mb-0.5";
-  const fieldBg = "bg-background dark:bg-muted border-border/40";
+  const sectionClass = "rounded-lg border border-[hsl(var(--border))] bg-[hsl(210_33%_97%)] dark:bg-muted/20 px-3.5 py-2.5 space-y-2";
+  const sectionTitleClass = "flex items-center gap-1.5 text-[11px] font-bold text-primary uppercase tracking-[0.08em]";
+  const fieldBg = "bg-background border-[hsl(210_20%_80%)] focus-visible:border-primary focus-visible:ring-primary/20 focus-visible:shadow-[0_0_0_3px_hsl(var(--primary)/0.08)]";
 
   return (
     <>
