@@ -155,6 +155,7 @@ export function useFechamentoCategoria(
   categorias: CategoriaRebanho[],
 ): FechamentoCategoriaResumo {
   const [pesosPastos, setPesosPastos] = useState<Record<string, number>>({});
+  const [pesoMedioGeralPastosState, setPesoMedioGeralPastosState] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
   const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
@@ -162,14 +163,17 @@ export function useFechamentoCategoria(
   const loadPesos = useCallback(async () => {
     if (!fazendaId || fazendaId === '__global__' || !categorias.length) {
       setPesosPastos({});
+      setPesoMedioGeralPastosState(null);
       return;
     }
     setLoading(true);
     try {
-      const map = await loadPesosPastosPorCategoria(fazendaId, anoMes, categorias);
-      setPesosPastos(map);
+      const { porCategoria, pesoMedioGeralPastos } = await loadPesosPastosCompleto(fazendaId, anoMes, categorias);
+      setPesosPastos(porCategoria);
+      setPesoMedioGeralPastosState(pesoMedioGeralPastos);
     } catch {
       setPesosPastos({});
+      setPesoMedioGeralPastosState(null);
     } finally {
       setLoading(false);
     }
@@ -202,10 +206,11 @@ export function useFechamentoCategoria(
 
     const totalCabecas = rows.reduce((s, r) => s + r.quantidadeFinal, 0);
     const pesoTotalGeral = rows.reduce((s, r) => s + r.pesoTotalFinalKg, 0);
-    const pesoMedioGeral = totalCabecas > 0 ? pesoTotalGeral / totalCabecas : null;
+    // pesoMedioGeral agora usa a fonte oficial dos pastos quando disponível
+    const pesoMedioGeral = pesoMedioGeralPastosState ?? (totalCabecas > 0 ? pesoTotalGeral / totalCabecas : null);
 
-    return { rows, totalCabecas, pesoMedioGeral, pesoTotalGeral, loading };
-  }, [categorias, saldosIniciais, lancamentos, ano, mes, pesosPastos, loading]);
+    return { rows, totalCabecas, pesoMedioGeral, pesoTotalGeral, pesoMedioGeralPastos: pesoMedioGeralPastosState, loading };
+  }, [categorias, saldosIniciais, lancamentos, ano, mes, pesosPastos, pesoMedioGeralPastosState, loading]);
 
   return result;
 }
