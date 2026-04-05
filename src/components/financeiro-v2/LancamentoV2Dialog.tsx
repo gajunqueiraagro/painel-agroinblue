@@ -1038,14 +1038,14 @@ export function LancamentoV2Dialog({
                   </Popover>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label className="text-xs text-muted-foreground">Centro Custo (auto)</Label>
-                  <Input value={centroCusto} readOnly disabled className="h-9 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-default" />
+                  <Label className="text-[10px] text-muted-foreground">Centro Custo (auto)</Label>
+                  <Input value={centroCusto} readOnly disabled className="h-8 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-default text-xs" />
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground">Macro Custo (auto)</Label>
-                  <Input value={macroCusto} readOnly disabled className="h-9 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-default" />
+                  <Label className="text-[10px] text-muted-foreground">Macro Custo (auto)</Label>
+                  <Input value={macroCusto} readOnly disabled className="h-8 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-default text-xs" />
                 </div>
               </div>
 
