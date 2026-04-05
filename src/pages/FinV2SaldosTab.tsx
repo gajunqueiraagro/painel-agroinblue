@@ -230,10 +230,11 @@ export function FinV2SaldosTab() {
   };
 
   const canEditSaldoInicial = (s: SaldoBancario): boolean => {
-    if (s.origem_saldo_inicial === 'automatico') return false; // never editable when auto
-    if (s.status_mes === 'travado') return isAdmin;
-    if (s.status_mes === 'fechado') return isAdmin;
-    return isAdmin || isFinanceiro;
+    // Saldo inicial is ONLY editable for the first month of the account (no previous saldo exists)
+    // AND only by admin
+    const prevFinal = findPrevSaldoFinal(s.conta_bancaria_id, s.ano_mes);
+    if (prevFinal !== null) return false; // Chain exists — never editable
+    return isAdmin; // First month — admin only
   };
 
   const getEditBlockReason = (s: SaldoBancario): string | null => {
@@ -279,8 +280,10 @@ export function FinV2SaldosTab() {
     if (!dialogOpen || !contaId || !anoMes) return;
     const prevFinal = findPrevSaldoFinal(contaId, anoMes);
     setAutoSaldoInicial(prevFinal);
-    if (prevFinal !== null && !editing && !overrideInicial) {
+    // Always auto-fill from previous month — no override allowed
+    if (prevFinal !== null) {
       setSaldoInicial(toBRL(prevFinal));
+      setOverrideInicial(false);
     }
   }, [contaId, anoMes, dialogOpen, allSaldos]);
 
@@ -344,7 +347,8 @@ export function FinV2SaldosTab() {
 
     const saldoInicialVal = parseBRL(saldoInicial);
     const saldoFinalVal = parseBRL(saldoFinal);
-    const origemInicialFinal = autoSaldoInicial !== null && !overrideInicial ? 'automatico' : 'manual';
+    // Saldo inicial is always automatic when previous month exists
+    const origemInicialFinal = autoSaldoInicial !== null ? 'automatico' : 'manual';
 
     const payload: any = {
       cliente_id: clienteAtual.id,
@@ -378,20 +382,15 @@ export function FinV2SaldosTab() {
 
       toast.success('Saldo atualizado');
 
-      // Propagate to next month
+      // Always propagate to next month automatically
       const nextAm = nextAnoMes(anoMes);
       const nextSaldo = allSaldos.find(s => s.conta_bancaria_id === contaId && s.ano_mes === nextAm);
-      if (nextSaldo) {
-        if (nextSaldo.origem_saldo_inicial === 'automatico') {
-          await supabase
-            .from('financeiro_saldos_bancarios_v2')
-            .update({ saldo_inicial: saldoFinalVal })
-            .eq('id', nextSaldo.id);
-          await logAudit(nextSaldo.id, 'propagacao_automatica', 'saldo_inicial', String(nextSaldo.saldo_inicial), String(saldoFinalVal));
-        } else if (Math.abs(nextSaldo.saldo_inicial - saldoFinalVal) > 0.01) {
-          // Manual next month — ask user
-          setPropagateConfirm({ nextSaldo, newValue: saldoFinalVal });
-        }
+      if (nextSaldo && Math.abs(nextSaldo.saldo_inicial - saldoFinalVal) > 0.01) {
+        await supabase
+          .from('financeiro_saldos_bancarios_v2')
+          .update({ saldo_inicial: saldoFinalVal, origem_saldo_inicial: 'automatico' })
+          .eq('id', nextSaldo.id);
+        await logAudit(nextSaldo.id, 'propagacao_automatica', 'saldo_inicial', String(nextSaldo.saldo_inicial), String(saldoFinalVal));
       }
     } else {
       payload.created_by = user?.id || null;
@@ -446,7 +445,7 @@ export function FinV2SaldosTab() {
     return m ? `${m.l}/${am.slice(2, 4)}` : am;
   };
 
-  const saldoInicialIsAuto = autoSaldoInicial !== null && !overrideInicial;
+  // saldoInicial is always locked when previous month exists
 
   /* ── render ── */
   return (
@@ -531,14 +530,28 @@ export function FinV2SaldosTab() {
                       const isAuto = s.origem_saldo_inicial === 'automatico';
                       const editable = canEditSaldoFinal(s);
                       const blockReason = getEditBlockReason(s);
+                      // Chain integrity check
+                      const prevFinal = findPrevSaldoFinal(s.conta_bancaria_id, s.ano_mes);
+                      const chainBroken = prevFinal !== null && Math.abs(prevFinal - s.saldo_inicial) > 0.01;
 
                       return (
-                        <TableRow key={s.id} className={`text-[11px] ${inconsistency ? 'bg-red-50/50 dark:bg-red-950/20' : ''}`}>
+                        <TableRow key={s.id} className={`text-[11px] ${inconsistency || chainBroken ? 'bg-red-50/50 dark:bg-red-950/20' : ''}`}>
                           <TableCell className="py-1">{mesLabel(s.ano_mes)}</TableCell>
                           <TableCell className="py-1">{contaNome(s.conta_bancaria_id)}</TableCell>
                           <TableCell className="text-right tabular-nums py-1">
                             <div className="flex items-center justify-end gap-1">
-                              {isAuto && <Link2 className="h-3 w-3 text-emerald-500 shrink-0" />}
+                              {chainBroken ? (
+                                <Tooltip>
+                                  <TooltipTrigger>
+                                    <AlertTriangle className="h-3 w-3 text-red-500 shrink-0" />
+                                  </TooltipTrigger>
+                                  <TooltipContent className="text-[10px] max-w-[200px]">
+                                    Inconsistência de saldo entre meses. Esperado: {formatMoeda(prevFinal!)} | Atual: {formatMoeda(s.saldo_inicial)}
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : isAuto ? (
+                                <Link2 className="h-3 w-3 text-emerald-500 shrink-0" />
+                              ) : null}
                               {formatMoeda(s.saldo_inicial)}
                             </div>
                           </TableCell>
@@ -722,47 +735,38 @@ export function FinV2SaldosTab() {
                 </Select>
               </div>
 
-              {/* Saldo Inicial */}
+              {/* Saldo Inicial — always automatic except first month (admin only) */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs">Saldo Inicial</Label>
-                  {autoSaldoInicial !== null && (editing ? canEditSaldoInicial(editing) || isAdmin : true) && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-muted-foreground">Editar manual</span>
-                      <Switch
-                        checked={overrideInicial}
-                        onCheckedChange={(v) => {
-                          setOverrideInicial(v);
-                          if (!v && autoSaldoInicial !== null) {
-                            setSaldoInicial(toBRL(autoSaldoInicial));
-                          }
-                        }}
-                        className="scale-75"
-                      />
-                    </div>
+                  {autoSaldoInicial !== null && (
+                    <span className="text-[10px] text-emerald-600 flex items-center gap-1">
+                      <Link2 className="h-3 w-3" /> Automático
+                    </span>
                   )}
                 </div>
                 <Input
                   value={saldoInicial}
                   onChange={e => setSaldoInicial(e.target.value)}
                   className="h-9"
-                  disabled={saldoInicialIsAuto}
+                  disabled={autoSaldoInicial !== null || (editing ? !canEditSaldoInicial(editing) : !isAdmin)}
                 />
-                {autoSaldoInicial !== null && !overrideInicial && (
+                {autoSaldoInicial !== null && (
                   <p className="text-[10px] text-emerald-600 flex items-center gap-1">
                     <Link2 className="h-3 w-3" />
-                    Saldo inicial herdado automaticamente do mês anterior ({formatMoeda(autoSaldoInicial)})
+                    Herdado do mês anterior ({formatMoeda(autoSaldoInicial)}) — não editável
                   </p>
                 )}
-                {autoSaldoInicial !== null && overrideInicial && (
+                {autoSaldoInicial === null && isAdmin && (
                   <p className="text-[10px] text-amber-600 flex items-center gap-1">
-                    <PenLine className="h-3 w-3" />
-                    Saldo inicial definido manualmente (override)
+                    <ShieldCheck className="h-3 w-3" />
+                    Primeiro mês da conta — defina o saldo inicial (somente administrador)
                   </p>
                 )}
-                {autoSaldoInicial === null && (
-                  <p className="text-[10px] text-muted-foreground">
-                    Sem histórico anterior — preencha manualmente (início da série).
+                {autoSaldoInicial === null && !isAdmin && (
+                  <p className="text-[10px] text-red-500 flex items-center gap-1">
+                    <ShieldAlert className="h-3 w-3" />
+                    Saldo inicial só pode ser definido pelo administrador
                   </p>
                 )}
               </div>
