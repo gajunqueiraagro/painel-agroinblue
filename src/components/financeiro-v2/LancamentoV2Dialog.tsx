@@ -1065,9 +1065,9 @@ export function LancamentoV2Dialog({
                     </div>
                     {frequencia === 'pontual' && (
                       <div>
-                        <Label className="text-xs">Modalidade</Label>
+                        <Label className="text-[10px]">Modalidade</Label>
                         <Select value={formaPagamentoParc} onValueChange={(v: 'avista' | 'parcelada') => setFormaPagamentoParc(v)}>
-                          <SelectTrigger className={cn("h-9", fieldBg)}><SelectValue /></SelectTrigger>
+                          <SelectTrigger className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="avista">À vista</SelectItem>
                             <SelectItem value="parcelada">Parcelada</SelectItem>
