@@ -456,7 +456,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <p className="text-[10px] text-muted-foreground">Saldo Calculado</p>
+                      <p className="text-[10px] text-muted-foreground">Saldo no Sistema</p>
                       <p className="text-xs font-medium tabular-nums">{formatMoeda(card.saldoCalculado)}</p>
                     </div>
 
