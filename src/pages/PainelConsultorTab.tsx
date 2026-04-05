@@ -767,18 +767,21 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
   const monthCutoff = useMemo(() => getCurrentMonthCutoff(anoNum), [anoNum]);
 
   useEffect(() => {
-    if (!fazendaId || fazendaId === '__global__' || categorias.length === 0) { setPesosPorMes({}); setPesoMedioGeralPorMes({}); return; }
+    if (!fazendaId || fazendaId === '__global__' || categorias.length === 0) { setPesosPorMes({}); setPesoMedioGeralPorMes({}); setQtdPorMes({}); return; }
     (async () => {
       const result: Record<string, Record<string, number>> = {};
       const pmResult: Record<string, number | null> = {};
+      const qtdResult: Record<string, Record<string, number>> = {};
       for (let m = 1; m <= 12; m++) {
         const anoMes = `${anoNum}-${String(m).padStart(2, '0')}`;
-        const { porCategoria, pesoMedioGeralPastos } = await loadPesosPastosCompleto(fazendaId, anoMes, categorias);
-        result[anoMes] = porCategoria;
-        pmResult[anoMes] = pesoMedioGeralPastos;
+        const r = await loadPesosPastosCompleto(fazendaId, anoMes, categorias);
+        result[anoMes] = r.porCategoria;
+        pmResult[anoMes] = r.pesoMedioGeralPastos;
+        qtdResult[anoMes] = r.quantidadePorCategoria;
       }
       setPesosPorMes(result);
       setPesoMedioGeralPorMes(pmResult);
+      setQtdPorMes(qtdResult);
     })();
   }, [fazendaId, anoNum, categorias]);
 
