@@ -347,7 +347,8 @@ export function FinV2SaldosTab() {
 
     const saldoInicialVal = parseBRL(saldoInicial);
     const saldoFinalVal = parseBRL(saldoFinal);
-    const origemInicialFinal = autoSaldoInicial !== null && !overrideInicial ? 'automatico' : 'manual';
+    // Saldo inicial is always automatic when previous month exists
+    const origemInicialFinal = autoSaldoInicial !== null ? 'automatico' : 'manual';
 
     const payload: any = {
       cliente_id: clienteAtual.id,
