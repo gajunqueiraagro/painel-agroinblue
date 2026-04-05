@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { normalizeStatusTransacao } from '@/lib/financeiro/v2Transferencia';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -245,7 +246,7 @@ export function LancamentoV2Dialog({
       setMacroCusto(lancamento.macro_custo || '');
       setCentroCusto(lancamento.centro_custo || '');
       setTipoOperacao(lancamento.tipo_operacao);
-      setStatusTransacao(lancamento.status_transacao || 'previsto');
+      setStatusTransacao(normalizeStatusTransacao(lancamento.status_transacao));
       setValorDisplay(toBRL(lancamento.valor));
       // For transfers: origin = conta_bancaria_id, destination = conta_destino_id
       // For entries: destination = conta_bancaria_id
