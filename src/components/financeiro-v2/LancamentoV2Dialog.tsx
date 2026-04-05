@@ -1109,7 +1109,7 @@ export function LancamentoV2Dialog({
                       </div>
                       <div className="px-3 py-1.5 bg-muted/40 flex justify-between items-center text-xs">
                         <span className="text-muted-foreground font-medium">Total parcelas:</span>
-                        <span className={cn("font-bold font-mono", Math.abs(parcelasTotal - Math.abs(valorNum)) < 0.01 ? "text-green-600 dark:text-green-400" : "text-destructive")}>
+                        <span className={cn("font-bold font-mono", Math.abs(parcelasTotal - Math.abs(valorNum)) < 0.01 ? "text-success" : "text-destructive")}>
                           {formatMoeda(parcelasTotal)}
                         </span>
                       </div>
