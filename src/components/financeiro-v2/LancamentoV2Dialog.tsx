@@ -253,7 +253,9 @@ export function LancamentoV2Dialog({
       // For exits: origin = conta_bancaria_id
       if (lancamento.tipo_operacao === '3-Transferência') {
         setContaOrigemId(lancamento.conta_bancaria_id || '');
-        setContaDestinoId((lancamento as any).conta_destino_id || '');
+        const destId = lancamento.conta_destino_id || '';
+        console.log('[FinV2] DIALOG INIT transfer destino =', destId, 'from lancamento.conta_destino_id =', lancamento.conta_destino_id);
+        setContaDestinoId(destId);
       } else if (lancamento.tipo_operacao === '1-Entradas') {
         setContaOrigemId('');
         setContaDestinoId(lancamento.conta_bancaria_id || '');
@@ -733,13 +735,15 @@ export function LancamentoV2Dialog({
       dados_pagamento: dadosPagamento || null,
     };
 
-      console.log('[FinV2] payload submit', {
+      console.log('[FinV2] SUBMIT STATE', {
         mode: currentIsEdit ? 'UPDATE' : 'INSERT',
         id: currentEditId,
-        tipo_operacao: form.tipo_operacao,
-        conta_bancaria_id: form.conta_bancaria_id,
-        conta_destino_id: form.conta_destino_id,
-        status_transacao: form.status_transacao,
+        isTransferencia,
+        contaDestinoId,
+        contaOrigemId,
+        'form.conta_destino_id': form.conta_destino_id,
+        'form.conta_bancaria_id': form.conta_bancaria_id,
+        tipoOperacao,
       });
 
     // CRITICAL: pass the stable ID for edits — ensures UPDATE, never INSERT
