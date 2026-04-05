@@ -831,10 +831,10 @@ export function LancamentoV2Dialog({
             {/* ── BLOCO 2 — Identificação ── */}
             <section className={sectionClass}>
               <p className={sectionTitle}>Identificação</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 {/* Produto */}
-                <div ref={produtoWrapperRef} className="relative">
-                  <Label className="text-xs">Produto / Descrição *</Label>
+                <div ref={produtoWrapperRef} className="relative col-span-2">
+                  <Label className="text-[10px]">Produto / Descrição *</Label>
                   <Input
                     tabIndex={5}
                     value={descricao}
