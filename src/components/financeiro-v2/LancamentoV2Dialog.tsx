@@ -972,9 +972,9 @@ export function LancamentoV2Dialog({
                   </div>
                 ) : (
                   <div>
-                    <Label className="text-xs">Conta Origem *</Label>
+                    <Label className="text-[10px]">Conta Origem *</Label>
                     <Select value={contaOrigemId} onValueChange={setContaOrigemId}>
-                      <SelectTrigger tabIndex={8} className={cn("h-9", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectTrigger tabIndex={8} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">Nenhuma</SelectItem>
                         {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
