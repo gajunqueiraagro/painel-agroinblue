@@ -735,13 +735,15 @@ export function LancamentoV2Dialog({
       dados_pagamento: dadosPagamento || null,
     };
 
-      console.log('[FinV2] payload submit', {
+      console.log('[FinV2] SUBMIT STATE', {
         mode: currentIsEdit ? 'UPDATE' : 'INSERT',
         id: currentEditId,
-        tipo_operacao: form.tipo_operacao,
-        conta_bancaria_id: form.conta_bancaria_id,
-        conta_destino_id: form.conta_destino_id,
-        status_transacao: form.status_transacao,
+        isTransferencia,
+        contaDestinoId,
+        contaOrigemId,
+        'form.conta_destino_id': form.conta_destino_id,
+        'form.conta_bancaria_id': form.conta_bancaria_id,
+        tipoOperacao,
       });
 
     // CRITICAL: pass the stable ID for edits — ensures UPDATE, never INSERT
