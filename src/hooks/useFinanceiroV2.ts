@@ -244,7 +244,32 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       if (error) throw error;
       if (!data || data.length === 0) break;
 
-      all.push(...(data as LancamentoV2[]));
+      for (const row of data) {
+        if ((row as any).tipo_operacao === '3-Transferência') {
+          console.log('[FinV2] load RAW row', {
+            id: (row as any).id,
+            conta_bancaria_id: (row as any).conta_bancaria_id,
+            conta_destino_id: (row as any).conta_destino_id,
+            tipo_operacao: (row as any).tipo_operacao,
+            status_transacao: (row as any).status_transacao,
+          });
+        }
+      }
+
+      const mapped = data as LancamentoV2[];
+      for (const row of mapped) {
+        if (row.tipo_operacao === '3-Transferência') {
+          console.log('[FinV2] load MAPPED row', {
+            id: row.id,
+            conta_bancaria_id: row.conta_bancaria_id,
+            conta_destino_id: row.conta_destino_id,
+            tipo_operacao: row.tipo_operacao,
+            status_transacao: row.status_transacao,
+          });
+        }
+      }
+
+      all.push(...mapped);
       if (data.length < batchSize) break;
       from += batchSize;
     }
