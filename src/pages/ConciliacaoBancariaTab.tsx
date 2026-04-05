@@ -191,12 +191,15 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
     while (true) {
       let lQuery = supabase
         .from('financeiro_lancamentos_v2')
-        .select('tipo_operacao, valor, sinal, data_competencia, data_pagamento, descricao, status_transacao, favorecido_id, nota_fiscal')
+        .select('tipo_operacao, valor, sinal, data_competencia, data_pagamento, descricao, status_transacao, favorecido_id, nota_fiscal, conta_bancaria_id, conta_destino_id')
         .eq('cliente_id', clienteId)
         .eq('cancelado', false)
         .gte('ano_mes', anoMesMin)
         .lte('ano_mes', anoMesMax);
-      if (contaId !== '__all__') lQuery = lQuery.eq('conta_bancaria_id', contaId);
+      if (contaId !== '__all__') {
+        // Fetch records where this account is origin OR destination
+        lQuery = lQuery.or(`conta_bancaria_id.eq.${contaId},conta_destino_id.eq.${contaId}`);
+      }
       lQuery = lQuery.order('data_competencia').range(from, from + batchSize - 1);
       const { data: lData } = await lQuery;
       if (!lData || lData.length === 0) break;
