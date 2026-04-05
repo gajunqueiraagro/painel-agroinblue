@@ -92,7 +92,7 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
                   <item.icon className={`h-7 w-7 ${blocked ? 'text-muted-foreground' : 'text-primary'}`} />
                 </div>
                 <div className="text-center">
-                  <p className={`text-[11px] font-bold leading-tight ${blocked ? 'text-muted-foreground' : 'text-foreground'}`}>
+                  <p className={`text-sm font-semibold leading-tight ${blocked ? 'text-muted-foreground' : 'text-foreground'}`}>
                     {item.label}
                   </p>
                   <p className="text-[9px] text-muted-foreground mt-0.5 leading-tight">{item.description}</p>
