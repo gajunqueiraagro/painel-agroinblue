@@ -508,7 +508,7 @@ export function FinV2SaldosTab() {
                   <TableHead className="text-right text-[10px]">Saldo Inicial</TableHead>
                   <TableHead className="text-right text-[10px]">Saldo Final</TableHead>
                   <TableHead className="text-center text-[10px]">Orig.</TableHead>
-                  <TableHead className="text-[10px]">Status</TableHead>
+                  <TableHead className="text-[10px]">Conciliação</TableHead>
                   <TableHead className="w-20 text-[10px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
