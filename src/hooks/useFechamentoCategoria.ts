@@ -168,7 +168,10 @@ export function useFechamentoCategoria(
   categorias: CategoriaRebanho[],
 ): FechamentoCategoriaResumo {
   const [pesosPastos, setPesosPastos] = useState<Record<string, number>>({});
+  const [qtdPastos, setQtdPastos] = useState<Record<string, number>>({});
   const [pesoMedioGeralPastosState, setPesoMedioGeralPastosState] = useState<number | null>(null);
+  const [totalCabecasPastosState, setTotalCabecasPastosState] = useState<number>(0);
+  const [hasFechamento, setHasFechamento] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
@@ -176,17 +179,26 @@ export function useFechamentoCategoria(
   const loadPesos = useCallback(async () => {
     if (!fazendaId || fazendaId === '__global__' || !categorias.length) {
       setPesosPastos({});
+      setQtdPastos({});
       setPesoMedioGeralPastosState(null);
+      setTotalCabecasPastosState(0);
+      setHasFechamento(false);
       return;
     }
     setLoading(true);
     try {
-      const { porCategoria, pesoMedioGeralPastos } = await loadPesosPastosCompleto(fazendaId, anoMes, categorias);
-      setPesosPastos(porCategoria);
-      setPesoMedioGeralPastosState(pesoMedioGeralPastos);
+      const result = await loadPesosPastosCompleto(fazendaId, anoMes, categorias);
+      setPesosPastos(result.porCategoria);
+      setQtdPastos(result.quantidadePorCategoria);
+      setPesoMedioGeralPastosState(result.pesoMedioGeralPastos);
+      setTotalCabecasPastosState(result.totalCabecasPastos);
+      setHasFechamento(result.totalCabecasPastos > 0 || Object.keys(result.quantidadePorCategoria).length > 0);
     } catch {
       setPesosPastos({});
+      setQtdPastos({});
       setPesoMedioGeralPastosState(null);
+      setTotalCabecasPastosState(0);
+      setHasFechamento(false);
     } finally {
       setLoading(false);
     }
@@ -195,15 +207,37 @@ export function useFechamentoCategoria(
   useEffect(() => { loadPesos(); }, [loadPesos]);
 
   const result = useMemo((): FechamentoCategoriaResumo => {
-    const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
+    // When fechamento_pastos data exists, use it as the ONLY source for quantities and weights
+    // When it doesn't exist, fall back to saldo conciliado (for months without closure)
+    const useFechamentoSource = hasFechamento;
+    const saldoMap = useFechamentoSource ? null : calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
 
     const rows: FechamentoCategoriaRow[] = categorias
       .sort((a, b) => a.ordem_exibicao - b.ordem_exibicao)
       .map(cat => {
-        const qtd = saldoMap.get(cat.codigo) || 0;
-        const { valor: pesoMedio, origem } = resolverPesoOficial(
-          cat.codigo, pesosPastos, saldosIniciais, lancamentos, ano, mes,
-        );
+        // Quantity: from fechamento_pastos when available, otherwise saldo conciliado
+        const qtd = useFechamentoSource
+          ? (qtdPastos[cat.codigo] || 0)
+          : (saldoMap?.get(cat.codigo) || 0);
+
+        // Weight: from fechamento_pastos only (no fallback to lancamento/saldo_inicial)
+        let pesoMedio: number | null = null;
+        let origem: OrigemPeso = 'sem_base';
+        if (useFechamentoSource) {
+          if (pesosPastos[cat.codigo] && pesosPastos[cat.codigo] > 0) {
+            pesoMedio = pesosPastos[cat.codigo];
+            origem = 'pastos';
+          }
+          // No fallback — if fechamento exists but no weight for this category, leave null
+        } else {
+          // No fechamento at all — use legacy resolution
+          const resolved = resolverPesoOficial(
+            cat.codigo, pesosPastos, saldosIniciais, lancamentos, ano, mes,
+          );
+          pesoMedio = resolved.valor;
+          origem = resolved.origem;
+        }
+
         const pesoTotal = qtd * (pesoMedio || 0);
         return {
           categoriaId: cat.id,
@@ -219,11 +253,12 @@ export function useFechamentoCategoria(
 
     const totalCabecas = rows.reduce((s, r) => s + r.quantidadeFinal, 0);
     const pesoTotalGeral = rows.reduce((s, r) => s + r.pesoTotalFinalKg, 0);
-    // pesoMedioGeral agora usa a fonte oficial dos pastos quando disponível
-    const pesoMedioGeral = pesoMedioGeralPastosState ?? (totalCabecas > 0 ? pesoTotalGeral / totalCabecas : null);
+    const pesoMedioGeral = useFechamentoSource
+      ? pesoMedioGeralPastosState
+      : (totalCabecas > 0 ? pesoTotalGeral / totalCabecas : null);
 
     return { rows, totalCabecas, pesoMedioGeral, pesoTotalGeral, pesoMedioGeralPastos: pesoMedioGeralPastosState, loading };
-  }, [categorias, saldosIniciais, lancamentos, ano, mes, pesosPastos, pesoMedioGeralPastosState, loading]);
+  }, [categorias, saldosIniciais, lancamentos, ano, mes, pesosPastos, qtdPastos, pesoMedioGeralPastosState, hasFechamento, loading]);
 
   return result;
 }
