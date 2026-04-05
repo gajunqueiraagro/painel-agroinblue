@@ -218,7 +218,9 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       query = query.gte('ano_mes', `${filtros.ano}-01`).lte('ano_mes', `${filtros.ano}-12`);
     }
 
-    if (filtros.conta_bancaria_id) query = query.eq('conta_bancaria_id', filtros.conta_bancaria_id);
+    if (filtros.conta_bancaria_id) {
+      query = query.or(`conta_bancaria_id.eq.${filtros.conta_bancaria_id},conta_destino_id.eq.${filtros.conta_bancaria_id}`);
+    }
     if (filtros.tipo_operacao) query = query.eq('tipo_operacao', filtros.tipo_operacao);
     if (filtros.status_transacao) query = query.eq('status_transacao', filtros.status_transacao);
     if (filtros.macro_custo) query = query.eq('macro_custo', filtros.macro_custo);
