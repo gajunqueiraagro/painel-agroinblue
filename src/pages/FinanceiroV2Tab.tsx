@@ -684,6 +684,37 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </div>
           </div>
 
+          {/* Filter summary line */}
+          {(() => {
+            const origemAtiva = contaOrigem !== '__all__';
+            const destinoAtivo = contaDestino !== '__all__';
+            const nomeOrigem = origemAtiva ? contaLabel(sortedContas.find(c => c.id === contaOrigem) || { nome_conta: '?' }) : '';
+            const nomeDestino = destinoAtivo ? contaLabel(sortedContas.find(c => c.id === contaDestino) || { nome_conta: '?' }) : '';
+
+            if (origemAtiva && destinoAtivo) {
+              return (
+                <div className="flex items-center gap-1.5 px-1 py-0.5 rounded bg-primary/5 border border-primary/20">
+                  <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-primary/40 text-primary gap-0.5">
+                    🔁 Transferência específica
+                  </Badge>
+                  <span className="text-[10px] text-foreground font-medium">
+                    {nomeOrigem} → {nomeDestino}
+                  </span>
+                </div>
+              );
+            }
+            if (origemAtiva || destinoAtivo) {
+              const nomeConta = origemAtiva ? nomeOrigem : nomeDestino;
+              return (
+                <div className="flex items-center gap-1.5 px-1 py-0.5 rounded bg-muted/60 border border-border/40">
+                  <span className="text-[10px] text-muted-foreground">🔍 Movimentações envolvendo:</span>
+                  <span className="text-[10px] text-foreground font-semibold">{nomeConta}</span>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
           {/* Summary + actions */}
           <div className="flex items-center justify-between">
             <div className="flex gap-2 text-[10px]">
