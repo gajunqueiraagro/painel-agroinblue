@@ -512,13 +512,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
               {card.lancamentos.length > 0 && (() => {
                 const classifyLanc = (l: LancamentoResumo) => {
                   const tipo = (l.tipo_operacao || '').toLowerCase().replace(/[\s\-–—]/g, '');
-                  if (tipo.startsWith('1') || tipo.includes('entrada')) {
-                    return tipo.includes('transfer') ? 'transf_entrada' : 'entrada';
-                  } else if (tipo.startsWith('2') || tipo.includes('saida') || tipo.includes('saída')) {
-                    return tipo.includes('transfer') ? 'transf_saida' : 'saida';
-                  } else if (tipo.startsWith('3') || tipo.includes('transfer')) {
-                    return l.sinal >= 0 ? 'transf_entrada' : 'transf_saida';
+                  const isTransf = tipo.startsWith('3') || tipo.includes('transfer');
+
+                  if (isTransf) {
+                    const isDestino = contaId !== '__all__' && l.conta_destino_id === contaId;
+                    return isDestino ? 'transf_entrada' : 'transf_saida';
                   }
+                  if (tipo.startsWith('1') || tipo.includes('entrada')) return 'entrada';
                   return 'saida';
                 };
 
