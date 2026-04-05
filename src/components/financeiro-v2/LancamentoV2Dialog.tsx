@@ -1077,14 +1077,14 @@ export function LancamentoV2Dialog({
                     )}
                     {frequencia === 'pontual' && formaPagamentoParc === 'parcelada' && (
                       <div>
-                        <Label className="text-xs">Nº de Parcelas *</Label>
+                        <Label className="text-[10px]">Nº de Parcelas *</Label>
                         <Input
                           type="number"
                           min={2}
                           max={24}
                           value={numParcelas}
                           onChange={e => setNumParcelas(Math.max(2, Math.min(24, parseInt(e.target.value) || 2)))}
-                          className={cn("h-9", fieldBg)}
+                          className={cn("h-8", fieldBg)}
                         />
                       </div>
                     )}
