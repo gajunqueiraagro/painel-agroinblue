@@ -560,8 +560,28 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const buildFrozenMetrics = useCallback((mesKey: string): MetricasExibicao | null => {
     const snapshotCabecalho = historicoPorMes[mesKey] ?? null;
     const snapshotDetalhado = historicoDetalhadoPorMes[mesKey] ?? [];
-    const metricasDetalhadas = aggregateMetricsFromSnapshotItems(snapshotDetalhado);
 
+    if (!snapshotCabecalho && snapshotDetalhado.length === 0) return null;
+
+    // For the currently selected month, use official closure data for qty/weight
+    // and recalculate value using snapshot prices
+    if (mesKey === anoMes && resumoOficial.rows.length > 0) {
+      const itensPorCategoria = new Map(snapshotDetalhado.map(item => [item.categoria, item]));
+      let totalValor = 0;
+      let totalCab = 0;
+      let totalPesoKg = 0;
+      resumoOficial.rows.forEach(row => {
+        const precoKg = Number(itensPorCategoria.get(row.categoriaCodigo)?.preco_kg) || 0;
+        const pesoMedio = row.pesoMedioFinalKg || 0;
+        totalCab += row.quantidadeFinal;
+        totalPesoKg += row.quantidadeFinal * pesoMedio;
+        totalValor += row.quantidadeFinal * pesoMedio * precoKg;
+      });
+      return buildMetricsFromTotals(totalValor, totalCab, totalPesoKg);
+    }
+
+    // For other months, use snapshot as-is
+    const metricasDetalhadas = aggregateMetricsFromSnapshotItems(snapshotDetalhado);
     if (!snapshotCabecalho && !metricasDetalhadas) return null;
 
     return buildMetricsFromTotals(
@@ -569,7 +589,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       metricasDetalhadas?.cabecas ?? null,
       snapshotCabecalho?.pesoKg ?? metricasDetalhadas?.pesoTotalKg ?? null,
     );
-  }, [historicoPorMes, historicoDetalhadoPorMes]);
+  }, [historicoPorMes, historicoDetalhadoPorMes, anoMes, resumoOficial.rows]);
 
   const metricasSelecionado = useMemo(() => {
     if (fonteMes === 'live') return metricasLiveSelecionado;
