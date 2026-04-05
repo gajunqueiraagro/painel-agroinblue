@@ -382,20 +382,15 @@ export function FinV2SaldosTab() {
 
       toast.success('Saldo atualizado');
 
-      // Propagate to next month
+      // Always propagate to next month automatically
       const nextAm = nextAnoMes(anoMes);
       const nextSaldo = allSaldos.find(s => s.conta_bancaria_id === contaId && s.ano_mes === nextAm);
-      if (nextSaldo) {
-        if (nextSaldo.origem_saldo_inicial === 'automatico') {
-          await supabase
-            .from('financeiro_saldos_bancarios_v2')
-            .update({ saldo_inicial: saldoFinalVal })
-            .eq('id', nextSaldo.id);
-          await logAudit(nextSaldo.id, 'propagacao_automatica', 'saldo_inicial', String(nextSaldo.saldo_inicial), String(saldoFinalVal));
-        } else if (Math.abs(nextSaldo.saldo_inicial - saldoFinalVal) > 0.01) {
-          // Manual next month — ask user
-          setPropagateConfirm({ nextSaldo, newValue: saldoFinalVal });
-        }
+      if (nextSaldo && Math.abs(nextSaldo.saldo_inicial - saldoFinalVal) > 0.01) {
+        await supabase
+          .from('financeiro_saldos_bancarios_v2')
+          .update({ saldo_inicial: saldoFinalVal, origem_saldo_inicial: 'automatico' })
+          .eq('id', nextSaldo.id);
+        await logAudit(nextSaldo.id, 'propagacao_automatica', 'saldo_inicial', String(nextSaldo.saldo_inicial), String(saldoFinalVal));
       }
     } else {
       payload.created_by = user?.id || null;
