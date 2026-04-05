@@ -289,8 +289,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     const anoMes = form.data_pagamento
       ? form.data_pagamento.substring(0, 7)
       : form.data_competencia.substring(0, 7);
-    const sinal = (form.tipo_operacao || '').startsWith('1') ? 1
-      : (form.tipo_operacao || '').startsWith('3') ? 0 : -1;
+    const sinal = (form.tipo_operacao || '').startsWith('1') ? 1 : -1;
 
     return {
       cliente_id: clienteId!,
@@ -340,8 +339,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     const anoMes = form.data_pagamento
       ? form.data_pagamento.substring(0, 7)
       : form.data_competencia.substring(0, 7);
-    const sinal = (form.tipo_operacao || '').startsWith('1') ? 1
-      : (form.tipo_operacao || '').startsWith('3') ? 0 : -1;
+    const sinal = (form.tipo_operacao || '').startsWith('1') ? 1 : -1;
 
     const { error } = await supabase.from('financeiro_lancamentos_v2').update({
       fazenda_id: form.fazenda_id,
