@@ -323,7 +323,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     if (!clienteId || !user) return false;
 
     const row = buildInsertRow(form, user.id);
-    const { error } = await supabase.from('financeiro_lancamentos_v2').insert(row);
+    const { error } = await supabase.from('financeiro_lancamentos_v2').insert(row as any);
 
     if (error) {
       toast.error('Erro ao criar lançamento');
