@@ -456,7 +456,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <p className="text-[10px] text-muted-foreground">Saldo Calculado</p>
+                      <p className="text-[10px] text-muted-foreground">Saldo no Sistema</p>
                       <p className="text-xs font-medium tabular-nums">{formatMoeda(card.saldoCalculado)}</p>
                     </div>
 
@@ -470,18 +470,18 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                 </div>
 
                 {/* ── COL 2: Movimento Financeiro ── */}
-                <div className="space-y-2">
+                <div className="space-y-0.5">
                   <div className="px-2 py-1.5 flex items-center justify-between">
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-medium">Saldo Inicial</p>
                     <p className="text-sm font-bold tabular-nums">{formatMoeda(card.saldoInicial)}</p>
                   </div>
 
-                  <div className="p-2.5">
+                  <div className="px-2.5 py-1">
                     <div className="flex items-baseline justify-between">
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Entradas</p>
                       <p className="text-sm font-bold tabular-nums text-green-600">{formatMoeda(card.totalEntradas)}</p>
                     </div>
-                    <div className="mt-1.5 space-y-0.5 border-t pt-1">
+                    <div className="mt-0.5 space-y-0.5 border-t pt-0.5">
                       <p className="text-[9px] text-muted-foreground flex justify-between">
                         <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.entradasTerceiros)}</span>
                       </p>
@@ -491,12 +491,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                     </div>
                   </div>
 
-                  <div className="p-2.5">
+                  <div className="px-2.5 py-1">
                     <div className="flex items-baseline justify-between">
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Saídas</p>
                       <p className="text-sm font-bold tabular-nums text-red-600">{formatMoeda(card.totalSaidas)}</p>
                     </div>
-                    <div className="mt-1.5 space-y-0.5 border-t pt-1">
+                    <div className="mt-0.5 space-y-0.5 border-t pt-0.5">
                       <p className="text-[9px] text-muted-foreground flex justify-between">
                         <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.saidasTerceiros)}</span>
                       </p>
@@ -506,9 +506,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                     </div>
                   </div>
 
-                  <div className="px-2.5 pt-1 border-t">
+                  <div className="px-2.5 pt-0.5 border-t">
                     <div className="flex items-center justify-between">
-                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-medium">Saldo Calculado</p>
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-medium">Saldo no Sistema</p>
                       <p className={`text-xs font-bold tabular-nums ${card.saldoCalculado >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {formatMoeda(card.saldoCalculado)}
                       </p>
