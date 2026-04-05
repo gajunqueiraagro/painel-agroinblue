@@ -247,8 +247,19 @@ export function LancamentoV2Dialog({
       setTipoOperacao(lancamento.tipo_operacao);
       setStatusTransacao(lancamento.status_transacao || 'previsto');
       setValorDisplay(toBRL(lancamento.valor));
-      setContaOrigemId(lancamento.conta_bancaria_id || '');
-      setContaDestinoId('');
+      // For transfers: origin = conta_bancaria_id, destination = conta_destino_id
+      // For entries: destination = conta_bancaria_id
+      // For exits: origin = conta_bancaria_id
+      if (lancamento.tipo_operacao === '3-Transferência') {
+        setContaOrigemId(lancamento.conta_bancaria_id || '');
+        setContaDestinoId((lancamento as any).conta_destino_id || '');
+      } else if (lancamento.tipo_operacao === '1-Entradas') {
+        setContaOrigemId('');
+        setContaDestinoId(lancamento.conta_bancaria_id || '');
+      } else {
+        setContaOrigemId(lancamento.conta_bancaria_id || '');
+        setContaDestinoId('');
+      }
       setNotaFiscal(lancamento.nota_fiscal || '');
       setObservacao(lancamento.observacao || '');
       setFormaPgto(lancamento.forma_pagamento || '');
