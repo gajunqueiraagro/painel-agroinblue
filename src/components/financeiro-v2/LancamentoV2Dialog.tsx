@@ -830,7 +830,7 @@ export function LancamentoV2Dialog({
 
             {/* ── BLOCO 2 — Identificação ── */}
             <section className={sectionClass}>
-              <p className={sectionTitle}>Identificação</p>
+              <p className={sectionTitleClass}><User className="h-3.5 w-3.5" /> Identificação</p>
               <div className="grid grid-cols-2 gap-2">
                 {/* Produto */}
                 <div ref={produtoWrapperRef} className="relative col-span-2">
