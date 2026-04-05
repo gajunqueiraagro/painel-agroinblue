@@ -71,11 +71,22 @@ export async function loadPesosPastosCompleto(
 ): Promise<PesosPastosResult> {
   const idToCodigo = new Map(categorias.map(c => [c.id, c.codigo]));
 
+  // First get active pastos for this fazenda (same filter as Mapa do Rebanho)
+  const { data: pastosAtivos } = await supabase
+    .from('pastos')
+    .select('id')
+    .eq('fazenda_id', fazendaId)
+    .eq('ativo', true)
+    .eq('entra_conciliacao', true);
+
+  if (!pastosAtivos?.length) return { porCategoria: {}, quantidadePorCategoria: {}, pesoMedioGeralPastos: null, totalCabecasPastos: 0 };
+
   const { data: fechamentos } = await supabase
     .from('fechamento_pastos')
     .select('id')
     .eq('fazenda_id', fazendaId)
-    .eq('ano_mes', anoMes);
+    .eq('ano_mes', anoMes)
+    .in('pasto_id', pastosAtivos.map(p => p.id));
 
   if (!fechamentos?.length) return { porCategoria: {}, quantidadePorCategoria: {}, pesoMedioGeralPastos: null, totalCabecasPastos: 0 };
 
