@@ -522,7 +522,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
                     );
                   })}
                   <td className="px-0.5 py-0.5 text-center text-[11px] font-extrabold border-r" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>{formatNum(totais.totalCab, 0)}</td>
-                  <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r tabular-nums" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>{totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 2) : '—'}</td>
+                  <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r tabular-nums" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>{pesoMedioOficial ? formatNum(pesoMedioOficial, 2) : '—'}</td>
                   <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)' }}>{formatNum(totais.areaTotal, 1)}</td>
                   <td className={`px-0.5 py-0.5 text-center text-[10px] italic border-r ${getUaHaColor(totais.uaHaGeral)}`} style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)' }}>
                     {totais.uaHaGeral ? formatNum(totais.uaHaGeral, 2) : '—'}
