@@ -875,7 +875,7 @@ export function LancamentoV2Dialog({
 
                 {/* Fornecedor */}
                 <div>
-                  <Label className="text-xs">Fornecedor *</Label>
+                  <Label className="text-[10px]">Fornecedor *</Label>
                   <div className="flex gap-1.5">
                     <Popover open={fornecedorOpen} onOpenChange={v => { setFornecedorOpen(v); if (!v) setFornecedorSearch(''); }}>
                       <PopoverTrigger asChild>
