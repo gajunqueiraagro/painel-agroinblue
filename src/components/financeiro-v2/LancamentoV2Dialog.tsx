@@ -786,14 +786,14 @@ export function LancamentoV2Dialog({
   return (
     <>
       <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-        <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col p-0 bg-[#fafbfc] dark:bg-card rounded-xl shadow-2xl border-0 overflow-hidden">
+        <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col p-0 bg-[#f4f5f7] dark:bg-[hsl(var(--card))] rounded-xl shadow-2xl border border-border/50 overflow-hidden">
           {/* Header */}
-          <DialogHeader className="px-6 pt-5 pb-3 border-b border-border/30 bg-background dark:bg-card">
-            <DialogTitle className="text-base font-semibold">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
+          <DialogHeader className="px-5 pt-4 pb-2.5 border-b border-border/40 bg-[hsl(var(--muted))] dark:bg-[hsl(var(--muted)/0.6)]">
+            <DialogTitle className="text-[13px] font-bold tracking-tight">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
           </DialogHeader>
 
           {/* Scrollable body */}
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+          <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
 
             {/* ── BLOCO 1 — Tipo e Datas ── */}
             <section className={sectionClass}>
