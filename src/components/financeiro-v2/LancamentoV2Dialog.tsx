@@ -845,7 +845,7 @@ export function LancamentoV2Dialog({
                     }}
                     onFocus={() => { if (descricao.trim().length >= 2) setProdutoOpen(true); }}
                     onKeyDown={handleProdutoKeyDown}
-                    className={cn("h-9", fieldBg)}
+                    className={cn("h-8", fieldBg)}
                     placeholder="Descrição do produto"
                     autoComplete="off"
                   />
