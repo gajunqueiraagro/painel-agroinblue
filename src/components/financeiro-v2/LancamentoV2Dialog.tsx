@@ -918,8 +918,8 @@ export function LancamentoV2Dialog({
                         </div>
                       </PopoverContent>
                     </Popover>
-                    <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setFornecedorDialogOpen(true)} title="Novo Fornecedor">
-                      <Plus className="h-4 w-4" />
+                    <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setFornecedorDialogOpen(true)} title="Novo Fornecedor">
+                      <Plus className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>
