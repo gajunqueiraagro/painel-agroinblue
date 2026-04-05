@@ -230,10 +230,11 @@ export function FinV2SaldosTab() {
   };
 
   const canEditSaldoInicial = (s: SaldoBancario): boolean => {
-    if (s.origem_saldo_inicial === 'automatico') return false; // never editable when auto
-    if (s.status_mes === 'travado') return isAdmin;
-    if (s.status_mes === 'fechado') return isAdmin;
-    return isAdmin || isFinanceiro;
+    // Saldo inicial is ONLY editable for the first month of the account (no previous saldo exists)
+    // AND only by admin
+    const prevFinal = findPrevSaldoFinal(s.conta_bancaria_id, s.ano_mes);
+    if (prevFinal !== null) return false; // Chain exists — never editable
+    return isAdmin; // First month — admin only
   };
 
   const getEditBlockReason = (s: SaldoBancario): string | null => {
