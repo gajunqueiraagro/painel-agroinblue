@@ -36,7 +36,7 @@ import {
 } from '@/lib/calculos/zootecnicos';
 import { supabase } from '@/integrations/supabase/client';
 import { isConciliado as isLancConciliado } from '@/lib/statusOperacional';
-import { loadPesosPastosPorCategoria, resolverPesoOficial } from '@/hooks/useFechamentoCategoria';
+import { loadPesosPastosCompleto, resolverPesoOficial } from '@/hooks/useFechamentoCategoria';
 import {
   isConciliado as isFinConciliado,
   isEntrada as isFinEntrada,
@@ -113,6 +113,7 @@ function buildMonthlyData(
   areaProdutiva: number,
   pesosPorMes: Record<string, Record<string, number>>,
   valorRebanhoMes: number[],
+  pesoMedioGeralPorMes: Record<string, number | null>,
 ): MonthlyData {
   const { saldoInicioMes, saldoFinalAno, saldoInicialAno } = calcSaldoMensalAcumulado(saldosIniciais, lancPec, ano);
 
@@ -188,7 +189,13 @@ function buildMonthlyData(
   const pesoTotalIni = mk(pesoIniMesCalc);
   const pesoTotalFin = mk(pesoFinMesCalc);
   const pesoMedioIni = mk(m => { const c = cabIniMes(m); return c > 0 ? pesoIniMesCalc(m) / c : 0; });
-  const pesoMedioFin = mk(m => { const c = cabFinMes(m); return c > 0 ? pesoFinMesCalc(m) / c : 0; });
+  const pesoMedioFin = mk(m => {
+    const anoMesKey = `${ano}-${String(m).padStart(2, '0')}`;
+    const pmPastos = pesoMedioGeralPorMes[anoMesKey];
+    if (pmPastos !== null && pmPastos !== undefined && pmPastos > 0) return pmPastos;
+    const c = cabFinMes(m);
+    return c > 0 ? pesoFinMesCalc(m) / c : 0;
+  });
 
   const arrobasProd = mk(m => {
     const pFin = pesoFinMesCalc(m);
@@ -706,6 +713,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
   const [viewTab, setViewTab] = useState<ViewTab>('mensal');
   const [cenario, setCenario] = useState<Cenario>('realizado');
   const [pesosPorMes, setPesosPorMes] = useState<Record<string, Record<string, number>>>({});
+  const [pesoMedioGeralPorMes, setPesoMedioGeralPorMes] = useState<Record<string, number | null>>({});
   const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(Array(13).fill(0));
   const [openBlocos, setOpenBlocos] = useState<Record<string, boolean>>({});
   const [showDivP1, setShowDivP1] = useState(false);
@@ -734,14 +742,18 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
   const monthCutoff = useMemo(() => getCurrentMonthCutoff(anoNum), [anoNum]);
 
   useEffect(() => {
-    if (!fazendaId || fazendaId === '__global__' || categorias.length === 0) { setPesosPorMes({}); return; }
+    if (!fazendaId || fazendaId === '__global__' || categorias.length === 0) { setPesosPorMes({}); setPesoMedioGeralPorMes({}); return; }
     (async () => {
       const result: Record<string, Record<string, number>> = {};
+      const pmResult: Record<string, number | null> = {};
       for (let m = 1; m <= 12; m++) {
         const anoMes = `${anoNum}-${String(m).padStart(2, '0')}`;
-        result[anoMes] = await loadPesosPastosPorCategoria(fazendaId, anoMes, categorias);
+        const { porCategoria, pesoMedioGeralPastos } = await loadPesosPastosCompleto(fazendaId, anoMes, categorias);
+        result[anoMes] = porCategoria;
+        pmResult[anoMes] = pesoMedioGeralPastos;
       }
       setPesosPorMes(result);
+      setPesoMedioGeralPorMes(pmResult);
     })();
   }, [fazendaId, anoNum, categorias]);
 
@@ -771,8 +783,8 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
   const areaProdutiva = useMemo(() => calcAreaProdutivaPecuaria(pastos), [pastos]);
 
   const monthlyData = useMemo(() =>
-    buildMonthlyData(lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes),
-    [lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes],
+    buildMonthlyData(lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes, pesoMedioGeralPorMes),
+    [lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes, pesoMedioGeralPorMes],
   );
 
   const isPrevisto = cenario === 'previsto';
