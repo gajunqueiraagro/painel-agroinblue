@@ -343,7 +343,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     const sinal = (form.tipo_operacao || '').startsWith('1') ? 1
       : (form.tipo_operacao || '').startsWith('3') ? 0 : -1;
 
-    const updatePayload: Record<string, any> = {
+    const { error } = await supabase.from('financeiro_lancamentos_v2').update({
       fazenda_id: form.fazenda_id,
       conta_bancaria_id: form.conta_bancaria_id || null,
       conta_destino_id: form.conta_destino_id || null,
@@ -366,7 +366,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       ano_mes: anoMes,
       editado_manual: true,
       updated_by: user.id,
-    }).eq('id', id);
+    } as any).eq('id', id);
 
     if (error) {
       toast.error('Erro ao editar lançamento');
