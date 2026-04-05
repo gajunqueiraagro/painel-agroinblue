@@ -341,7 +341,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       : form.data_competencia.substring(0, 7);
     const sinal = (form.tipo_operacao || '').startsWith('1') ? 1 : -1;
 
-    const { error } = await supabase.from('financeiro_lancamentos_v2').update({
+    const updatePayload = {
       fazenda_id: form.fazenda_id,
       conta_bancaria_id: form.conta_bancaria_id || null,
       conta_destino_id: form.conta_destino_id || null,
@@ -364,13 +364,30 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       ano_mes: anoMes,
       editado_manual: true,
       updated_by: user.id,
-    } as any).eq('id', id);
+    };
+
+    console.log('[FinV2] editarLancamento PAYLOAD', {
+      id,
+      'form.conta_destino_id': form.conta_destino_id,
+      'payload.conta_destino_id': updatePayload.conta_destino_id,
+      'form.tipo_operacao': form.tipo_operacao,
+    });
+
+    const { error } = await supabase.from('financeiro_lancamentos_v2').update(updatePayload as any).eq('id', id);
 
     if (error) {
       toast.error('Erro ao editar lançamento');
-      console.error(error);
+      console.error('[FinV2] editarLancamento ERROR', error);
       return false;
     }
+
+    // Post-save verification
+    const { data: verify } = await supabase.from('financeiro_lancamentos_v2')
+      .select('id, conta_destino_id, conta_bancaria_id, tipo_operacao')
+      .eq('id', id)
+      .single();
+    console.log('[FinV2] POST-SAVE VERIFY', verify);
+
     toast.success('Lançamento atualizado');
     return true;
   }, [clienteId, user]);

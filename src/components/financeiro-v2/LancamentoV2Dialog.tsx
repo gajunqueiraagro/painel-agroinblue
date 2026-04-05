@@ -253,7 +253,9 @@ export function LancamentoV2Dialog({
       // For exits: origin = conta_bancaria_id
       if (lancamento.tipo_operacao === '3-Transferência') {
         setContaOrigemId(lancamento.conta_bancaria_id || '');
-        setContaDestinoId((lancamento as any).conta_destino_id || '');
+        const destId = lancamento.conta_destino_id || '';
+        console.log('[FinV2] DIALOG INIT transfer destino =', destId, 'from lancamento.conta_destino_id =', lancamento.conta_destino_id);
+        setContaDestinoId(destId);
       } else if (lancamento.tipo_operacao === '1-Entradas') {
         setContaOrigemId('');
         setContaDestinoId(lancamento.conta_bancaria_id || '');
