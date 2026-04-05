@@ -137,7 +137,16 @@ function buildMonthlyData(
     const k = String(m).padStart(2, '0');
     return m === 1 ? saldoInicialAno : (saldoInicioMes[k] ?? 0);
   };
-  const cabFinMes = (m: number) => saldoFimMes(m);
+
+  // cabFinMes: use fechamento_pastos quantities when available
+  const cabFinMes = (m: number) => {
+    const anoMesKey = `${ano}-${String(m).padStart(2, '0')}`;
+    const qtdMap = qtdPorMes[anoMesKey];
+    if (qtdMap && Object.keys(qtdMap).length > 0) {
+      return Object.values(qtdMap).reduce((s, v) => s + v, 0);
+    }
+    return saldoFimMes(m);
+  };
 
   const entradasCabMes = (m: number) => {
     const resumo = calcResumoMovimentacoes(lancPec, `${ano}-${String(m).padStart(2, '0')}`);
@@ -148,10 +157,24 @@ function buildMonthlyData(
     return resumo.totalSaidas;
   };
 
+  // pesoFinKgArr: use fechamento_pastos quantities + weights when available
   const pesoFinKgArr = Array.from({ length: 12 }, (_, i) => {
     const m = i + 1;
-    const anoMes = `${ano}-${String(m).padStart(2, '0')}`;
-    const pesosMap = pesosPorMes[anoMes] || {};
+    const anoMesKey = `${ano}-${String(m).padStart(2, '0')}`;
+    const pesosMap = pesosPorMes[anoMesKey] || {};
+    const qtdMap = qtdPorMes[anoMesKey];
+
+    // If fechamento data exists, use its quantities and weights exclusively
+    if (qtdMap && Object.keys(qtdMap).length > 0) {
+      let total = 0;
+      Object.entries(qtdMap).forEach(([cat, qtd]) => {
+        const peso = pesosMap[cat] || 0;
+        total += qtd * peso;
+      });
+      return total;
+    }
+
+    // Fallback for months without fechamento: use saldo conciliado
     const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancPec, ano, m);
     let total = 0;
     saldoMap.forEach((qtd, cat) => {
