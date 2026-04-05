@@ -1056,7 +1056,7 @@ export function LancamentoV2Dialog({
                     <div>
                       <Label className="text-[10px]">Frequência</Label>
                       <Select value={frequencia} onValueChange={(v: 'pontual' | 'recorrente') => setFrequencia(v)}>
-                        <SelectTrigger className={cn("h-9", fieldBg)}><SelectValue /></SelectTrigger>
+                        <SelectTrigger className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="pontual">Pontual</SelectItem>
                           <SelectItem value="recorrente">Recorrente</SelectItem>
