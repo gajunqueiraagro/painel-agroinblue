@@ -811,8 +811,8 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props)
   const areaProdutiva = useMemo(() => calcAreaProdutivaPecuaria(pastos), [pastos]);
 
   const monthlyData = useMemo(() =>
-    buildMonthlyData(lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes, pesoMedioGeralPorMes),
-    [lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes, pesoMedioGeralPorMes],
+    buildMonthlyData(lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes, pesoMedioGeralPorMes, qtdPorMes),
+    [lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes, pesoMedioGeralPorMes, qtdPorMes],
   );
 
   const isPrevisto = cenario === 'previsto';
