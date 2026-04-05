@@ -365,7 +365,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
   return (
     <div className="animate-fade-in pb-20">
       <div className="p-3 space-y-2">
-        {/* Filtros compactos inline */}
+        {/* Header: filtros + meses */}
         <div className="flex items-center gap-2">
           <Select value={ano} onValueChange={setAno}>
             <SelectTrigger className="h-7 text-xs w-[72px]"><SelectValue /></SelectTrigger>
@@ -374,7 +374,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
             </SelectContent>
           </Select>
           <Select value={contaId} onValueChange={setContaId}>
-            <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-7 text-xs w-[220px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__" className="text-xs">Todas as contas</SelectItem>
               {contas.map(c => (
@@ -382,24 +382,23 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
               ))}
             </SelectContent>
           </Select>
-        </div>
-
-        {/* Barra de meses com status */}
-        <div className="flex gap-0.5 rounded-md overflow-hidden">
-          {mesCards.map(c => {
-            const cfg = STATUS_CONFIG[c.status];
-            const isSelected = selectedMes === c.mes;
-            return (
-              <button
-                key={c.mes}
-                onClick={() => setSelectedMes(c.mes)}
-                className={`flex-1 py-1.5 text-center text-[9px] font-bold transition-all ${cfg.color} hover:opacity-80 ${isSelected ? 'ring-2 ring-primary scale-105 z-10' : 'opacity-70'}`}
-                title={`${c.label}: ${cfg.label}`}
-              >
-                {c.label}
-              </button>
-            );
-          })}
+          <div className="flex-1" />
+          <div className="flex gap-0.5 rounded-md overflow-hidden">
+            {mesCards.map(c => {
+              const cfg = STATUS_CONFIG[c.status];
+              const isSelected = selectedMes === c.mes;
+              return (
+                <button
+                  key={c.mes}
+                  onClick={() => setSelectedMes(c.mes)}
+                  className={`w-[38px] py-1.5 text-center text-[9px] font-bold transition-all ${cfg.color} hover:opacity-80 ${isSelected ? 'ring-2 ring-primary scale-105 z-10' : 'opacity-70'}`}
+                  title={`${c.label}: ${cfg.label}`}
+                >
+                  {c.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {loading ? (
@@ -408,9 +407,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
           const card = selectedCard;
           const cfg = STATUS_CONFIG[card.status];
           const StatusIcon = cfg.icon;
+          const diffAbs = Math.abs(card.diferenca);
+          const isConciliado = card.status === 'conciliado';
+          const isPendente = card.status === 'pendente';
+
           return (
             <div className="space-y-2">
-              {/* Header do mês */}
+              {/* Título do mês + botão lançamentos */}
               <div className="flex items-center gap-2">
                 <StatusIcon className={`h-4 w-4 ${cfg.iconColor}`} />
                 <span className="text-sm font-bold">{card.label}/{ano}</span>
@@ -426,89 +429,119 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
                     <ExternalLink className="h-3.5 w-3.5" /> Lançamentos
                   </Button>
                 )}
-                <div className="ml-auto text-right">
-                  <p className="text-[9px] text-muted-foreground">Saldo Calculado</p>
-                  <p className={`text-xs font-bold ${card.saldoCalculado >= 0 ? 'text-foreground' : 'text-red-600'}`}>
-                    {formatMoeda(card.saldoCalculado)}
-                  </p>
-                </div>
               </div>
 
-              {/* Blocos de dados */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <div className="bg-background rounded-md p-2 border">
-                  <p className="text-[9px] text-muted-foreground uppercase font-medium">Saldo Inicial</p>
-                  <p className="text-xs font-bold">{formatMoeda(card.saldoInicial)}</p>
-                </div>
+              {/* ═══ 3 COLUNAS ═══ */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
 
-                <div className="bg-background rounded-md p-2 border">
-                  <p className="text-[9px] text-muted-foreground uppercase font-medium">Entradas</p>
-                  <p className="text-xs font-bold text-green-700 dark:text-green-400">{formatMoeda(card.totalEntradas)}</p>
-                  <div className="mt-1 space-y-0.5">
-                    <p className="text-[8px] text-muted-foreground flex justify-between">
-                      <span>Terceiros</span><span>{formatMoeda(card.entradasTerceiros)}</span>
-                    </p>
-                    <p className="text-[8px] text-muted-foreground flex justify-between">
-                      <span>Transferências</span><span>{formatMoeda(card.transferenciasRecebidas)}</span>
-                    </p>
+                {/* ── COL 1: Movimento Financeiro ── */}
+                <div className="space-y-2">
+                  {/* Saldo Inicial — texto simples */}
+                  <div className="px-2 py-1.5">
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-medium">Saldo Inicial</p>
+                    <p className="text-sm font-bold tabular-nums">{formatMoeda(card.saldoInicial)}</p>
                   </div>
-                </div>
 
-                <div className="bg-background rounded-md p-2 border">
-                  <p className="text-[9px] text-muted-foreground uppercase font-medium">Saídas</p>
-                  <p className="text-xs font-bold text-red-700 dark:text-red-400">{formatMoeda(card.totalSaidas)}</p>
-                  <div className="mt-1 space-y-0.5">
-                    <p className="text-[8px] text-muted-foreground flex justify-between">
-                      <span>Terceiros</span><span>{formatMoeda(card.saidasTerceiros)}</span>
-                    </p>
-                    <p className="text-[8px] text-muted-foreground flex justify-between">
-                      <span>Transferências</span><span>{formatMoeda(card.transferenciasEnviadas)}</span>
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-background rounded-md p-2 border">
-                  <p className="text-[9px] text-muted-foreground uppercase font-medium">Saldo Final Calculado</p>
-                  <p className={`text-xs font-bold ${card.saldoCalculado >= 0 ? 'text-foreground' : 'text-red-600'}`}>
-                    {formatMoeda(card.saldoCalculado)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Conciliação */}
-              <div className="bg-background rounded-md p-2.5 border space-y-2">
-                <p className="text-[10px] font-bold text-foreground uppercase tracking-wider">Conciliação</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <p className="text-[9px] text-muted-foreground">Saldo Extrato</p>
-                    <div className="flex items-center gap-1">
-                      <p className="text-xs font-bold">
-                        {card.saldoExtrato !== null ? formatMoeda(card.saldoExtrato) : '—'}
+                  {/* Entradas */}
+                  <div className="bg-green-50 dark:bg-green-950/30 rounded-md p-2.5 border border-green-200 dark:border-green-800/50">
+                    <div className="flex items-baseline justify-between">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-green-800 dark:text-green-300">Entradas</p>
+                      <p className="text-base font-extrabold tabular-nums text-green-700 dark:text-green-400">{formatMoeda(card.totalEntradas)}</p>
+                    </div>
+                    <div className="mt-1.5 space-y-0.5 border-t border-green-200/60 dark:border-green-800/40 pt-1">
+                      <p className="text-[9px] text-green-700/80 dark:text-green-400/70 flex justify-between">
+                        <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.entradasTerceiros)}</span>
                       </p>
-                      {contaId !== '__all__' && canEditSaldoFinal(card.anoMes) && (
-                        <button
-                          onClick={() => handleEditSaldo(card.anoMes, contaId, card.saldoExtrato || 0)}
-                          className="p-0.5 hover:bg-muted rounded"
-                        >
-                          <Pencil className="h-3 w-3 text-muted-foreground" />
-                        </button>
-                      )}
+                      <p className="text-[9px] text-green-700/80 dark:text-green-400/70 flex justify-between">
+                        <span>Transferências</span><span className="tabular-nums">{formatMoeda(card.transferenciasRecebidas)}</span>
+                      </p>
                     </div>
                   </div>
-                  <div>
-                    <p className="text-[9px] text-muted-foreground">Saldo Calculado</p>
-                    <p className="text-xs font-bold">{formatMoeda(card.saldoCalculado)}</p>
+
+                  {/* Saídas */}
+                  <div className="bg-red-50 dark:bg-red-950/30 rounded-md p-2.5 border border-red-200 dark:border-red-800/50">
+                    <div className="flex items-baseline justify-between">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-red-800 dark:text-red-300">Saídas</p>
+                      <p className="text-base font-extrabold tabular-nums text-red-700 dark:text-red-400">{formatMoeda(card.totalSaidas)}</p>
+                    </div>
+                    <div className="mt-1.5 space-y-0.5 border-t border-red-200/60 dark:border-red-800/40 pt-1">
+                      <p className="text-[9px] text-red-700/80 dark:text-red-400/70 flex justify-between">
+                        <span>Terceiros</span><span className="tabular-nums">{formatMoeda(card.saidasTerceiros)}</span>
+                      </p>
+                      <p className="text-[9px] text-red-700/80 dark:text-red-400/70 flex justify-between">
+                        <span>Transferências</span><span className="tabular-nums">{formatMoeda(card.transferenciasEnviadas)}</span>
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[9px] text-muted-foreground">Diferença</p>
-                    <p className={`text-xs font-bold ${Math.abs(card.diferenca) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatMoeda(card.diferenca)}
+                </div>
+
+                {/* ── COL 2: Conciliação ── */}
+                <div className="bg-background rounded-md p-3 border space-y-3">
+                  <p className="text-[10px] font-bold text-foreground uppercase tracking-wider">Conciliação</p>
+
+                  <div className="space-y-2">
+                    <div>
+                      <p className="text-[9px] text-muted-foreground">Saldo Extrato</p>
+                      <div className="flex items-center gap-1">
+                        <p className="text-sm font-bold tabular-nums">
+                          {card.saldoExtrato !== null ? formatMoeda(card.saldoExtrato) : '—'}
+                        </p>
+                        {contaId !== '__all__' && canEditSaldoFinal(card.anoMes) && (
+                          <button
+                            onClick={() => handleEditSaldo(card.anoMes, contaId, card.saldoExtrato || 0)}
+                            className="p-0.5 hover:bg-muted rounded"
+                          >
+                            <Pencil className="h-3 w-3 text-muted-foreground" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-[9px] text-muted-foreground">Saldo Calculado</p>
+                      <p className="text-sm font-bold tabular-nums">{formatMoeda(card.saldoCalculado)}</p>
+                    </div>
+
+                    <div className="border-t pt-2">
+                      <p className="text-[9px] text-muted-foreground">Diferença</p>
+                      <p className={`text-sm font-bold tabular-nums ${diffAbs < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatMoeda(card.diferenca)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── COL 3: Status da Conciliação ── */}
+                <div className={`rounded-md p-3 border flex flex-col items-center justify-center text-center space-y-1.5 ${
+                  isConciliado
+                    ? 'bg-green-50 border-green-300 dark:bg-green-950/40 dark:border-green-700'
+                    : isPendente
+                      ? 'bg-muted/50 border-muted'
+                      : card.status === 'atencao'
+                        ? 'bg-yellow-50 border-yellow-300 dark:bg-yellow-950/40 dark:border-yellow-700'
+                        : 'bg-red-50 border-red-300 dark:bg-red-950/40 dark:border-red-700'
+                }`}>
+                  <StatusIcon className={`h-8 w-8 ${cfg.iconColor}`} />
+                  <p className={`text-sm font-extrabold ${
+                    isConciliado ? 'text-green-700 dark:text-green-300'
+                      : isPendente ? 'text-muted-foreground'
+                        : card.status === 'atencao' ? 'text-yellow-700 dark:text-yellow-300'
+                          : 'text-red-700 dark:text-red-300'
+                  }`}>
+                    {isConciliado ? '✅ Conciliado' : isPendente ? '⏳ Pendente' : card.status === 'atencao' ? '⚠️ Atenção' : '❌ Não Conciliado'}
+                  </p>
+                  {!isPendente && (
+                    <p className={`text-xs font-bold tabular-nums ${diffAbs < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
+                      Diferença: {formatMoeda(card.diferenca)}
                     </p>
-                  </div>
+                  )}
+                  {isPendente && (
+                    <p className="text-[10px] text-muted-foreground">Informe o saldo do extrato</p>
+                  )}
                 </div>
               </div>
 
-              {/* Lançamentos */}
+              {/* ═══ LANÇAMENTOS ═══ */}
               {card.lancamentos.length > 0 && (() => {
                 const classifyLanc = (l: LancamentoResumo) => {
                   const tipo = (l.tipo_operacao || '').toLowerCase().replace(/[\s\-–—]/g, '');
