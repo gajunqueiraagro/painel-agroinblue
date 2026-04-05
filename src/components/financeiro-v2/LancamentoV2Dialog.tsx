@@ -993,11 +993,11 @@ export function LancamentoV2Dialog({
                   <Label className="text-[10px]">Valor (R$) *</Label>
                   <Input tabIndex={10} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className={cn("h-8 text-right font-mono", fieldBg)} placeholder="0,00" inputMode="numeric" />
                 </div>
-                <div className="col-span-2">
-                  <Label className="text-xs">Subcentro *</Label>
+                <div>
+                  <Label className="text-[10px]">Subcentro *</Label>
                   <Popover open={subcentroOpen} onOpenChange={v => { setSubcentroOpen(v); if (!v) { setSubcentroSearch(''); setSubcentroHighlight(0); } }}>
                     <PopoverTrigger asChild>
-                      <Button tabIndex={11} variant="outline" role="combobox" aria-expanded={subcentroOpen} className={cn("w-full h-9 justify-between font-normal text-sm", fieldBg)}>
+                      <Button tabIndex={11} variant="outline" role="combobox" aria-expanded={subcentroOpen} className={cn("w-full h-8 justify-between font-normal text-xs", fieldBg)}>
                         <span className="truncate">{subcentro || 'Selecione o subcentro...'}</span>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
