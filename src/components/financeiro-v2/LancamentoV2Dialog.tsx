@@ -987,7 +987,7 @@ export function LancamentoV2Dialog({
 
             {/* ── BLOCO 3 — Valor e Classificação ── */}
             <section className={sectionClass}>
-              <p className={sectionTitle}>Valor e Classificação</p>
+              <p className={sectionTitleClass}><DollarSign className="h-3.5 w-3.5" /> Valor e Classificação</p>
               <div className="grid grid-cols-[140px_1fr] gap-2">
                 <div>
                   <Label className="text-[10px]">Valor (R$) *</Label>
