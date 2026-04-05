@@ -779,47 +779,47 @@ export function LancamentoV2Dialog({
     }
   }, [open]);
 
-  const sectionClass = "rounded-lg bg-muted/20 dark:bg-muted/10 border border-border/20 p-3 space-y-2.5";
-  const sectionTitle = "text-[9px] font-bold text-muted-foreground uppercase tracking-widest";
+  const sectionClass = "rounded-md bg-muted/30 dark:bg-muted/15 border border-border/30 px-3 py-2 space-y-1.5";
+  const sectionTitle = "text-[9px] font-bold text-muted-foreground/80 uppercase tracking-[0.12em] mb-0.5";
   const fieldBg = "bg-background dark:bg-muted border-border/40";
 
   return (
     <>
       <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-        <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col p-0 bg-[#fafbfc] dark:bg-card rounded-xl shadow-2xl border-0 overflow-hidden">
+        <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col p-0 bg-[#f4f5f7] dark:bg-[hsl(var(--card))] rounded-xl shadow-2xl border border-border/50 overflow-hidden">
           {/* Header */}
-          <DialogHeader className="px-6 pt-5 pb-3 border-b border-border/30 bg-background dark:bg-card">
-            <DialogTitle className="text-base font-semibold">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
+          <DialogHeader className="px-5 pt-4 pb-2.5 border-b border-border/40 bg-[hsl(var(--muted))] dark:bg-[hsl(var(--muted)/0.6)]">
+            <DialogTitle className="text-[13px] font-bold tracking-tight">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
           </DialogHeader>
 
           {/* Scrollable body */}
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+          <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
 
             {/* ── BLOCO 1 — Tipo e Datas ── */}
             <section className={sectionClass}>
               <p className={sectionTitle}>Tipo e Datas</p>
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-4 gap-2">
                 <div>
-                  <Label className="text-xs">Tipo Operação *</Label>
+                  <Label className="text-[10px]">Tipo Operação *</Label>
                   <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigemId(''); setContaDestinoId(''); setSubcentro(''); setMacroCusto(''); setCentroCusto(''); setSubcentroSearch(''); }}>
-                    <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-9", fieldBg)}><SelectValue /></SelectTrigger>
+                    <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {TIPOS_OPERACAO.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs">Data Competência *</Label>
-                  <Input tabIndex={2} type="date" value={dataCompetencia} onChange={e => setDataCompetencia(e.target.value)} className={cn("h-9", fieldBg)} />
+                  <Label className="text-[10px]">Data Competência *</Label>
+                  <Input tabIndex={2} type="date" value={dataCompetencia} onChange={e => setDataCompetencia(e.target.value)} className={cn("h-8", fieldBg)} />
                 </div>
                 <div>
-                  <Label className="text-xs">Data Pagamento *</Label>
-                  <Input tabIndex={3} type="date" value={dataPagamento} onChange={e => handleDataPagamentoChange(e.target.value)} className={cn("h-9", fieldBg)} />
+                  <Label className="text-[10px]">Data Pagamento *</Label>
+                  <Input tabIndex={3} type="date" value={dataPagamento} onChange={e => handleDataPagamentoChange(e.target.value)} className={cn("h-8", fieldBg)} />
                 </div>
                 <div>
-                  <Label className="text-xs">Status *</Label>
+                  <Label className="text-[10px]">Status *</Label>
                   <Select value={statusTransacao} onValueChange={setStatusTransacao}>
-                    <SelectTrigger tabIndex={4} className={cn("h-9", fieldBg)}><SelectValue /></SelectTrigger>
+                    <SelectTrigger tabIndex={4} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
                     </SelectContent>
@@ -831,10 +831,10 @@ export function LancamentoV2Dialog({
             {/* ── BLOCO 2 — Identificação ── */}
             <section className={sectionClass}>
               <p className={sectionTitle}>Identificação</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 {/* Produto */}
-                <div ref={produtoWrapperRef} className="relative">
-                  <Label className="text-xs">Produto / Descrição *</Label>
+                <div ref={produtoWrapperRef} className="relative col-span-2">
+                  <Label className="text-[10px]">Produto / Descrição *</Label>
                   <Input
                     tabIndex={5}
                     value={descricao}
@@ -845,7 +845,7 @@ export function LancamentoV2Dialog({
                     }}
                     onFocus={() => { if (descricao.trim().length >= 2) setProdutoOpen(true); }}
                     onKeyDown={handleProdutoKeyDown}
-                    className={cn("h-9", fieldBg)}
+                    className={cn("h-8", fieldBg)}
                     placeholder="Descrição do produto"
                     autoComplete="off"
                   />
@@ -875,13 +875,13 @@ export function LancamentoV2Dialog({
 
                 {/* Fornecedor */}
                 <div>
-                  <Label className="text-xs">Fornecedor *</Label>
-                  <div className="flex gap-1.5">
+                  <Label className="text-[10px]">Fornecedor *</Label>
+                  <div className="flex gap-1">
                     <Popover open={fornecedorOpen} onOpenChange={v => { setFornecedorOpen(v); if (!v) setFornecedorSearch(''); }}>
                       <PopoverTrigger asChild>
-                        <Button tabIndex={6} variant="outline" role="combobox" aria-expanded={fornecedorOpen} className={cn("flex-1 h-9 justify-between font-normal text-sm", fieldBg)}>
+                        <Button tabIndex={6} variant="outline" role="combobox" aria-expanded={fornecedorOpen} className={cn("flex-1 h-8 justify-between font-normal text-xs", fieldBg)}>
                           <span className="truncate">{selectedFornecedorNome || 'Selecione fornecedor...'}</span>
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
@@ -918,17 +918,17 @@ export function LancamentoV2Dialog({
                         </div>
                       </PopoverContent>
                     </Popover>
-                    <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setFornecedorDialogOpen(true)} title="Novo Fornecedor">
-                      <Plus className="h-4 w-4" />
+                    <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setFornecedorDialogOpen(true)} title="Novo Fornecedor">
+                      <Plus className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>
 
                 {/* Fazenda */}
                 <div>
-                  <Label className="text-xs">Fazenda *</Label>
+                  <Label className="text-[10px]">Fazenda *</Label>
                   <Select value={fazendaId} onValueChange={v => { setFazendaId(v); setContaOrigemId(''); setContaDestinoId(''); }}>
-                    <SelectTrigger tabIndex={7} className={cn("h-9", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectTrigger tabIndex={7} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
                     </SelectContent>
@@ -939,9 +939,9 @@ export function LancamentoV2Dialog({
                 {isTransferencia ? (
                   <>
                     <div>
-                      <Label className="text-xs">Conta Origem *</Label>
+                      <Label className="text-[10px]">Conta Origem *</Label>
                       <Select value={contaOrigemId} onValueChange={setContaOrigemId}>
-                        <SelectTrigger tabIndex={8} className={cn("h-9", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectTrigger tabIndex={8} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__">Nenhuma</SelectItem>
                           {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
@@ -949,9 +949,9 @@ export function LancamentoV2Dialog({
                       </Select>
                     </div>
                     <div>
-                      <Label className="text-xs">Conta Destino *</Label>
+                      <Label className="text-[10px]">Conta Destino *</Label>
                       <Select value={contaDestinoId} onValueChange={setContaDestinoId}>
-                        <SelectTrigger tabIndex={9} className={cn("h-9", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectTrigger tabIndex={9} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__">Nenhuma</SelectItem>
                           {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
@@ -961,9 +961,9 @@ export function LancamentoV2Dialog({
                   </>
                 ) : isEntrada ? (
                   <div>
-                    <Label className="text-xs">Conta Destino *</Label>
+                    <Label className="text-[10px]">Conta Destino *</Label>
                     <Select value={contaDestinoId} onValueChange={setContaDestinoId}>
-                      <SelectTrigger tabIndex={8} className={cn("h-9", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectTrigger tabIndex={8} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">Nenhuma</SelectItem>
                         {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
@@ -972,9 +972,9 @@ export function LancamentoV2Dialog({
                   </div>
                 ) : (
                   <div>
-                    <Label className="text-xs">Conta Origem *</Label>
+                    <Label className="text-[10px]">Conta Origem *</Label>
                     <Select value={contaOrigemId} onValueChange={setContaOrigemId}>
-                      <SelectTrigger tabIndex={8} className={cn("h-9", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectTrigger tabIndex={8} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">Nenhuma</SelectItem>
                         {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
@@ -988,16 +988,16 @@ export function LancamentoV2Dialog({
             {/* ── BLOCO 3 — Valor e Classificação ── */}
             <section className={sectionClass}>
               <p className={sectionTitle}>Valor e Classificação</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-[140px_1fr] gap-2">
                 <div>
-                  <Label className="text-xs">Valor (R$) *</Label>
-                  <Input tabIndex={10} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className={cn("h-9 text-right font-mono", fieldBg)} placeholder="0,00" inputMode="numeric" />
+                  <Label className="text-[10px]">Valor (R$) *</Label>
+                  <Input tabIndex={10} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className={cn("h-8 text-right font-mono", fieldBg)} placeholder="0,00" inputMode="numeric" />
                 </div>
-                <div className="col-span-2">
-                  <Label className="text-xs">Subcentro *</Label>
+                <div>
+                  <Label className="text-[10px]">Subcentro *</Label>
                   <Popover open={subcentroOpen} onOpenChange={v => { setSubcentroOpen(v); if (!v) { setSubcentroSearch(''); setSubcentroHighlight(0); } }}>
                     <PopoverTrigger asChild>
-                      <Button tabIndex={11} variant="outline" role="combobox" aria-expanded={subcentroOpen} className={cn("w-full h-9 justify-between font-normal text-sm", fieldBg)}>
+                      <Button tabIndex={11} variant="outline" role="combobox" aria-expanded={subcentroOpen} className={cn("w-full h-8 justify-between font-normal text-xs", fieldBg)}>
                         <span className="truncate">{subcentro || 'Selecione o subcentro...'}</span>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
@@ -1038,25 +1038,25 @@ export function LancamentoV2Dialog({
                   </Popover>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label className="text-xs text-muted-foreground">Centro Custo (auto)</Label>
-                  <Input value={centroCusto} readOnly disabled className="h-9 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-default" />
+                  <Label className="text-[10px] text-muted-foreground">Centro Custo (auto)</Label>
+                  <Input value={centroCusto} readOnly disabled className="h-8 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-default text-xs" />
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground">Macro Custo (auto)</Label>
-                  <Input value={macroCusto} readOnly disabled className="h-9 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-default" />
+                  <Label className="text-[10px] text-muted-foreground">Macro Custo (auto)</Label>
+                  <Input value={macroCusto} readOnly disabled className="h-8 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-default text-xs" />
                 </div>
               </div>
 
               {/* Frequency + Installment — only for new */}
               {!isEdit && (
-                <div className="space-y-2.5 pt-1">
-                  <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5 pt-0.5">
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <Label className="text-xs">Frequência</Label>
+                      <Label className="text-[10px]">Frequência</Label>
                       <Select value={frequencia} onValueChange={(v: 'pontual' | 'recorrente') => setFrequencia(v)}>
-                        <SelectTrigger className={cn("h-9", fieldBg)}><SelectValue /></SelectTrigger>
+                        <SelectTrigger className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="pontual">Pontual</SelectItem>
                           <SelectItem value="recorrente">Recorrente</SelectItem>
@@ -1065,9 +1065,9 @@ export function LancamentoV2Dialog({
                     </div>
                     {frequencia === 'pontual' && (
                       <div>
-                        <Label className="text-xs">Modalidade</Label>
+                        <Label className="text-[10px]">Modalidade</Label>
                         <Select value={formaPagamentoParc} onValueChange={(v: 'avista' | 'parcelada') => setFormaPagamentoParc(v)}>
-                          <SelectTrigger className={cn("h-9", fieldBg)}><SelectValue /></SelectTrigger>
+                          <SelectTrigger className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="avista">À vista</SelectItem>
                             <SelectItem value="parcelada">Parcelada</SelectItem>
@@ -1077,14 +1077,14 @@ export function LancamentoV2Dialog({
                     )}
                     {frequencia === 'pontual' && formaPagamentoParc === 'parcelada' && (
                       <div>
-                        <Label className="text-xs">Nº de Parcelas *</Label>
+                        <Label className="text-[10px]">Nº de Parcelas *</Label>
                         <Input
                           type="number"
                           min={2}
                           max={24}
                           value={numParcelas}
                           onChange={e => setNumParcelas(Math.max(2, Math.min(24, parseInt(e.target.value) || 2)))}
-                          className={cn("h-9", fieldBg)}
+                          className={cn("h-8", fieldBg)}
                         />
                       </div>
                     )}
@@ -1161,15 +1161,15 @@ export function LancamentoV2Dialog({
             {/* ── BLOCO 4 — Complementares ── */}
             <section className={sectionClass}>
               <p className={sectionTitle}>Complementares</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-[120px_1fr_1fr] gap-2">
                 <div>
-                  <Label className="text-xs">Nota Fiscal</Label>
-                  <Input tabIndex={12} value={notaFiscalDisplay} onChange={handleNotaFiscalChange} inputMode="numeric" className={cn("h-9 font-mono", fieldBg)} placeholder="000.000.000" />
+                  <Label className="text-[10px]">Nota Fiscal</Label>
+                  <Input tabIndex={12} value={notaFiscalDisplay} onChange={handleNotaFiscalChange} inputMode="numeric" className={cn("h-8 font-mono text-xs", fieldBg)} placeholder="000.000.000" />
                 </div>
                 <div>
-                  <Label className="text-xs">Forma de Pagamento</Label>
+                  <Label className="text-[10px]">Forma de Pagamento</Label>
                   <Select value={formaPgto || '__none_fp__'} onValueChange={handleFormaPgtoChange}>
-                    <SelectTrigger tabIndex={13} className={cn("h-9", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectTrigger tabIndex={13} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none_fp__">Nenhuma</SelectItem>
                       <SelectItem value="PIX">PIX</SelectItem>
@@ -1185,7 +1185,7 @@ export function LancamentoV2Dialog({
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-0.5">
-                    <Label className="text-xs">Dados Pagamento</Label>
+                    <Label className="text-[10px]">Dados Pagamento</Label>
                     <div className="flex gap-1">
                       {formaPgto === 'PIX' && dadosPagamento && (() => {
                         const chaveMatch = dadosPagamento.match(/Chave:\s*(.+)/i);
@@ -1204,18 +1204,18 @@ export function LancamentoV2Dialog({
                       )}
                     </div>
                   </div>
-                  <Textarea tabIndex={14} value={dadosPagamento} onChange={e => setDadosPagamento(e.target.value)} rows={1} placeholder="Chave PIX, dados bancários..." className={cn("text-xs resize-none", fieldBg)} />
+                  <Textarea tabIndex={14} value={dadosPagamento} onChange={e => setDadosPagamento(e.target.value)} rows={1} placeholder="Chave PIX, dados bancários..." className={cn("text-xs resize-none min-h-[32px]", fieldBg)} />
                 </div>
               </div>
               <div>
-                <Label className="text-xs">Observação</Label>
-                <Textarea tabIndex={15} value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Observações adicionais" className={cn("text-xs", fieldBg)} />
+                <Label className="text-[10px]">Observação</Label>
+                <Textarea tabIndex={15} value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Observações adicionais" className={cn("text-xs min-h-[48px]", fieldBg)} />
               </div>
             </section>
           </div>
 
           {/* Sticky footer */}
-          <div className="px-6 py-3 border-t border-border/30 bg-background dark:bg-card flex items-center gap-2">
+          <div className="px-5 py-2.5 border-t border-border/40 bg-[hsl(var(--muted))] dark:bg-[hsl(var(--muted)/0.6)] flex items-center gap-2">
             <Button variant="outline" onClick={onClose} className="px-5" tabIndex={16}>Cancelar</Button>
             <div className="flex-1" />
             {isEdit && onDelete && (
