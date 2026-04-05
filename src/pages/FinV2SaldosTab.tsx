@@ -445,7 +445,8 @@ export function FinV2SaldosTab() {
     return m ? `${m.l}/${am.slice(2, 4)}` : am;
   };
 
-  const saldoInicialIsAuto = autoSaldoInicial !== null && !overrideInicial;
+  // saldo inicial is always auto when prev exists
+  const _unusedAutoFlag = autoSaldoInicial !== null && !overrideInicial;
 
   /* ── render ── */
   return (
