@@ -13,6 +13,8 @@ interface Props {
   onRequestRegister: () => void;
   submitting: boolean;
   canRegister: boolean;
+  onBack?: () => void;
+  backLabel?: string;
 }
 
 function fmt(v: number | null, dec = 1) {
