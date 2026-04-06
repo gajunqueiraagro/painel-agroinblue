@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { STATUS_LABEL as CENTRAL_STATUS_LABEL } from '@/lib/statusOperacional';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -138,6 +138,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [currentPage, setCurrentPage] = useState(0);
   const hook = useFinanceiroV2(pageSize);
   const fechamentoHook = useFechamentoMensal();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const currentYear = new Date().getFullYear();
   const anos = useMemo(() => {
@@ -328,7 +329,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       ok = await hook.criarLancamento(form);
     }
     if (ok) {
+      const scrollTop = scrollContainerRef.current?.scrollTop ?? 0;
       await hook.loadLancamentos(filtros, hook.page);
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = scrollTop;
+      });
       const refreshed = hook.lancamentos.find(l => l.id === id);
       console.log('[FinV2] after save reload', {
         id,
@@ -342,12 +347,24 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   };
   const handleDelete = async (id: string) => {
     const ok = await hook.excluirLancamento(id);
-    if (ok) hook.loadLancamentos(filtros, hook.page);
+    if (ok) {
+      const scrollTop = scrollContainerRef.current?.scrollTop ?? 0;
+      await hook.loadLancamentos(filtros, hook.page);
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = scrollTop;
+      });
+    }
     return ok;
   };
   const handleDuplicate = async (lanc: LancamentoV2) => {
     const ok = await hook.duplicarLancamento(lanc);
-    if (ok) hook.loadLancamentos(filtros, hook.page);
+    if (ok) {
+      const scrollTop = scrollContainerRef.current?.scrollTop ?? 0;
+      await hook.loadLancamentos(filtros, hook.page);
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = scrollTop;
+      });
+    }
   };
 
   const openNew = () => { setEditingLanc(null); setDialogOpen(true); };
@@ -773,7 +790,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             contas={hook.contasBancarias}
             onFixed={() => hook.loadLancamentos(filtros, hook.page)}
           />
-           <div className="rounded-lg border border-[hsl(var(--border))] overflow-auto relative pr-3" style={{ maxHeight: 'calc(100vh - 260px - var(--bottom-nav-safe, 64px))' }}>
+           <div ref={scrollContainerRef} className="rounded-lg border border-[hsl(var(--border))] overflow-auto relative pr-3" style={{ maxHeight: 'calc(100vh - 260px - var(--bottom-nav-safe, 64px))' }}>
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: 62 }} />
