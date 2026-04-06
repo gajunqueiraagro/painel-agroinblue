@@ -29,7 +29,7 @@ export type ConciliacaoStatus = 'conciliado' | 'atencao' | 'nao_conciliado' | 'p
  * Only these status_transacao values count as "realised" for reconciliation.
  * Used as filter in Supabase queries and client-side checks.
  */
-export const STATUS_REALIZADOS = ['confirmado', 'conciliado'] as const;
+export const STATUS_REALIZADOS = ['conciliado'] as const;
 
 /**
  * Build a per-account/per-month movement summary from a list of lancamentos.
