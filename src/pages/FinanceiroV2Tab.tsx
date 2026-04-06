@@ -10,14 +10,14 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Plus, Pencil, Copy, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Copy, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download } from 'lucide-react';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, type LancamentoV2, type FiltrosV2 } from '@/hooks/useFinanceiroV2';
 import { useFechamentoMensal } from '@/hooks/useFechamentoMensal';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
 import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2ExportMenu';
-import { CorrecaoTransferenciasDialog } from '@/components/financeiro-v2/CorrecaoTransferenciasDialog';
+import { CorrecaoTransferenciasBanner } from '@/components/financeiro-v2/CorrecaoTransferenciasBanner';
 import { FechamentoMensalBanner } from '@/components/financeiro/FechamentoMensalBanner';
 import { format, parseISO } from 'date-fns';
 
@@ -185,7 +185,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [mode, setMode] = useState<'list' | 'rapido'>('list');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLanc, setEditingLanc] = useState<LancamentoV2 | null>(null);
-  const [correcaoOpen, setCorrecaoOpen] = useState(false);
+  
 
   // Sorting state
    type SortField = 'default' | 'data' | 'pgto' | 'valor' | 'produto' | 'fornecedor';
@@ -698,14 +698,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                   <Plus className="h-3 w-3" /> Novo
                 </Button>
               )}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setCorrecaoOpen(true)}
-                className="h-6 text-[10px] gap-0.5 px-2 border-amber-400 text-amber-700 hover:bg-amber-50"
-              >
-                <AlertTriangle className="h-3 w-3" /> Corrigir Transf.
-              </Button>
             </div>
           </div>
 
@@ -777,6 +769,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
       {mode === 'list' && !hook.loading && ano && (
         <>
+          <CorrecaoTransferenciasBanner
+            contas={hook.contasBancarias}
+            onFixed={() => hook.loadLancamentos(filtros, hook.page)}
+          />
            <div className="rounded-lg border border-[hsl(var(--border))] overflow-auto relative" style={{ maxHeight: 'calc(100vh - 260px)' }}>
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               <colgroup>
@@ -876,12 +872,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         onCriarFornecedor={hook.criarFornecedor}
       />
 
-      <CorrecaoTransferenciasDialog
-        open={correcaoOpen}
-        onClose={() => setCorrecaoOpen(false)}
-        contas={hook.contasBancarias}
-        onFixed={() => hook.loadLancamentos(filtros, hook.page)}
-      />
     </div>
   );
 }
