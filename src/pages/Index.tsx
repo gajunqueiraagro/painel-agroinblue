@@ -65,6 +65,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Lancamento } from '@/types/cattle';
+import { filtrarPorCenario } from '@/lib/statusOperacional';
 
 export interface FiltroGlobal {
   ano: string;
@@ -179,7 +180,8 @@ const Index = () => {
     mes: new Date().getMonth() + 1,
   });
   const metaGmd = useMetaGmd(filtroGlobal.ano);
-  const metaConsolidacaoData = useMetaConsolidacao(saldosIniciais, metaLancamentos, metaGmd.rows, Number(filtroGlobal.ano));
+  const metaLancamentosFiltrados = useMemo(() => filtrarPorCenario(lancamentos, 'meta'), [lancamentos]);
+  const metaConsolidacaoData = useMetaConsolidacao(saldosIniciais, metaLancamentosFiltrados, metaGmd.rows, Number(filtroGlobal.ano));
 
   const handleFiltroChange = useCallback((f: Partial<FiltroGlobal>) => {
     setFiltroGlobal(prev => ({ ...prev, ...f }));
@@ -628,7 +630,7 @@ const Index = () => {
       )}
       {activeTab === 'meta_movimentacoes' && (
         <LancamentosTab
-          lancamentos={metaLancamentos}
+          lancamentos={metaLancamentosFiltrados}
           onAdicionar={canEditZoo ? (metaAdicionar as any) : noOp}
           onEditar={canEditZoo ? (metaEditar as any) : noOp}
           onRemover={canEditZoo ? (metaRemover as any) : noOp}
@@ -639,7 +641,7 @@ const Index = () => {
       {activeTab === 'meta_consolidacao' && (
         <MetaConsolidacaoTab
           saldosIniciais={saldosIniciais}
-          metaLancamentos={metaLancamentos}
+          metaLancamentos={metaLancamentosFiltrados}
           gmdRows={metaGmd.rows}
           ano={Number(filtroGlobal.ano)}
           onBack={() => setActiveTab('painel_consultor_hub')}
