@@ -89,7 +89,11 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 /* ── component ── */
-export function FinV2SaldosTab() {
+interface SaldosProps {
+  onNavigateToConciliacao?: (ano: string, mes: string, contaId: string) => void;
+}
+
+export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
   const { clienteAtual } = useCliente();
   const { fazendas, fazendaAtual } = useFazenda();
   const { user } = useAuth();
