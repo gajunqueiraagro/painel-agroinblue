@@ -3068,6 +3068,139 @@ export type Database = {
           },
         ]
       }
+      meta_gmd_mensal: {
+        Row: {
+          ano_mes: string
+          categoria: string
+          cliente_id: string
+          created_at: string
+          fazenda_id: string
+          gmd_previsto: number
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          ano_mes: string
+          categoria: string
+          cliente_id: string
+          created_at?: string
+          fazenda_id: string
+          gmd_previsto?: number
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          ano_mes?: string
+          categoria?: string
+          cliente_id?: string
+          created_at?: string
+          fazenda_id?: string
+          gmd_previsto?: number
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_gmd_mensal_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_gmd_mensal_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_preco_mercado: {
+        Row: {
+          agio_perc: number
+          ano_mes: string
+          bloco: string
+          categoria: string
+          cliente_id: string
+          created_at: string
+          id: string
+          unidade: string
+          valor: number
+        }
+        Insert: {
+          agio_perc?: number
+          ano_mes: string
+          bloco: string
+          categoria: string
+          cliente_id: string
+          created_at?: string
+          id?: string
+          unidade: string
+          valor?: number
+        }
+        Update: {
+          agio_perc?: number
+          ano_mes?: string
+          bloco?: string
+          categoria?: string
+          cliente_id?: string
+          created_at?: string
+          id?: string
+          unidade?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_preco_mercado_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_preco_mercado_status: {
+        Row: {
+          ano_mes: string
+          cliente_id: string
+          created_at: string
+          id: string
+          status: string
+          updated_at: string
+          validado_em: string | null
+          validado_por: string | null
+        }
+        Insert: {
+          ano_mes: string
+          cliente_id: string
+          created_at?: string
+          id?: string
+          status?: string
+          updated_at?: string
+          validado_em?: string | null
+          validado_por?: string | null
+        }
+        Update: {
+          ano_mes?: string
+          cliente_id?: string
+          created_at?: string
+          id?: string
+          status?: string
+          updated_at?: string
+          validado_em?: string | null
+          validado_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_preco_mercado_status_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pasto_condicoes: {
         Row: {
           altura_pasto_cm: number | null
