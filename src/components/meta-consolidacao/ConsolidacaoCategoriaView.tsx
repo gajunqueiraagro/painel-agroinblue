@@ -6,9 +6,14 @@ import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
 
 const MESES_LABELS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const TH = "px-1.5 py-[3px] text-right font-semibold text-[10px] leading-tight";
-const TD = "px-1.5 py-[3px] text-right text-[10px] leading-tight";
+const TD = "px-1.5 py-[3px] text-right text-[10px] leading-tight italic";
 
 const SEPARATOR_AFTER = 'touros';
+
+function valColor(v: number | null): string {
+  if (v == null || v === 0) return 'text-muted-foreground/40';
+  return v > 0 ? 'text-emerald-600' : 'text-red-600';
+}
 
 function fmt(v: number | null, decimals = 0): string {
   if (v == null) return '—';
@@ -94,24 +99,24 @@ export function ConsolidacaoCategoriaView({ data, ano, onBack }: Props) {
                 {rows.map((r, i) => (
                   <tr key={r.mes} className={i % 2 === 0 ? 'bg-background' : 'bg-orange-50/40'}>
                     <td className={`${TD} text-left font-medium`}>{MESES_LABELS[parseInt(r.mes) - 1]}</td>
-                    <td className={`${TD} bg-orange-50`}>{fmt(r.si)}</td>
-                    <td className={r.ee > 0 ? `${TD} text-emerald-600` : `${TD} text-muted-foreground/40`}>
+                    <td className={`${TD} bg-orange-50 ${valColor(r.si)}`}>{fmt(r.si)}</td>
+                    <td className={`${TD} ${r.ee > 0 ? 'text-emerald-600' : 'text-muted-foreground/40'}`}>
                       {r.ee > 0 ? `+${fmt(r.ee)}` : '—'}
                     </td>
-                    <td className={r.se > 0 ? `${TD} text-red-600` : `${TD} text-muted-foreground/40`}>
+                    <td className={`${TD} ${r.se > 0 ? 'text-red-600' : 'text-muted-foreground/40'}`}>
                       {r.se > 0 ? `-${fmt(r.se)}` : '—'}
                     </td>
-                    <td className={r.ei > 0 ? `${TD} text-emerald-600` : `${TD} text-muted-foreground/40`}>
+                    <td className={`${TD} ${r.ei > 0 ? 'text-emerald-600' : 'text-muted-foreground/40'}`}>
                       {r.ei > 0 ? `+${fmt(r.ei)}` : '—'}
                     </td>
-                    <td className={r.siInternas > 0 ? `${TD} text-red-600` : `${TD} text-muted-foreground/40`}>
+                    <td className={`${TD} ${r.siInternas > 0 ? 'text-red-600' : 'text-muted-foreground/40'}`}>
                       {r.siInternas > 0 ? `-${fmt(r.siInternas)}` : '—'}
                     </td>
-                    <td className={`${TD} font-bold bg-orange-50`}>{fmt(r.sf)}</td>
-                    <td className={`${TD} text-orange-600 italic`}>{fmt(r.gmd, 3)}</td>
-                    <td className={TD}>{fmt(r.producaoBio, 1)}</td>
-                    <td className={TD}>{fmt(r.pesoTotalFinal, 1)}</td>
-                    <td className={`${TD} font-bold bg-orange-50`}>{fmt(r.pesoMedioFinal, 1)}</td>
+                    <td className={`${TD} font-bold bg-orange-50 ${valColor(r.sf)}`}>{fmt(r.sf)}</td>
+                    <td className={`${TD} text-orange-600`}>{fmt(r.gmd, 3)}</td>
+                    <td className={`${TD} ${valColor(r.producaoBio)}`}>{fmt(r.producaoBio, 1)}</td>
+                    <td className={`${TD} ${valColor(r.pesoTotalFinal)}`}>{fmt(r.pesoTotalFinal, 1)}</td>
+                    <td className={`${TD} font-bold bg-orange-50 ${valColor(r.pesoMedioFinal)}`}>{fmt(r.pesoMedioFinal, 1)}</td>
                   </tr>
                 ))}
               </tbody>
