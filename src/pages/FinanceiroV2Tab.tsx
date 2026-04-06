@@ -854,24 +854,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </table>
           </div>
 
-          {/* Pagination */}
-          <div className="flex items-center justify-between px-1 py-1">
+          {/* Total count */}
+          <div className="flex items-center px-1 py-1">
             <span className="text-[10px] text-muted-foreground">
               {totalLancamentosFiltrados} lançamento{totalLancamentosFiltrados !== 1 ? 's' : ''} encontrado{totalLancamentosFiltrados !== 1 ? 's' : ''}
             </span>
-            {totalPages > 1 && (
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" disabled={currentPage === 0} onClick={() => handlePageChange(currentPage - 1)}>
-                  <ChevronLeft className="h-3 w-3 mr-0.5" /> Anterior
-                </Button>
-                <span className="text-[10px] text-muted-foreground">
-                  Página {currentPage + 1} de {totalPages}
-                </span>
-                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" disabled={currentPage >= totalPages - 1} onClick={() => handlePageChange(currentPage + 1)}>
-                  Próxima <ChevronRight className="h-3 w-3 ml-0.5" />
-                </Button>
-              </div>
-            )}
           </div>
         </>
       )}
