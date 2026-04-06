@@ -134,14 +134,14 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     return arr;
   }, [currentYear]);
 
-  const [ano, setAno] = useState(String(currentYear));
-  const [contaId, setContaId] = useState<string>('__all__');
+  const [ano, setAno] = useState(initialAno || String(currentYear));
+  const [contaId, setContaId] = useState<string>(initialConta || '__all__');
   const [contas, setContas] = useState<ContaRef[]>([]);
   const [fornecedores, setFornecedores] = useState<FornecedorRef[]>([]);
   const [saldos, setSaldos] = useState<SaldoRow[]>([]);
   const [lancamentos, setLancamentos] = useState<LancamentoResumo[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedMes, setSelectedMes] = useState<string>(String(currentMonth).padStart(2, '0'));
+  const [selectedMes, setSelectedMes] = useState<string>(initialMes || String(currentMonth).padStart(2, '0'));
   const [filtroTipoLanc, setFiltroTipoLanc] = useState<'todos' | 'entradas' | 'saidas' | 'transf_entrada' | 'transf_saida'>('todos');
   const [editingSaldo, setEditingSaldo] = useState<{ anoMes: string; contaId: string; current: number } | null>(null);
   const [editValue, setEditValue] = useState('');
