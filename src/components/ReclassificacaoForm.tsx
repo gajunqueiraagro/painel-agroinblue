@@ -24,7 +24,6 @@ const STATUS_DESCRIPTIONS: Record<StatusOperacional, string> = {
 
 const STATUS_BUTTONS: { value: StatusOperacional; dot: string; activeBorder: string; activeBg: string }[] = [
   { value: 'conciliado', dot: 'bg-green-600', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
-  { value: 'confirmado', dot: 'bg-blue-500', activeBorder: 'border-blue-400', activeBg: 'bg-blue-50 dark:bg-blue-950/30' },
   { value: 'previsto', dot: 'bg-orange-500', activeBorder: 'border-orange-400', activeBg: 'bg-orange-50 dark:bg-orange-950/30' },
 ];
 
