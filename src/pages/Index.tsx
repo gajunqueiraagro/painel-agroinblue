@@ -343,9 +343,6 @@ const Index = () => {
         }
       />
 
-  const metaGmd = useMetaGmd(filtroGlobal.ano);
-
-
 
       <div className={`flex-1 min-h-0 ${(activeTab === 'mapa_geo_pastos' || activeTab === 'mapa_pastos') ? 'overflow-hidden' : 'overflow-y-auto'}`}>
       {activeTab === 'resumo' && (
