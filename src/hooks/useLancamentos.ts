@@ -108,7 +108,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
 
     // Single fazenda mode
     const [lancRes, saldoRes] = await Promise.all([
-      supabase.from('lancamentos').select('*').eq('fazenda_id', fazendaId).eq('cancelado', false).order('data', { ascending: false }),
+      supabase.from('lancamentos').select('*').eq('fazenda_id', fazendaId).eq('cancelado', false).eq('cenario', cenario).order('data', { ascending: false }),
       supabase.from('saldos_iniciais').select('*').eq('fazenda_id', fazendaId),
     ]);
 
