@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { STATUS_LABEL as CENTRAL_STATUS_LABEL } from '@/lib/statusOperacional';
 import { SearchableSelect } from '@/components/ui/searchable-select';
