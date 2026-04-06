@@ -256,7 +256,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   }, [clienteId]);
 
   const fetchAllLancamentos = useCallback(async (filtros: FiltrosV2): Promise<LancamentoV2[]> => {
-    if (!clienteId || !filtros.ano) return [];
+    if (!clienteId) return [];
 
     const all: LancamentoV2[] = [];
     let from = 0;
