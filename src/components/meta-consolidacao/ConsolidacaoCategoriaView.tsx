@@ -265,7 +265,7 @@ export function ConsolidacaoCategoriaView({ data, ano, metaLancamentos, onBack, 
                             mesLabel={mesLabel}
                             breakdown={eeBreakdown}
                             hasData={r.ee > 0}
-                            onClick={() => handleCellClick(r.mes)}
+                            onClick={() => handleEntradasClick(r.mes)}
                             colorClass="text-emerald-600"
                           />
                         </td>
