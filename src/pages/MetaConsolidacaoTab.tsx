@@ -35,9 +35,6 @@ export function MetaConsolidacaoTab({ saldosIniciais, metaLancamentos, gmdRows, 
   const [selectedCat, setSelectedCat] = useState(CATEGORIAS[0].value);
   const [selectedMes, setSelectedMes] = useState('01');
 
-  // Debug: log GMD rows to verify data
-  console.log('[MetaConsolidacao] gmdRows recebidos:', gmdRows);
-  console.log('[MetaConsolidacao] data calculada (primeiros 3):', data.slice(0, 3));
 
   const catRows = useMemo(() => data.filter(d => d.categoria === selectedCat), [data, selectedCat]);
   const mesRows = useMemo(() => data.filter(d => d.mes === selectedMes), [data, selectedMes]);
