@@ -2555,7 +2555,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               onAdicionar={onAdicionar}
               dataInicial={dataInicial}
               lancamentos={lancamentos}
-              saldosIniciais={undefined}
               ano={Number(anoFiltro)}
             />
           </div>
