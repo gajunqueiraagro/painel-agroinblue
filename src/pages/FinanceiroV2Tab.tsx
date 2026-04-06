@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { STATUS_LABEL as CENTRAL_STATUS_LABEL } from '@/lib/statusOperacional';
+import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -406,11 +407,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     const hasContaDestino = contaDestino && contaDestino !== '__all__';
 
     if (hasContaOrigem && !hasContaDestino) {
-      // Show only money leaving: saídas (sinal < 0) or transfers
-      items = items.filter(l => l.sinal < 0 || l.tipo_operacao === '3-Transferência');
+      // Show only money leaving this account: saídas or transfers sent
+      items = items.filter(l => l.sinal < 0 || isTransferenciaTipo(l.tipo_operacao));
     } else if (hasContaDestino && !hasContaOrigem) {
-      // Show only money arriving: entradas (sinal > 0) or transfers
-      items = items.filter(l => l.sinal > 0 || l.tipo_operacao === '3-Transferência');
+      // Show only money arriving at this account: entradas or transfers received
+      items = items.filter(l => l.sinal > 0 || isTransferenciaTipo(l.tipo_operacao));
     }
 
     if (produtoFiltro.trim()) {
@@ -513,8 +514,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     return sortField === field ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
   };
 
-  const totalEntradas = sortedLancamentos.filter(l => l.sinal > 0).reduce((s, l) => s + l.valor, 0);
-  const totalSaidas = sortedLancamentos.filter(l => l.sinal < 0).reduce((s, l) => s + l.valor, 0);
+  const hasContaOrigemAtiva = contaOrigem && contaOrigem !== '__all__';
+  const hasContaDestinoAtiva = contaDestino && contaDestino !== '__all__';
+
+  const totalEntradas = (hasContaOrigemAtiva && !hasContaDestinoAtiva)
+    ? 0
+    : sortedLancamentos.filter(l => l.sinal > 0).reduce((s, l) => s + l.valor, 0);
+
+  const totalSaidas = (hasContaDestinoAtiva && !hasContaOrigemAtiva)
+    ? 0
+    : sortedLancamentos.filter(l => l.sinal < 0).reduce((s, l) => s + l.valor, 0);
 
   const toggleMes = (val: string) => {
     setMesesSelecionados(prev =>
