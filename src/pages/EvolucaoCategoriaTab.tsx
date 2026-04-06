@@ -441,11 +441,11 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
               <col style={{ width: 52 }} />
             </colgroup>
             <thead>
-              <tr className="border-b bg-muted">
-                <th className="text-left px-1.5 py-1 font-bold text-foreground sticky left-0 bg-muted">
+              <tr className={`border-b ${isRealizado ? 'bg-primary/15' : 'bg-orange-500/15'}`}>
+                <th className={`text-left px-1.5 py-1 font-bold sticky left-0 ${isRealizado ? 'bg-primary/15 text-primary' : 'bg-orange-500/15 text-orange-700'}`}>
                   Categoria
                 </th>
-                <th className="px-1.5 py-1 font-bold text-foreground text-center bg-muted">
+                <th className={`px-1.5 py-1 font-bold text-center ${isRealizado ? 'bg-primary/15 text-foreground' : 'bg-orange-500/15 text-foreground'}`}>
                   Saldo Ini.
                 </th>
                 {COLUNAS_MOV.map(col => (
@@ -453,10 +453,10 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                     {col.label}
                   </th>
                 ))}
-                <th className="px-1.5 py-1 font-bold text-foreground text-center bg-muted">
+                <th className={`px-1.5 py-1 font-bold text-foreground text-center ${isRealizado ? 'bg-primary/15' : 'bg-orange-500/15'}`}>
                   Saldo Fin.
                 </th>
-                <th className="px-1.5 py-1 font-bold text-foreground text-center bg-muted">
+                <th className={`px-1.5 py-1 font-bold text-foreground text-center ${isRealizado ? 'bg-primary/15' : 'bg-orange-500/15'}`}>
                   Peso (kg)
                 </th>
               </tr>
@@ -464,12 +464,15 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
             <tbody>
               {dados.map((cat, i) => {
                 const isSeparator = cat.value === 'mamotes_f';
+                const catBg = isRealizado
+                  ? (i % 2 === 0 ? 'bg-primary/5' : 'bg-primary/10')
+                  : (i % 2 === 0 ? 'bg-orange-500/5' : 'bg-orange-500/10');
                 return (
                   <tr key={cat.value} className={`${i % 2 === 0 ? '' : 'bg-muted/30'} ${isSeparator ? 'border-t-2 border-border' : ''}`}>
-                    <td className={`px-1.5 py-0.5 font-bold text-foreground sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
+                    <td className={`px-1.5 py-0.5 font-bold text-foreground sticky left-0 ${catBg}`}>
                       {cat.label}
                     </td>
-                    <td className={`px-1.5 py-0.5 text-center font-semibold bg-primary/5 ${cat.saldoInicioMes === 0 ? 'text-transparent' : 'text-foreground'}`}>
+                    <td className={`px-1.5 py-0.5 text-center font-semibold ${isRealizado ? 'bg-primary/5' : 'bg-orange-500/5'} ${cat.saldoInicioMes === 0 ? 'text-transparent' : 'text-foreground'}`}>
                       {cat.saldoInicioMes}
                     </td>
                     {cat.movs.map((val, j) => (
@@ -477,17 +480,17 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                         {val || '–'}
                       </td>
                     ))}
-                    <td className={`px-1.5 py-0.5 text-center font-extrabold bg-primary/5 ${cat.saldoFinal === 0 ? 'text-transparent' : 'text-foreground'}`}>
+                    <td className={`px-1.5 py-0.5 text-center font-extrabold ${isRealizado ? 'bg-primary/5' : 'bg-orange-500/5'} ${cat.saldoFinal === 0 ? 'text-transparent' : 'text-foreground'}`}>
                       {cat.saldoFinal}
                     </td>
-                    <td className={`px-1.5 py-0.5 text-center italic text-[9px] bg-primary/5 ${!cat.pesoMedio || cat.pesoMedio <= 0 ? 'text-transparent' : 'text-foreground'}`}>
+                    <td className={`px-1.5 py-0.5 text-center italic text-[9px] ${isRealizado ? 'bg-primary/5' : 'bg-orange-500/5'} ${!cat.pesoMedio || cat.pesoMedio <= 0 ? 'text-transparent' : 'text-foreground'}`}>
                       {formatPeso(cat.pesoMedio)}
                     </td>
                   </tr>
                 );
               })}
-              <tr className="border-t-2 bg-muted">
-                <td className="px-1.5 py-1 font-extrabold text-foreground sticky left-0 bg-muted">TOTAL</td>
+              <tr className={`border-t-2 ${isRealizado ? 'bg-primary/15' : 'bg-orange-500/15'}`}>
+                <td className={`px-1.5 py-1 font-extrabold text-foreground sticky left-0 ${isRealizado ? 'bg-primary/15' : 'bg-orange-500/15'}`}>TOTAL</td>
                 <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoIni}</td>
                 {totais.movs.map((val, j) => (
                   <td key={j} className={`px-1.5 py-1 text-center font-extrabold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-transparent'}`}>
