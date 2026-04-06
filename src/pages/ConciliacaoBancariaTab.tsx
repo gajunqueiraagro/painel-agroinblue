@@ -102,13 +102,7 @@ function contaLabel(c: ContaRef): string {
   return c.nome_exibicao || c.nome_conta;
 }
 
-function getStatus(diferenca: number, saldoExtrato: number | null): MesCard['status'] {
-  if (saldoExtrato === null) return 'pendente';
-  const abs = Math.abs(diferenca);
-  if (abs < 0.01) return 'conciliado';
-  if (abs <= 100) return 'atencao';
-  return 'nao_conciliado';
-}
+// Use shared getConciliacaoStatus from conciliacaoCalc
 
 const STATUS_CONFIG = {
   conciliado: { label: 'Realizado', color: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300', icon: CheckCircle2, iconColor: 'text-green-600' },
