@@ -429,7 +429,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
       </div>
 
       {/* Tabela */}
-      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto" style={{ maxWidth: 610 }}>
+      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto" style={{ maxWidth: 635 }}>
           <table className="text-[10px]" style={{ tableLayout: 'fixed', width: 635 }}>
             <colgroup>
               <col style={{ width: 75 }} />
