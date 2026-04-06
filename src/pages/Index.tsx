@@ -306,6 +306,9 @@ const Index = () => {
     analise_operacional: goToVisaoZooHub,
     fechamento_executivo: goToVisaoZooHub,
     analise_consultor: goToVisaoZooHub,
+    metas_hub: goToVisaoZooHub,
+    meta_gmd: () => setActiveTab('metas_hub'),
+    meta_preco: () => setActiveTab('metas_hub'),
     // Financeiro (analysis) sub-screens
     fin_caixa: () => setActiveTab('lancar_fin_hub'),
     analise_economica: () => setActiveTab('lancar_fin_hub'),
