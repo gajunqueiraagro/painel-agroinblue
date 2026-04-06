@@ -1023,10 +1023,15 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const blocos = useMemo(() => {
     if (previstoGlobalBloqueado) return [];
     if (isPrevisto) {
+      // Fonte única: consolidação Meta validada
+      if (metaConsolidacao && metaConsolidacao.length > 0) {
+        return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva);
+      }
+      // Fallback para view SQL apenas se consolidação não disponível
       return buildBlocosFromZootMensal(zootMeta || [], viewTab);
     }
     return buildBlocosForTab(monthlyData, viewTab);
-  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab]);
+  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacao, areaProdutiva]);
 
   useEffect(() => {
     if (blocos.length > 0) {
