@@ -352,244 +352,260 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
     return { dot: 'bg-red-500', text: 'text-red-700' };
   };
 
+  const MESES_CURTOS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
   return (
-    <div className="p-3 w-full space-y-2 animate-fade-in pb-20">
-      {/* Filtros */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-            <SelectTrigger className="h-7 text-xs font-bold w-20">
-              <SelectValue placeholder="Ano" />
-            </SelectTrigger>
-            <SelectContent>
-              {anosDisponiveis.map(a => (
-                <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={mesFiltro} onValueChange={setMesFiltro}>
-            <SelectTrigger className="h-7 text-xs font-bold w-24">
-              <SelectValue placeholder="Mês" />
-            </SelectTrigger>
-            <SelectContent>
-              {MESES.map(m => (
-                <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
-            {([
-              { value: 'realizado' as const, label: 'Realizado' },
-              { value: 'previsto' as const, label: 'Previsto' },
-            ]).map(opt => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setStatusFiltro(opt.value)}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                  statusFiltro === opt.value
-                    ? opt.value === 'realizado'
-                      ? 'bg-green-700 text-white shadow-sm'
-                      : 'bg-orange-500 text-white shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Card status conciliação — only in Realizado */}
-        {isRealizado && conciliacaoStatus && (
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
-            conciliacaoStatus === 'fechado'
-              ? 'bg-green-50 border-green-300 text-green-800'
-              : conciliacaoStatus === 'parcial'
-                ? 'bg-orange-50 border-orange-300 text-orange-800'
-                : 'bg-muted border-border text-muted-foreground'
-          }`}>
-            {conciliacaoStatus === 'fechado' ? (
-              <CheckCircle className="h-3.5 w-3.5" />
-            ) : conciliacaoStatus === 'parcial' ? (
-              <AlertTriangle className="h-3.5 w-3.5" />
-            ) : (
-              <Clock className="h-3.5 w-3.5" />
-            )}
-            Pasto: {conciliacaoStatus === 'fechado' ? 'Fechado' : conciliacaoStatus === 'parcial' ? 'Parcial' : 'Aberto'}
-          </div>
-        )}
-        {isRealizado && rebanhoStatus && (
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
-            rebanhoStatus === 'fechado'
-              ? 'bg-green-50 border-green-300 text-green-800'
-              : 'bg-muted border-border text-muted-foreground'
-          }`}>
-            {rebanhoStatus === 'fechado' ? (
-              <CheckCircle className="h-3.5 w-3.5" />
-            ) : (
-              <Clock className="h-3.5 w-3.5" />
-            )}
-            Rebanho: {rebanhoStatus === 'fechado' ? 'Fechado' : 'Aberto'}
-           </div>
-        )}
-        {valorRebanhoTotal > 0 && (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-blue-50 border-blue-300 text-blue-800">
-            <DollarSign className="h-3.5 w-3.5" />
-            Valor Rebanho: {valorRebanhoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
-          </div>
-        )}
-        {onNavigateToReclass && (
-          <button
-            onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: Number(mesFiltro) })}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 transition-colors"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Reclass.
-          </button>
-        )}
+    <div className="flex w-full animate-fade-in pb-20">
+      {/* Sidebar de meses */}
+      <div className="flex flex-col gap-1 pr-2 border-r border-border pt-3 pl-2 min-w-[56px]">
+        {MESES_CURTOS.map((label, i) => {
+          const mesVal = String(i + 1).padStart(2, '0');
+          const isActive = mesFiltro === mesVal;
+          return (
+            <button
+              key={mesVal}
+              onClick={() => setMesFiltro(mesVal)}
+              className={`px-2 py-1.5 rounded-md text-[11px] font-semibold text-center transition-all ${
+                isActive
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Tabela */}
-      <TooltipProvider delayDuration={200}>
-        <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
-          <table className="w-full text-[10px]">
-            <thead>
-              <tr className="border-b bg-muted">
-                <th className="text-left px-1.5 py-1 font-bold text-foreground sticky left-0 bg-muted min-w-[80px]">
-                  Categoria
-                </th>
-                <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-muted">
-                  Saldo Ini.
-                </th>
-                {COLUNAS_MOV.map(col => (
-                  <th key={col.tipo} className={`px-1.5 py-1 font-bold text-center min-w-[45px] ${col.entrada ? 'text-success' : 'text-destructive'}`}>
-                    {col.label}
-                  </th>
+      {/* Área principal */}
+      <div className="flex-1 p-3 space-y-2 overflow-x-auto">
+        {/* Filtros topo */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+              <SelectTrigger className="h-7 text-xs font-bold w-20">
+                <SelectValue placeholder="Ano" />
+              </SelectTrigger>
+              <SelectContent>
+                {anosDisponiveis.map(a => (
+                  <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
                 ))}
-                <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-muted">
-                  Saldo Fin.
-                </th>
-                {showDelta && (
-                  <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[30px] bg-muted" title="Divergência: Saldo Oficial − Alocado nos Pastos">
-                    Δ
-                  </th>
-                )}
-                <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[55px] bg-muted">
-                  Peso (kg)
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {dados.map((cat, i) => {
-                const isSeparator = cat.value === 'mamotes_f';
-                const deltaStyle = getDeltaStyle(cat.delta, cat.saldoFinal);
-                return (
-                  <tr key={cat.value} className={`${i % 2 === 0 ? '' : 'bg-muted/30'} ${isSeparator ? 'border-t-2 border-border' : ''}`}>
-                    <td className={`px-1.5 py-0.5 font-bold text-foreground sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
-                      {cat.label}
-                    </td>
-                    <td className={`px-1.5 py-0.5 text-center font-semibold bg-primary/5 ${cat.saldoInicioMes === 0 ? 'text-transparent' : 'text-foreground'}`}>
-                      {cat.saldoInicioMes}
-                    </td>
-                    {cat.movs.map((val, j) => (
-                      <td key={j} className={`px-1.5 py-0.5 text-center font-semibold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-transparent'}`}>
-                        {val || '–'}
-                      </td>
-                    ))}
-                    <td className={`px-1.5 py-0.5 text-center font-extrabold bg-primary/5 ${cat.saldoFinal === 0 ? 'text-transparent' : 'text-foreground'}`}>
-                      {cat.saldoFinal}
-                    </td>
-                    {showDelta && (
-                      <td className="px-1.5 py-0.5 text-center">
-                        {cat.saldoFinal === 0 && cat.pastosQtd === 0 ? (
-                          <span className="text-transparent">–</span>
-                        ) : (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className={`inline-flex items-center justify-center cursor-default`}>
-                                <span className={`inline-block w-2 h-2 rounded-full ${deltaStyle.dot}`} />
-                                {cat.delta !== 0 && (
-                                  <span className={`ml-0.5 text-[8px] font-bold tabular-nums ${deltaStyle.text}`}>
-                                    {cat.delta > 0 ? `+${cat.delta}` : cat.delta}
-                                  </span>
-                                )}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="text-[10px] space-y-0.5 p-2">
-                              <p className="font-bold text-foreground">{cat.label}</p>
-                              <div className="flex justify-between gap-4">
-                                <span className="text-muted-foreground">Oficial:</span>
-                                <span className="font-semibold">{cat.saldoFinal}</span>
-                              </div>
-                              <div className="flex justify-between gap-4">
-                                <span className="text-muted-foreground">Pastos:</span>
-                                <span className="font-semibold">{cat.pastosQtd}</span>
-                              </div>
-                              <div className={`flex justify-between gap-4 font-bold ${deltaStyle.text}`}>
-                                <span>Diferença:</span>
-                                <span>{cat.delta > 0 ? `+${cat.delta}` : cat.delta}</span>
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
-                      </td>
-                    )}
-                    <td className={`px-1.5 py-0.5 text-center italic text-[9px] bg-primary/5 ${!cat.pesoMedio || cat.pesoMedio <= 0 ? 'text-transparent' : 'text-foreground'}`}>
-                      {formatPeso(cat.pesoMedio)}
-                    </td>
-                  </tr>
-                );
-              })}
-              <tr className="border-t-2 bg-muted">
-                <td className="px-1.5 py-1 font-extrabold text-foreground sticky left-0 bg-muted">TOTAL</td>
-                <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoIni}</td>
-                {totais.movs.map((val, j) => (
-                  <td key={j} className={`px-1.5 py-1 text-center font-extrabold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-transparent'}`}>
-                    {val || '–'}
-                  </td>
-                ))}
-                <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoFin}</td>
-                {showDelta && (
-                  <td className="px-1.5 py-1 text-center">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="inline-flex items-center justify-center cursor-default">
-                          <span className={`inline-block w-2 h-2 rounded-full ${getDeltaStyle(totais.deltaTotal, totais.saldoFin).dot}`} />
-                          {totais.deltaTotal !== 0 && (
-                            <span className={`ml-0.5 text-[8px] font-bold tabular-nums ${getDeltaStyle(totais.deltaTotal, totais.saldoFin).text}`}>
-                              {totais.deltaTotal > 0 ? `+${totais.deltaTotal}` : totais.deltaTotal}
-                            </span>
-                          )}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="text-[10px] space-y-0.5 p-2">
-                        <p className="font-bold text-foreground">TOTAL</p>
-                        <div className="flex justify-between gap-4">
-                          <span className="text-muted-foreground">Oficial:</span>
-                          <span className="font-semibold">{totais.saldoFin}</span>
-                        </div>
-                        <div className="flex justify-between gap-4">
-                          <span className="text-muted-foreground">Pastos:</span>
-                          <span className="font-semibold">{totais.pastosTotal}</span>
-                        </div>
-                        <div className={`flex justify-between gap-4 font-bold ${getDeltaStyle(totais.deltaTotal, totais.saldoFin).text}`}>
-                          <span>Diferença:</span>
-                          <span>{totais.deltaTotal > 0 ? `+${totais.deltaTotal}` : totais.deltaTotal}</span>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </td>
-                )}
-                <td className={`px-1.5 py-1 text-center italic text-[9px] font-semibold ${!totais.pesoMedio || totais.pesoMedio <= 0 ? 'text-transparent' : 'text-foreground'}`}>
-                  {formatPeso(totais.pesoMedio)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+              </SelectContent>
+            </Select>
+
+            <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
+              {([
+                { value: 'realizado' as const, label: 'Realizado' },
+                { value: 'previsto' as const, label: 'Previsto' },
+              ]).map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setStatusFiltro(opt.value)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                    statusFiltro === opt.value
+                      ? opt.value === 'realizado'
+                        ? 'bg-green-700 text-white shadow-sm'
+                        : 'bg-orange-500 text-white shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Card status conciliação — only in Realizado */}
+          {isRealizado && conciliacaoStatus && (
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
+              conciliacaoStatus === 'fechado'
+                ? 'bg-green-50 border-green-300 text-green-800'
+                : conciliacaoStatus === 'parcial'
+                  ? 'bg-orange-50 border-orange-300 text-orange-800'
+                  : 'bg-muted border-border text-muted-foreground'
+            }`}>
+              {conciliacaoStatus === 'fechado' ? (
+                <CheckCircle className="h-3.5 w-3.5" />
+              ) : conciliacaoStatus === 'parcial' ? (
+                <AlertTriangle className="h-3.5 w-3.5" />
+              ) : (
+                <Clock className="h-3.5 w-3.5" />
+              )}
+              Pasto: {conciliacaoStatus === 'fechado' ? 'Fechado' : conciliacaoStatus === 'parcial' ? 'Parcial' : 'Aberto'}
+            </div>
+          )}
+          {isRealizado && rebanhoStatus && (
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
+              rebanhoStatus === 'fechado'
+                ? 'bg-green-50 border-green-300 text-green-800'
+                : 'bg-muted border-border text-muted-foreground'
+            }`}>
+              {rebanhoStatus === 'fechado' ? (
+                <CheckCircle className="h-3.5 w-3.5" />
+              ) : (
+                <Clock className="h-3.5 w-3.5" />
+              )}
+              Rebanho: {rebanhoStatus === 'fechado' ? 'Fechado' : 'Aberto'}
+            </div>
+          )}
+          {valorRebanhoTotal > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-blue-50 border-blue-300 text-blue-800">
+              <DollarSign className="h-3.5 w-3.5" />
+              Valor Rebanho: {valorRebanhoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+            </div>
+          )}
+          {onNavigateToReclass && (
+            <button
+              onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: Number(mesFiltro) })}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 transition-colors"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Reclass.
+            </button>
+          )}
         </div>
-      </TooltipProvider>
+
+        {/* Tabela */}
+        <TooltipProvider delayDuration={200}>
+          <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
+            <table className="w-full text-[10px]">
+              <thead>
+                <tr className="border-b bg-muted">
+                  <th className="text-left px-1.5 py-1 font-bold text-foreground sticky left-0 bg-muted min-w-[80px]">
+                    Categoria
+                  </th>
+                  <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-muted">
+                    Saldo Ini.
+                  </th>
+                  {COLUNAS_MOV.map(col => (
+                    <th key={col.tipo} className={`px-1.5 py-1 font-bold text-center min-w-[45px] ${col.entrada ? 'text-success' : 'text-destructive'}`}>
+                      {col.label}
+                    </th>
+                  ))}
+                  <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-muted">
+                    Saldo Fin.
+                  </th>
+                  {showDelta && (
+                    <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[30px] bg-muted" title="Divergência: Saldo Oficial − Alocado nos Pastos">
+                      Δ
+                    </th>
+                  )}
+                  <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[55px] bg-muted">
+                    Peso (kg)
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {dados.map((cat, i) => {
+                  const isSeparator = cat.value === 'mamotes_f';
+                  const deltaStyle = getDeltaStyle(cat.delta, cat.saldoFinal);
+                  return (
+                    <tr key={cat.value} className={`${i % 2 === 0 ? '' : 'bg-muted/30'} ${isSeparator ? 'border-t-2 border-border' : ''}`}>
+                      <td className={`px-1.5 py-0.5 font-bold text-foreground sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
+                        {cat.label}
+                      </td>
+                      <td className={`px-1.5 py-0.5 text-center font-semibold bg-primary/5 ${cat.saldoInicioMes === 0 ? 'text-transparent' : 'text-foreground'}`}>
+                        {cat.saldoInicioMes}
+                      </td>
+                      {cat.movs.map((val, j) => (
+                        <td key={j} className={`px-1.5 py-0.5 text-center font-semibold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-transparent'}`}>
+                          {val || '–'}
+                        </td>
+                      ))}
+                      <td className={`px-1.5 py-0.5 text-center font-extrabold bg-primary/5 ${cat.saldoFinal === 0 ? 'text-transparent' : 'text-foreground'}`}>
+                        {cat.saldoFinal}
+                      </td>
+                      {showDelta && (
+                        <td className="px-1.5 py-0.5 text-center">
+                          {cat.saldoFinal === 0 && cat.pastosQtd === 0 ? (
+                            <span className="text-transparent">–</span>
+                          ) : (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className={`inline-flex items-center justify-center cursor-default`}>
+                                  <span className={`inline-block w-2 h-2 rounded-full ${deltaStyle.dot}`} />
+                                  {cat.delta !== 0 && (
+                                    <span className={`ml-0.5 text-[8px] font-bold tabular-nums ${deltaStyle.text}`}>
+                                      {cat.delta > 0 ? `+${cat.delta}` : cat.delta}
+                                    </span>
+                                  )}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="text-[10px] space-y-0.5 p-2">
+                                <p className="font-bold text-foreground">{cat.label}</p>
+                                <div className="flex justify-between gap-4">
+                                  <span className="text-muted-foreground">Oficial:</span>
+                                  <span className="font-semibold">{cat.saldoFinal}</span>
+                                </div>
+                                <div className="flex justify-between gap-4">
+                                  <span className="text-muted-foreground">Pastos:</span>
+                                  <span className="font-semibold">{cat.pastosQtd}</span>
+                                </div>
+                                <div className={`flex justify-between gap-4 font-bold ${deltaStyle.text}`}>
+                                  <span>Diferença:</span>
+                                  <span>{cat.delta > 0 ? `+${cat.delta}` : cat.delta}</span>
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </td>
+                      )}
+                      <td className={`px-1.5 py-0.5 text-center italic text-[9px] bg-primary/5 ${!cat.pesoMedio || cat.pesoMedio <= 0 ? 'text-transparent' : 'text-foreground'}`}>
+                        {formatPeso(cat.pesoMedio)}
+                      </td>
+                    </tr>
+                  );
+                })}
+                <tr className="border-t-2 bg-muted">
+                  <td className="px-1.5 py-1 font-extrabold text-foreground sticky left-0 bg-muted">TOTAL</td>
+                  <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoIni}</td>
+                  {totais.movs.map((val, j) => (
+                    <td key={j} className={`px-1.5 py-1 text-center font-extrabold ${val > 0 ? (COLUNAS_MOV[j].entrada ? 'text-success' : 'text-destructive') : 'text-transparent'}`}>
+                      {val || '–'}
+                    </td>
+                  ))}
+                  <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoFin}</td>
+                  {showDelta && (
+                    <td className="px-1.5 py-1 text-center">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex items-center justify-center cursor-default">
+                            <span className={`inline-block w-2 h-2 rounded-full ${getDeltaStyle(totais.deltaTotal, totais.saldoFin).dot}`} />
+                            {totais.deltaTotal !== 0 && (
+                              <span className={`ml-0.5 text-[8px] font-bold tabular-nums ${getDeltaStyle(totais.deltaTotal, totais.saldoFin).text}`}>
+                                {totais.deltaTotal > 0 ? `+${totais.deltaTotal}` : totais.deltaTotal}
+                              </span>
+                            )}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-[10px] space-y-0.5 p-2">
+                          <p className="font-bold text-foreground">TOTAL</p>
+                          <div className="flex justify-between gap-4">
+                            <span className="text-muted-foreground">Oficial:</span>
+                            <span className="font-semibold">{totais.saldoFin}</span>
+                          </div>
+                          <div className="flex justify-between gap-4">
+                            <span className="text-muted-foreground">Pastos:</span>
+                            <span className="font-semibold">{totais.pastosTotal}</span>
+                          </div>
+                          <div className={`flex justify-between gap-4 font-bold ${getDeltaStyle(totais.deltaTotal, totais.saldoFin).text}`}>
+                            <span>Diferença:</span>
+                            <span>{totais.deltaTotal > 0 ? `+${totais.deltaTotal}` : totais.deltaTotal}</span>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </td>
+                  )}
+                  <td className={`px-1.5 py-1 text-center italic text-[9px] font-semibold ${!totais.pesoMedio || totais.pesoMedio <= 0 ? 'text-transparent' : 'text-foreground'}`}>
+                    {formatPeso(totais.pesoMedio)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </TooltipProvider>
+      </div>
     </div>
   );
 }
