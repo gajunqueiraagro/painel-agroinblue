@@ -126,8 +126,15 @@ export function MetaGmdTab({ onBack }: Props) {
                       {Array.from({ length: 12 }, (_, m) => {
                         const key = String(m + 1).padStart(2, '0');
                         const val = row.meses[key] || 0;
+                        const bgColor = val === 0 ? 'bg-gray-100'
+                          : val <= 0.200 ? 'bg-yellow-100'
+                          : val <= 0.500 ? 'bg-green-100'
+                          : val <= 0.800 ? 'bg-blue-100'
+                          : val <= 2.000 ? 'bg-blue-300'
+                          : 'bg-red-200';
+                        const textColor = val > 0.800 && val <= 2.000 ? 'text-white' : val > 2.000 ? 'text-red-800' : 'text-orange-600';
                         return (
-                          <td key={key} className="py-0 px-0.5">
+                          <td key={key} className="py-0 px-0.5 relative">
                             <Input
                               type="number"
                               step="0.050"
@@ -136,8 +143,9 @@ export function MetaGmdTab({ onBack }: Props) {
                               value={val === 0 ? '' : val.toFixed(3)}
                               placeholder="–"
                               onChange={e => updateCell(row.categoria, key, parseFloat(e.target.value) || 0)}
-                              className="h-5 text-[10px] text-center w-full px-0 italic text-orange-600 border-orange-200 focus:border-orange-400 hover:bg-orange-50/50 transition-colors placeholder:text-muted-foreground/50 placeholder:not-italic"
+                              className={`h-5 text-[10px] text-center w-full px-0 italic border-orange-200 focus:border-orange-400 hover:brightness-95 transition-colors placeholder:text-muted-foreground/50 placeholder:not-italic ${bgColor} ${textColor}`}
                             />
+                            {val > 2.000 && <span className="absolute right-0.5 top-0 text-[8px] text-red-600 font-bold">*</span>}
                           </td>
                         );
                       })}
