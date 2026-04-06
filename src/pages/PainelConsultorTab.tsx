@@ -64,6 +64,7 @@ interface Props {
   onBack: () => void;
   onTabChange?: (tab: string) => void;
   filtroGlobal?: { ano: string; mes: number };
+  metaConsolidacao?: MetaCategoriaMes[];
 }
 
 // ─── Row definition ───
