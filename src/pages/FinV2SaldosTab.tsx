@@ -24,6 +24,7 @@ import {
   LockKeyhole, ShieldAlert,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { buildMovSummary, STATUS_REALIZADOS, type MovimentoResumo } from '@/lib/financeiro/conciliacaoCalc';
 
 /* ── types ── */
 interface SaldoBancario {
