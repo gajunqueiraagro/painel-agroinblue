@@ -185,22 +185,42 @@ export function useReclassificacaoState(props: Props) {
   const destinoLabel = CATEGORIAS.find(c => c.value === categoriaDestino)?.label || '';
   const canRegister = !!quantidade && Number(quantidade) > 0 && categoriaOrigem !== categoriaDestino;
 
-  const handleRegister = () => {
-    if (!canRegister) return;
+  const handleRegister = async () => {
+    if (!canRegister || submitting) return;
     setSubmitting(true);
-    onAdicionar({
-      data,
-      tipo: 'reclassificacao',
-      quantidade: Number(quantidade),
-      categoria: categoriaOrigem,
-      categoriaDestino,
-      pesoMedioKg: pesoKg ? Number(pesoKg) : undefined,
-      pesoMedioArrobas: pesoKg ? kgToArrobas(Number(pesoKg)) : undefined,
-      statusOperacional: statusOp,
-    });
-    setQuantidade('');
-    setPesoKg('');
-    setSubmitting(false);
+    try {
+      const result = await onAdicionar({
+        data,
+        tipo: 'reclassificacao',
+        quantidade: Number(quantidade),
+        categoria: categoriaOrigem,
+        categoriaDestino,
+        pesoMedioKg: pesoKg ? Number(pesoKg) : undefined,
+        pesoMedioArrobas: pesoKg ? kgToArrobas(Number(pesoKg)) : undefined,
+        statusOperacional: statusOp,
+      });
+
+      if (result) {
+        const isPrev = statusOp === 'previsto';
+        toast.success('Reclassificação registrada com sucesso.', {
+          description: `${origemLabel} → ${destinoLabel} | ${Number(quantidade)} cab. | ${isPrev ? 'Previsto' : 'Realizado'}`,
+          style: isPrev ? { borderLeft: '4px solid #f97316' } : { borderLeft: '4px solid #16a34a' },
+        });
+        setQuantidade('');
+        setPesoKg('');
+      } else {
+        toast.error('Não foi possível registrar a reclassificação.', {
+          description: 'Verifique os dados e tente novamente.',
+        });
+      }
+    } catch (err: any) {
+      console.error('[Reclassificação] Erro ao salvar:', err);
+      toast.error('Erro ao registrar reclassificação.', {
+        description: err?.message || 'Erro desconhecido. Verifique os dados.',
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return {
