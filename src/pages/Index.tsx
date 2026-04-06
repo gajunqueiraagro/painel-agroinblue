@@ -57,6 +57,7 @@ import { StatusFechamentosTab } from './StatusFechamentosTab';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { SyncStatus } from '@/components/SyncStatus';
 import { useLancamentos } from '@/hooks/useLancamentos';
+import { useMetaGmd } from '@/hooks/useMetaGmd';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
