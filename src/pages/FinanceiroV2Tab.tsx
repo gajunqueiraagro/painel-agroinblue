@@ -573,7 +573,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div>
               <label className={lblCls}>Status</label>
               <Select value={statusTransacao} onValueChange={setStatusTransacao}>
-                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)]`}><SelectValue /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
                   <SelectItem value="previsto" className={itemCls}>{CENTRAL_STATUS_LABEL.previsto}</SelectItem>
