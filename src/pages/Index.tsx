@@ -278,7 +278,7 @@ const Index = () => {
   const subScreenBackMap: Partial<Record<TabId, () => void>> = {
     // Resumo sub-screens
     operacao_hub: goToResumo,
-    painel_consultor: goToResumo,
+    painel_consultor_hub: goToVisaoZooHub,
     status_fechamentos: goToResumo,
     analise: () => setActiveTab('operacao_hub'),
     analise_entradas: () => setActiveTab('analise'),
