@@ -2551,7 +2551,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         {/* Center: Form or Historico */}
         {aba === 'reclassificacao' ? (
           <div className="col-span-2 self-start">
-            <ReclassificacaoForm onAdicionar={onAdicionar} dataInicial={dataInicial} />
+            <ReclassificacaoForm
+              onAdicionar={onAdicionar}
+              dataInicial={dataInicial}
+              lancamentos={lancamentos}
+              ano={Number(anoFiltro)}
+            />
           </div>
         ) : aba === 'historico' ? (
           <div className="col-span-2 self-start">{renderHistorico()}</div>
