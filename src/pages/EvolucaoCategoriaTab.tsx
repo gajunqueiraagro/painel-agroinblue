@@ -541,7 +541,6 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
             </tbody>
           </table>
         </div>
-      </TooltipProvider>
     </div>
   );
 }
