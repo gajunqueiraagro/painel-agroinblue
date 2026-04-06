@@ -566,216 +566,220 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const itemCls = "text-[10px] py-0.5";
   const lblCls = "text-[9px] font-semibold leading-none mb-0.5 block text-[hsl(213_52%_24%)]";
 
+  const saldo = totalEntradas - totalSaidas;
+
   return (
-    <div className="space-y-1 pb-20" style={{ backgroundColor: '#F3F6FA' }}>
-      {/* FILTERS */}
-      <Card className="rounded-lg bg-white" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
-        <CardContent className="p-2 space-y-1">
-          {/* LINE 1: Ano | Mês | Tipo | Status | Fazenda | Atividade */}
-          <div className="grid grid-cols-[62px_77px_106px_106px_0.35fr_110px] gap-1.5 items-end">
-            <div>
-              <label className={lblCls}>Ano</label>
-              <Select value={ano} onValueChange={setAno}>
-                <SelectTrigger className={`${selCls} w-full bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__todos__" className={itemCls}>Todos</SelectItem>
-                  {anos.map(a => <SelectItem key={a} value={a} className={itemCls}>{a}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className={lblCls}>Mês</label>
-              <Popover open={mesPopoverOpen} onOpenChange={setMesPopoverOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-6 text-[10px] justify-between font-normal px-1.5 w-full bg-white border-[#C9D4E2] hover:border-[#AFC2D8]">
-                    {mesLabel}
-                    <ChevronsUpDown className="h-2.5 w-2.5 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-44 p-1.5" align="start">
-                  <div className="flex justify-between mb-0.5">
-                    <button className="text-[9px] text-primary hover:underline" onClick={() => setMesesSelecionados([])}>Todos</button>
-                    <button className="text-[9px] text-primary hover:underline" onClick={() => setMesesSelecionados(MESES_LIST.map(m => m.value))}>Marcar todos</button>
-                  </div>
-                  <div className="grid grid-cols-3 gap-0.5">
-                    {MESES_LIST.map(m => (
-                      <label key={m.value} className="flex items-center gap-0.5 text-[10px] cursor-pointer hover:bg-muted rounded px-0.5 py-0.5">
-                        <Checkbox checked={mesesSelecionados.includes(m.value)} onCheckedChange={() => toggleMes(m.value)} className="h-2.5 w-2.5" />
-                        {m.label}
-                      </label>
-                    ))}
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div>
-              <label className={lblCls}>Tipo</label>
-              <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigem('__all__'); setContaDestino('__all__'); }}>
-                <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
-                  <SelectItem value="1-Entradas" className={itemCls}>Entradas</SelectItem>
-                  <SelectItem value="2-Saídas" className={itemCls}>Saídas</SelectItem>
-                  <SelectItem value="3-Transferência" className={itemCls}>Transferências</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className={lblCls}>Status</label>
-              <Select value={statusTransacao} onValueChange={setStatusTransacao}>
-                <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
-                  <SelectItem value="previsto" className={itemCls}>{CENTRAL_STATUS_LABEL.previsto}</SelectItem>
-                  <SelectItem value="agendado" className={itemCls}>Agendado</SelectItem>
-                  <SelectItem value="confirmado" className={itemCls}>{CENTRAL_STATUS_LABEL.confirmado}</SelectItem>
-                  <SelectItem value="conciliado" className={itemCls}>{CENTRAL_STATUS_LABEL.conciliado}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className={lblCls}>Fazenda</label>
-              <Select value={fazendaId} onValueChange={setFazendaId}>
-                <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
-                  {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id} className={itemCls}>{f.nome}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className={lblCls}>Atividade</label>
-              <Select value={atividadeFiltro} onValueChange={setAtividadeFiltro}>
-                <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
-                  <SelectItem value="pecuaria" className={itemCls}>Pecuária</SelectItem>
-                  <SelectItem value="agricultura" className={itemCls}>Agricultura</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* LINE 2: Conta Origem | Conta Destino | Macro | Centro | Subcentro + Buttons */}
-          <div className="flex items-end gap-1.5">
-            <div className="grid grid-cols-[145px_145px_130px_130px_130px] gap-1.5 items-end flex-1">
-              <div>
-                <label className={lblCls}>Conta Origem</label>
-                <Select value={contaOrigem} onValueChange={setContaOrigem} disabled={isEntrada}>
-                  <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isEntrada ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
-                    {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className={lblCls}>Conta Destino</label>
-                <Select value={contaDestino} onValueChange={setContaDestino} disabled={isSaida}>
-                  <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isSaida ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
-                    {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className={lblCls}>Macro</label>
-                <SearchableSelect
-                  value={macroFiltro}
-                  onValueChange={v => { setMacroFiltro(v); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
-                  options={macrosUnicos.map(m => ({ value: m, label: m }))}
-                  disabled={macroLocked}
-                  placeholder="Buscar macro..."
-                />
-              </div>
-              <div>
-                <label className={lblCls}>Centro</label>
-                <SearchableSelect
-                  value={centroFiltro}
-                  onValueChange={v => { setCentroFiltro(v); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
-                  options={centrosUnicos.map(c => ({ value: c, label: c }))}
-                  disabled={macroLocked}
-                  placeholder="Buscar centro..."
-                />
-              </div>
-              <div>
-                <label className={lblCls}>Subcentro</label>
-                <SearchableSelect
-                  value={subcentroFiltro}
-                  onValueChange={handleSubcentroChange}
-                  options={subcentrosUnicos.map(s => ({ value: s, label: s }))}
-                  placeholder="Buscar subcentro..."
-                />
-              </div>
-            </div>
-            <div className="flex gap-1 items-end pb-[1px]">
-              {onBack && (
-                <Button size="sm" variant="outline" onClick={onBack} className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground">
-                  <ChevronLeft className="h-3 w-3" /> Voltar
+    <div className="pb-20" style={{ backgroundColor: '#F3F6FA' }}>
+      {/* ── STICKY HEADER: FILTROS + RESUMO + AÇÕES ── */}
+      <div className="sticky top-0 z-30 border-b px-4 py-2" style={{ backgroundColor: '#F8FAFC', borderColor: '#D6DEE8' }}>
+        <div className="flex items-center justify-between gap-4">
+          {/* LADO ESQUERDO → FILTROS */}
+          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+            {/* Ano */}
+            <Select value={ano} onValueChange={setAno}>
+              <SelectTrigger className={`${selCls} w-[68px] bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__todos__" className={itemCls}>Todos</SelectItem>
+                {anos.map(a => <SelectItem key={a} value={a} className={itemCls}>{a}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {/* Mês */}
+            <Popover open={mesPopoverOpen} onOpenChange={setMesPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="h-6 text-[10px] justify-between font-normal px-1.5 w-[72px] bg-white border-[#C9D4E2]">
+                  {mesLabel}
+                  <ChevronsUpDown className="h-2.5 w-2.5 opacity-50" />
                 </Button>
-              )}
-              <Button size="sm" variant="ghost" onClick={handleLimparFiltros} className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground">
-                <FilterX className="h-3 w-3" /> Limpar
-              </Button>
-              <FinanceiroV2ExportMenu
-                lancamentos={sortedLancamentos}
-                fornecedores={hook.fornecedores}
-                ano={ano}
-                fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
-                totalCount={totalLancamentosFiltrados}
-              />
-              <Button
-                size="sm"
-                variant={mode === 'rapido' ? 'default' : 'outline'}
-                onClick={() => setMode(mode === 'rapido' ? 'list' : 'rapido')}
-                className="h-6 text-[10px] gap-0.5 px-2"
-              >
-                {mode === 'rapido' ? <List className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
-                {mode === 'rapido' ? 'Lista' : 'Rápido'}
-              </Button>
-              {mode === 'list' && !mesFechadoAtivo && (
-                <Button size="sm" onClick={openNew} className="h-6 text-[10px] gap-0.5 px-2 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]">
-                  <Plus className="h-3 w-3" /> Novo
+              </PopoverTrigger>
+              <PopoverContent className="w-44 p-1.5" align="start">
+                <div className="flex justify-between mb-0.5">
+                  <button className="text-[9px] text-primary hover:underline" onClick={() => setMesesSelecionados([])}>Todos</button>
+                  <button className="text-[9px] text-primary hover:underline" onClick={() => setMesesSelecionados(MESES_LIST.map(m => m.value))}>Marcar todos</button>
+                </div>
+                <div className="grid grid-cols-3 gap-0.5">
+                  {MESES_LIST.map(m => (
+                    <label key={m.value} className="flex items-center gap-0.5 text-[10px] cursor-pointer hover:bg-muted rounded px-0.5 py-0.5">
+                      <Checkbox checked={mesesSelecionados.includes(m.value)} onCheckedChange={() => toggleMes(m.value)} className="h-2.5 w-2.5" />
+                      {m.label}
+                    </label>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+            {/* Tipo */}
+            <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigem('__all__'); setContaDestino('__all__'); }}>
+              <SelectTrigger className={`${selCls} w-[100px] bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
+                <SelectItem value="1-Entradas" className={itemCls}>Entradas</SelectItem>
+                <SelectItem value="2-Saídas" className={itemCls}>Saídas</SelectItem>
+                <SelectItem value="3-Transferência" className={itemCls}>Transferências</SelectItem>
+              </SelectContent>
+            </Select>
+            {/* Conta Origem */}
+            <Select value={contaOrigem} onValueChange={setContaOrigem} disabled={isEntrada}>
+              <SelectTrigger className={`${selCls} w-[130px] bg-white border-[#C9D4E2] ${isEntrada ? 'opacity-40' : ''}`}><SelectValue placeholder="Origem" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__" className={itemCls}>Todas Origens</SelectItem>
+                {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {/* Fazenda */}
+            <Select value={fazendaId} onValueChange={setFazendaId}>
+              <SelectTrigger className={`${selCls} w-[120px] bg-white border-[#C9D4E2]`}><SelectValue placeholder="Fazenda" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
+                {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id} className={itemCls}>{f.nome}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {/* Limpar */}
+            <Button size="sm" variant="ghost" onClick={handleLimparFiltros} className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground">
+              <FilterX className="h-3 w-3" />
+            </Button>
+            {/* More filters popover */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button size="sm" variant="outline" className="h-6 text-[10px] px-1.5 gap-0.5 bg-white border-[#C9D4E2]">
+                  <ChevronsUpDown className="h-3 w-3" /> Mais
                 </Button>
-              )}
-            </div>
+              </PopoverTrigger>
+              <PopoverContent className="w-[420px] p-3" align="start">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className={lblCls}>Conta Destino</label>
+                    <Select value={contaDestino} onValueChange={setContaDestino} disabled={isSaida}>
+                      <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] ${isSaida ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
+                        {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className={lblCls}>Status</label>
+                    <Select value={statusTransacao} onValueChange={setStatusTransacao}>
+                      <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
+                        <SelectItem value="previsto" className={itemCls}>{CENTRAL_STATUS_LABEL.previsto}</SelectItem>
+                        <SelectItem value="agendado" className={itemCls}>Agendado</SelectItem>
+                        <SelectItem value="confirmado" className={itemCls}>{CENTRAL_STATUS_LABEL.confirmado}</SelectItem>
+                        <SelectItem value="conciliado" className={itemCls}>{CENTRAL_STATUS_LABEL.conciliado}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className={lblCls}>Atividade</label>
+                    <Select value={atividadeFiltro} onValueChange={setAtividadeFiltro}>
+                      <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
+                        <SelectItem value="pecuaria" className={itemCls}>Pecuária</SelectItem>
+                        <SelectItem value="agricultura" className={itemCls}>Agricultura</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className={lblCls}>Macro</label>
+                    <SearchableSelect
+                      value={macroFiltro}
+                      onValueChange={v => { setMacroFiltro(v); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
+                      options={macrosUnicos.map(m => ({ value: m, label: m }))}
+                      disabled={macroLocked}
+                      placeholder="Buscar macro..."
+                    />
+                  </div>
+                  <div>
+                    <label className={lblCls}>Centro</label>
+                    <SearchableSelect
+                      value={centroFiltro}
+                      onValueChange={v => { setCentroFiltro(v); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
+                      options={centrosUnicos.map(c => ({ value: c, label: c }))}
+                      disabled={macroLocked}
+                      placeholder="Buscar centro..."
+                    />
+                  </div>
+                  <div>
+                    <label className={lblCls}>Subcentro</label>
+                    <SearchableSelect
+                      value={subcentroFiltro}
+                      onValueChange={handleSubcentroChange}
+                      options={subcentrosUnicos.map(s => ({ value: s, label: s }))}
+                      placeholder="Buscar subcentro..."
+                    />
+                  </div>
+                  <div>
+                    <label className={lblCls}>Produto</label>
+                    <Input
+                      value={produtoFiltro}
+                      onChange={e => setProdutoFiltro(e.target.value)}
+                      placeholder="Buscar..."
+                      className="h-6 !text-[8px] placeholder:!text-[8px] leading-tight px-1.5 bg-white border-[#C9D4E2]"
+                      autoCorrect="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                    />
+                  </div>
+                  <div>
+                    <label className={lblCls}>Fornecedor</label>
+                    <SearchableSelect
+                      value={fornecedorFiltro}
+                      onValueChange={setFornecedorFiltro}
+                      options={hook.fornecedores.map(f => ({ value: f.id, label: f.nome }))}
+                      placeholder="Buscar fornecedor..."
+                    />
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+            {onBack && (
+              <Button size="sm" variant="outline" onClick={onBack} className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground">
+                <ChevronLeft className="h-3 w-3" /> Voltar
+              </Button>
+            )}
+            <FinanceiroV2ExportMenu
+              lancamentos={sortedLancamentos}
+              fornecedores={hook.fornecedores}
+              ano={ano}
+              fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
+              totalCount={totalLancamentosFiltrados}
+            />
+            <Button
+              size="sm"
+              variant={mode === 'rapido' ? 'default' : 'outline'}
+              onClick={() => setMode(mode === 'rapido' ? 'list' : 'rapido')}
+              className="h-6 text-[10px] gap-0.5 px-2"
+            >
+              {mode === 'rapido' ? <List className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
+              {mode === 'rapido' ? 'Lista' : 'Rápido'}
+            </Button>
           </div>
 
-          {/* LINE 3: Produto | Fornecedor + Summary */}
-          <div className="flex items-end gap-1.5">
-            <div className="grid grid-cols-[200px_300px] gap-1.5 items-end">
-              <div>
-                <label className={lblCls}>Produto</label>
-                <Input
-                  value={produtoFiltro}
-                  onChange={e => setProdutoFiltro(e.target.value)}
-                  placeholder="Buscar..."
-                  className="h-6 !text-[8px] placeholder:!text-[8px] leading-tight px-1.5 bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus-visible:ring-[#1E3A5F]"
-                  autoCorrect="off"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                />
-              </div>
-              <div>
-                <label className={lblCls}>Fornecedor</label>
-                <SearchableSelect
-                  value={fornecedorFiltro}
-                  onValueChange={setFornecedorFiltro}
-                  options={hook.fornecedores.map(f => ({ value: f.id, label: f.nome }))}
-                  placeholder="Buscar fornecedor..."
-                />
-              </div>
+          {/* LADO DIREITO → CARDS RESUMO + BOTÃO */}
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="bg-white border border-border rounded-lg px-3 py-1.5 min-w-[140px] shadow-sm">
+              <div className="text-[10px] text-muted-foreground leading-tight">Entradas</div>
+              <div className="text-[16px] font-semibold text-success leading-tight tabular-nums">{formatMoeda(totalEntradas)}</div>
             </div>
-            <div className="flex gap-2 text-[10px] items-center ml-auto pb-[1px]">
-              <span className="text-success font-bold">Entradas: {formatMoeda(totalEntradas)}</span>
-              <span className="text-destructive font-bold">Saídas: {formatMoeda(totalSaidas)}</span>
-              <span className="text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
+            <div className="bg-white border border-border rounded-lg px-3 py-1.5 min-w-[140px] shadow-sm">
+              <div className="text-[10px] text-muted-foreground leading-tight">Saídas</div>
+              <div className="text-[16px] font-semibold text-destructive leading-tight tabular-nums">{formatMoeda(totalSaidas)}</div>
             </div>
+            <div className="bg-white border border-border rounded-lg px-3 py-1.5 min-w-[140px] shadow-sm">
+              <div className="text-[10px] text-muted-foreground leading-tight">Saldo</div>
+              <div className={`text-[18px] font-bold leading-tight tabular-nums ${saldo >= 0 ? 'text-success' : 'text-destructive'}`}>{formatMoeda(saldo)}</div>
+            </div>
+            <span className="text-[10px] text-muted-foreground whitespace-nowrap">{totalLancamentosFiltrados} lanç.</span>
+            {mode === 'list' && !mesFechadoAtivo && (
+              <Button size="sm" onClick={openNew} className="h-8 px-4 text-[11px] gap-1 bg-cta text-cta-foreground hover:bg-cta-hover font-semibold">
+                <Plus className="h-3.5 w-3.5" /> Novo
+              </Button>
+            )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
+      <div className="space-y-1 px-2 pt-1">
       {/* Fechamento mensal banner */}
       {singleMonthSelected && fazendaId !== '__all__' && (
         <FechamentoMensalBanner
@@ -814,7 +818,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             contas={hook.contasBancarias}
             onFixed={() => hook.loadLancamentos(filtros, hook.page)}
           />
-           <div ref={scrollContainerRef} className="rounded-lg border border-[hsl(var(--border))] overflow-auto relative pr-3" style={{ maxHeight: 'calc(100vh - 260px - var(--bottom-nav-safe, 64px))' }}>
+           <div ref={scrollContainerRef} className="rounded-lg border border-[hsl(var(--border))] overflow-auto relative pr-3" style={{ maxHeight: 'calc(100vh - 140px - var(--bottom-nav-safe, 64px))' }}>
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: 62 }} />
@@ -898,6 +902,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           </div>
         </>
       )}
+      </div>{/* end content wrapper */}
 
       <LancamentoV2Dialog
         open={dialogOpen}
