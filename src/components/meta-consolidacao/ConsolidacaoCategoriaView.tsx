@@ -94,8 +94,8 @@ interface Props {
   ano: number;
   metaLancamentos: Lancamento[];
   onBack: () => void;
-  onNavigateToLancamentos?: (ano: string, mes: string) => void;
-  onNavigateToReclass?: () => void;
+  onNavigateToLancamentos?: (ano: string, mes: string, categoria?: string) => void;
+  onNavigateToReclass?: (mes?: string) => void;
 }
 
 function CellWithTooltip({
@@ -164,8 +164,12 @@ export function ConsolidacaoCategoriaView({ data, ano, metaLancamentos, onBack, 
 
   const selectedCatLabel = CATEGORIAS.find(c => c.value === selectedCat)?.label || selectedCat;
 
-  const handleCellClick = (mes: string) => {
-    onNavigateToLancamentos?.(String(ano), mes);
+  const handleEntradasClick = (mes: string) => {
+    onNavigateToLancamentos?.(String(ano), mes, selectedCat);
+  };
+
+  const handleInternasClick = (mes: string) => {
+    onNavigateToReclass?.(mes);
   };
 
   return (
@@ -179,7 +183,7 @@ export function ConsolidacaoCategoriaView({ data, ano, metaLancamentos, onBack, 
             <h2 className="text-sm font-semibold text-orange-700">Consolidação por Categoria — {ano}</h2>
           </div>
           {onNavigateToReclass && (
-            <Button variant="outline" size="sm" className="h-7 px-3 text-xs font-semibold gap-1.5 border-orange-300 text-orange-700 hover:bg-orange-50" onClick={onNavigateToReclass}>
+            <Button variant="outline" size="sm" className="h-7 px-3 text-xs font-semibold gap-1.5 border-orange-300 text-orange-700 hover:bg-orange-50" onClick={() => onNavigateToReclass?.()}>
               <RefreshCw className="h-3 w-3" /> Reclassificar
             </Button>
           )}
@@ -261,7 +265,7 @@ export function ConsolidacaoCategoriaView({ data, ano, metaLancamentos, onBack, 
                             mesLabel={mesLabel}
                             breakdown={eeBreakdown}
                             hasData={r.ee > 0}
-                            onClick={() => handleCellClick(r.mes)}
+                            onClick={() => handleEntradasClick(r.mes)}
                             colorClass="text-emerald-600"
                           />
                         </td>
@@ -273,7 +277,7 @@ export function ConsolidacaoCategoriaView({ data, ano, metaLancamentos, onBack, 
                             mesLabel={mesLabel}
                             breakdown={seBreakdown}
                             hasData={r.se > 0}
-                            onClick={() => handleCellClick(r.mes)}
+                            onClick={() => handleEntradasClick(r.mes)}
                             colorClass="text-red-600"
                           />
                         </td>
@@ -285,7 +289,7 @@ export function ConsolidacaoCategoriaView({ data, ano, metaLancamentos, onBack, 
                             mesLabel={mesLabel}
                             breakdown={eiBreakdown}
                             hasData={r.ei > 0}
-                            onClick={() => handleCellClick(r.mes)}
+                            onClick={() => handleInternasClick(r.mes)}
                             colorClass="text-emerald-600"
                           />
                         </td>
@@ -297,7 +301,7 @@ export function ConsolidacaoCategoriaView({ data, ano, metaLancamentos, onBack, 
                             mesLabel={mesLabel}
                             breakdown={siBreakdown}
                             hasData={r.siInternas > 0}
-                            onClick={() => handleCellClick(r.mes)}
+                            onClick={() => handleInternasClick(r.mes)}
                             colorClass="text-red-600"
                           />
                         </td>
