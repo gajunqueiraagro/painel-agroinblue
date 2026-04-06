@@ -182,7 +182,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     }
 
     setLoading(false);
-  }, [fazendaId, isGlobal, fazendas]);
+  }, [fazendaId, isGlobal, fazendas, cenario]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
