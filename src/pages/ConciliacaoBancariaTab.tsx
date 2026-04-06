@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
+import { STATUS_REALIZADOS, getConciliacaoStatus, type ConciliacaoStatus } from '@/lib/financeiro/conciliacaoCalc';
+import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
 
 /* ── Types ── */
 interface ContaRef {
