@@ -342,10 +342,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
 
   return (
     <div className="p-3 w-full space-y-1 animate-fade-in pb-20">
-      {/* Linha 1: título */}
-      <h2 className="text-sm font-bold text-foreground">Evolução de Categorias</h2>
-
-      {/* Linha 2: ano + régua de meses (limitada à largura até Recl.S) */}
+      {/* Ano + régua de meses */}
       <div className="flex items-center gap-2">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
           <SelectTrigger className="h-7 text-xs font-bold w-20 shrink-0">
@@ -358,8 +355,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
           </SelectContent>
         </Select>
 
-        {/* 12 meses — max-w limitado para alinhar com coluna Recl.S */}
-        <div className="flex items-center gap-0.5" style={{ maxWidth: 'calc(80px + 50px + 10 * 45px)' }}>
+        <div className="flex items-center gap-0.5 flex-1">
           {MESES_CURTOS.map((label, i) => {
             const mesVal = String(i + 1).padStart(2, '0');
             const isActive = mesFiltro === mesVal;
