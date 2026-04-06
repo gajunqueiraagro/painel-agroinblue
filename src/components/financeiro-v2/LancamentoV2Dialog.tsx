@@ -258,7 +258,7 @@ export function LancamentoV2Dialog({
         setContaDestinoId(destId);
       } else if (lancamento.tipo_operacao === '1-Entradas') {
         setContaOrigemId('');
-        setContaDestinoId(lancamento.conta_bancaria_id || '');
+        setContaDestinoId(lancamento.conta_destino_id || lancamento.conta_bancaria_id || '');
       } else {
         setContaOrigemId(lancamento.conta_bancaria_id || '');
         setContaDestinoId('');
@@ -638,12 +638,18 @@ export function LancamentoV2Dialog({
     const currentIsEdit = !!currentEditId;
 
     let contaBancariaId: string | null = null;
+    let contaDestinoFinal: string | null = null;
     if (isTransferencia) {
       contaBancariaId = contaOrigemId && contaOrigemId !== '__none__' ? contaOrigemId : null;
+      contaDestinoFinal = contaDestinoId && contaDestinoId !== '__none__' ? contaDestinoId : null;
     } else if (isEntrada) {
-      contaBancariaId = contaDestinoId && contaDestinoId !== '__none__' ? contaDestinoId : null;
+      // Entries: money flows IN → account goes to conta_destino_id
+      contaBancariaId = null;
+      contaDestinoFinal = contaDestinoId && contaDestinoId !== '__none__' ? contaDestinoId : null;
     } else {
+      // Exits: money flows OUT → account goes to conta_bancaria_id (origin)
       contaBancariaId = contaOrigemId && contaOrigemId !== '__none__' ? contaOrigemId : null;
+      contaDestinoFinal = null;
     }
 
     // --- Recurrence logic (ONLY for new lancamentos, NEVER for edit) ---
@@ -655,6 +661,7 @@ export function LancamentoV2Dialog({
         const form: LancamentoV2Form = {
           fazenda_id: fazendaId,
           conta_bancaria_id: contaBancariaId,
+          conta_destino_id: contaDestinoFinal,
           data_competencia: row.dataCompetencia,
           data_pagamento: row.dataPagamento || null,
           valor: recVal,
@@ -689,6 +696,7 @@ export function LancamentoV2Dialog({
         const form: LancamentoV2Form = {
           fazenda_id: fazendaId,
           conta_bancaria_id: contaBancariaId,
+          conta_destino_id: contaDestinoFinal,
           data_competencia: dataCompetencia,
           data_pagamento: row.dataPagamento || dataPagamento,
           valor: parcelaVal,
@@ -718,7 +726,7 @@ export function LancamentoV2Dialog({
     const form: LancamentoV2Form = {
       fazenda_id: fazendaId,
       conta_bancaria_id: contaBancariaId,
-      conta_destino_id: isTransferencia && contaDestinoId && contaDestinoId !== '__none__' ? contaDestinoId : null,
+      conta_destino_id: contaDestinoFinal,
       data_competencia: dataCompetencia,
       data_pagamento: dataPagamento || null,
       valor: Math.abs(valorNum),

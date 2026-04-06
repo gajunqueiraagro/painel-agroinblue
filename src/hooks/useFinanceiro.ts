@@ -780,7 +780,7 @@ export function useFinanceiro() {
       const expandedRows: Array<{
         fazenda_id: string; cliente_id: string; lote_importacao_id: string;
         origem_lancamento: string; data_competencia: string; data_pagamento: string | null;
-        ano_mes: string; conta_bancaria_id: string | null; descricao: string | null;
+        ano_mes: string; conta_bancaria_id: string | null; conta_destino_id?: string | null; descricao: string | null;
         valor: number; sinal: number; status_transacao: string | null;
         tipo_operacao: string; macro_custo: string | null; centro_custo: string | null;
         subcentro: string | null; observacao: string | null; escopo_negocio: string;
@@ -814,25 +814,23 @@ export function useFinanceiro() {
         if (ehTransf && l.contaDestinoId) {
           // Generate a shared group ID for the pair
           const grupoId = crypto.randomUUID();
-          // Debit from origin (sinal = -1)
+          // Debit from origin (sinal = -1): conta_bancaria_id = origin
           expandedRows.push({
             ...baseRow,
             conta_bancaria_id: l.contaBancariaId,
+            conta_destino_id: l.contaDestinoId,
             sinal: -1,
             transferencia_grupo_id: grupoId,
           });
-          // Credit to destination (sinal = 1)
-          expandedRows.push({
-            ...baseRow,
-            conta_bancaria_id: l.contaDestinoId,
-            sinal: 1,
-            transferencia_grupo_id: grupoId,
-          });
         } else {
+          const rowSinal = sinalFromTipo(l.tipoOperacao);
+          const isEntry = rowSinal === 1;
           expandedRows.push({
             ...baseRow,
-            conta_bancaria_id: l.contaBancariaId,
-            sinal: sinalFromTipo(l.tipoOperacao),
+            // Directional: entries → conta_destino_id, exits → conta_bancaria_id
+            conta_bancaria_id: isEntry ? null : l.contaBancariaId,
+            conta_destino_id: isEntry ? l.contaBancariaId : null,
+            sinal: rowSinal,
             transferencia_grupo_id: null,
           });
         }
