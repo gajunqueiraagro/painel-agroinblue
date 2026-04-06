@@ -130,12 +130,13 @@ export function MetaGmdTab({ onBack }: Props) {
                           <td key={key} className="py-0 px-0.5">
                             <Input
                               type="number"
-                              step="0.001"
+                              step="0.050"
                               min="0"
                               tabIndex={m * rows.length + idx + 1}
-                              value={val.toFixed(3)}
+                              value={val === 0 ? '' : val.toFixed(3)}
+                              placeholder="–"
                               onChange={e => updateCell(row.categoria, key, parseFloat(e.target.value) || 0)}
-                              className="h-5 text-[10px] text-center w-full px-0 italic text-orange-600 border-orange-200 focus:border-orange-400 hover:bg-orange-50/50 transition-colors"
+                              className="h-5 text-[10px] text-center w-full px-0 italic text-orange-600 border-orange-200 focus:border-orange-400 hover:bg-orange-50/50 transition-colors placeholder:text-muted-foreground/50 placeholder:not-italic"
                             />
                           </td>
                         );
