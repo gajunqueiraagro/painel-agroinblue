@@ -421,7 +421,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
 
           {/* PAINEL DO CONSULTOR */}
           <button
-            onClick={() => onTabChange('painel_consultor' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
+            onClick={() => onTabChange('painel_consultor_hub' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
             className="rounded-lg border border-primary/30 bg-primary/5 px-2 py-3 flex flex-col items-center justify-center gap-1.5 transition-colors hover:bg-primary/10 active:bg-primary/15"
           >
             <div className="h-8 w-8 rounded-md bg-primary/15 flex items-center justify-center">

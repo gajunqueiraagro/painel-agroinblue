@@ -37,7 +37,7 @@ import { VisaoAnualZootecnicaTab } from './VisaoAnualZootecnicaTab';
 import { FechamentoExecutivoTab } from './FechamentoExecutivoTab';
 import { AnaliseConsultorTab } from './AnaliseConsultorTab';
 import { PrecoMercadoTab } from './PrecoMercadoTab';
-import { MetasHubTab } from './MetasHubTab';
+import { PainelConsultorHubTab } from './PainelConsultorHubTab';
 import { MetaGmdTab } from './MetaGmdTab';
 import { MetaPrecoTab } from './MetaPrecoTab';
 import { GraficosAnaliseTab } from './GraficosAnaliseTab';
@@ -120,10 +120,10 @@ const TITLES: Record<TabId, string> = {
   contratos: 'Contratos / Recorrências',
   conciliacao_bancaria: 'Conciliação Bancária',
   painel_consultor: 'Painel do Consultor',
+  painel_consultor_hub: 'Painel do Consultor',
   auditoria: 'Central de Auditoria',
   conta_boitel: 'Conta Boitel',
   status_fechamentos: 'Central de Fechamento',
-  metas_hub: 'Metas / Previsto',
   meta_gmd: 'GMD Previsto',
   meta_preco: 'Preços Previstos',
   meta_movimentacoes: 'Movimentações Meta',
@@ -278,7 +278,7 @@ const Index = () => {
   const subScreenBackMap: Partial<Record<TabId, () => void>> = {
     // Resumo sub-screens
     operacao_hub: goToResumo,
-    painel_consultor: goToResumo,
+    painel_consultor_hub: goToVisaoZooHub,
     status_fechamentos: goToResumo,
     analise: () => setActiveTab('operacao_hub'),
     analise_entradas: () => setActiveTab('analise'),
@@ -314,9 +314,11 @@ const Index = () => {
     analise_operacional: goToVisaoZooHub,
     fechamento_executivo: goToVisaoZooHub,
     analise_consultor: goToVisaoZooHub,
-    metas_hub: goToVisaoZooHub,
-    meta_gmd: () => setActiveTab('metas_hub'),
-    meta_preco: () => setActiveTab('metas_hub'),
+    painel_consultor: () => setActiveTab('painel_consultor_hub'),
+    meta_gmd: () => setActiveTab('painel_consultor_hub'),
+    meta_preco: () => setActiveTab('painel_consultor_hub'),
+    meta_consolidacao: () => setActiveTab('painel_consultor_hub'),
+    meta_movimentacoes: () => setActiveTab('painel_consultor_hub'),
     // Financeiro (analysis) sub-screens
     fin_caixa: () => setActiveTab('lancar_fin_hub'),
     analise_economica: () => setActiveTab('lancar_fin_hub'),
@@ -362,7 +364,7 @@ const Index = () => {
         <OperacaoHubTab onTabChange={handleTabChange} onBack={() => setActiveTab('resumo')} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
       )}
       {activeTab === 'painel_consultor' && (
-        <PainelConsultorTab onBack={() => setActiveTab('resumo')} onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} metaConsolidacao={metaConsolidacaoData} />
+        <PainelConsultorTab onBack={() => setActiveTab('painel_consultor_hub')} onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} metaConsolidacao={metaConsolidacaoData} />
       )}
       {activeTab === 'status_fechamentos' && (
         <StatusFechamentosTab
@@ -615,14 +617,14 @@ const Index = () => {
       {activeTab === 'conta_boitel' && (
         <ContaBoitelTab onBack={() => setActiveTab('financeiro_v2_hub')} />
       )}
-      {activeTab === 'metas_hub' && (
-        <MetasHubTab onTabChange={handleTabChange} />
+      {activeTab === 'painel_consultor_hub' && (
+        <PainelConsultorHubTab onTabChange={handleTabChange} onBack={goToVisaoZooHub} />
       )}
       {activeTab === 'meta_gmd' && (
-        <MetaGmdTab onBack={() => setActiveTab('metas_hub')} />
+        <MetaGmdTab onBack={() => setActiveTab('painel_consultor_hub')} />
       )}
       {activeTab === 'meta_preco' && (
-        <MetaPrecoTab onBack={() => setActiveTab('metas_hub')} />
+        <MetaPrecoTab onBack={() => setActiveTab('painel_consultor_hub')} />
       )}
       {activeTab === 'meta_movimentacoes' && (
         <LancamentosTab
@@ -630,8 +632,8 @@ const Index = () => {
           onAdicionar={canEditZoo ? (metaAdicionar as any) : noOp}
           onEditar={canEditZoo ? (metaEditar as any) : noOp}
           onRemover={canEditZoo ? (metaRemover as any) : noOp}
-          onBackToConciliacao={() => setActiveTab('metas_hub')}
-          backLabel="Voltar para Metas"
+          onBackToConciliacao={() => setActiveTab('painel_consultor_hub')}
+          backLabel="Voltar para Painel do Consultor"
         />
       )}
       {activeTab === 'meta_consolidacao' && (
@@ -640,7 +642,7 @@ const Index = () => {
           metaLancamentos={metaLancamentos}
           gmdRows={metaGmd.rows}
           ano={Number(filtroGlobal.ano)}
-          onBack={() => setActiveTab('metas_hub')}
+          onBack={() => setActiveTab('painel_consultor_hub')}
         />
       )}
       </div>
