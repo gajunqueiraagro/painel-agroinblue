@@ -93,7 +93,7 @@ interface Props {
   ano: number;
   metaLancamentos: Lancamento[];
   onBack: () => void;
-  onNavigateToLancamentos?: () => void;
+  onNavigateToLancamentos?: (ano: string, mes: string) => void;
 }
 
 function CellWithTooltip({
