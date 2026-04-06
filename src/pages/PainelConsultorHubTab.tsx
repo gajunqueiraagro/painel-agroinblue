@@ -1,8 +1,7 @@
 /**
- * Hub do Painel do Consultor — centraliza navegação do cenário Previsto/Meta
- * e acesso aos Dados de Auditoria.
+ * Hub do Painel do Consultor — grid visual de navegação.
  */
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { ClipboardCheck, Table2, TrendingUp, DollarSign, ArrowLeftRight } from 'lucide-react';
 import type { TabId } from '@/components/BottomNav';
 
@@ -15,69 +14,75 @@ const items = [
   {
     id: 'painel_consultor' as TabId,
     title: 'Dados de Auditoria',
-    desc: 'Painel completo com indicadores mensais, comparativo meta vs realizado',
+    desc: 'Indicadores mensais, comparativo meta vs realizado',
     icon: ClipboardCheck,
     color: 'text-primary',
-    accent: 'border-primary/30 bg-primary/5',
+    bg: 'bg-primary/10',
   },
   {
     id: 'meta_consolidacao' as TabId,
     title: 'Consolidação por Categoria',
-    desc: 'Saldo, peso e produção biológica por categoria/mês (somente leitura)',
+    desc: 'Saldo, peso e produção biológica por categoria/mês',
     icon: Table2,
     color: 'text-violet-600',
-    accent: '',
+    bg: 'bg-violet-500/10',
   },
   {
     id: 'meta_gmd' as TabId,
     title: 'GMD Previsto',
-    desc: 'Defina o GMD meta por categoria e mês',
+    desc: 'GMD meta por categoria e mês',
     icon: TrendingUp,
     color: 'text-emerald-600',
-    accent: '',
+    bg: 'bg-emerald-500/10',
   },
   {
     id: 'meta_preco' as TabId,
     title: 'Preços Previstos',
-    desc: 'Preços de mercado para o cenário meta',
+    desc: 'Preços de mercado do cenário meta',
     icon: DollarSign,
     color: 'text-blue-600',
-    accent: '',
+    bg: 'bg-blue-500/10',
   },
   {
     id: 'meta_movimentacoes' as TabId,
     title: 'Movimentações Previstas',
-    desc: 'Registre compras, vendas, abates e reclassificações do cenário meta',
+    desc: 'Compras, vendas, abates e reclassificações meta',
     icon: ArrowLeftRight,
     color: 'text-orange-600',
-    accent: '',
+    bg: 'bg-orange-500/10',
   },
 ];
 
 export function PainelConsultorHubTab({ onTabChange }: Props) {
   return (
-    <div className="w-full px-4 animate-fade-in pb-24">
-      <div className="p-4 space-y-3">
-        <p className="text-xs text-muted-foreground">
-          Gerencie o cenário previsto e acesse os dados de auditoria do Painel do Consultor.
-        </p>
-        {items.map(item => (
-          <Card
-            key={item.id}
-            className={`cursor-pointer hover:shadow-md transition-shadow ${item.accent}`}
-            onClick={() => onTabChange(item.id)}
-          >
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={`p-2 rounded-lg bg-muted ${item.color}`}>
-                <item.icon className="h-5 w-5" />
+    <div className="w-full px-4 pt-2 animate-fade-in pb-24">
+      <p className="text-xs text-muted-foreground mb-4 px-1">
+        Gerencie o cenário previsto e acesse os dados de auditoria.
+      </p>
+
+      <div className="grid grid-cols-2 gap-3">
+        {items.map((item, idx) => {
+          const isFirst = idx === 0;
+          return (
+            <Card
+              key={item.id}
+              onClick={() => onTabChange(item.id)}
+              className={`cursor-pointer transition-all hover:shadow-md hover:border-primary/40 active:scale-[0.98] ${
+                isFirst ? 'col-span-2' : ''
+              }`}
+            >
+              <div className={`flex flex-col items-center justify-center text-center gap-2 p-5 ${isFirst ? 'py-6' : 'py-5'}`}>
+                <div className={`rounded-xl p-3 ${item.bg}`}>
+                  <item.icon className={`h-6 w-6 ${item.color}`} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground leading-tight">{item.title}</h3>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{item.desc}</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">{item.title}</h3>
-                <p className="text-xs text-muted-foreground">{item.desc}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
