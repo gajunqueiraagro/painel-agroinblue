@@ -144,9 +144,11 @@ interface Props {
   ano: number;
   metaLancamentos: Lancamento[];
   onBack: () => void;
+  onNavigateToLancamentos?: (ano: string, mes: string, categoria?: string) => void;
+  onNavigateToReclass?: (mes?: string) => void;
 }
 
-export function ConsolidacaoMesView({ data, ano, metaLancamentos, onBack }: Props) {
+export function ConsolidacaoMesView({ data, ano, metaLancamentos, onBack, onNavigateToLancamentos, onNavigateToReclass }: Props) {
   const [selectedMes, setSelectedMes] = useState('01');
 
   const rows = useMemo(() => data.filter(d => d.mes === selectedMes), [data, selectedMes]);
