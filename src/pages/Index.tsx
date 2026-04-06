@@ -640,6 +640,7 @@ const Index = () => {
           onBackToConciliacao={() => {
             setMetaLancAnoFiltro(undefined);
             setMetaLancMesFiltro(undefined);
+            setMetaLancAbaInicial(undefined);
             setActiveTab('painel_consultor_hub');
           }}
           backLabel="Voltar para Painel do Consultor"
