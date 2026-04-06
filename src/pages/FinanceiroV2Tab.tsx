@@ -586,7 +586,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div>
               <label className={lblCls}>Fazenda</label>
               <Select value={fazendaId} onValueChange={setFazendaId}>
-                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)]`}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
                   {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id} className={itemCls}>{f.nome}</SelectItem>)}
