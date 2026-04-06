@@ -25,7 +25,8 @@ import { format, parseISO, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, RefreshCw, Clock, Info } from 'lucide-react';
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
-import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
+import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components/ReclassificacaoForm';
+import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
 import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/components/compra/CompraDetalhesDialog';
 import { CompraResumoPanel } from '@/components/compra/CompraResumoPanel';
 import { gerarFinanceiroCompra } from '@/components/compra/gerarFinanceiroCompra';
@@ -230,6 +231,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [statusOp, setStatusOp] = useState<StatusOperacional>('conciliado');
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const reclassState = useReclassificacaoState({ onAdicionar, dataInicial, lancamentos, ano: Number(anoFiltro) });
   const [compraDetalhes, setCompraDetalhes] = useState<CompraDetalhes | null>(null);
   const [compraDialogOpen, setCompraDialogOpen] = useState(false);
   const [abateDetalhes, setAbateDetalhes] = useState<AbateDetalhes | null>(null);
@@ -2550,14 +2552,26 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
         {/* Center: Form or Historico */}
         {aba === 'reclassificacao' ? (
-          <div className="col-span-2 self-start">
-            <ReclassificacaoForm
+          <>
+            <ReclassificacaoFormFields
               onAdicionar={onAdicionar}
               dataInicial={dataInicial}
               lancamentos={lancamentos}
               ano={Number(anoFiltro)}
+              state={reclassState}
             />
-          </div>
+            <ReclassificacaoResumoPanel
+              quantidade={Number(reclassState.quantidade) || 0}
+              pesoKg={Number(reclassState.pesoKg) || 0}
+              origemLabel={reclassState.origemLabel}
+              destinoLabel={reclassState.destinoLabel}
+              pesoMedioOrigem={reclassState.origemInfo.pesoMedio}
+              isPrevisto={reclassState.isPrevisto}
+              onRequestRegister={reclassState.handleRegister}
+              submitting={reclassState.submitting}
+              canRegister={reclassState.canRegister}
+            />
+          </>
         ) : aba === 'historico' ? (
           <div className="col-span-2 self-start">{renderHistorico()}</div>
         ) : (
