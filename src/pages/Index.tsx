@@ -705,10 +705,9 @@ const Index = () => {
             setSubAbaFinanceiro(undefined);
             setMovFiltroAno(anoVal);
             setMovFiltroMes(mesVal);
+            setMovFiltroStatus('previsto');
             setMovBackTab('meta_consolidacao');
             setMovDrillLabel('Voltar para Consolidação');
-            setEditOriginStatusFiltro('previsto');
-            setEditOriginTab('financeiro');
             setActiveTab('financeiro');
           }}
           onNavigateToReclass={(mesVal) => {
