@@ -86,6 +86,16 @@ export function ReclassificacaoResumoPanel({
         <RefreshCw className="h-3 w-3 mr-1" />
         {submitting ? 'Registrando...' : 'Registrar Reclassificação'}
       </Button>
+
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="w-full flex items-center justify-center gap-1 text-[10px] font-bold text-primary bg-primary/10 rounded-md py-1.5 transition-colors hover:bg-primary/20 mt-1"
+        >
+          <ArrowLeft className="h-3 w-3" />
+          {backLabel || 'Retornar à Conciliação'}
+        </button>
+      )}
     </div>
   );
 }
