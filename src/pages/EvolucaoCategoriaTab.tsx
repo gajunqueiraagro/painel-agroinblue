@@ -13,6 +13,7 @@ interface Props {
   saldosIniciais: SaldoInicial[];
   initialAno?: string;
   initialMes?: string;
+  initialCenario?: 'realizado' | 'previsto';
   onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
 }
 
@@ -30,7 +31,7 @@ const COLUNAS_MOV = [
   { tipo: 'reclassificacao_saida', label: 'Recl.S', entrada: false },
 ];
 
-export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, initialMes, onNavigateToReclass }: Props) {
+export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, initialMes, initialCenario, onNavigateToReclass }: Props) {
   const { fazendaAtual } = useFazenda();
   const fazendaId = fazendaAtual?.id;
 
@@ -52,7 +53,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
 
   const [anoFiltro, setAnoFiltro] = useState(initialAno || String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState(initialMes || format(new Date(), 'MM'));
-  const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'previsto'>('realizado');
+  const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'previsto'>(initialCenario || 'realizado');
   const [pesosDb, setPesosDb] = useState<Record<string, number>>({});
   const [conciliacaoStatus, setConciliacaoStatus] = useState<'aberto' | 'fechado' | 'parcial' | null>(null);
   const [rebanhoStatus, setRebanhoStatus] = useState<'aberto' | 'fechado' | null>(null);

@@ -89,6 +89,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
           saldosIniciais={saldosIniciais}
           initialAno={anoFiltro}
           initialMes={drilldownMonth}
+          initialCenario={statusFiltro}
           onNavigateToReclass={onNavigateToReclass}
         />
       </div>
