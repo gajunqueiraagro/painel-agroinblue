@@ -662,6 +662,7 @@ const Index = () => {
             setActiveTab('meta_movimentacoes');
           }}
           onNavigateToReclass={() => {
+            setMetaLancAbaInicial('reclassificacao');
             setActiveTab('meta_movimentacoes');
           }}
         />
