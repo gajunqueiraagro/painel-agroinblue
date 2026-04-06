@@ -171,11 +171,18 @@ export function ConsolidacaoCategoriaView({ data, ano, metaLancamentos, onBack, 
   return (
     <TooltipProvider delayDuration={200}>
       <div className="w-full px-2 pb-4 animate-fade-in">
-        <div className="flex items-center gap-2 mb-1">
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={onBack}>
-            <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Voltar
-          </Button>
-          <h2 className="text-sm font-semibold text-orange-700">Consolidação por Categoria — {ano}</h2>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={onBack}>
+              <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Voltar
+            </Button>
+            <h2 className="text-sm font-semibold text-orange-700">Consolidação por Categoria — {ano}</h2>
+          </div>
+          {onNavigateToReclass && (
+            <Button variant="outline" size="sm" className="h-7 px-3 text-xs font-semibold gap-1.5 border-orange-300 text-orange-700 hover:bg-orange-50" onClick={onNavigateToReclass}>
+              <RefreshCw className="h-3 w-3" /> Reclassificar
+            </Button>
+          )}
         </div>
 
         {/* Category selector - horizontal cards */}
