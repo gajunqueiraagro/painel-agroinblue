@@ -197,7 +197,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     return fazendas.filter(f => f.id !== fazendaAtual?.id && f.id !== '__global__' && f.tem_pecuaria !== false);
   }, [fazendas, fazendaAtual]);
 
-  const [aba, setAba] = useState<Aba>(abaInicial || 'entrada');
+  const [aba, setAba] = useState<Aba>(abaInicial || (initialAnoFiltro ? 'historico' : 'entrada'));
   const [tipo, setTipo] = useState<TipoMovimentacao>('nascimento');
   const [categoria, setCategoria] = useState<Categoria | ''>('');
   const [quantidade, setQuantidade] = useState('');
@@ -213,8 +213,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const abateFinanceiroRef = useRef<AbateFinanceiroPanelRef>(null);
   const vendaFinanceiroRef = useRef<VendaFinanceiroPanelRef>(null);
   const consumoFinanceiroRef = useRef<ConsumoFinanceiroPanelRef>(null);
-  const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
-  const [mesFiltro, setMesFiltro] = useState('todos');
+  const [anoFiltro, setAnoFiltro] = useState(initialAnoFiltro || String(new Date().getFullYear()));
+  const [mesFiltro, setMesFiltro] = useState(initialMesFiltro || 'todos');
 
   // ─── P1 governance: derive anoMes from form date ───
   const formAnoMes = useMemo(() => {
