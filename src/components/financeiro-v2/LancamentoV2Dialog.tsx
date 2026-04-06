@@ -258,7 +258,7 @@ export function LancamentoV2Dialog({
         setContaDestinoId(destId);
       } else if (lancamento.tipo_operacao === '1-Entradas') {
         setContaOrigemId('');
-        setContaDestinoId(lancamento.conta_bancaria_id || '');
+        setContaDestinoId(lancamento.conta_destino_id || lancamento.conta_bancaria_id || '');
       } else {
         setContaOrigemId(lancamento.conta_bancaria_id || '');
         setContaDestinoId('');
