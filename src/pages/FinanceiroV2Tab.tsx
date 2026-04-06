@@ -522,14 +522,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   return (
     <div className="space-y-1 pb-20">
       {/* FILTERS */}
-      <Card className="bg-muted/50 border-border/60">
-        <CardContent className="p-1.5 space-y-1">
+      <Card className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(210_33%_97%)] shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
+        <CardContent className="p-2 space-y-1.5">
           {/* LINE 1: Ano | Mês | Tipo | Status | Fazenda | Atividade */}
-          <div className="grid grid-cols-[62px_64px_88px_72px_0.5fr_72px] gap-1 items-end">
+          <div className="grid grid-cols-[62px_70px_96px_80px_0.35fr_80px] gap-1.5 items-end">
             <div>
               <label className={lblCls}>Ano</label>
               <Select value={ano} onValueChange={setAno}>
-                <SelectTrigger className={`${selCls} w-[68px]`}><SelectValue /></SelectTrigger>
+                <SelectTrigger className={`${selCls} w-full bg-background border-[hsl(210_20%_80%)]`}><SelectValue /></SelectTrigger>
                 <SelectContent>{anos.map(a => <SelectItem key={a} value={a} className={itemCls}>{a}</SelectItem>)}</SelectContent>
               </Select>
             </div>
@@ -537,7 +537,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <label className={lblCls}>Mês</label>
               <Popover open={mesPopoverOpen} onOpenChange={setMesPopoverOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-6 text-[10px] justify-between font-normal px-1.5 w-[70px]">
+                  <Button variant="outline" className="h-6 text-[10px] justify-between font-normal px-1.5 w-full bg-background border-[hsl(210_20%_80%)]">
                     {mesLabel}
                     <ChevronsUpDown className="h-2.5 w-2.5 opacity-50" />
                   </Button>
@@ -561,7 +561,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div>
               <label className={lblCls}>Tipo</label>
               <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigem('__all__'); setContaDestino('__all__'); }}>
-                <SelectTrigger className={selCls}><SelectValue /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)]`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
                   <SelectItem value="1-Entradas" className={itemCls}>Entradas</SelectItem>
@@ -573,7 +573,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div>
               <label className={lblCls}>Status</label>
               <Select value={statusTransacao} onValueChange={setStatusTransacao}>
-                <SelectTrigger className={selCls}><SelectValue /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)]`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
                   <SelectItem value="previsto" className={itemCls}>{CENTRAL_STATUS_LABEL.previsto}</SelectItem>
@@ -586,7 +586,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div>
               <label className={lblCls}>Fazenda</label>
               <Select value={fazendaId} onValueChange={setFazendaId}>
-                <SelectTrigger className={selCls}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)]`}><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
                   {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id} className={itemCls}>{f.nome}</SelectItem>)}
@@ -596,7 +596,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div>
               <label className={lblCls}>Atividade</label>
               <Select value={atividadeFiltro} onValueChange={setAtividadeFiltro}>
-                <SelectTrigger className={selCls}><SelectValue /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)]`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
                   <SelectItem value="pecuaria" className={itemCls}>Pecuária</SelectItem>
@@ -607,11 +607,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           </div>
 
           {/* LINE 2: Conta Origem | Conta Destino | Macro */}
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-[0.7fr_0.7fr_0.5fr] gap-1.5">
             <div>
               <label className={lblCls}>Conta Origem</label>
               <Select value={contaOrigem} onValueChange={setContaOrigem} disabled={isEntrada}>
-                <SelectTrigger className={`${selCls} ${isEntrada ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)] ${isEntrada ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
                   {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
@@ -621,7 +621,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div>
               <label className={lblCls}>Conta Destino</label>
               <Select value={contaDestino} onValueChange={setContaDestino} disabled={isSaida}>
-                <SelectTrigger className={`${selCls} ${isSaida ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)] ${isSaida ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
                   {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
@@ -641,7 +641,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           </div>
 
           {/* LINE 3: Centro | Subcentro | Produto | Fornecedor */}
-          <div className="grid grid-cols-[1fr_1.4fr_1.4fr_1.6fr] gap-1">
+          <div className="grid grid-cols-[1fr_1.4fr_1.4fr_1.6fr] gap-1.5">
             <div>
               <label className={lblCls}>Centro</label>
               <SearchableSelect
@@ -667,7 +667,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 value={produtoFiltro}
                 onChange={e => setProdutoFiltro(e.target.value)}
                 placeholder="Buscar..."
-                className="h-6 !text-[8px] placeholder:!text-[8px] leading-tight px-1.5"
+                className="h-6 !text-[8px] placeholder:!text-[8px] leading-tight px-1.5 bg-background border-[hsl(210_20%_80%)]"
                 autoCorrect="off"
                 autoCapitalize="none"
                 spellCheck={false}
@@ -791,18 +791,18 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
       {mode === 'list' && !hook.loading && ano && (
         <>
-          <div className="rounded-lg border overflow-auto relative" style={{ maxHeight: 'calc(100vh - 280px)' }}>
+          <div className="rounded-lg border border-[hsl(var(--border))] overflow-auto relative" style={{ maxHeight: 'calc(100vh - 280px)' }}>
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse">
-              <thead className="[&_tr]:border-b sticky top-0 z-20 bg-muted">
+              <thead className="[&_tr]:border-b sticky top-0 z-20 bg-primary">
                 <tr className="border-b !h-auto">
-                  <th className="px-0.5 py-[2px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground cursor-pointer select-none sticky left-0 z-30 bg-muted w-[40px]" onClick={() => toggleSort('data')}>Comp.{sortIcon('data')}</th>
-                  <th className="px-0.5 py-[2px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground cursor-pointer select-none sticky left-[40px] z-30 bg-muted w-[40px]" onClick={() => toggleSort('pgto')}>Pgto{sortIcon('pgto')}</th>
-                  <th className="px-1 py-[2px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto{sortIcon('produto')}</th>
-                  <th className="px-1 py-[2px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor{sortIcon('fornecedor')}</th>
-                  <th className="px-1 py-[2px] text-right align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground cursor-pointer select-none w-[110px]" onClick={() => toggleSort('valor')}>Valor{sortIcon('valor')}</th>
-                  <th className="px-1 py-[2px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground w-[72px]">NF</th>
-                  <th className="px-1 py-[2px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground w-[68px]">Status</th>
-                  <th className="px-1 py-[2px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground w-[40px]"></th>
+                  <th className="px-0.5 py-[3px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-0 z-30 bg-primary w-[40px]" onClick={() => toggleSort('data')}>Comp.{sortIcon('data')}</th>
+                  <th className="px-0.5 py-[3px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[40px] z-30 bg-primary w-[40px]" onClick={() => toggleSort('pgto')}>Pgto{sortIcon('pgto')}</th>
+                  <th className="px-1 py-[3px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto{sortIcon('produto')}</th>
+                  <th className="px-1 py-[3px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor{sortIcon('fornecedor')}</th>
+                  <th className="px-1 py-[3px] text-right align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none w-[110px]" onClick={() => toggleSort('valor')}>Valor{sortIcon('valor')}</th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground w-[72px]">NF</th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground w-[68px]">Status</th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground w-[40px]"></th>
                 </tr>
               </thead>
               <tbody className="[&_tr:last-child]:border-0">
