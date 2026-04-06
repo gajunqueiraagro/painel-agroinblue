@@ -645,7 +645,7 @@ const Index = () => {
           backLabel="Voltar para Painel do Consultor"
           initialAnoFiltro={metaLancAnoFiltro}
           initialMesFiltro={metaLancMesFiltro}
-          abaInicial={metaLancAnoFiltro ? 'historico' : undefined}
+          abaInicial={metaLancAbaInicial || (metaLancAnoFiltro ? 'historico' : undefined)}
         />
       )}
       {activeTab === 'meta_consolidacao' && (
