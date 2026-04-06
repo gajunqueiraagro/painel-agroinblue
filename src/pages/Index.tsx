@@ -41,6 +41,7 @@ import { MetasHubTab } from './MetasHubTab';
 import { MetaGmdTab } from './MetaGmdTab';
 import { MetaPrecoTab } from './MetaPrecoTab';
 import { GraficosAnaliseTab } from './GraficosAnaliseTab';
+import { MetaConsolidacaoTab } from './MetaConsolidacaoTab';
 import { FinanceiroV2Tab } from './FinanceiroV2Tab';
 import { FinanceiroV2HubTab } from './FinanceiroV2HubTab';
 import { FinV2ContasTab } from './FinV2ContasTab';
