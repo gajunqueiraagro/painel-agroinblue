@@ -183,7 +183,7 @@ export function ConsolidacaoCategoriaView({ data, ano, metaLancamentos, onBack, 
             <h2 className="text-sm font-semibold text-orange-700">Consolidação por Categoria — {ano}</h2>
           </div>
           {onNavigateToReclass && (
-            <Button variant="outline" size="sm" className="h-7 px-3 text-xs font-semibold gap-1.5 border-orange-300 text-orange-700 hover:bg-orange-50" onClick={onNavigateToReclass}>
+            <Button variant="outline" size="sm" className="h-7 px-3 text-xs font-semibold gap-1.5 border-orange-300 text-orange-700 hover:bg-orange-50" onClick={() => onNavigateToReclass?.()}>
               <RefreshCw className="h-3 w-3" /> Reclassificar
             </Button>
           )}
