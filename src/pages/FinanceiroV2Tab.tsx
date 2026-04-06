@@ -407,11 +407,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     const hasContaDestino = contaDestino && contaDestino !== '__all__';
 
     if (hasContaOrigem && !hasContaDestino) {
-      // Show only money leaving: saídas (sinal < 0) or transfers
-      items = items.filter(l => l.sinal < 0 || l.tipo_operacao === '3-Transferência');
+      // Show only money leaving this account: saídas or transfers sent
+      items = items.filter(l => l.sinal < 0 || isTransferenciaTipo(l.tipo_operacao));
     } else if (hasContaDestino && !hasContaOrigem) {
-      // Show only money arriving: entradas (sinal > 0) or transfers
-      items = items.filter(l => l.sinal > 0 || l.tipo_operacao === '3-Transferência');
+      // Show only money arriving at this account: entradas or transfers received
+      items = items.filter(l => l.sinal > 0 || isTransferenciaTipo(l.tipo_operacao));
     }
 
     if (produtoFiltro.trim()) {
