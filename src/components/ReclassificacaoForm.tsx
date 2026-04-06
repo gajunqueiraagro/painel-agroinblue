@@ -59,7 +59,7 @@ export function ReclassificacaoFormFields(props: Props & {
     data, setData,
     qtdInput, pesoInput,
     statusOp, setStatusOp,
-    origemInfo, setPesoKg,
+    origemInfo, setPesoKg, setPesoAutoFilled,
   } = state;
 
   const isPrevisto = statusOp === 'previsto';
