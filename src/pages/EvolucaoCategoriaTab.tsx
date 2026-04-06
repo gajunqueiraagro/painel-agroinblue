@@ -559,37 +559,6 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                   </td>
                 ))}
                 <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoFin}</td>
-                {showDelta && (
-                  <td className="px-1.5 py-1 text-center">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="inline-flex items-center justify-center cursor-default">
-                          <span className={`inline-block w-2 h-2 rounded-full ${getDeltaStyle(totais.deltaTotal, totais.saldoFin).dot}`} />
-                          {totais.deltaTotal !== 0 && (
-                            <span className={`ml-0.5 text-[8px] font-bold tabular-nums ${getDeltaStyle(totais.deltaTotal, totais.saldoFin).text}`}>
-                              {totais.deltaTotal > 0 ? `+${totais.deltaTotal}` : totais.deltaTotal}
-                            </span>
-                          )}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="text-[10px] space-y-0.5 p-2">
-                        <p className="font-bold text-foreground">TOTAL</p>
-                        <div className="flex justify-between gap-4">
-                          <span className="text-muted-foreground">Oficial:</span>
-                          <span className="font-semibold">{totais.saldoFin}</span>
-                        </div>
-                        <div className="flex justify-between gap-4">
-                          <span className="text-muted-foreground">Pastos:</span>
-                          <span className="font-semibold">{totais.pastosTotal}</span>
-                        </div>
-                        <div className={`flex justify-between gap-4 font-bold ${getDeltaStyle(totais.deltaTotal, totais.saldoFin).text}`}>
-                          <span>Diferença:</span>
-                          <span>{totais.deltaTotal > 0 ? `+${totais.deltaTotal}` : totais.deltaTotal}</span>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </td>
-                )}
                 <td className={`px-1.5 py-1 text-center italic text-[9px] font-semibold ${!totais.pesoMedio || totais.pesoMedio <= 0 ? 'text-transparent' : 'text-foreground'}`}>
                   {formatPeso(totais.pesoMedio)}
                 </td>
