@@ -176,8 +176,9 @@ export function useReclassificacaoState(props: Props) {
   const origemInfo = useMemo(() => deriveCategoryInfo(categoriaOrigem, lancamentos), [categoriaOrigem, lancamentos]);
 
   useEffect(() => {
-    if (origemInfo.pesoMedio && !pesoKg) {
+    if (origemInfo.pesoMedio && !pesoKg && !pesoAutoFilled) {
       setPesoKg(origemInfo.pesoMedio.toFixed(2));
+      setPesoAutoFilled(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoriaOrigem]);
