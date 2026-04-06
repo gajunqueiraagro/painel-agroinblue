@@ -234,10 +234,10 @@ export function ConsolidacaoCategoriaView({ data, ano, metaLancamentos, onBack, 
                   <tr className="bg-orange-500 text-white">
                     <th className={`${TH} text-left`}>Mês</th>
                     <th className={`${TH} bg-orange-600/30`}>Saldo Inicial</th>
-                    <th className={TH}>Entradas</th>
-                    <th className={TH}>Saídas</th>
-                    <th className={TH}>Entr. Internas</th>
-                    <th className={TH}>Saíd. Internas</th>
+                    <th className={TH}>Entradas Externas</th>
+                    <th className={TH}>Saídas Externas</th>
+                    <th className={TH}>Evol. Cat. Entrada</th>
+                    <th className={TH}>Evol. Cat. Saída</th>
                     <th className={`${TH} bg-orange-600/30`}>Saldo Final</th>
                     <th className={TH}>GMD</th>
                     <th className={TH}>Prod. Bio</th>
