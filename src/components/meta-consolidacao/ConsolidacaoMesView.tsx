@@ -89,6 +89,7 @@ function CellWithTooltip({
   mesLabel,
   breakdown,
   hasData,
+  onClick,
   colorClass,
 }: {
   value: string;
@@ -97,6 +98,7 @@ function CellWithTooltip({
   mesLabel: string;
   breakdown: MovBreakdown[];
   hasData: boolean;
+  onClick?: () => void;
   colorClass: string;
 }) {
   if (!hasData) {
@@ -108,7 +110,7 @@ function CellWithTooltip({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className={`${colorClass} cursor-pointer hover:underline`}>
+        <span className={`${colorClass} cursor-pointer hover:underline`} onClick={onClick}>
           {display}
         </span>
       </TooltipTrigger>
@@ -142,9 +144,11 @@ interface Props {
   ano: number;
   metaLancamentos: Lancamento[];
   onBack: () => void;
+  onNavigateToLancamentos?: (ano: string, mes: string, categoria?: string) => void;
+  onNavigateToReclass?: (mes?: string) => void;
 }
 
-export function ConsolidacaoMesView({ data, ano, metaLancamentos, onBack }: Props) {
+export function ConsolidacaoMesView({ data, ano, metaLancamentos, onBack, onNavigateToLancamentos, onNavigateToReclass }: Props) {
   const [selectedMes, setSelectedMes] = useState('01');
 
   const rows = useMemo(() => data.filter(d => d.mes === selectedMes), [data, selectedMes]);
@@ -241,6 +245,7 @@ export function ConsolidacaoMesView({ data, ano, metaLancamentos, onBack }: Prop
                           mesLabel={mesLabel}
                           breakdown={eeBreakdown}
                           hasData={r.ee > 0}
+                          onClick={() => onNavigateToLancamentos?.(String(ano), selectedMes, r.categoria)}
                           colorClass="text-emerald-600"
                         />
                       </td>
@@ -252,6 +257,7 @@ export function ConsolidacaoMesView({ data, ano, metaLancamentos, onBack }: Prop
                           mesLabel={mesLabel}
                           breakdown={seBreakdown}
                           hasData={r.se > 0}
+                          onClick={() => onNavigateToLancamentos?.(String(ano), selectedMes, r.categoria)}
                           colorClass="text-red-600"
                         />
                       </td>
@@ -263,6 +269,7 @@ export function ConsolidacaoMesView({ data, ano, metaLancamentos, onBack }: Prop
                           mesLabel={mesLabel}
                           breakdown={eiBreakdown}
                           hasData={r.ei > 0}
+                          onClick={() => onNavigateToReclass?.(selectedMes)}
                           colorClass="text-emerald-600"
                         />
                       </td>
@@ -274,6 +281,7 @@ export function ConsolidacaoMesView({ data, ano, metaLancamentos, onBack }: Prop
                           mesLabel={mesLabel}
                           breakdown={siBreakdown}
                           hasData={r.siInternas > 0}
+                          onClick={() => onNavigateToReclass?.(selectedMes)}
                           colorClass="text-red-600"
                         />
                       </td>
