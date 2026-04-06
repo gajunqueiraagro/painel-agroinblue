@@ -725,8 +725,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               </div>
             </div>
             <div className="flex gap-2 text-[10px] items-center ml-auto pb-[1px]">
-              <span className="text-success font-bold">Ent: {formatMoeda(totalEntradas)}</span>
-              <span className="text-destructive font-bold">Saí: {formatMoeda(totalSaidas)}</span>
+              <span className="text-success font-bold">Entradas: {formatMoeda(totalEntradas)}</span>
+              <span className="text-destructive font-bold">Saídas: {formatMoeda(totalSaidas)}</span>
               <span className="text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
             </div>
           </div>
