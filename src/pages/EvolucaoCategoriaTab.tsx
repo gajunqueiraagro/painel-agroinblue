@@ -544,50 +544,6 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                     <td className={`px-1.5 py-0.5 text-center font-extrabold bg-primary/5 ${cat.saldoFinal === 0 ? 'text-transparent' : 'text-foreground'}`}>
                       {cat.saldoFinal}
                     </td>
-                    {showDelta && (
-                      <td className="px-1.5 py-0.5 text-center">
-                        {cat.saldoFinal === 0 && cat.pastosQtd === 0 ? (
-                          <span className="text-transparent">–</span>
-                        ) : (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="inline-flex items-center justify-center cursor-default">
-                                <span className={`inline-block w-2 h-2 rounded-full ${deltaStyle.dot}`} />
-                                {cat.delta !== 0 && (
-                                  <span className={`ml-0.5 text-[8px] font-bold tabular-nums ${deltaStyle.text}`}>
-                                    {cat.delta > 0 ? `+${cat.delta}` : cat.delta}
-                                  </span>
-                                )}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="text-[10px] space-y-0.5 p-2">
-                              <p className="font-bold text-foreground">{cat.label}</p>
-                              {(() => {
-                                const oficialDiv = conciliacaoOficialLoaded ? conciliacaoOficial[cat.label] : null;
-                                const sistemaVal = oficialDiv ? oficialDiv.saldo_sistema : cat.saldoFinal;
-                                const pastosVal = oficialDiv ? oficialDiv.saldo_pastos : cat.pastosQtd;
-                                return (
-                                  <>
-                                    <div className="flex justify-between gap-4">
-                                      <span className="text-muted-foreground">Sistema:</span>
-                                      <span className="font-semibold">{sistemaVal}</span>
-                                    </div>
-                                    <div className="flex justify-between gap-4">
-                                      <span className="text-muted-foreground">Pastos:</span>
-                                      <span className="font-semibold">{pastosVal}</span>
-                                    </div>
-                                  </>
-                                );
-                              })()}
-                              <div className={`flex justify-between gap-4 font-bold ${deltaStyle.text}`}>
-                                <span>Diferença:</span>
-                                <span>{cat.delta > 0 ? `+${cat.delta}` : cat.delta}</span>
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
-                      </td>
-                    )}
                     <td className={`px-1.5 py-0.5 text-center italic text-[9px] bg-primary/5 ${!cat.pesoMedio || cat.pesoMedio <= 0 ? 'text-transparent' : 'text-foreground'}`}>
                       {formatPeso(cat.pesoMedio)}
                     </td>
