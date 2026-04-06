@@ -58,6 +58,9 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   const [rebanhoStatus, setRebanhoStatus] = useState<'aberto' | 'fechado' | null>(null);
   const [precosRebanho, setPrecosRebanho] = useState<Record<string, number>>({});
   const [pastosQtdPorCat, setPastosQtdPorCat] = useState<Record<string, number>>({});
+  // Official conciliation divergences from RPC (same source as official conciliation screen)
+  const [conciliacaoOficial, setConciliacaoOficial] = useState<Record<string, { saldo_sistema: number; saldo_pastos: number; diferenca: number }>>({});
+  const [conciliacaoOficialLoaded, setConciliacaoOficialLoaded] = useState(false);
 
   // Fetch conciliação status for the selected month/fazenda
   useEffect(() => {
@@ -199,7 +202,42 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
           if (v.somaQtd > 0) result[cod] = v.somaQtdPeso / v.somaQtd;
         }
 
-        // Fallback: if no fechamento data, use saldosIniciais peso_medio_kg
+  // Fetch official conciliation from the same RPC used by the official conciliation screen
+  useEffect(() => {
+    const anoMes = `${anoFiltro}-${mesFiltro}`;
+    if (!fazendaId || fazendaId === '__global__') {
+      setConciliacaoOficial({});
+      setConciliacaoOficialLoaded(false);
+      return;
+    }
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc('validar_conciliacao_rebanho', {
+          _fazenda_id: fazendaId,
+          _ano_mes: anoMes,
+        });
+        if (error) throw error;
+        const result: Record<string, { saldo_sistema: number; saldo_pastos: number; diferenca: number }> = {};
+        const divergencias = (data as any)?.divergencias || [];
+        divergencias.forEach((d: any) => {
+          if (d.categoria) {
+            result[d.categoria] = {
+              saldo_sistema: d.saldo_sistema ?? 0,
+              saldo_pastos: d.saldo_pastos ?? 0,
+              diferenca: d.diferenca ?? 0,
+            };
+          }
+        });
+        setConciliacaoOficial(result);
+        setConciliacaoOficialLoaded(true);
+      } catch {
+        setConciliacaoOficial({});
+        setConciliacaoOficialLoaded(false);
+      }
+    })();
+  }, [fazendaId, anoFiltro, mesFiltro]);
+
+
         if (Object.keys(result).length === 0) {
           saldosIniciais
             .filter(s => s.ano === Number(anoFiltro) && s.pesoMedioKg && s.pesoMedioKg > 0)
@@ -289,11 +327,20 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
 
       const pesoMedio = pesosDb[cat.value] || null;
       const pastosQtd = pastosQtdPorCat[cat.value] || 0;
-      const delta = saldoFinal - pastosQtd;
+
+      // Use official RPC conciliation when available (same source as official conciliation screen)
+      let delta: number;
+      if (conciliacaoOficialLoaded) {
+        // RPC returns divergences keyed by categoria nome — if absent, means delta = 0
+        const oficialDiv = conciliacaoOficial[cat.label];
+        delta = oficialDiv ? oficialDiv.diferenca : 0;
+      } else {
+        delta = saldoFinal - pastosQtd;
+      }
 
       return { ...cat, saldoInicioMes, movs, saldoFinal, pesoMedio, pastosQtd, delta };
     });
-  }, [lancFiltrados, saldosIniciais, anoFiltro, mesFiltro, pesosDb, pastosQtdPorCat]);
+  }, [lancFiltrados, saldosIniciais, anoFiltro, mesFiltro, pesosDb, pastosQtdPorCat, conciliacaoOficial, conciliacaoOficialLoaded]);
 
   const totais = useMemo(() => {
     const saldoIni = dados.reduce((s, d) => s + d.saldoInicioMes, 0);
@@ -321,7 +368,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
     return total;
   }, [dados, precosRebanho]);
 
-  const hasPastosData = Object.keys(pastosQtdPorCat).length > 0;
+  const hasPastosData = Object.keys(pastosQtdPorCat).length > 0 || conciliacaoOficialLoaded;
   const showDelta = hasPastosData && statusFiltro === 'realizado';
   const isRealizado = statusFiltro === 'realizado';
 
@@ -520,14 +567,23 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                             </TooltipTrigger>
                             <TooltipContent side="top" className="text-[10px] space-y-0.5 p-2">
                               <p className="font-bold text-foreground">{cat.label}</p>
-                              <div className="flex justify-between gap-4">
-                                <span className="text-muted-foreground">Oficial:</span>
-                                <span className="font-semibold">{cat.saldoFinal}</span>
-                              </div>
-                              <div className="flex justify-between gap-4">
-                                <span className="text-muted-foreground">Pastos:</span>
-                                <span className="font-semibold">{cat.pastosQtd}</span>
-                              </div>
+                              {(() => {
+                                const oficialDiv = conciliacaoOficialLoaded ? conciliacaoOficial[cat.label] : null;
+                                const sistemaVal = oficialDiv ? oficialDiv.saldo_sistema : cat.saldoFinal;
+                                const pastosVal = oficialDiv ? oficialDiv.saldo_pastos : cat.pastosQtd;
+                                return (
+                                  <>
+                                    <div className="flex justify-between gap-4">
+                                      <span className="text-muted-foreground">Sistema:</span>
+                                      <span className="font-semibold">{sistemaVal}</span>
+                                    </div>
+                                    <div className="flex justify-between gap-4">
+                                      <span className="text-muted-foreground">Pastos:</span>
+                                      <span className="font-semibold">{pastosVal}</span>
+                                    </div>
+                                  </>
+                                );
+                              })()}
                               <div className={`flex justify-between gap-4 font-bold ${deltaStyle.text}`}>
                                 <span>Diferença:</span>
                                 <span>{cat.delta > 0 ? `+${cat.delta}` : cat.delta}</span>
