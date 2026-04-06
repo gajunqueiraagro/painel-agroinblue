@@ -660,7 +660,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           </div>
 
           {/* LINE 3: Produto | Fornecedor */}
-          <div className="grid grid-cols-[200px_200px] gap-1.5">
+          <div className="grid grid-cols-[200px_300px] gap-1.5">
             <div>
               <label className={lblCls}>Produto</label>
               <Input
