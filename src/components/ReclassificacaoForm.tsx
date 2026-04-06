@@ -59,7 +59,7 @@ export function ReclassificacaoFormFields(props: Props & {
     data, setData,
     qtdInput, pesoInput,
     statusOp, setStatusOp,
-    origemInfo, setPesoKg,
+    origemInfo, setPesoKg, setPesoAutoFilled,
   } = state;
 
   const isPrevisto = statusOp === 'previsto';
@@ -110,7 +110,7 @@ export function ReclassificacaoFormFields(props: Props & {
       <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-end">
         <div>
           <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">De (Origem)</Label>
-          <Select value={categoriaOrigem} onValueChange={v => { setCategoriaOrigem(v as Categoria); setPesoKg(''); }}>
+          <Select value={categoriaOrigem} onValueChange={v => { setCategoriaOrigem(v as Categoria); setPesoKg(''); setPesoAutoFilled(false); }}>
             <SelectTrigger className={`mt-0.5 h-8 text-[11px] ${borderAccent}`}><SelectValue /></SelectTrigger>
             <SelectContent className="max-h-52">
               {CATEGORIAS.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px]">{c.label}</SelectItem>)}
@@ -168,6 +168,7 @@ export function useReclassificacaoState(props: Props) {
   const [pesoKg, setPesoKg] = useState('');
   const [statusOp, setStatusOp] = useState<StatusOperacional>('conciliado');
   const [submitting, setSubmitting] = useState(false);
+  const [pesoAutoFilled, setPesoAutoFilled] = useState(false);
 
   const qtdInput = useIntegerInput(quantidade, setQuantidade);
   const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
@@ -175,8 +176,9 @@ export function useReclassificacaoState(props: Props) {
   const origemInfo = useMemo(() => deriveCategoryInfo(categoriaOrigem, lancamentos), [categoriaOrigem, lancamentos]);
 
   useEffect(() => {
-    if (origemInfo.pesoMedio && !pesoKg) {
+    if (origemInfo.pesoMedio && !pesoKg && !pesoAutoFilled) {
       setPesoKg(origemInfo.pesoMedio.toFixed(2));
+      setPesoAutoFilled(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoriaOrigem]);
@@ -208,6 +210,7 @@ export function useReclassificacaoState(props: Props) {
         });
         setQuantidade('');
         setPesoKg('');
+        setPesoAutoFilled(false);
       } else {
         toast.error('Não foi possível registrar a reclassificação.', {
           description: 'Verifique os dados e tente novamente.',
@@ -234,5 +237,6 @@ export function useReclassificacaoState(props: Props) {
     qtdInput, pesoInput,
     origemInfo, origemLabel, destinoLabel,
     canRegister, handleRegister,
+    setPesoAutoFilled,
   };
 }
