@@ -538,7 +538,7 @@ const Index = () => {
           filtroMesInicial={movFiltroMes}
           drillDownLabel={movDrillLabel}
           onBack={movBackTab ? () => setActiveTab(movBackTab) : undefined}
-          filtroStatusInicial={editOriginTab === 'financeiro' ? editOriginStatusFiltro : undefined}
+          filtroStatusInicial={movFiltroStatus || (editOriginTab === 'financeiro' ? editOriginStatusFiltro : undefined)}
           onEditarAbate={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setAbateParaEditar(l); setActiveTab('lancamentos'); }}
           onEditarVenda={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setVendaParaEditar(l); setActiveTab('lancamentos'); }}
           onEditarCompra={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setCompraParaEditar(l); setActiveTab('lancamentos'); }}
