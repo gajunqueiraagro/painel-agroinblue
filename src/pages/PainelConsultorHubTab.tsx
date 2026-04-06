@@ -1,8 +1,8 @@
 /**
- * Hub do Painel do Consultor — grid visual de navegação.
+ * Hub do Painel do Consultor — grid visual 3×2 de navegação.
  */
 import { Card } from '@/components/ui/card';
-import { ClipboardCheck, Table2, TrendingUp, DollarSign, ArrowLeftRight } from 'lucide-react';
+import { ClipboardCheck, Table2, TrendingUp, DollarSign, ArrowLeftRight, CalendarCheck } from 'lucide-react';
 import type { TabId } from '@/components/BottomNav';
 
 interface Props {
@@ -12,12 +12,28 @@ interface Props {
 
 const items = [
   {
+    id: 'status_fechamentos' as TabId,
+    title: 'Status do Mês',
+    desc: 'Visão consolidada do status financeiro, zootécnico e econômico',
+    icon: CalendarCheck,
+    color: 'text-amber-600',
+    bg: 'bg-amber-500/10',
+  },
+  {
     id: 'painel_consultor' as TabId,
     title: 'Dados de Auditoria',
     desc: 'Indicadores mensais, comparativo meta vs realizado',
     icon: ClipboardCheck,
     color: 'text-primary',
     bg: 'bg-primary/10',
+  },
+  {
+    id: 'meta_movimentacoes' as TabId,
+    title: 'Movimentações Previstas',
+    desc: 'Compras, vendas, abates e reclassificações meta',
+    icon: ArrowLeftRight,
+    color: 'text-orange-600',
+    bg: 'bg-orange-500/10',
   },
   {
     id: 'meta_consolidacao' as TabId,
@@ -43,14 +59,6 @@ const items = [
     color: 'text-blue-600',
     bg: 'bg-blue-500/10',
   },
-  {
-    id: 'meta_movimentacoes' as TabId,
-    title: 'Movimentações Previstas',
-    desc: 'Compras, vendas, abates e reclassificações meta',
-    icon: ArrowLeftRight,
-    color: 'text-orange-600',
-    bg: 'bg-orange-500/10',
-  },
 ];
 
 export function PainelConsultorHubTab({ onTabChange }: Props) {
@@ -60,29 +68,24 @@ export function PainelConsultorHubTab({ onTabChange }: Props) {
         Gerencie o cenário previsto e acesse os dados de auditoria.
       </p>
 
-      <div className="grid grid-cols-2 gap-3">
-        {items.map((item, idx) => {
-          const isFirst = idx === 0;
-          return (
-            <Card
-              key={item.id}
-              onClick={() => onTabChange(item.id)}
-              className={`cursor-pointer transition-all hover:shadow-md hover:border-primary/40 active:scale-[0.98] ${
-                isFirst ? 'col-span-2' : ''
-              }`}
-            >
-              <div className={`flex flex-col items-center justify-center text-center gap-2 p-5 ${isFirst ? 'py-6' : 'py-5'}`}>
-                <div className={`rounded-xl p-3 ${item.bg}`}>
-                  <item.icon className={`h-6 w-6 ${item.color}`} />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-foreground leading-tight">{item.title}</h3>
-                  <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{item.desc}</p>
-                </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {items.map(item => (
+          <Card
+            key={item.id}
+            onClick={() => onTabChange(item.id)}
+            className="cursor-pointer transition-all hover:shadow-md hover:border-primary/40 active:scale-[0.98]"
+          >
+            <div className="flex flex-col items-center justify-center text-center gap-2 p-4 min-h-[120px]">
+              <div className={`rounded-xl p-2.5 ${item.bg}`}>
+                <item.icon className={`h-5 w-5 ${item.color}`} />
               </div>
-            </Card>
-          );
-        })}
+              <div>
+                <h3 className="text-xs font-bold text-foreground leading-tight">{item.title}</h3>
+                <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{item.desc}</p>
+              </div>
+            </div>
+          </Card>
+        ))}
       </div>
     </div>
   );
