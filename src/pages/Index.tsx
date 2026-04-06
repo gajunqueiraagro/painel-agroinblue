@@ -41,6 +41,7 @@ import { MetasHubTab } from './MetasHubTab';
 import { MetaGmdTab } from './MetaGmdTab';
 import { MetaPrecoTab } from './MetaPrecoTab';
 import { GraficosAnaliseTab } from './GraficosAnaliseTab';
+import { MetaConsolidacaoTab } from './MetaConsolidacaoTab';
 import { FinanceiroV2Tab } from './FinanceiroV2Tab';
 import { FinanceiroV2HubTab } from './FinanceiroV2HubTab';
 import { FinV2ContasTab } from './FinV2ContasTab';
@@ -56,6 +57,7 @@ import { StatusFechamentosTab } from './StatusFechamentosTab';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { SyncStatus } from '@/components/SyncStatus';
 import { useLancamentos } from '@/hooks/useLancamentos';
+import { useMetaGmd } from '@/hooks/useMetaGmd';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -124,6 +126,7 @@ const TITLES: Record<TabId, string> = {
   meta_gmd: 'GMD Previsto',
   meta_preco: 'Preços Previstos',
   meta_movimentacoes: 'Movimentações Meta',
+  meta_consolidacao: 'Consolidação Meta',
 };
 
 const Index = () => {
@@ -174,6 +177,7 @@ const Index = () => {
     ano: String(new Date().getFullYear()),
     mes: new Date().getMonth() + 1,
   });
+  const metaGmd = useMetaGmd(filtroGlobal.ano);
 
   const handleFiltroChange = useCallback((f: Partial<FiltroGlobal>) => {
     setFiltroGlobal(prev => ({ ...prev, ...f }));
@@ -339,8 +343,6 @@ const Index = () => {
           </div>
         }
       />
-
-
 
 
       <div className={`flex-1 min-h-0 ${(activeTab === 'mapa_geo_pastos' || activeTab === 'mapa_pastos') ? 'overflow-hidden' : 'overflow-y-auto'}`}>
@@ -628,6 +630,15 @@ const Index = () => {
           onRemover={canEditZoo ? (metaRemover as any) : noOp}
           onBackToConciliacao={() => setActiveTab('metas_hub')}
           backLabel="Voltar para Metas"
+        />
+      )}
+      {activeTab === 'meta_consolidacao' && (
+        <MetaConsolidacaoTab
+          saldosIniciais={saldosIniciais}
+          metaLancamentos={metaLancamentos}
+          gmdRows={metaGmd.rows}
+          ano={Number(filtroGlobal.ano)}
+          onBack={() => setActiveTab('metas_hub')}
         />
       )}
       </div>
