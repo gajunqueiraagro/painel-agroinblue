@@ -164,7 +164,6 @@ const Index = () => {
   const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, countFinanceirosVinculados, setSaldoInicial, loadData } = useLancamentos();
   const { lancamentos: metaLancamentos, adicionarLancamento: metaAdicionar, editarLancamento: metaEditar, removerLancamento: metaRemover, loadData: metaLoadData } = useLancamentos('meta');
   const { pendingCount, syncing, online, syncQueue } = useOfflineSync(fazendaAtual?.id === '__global__' ? undefined : fazendaAtual?.id, loadData);
-  const metaGmd = useMetaGmd(filtroGlobal.ano);
 
   // Wrap edit actions based on permissions
   const noOp = async () => {};
