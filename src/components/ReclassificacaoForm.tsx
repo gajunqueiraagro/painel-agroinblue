@@ -24,7 +24,6 @@ const STATUS_DESCRIPTIONS: Record<StatusOperacional, string> = {
 
 const STATUS_BUTTONS: { value: StatusOperacional; dot: string; activeBorder: string; activeBg: string }[] = [
   { value: 'conciliado', dot: 'bg-green-600', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
-  { value: 'confirmado', dot: 'bg-blue-500', activeBorder: 'border-blue-400', activeBg: 'bg-blue-50 dark:bg-blue-950/30' },
   { value: 'previsto', dot: 'bg-orange-500', activeBorder: 'border-orange-400', activeBg: 'bg-orange-50 dark:bg-orange-950/30' },
 ];
 
@@ -80,7 +79,7 @@ export function ReclassificacaoFormFields(props: Props & {
       {/* Status selector – same pattern as Venda/Abate/Transferência */}
       <div className="space-y-1">
         <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Status da Operação</Label>
-        <div className="grid grid-cols-3 gap-1">
+        <div className="grid grid-cols-2 gap-1">
           {STATUS_BUTTONS.map(s => {
             const selected = statusOp === s.value;
             return (
