@@ -636,8 +636,15 @@ const Index = () => {
           onAdicionar={canEditZoo ? (metaAdicionar as any) : noOp}
           onEditar={canEditZoo ? (metaEditar as any) : noOp}
           onRemover={canEditZoo ? (metaRemover as any) : noOp}
-          onBackToConciliacao={() => setActiveTab('painel_consultor_hub')}
+          onBackToConciliacao={() => {
+            setMetaLancAnoFiltro(undefined);
+            setMetaLancMesFiltro(undefined);
+            setActiveTab('painel_consultor_hub');
+          }}
           backLabel="Voltar para Painel do Consultor"
+          initialAnoFiltro={metaLancAnoFiltro}
+          initialMesFiltro={metaLancMesFiltro}
+          abaInicial={metaLancAnoFiltro ? 'historico' : undefined}
         />
       )}
       {activeTab === 'meta_consolidacao' && (
@@ -647,7 +654,11 @@ const Index = () => {
           gmdRows={metaGmd.rows}
           ano={Number(filtroGlobal.ano)}
           onBack={() => setActiveTab('painel_consultor_hub')}
-          onNavigateToLancamentos={() => setActiveTab('meta_movimentacoes')}
+          onNavigateToLancamentos={(anoVal, mesVal) => {
+            setMetaLancAnoFiltro(anoVal);
+            setMetaLancMesFiltro(mesVal);
+            setActiveTab('meta_movimentacoes');
+          }}
         />
       )}
       </div>
