@@ -2566,7 +2566,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               origemLabel={reclassState.origemLabel}
               destinoLabel={reclassState.destinoLabel}
               pesoMedioOrigem={reclassState.origemInfo.pesoMedio}
-              isPrevisto={reclassState.isPrevisto}
+              statusOp={reclassState.statusOp}
               onRequestRegister={reclassState.handleRegister}
               submitting={reclassState.submitting}
               canRegister={reclassState.canRegister}
