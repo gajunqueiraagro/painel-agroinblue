@@ -809,7 +809,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <tbody className="[&_tr:last-child]:border-0">
                 {totalLancamentosFiltrados === 0 ? (
                   <tr className="border-b">
-                    <td colSpan={8} className="text-center text-muted-foreground py-4 text-[10px]">
+                    <td colSpan={9} className="text-center text-muted-foreground py-4 text-[10px]">
                       Nenhum lançamento encontrado.
                     </td>
                   </tr>
