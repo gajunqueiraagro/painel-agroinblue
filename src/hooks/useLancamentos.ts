@@ -411,7 +411,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     // Soft delete: mark as cancelled + write audit log
     const { data: lancRow } = await supabase
       .from('lancamentos')
-      .select('id, cliente_id, tipo, categoria, quantidade, data')
+      .select('id, cliente_id, tipo, categoria, quantidade, data, transferencia_par_id')
       .eq('id', id)
       .single();
 
@@ -448,6 +448,28 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       .eq('id', id);
 
     if (!error) {
+      const parId = (lancRow as any)?.transferencia_par_id;
+      const isTransfer = lancRow && ['transferencia_saida', 'transferencia_entrada'].includes(lancRow.tipo);
+
+      // For transfers: the DB trigger propagates cancellation from saída→entrada automatically.
+      // But if we're deleting the entrada side, we must also cancel the saída side explicitly.
+      if (isTransfer && parId) {
+        const isEntrada = lancRow.tipo === 'transferencia_entrada';
+        if (isEntrada) {
+          // Cancel the saída side (which will also trigger re-propagation, but it's already cancelled)
+          await supabase
+            .from('lancamentos')
+            .update({
+              cancelado: true,
+              cancelado_em: new Date().toISOString(),
+              cancelado_por: userId || null,
+            })
+            .eq('id', parId)
+            .eq('cancelado', false);
+        }
+        // For saída side: the trigger sync_transferencia_update already propagates cancelado to the entrada
+      }
+
       // Write audit log
       if (lancRow?.cliente_id) {
         await supabase.from('audit_log_movimentacoes').insert({
@@ -462,10 +484,14 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
             quantidade: lancRow.quantidade,
             data: lancRow.data,
             financeiros_cancelados: finIds.length,
+            transferencia_par_cancelado: isTransfer && parId ? parId : null,
           },
         });
       }
-      setLancamentos(prev => prev.filter(l => l.id !== id));
+      // Remove both sides from local state
+      const idsToRemove = new Set([id]);
+      if (isTransfer && parId) idsToRemove.add(parId);
+      setLancamentos(prev => prev.filter(l => !idsToRemove.has(l.id)));
     }
     return !error;
   };
