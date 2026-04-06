@@ -295,6 +295,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     const { data, error } = await supabase.from('lancamentos').insert({
       fazenda_id: fazendaId,
       cliente_id: clienteId!,
+      cenario,
       ...insertData,
     }).select().single();
 
