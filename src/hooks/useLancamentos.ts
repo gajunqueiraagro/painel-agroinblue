@@ -28,7 +28,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       const fazendaIds = fazendas.map(f => f.id);
       
       const [lancRes, saldoRes] = await Promise.all([
-        supabase.from('lancamentos').select('*').in('fazenda_id', fazendaIds).eq('cancelado', false).order('data', { ascending: false }),
+        supabase.from('lancamentos').select('*').in('fazenda_id', fazendaIds).eq('cancelado', false).eq('cenario', cenario).order('data', { ascending: false }),
         supabase.from('saldos_iniciais').select('*').in('fazenda_id', fazendaIds),
       ]);
 
