@@ -64,21 +64,21 @@ export function ConsolidacaoCategoriaView({ data, ano, onBack }: Props) {
       </div>
 
       <div className="w-full flex justify-start mt-0">
-        <div className="w-[60%] min-w-[900px]">
+        <div style={{ width: 663 }}>
           <div className="rounded-lg border border-orange-200">
             <table className="w-full table-fixed text-[10px]">
               <colgroup>
-                <col style={{ width: '10%' }} />
-                <col style={{ width: '10%' }} />
-                <col style={{ width: '8%' }} />
-                <col style={{ width: '8%' }} />
-                <col style={{ width: '9%' }} />
-                <col style={{ width: '9%' }} />
-                <col style={{ width: '10%' }} />
-                <col style={{ width: '8%' }} />
-                <col style={{ width: '10%' }} />
-                <col style={{ width: '9%' }} />
-                <col style={{ width: '9%' }} />
+                <col style={{ width: 43 }} />
+                <col style={{ width: 50 }} />
+                <col style={{ width: 55 }} />
+                <col style={{ width: 55 }} />
+                <col style={{ width: 60 }} />
+                <col style={{ width: 60 }} />
+                <col style={{ width: 60 }} />
+                <col style={{ width: 50 }} />
+                <col style={{ width: 70 }} />
+                <col style={{ width: 85 }} />
+                <col style={{ width: 75 }} />
               </colgroup>
               <thead>
                 <tr className="bg-orange-500 text-white">
