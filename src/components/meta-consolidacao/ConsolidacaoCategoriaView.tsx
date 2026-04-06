@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { CATEGORIAS, type Lancamento, type Categoria } from '@/types/cattle';
+import { RefreshCw } from 'lucide-react';
 import { isEntrada, isSaida, isReclassificacao } from '@/lib/calculos/zootecnicos';
 import { TODOS_TIPOS } from '@/types/cattle';
 import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
