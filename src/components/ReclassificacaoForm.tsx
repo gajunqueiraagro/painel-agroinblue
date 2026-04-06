@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { CATEGORIAS, Categoria, Lancamento, SaldoInicial, kgToArrobas } from '@/types/cattle';
+import { CATEGORIAS, Categoria, Lancamento, kgToArrobas } from '@/types/cattle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,67 +8,62 @@ import { Switch } from '@/components/ui/switch';
 import { format } from 'date-fns';
 import { useIntegerInput, useDecimalInput } from '@/hooks/useFormattedNumber';
 import { RefreshCw, ArrowRight, Scale, Info } from 'lucide-react';
-import { isEntrada, isSaida, isReclassificacao } from '@/lib/calculos/zootecnicos';
-import { isConciliado } from '@/lib/statusOperacional';
 
 interface Props {
   onAdicionar: (l: Omit<Lancamento, 'id'>) => void;
   dataInicial?: string;
   lancamentos?: Lancamento[];
-  saldosIniciais?: SaldoInicial[];
   ano?: number;
 }
 
-/** Compute average peso and saldo for a category from lancamentos + saldos */
-function computeCategoryInfo(
+/**
+ * Derive the best peso médio for a category from existing lancamentos.
+ * Uses the most recent lancamento that has pesoMedioKg for this category.
+ * Also computes a rough saldo count from lancamentos.
+ */
+function deriveCategoryInfo(
   categoria: Categoria,
   lancamentos: Lancamento[],
-  saldosIniciais: SaldoInicial[],
-  ano: number,
-  cenario: 'realizado' | 'previsto',
-): { saldo: number; pesoMedio: number | null } {
-  // Saldo from saldo inicial
-  let saldo = saldosIniciais
-    .filter(s => s.ano === ano && s.categoria === categoria)
-    .reduce((sum, s) => sum + s.quantidade, 0);
+): { pesoMedio: number | null; saldo: number } {
+  // Find most recent peso for this category
+  let pesoMedio: number | null = null;
+  const sorted = [...lancamentos]
+    .filter(l => l.categoria === categoria && l.pesoMedioKg && l.pesoMedioKg > 0)
+    .sort((a, b) => b.data.localeCompare(a.data));
 
-  let pesoTotal = saldosIniciais
-    .filter(s => s.ano === ano && s.categoria === categoria)
-    .reduce((sum, s) => sum + s.quantidade * (s.pesoMedioKg || 0), 0);
+  if (sorted.length > 0) {
+    // Weighted average of last few entries for reliability
+    const recent = sorted.slice(0, 5);
+    let totalPeso = 0;
+    let totalQtd = 0;
+    for (const l of recent) {
+      totalPeso += (l.pesoMedioKg || 0) * l.quantidade;
+      totalQtd += l.quantidade;
+    }
+    pesoMedio = totalQtd > 0 ? totalPeso / totalQtd : null;
+  }
 
-  // Filter lancamentos by cenario
-  const lancs = cenario === 'realizado'
-    ? lancamentos.filter(l => isConciliado(l))
-    : lancamentos.filter(l => l.statusOperacional === 'previsto');
-
-  for (const l of lancs) {
-    if (!l.data.startsWith(String(ano))) continue;
-    const peso = l.pesoMedioKg || 0;
+  // Rough saldo (entradas - saidas for this category)
+  let saldo = 0;
+  for (const l of lancamentos) {
+    const isEntrada = ['nascimento', 'compra', 'transferencia_entrada'].includes(l.tipo);
+    const isSaida = ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'].includes(l.tipo);
+    const isReclass = l.tipo === 'reclassificacao';
 
     if (l.categoria === categoria) {
-      if (isEntrada(l.tipo)) {
-        saldo += l.quantidade;
-        pesoTotal += l.quantidade * peso;
-      } else if (isSaida(l.tipo)) {
-        saldo -= l.quantidade;
-        pesoTotal -= l.quantidade * peso;
-      } else if (isReclassificacao(l.tipo)) {
-        saldo -= l.quantidade;
-        pesoTotal -= l.quantidade * peso;
-      }
+      if (isEntrada) saldo += l.quantidade;
+      else if (isSaida) saldo -= l.quantidade;
+      else if (isReclass) saldo -= l.quantidade;
     }
-    if (isReclassificacao(l.tipo) && l.categoriaDestino === categoria) {
+    if (isReclass && l.categoriaDestino === categoria) {
       saldo += l.quantidade;
-      pesoTotal += l.quantidade * peso;
     }
   }
 
-  const pesoMedio = saldo > 0 ? pesoTotal / saldo : null;
-  return { saldo: Math.max(0, saldo), pesoMedio: pesoMedio && pesoMedio > 0 ? pesoMedio : null };
+  return { pesoMedio, saldo };
 }
 
-export function ReclassificacaoForm({ onAdicionar, dataInicial, lancamentos = [], saldosIniciais = [], ano }: Props) {
-  const currentYear = ano || new Date().getFullYear();
+export function ReclassificacaoForm({ onAdicionar, dataInicial, lancamentos = [], ano }: Props) {
   const [categoriaOrigem, setCategoriaOrigem] = useState<Categoria>('desmama_m');
   const [categoriaDestino, setCategoriaDestino] = useState<Categoria>('garrotes');
   const [quantidade, setQuantidade] = useState('');
@@ -79,19 +74,8 @@ export function ReclassificacaoForm({ onAdicionar, dataInicial, lancamentos = []
   const qtdInput = useIntegerInput(quantidade, setQuantidade);
   const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
 
-  const cenario = isPrevisto ? 'previsto' : 'realizado';
-
-  // Compute info for origin category
-  const origemInfo = useMemo(
-    () => computeCategoryInfo(categoriaOrigem, lancamentos, saldosIniciais, currentYear, cenario),
-    [categoriaOrigem, lancamentos, saldosIniciais, currentYear, cenario],
-  );
-
-  // Compute info for destination category
-  const destinoInfo = useMemo(
-    () => computeCategoryInfo(categoriaDestino, lancamentos, saldosIniciais, currentYear, cenario),
-    [categoriaDestino, lancamentos, saldosIniciais, currentYear, cenario],
-  );
+  const origemInfo = useMemo(() => deriveCategoryInfo(categoriaOrigem, lancamentos), [categoriaOrigem, lancamentos]);
+  const destinoInfo = useMemo(() => deriveCategoryInfo(categoriaDestino, lancamentos), [categoriaDestino, lancamentos]);
 
   // Auto-suggest peso when origin changes and field is empty
   useEffect(() => {
@@ -99,7 +83,7 @@ export function ReclassificacaoForm({ onAdicionar, dataInicial, lancamentos = []
       setPesoKg(origemInfo.pesoMedio.toFixed(2));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoriaOrigem, cenario]);
+  }, [categoriaOrigem]);
 
   const origemLabel = CATEGORIAS.find(c => c.value === categoriaOrigem)?.label || '';
   const destinoLabel = CATEGORIAS.find(c => c.value === categoriaDestino)?.label || '';
@@ -221,7 +205,7 @@ export function ReclassificacaoForm({ onAdicionar, dataInicial, lancamentos = []
         </div>
 
         {/* ─── Linha 5: Resumo operacional ─── */}
-        <div className={`rounded-md border px-3 py-2 text-[10px] space-y-1 ${isPrevisto ? 'bg-orange-50 border-orange-200' : 'bg-emerald-50 border-emerald-200'}`}>
+        <div className={`rounded-md border px-3 py-2 text-[10px] space-y-1 ${isPrevisto ? 'bg-orange-50/60 border-orange-200' : 'bg-emerald-50/60 border-emerald-200'}`}>
           <div className="flex items-center gap-1 mb-1">
             <Info className="h-3 w-3 text-muted-foreground" />
             <span className="font-semibold text-muted-foreground uppercase tracking-wider">Resumo da operação</span>
@@ -234,16 +218,6 @@ export function ReclassificacaoForm({ onAdicionar, dataInicial, lancamentos = []
             <div className="flex justify-between">
               <span className="text-muted-foreground">Destino:</span>
               <span className="font-semibold text-foreground">{destinoLabel}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Saldo origem:</span>
-              <span className={`font-semibold ${origemInfo.saldo > 0 ? 'text-foreground' : 'text-red-600'}`}>
-                {origemInfo.saldo} cab
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Saldo destino:</span>
-              <span className="font-semibold text-foreground">{destinoInfo.saldo} cab</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Peso médio origem:</span>
