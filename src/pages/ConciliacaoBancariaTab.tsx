@@ -113,9 +113,13 @@ const STATUS_CONFIG = {
 
 interface ConciliacaoProps {
   onNavigateToLancamentos?: (ano: string, mes: number) => void;
+  onBack?: () => void;
+  initialAno?: string;
+  initialConta?: string;
+  initialMes?: string;
 }
 
-export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoProps = {}) {
+export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initialAno, initialConta, initialMes }: ConciliacaoProps = {}) {
   const { clienteAtual } = useCliente();
   const perm = usePermissions();
   const isAdmin = perm.perfil === 'admin_agroinblue' || perm.perfil === 'gestor_cliente';
