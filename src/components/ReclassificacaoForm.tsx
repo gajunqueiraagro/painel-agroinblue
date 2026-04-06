@@ -237,5 +237,6 @@ export function useReclassificacaoState(props: Props) {
     qtdInput, pesoInput,
     origemInfo, origemLabel, destinoLabel,
     canRegister, handleRegister,
+    setPesoAutoFilled,
   };
 }
