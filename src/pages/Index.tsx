@@ -269,6 +269,7 @@ const Index = () => {
       setMovFiltroMes(undefined);
       setMovDrillLabel(undefined);
       setMovBackTab(undefined);
+      setMovFiltroStatus(undefined);
     }
     if (tab !== 'lancamentos') {
       setLancamentosFromConciliacao(false);
