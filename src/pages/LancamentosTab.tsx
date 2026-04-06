@@ -2551,14 +2551,26 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
         {/* Center: Form or Historico */}
         {aba === 'reclassificacao' ? (
-          <div className="col-span-2 self-start">
-            <ReclassificacaoForm
+          <>
+            <ReclassificacaoFormFields
               onAdicionar={onAdicionar}
               dataInicial={dataInicial}
               lancamentos={lancamentos}
               ano={Number(anoFiltro)}
+              state={reclassState}
             />
-          </div>
+            <ReclassificacaoResumoPanel
+              quantidade={Number(reclassState.quantidade) || 0}
+              pesoKg={Number(reclassState.pesoKg) || 0}
+              origemLabel={reclassState.origemLabel}
+              destinoLabel={reclassState.destinoLabel}
+              pesoMedioOrigem={reclassState.origemInfo.pesoMedio}
+              isPrevisto={reclassState.isPrevisto}
+              onRequestRegister={reclassState.handleRegister}
+              submitting={reclassState.submitting}
+              canRegister={reclassState.canRegister}
+            />
+          </>
         ) : aba === 'historico' ? (
           <div className="col-span-2 self-start">{renderHistorico()}</div>
         ) : (
