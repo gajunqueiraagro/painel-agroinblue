@@ -779,6 +779,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         </div>
       </div>
 
+      <div className="space-y-1 px-2 pt-1">
       {/* Fechamento mensal banner */}
       {singleMonthSelected && fazendaId !== '__all__' && (
         <FechamentoMensalBanner
