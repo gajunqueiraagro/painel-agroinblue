@@ -58,49 +58,66 @@ export function ConsolidacaoCategoriaView({ data, ano, onBack }: Props) {
         })}
       </div>
 
-      <div className="rounded-lg border border-orange-200 mt-0">
-        <table className="w-full table-fixed text-[10px]">
-          <thead>
-            <tr className="bg-orange-500 text-white">
-              <th className={`${TH} text-left`}>Mês</th>
-              <th className={`${TH} bg-orange-600/30`}>Saldo Inicial</th>
-              <th className={TH}>Entradas</th>
-              <th className={TH}>Saídas</th>
-              <th className={TH}>Entr. Internas</th>
-              <th className={TH}>Saíd. Internas</th>
-              <th className={`${TH} bg-orange-600/30`}>Saldo Final</th>
-              <th className={TH}>GMD</th>
-              <th className={TH}>Prod. Bio</th>
-              <th className={TH}>Peso Final</th>
-              <th className={`${TH} bg-orange-600/30`}>PM Final</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={r.mes} className={i % 2 === 0 ? 'bg-background' : 'bg-orange-50/40'}>
-                <td className={`${TD} text-left font-medium`}>{MESES_LABELS[parseInt(r.mes) - 1]}</td>
-                <td className={`${TD} bg-orange-50`}>{fmt(r.si)}</td>
-                <td className={r.ee > 0 ? `${TD} text-emerald-600` : `${TD} text-muted-foreground/40`}>
-                  {r.ee > 0 ? `+${fmt(r.ee)}` : '—'}
-                </td>
-                <td className={r.se > 0 ? `${TD} text-red-600` : `${TD} text-muted-foreground/40`}>
-                  {r.se > 0 ? `-${fmt(r.se)}` : '—'}
-                </td>
-                <td className={r.ei > 0 ? `${TD} text-emerald-600` : `${TD} text-muted-foreground/40`}>
-                  {r.ei > 0 ? `+${fmt(r.ei)}` : '—'}
-                </td>
-                <td className={r.siInternas > 0 ? `${TD} text-red-600` : `${TD} text-muted-foreground/40`}>
-                  {r.siInternas > 0 ? `-${fmt(r.siInternas)}` : '—'}
-                </td>
-                <td className={`${TD} font-bold bg-orange-50`}>{fmt(r.sf)}</td>
-                <td className={`${TD} text-orange-600 italic`}>{fmt(r.gmd, 3)}</td>
-                <td className={TD}>{fmt(r.producaoBio, 1)}</td>
-                <td className={TD}>{fmt(r.pesoTotalFinal, 1)}</td>
-                <td className={`${TD} font-bold bg-orange-50`}>{fmt(r.pesoMedioFinal, 1)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="w-full flex justify-start mt-0">
+        <div className="w-[70%] min-w-[900px]">
+          <div className="rounded-lg border border-orange-200">
+            <table className="w-full table-fixed text-[10px]">
+              <colgroup>
+                <col style={{ width: '18%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: '7%' }} />
+                <col style={{ width: '7%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: '9%' }} />
+                <col style={{ width: '7%' }} />
+                <col style={{ width: '10%' }} />
+                <col style={{ width: '10%' }} />
+                <col style={{ width: '8%' }} />
+              </colgroup>
+              <thead>
+                <tr className="bg-orange-500 text-white">
+                  <th className={`${TH} text-left`}>Mês</th>
+                  <th className={`${TH} bg-orange-600/30`}>Saldo Inicial</th>
+                  <th className={TH}>Entradas</th>
+                  <th className={TH}>Saídas</th>
+                  <th className={TH}>Entr. Internas</th>
+                  <th className={TH}>Saíd. Internas</th>
+                  <th className={`${TH} bg-orange-600/30`}>Saldo Final</th>
+                  <th className={TH}>GMD</th>
+                  <th className={TH}>Prod. Bio</th>
+                  <th className={TH}>Peso Final</th>
+                  <th className={`${TH} bg-orange-600/30`}>PM Final</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={r.mes} className={i % 2 === 0 ? 'bg-background' : 'bg-orange-50/40'}>
+                    <td className={`${TD} text-left font-medium`}>{MESES_LABELS[parseInt(r.mes) - 1]}</td>
+                    <td className={`${TD} bg-orange-50`}>{fmt(r.si)}</td>
+                    <td className={r.ee > 0 ? `${TD} text-emerald-600` : `${TD} text-muted-foreground/40`}>
+                      {r.ee > 0 ? `+${fmt(r.ee)}` : '—'}
+                    </td>
+                    <td className={r.se > 0 ? `${TD} text-red-600` : `${TD} text-muted-foreground/40`}>
+                      {r.se > 0 ? `-${fmt(r.se)}` : '—'}
+                    </td>
+                    <td className={r.ei > 0 ? `${TD} text-emerald-600` : `${TD} text-muted-foreground/40`}>
+                      {r.ei > 0 ? `+${fmt(r.ei)}` : '—'}
+                    </td>
+                    <td className={r.siInternas > 0 ? `${TD} text-red-600` : `${TD} text-muted-foreground/40`}>
+                      {r.siInternas > 0 ? `-${fmt(r.siInternas)}` : '—'}
+                    </td>
+                    <td className={`${TD} font-bold bg-orange-50`}>{fmt(r.sf)}</td>
+                    <td className={`${TD} text-orange-600 italic`}>{fmt(r.gmd, 3)}</td>
+                    <td className={TD}>{fmt(r.producaoBio, 1)}</td>
+                    <td className={TD}>{fmt(r.pesoTotalFinal, 1)}</td>
+                    <td className={`${TD} font-bold bg-orange-50`}>{fmt(r.pesoMedioFinal, 1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );
