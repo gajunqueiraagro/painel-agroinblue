@@ -134,6 +134,7 @@ const Index = () => {
   const [movDrillLabel, setMovDrillLabel] = useState<string | undefined>(undefined);
   const [movBackTab, setMovBackTab] = useState<TabId | undefined>(undefined);
   const [lancamentosFromConciliacao, setLancamentosFromConciliacao] = useState(false);
+  const [conciliacaoContext, setConciliacaoContext] = useState<{ ano: string; mes: string; contaId: string } | null>(null);
   const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
   const [lancamentosFromFechamento, setLancamentosFromFechamento] = useState(false);
   const [lancamentosFromEvolCategoria, setLancamentosFromEvolCategoria] = useState(false);
@@ -571,10 +572,24 @@ const Index = () => {
       {activeTab === 'fin_v2_contas' && <FinV2ContasTab />}
       {activeTab === 'fin_v2_fornecedores' && <FinV2FornecedoresTab />}
       {activeTab === 'fin_v2_plano' && <FinV2PlanoContasTab />}
-      {activeTab === 'fin_v2_saldos' && <FinV2SaldosTab />}
+      {activeTab === 'fin_v2_saldos' && (
+        <FinV2SaldosTab
+          onNavigateToConciliacao={(ano, mes, contaId) => {
+            setConciliacaoContext({ ano, mes, contaId });
+            setActiveTab('conciliacao_bancaria');
+          }}
+        />
+      )}
       {activeTab === 'contratos' && <ContratosTab />}
       {activeTab === 'conciliacao_bancaria' && (
         <ConciliacaoBancariaTab
+          initialAno={conciliacaoContext?.ano}
+          initialConta={conciliacaoContext?.contaId}
+          initialMes={conciliacaoContext?.mes}
+          onBack={conciliacaoContext ? () => {
+            setConciliacaoContext(null);
+            setActiveTab('fin_v2_saldos');
+          } : undefined}
           onNavigateToLancamentos={(a, m) => {
             setFiltroGlobal({ ano: a, mes: m });
             setActiveTab('financeiro_v2');

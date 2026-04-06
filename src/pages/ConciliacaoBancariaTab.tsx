@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
-  CheckCircle2, AlertTriangle, XCircle, Pencil, ExternalLink,
+  CheckCircle2, AlertTriangle, XCircle, Pencil, ExternalLink, ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
@@ -113,9 +113,13 @@ const STATUS_CONFIG = {
 
 interface ConciliacaoProps {
   onNavigateToLancamentos?: (ano: string, mes: number) => void;
+  onBack?: () => void;
+  initialAno?: string;
+  initialConta?: string;
+  initialMes?: string;
 }
 
-export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoProps = {}) {
+export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initialAno, initialConta, initialMes }: ConciliacaoProps = {}) {
   const { clienteAtual } = useCliente();
   const perm = usePermissions();
   const isAdmin = perm.perfil === 'admin_agroinblue' || perm.perfil === 'gestor_cliente';
@@ -130,14 +134,14 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
     return arr;
   }, [currentYear]);
 
-  const [ano, setAno] = useState(String(currentYear));
-  const [contaId, setContaId] = useState<string>('__all__');
+  const [ano, setAno] = useState(initialAno || String(currentYear));
+  const [contaId, setContaId] = useState<string>(initialConta || '__all__');
   const [contas, setContas] = useState<ContaRef[]>([]);
   const [fornecedores, setFornecedores] = useState<FornecedorRef[]>([]);
   const [saldos, setSaldos] = useState<SaldoRow[]>([]);
   const [lancamentos, setLancamentos] = useState<LancamentoResumo[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedMes, setSelectedMes] = useState<string>(String(currentMonth).padStart(2, '0'));
+  const [selectedMes, setSelectedMes] = useState<string>(initialMes || String(currentMonth).padStart(2, '0'));
   const [filtroTipoLanc, setFiltroTipoLanc] = useState<'todos' | 'entradas' | 'saidas' | 'transf_entrada' | 'transf_saida'>('todos');
   const [editingSaldo, setEditingSaldo] = useState<{ anoMes: string; contaId: string; current: number } | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -407,6 +411,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
       <div className="p-3 space-y-2">
         {/* Header: filtros + meses */}
         <div className="flex items-center gap-2">
+          {onBack && (
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onBack}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
           <Select value={ano} onValueChange={setAno}>
             <SelectTrigger className="h-7 text-xs w-[72px]"><SelectValue /></SelectTrigger>
             <SelectContent>
