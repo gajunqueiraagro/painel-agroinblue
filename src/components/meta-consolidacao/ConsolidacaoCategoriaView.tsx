@@ -64,7 +64,7 @@ export function ConsolidacaoCategoriaView({ data, ano, onBack }: Props) {
       </div>
 
       <div className="w-full flex justify-start mt-0">
-        <div className="w-[70%] min-w-[900px]">
+        <div className="w-[60%] min-w-[900px]">
           <div className="rounded-lg border border-orange-200">
             <table className="w-full table-fixed text-[10px]">
               <colgroup>
