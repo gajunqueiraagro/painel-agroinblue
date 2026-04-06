@@ -194,6 +194,12 @@ export function MetaPrecoTab({ onBack }: Props) {
   return (
     <div className="w-full px-4 animate-fade-in pb-24">
       <div className="p-4 space-y-3">
+        {onBack && (
+          <button onClick={onBack} className="flex items-center gap-1 text-xs text-primary hover:underline mb-1">
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Voltar para Painel do Consultor
+          </button>
+        )}
         <Card>
           <CardContent className="p-3">
             <div className="flex items-center gap-2 flex-wrap">
