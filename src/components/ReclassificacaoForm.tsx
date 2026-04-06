@@ -210,6 +210,7 @@ export function useReclassificacaoState(props: Props) {
         });
         setQuantidade('');
         setPesoKg('');
+        setPesoAutoFilled(false);
       } else {
         toast.error('Não foi possível registrar a reclassificação.', {
           description: 'Verifique os dados e tente novamente.',
