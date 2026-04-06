@@ -162,32 +162,17 @@ export function FinV2SaldosTab() {
     setContas((cData as ContaRef[]) || []);
     setAllSaldos((allData as SaldoBancario[]) || []);
 
+    // CRITICAL: filter by STATUS_REALIZADOS to match Conciliação tab logic
     const { data: movData } = await supabase
       .from('financeiro_lancamentos_v2')
       .select('conta_bancaria_id, conta_destino_id, ano_mes, valor, sinal, tipo_operacao')
       .eq('cliente_id', clienteAtual.id)
       .eq('cancelado', false)
+      .in('status_transacao', [...STATUS_REALIZADOS])
       .not('conta_bancaria_id', 'is', null);
 
     if (movData) {
-      const summary: Record<string, { entradas: number; saidas: number }> = {};
-      for (const l of movData as any[]) {
-        const key = `${l.conta_bancaria_id}|${l.ano_mes}`;
-        if (!summary[key]) summary[key] = { entradas: 0, saidas: 0 };
-
-        // Transfer with destination: always debit origin, credit destination
-        if (l.tipo_operacao === '3-Transferência' && l.conta_destino_id) {
-          summary[key].saidas += Number(l.valor);
-          const destKey = `${l.conta_destino_id}|${l.ano_mes}`;
-          if (!summary[destKey]) summary[destKey] = { entradas: 0, saidas: 0 };
-          summary[destKey].entradas += Number(l.valor);
-        } else {
-          // Normal flow: positive = entry, negative = exit
-          if (l.sinal > 0) summary[key].entradas += Number(l.valor);
-          else summary[key].saidas += Number(l.valor);
-        }
-      }
-      setMovSummary(summary);
+      setMovSummary(buildMovSummary(movData as MovimentoResumo[]));
     }
     setLoading(false);
   }, [clienteAtual?.id, filtroAno, filtroMes]);
