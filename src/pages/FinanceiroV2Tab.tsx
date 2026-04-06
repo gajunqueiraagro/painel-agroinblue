@@ -537,7 +537,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <label className={lblCls}>Mês</label>
               <Popover open={mesPopoverOpen} onOpenChange={setMesPopoverOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-6 text-[10px] justify-between font-normal px-1.5 w-full bg-background border-[hsl(210_20%_80%)]">
+                  <Button variant="outline" className="h-6 text-[10px] justify-between font-normal px-1.5 w-full bg-white border-[#C9D4E2] hover:border-[#AFC2D8]">
                     {mesLabel}
                     <ChevronsUpDown className="h-2.5 w-2.5 opacity-50" />
                   </Button>
