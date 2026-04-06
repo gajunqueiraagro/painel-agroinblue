@@ -153,6 +153,7 @@ const Index = () => {
   const [lancamentosFromFluxoAnual, setLancamentosFromFluxoAnual] = useState(false);
   const [metaLancAnoFiltro, setMetaLancAnoFiltro] = useState<string | undefined>(undefined);
   const [metaLancMesFiltro, setMetaLancMesFiltro] = useState<string | undefined>(undefined);
+  const [metaLancAbaInicial, setMetaLancAbaInicial] = useState<'historico' | 'reclassificacao' | undefined>(undefined);
   const [abateParaEditar, setAbateParaEditar] = useState<Lancamento | null>(null);
   const [vendaParaEditar, setVendaParaEditar] = useState<Lancamento | null>(null);
   const [compraParaEditar, setCompraParaEditar] = useState<Lancamento | null>(null);
@@ -639,12 +640,13 @@ const Index = () => {
           onBackToConciliacao={() => {
             setMetaLancAnoFiltro(undefined);
             setMetaLancMesFiltro(undefined);
+            setMetaLancAbaInicial(undefined);
             setActiveTab('painel_consultor_hub');
           }}
           backLabel="Voltar para Painel do Consultor"
           initialAnoFiltro={metaLancAnoFiltro}
           initialMesFiltro={metaLancMesFiltro}
-          abaInicial={metaLancAnoFiltro ? 'historico' : undefined}
+          abaInicial={metaLancAbaInicial || (metaLancAnoFiltro ? 'historico' : undefined)}
         />
       )}
       {activeTab === 'meta_consolidacao' && (
@@ -657,6 +659,10 @@ const Index = () => {
           onNavigateToLancamentos={(anoVal, mesVal) => {
             setMetaLancAnoFiltro(anoVal);
             setMetaLancMesFiltro(mesVal);
+            setActiveTab('meta_movimentacoes');
+          }}
+          onNavigateToReclass={() => {
+            setMetaLancAbaInicial('reclassificacao');
             setActiveTab('meta_movimentacoes');
           }}
         />
