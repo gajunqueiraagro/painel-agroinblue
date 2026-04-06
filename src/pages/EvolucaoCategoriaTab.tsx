@@ -368,21 +368,11 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
     return total;
   }, [dados, precosRebanho]);
 
-  const hasPastosData = Object.keys(pastosQtdPorCat).length > 0 || conciliacaoOficialLoaded;
-  const showDelta = hasPastosData && statusFiltro === 'realizado';
   const isRealizado = statusFiltro === 'realizado';
 
   const formatPeso = (v: number | null) => {
     if (v === null || v === undefined || v <= 0) return '—';
     return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
-
-  const getDeltaStyle = (delta: number, saldoFinal: number) => {
-    if (saldoFinal === 0 && delta === 0) return { dot: 'bg-muted-foreground/30', text: 'text-transparent' };
-    if (delta === 0) return { dot: 'bg-green-500', text: 'text-green-700' };
-    const ratio = saldoFinal > 0 ? Math.abs(delta) / saldoFinal : 1;
-    if (ratio <= 0.05) return { dot: 'bg-yellow-500', text: 'text-yellow-700' };
-    return { dot: 'bg-red-500', text: 'text-red-700' };
   };
 
   const MESES_CURTOS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
