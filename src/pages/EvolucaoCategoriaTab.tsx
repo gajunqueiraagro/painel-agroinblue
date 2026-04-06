@@ -58,6 +58,9 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   const [rebanhoStatus, setRebanhoStatus] = useState<'aberto' | 'fechado' | null>(null);
   const [precosRebanho, setPrecosRebanho] = useState<Record<string, number>>({});
   const [pastosQtdPorCat, setPastosQtdPorCat] = useState<Record<string, number>>({});
+  // Official conciliation divergences from RPC (same source as official conciliation screen)
+  const [conciliacaoOficial, setConciliacaoOficial] = useState<Record<string, { saldo_sistema: number; saldo_pastos: number; diferenca: number }>>({});
+  const [conciliacaoOficialLoaded, setConciliacaoOficialLoaded] = useState(false);
 
   // Fetch conciliação status for the selected month/fazenda
   useEffect(() => {
