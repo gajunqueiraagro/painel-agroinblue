@@ -144,12 +144,11 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   }, [fazendaId, anoFiltro, mesFiltro]);
 
 
-  // Fetch pesos from fechamento_pastos + fechamento_pasto_itens AND aggregate qty per category
+  // Fetch pesos from fechamento_pastos + fechamento_pasto_itens
   useEffect(() => {
     const anoMes = `${anoFiltro}-${mesFiltro}`;
     if (!fazendaId || fazendaId === '__global__') {
       setPesosDb({});
-      setPastosQtdPorCat({});
       return;
     }
 
@@ -170,7 +169,6 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
         (catData || []).forEach(c => { catMap[c.id] = c.codigo; });
 
         const pesosPorCat: Record<string, { somaQtdPeso: number; somaQtd: number }> = {};
-        const qtdPorCat: Record<string, number> = {};
 
         if (fechIds.length > 0) {
           const { data: itens } = await supabase
@@ -181,11 +179,6 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
           (itens || []).forEach((item) => {
             const codigo = catMap[item.categoria_id];
             if (!codigo) return;
-
-            // Aggregate quantity per category (for conciliation)
-            qtdPorCat[codigo] = (qtdPorCat[codigo] || 0) + item.quantidade;
-
-            // Aggregate peso
             if (!item.peso_medio_kg || item.peso_medio_kg <= 0) return;
             if (!pesosPorCat[codigo]) pesosPorCat[codigo] = { somaQtdPeso: 0, somaQtd: 0 };
             pesosPorCat[codigo].somaQtdPeso += item.quantidade * item.peso_medio_kg;
@@ -198,42 +191,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
           if (v.somaQtd > 0) result[cod] = v.somaQtdPeso / v.somaQtd;
         }
 
-  // Fetch official conciliation from the same RPC used by the official conciliation screen
-  useEffect(() => {
-    const anoMes = `${anoFiltro}-${mesFiltro}`;
-    if (!fazendaId || fazendaId === '__global__') {
-      setConciliacaoOficial({});
-      setConciliacaoOficialLoaded(false);
-      return;
-    }
-    (async () => {
-      try {
-        const { data, error } = await supabase.rpc('validar_conciliacao_rebanho', {
-          _fazenda_id: fazendaId,
-          _ano_mes: anoMes,
-        });
-        if (error) throw error;
-        const result: Record<string, { saldo_sistema: number; saldo_pastos: number; diferenca: number }> = {};
-        const divergencias = (data as any)?.divergencias || [];
-        divergencias.forEach((d: any) => {
-          if (d.categoria) {
-            result[d.categoria] = {
-              saldo_sistema: d.saldo_sistema ?? 0,
-              saldo_pastos: d.saldo_pastos ?? 0,
-              diferenca: d.diferenca ?? 0,
-            };
-          }
-        });
-        setConciliacaoOficial(result);
-        setConciliacaoOficialLoaded(true);
-      } catch {
-        setConciliacaoOficial({});
-        setConciliacaoOficialLoaded(false);
-      }
-    })();
-  }, [fazendaId, anoFiltro, mesFiltro]);
-
-
+        // Fallback: if no fechamento data, use saldosIniciais peso_medio_kg
         if (Object.keys(result).length === 0) {
           saldosIniciais
             .filter(s => s.ano === Number(anoFiltro) && s.pesoMedioKg && s.pesoMedioKg > 0)
@@ -241,14 +199,12 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
         }
 
         setPesosDb(result);
-        setPastosQtdPorCat(qtdPorCat);
       } catch {
         const result: Record<string, number> = {};
         saldosIniciais
           .filter(s => s.ano === Number(anoFiltro) && s.pesoMedioKg && s.pesoMedioKg > 0)
           .forEach(s => { result[s.categoria] = s.pesoMedioKg!; });
         setPesosDb(result);
-        setPastosQtdPorCat({});
       }
     })();
   }, [fazendaId, anoFiltro, mesFiltro, saldosIniciais]);
