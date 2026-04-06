@@ -462,7 +462,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
               </SelectContent>
             </Select>
 
-            {!loading && saldos.length > 0 && filtroMes !== 'todos' && (
+            {!loading && saldos.length > 0 && filtroMes !== '__all__' && (
               <div className="flex items-center gap-2">
                 {grouped.map(g => (
                   <div key={g.tipo} className="border border-border rounded-md px-3 py-1">
@@ -517,8 +517,9 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                       const isAuto = s.origem_saldo_inicial === 'automatico';
                       const editable = canEditSaldoFinal(s);
                       const blockReason = getEditBlockReason(s);
-                      // Chain integrity check
+                      // Chain integrity: always use previous month's saldo_final as saldo_inicial
                       const prevFinal = findPrevSaldoFinal(s.conta_bancaria_id, s.ano_mes);
+                      const saldoInicialEfetivo = prevFinal !== null ? prevFinal : s.saldo_inicial;
                       const chainBroken = prevFinal !== null && Math.abs(prevFinal - s.saldo_inicial) > 0.01;
 
                       return (
@@ -527,19 +528,10 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                           <TableCell className="py-1">{contaNome(s.conta_bancaria_id)}</TableCell>
                           <TableCell className="text-right tabular-nums py-1">
                             <div className="flex items-center justify-end gap-1">
-                              {chainBroken ? (
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <AlertTriangle className="h-3 w-3 text-red-500 shrink-0" />
-                                  </TooltipTrigger>
-                                  <TooltipContent className="text-[10px] max-w-[200px]">
-                                    Inconsistência de saldo entre meses. Esperado: {formatMoeda(prevFinal!)} | Atual: {formatMoeda(s.saldo_inicial)}
-                                  </TooltipContent>
-                                </Tooltip>
-                              ) : isAuto ? (
+                              {prevFinal !== null ? (
                                 <Link2 className="h-3 w-3 text-emerald-500 shrink-0" />
                               ) : null}
-                              {formatMoeda(s.saldo_inicial)}
+                              {formatMoeda(saldoInicialEfetivo)}
                             </div>
                           </TableCell>
                           <TableCell className="text-right tabular-nums font-semibold py-1">
@@ -563,7 +555,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                             {(() => {
                               const key = `${s.conta_bancaria_id}|${s.ano_mes}`;
                               const mov = movSummary[key];
-                              const saldoCalculado = s.saldo_inicial + (mov ? mov.entradas - mov.saidas : 0);
+                              const saldoCalculado = saldoInicialEfetivo + (mov ? mov.entradas - mov.saidas : 0);
                               const diff = Math.abs(s.saldo_final - saldoCalculado);
                               const isConciliado = diff < 0.01;
 
