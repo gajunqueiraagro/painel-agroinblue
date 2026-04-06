@@ -31,6 +31,12 @@ export function MetaGmdTab({ onBack }: Props) {
   return (
     <div className="w-full px-2 animate-fade-in pb-24">
       <div className="p-2 space-y-3">
+        {onBack && (
+          <button onClick={onBack} className="flex items-center gap-1 text-xs text-primary hover:underline mb-1">
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Voltar para Painel do Consultor
+          </button>
+        )}
         {/* Filtro Ano */}
         <Card>
           <CardContent className="p-3">

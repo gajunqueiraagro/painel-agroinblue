@@ -12,7 +12,7 @@ import { MESES_NOMES } from '@/lib/calculos/labels';
 import { BLOCOS_PRECO, type PrecoMercadoItem } from '@/hooks/usePrecoMercado';
 import { useMetaPrecoMercado } from '@/hooks/useMetaPrecoMercado';
 import { usePermissions } from '@/hooks/usePermissions';
-import { Lock, Unlock, Save, CheckCircle, AlertTriangle, Copy } from 'lucide-react';
+import { Lock, Unlock, Save, CheckCircle, AlertTriangle, Copy, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Props {
