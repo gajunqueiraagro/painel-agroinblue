@@ -109,6 +109,13 @@ function fmtDate(d: string | null) {
   if (!d) return '-';
   try { return format(parseISO(d), 'dd/MM/yy'); } catch { return d; }
 }
+function formatNF(nf: string | null | undefined): string {
+  if (!nf) return '-';
+  const digits = nf.replace(/\D/g, '');
+  if (!digits) return '-';
+  const padded = digits.padStart(9, '0').slice(-9);
+  return `${padded.slice(0, 3)}.${padded.slice(3, 6)}.${padded.slice(6, 9)}`;
+}
 
 interface Props {
   onBack?: () => void;
@@ -799,8 +806,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                   <th className="px-0.5 py-[3px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[40px] z-30 bg-primary w-[40px]" onClick={() => toggleSort('pgto')}>Pgto{sortIcon('pgto')}</th>
                   <th className="px-1 py-[3px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto{sortIcon('produto')}</th>
                   <th className="px-1 py-[3px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor{sortIcon('fornecedor')}</th>
+                  <th className="px-1 py-[3px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Centro</th>
                   <th className="px-1 py-[3px] text-right align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none w-[110px]" onClick={() => toggleSort('valor')}>Valor{sortIcon('valor')}</th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground w-[72px]">NF</th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground w-[90px]">NF</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground w-[68px]">Status</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground w-[40px]"></th>
                 </tr>
@@ -808,7 +816,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <tbody className="[&_tr:last-child]:border-0">
                 {totalLancamentosFiltrados === 0 ? (
                   <tr className="border-b">
-                    <td colSpan={8} className="text-center text-muted-foreground py-4 text-[10px]">
+                    <td colSpan={9} className="text-center text-muted-foreground py-4 text-[10px]">
                       Nenhum lançamento encontrado.
                     </td>
                   </tr>
@@ -831,10 +839,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                         <td className="truncate max-w-0 px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
                         </td>
+                        <td className="truncate max-w-0 px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={l.centro_custo || ''}>{l.centro_custo || '-'}</td>
                         <td className={`text-right font-semibold w-[110px] whitespace-nowrap px-2 py-1 align-middle text-[12px] leading-tight ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
                           {fmtValor(l.valor, l.sinal)}
                         </td>
-                        <td className="font-mono text-muted-foreground text-center w-[72px] px-1 py-1 align-middle text-[12px] leading-tight">{l.nota_fiscal || '-'}</td>
+                        <td className="font-mono text-muted-foreground text-center w-[90px] px-1 py-1 align-middle text-[12px] leading-tight">{formatNF(l.nota_fiscal)}</td>
                         <td className={`text-center w-[68px] px-1 py-1 align-middle text-[12px] leading-tight ${stColor}`}>{stLabel}</td>
                         <td className="!py-0 px-0 w-[40px] align-middle">
                           <div className="flex items-center justify-center gap-0.5">
