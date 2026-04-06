@@ -818,7 +818,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             contas={hook.contasBancarias}
             onFixed={() => hook.loadLancamentos(filtros, hook.page)}
           />
-           <div ref={scrollContainerRef} className="rounded-lg border border-[hsl(var(--border))] overflow-auto relative pr-3" style={{ maxHeight: 'calc(100vh - 260px - var(--bottom-nav-safe, 64px))' }}>
+           <div ref={scrollContainerRef} className="rounded-lg border border-[hsl(var(--border))] overflow-auto relative pr-3" style={{ maxHeight: 'calc(100vh - 140px - var(--bottom-nav-safe, 64px))' }}>
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: 62 }} />
