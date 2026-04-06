@@ -645,6 +645,7 @@ const Index = () => {
           gmdRows={metaGmd.rows}
           ano={Number(filtroGlobal.ano)}
           onBack={() => setActiveTab('painel_consultor_hub')}
+          onNavigateToLancamentos={() => setActiveTab('meta_movimentacoes')}
         />
       )}
       </div>
