@@ -2904,6 +2904,7 @@ export type Database = {
           cancelado_por: string | null
           categoria: string
           categoria_destino: string | null
+          cenario: string
           cliente_id: string
           created_at: string
           created_by: string | null
@@ -2950,6 +2951,7 @@ export type Database = {
           cancelado_por?: string | null
           categoria: string
           categoria_destino?: string | null
+          cenario?: string
           cliente_id: string
           created_at?: string
           created_by?: string | null
@@ -2996,6 +2998,7 @@ export type Database = {
           cancelado_por?: string | null
           categoria?: string
           categoria_destino?: string | null
+          cenario?: string
           cliente_id?: string
           created_at?: string
           created_by?: string | null
