@@ -132,7 +132,8 @@ export function MetaGmdTab({ onBack }: Props) {
                               type="number"
                               step="0.001"
                               min="0"
-                              value={val ? val.toFixed(3) : ''}
+                              tabIndex={m * rows.length + idx + 1}
+                              value={val.toFixed(3)}
                               onChange={e => updateCell(row.categoria, key, parseFloat(e.target.value) || 0)}
                               className="h-5 text-[10px] text-center w-full px-0 italic text-orange-600 border-orange-200 focus:border-orange-400 hover:bg-orange-50/50 transition-colors"
                             />
