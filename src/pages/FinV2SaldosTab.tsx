@@ -555,7 +555,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                             {(() => {
                               const key = `${s.conta_bancaria_id}|${s.ano_mes}`;
                               const mov = movSummary[key];
-                              const saldoCalculado = saldoInicialEfetivo + (mov ? mov.entradas - mov.saidas : 0);
+                              const saldoCalculado = s.saldo_inicial + (mov ? mov.entradas - mov.saidas : 0);
                               const diff = Math.abs(s.saldo_final - saldoCalculado);
                               const isConciliado = diff < 0.01;
 
