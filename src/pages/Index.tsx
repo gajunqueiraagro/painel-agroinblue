@@ -145,6 +145,7 @@ const Index = () => {
   const [movFiltroMes, setMovFiltroMes] = useState<string | undefined>(undefined);
   const [movDrillLabel, setMovDrillLabel] = useState<string | undefined>(undefined);
   const [movBackTab, setMovBackTab] = useState<TabId | undefined>(undefined);
+  const [movFiltroStatus, setMovFiltroStatus] = useState<string | undefined>(undefined);
   const [lancamentosFromConciliacao, setLancamentosFromConciliacao] = useState(false);
   const [conciliacaoContext, setConciliacaoContext] = useState<{ ano: string; mes: string; contaId: string } | null>(null);
   const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
@@ -268,6 +269,7 @@ const Index = () => {
       setMovFiltroMes(undefined);
       setMovDrillLabel(undefined);
       setMovBackTab(undefined);
+      setMovFiltroStatus(undefined);
     }
     if (tab !== 'lancamentos') {
       setLancamentosFromConciliacao(false);
@@ -536,7 +538,7 @@ const Index = () => {
           filtroMesInicial={movFiltroMes}
           drillDownLabel={movDrillLabel}
           onBack={movBackTab ? () => setActiveTab(movBackTab) : undefined}
-          filtroStatusInicial={editOriginTab === 'financeiro' ? editOriginStatusFiltro : undefined}
+          filtroStatusInicial={movFiltroStatus || (editOriginTab === 'financeiro' ? editOriginStatusFiltro : undefined)}
           onEditarAbate={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setAbateParaEditar(l); setActiveTab('lancamentos'); }}
           onEditarVenda={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setVendaParaEditar(l); setActiveTab('lancamentos'); }}
           onEditarCompra={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setCompraParaEditar(l); setActiveTab('lancamentos'); }}
@@ -700,10 +702,13 @@ const Index = () => {
           ano={Number(filtroGlobal.ano)}
           onBack={() => setActiveTab('painel_consultor_hub')}
           onNavigateToLancamentos={(anoVal, mesVal, catVal) => {
-            setMetaLancAbaInicial('historico');
-            setMetaLancAnoFiltro(anoVal);
-            setMetaLancMesFiltro(mesVal);
-            setActiveTab('meta_movimentacoes');
+            setSubAbaFinanceiro(undefined);
+            setMovFiltroAno(anoVal);
+            setMovFiltroMes(mesVal);
+            setMovFiltroStatus('previsto');
+            setMovBackTab('meta_consolidacao');
+            setMovDrillLabel('Voltar para Consolidação');
+            setActiveTab('financeiro');
           }}
           onNavigateToReclass={(mesVal) => {
             setMetaLancAbaInicial('reclassificacao');
