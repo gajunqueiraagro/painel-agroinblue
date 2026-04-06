@@ -880,10 +880,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         open={correcaoOpen}
         onClose={() => setCorrecaoOpen(false)}
         contas={hook.contasBancarias}
-        onFixed={() => {
-          const filtros = buildFiltros();
-          if (filtros) hook.loadLancamentos(filtros);
-        }}
+        onFixed={() => hook.loadLancamentos(filtros, hook.page)}
       />
     </div>
   );
