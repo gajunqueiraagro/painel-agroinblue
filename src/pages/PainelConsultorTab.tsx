@@ -648,7 +648,204 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
   }
 }
 
-// ─── Total logic ───
+// ─── Build blocos from MetaConsolidacao (validated consolidation) ───
+function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number): Bloco[] {
+  // Aggregate across all categories per month
+  const agg = (field: keyof MetaCategoriaMes): number[] =>
+    Array.from({ length: 12 }, (_, i) => {
+      const mesKey = String(i + 1).padStart(2, '0');
+      return consolidacao
+        .filter(c => c.mes === mesKey)
+        .reduce((s, c) => s + (Number(c[field]) || 0), 0);
+    });
+
+  const cabIni = agg('si');
+  const cabFin = agg('sf');
+  const entradas = agg('ee');
+  const saidas = agg('se');
+  const pesoIni = agg('pesoInicial');
+  const pesoFin = agg('pesoTotalFinal');
+  const prodBio = agg('producaoBio');
+
+  // Peso médio final = peso total final / SF (weighted across categories)
+  const pesoMedFin = Array.from({ length: 12 }, (_, i) => {
+    const sf = cabFin[i];
+    return sf > 0 ? pesoFin[i] / sf : 0;
+  });
+
+  const pesoMedIni = cabIni.map((c, i) => c > 0 ? pesoIni[i] / c : 0);
+  const cabMedia = cabIni.map((v, i) => (v + cabFin[i]) / 2);
+
+  // GMD: produção biológica / (cab média × dias)
+  const gmd = Array.from({ length: 12 }, (_, i) => {
+    const cm = cabMedia[i];
+    const mesNum = i + 1;
+    const ano = consolidacao.length > 0 ? new Date().getFullYear() : new Date().getFullYear();
+    // Get dias from first matching row
+    const row = consolidacao.find(c => c.mes === String(mesNum).padStart(2, '0'));
+    const dias = row?.dias || new Date(ano, mesNum, 0).getDate();
+    if (cm <= 0 || dias <= 0) return 0;
+    return prodBio[i] / (cm * dias);
+  });
+
+  // Arrobas produzidas = produção biológica / 30
+  const arrobasProd = prodBio.map(v => v / 30);
+  const prodKgArr = prodBio;
+
+  const uaMedia = cabMedia.map((v, i) => pesoMedFin[i] > 0 ? (v * pesoMedFin[i]) / 450 : 0);
+  const lotacao = uaMedia.map(v => areaProd > 0 ? v / areaProd : 0);
+  const arrHa = arrobasProd.map(v => areaProd > 0 ? v / areaProd : 0);
+  const desfruteCab = saidas;
+  const desfrute_arr = saidas.map((v, i) => pesoMedFin[i] > 0 ? (v * pesoMedFin[i]) / 30 : 0);
+
+  const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string): Row => {
+    let valores: number[];
+    switch (tab) {
+      case 'mensal': valores = raw; break;
+      case 'medio': valores = raw; break;
+      case 'acumulado': valores = cumSum(raw); break;
+      case 'media_periodo': valores = rollingAvg(raw); break;
+    }
+    return { indicador, format, valores, indicadorId };
+  };
+
+  const emptyMoney = Array(12).fill(0);
+
+  switch (tab) {
+    case 'mensal':
+      return [
+        {
+          nome: 'Rebanho',
+          rows: [
+            r('Reb. inicial (cab)', 'cab', cabIni, 'reb_inicial'),
+            r('Reb. final (cab)', 'cab', cabFin, 'reb_final'),
+            r('Entradas (cab)', 'cab', entradas, 'entradas_cab'),
+            r('Saídas (cab)', 'cab', saidas, 'saidas_cab'),
+          ],
+        },
+        {
+          nome: 'Peso',
+          rows: [
+            r('Peso ini. (kg)', 'padrao', pesoIni, 'peso_ini_kg'),
+            r('Peso final (kg)', 'padrao', pesoFin, 'peso_fin_kg'),
+            r('Peso ini. (@)', 'padrao', pesoIni.map(v => v / 30), 'peso_ini_arr'),
+            r('Peso final (@)', 'padrao', pesoFin.map(v => v / 30), 'peso_fin_arr'),
+            r('Peso méd. ini.', 'med2', pesoMedIni, 'peso_med_ini'),
+            r('Peso méd. final', 'med2', pesoMedFin, 'peso_med_fin'),
+          ],
+        },
+        {
+          nome: 'Valor do Rebanho',
+          rows: [
+            r('Valor reb. inicial', 'money', emptyMoney, 'valor_reb_ini'),
+            r('Valor reb. final', 'money', emptyMoney, 'valor_reb_fin'),
+            r('Valor/cab final', 'money', emptyMoney, 'valor_cab_fin'),
+            r('Valor/@ final', 'money', emptyMoney, 'valor_arr_fin'),
+          ],
+        },
+      ];
+    case 'medio':
+      return [
+        {
+          nome: 'Desempenho',
+          rows: [
+            r('GMD (kg/cab/dia)', 'gmd', gmd, 'gmd'),
+            r('Peso méd. reb.', 'med2', pesoMedFin, 'peso_med_reb'),
+            r('UA média', 'med2', uaMedia, 'ua_media'),
+            r('Lotação (UA/ha)', 'med2', lotacao, 'lotacao'),
+          ],
+        },
+        {
+          nome: 'Produção',
+          rows: [
+            r('@ produzidas', 'padrao', arrobasProd, 'arrobas_prod'),
+            r('Produção (kg)', 'padrao', prodKgArr, 'prod_kg'),
+            r('@/ha', 'med2', arrHa, 'arr_ha'),
+            r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
+            r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
+          ],
+        },
+        {
+          nome: 'Estrutura',
+          rows: [
+            r('Área prod. (ha)', 'med2', Array(12).fill(areaProd), 'area_prod'),
+            r('Reb. médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio'),
+          ],
+        },
+      ];
+    case 'acumulado':
+      return [
+        {
+          nome: 'Rebanho',
+          rows: [
+            r('Entradas acum. (cab)', 'cab', entradas, 'entradas_acum'),
+            r('Saídas acum. (cab)', 'cab', saidas, 'saidas_acum'),
+            r('Saldo acum. reb.', 'cab', entradas.map((v, i) => v - saidas[i]), 'saldo_acum'),
+          ],
+        },
+        {
+          nome: 'Produção',
+          rows: [
+            r('@ produzidas acum.', 'padrao', arrobasProd, 'arrobas_acum'),
+            r('Produção kg acum.', 'padrao', prodKgArr, 'prod_kg_acum'),
+            r('@/ha acum.', 'med2', arrHa, 'arr_ha_acum'),
+            r('Desfrute acum. (cab)', 'cab', desfruteCab, 'desfrute_acum_cab'),
+            r('Desfrute acum. (@)', 'padrao', desfrute_arr, 'desfrute_acum_arr'),
+          ],
+        },
+        {
+          nome: 'Financeiro no Caixa',
+          rows: [
+            r('Entradas fin. acum.', 'money', emptyMoney, 'ent_fin_acum'),
+            r('Saídas fin. acum.', 'money', emptyMoney, 'sai_fin_acum'),
+            r('Rec. pec. acum.', 'money', emptyMoney, 'rec_pec_acum'),
+            r('Res. caixa acum.', 'money', emptyMoney, 'res_caixa_acum'),
+          ],
+        },
+        {
+          nome: 'Financeiro por Competência',
+          rows: [
+            r('Rec. pec. comp. acum.', 'money', emptyMoney, 'rec_pec_comp_acum'),
+            r('Res. oper. acum.', 'money', emptyMoney, 'res_oper_acum'),
+            r('EBITDA acum.', 'money', emptyMoney, 'ebitda_acum'),
+            r('Var. valor reb.', 'money', emptyMoney, 'var_valor_reb'),
+          ],
+        },
+      ];
+    case 'media_periodo':
+      return [
+        {
+          nome: 'Desempenho Médio',
+          rows: [
+            r('GMD médio período', 'gmd', gmd, 'gmd_medio'),
+            r('Peso médio período', 'med2', pesoMedFin, 'peso_medio_periodo'),
+            r('UA média período', 'med2', uaMedia, 'ua_media_periodo'),
+            r('Lotação média', 'med2', lotacao, 'lotacao_media'),
+          ],
+        },
+        {
+          nome: 'Produção Média',
+          rows: [
+            r('@/ha média período', 'med2', arrHa, 'arr_ha_media'),
+            r('Prod. média (@)', 'padrao', arrobasProd, 'prod_media_arr'),
+            r('Prod. média (kg)', 'padrao', prodKgArr, 'prod_media_kg'),
+            r('Desfrute médio', 'cab', desfruteCab, 'desfrute_medio'),
+          ],
+        },
+        {
+          nome: 'Financeiro Médio',
+          rows: [
+            r('Receita média', 'money', emptyMoney, 'receita_media'),
+            r('Res. oper. médio', 'money', emptyMoney, 'res_oper_medio'),
+            r('EBITDA médio', 'money', emptyMoney, 'ebitda_medio'),
+            r('Res. caixa médio', 'money', emptyMoney, 'res_caixa_medio'),
+          ],
+        },
+      ];
+  }
+}
+
+
 function totalForRow(row: Row, tab: ViewTab, maxMonth: number): number {
   if (tab === 'acumulado' || tab === 'media_periodo') {
     const idx = Math.min(maxMonth - 1, 11);
