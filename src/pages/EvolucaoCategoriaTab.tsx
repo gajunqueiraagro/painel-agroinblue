@@ -517,7 +517,6 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
             <tbody>
               {dados.map((cat, i) => {
                 const isSeparator = cat.value === 'mamotes_f';
-                const deltaStyle = getDeltaStyle(cat.delta, cat.saldoFinal);
                 return (
                   <tr key={cat.value} className={`${i % 2 === 0 ? '' : 'bg-muted/30'} ${isSeparator ? 'border-t-2 border-border' : ''}`}>
                     <td className={`px-1.5 py-0.5 font-bold text-foreground sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
