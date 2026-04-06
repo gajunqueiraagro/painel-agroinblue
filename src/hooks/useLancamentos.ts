@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 const STORAGE_KEY = 'gado-lancamentos';
 const SALDO_KEY = 'gado-saldo-inicial';
 
-export function useLancamentos() {
+export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [saldosIniciais, setSaldosIniciais] = useState<SaldoInicial[]>([]);
