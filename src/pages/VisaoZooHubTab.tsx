@@ -484,15 +484,15 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
           </button>
 
           <button
-            onClick={() => onTabChange('metas_hub')}
+            onClick={() => onTabChange('painel_consultor_hub')}
             className="flex items-center gap-2.5 rounded-xl border-2 border-primary/30 bg-primary/5 px-4 py-4 min-h-[80px] transition-all hover:border-primary hover:shadow-md active:scale-[0.98] group"
           >
             <div className="rounded-full p-2 bg-primary/10 shrink-0">
-              <TrendingUp className="h-5 w-5 text-primary" />
+              <ClipboardCheck className="h-5 w-5 text-primary" />
             </div>
             <div className="text-left flex-1 min-w-0">
-              <p className="text-xs font-bold text-foreground">Metas / Previsto</p>
-              <p className="text-[10px] text-muted-foreground leading-tight">GMD e preços previstos por mês</p>
+              <p className="text-xs font-bold text-foreground">Painel do Consultor</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">Auditoria, metas e cenário previsto</p>
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0" />
           </button>

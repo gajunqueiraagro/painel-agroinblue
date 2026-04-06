@@ -31,7 +31,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     // Financeiro (analysis) sub-screens
     const finTabs: TabId[] = ['fin_caixa', 'lancar_fin_hub', 'visao_fin_hub', 'analise_economica', 'financeiro', 'analise_operacional'];
     // Resumo sub-screens
-    const resumoTabs: TabId[] = ['resumo', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute', 'operacao_hub', 'painel_consultor', 'status_fechamentos'];
+    const resumoTabs: TabId[] = ['resumo', 'analise', 'analise_entradas', 'analise_saidas', 'desfrute', 'operacao_hub', 'status_fechamentos'];
     // Cadastros
     const cadTabs: TabId[] = ['cadastros', 'acessos', 'auditoria'];
     if (lancarZooTabs.includes(tab)) return 'lancar_zoo_hub';
