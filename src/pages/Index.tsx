@@ -700,10 +700,14 @@ const Index = () => {
           ano={Number(filtroGlobal.ano)}
           onBack={() => setActiveTab('painel_consultor_hub')}
           onNavigateToLancamentos={(anoVal, mesVal, catVal) => {
-            setMetaLancAbaInicial('historico');
-            setMetaLancAnoFiltro(anoVal);
-            setMetaLancMesFiltro(mesVal);
-            setActiveTab('meta_movimentacoes');
+            setSubAbaFinanceiro(undefined);
+            setMovFiltroAno(anoVal);
+            setMovFiltroMes(mesVal);
+            setMovBackTab('meta_consolidacao');
+            setMovDrillLabel('Voltar para Consolidação');
+            setEditOriginStatusFiltro('previsto');
+            setEditOriginTab('financeiro');
+            setActiveTab('financeiro');
           }}
           onNavigateToReclass={(mesVal) => {
             setMetaLancAbaInicial('reclassificacao');
