@@ -398,8 +398,20 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
   const filteredLancamentos = useMemo(() => {
     let items = hook.lancamentos;
-    // Client-side filters already handled server-side via buildLancamentosQuery.
-    // No additional client-side conta filtering needed.
+
+    // Directional conta filtering:
+    // "Conta Origem" alone → only outflows (saídas + transfers sent from this account)
+    // "Conta Destino" alone → only inflows (entradas + transfers received by this account)
+    const hasContaOrigem = contaOrigem && contaOrigem !== '__all__';
+    const hasContaDestino = contaDestino && contaDestino !== '__all__';
+
+    if (hasContaOrigem && !hasContaDestino) {
+      // Show only money leaving: saídas (sinal < 0) or transfers
+      items = items.filter(l => l.sinal < 0 || l.tipo_operacao === '3-Transferência');
+    } else if (hasContaDestino && !hasContaOrigem) {
+      // Show only money arriving: entradas (sinal > 0) or transfers
+      items = items.filter(l => l.sinal > 0 || l.tipo_operacao === '3-Transferência');
+    }
 
     if (produtoFiltro.trim()) {
       const q = produtoFiltro.toLowerCase();
