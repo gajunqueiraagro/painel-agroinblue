@@ -2286,7 +2286,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <Input tabIndex={1} type="date" value={data} onChange={e => setData(e.target.value)} className={`mt-0.5 h-7 text-[11px] ${previstoInputClass}`} />
         </div>
         <div>
-          <Label className={`font-bold text-[11px] ${previstoLabelClass}`}>Qtd. Cab.</Label>
+          <Label className={`font-bold text-[11px] whitespace-nowrap ${previstoLabelClass}`}>Qtd. Cab.</Label>
           <Input tabIndex={2} type="text" inputMode="numeric" value={qtdInput.displayValue} onChange={qtdInput.onChange} onBlur={qtdInput.onBlur} onFocus={qtdInput.onFocus} placeholder="0" className={`mt-0.5 h-7 text-[11px] text-right font-bold tabular-nums ${previstoInputClass}`} />
         </div>
         <div>
