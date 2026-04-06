@@ -162,8 +162,8 @@ export function ConsolidacaoCategoriaView({ data, ano, metaLancamentos, onBack, 
 
   const selectedCatLabel = CATEGORIAS.find(c => c.value === selectedCat)?.label || selectedCat;
 
-  const handleCellClick = () => {
-    onNavigateToLancamentos?.();
+  const handleCellClick = (mes: string) => {
+    onNavigateToLancamentos?.(String(ano), mes);
   };
 
   return (
