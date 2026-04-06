@@ -110,7 +110,7 @@ function CellWithTooltip({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className={`${colorClass} cursor-pointer hover:underline`}>
+        <span className={`${colorClass} cursor-pointer hover:underline`} onClick={onClick}>
           {display}
         </span>
       </TooltipTrigger>
