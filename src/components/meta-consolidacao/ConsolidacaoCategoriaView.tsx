@@ -93,7 +93,7 @@ interface Props {
   ano: number;
   metaLancamentos: Lancamento[];
   onBack: () => void;
-  onNavigateToLancamentos?: () => void;
+  onNavigateToLancamentos?: (ano: string, mes: string) => void;
 }
 
 function CellWithTooltip({
@@ -162,8 +162,8 @@ export function ConsolidacaoCategoriaView({ data, ano, metaLancamentos, onBack, 
 
   const selectedCatLabel = CATEGORIAS.find(c => c.value === selectedCat)?.label || selectedCat;
 
-  const handleCellClick = () => {
-    onNavigateToLancamentos?.();
+  const handleCellClick = (mes: string) => {
+    onNavigateToLancamentos?.(String(ano), mes);
   };
 
   return (
@@ -252,7 +252,7 @@ export function ConsolidacaoCategoriaView({ data, ano, metaLancamentos, onBack, 
                             mesLabel={mesLabel}
                             breakdown={eeBreakdown}
                             hasData={r.ee > 0}
-                            onClick={handleCellClick}
+                            onClick={() => handleCellClick(r.mes)}
                             colorClass="text-emerald-600"
                           />
                         </td>
@@ -264,7 +264,7 @@ export function ConsolidacaoCategoriaView({ data, ano, metaLancamentos, onBack, 
                             mesLabel={mesLabel}
                             breakdown={seBreakdown}
                             hasData={r.se > 0}
-                            onClick={handleCellClick}
+                            onClick={() => handleCellClick(r.mes)}
                             colorClass="text-red-600"
                           />
                         </td>
@@ -276,7 +276,7 @@ export function ConsolidacaoCategoriaView({ data, ano, metaLancamentos, onBack, 
                             mesLabel={mesLabel}
                             breakdown={eiBreakdown}
                             hasData={r.ei > 0}
-                            onClick={handleCellClick}
+                            onClick={() => handleCellClick(r.mes)}
                             colorClass="text-emerald-600"
                           />
                         </td>
@@ -288,7 +288,7 @@ export function ConsolidacaoCategoriaView({ data, ano, metaLancamentos, onBack, 
                             mesLabel={mesLabel}
                             breakdown={siBreakdown}
                             hasData={r.siInternas > 0}
-                            onClick={handleCellClick}
+                            onClick={() => handleCellClick(r.mes)}
                             colorClass="text-red-600"
                           />
                         </td>

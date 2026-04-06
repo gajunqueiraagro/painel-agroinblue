@@ -15,7 +15,7 @@ interface Props {
   gmdRows: MetaGmdRow[];
   ano: number;
   onBack: () => void;
-  onNavigateToLancamentos?: () => void;
+  onNavigateToLancamentos?: (ano: string, mes: string) => void;
 }
 
 type Screen = 'hub' | 'categoria' | 'mes';
