@@ -2524,7 +2524,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   return (
     <div className="p-3 animate-fade-in pb-20">
-      {onBackToConciliacao && (
+      {onBackToConciliacao && aba !== 'reclassificacao' && (
         <button onClick={onBackToConciliacao} className="w-full flex items-center justify-center gap-1 text-[12px] font-bold text-primary bg-primary/10 rounded-md py-1.5 transition-colors hover:bg-primary/20 mb-2">
           <ArrowLeft className="h-3.5 w-3.5" /> {backLabel || 'Retornar à Conciliação de Categoria'}
         </button>
@@ -2570,6 +2570,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               onRequestRegister={reclassState.handleRegister}
               submitting={reclassState.submitting}
               canRegister={reclassState.canRegister}
+              onBack={onBackToConciliacao}
+              backLabel={backLabel}
             />
           </>
         ) : aba === 'historico' ? (

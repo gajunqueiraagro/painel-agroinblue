@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, ArrowLeft } from 'lucide-react';
 import { STATUS_LABEL, type StatusOperacional } from '@/lib/statusOperacional';
 
 interface Props {
@@ -13,6 +13,8 @@ interface Props {
   onRequestRegister: () => void;
   submitting: boolean;
   canRegister: boolean;
+  onBack?: () => void;
+  backLabel?: string;
 }
 
 function fmt(v: number | null, dec = 1) {
@@ -30,6 +32,7 @@ export function ReclassificacaoResumoPanel({
   quantidade, pesoKg, origemLabel, destinoLabel,
   pesoMedioOrigem, statusOp,
   onRequestRegister, submitting, canRegister,
+  onBack, backLabel,
 }: Props) {
   const totalKg = quantidade * pesoKg;
   const arrobasCab = pesoKg ? pesoKg / 15 : 0;
@@ -83,6 +86,16 @@ export function ReclassificacaoResumoPanel({
         <RefreshCw className="h-3 w-3 mr-1" />
         {submitting ? 'Registrando...' : 'Registrar Reclassificação'}
       </Button>
+
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="w-full flex items-center justify-center gap-1 text-[10px] font-bold text-primary bg-primary/10 rounded-md py-1.5 transition-colors hover:bg-primary/20 mt-1"
+        >
+          <ArrowLeft className="h-3 w-3" />
+          {backLabel || 'Retornar à Conciliação'}
+        </button>
+      )}
     </div>
   );
 }
