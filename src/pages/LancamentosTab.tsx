@@ -26,6 +26,7 @@ import { ptBR } from 'date-fns/locale';
 import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, RefreshCw, Clock, Info } from 'lucide-react';
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components/ReclassificacaoForm';
+import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
 import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/components/compra/CompraDetalhesDialog';
 import { CompraResumoPanel } from '@/components/compra/CompraResumoPanel';
 import { gerarFinanceiroCompra } from '@/components/compra/gerarFinanceiroCompra';
