@@ -174,8 +174,24 @@ const Index = () => {
   const noOp = async () => {};
   const canEditZoo = canEdit('zootecnico') && !isGlobal;
   const canEditFin = canEdit('financeiro') && !isGlobal;
-  const wrappedAdicionar = canEditZoo ? adicionarLancamento : noOp;
-  const wrappedEditar = canEditZoo ? editarLancamento : noOp;
+
+  // Wrap adicionarLancamento to also reload meta data when a previsto record is saved
+  const wrappedAdicionar = canEditZoo ? (async (lancamento: Omit<Lancamento, 'id'>) => {
+    const result = await adicionarLancamento(lancamento);
+    if (result && lancamento.statusOperacional === 'previsto') {
+      metaLoadData();
+    }
+    return result;
+  }) : noOp;
+
+  // Wrap editarLancamento to also reload meta data when status changes
+  const wrappedEditar = canEditZoo ? (async (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => {
+    await editarLancamento(id, dados);
+    if (dados.statusOperacional === 'previsto') {
+      metaLoadData();
+    }
+  }) : noOp;
+
   const wrappedRemover = canEditZoo ? removerLancamento : noOp;
 
   const [filtroGlobal, setFiltroGlobal] = useState<FiltroGlobal>({
@@ -194,6 +210,19 @@ const Index = () => {
     if (!isGlobal) return lancamentos;
     return lancamentos.filter(l => l.tipo !== 'transferencia_entrada' && l.tipo !== 'transferencia_saida');
   }, [lancamentos, isGlobal]);
+
+  // Merge realizado + meta for screens that need both cenários (Evolução, Fluxo Anual)
+  const lancamentosTodosCenarios = useMemo(() => {
+    const metaIds = new Set(metaLancamentos.map(l => l.id));
+    // Avoid duplicates: realizado first, then meta records not already present
+    const merged = [...lancamentosVisiveis];
+    for (const ml of metaLancamentos) {
+      if (!lancamentosVisiveis.some(l => l.id === ml.id)) {
+        merged.push(ml);
+      }
+    }
+    return merged;
+  }, [lancamentosVisiveis, metaLancamentos]);
 
   const navigateToMovimentacao = useCallback((subAba: SubAba, opts?: { ano?: string; mes?: string; label?: string; backTab?: TabId }) => {
     setSubAbaFinanceiro(subAba);
@@ -467,10 +496,10 @@ const Index = () => {
           } : undefined}
         />
       )}
-      {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosVisiveis} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} onNavigateToValorRebanho={() => setActiveTab('valor_rebanho')} onSetSaldo={canEditZoo ? setSaldoInicial : undefined} onNavigateToReclass={goToReclassFromFluxoAnual} />}
+      {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosTodosCenarios} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} onNavigateToValorRebanho={() => setActiveTab('valor_rebanho')} onSetSaldo={canEditZoo ? setSaldoInicial : undefined} onNavigateToReclass={goToReclassFromFluxoAnual} />}
       {activeTab === 'evolucao_rebanho_hub' && (
         <EvolucaoRebanhoHubTab
-          lancamentos={lancamentosVisiveis}
+          lancamentos={lancamentosTodosCenarios}
           saldosIniciais={saldosIniciais}
           onNavigateToMovimentacao={navigateToMovimentacao}
           onEditar={wrappedEditar as any}
