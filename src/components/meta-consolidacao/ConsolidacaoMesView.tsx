@@ -208,20 +208,20 @@ export function ConsolidacaoMesView({ data, ano, metaLancamentos, onBack, onNavi
           })}
         </div>
 
-        <div className="rounded-lg border border-orange-200 mt-0 overflow-x-auto">
-          <table className="table-fixed text-[10px]" style={{ width: '830px' }}>
+        <div className="rounded-lg border border-orange-200 mt-0 inline-block">
+          <table className="table-fixed text-[10px]" style={{ width: '750px' }}>
             <colgroup>
-              <col style={{ width: '120px' }} />
+              <col style={{ width: '100px' }} />
+              <col style={{ width: '65px' }} />
+              <col style={{ width: '65px' }} />
+              <col style={{ width: '65px' }} />
+              <col style={{ width: '65px' }} />
+              <col style={{ width: '65px' }} />
+              <col style={{ width: '65px' }} />
+              <col style={{ width: '55px' }} />
               <col style={{ width: '70px' }} />
               <col style={{ width: '70px' }} />
-              <col style={{ width: '70px' }} />
-              <col style={{ width: '70px' }} />
-              <col style={{ width: '70px' }} />
-              <col style={{ width: '70px' }} />
-              <col style={{ width: '60px' }} />
-              <col style={{ width: '80px' }} />
-              <col style={{ width: '80px' }} />
-              <col style={{ width: '70px' }} />
+              <col style={{ width: '65px' }} />
             </colgroup>
             <thead>
               <tr className="bg-orange-500 text-white">
