@@ -25,7 +25,7 @@ import { format, parseISO, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, RefreshCw, Clock, Info } from 'lucide-react';
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
-import { ReclassificacaoForm } from '@/components/ReclassificacaoForm';
+import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components/ReclassificacaoForm';
 import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/components/compra/CompraDetalhesDialog';
 import { CompraResumoPanel } from '@/components/compra/CompraResumoPanel';
 import { gerarFinanceiroCompra } from '@/components/compra/gerarFinanceiroCompra';
