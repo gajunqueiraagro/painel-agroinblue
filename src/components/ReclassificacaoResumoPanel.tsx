@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { RefreshCw } from 'lucide-react';
+import { STATUS_LABEL, type StatusOperacional } from '@/lib/statusOperacional';
 
 interface Props {
   quantidade: number;
@@ -8,7 +9,7 @@ interface Props {
   origemLabel: string;
   destinoLabel: string;
   pesoMedioOrigem: number | null;
-  isPrevisto: boolean;
+  statusOp: StatusOperacional;
   onRequestRegister: () => void;
   submitting: boolean;
   canRegister: boolean;
@@ -19,14 +20,21 @@ function fmt(v: number | null, dec = 1) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 
+const STATUS_COLORS: Record<StatusOperacional, { text: string; bg: string }> = {
+  conciliado: { text: 'text-green-600', bg: 'bg-green-500' },
+  confirmado: { text: 'text-blue-600', bg: 'bg-blue-500' },
+  previsto: { text: 'text-orange-600', bg: 'bg-orange-500' },
+};
+
 export function ReclassificacaoResumoPanel({
   quantidade, pesoKg, origemLabel, destinoLabel,
-  pesoMedioOrigem, isPrevisto,
+  pesoMedioOrigem, statusOp,
   onRequestRegister, submitting, canRegister,
 }: Props) {
   const totalKg = quantidade * pesoKg;
   const arrobasCab = pesoKg ? pesoKg / 15 : 0;
   const totalArrobas = totalKg / 15;
+  const colors = STATUS_COLORS[statusOp];
 
   return (
     <div className="bg-card rounded-md border shadow-sm p-2 space-y-1.5 self-start">
@@ -56,18 +64,19 @@ export function ReclassificacaoResumoPanel({
 
       <Separator />
 
-      <div className="flex justify-between text-[10px] leading-tight">
+      <div className="flex justify-between items-center text-[10px] leading-tight">
         <span className="text-muted-foreground">Cenário</span>
-        <strong className={isPrevisto ? 'text-orange-600' : 'text-emerald-600'}>
-          {isPrevisto ? 'Previsto' : 'Realizado'}
-        </strong>
+        <span className="flex items-center gap-1">
+          <span className={`w-1.5 h-1.5 rounded-full ${colors.bg}`} />
+          <strong className={colors.text}>{STATUS_LABEL[statusOp]}</strong>
+        </span>
       </div>
 
       <Separator />
 
       <Button
         type="button"
-        className={`w-full h-7 text-[10px] font-bold ${isPrevisto ? 'bg-orange-500 hover:bg-orange-600' : ''}`}
+        className={`w-full h-7 text-[10px] font-bold ${statusOp === 'previsto' ? 'bg-orange-500 hover:bg-orange-600' : ''}`}
         onClick={onRequestRegister}
         disabled={!canRegister || submitting}
       >
