@@ -16,6 +16,7 @@ interface Props {
   ano: number;
   onBack: () => void;
   onNavigateToLancamentos?: (ano: string, mes: string) => void;
+  onNavigateToReclass?: () => void;
 }
 
 type Screen = 'hub' | 'categoria' | 'mes';
