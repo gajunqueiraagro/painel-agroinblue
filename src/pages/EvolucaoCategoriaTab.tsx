@@ -335,15 +335,13 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
     const saldoIni = dados.reduce((s, d) => s + d.saldoInicioMes, 0);
     const movs = COLUNAS_MOV.map((_, i) => dados.reduce((s, d) => s + d.movs[i], 0));
     const saldoFin = dados.reduce((s, d) => s + d.saldoFinal, 0);
-    const pastosTotal = dados.reduce((s, d) => s + d.pastosQtd, 0);
-    const deltaTotal = saldoFin - pastosTotal;
 
     // Weighted average peso
     const somaPeso = dados.reduce((s, d) => s + (d.pesoMedio && d.saldoFinal > 0 ? d.saldoFinal * d.pesoMedio : 0), 0);
     const somaQtd = dados.reduce((s, d) => s + (d.pesoMedio && d.saldoFinal > 0 ? d.saldoFinal : 0), 0);
     const pesoMedio = somaQtd > 0 ? somaPeso / somaQtd : null;
 
-    return { saldoIni, movs, saldoFin, pesoMedio, pastosTotal, deltaTotal };
+    return { saldoIni, movs, saldoFin, pesoMedio };
   }, [dados]);
 
   const valorRebanhoTotal = useMemo(() => {
