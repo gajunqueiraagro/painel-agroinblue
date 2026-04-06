@@ -607,7 +607,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           </div>
 
           {/* LINE 2: Conta Origem | Conta Destino | Macro | Centro | Subcentro */}
-          <div className="grid grid-cols-[130px_130px_130px_130px_130px] gap-1.5">
+          <div className="grid grid-cols-[145px_145px_130px_130px_130px] gap-1.5">
             <div>
               <label className={lblCls}>Conta Origem</label>
               <Select value={contaOrigem} onValueChange={setContaOrigem} disabled={isEntrada}>
@@ -660,7 +660,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           </div>
 
           {/* LINE 3: Produto | Fornecedor */}
-          <div className="grid grid-cols-[200px_200px] gap-1.5">
+          <div className="grid grid-cols-[200px_300px] gap-1.5">
             <div>
               <label className={lblCls}>Produto</label>
               <Input
