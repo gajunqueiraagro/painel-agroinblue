@@ -814,18 +814,12 @@ export function useFinanceiro() {
         if (ehTransf && l.contaDestinoId) {
           // Generate a shared group ID for the pair
           const grupoId = crypto.randomUUID();
-          // Debit from origin (sinal = -1)
+          // Debit from origin (sinal = -1): conta_bancaria_id = origin
           expandedRows.push({
             ...baseRow,
             conta_bancaria_id: l.contaBancariaId,
+            conta_destino_id: l.contaDestinoId,
             sinal: -1,
-            transferencia_grupo_id: grupoId,
-          });
-          // Credit to destination (sinal = 1)
-          expandedRows.push({
-            ...baseRow,
-            conta_bancaria_id: l.contaDestinoId,
-            sinal: 1,
             transferencia_grupo_id: grupoId,
           });
         } else {
