@@ -522,14 +522,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   return (
     <div className="space-y-1 pb-20">
       {/* FILTERS */}
-      <Card className="bg-muted/50 border-border/60">
-        <CardContent className="p-1.5 space-y-1">
+      <Card className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(210_33%_97%)] shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
+        <CardContent className="p-2 space-y-1.5">
           {/* LINE 1: Ano | Mês | Tipo | Status | Fazenda | Atividade */}
-          <div className="grid grid-cols-[62px_64px_88px_72px_0.5fr_72px] gap-1 items-end">
+          <div className="grid grid-cols-[62px_70px_96px_80px_0.35fr_80px] gap-1.5 items-end">
             <div>
               <label className={lblCls}>Ano</label>
               <Select value={ano} onValueChange={setAno}>
-                <SelectTrigger className={`${selCls} w-[68px]`}><SelectValue /></SelectTrigger>
+                <SelectTrigger className={`${selCls} w-full bg-background border-[hsl(210_20%_80%)]`}><SelectValue /></SelectTrigger>
                 <SelectContent>{anos.map(a => <SelectItem key={a} value={a} className={itemCls}>{a}</SelectItem>)}</SelectContent>
               </Select>
             </div>
@@ -537,7 +537,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <label className={lblCls}>Mês</label>
               <Popover open={mesPopoverOpen} onOpenChange={setMesPopoverOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-6 text-[10px] justify-between font-normal px-1.5 w-[70px]">
+                  <Button variant="outline" className="h-6 text-[10px] justify-between font-normal px-1.5 w-full bg-background border-[hsl(210_20%_80%)]">
                     {mesLabel}
                     <ChevronsUpDown className="h-2.5 w-2.5 opacity-50" />
                   </Button>
@@ -561,7 +561,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div>
               <label className={lblCls}>Tipo</label>
               <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigem('__all__'); setContaDestino('__all__'); }}>
-                <SelectTrigger className={selCls}><SelectValue /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)]`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
                   <SelectItem value="1-Entradas" className={itemCls}>Entradas</SelectItem>
@@ -573,7 +573,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div>
               <label className={lblCls}>Status</label>
               <Select value={statusTransacao} onValueChange={setStatusTransacao}>
-                <SelectTrigger className={selCls}><SelectValue /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)]`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
                   <SelectItem value="previsto" className={itemCls}>{CENTRAL_STATUS_LABEL.previsto}</SelectItem>
@@ -586,7 +586,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div>
               <label className={lblCls}>Fazenda</label>
               <Select value={fazendaId} onValueChange={setFazendaId}>
-                <SelectTrigger className={selCls}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)]`}><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
                   {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id} className={itemCls}>{f.nome}</SelectItem>)}
@@ -596,7 +596,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div>
               <label className={lblCls}>Atividade</label>
               <Select value={atividadeFiltro} onValueChange={setAtividadeFiltro}>
-                <SelectTrigger className={selCls}><SelectValue /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)]`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
                   <SelectItem value="pecuaria" className={itemCls}>Pecuária</SelectItem>
