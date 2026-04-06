@@ -641,7 +641,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           </div>
 
           {/* LINE 3: Centro | Subcentro | Produto | Fornecedor */}
-          <div className="grid grid-cols-[1fr_1.4fr_1.4fr_1.6fr] gap-1">
+          <div className="grid grid-cols-[1fr_1.4fr_1.4fr_1.6fr] gap-1.5">
             <div>
               <label className={lblCls}>Centro</label>
               <SearchableSelect
@@ -667,7 +667,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 value={produtoFiltro}
                 onChange={e => setProdutoFiltro(e.target.value)}
                 placeholder="Buscar..."
-                className="h-6 !text-[8px] placeholder:!text-[8px] leading-tight px-1.5"
+                className="h-6 !text-[8px] placeholder:!text-[8px] leading-tight px-1.5 bg-background border-[hsl(210_20%_80%)]"
                 autoCorrect="off"
                 autoCapitalize="none"
                 spellCheck={false}
