@@ -613,10 +613,123 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </div>
           </div>
 
-          {/* LINE 2: Conta Origem | Conta Destino | Macro | Centro | Subcentro */}
-          <div className="grid grid-cols-[145px_145px_130px_130px_130px] gap-1.5 items-end">
-            <div>
-              <label className={lblCls}>Conta Origem</label>
+          {/* LINE 2: Conta Origem | Conta Destino | Macro | Centro | Subcentro + Buttons */}
+          <div className="flex items-end gap-1.5">
+            <div className="grid grid-cols-[145px_145px_130px_130px_130px] gap-1.5 items-end flex-1">
+              <div>
+                <label className={lblCls}>Conta Origem</label>
+                <Select value={contaOrigem} onValueChange={setContaOrigem} disabled={isEntrada}>
+                  <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isEntrada ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
+                    {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className={lblCls}>Conta Destino</label>
+                <Select value={contaDestino} onValueChange={setContaDestino} disabled={isSaida}>
+                  <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isSaida ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
+                    {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className={lblCls}>Macro</label>
+                <SearchableSelect
+                  value={macroFiltro}
+                  onValueChange={v => { setMacroFiltro(v); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
+                  options={macrosUnicos.map(m => ({ value: m, label: m }))}
+                  disabled={macroLocked}
+                  placeholder="Buscar macro..."
+                />
+              </div>
+              <div>
+                <label className={lblCls}>Centro</label>
+                <SearchableSelect
+                  value={centroFiltro}
+                  onValueChange={v => { setCentroFiltro(v); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
+                  options={centrosUnicos.map(c => ({ value: c, label: c }))}
+                  disabled={macroLocked}
+                  placeholder="Buscar centro..."
+                />
+              </div>
+              <div>
+                <label className={lblCls}>Subcentro</label>
+                <SearchableSelect
+                  value={subcentroFiltro}
+                  onValueChange={handleSubcentroChange}
+                  options={subcentrosUnicos.map(s => ({ value: s, label: s }))}
+                  placeholder="Buscar subcentro..."
+                />
+              </div>
+            </div>
+            <div className="flex gap-1 items-end pb-[1px]">
+              {onBack && (
+                <Button size="sm" variant="outline" onClick={onBack} className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground">
+                  <ChevronLeft className="h-3 w-3" /> Voltar
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" onClick={handleLimparFiltros} className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground">
+                <FilterX className="h-3 w-3" /> Limpar
+              </Button>
+              <FinanceiroV2ExportMenu
+                lancamentos={sortedLancamentos}
+                fornecedores={hook.fornecedores}
+                ano={ano}
+                fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
+                totalCount={totalLancamentosFiltrados}
+              />
+              <Button
+                size="sm"
+                variant={mode === 'rapido' ? 'default' : 'outline'}
+                onClick={() => setMode(mode === 'rapido' ? 'list' : 'rapido')}
+                className="h-6 text-[10px] gap-0.5 px-2"
+              >
+                {mode === 'rapido' ? <List className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
+                {mode === 'rapido' ? 'Lista' : 'Rápido'}
+              </Button>
+              {mode === 'list' && !mesFechadoAtivo && (
+                <Button size="sm" onClick={openNew} className="h-6 text-[10px] gap-0.5 px-2 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]">
+                  <Plus className="h-3 w-3" /> Novo
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* LINE 3: Produto | Fornecedor + Summary */}
+          <div className="flex items-end gap-1.5">
+            <div className="grid grid-cols-[200px_300px] gap-1.5 items-end">
+              <div>
+                <label className={lblCls}>Produto</label>
+                <Input
+                  value={produtoFiltro}
+                  onChange={e => setProdutoFiltro(e.target.value)}
+                  placeholder="Buscar..."
+                  className="h-6 !text-[8px] placeholder:!text-[8px] leading-tight px-1.5 bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus-visible:ring-[#1E3A5F]"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                />
+              </div>
+              <div>
+                <label className={lblCls}>Fornecedor</label>
+                <SearchableSelect
+                  value={fornecedorFiltro}
+                  onValueChange={setFornecedorFiltro}
+                  options={hook.fornecedores.map(f => ({ value: f.id, label: f.nome }))}
+                  placeholder="Buscar fornecedor..."
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 text-[10px] items-center ml-auto pb-[1px]">
+              <span className="text-success font-bold">Ent: {formatMoeda(totalEntradas)}</span>
+              <span className="text-destructive font-bold">Saí: {formatMoeda(totalSaidas)}</span>
+              <span className="text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
+            </div>
+          </div>
               <Select value={contaOrigem} onValueChange={setContaOrigem} disabled={isEntrada}>
                 <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isEntrada ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
