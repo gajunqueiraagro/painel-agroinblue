@@ -339,11 +339,10 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   };
 
   const MESES_CURTOS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  const mesLabel = MESES_CURTOS[parseInt(mesFiltro) - 1];
 
   return (
     <div className="p-3 w-full space-y-2 animate-fade-in pb-20">
-      {/* Header: ano + título + régua horizontal de meses */}
+      {/* Header: título + régua horizontal de meses */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 shrink-0">
           <Select value={anoFiltro} onValueChange={setAnoFiltro}>
@@ -357,11 +356,11 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
             </SelectContent>
           </Select>
           <h2 className="text-sm font-bold text-foreground whitespace-nowrap">
-            Evolução — {mesLabel}/{anoFiltro}
+            Evolução de Categorias
           </h2>
         </div>
 
-        <div className="flex items-center gap-0.5 flex-1 justify-end">
+        <div className="flex items-center flex-1 justify-between">
           {MESES_CURTOS.map((label, i) => {
             const mesVal = String(i + 1).padStart(2, '0');
             const isActive = mesFiltro === mesVal;
@@ -369,7 +368,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
               <button
                 key={mesVal}
                 onClick={() => setMesFiltro(mesVal)}
-                className={`px-1.5 py-1 rounded text-[10px] font-semibold transition-all ${
+                className={`px-2 py-2 rounded-md text-xs font-semibold transition-all ${
                   isActive
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
