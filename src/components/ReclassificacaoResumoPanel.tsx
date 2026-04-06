@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, ArrowLeft } from 'lucide-react';
 import { STATUS_LABEL, type StatusOperacional } from '@/lib/statusOperacional';
 
 interface Props {
