@@ -37,6 +37,9 @@ import { VisaoAnualZootecnicaTab } from './VisaoAnualZootecnicaTab';
 import { FechamentoExecutivoTab } from './FechamentoExecutivoTab';
 import { AnaliseConsultorTab } from './AnaliseConsultorTab';
 import { PrecoMercadoTab } from './PrecoMercadoTab';
+import { MetasHubTab } from './MetasHubTab';
+import { MetaGmdTab } from './MetaGmdTab';
+import { MetaPrecoTab } from './MetaPrecoTab';
 import { GraficosAnaliseTab } from './GraficosAnaliseTab';
 import { FinanceiroV2Tab } from './FinanceiroV2Tab';
 import { FinanceiroV2HubTab } from './FinanceiroV2HubTab';
@@ -117,6 +120,9 @@ const TITLES: Record<TabId, string> = {
   auditoria: 'Central de Auditoria',
   conta_boitel: 'Conta Boitel',
   status_fechamentos: 'Central de Fechamento',
+  metas_hub: 'Metas / Previsto',
+  meta_gmd: 'GMD Previsto',
+  meta_preco: 'Preços Previstos',
 };
 
 const Index = () => {
@@ -300,6 +306,9 @@ const Index = () => {
     analise_operacional: goToVisaoZooHub,
     fechamento_executivo: goToVisaoZooHub,
     analise_consultor: goToVisaoZooHub,
+    metas_hub: goToVisaoZooHub,
+    meta_gmd: () => setActiveTab('metas_hub'),
+    meta_preco: () => setActiveTab('metas_hub'),
     // Financeiro (analysis) sub-screens
     fin_caixa: () => setActiveTab('lancar_fin_hub'),
     analise_economica: () => setActiveTab('lancar_fin_hub'),
@@ -599,6 +608,15 @@ const Index = () => {
       {activeTab === 'auditoria' && <AuditoriaTab />}
       {activeTab === 'conta_boitel' && (
         <ContaBoitelTab onBack={() => setActiveTab('financeiro_v2_hub')} />
+      )}
+      {activeTab === 'metas_hub' && (
+        <MetasHubTab onTabChange={handleTabChange} />
+      )}
+      {activeTab === 'meta_gmd' && (
+        <MetaGmdTab onBack={() => setActiveTab('metas_hub')} />
+      )}
+      {activeTab === 'meta_preco' && (
+        <MetaPrecoTab onBack={() => setActiveTab('metas_hub')} />
       )}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
