@@ -1116,13 +1116,13 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                   <SourceInfoTooltip indicadorId={row.indicadorId} cenario={cenario} />
                 </td>
                 {row.valores.map((v, i) => {
-                  const isFuture = (i + 1) > monthCutoff;
+                  const isFuture = !isPrevisto && (i + 1) > monthCutoff;
                   let cellContent = '';
                   let isSemBase = false;
                   if (previstoSemFonte) {
                     cellContent = '';  // sem base prevista
                   } else if (isFuture) {
-                    cellContent = '';  // mês futuro
+                    cellContent = '';  // mês futuro (only for Realizado)
                   } else if (isNaN(v)) {
                     cellContent = '–';  // meta não projetou este indicador
                     isSemBase = true;
