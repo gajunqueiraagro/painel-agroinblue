@@ -306,12 +306,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
   const loadLancamentos = useCallback(async (filtros: FiltrosV2, pageNum: number = 0) => {
     if (!clienteId) return;
-    if (!filtros.ano) {
-      setLancamentos([]);
-      setTotal(0);
-      setPage(0);
-      return;
-    }
+    // ano is optional now ('__todos__' means all years)
 
     setLoading(true);
     try {
