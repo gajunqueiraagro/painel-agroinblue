@@ -902,6 +902,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           </div>
         </>
       )}
+      </div>{/* end content wrapper */}
 
       <LancamentoV2Dialog
         open={dialogOpen}
