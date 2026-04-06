@@ -377,7 +377,14 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     if (dados.valorTotal !== undefined) update.valor_total = dados.valorTotal;
     if (dados.notaFiscal !== undefined) update.nota_fiscal = dados.notaFiscal;
     if (dados.tipoPeso !== undefined) update.tipo_peso = dados.tipoPeso;
-    if (dados.statusOperacional !== undefined) update.status_operacional = dados.statusOperacional;
+    if (dados.statusOperacional !== undefined) {
+      update.status_operacional = dados.statusOperacional;
+      if (dados.statusOperacional === 'previsto') {
+        update.cenario = 'meta';
+      } else {
+        update.cenario = 'realizado';
+      }
+    }
     if (dados.dataVenda !== undefined) update.data_venda = dados.dataVenda;
     if (dados.dataEmbarque !== undefined) update.data_embarque = dados.dataEmbarque;
     if (dados.dataAbate !== undefined) update.data_abate = dados.dataAbate;
