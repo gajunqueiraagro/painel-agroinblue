@@ -1,8 +1,8 @@
 /**
- * Hub de Metas/Previsto — sub-abas GMD Previsto e Preços Previstos.
+ * Hub de Metas/Previsto — sub-abas GMD Previsto, Preços Previstos e Movimentações Meta.
  */
 import { Card, CardContent } from '@/components/ui/card';
-import { TrendingUp, DollarSign } from 'lucide-react';
+import { TrendingUp, DollarSign, ArrowLeftRight } from 'lucide-react';
 import type { TabId } from '@/components/BottomNav';
 
 interface Props {
@@ -10,6 +10,13 @@ interface Props {
 }
 
 const items = [
+  {
+    id: 'meta_movimentacoes' as TabId,
+    title: 'Movimentações Previstas',
+    desc: 'Registre compras, vendas, abates e reclassificações do cenário meta',
+    icon: ArrowLeftRight,
+    color: 'text-orange-600',
+  },
   {
     id: 'meta_gmd' as TabId,
     title: 'GMD Previsto',
