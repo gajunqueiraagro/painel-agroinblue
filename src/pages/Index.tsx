@@ -641,7 +641,7 @@ const Index = () => {
       {activeTab === 'meta_consolidacao' && (
         <MetaConsolidacaoTab
           saldosIniciais={saldosIniciais}
-          metaLancamentos={metaLancamentos}
+          metaLancamentos={metaLancamentosFiltrados}
           gmdRows={metaGmd.rows}
           ano={Number(filtroGlobal.ano)}
           onBack={() => setActiveTab('painel_consultor_hub')}
