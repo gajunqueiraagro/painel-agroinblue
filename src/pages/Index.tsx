@@ -619,6 +619,16 @@ const Index = () => {
       {activeTab === 'meta_preco' && (
         <MetaPrecoTab onBack={() => setActiveTab('metas_hub')} />
       )}
+      {activeTab === 'meta_movimentacoes' && (
+        <LancamentosTab
+          lancamentos={metaLancamentos}
+          onAdicionar={canEditZoo ? (metaAdicionar as any) : noOp}
+          onEditar={canEditZoo ? (metaEditar as any) : noOp}
+          onRemover={canEditZoo ? (metaRemover as any) : noOp}
+          onBackToConciliacao={() => setActiveTab('metas_hub')}
+          backLabel="Voltar para Metas"
+        />
+      )}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
