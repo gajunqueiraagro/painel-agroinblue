@@ -177,6 +177,7 @@ const Index = () => {
     ano: String(new Date().getFullYear()),
     mes: new Date().getMonth() + 1,
   });
+  const metaGmd = useMetaGmd(filtroGlobal.ano);
 
   const handleFiltroChange = useCallback((f: Partial<FiltroGlobal>) => {
     setFiltroGlobal(prev => ({ ...prev, ...f }));
