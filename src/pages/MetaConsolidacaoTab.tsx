@@ -30,7 +30,7 @@ export function MetaConsolidacaoTab({ saldosIniciais, metaLancamentos, gmdRows, 
   }
 
   if (screen === 'mes') {
-    return <ConsolidacaoMesView data={data} ano={ano} onBack={() => setScreen('hub')} />;
+    return <ConsolidacaoMesView data={data} ano={ano} metaLancamentos={metaLancamentos} onBack={() => setScreen('hub')} />;
   }
 
   return (
