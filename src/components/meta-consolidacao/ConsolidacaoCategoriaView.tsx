@@ -158,7 +158,7 @@ function CellWithTooltip({
   );
 }
 
-export function ConsolidacaoCategoriaView({ data, ano, metaLancamentos, onBack, onNavigateToLancamentos }: Props) {
+export function ConsolidacaoCategoriaView({ data, ano, metaLancamentos, onBack, onNavigateToLancamentos, onNavigateToReclass }: Props) {
   const [selectedCat, setSelectedCat] = useState(CATEGORIAS[0].value);
   const rows = useMemo(() => data.filter(d => d.categoria === selectedCat), [data, selectedCat]);
 
