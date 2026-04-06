@@ -748,7 +748,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 {mode === 'rapido' ? 'Lista' : 'Rápido'}
               </Button>
               {mode === 'list' && !mesFechadoAtivo && (
-                <Button size="sm" onClick={openNew} className="h-6 text-[10px] gap-0.5 px-2">
+                <Button size="sm" onClick={openNew} className="h-6 text-[10px] gap-0.5 px-2 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]">
                   <Plus className="h-3 w-3" /> Novo
                 </Button>
               )}
