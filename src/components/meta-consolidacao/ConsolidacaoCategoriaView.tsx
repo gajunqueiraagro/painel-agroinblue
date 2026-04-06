@@ -6,9 +6,14 @@ import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
 
 const MESES_LABELS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const TH = "px-1.5 py-[3px] text-right font-semibold text-[10px] leading-tight";
-const TD = "px-1.5 py-[3px] text-right text-[10px] leading-tight";
+const TD = "px-1.5 py-[3px] text-right text-[10px] leading-tight italic";
 
 const SEPARATOR_AFTER = 'touros';
+
+function valColor(v: number | null): string {
+  if (v == null || v === 0) return 'text-muted-foreground/40';
+  return v > 0 ? 'text-emerald-600' : 'text-red-600';
+}
 
 function fmt(v: number | null, decimals = 0): string {
   if (v == null) return '—';
