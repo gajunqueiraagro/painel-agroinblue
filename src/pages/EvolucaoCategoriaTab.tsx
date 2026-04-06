@@ -13,6 +13,7 @@ interface Props {
   saldosIniciais: SaldoInicial[];
   initialAno?: string;
   initialMes?: string;
+  initialCenario?: 'realizado' | 'previsto';
   onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
 }
 
