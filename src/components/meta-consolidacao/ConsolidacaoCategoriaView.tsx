@@ -289,7 +289,7 @@ export function ConsolidacaoCategoriaView({ data, ano, metaLancamentos, onBack, 
                             mesLabel={mesLabel}
                             breakdown={eiBreakdown}
                             hasData={r.ei > 0}
-                            onClick={() => handleCellClick(r.mes)}
+                            onClick={() => handleInternasClick(r.mes)}
                             colorClass="text-emerald-600"
                           />
                         </td>
