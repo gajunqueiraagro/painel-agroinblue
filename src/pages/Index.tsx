@@ -120,6 +120,9 @@ const TITLES: Record<TabId, string> = {
   auditoria: 'Central de Auditoria',
   conta_boitel: 'Conta Boitel',
   status_fechamentos: 'Central de Fechamento',
+  metas_hub: 'Metas / Previsto',
+  meta_gmd: 'GMD Previsto',
+  meta_preco: 'Preços Previstos',
 };
 
 const Index = () => {
