@@ -179,6 +179,7 @@ const Index = () => {
     mes: new Date().getMonth() + 1,
   });
   const metaGmd = useMetaGmd(filtroGlobal.ano);
+  const metaConsolidacaoData = useMetaConsolidacao(saldosIniciais, metaLancamentos, metaGmd.rows, Number(filtroGlobal.ano));
 
   const handleFiltroChange = useCallback((f: Partial<FiltroGlobal>) => {
     setFiltroGlobal(prev => ({ ...prev, ...f }));
