@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft } from 'lucide-react';
 import { CATEGORIAS } from '@/types/cattle';
 import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
@@ -8,6 +7,8 @@ import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
 const MESES_LABELS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const TH = "px-1.5 py-[3px] text-right font-semibold text-[10px] leading-tight";
 const TD = "px-1.5 py-[3px] text-right text-[10px] leading-tight";
+
+const SEPARATOR_AFTER = 'touros';
 
 function fmt(v: number | null, decimals = 0): string {
   if (v == null) return '—';
@@ -26,23 +27,35 @@ export function ConsolidacaoCategoriaView({ data, ano, onBack }: Props) {
 
   return (
     <div className="w-full px-2 pb-4 animate-fade-in">
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={onBack}>
-            <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Voltar
-          </Button>
-          <h2 className="text-sm font-semibold text-orange-700">Consolidação por Categoria — {ano}</h2>
-        </div>
-        <Select value={selectedCat} onValueChange={(v) => setSelectedCat(v as any)}>
-          <SelectTrigger className="w-[140px] h-7 text-[10px] border-orange-300">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {CATEGORIAS.map(c => (
-              <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex items-center gap-2 mb-1">
+        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={onBack}>
+          <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Voltar
+        </Button>
+        <h2 className="text-sm font-semibold text-orange-700">Consolidação por Categoria — {ano}</h2>
+      </div>
+
+      {/* Category selector - horizontal cards */}
+      <div className="flex items-center gap-1 mb-1 overflow-x-auto">
+        {CATEGORIAS.map((cat) => {
+          const isActive = selectedCat === cat.value;
+          return (
+            <span key={cat.value} className="flex items-center gap-1">
+              <button
+                onClick={() => setSelectedCat(cat.value)}
+                className={`px-3 py-1.5 rounded-md text-[11px] font-semibold transition-all whitespace-nowrap ${
+                  isActive
+                    ? 'bg-orange-500 text-white shadow-sm'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                }`}
+              >
+                {cat.label}
+              </button>
+              {cat.value === SEPARATOR_AFTER && (
+                <span className="w-px h-5 bg-orange-300/60 mx-1 shrink-0" />
+              )}
+            </span>
+          );
+        })}
       </div>
 
       <div className="rounded-lg border border-orange-200 mt-0">
