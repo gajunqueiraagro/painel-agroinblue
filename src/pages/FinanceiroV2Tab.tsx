@@ -813,7 +813,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                     </td>
                   </tr>
                 ) : (
-                  paginatedLancamentos.map(l => {
+                  sortedLancamentos.map(l => {
                     const fornNome = fornecedoresMap.get(l.favorecido_id || '');
                     const stKey = (l.status_transacao || '').toLowerCase();
                     const stLabel = STATUS_LABELS[stKey] || l.status_transacao || '-';
