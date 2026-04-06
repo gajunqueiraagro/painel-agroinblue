@@ -429,16 +429,16 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
       </div>
 
       {/* Tabela */}
-      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto" style={{ maxWidth: 610 }}>
-          <table className="text-[10px]" style={{ tableLayout: 'fixed', width: 610 }}>
+      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto" style={{ maxWidth: 635 }}>
+          <table className="text-[10px]" style={{ tableLayout: 'fixed', width: 635 }}>
             <colgroup>
-              <col style={{ width: 70 }} />
-              <col style={{ width: 40 }} />
+              <col style={{ width: 75 }} />
+              <col style={{ width: 43 }} />
               {COLUNAS_MOV.map(col => (
-                <col key={col.tipo} style={{ width: 40 }} />
+                <col key={col.tipo} style={{ width: 43 }} />
               ))}
-              <col style={{ width: 50 }} />
-              <col style={{ width: 50 }} />
+              <col style={{ width: 53 }} />
+              <col style={{ width: 52 }} />
             </colgroup>
             <thead>
               <tr className="border-b bg-muted">
