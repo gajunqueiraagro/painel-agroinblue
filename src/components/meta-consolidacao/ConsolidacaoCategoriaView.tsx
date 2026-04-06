@@ -92,7 +92,7 @@ export function ConsolidacaoCategoriaView({ data, ano, onBack }: Props) {
                   <th className={TH}>GMD</th>
                   <th className={TH}>Prod. Bio</th>
                   <th className={TH}>Peso Final</th>
-                  <th className={`${TH} bg-orange-600/30`}>PM Final</th>
+                  <th className={`${TH} bg-orange-600/30`}>Peso Médio kg</th>
                 </tr>
               </thead>
               <tbody>
