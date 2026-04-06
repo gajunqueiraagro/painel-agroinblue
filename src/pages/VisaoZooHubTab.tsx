@@ -31,7 +31,7 @@ import {
 import { isDesembolsoProdutivo, isReceita as isReceitaMacro } from '@/lib/financeiro/classificacao';
 import { TabId } from '@/components/BottomNav';
 import {
-  AlertTriangle, TrendingUp, FileBarChart, ChevronRight, Info,
+  AlertTriangle, TrendingUp, FileBarChart, ChevronRight, Info, ClipboardCheck,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
