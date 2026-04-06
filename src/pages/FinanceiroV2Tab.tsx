@@ -613,123 +613,60 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </div>
           </div>
 
-          {/* LINE 2: Conta Origem | Conta Destino | Macro | Centro | Subcentro */}
-          <div className="grid grid-cols-[145px_145px_130px_130px_130px] gap-1.5 items-end">
-            <div>
-              <label className={lblCls}>Conta Origem</label>
-              <Select value={contaOrigem} onValueChange={setContaOrigem} disabled={isEntrada}>
-                <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isEntrada ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
-                  {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
-                </SelectContent>
-              </Select>
+          {/* LINE 2: Conta Origem | Conta Destino | Macro | Centro | Subcentro + Buttons */}
+          <div className="flex items-end gap-1.5">
+            <div className="grid grid-cols-[145px_145px_130px_130px_130px] gap-1.5 items-end flex-1">
+              <div>
+                <label className={lblCls}>Conta Origem</label>
+                <Select value={contaOrigem} onValueChange={setContaOrigem} disabled={isEntrada}>
+                  <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isEntrada ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
+                    {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className={lblCls}>Conta Destino</label>
+                <Select value={contaDestino} onValueChange={setContaDestino} disabled={isSaida}>
+                  <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isSaida ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
+                    {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className={lblCls}>Macro</label>
+                <SearchableSelect
+                  value={macroFiltro}
+                  onValueChange={v => { setMacroFiltro(v); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
+                  options={macrosUnicos.map(m => ({ value: m, label: m }))}
+                  disabled={macroLocked}
+                  placeholder="Buscar macro..."
+                />
+              </div>
+              <div>
+                <label className={lblCls}>Centro</label>
+                <SearchableSelect
+                  value={centroFiltro}
+                  onValueChange={v => { setCentroFiltro(v); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
+                  options={centrosUnicos.map(c => ({ value: c, label: c }))}
+                  disabled={macroLocked}
+                  placeholder="Buscar centro..."
+                />
+              </div>
+              <div>
+                <label className={lblCls}>Subcentro</label>
+                <SearchableSelect
+                  value={subcentroFiltro}
+                  onValueChange={handleSubcentroChange}
+                  options={subcentrosUnicos.map(s => ({ value: s, label: s }))}
+                  placeholder="Buscar subcentro..."
+                />
+              </div>
             </div>
-            <div>
-              <label className={lblCls}>Conta Destino</label>
-              <Select value={contaDestino} onValueChange={setContaDestino} disabled={isSaida}>
-                <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isSaida ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
-                  {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className={lblCls}>Macro</label>
-              <SearchableSelect
-                value={macroFiltro}
-                onValueChange={v => { setMacroFiltro(v); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
-                options={macrosUnicos.map(m => ({ value: m, label: m }))}
-                disabled={macroLocked}
-                placeholder="Buscar macro..."
-              />
-            </div>
-            <div>
-              <label className={lblCls}>Centro</label>
-              <SearchableSelect
-                value={centroFiltro}
-                onValueChange={v => { setCentroFiltro(v); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
-                options={centrosUnicos.map(c => ({ value: c, label: c }))}
-                disabled={macroLocked}
-                placeholder="Buscar centro..."
-              />
-            </div>
-            <div>
-              <label className={lblCls}>Subcentro</label>
-              <SearchableSelect
-                value={subcentroFiltro}
-                onValueChange={handleSubcentroChange}
-                options={subcentrosUnicos.map(s => ({ value: s, label: s }))}
-                placeholder="Buscar subcentro..."
-              />
-            </div>
-          </div>
-
-          {/* LINE 3: Produto | Fornecedor */}
-          <div className="grid grid-cols-[200px_300px] gap-1.5 items-end">
-            <div>
-              <label className={lblCls}>Produto</label>
-              <Input
-                value={produtoFiltro}
-                onChange={e => setProdutoFiltro(e.target.value)}
-                placeholder="Buscar..."
-                className="h-6 !text-[8px] placeholder:!text-[8px] leading-tight px-1.5 bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus-visible:ring-[#1E3A5F]"
-                autoCorrect="off"
-                autoCapitalize="none"
-                spellCheck={false}
-              />
-            </div>
-            <div>
-              <label className={lblCls}>Fornecedor</label>
-              <SearchableSelect
-                value={fornecedorFiltro}
-                onValueChange={setFornecedorFiltro}
-                options={hook.fornecedores.map(f => ({ value: f.id, label: f.nome }))}
-                placeholder="Buscar fornecedor..."
-              />
-            </div>
-          </div>
-
-          {/* Filter summary line */}
-          {(() => {
-            const origemAtiva = contaOrigem !== '__all__';
-            const destinoAtivo = contaDestino !== '__all__';
-            const nomeOrigem = origemAtiva ? contaLabel(sortedContas.find(c => c.id === contaOrigem) || { nome_conta: '?' }) : '';
-            const nomeDestino = destinoAtivo ? contaLabel(sortedContas.find(c => c.id === contaDestino) || { nome_conta: '?' }) : '';
-
-            if (origemAtiva && destinoAtivo) {
-              return (
-                <div className="flex items-center gap-1.5 px-1 py-0.5 rounded bg-primary/5 border border-primary/20">
-                  <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-primary/40 text-primary gap-0.5">
-                    🔁 Transferência específica
-                  </Badge>
-                  <span className="text-[10px] text-foreground font-medium">
-                    {nomeOrigem} → {nomeDestino}
-                  </span>
-                </div>
-              );
-            }
-            if (origemAtiva || destinoAtivo) {
-              const nomeConta = origemAtiva ? nomeOrigem : nomeDestino;
-              return (
-                <div className="flex items-center gap-1.5 px-1 py-0.5 rounded bg-muted/60 border border-border/40">
-                  <span className="text-[10px] text-muted-foreground">🔍 Movimentações envolvendo:</span>
-                  <span className="text-[10px] text-foreground font-semibold">{nomeConta}</span>
-                </div>
-              );
-            }
-            return null;
-          })()}
-
-          {/* Summary + actions */}
-          <div className="flex items-center justify-between">
-            <div className="flex gap-2 text-[10px]">
-              <span className="text-success font-bold">Ent: {formatMoeda(totalEntradas)}</span>
-              <span className="text-destructive font-bold">Saí: {formatMoeda(totalSaidas)}</span>
-              <span className="text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
-            </div>
-            <div className="flex gap-1">
+            <div className="flex gap-1 items-end pb-[1px]">
               {onBack && (
                 <Button size="sm" variant="outline" onClick={onBack} className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground">
                   <ChevronLeft className="h-3 w-3" /> Voltar
@@ -751,7 +688,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 onClick={() => setMode(mode === 'rapido' ? 'list' : 'rapido')}
                 className="h-6 text-[10px] gap-0.5 px-2"
               >
-              {mode === 'rapido' ? <List className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
+                {mode === 'rapido' ? <List className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
                 {mode === 'rapido' ? 'Lista' : 'Rápido'}
               </Button>
               {mode === 'list' && !mesFechadoAtivo && (
@@ -759,6 +696,38 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                   <Plus className="h-3 w-3" /> Novo
                 </Button>
               )}
+            </div>
+          </div>
+
+          {/* LINE 3: Produto | Fornecedor + Summary */}
+          <div className="flex items-end gap-1.5">
+            <div className="grid grid-cols-[200px_300px] gap-1.5 items-end">
+              <div>
+                <label className={lblCls}>Produto</label>
+                <Input
+                  value={produtoFiltro}
+                  onChange={e => setProdutoFiltro(e.target.value)}
+                  placeholder="Buscar..."
+                  className="h-6 !text-[8px] placeholder:!text-[8px] leading-tight px-1.5 bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus-visible:ring-[#1E3A5F]"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                />
+              </div>
+              <div>
+                <label className={lblCls}>Fornecedor</label>
+                <SearchableSelect
+                  value={fornecedorFiltro}
+                  onValueChange={setFornecedorFiltro}
+                  options={hook.fornecedores.map(f => ({ value: f.id, label: f.nome }))}
+                  placeholder="Buscar fornecedor..."
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 text-[10px] items-center ml-auto pb-[1px]">
+              <span className="text-success font-bold">Ent: {formatMoeda(totalEntradas)}</span>
+              <span className="text-destructive font-bold">Saí: {formatMoeda(totalSaidas)}</span>
+              <span className="text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
             </div>
           </div>
         </CardContent>
@@ -798,19 +767,30 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
       {mode === 'list' && !hook.loading && ano && (
         <>
-          <div className="rounded-lg border border-[hsl(var(--border))] overflow-auto relative" style={{ maxHeight: 'calc(100vh - 280px)' }}>
-            <table className="table-financeiro w-full caption-bottom text-sm border-collapse">
+           <div className="rounded-lg border border-[hsl(var(--border))] overflow-auto relative" style={{ maxHeight: 'calc(100vh - 260px)' }}>
+            <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: 62 }} />
+                <col style={{ width: 62 }} />
+                <col />
+                <col style={{ width: 200 }} />
+                <col style={{ width: 120 }} />
+                <col style={{ width: 110 }} />
+                <col style={{ width: 90 }} />
+                <col style={{ width: 68 }} />
+                <col style={{ width: 40 }} />
+              </colgroup>
               <thead className="[&_tr]:border-b sticky top-0 z-20 bg-primary">
                 <tr className="border-b !h-auto">
-                  <th className="px-0.5 py-[3px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-0 z-30 bg-primary w-[40px]" onClick={() => toggleSort('data')}>Comp.{sortIcon('data')}</th>
-                  <th className="px-0.5 py-[3px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[40px] z-30 bg-primary w-[40px]" onClick={() => toggleSort('pgto')}>Pgto{sortIcon('pgto')}</th>
-                  <th className="px-1 py-[3px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto{sortIcon('produto')}</th>
-                  <th className="px-1 py-[3px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor{sortIcon('fornecedor')}</th>
-                  <th className="px-1 py-[3px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Centro</th>
-                  <th className="px-1 py-[3px] text-right align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none w-[110px]" onClick={() => toggleSort('valor')}>Valor{sortIcon('valor')}</th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground w-[90px]">NF</th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground w-[68px]">Status</th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground w-[40px]"></th>
+                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-0 z-30 bg-primary" onClick={() => toggleSort('data')}>Comp.{sortIcon('data')}</th>
+                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[62px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto{sortIcon('pgto')}</th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto{sortIcon('produto')}</th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor{sortIcon('fornecedor')}</th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Centro</th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('valor')}>Valor{sortIcon('valor')}</th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">NF</th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Status</th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground"></th>
                 </tr>
               </thead>
               <tbody className="[&_tr:last-child]:border-0">
@@ -833,18 +813,18 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
                     return (
                       <tr key={l.id} className="border-b italic !h-auto hover:bg-muted/50 transition-colors">
-                        <td className="font-mono w-[40px] px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-0 z-10 bg-background">{fmtDate(l.data_competencia)}</td>
-                        <td className="font-mono w-[40px] px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[40px] z-10 bg-background">{fmtDate(l.data_pagamento)}</td>
-                        <td className="truncate max-w-0 px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={l.descricao || ''}>{l.descricao || '-'}</td>
-                        <td className="truncate max-w-0 px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={fornNome || ''}>
+                        <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-0 z-10 bg-background text-center">{fmtDate(l.data_competencia)}</td>
+                        <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[62px] z-10 bg-background text-center">{fmtDate(l.data_pagamento)}</td>
+                        <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={l.descricao || ''}>{l.descricao || '-'}</td>
+                        <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
                         </td>
-                        <td className="truncate max-w-0 px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={l.centro_custo || ''}>{l.centro_custo || '-'}</td>
-                        <td className={`text-right font-semibold w-[110px] whitespace-nowrap px-2 py-1 align-middle text-[12px] leading-tight ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
+                        <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={l.centro_custo || ''}>{l.centro_custo || '-'}</td>
+                        <td className={`text-right font-semibold whitespace-nowrap px-2 py-1 align-middle text-[12px] leading-tight ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
                           {fmtValor(l.valor, l.sinal)}
                         </td>
-                        <td className="font-mono text-muted-foreground text-center w-[90px] px-1 py-1 align-middle text-[12px] leading-tight">{formatNF(l.nota_fiscal)}</td>
-                        <td className={`text-center w-[68px] px-1 py-1 align-middle text-[12px] leading-tight ${stColor}`}>{stLabel}</td>
+                        <td className="font-mono text-muted-foreground text-center px-1 py-1 align-middle text-[12px] leading-tight">{formatNF(l.nota_fiscal)}</td>
+                        <td className={`text-center px-1 py-1 align-middle text-[12px] leading-tight ${stColor}`}>{stLabel}</td>
                         <td className="!py-0 px-0 w-[40px] align-middle">
                           <div className="flex items-center justify-center gap-0.5">
                             <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => openEdit(l)} disabled={!canEditRow} title={rowMesFechado ? 'Mês fechado' : isHistoricoReadOnly ? 'Histórico antigo: somente leitura' : 'Editar'}>
