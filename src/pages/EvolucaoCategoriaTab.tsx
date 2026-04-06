@@ -342,6 +342,48 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
 
   return (
     <div className="p-3 w-full space-y-1 animate-fade-in pb-20">
+      {/* Status badges — alinhados à direita, na mesma altura do título do parent */}
+      <div className="flex items-center justify-end gap-2 -mt-7">
+        {isRealizado && conciliacaoStatus && (
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
+            conciliacaoStatus === 'fechado'
+              ? 'bg-green-50 border-green-300 text-green-800'
+              : conciliacaoStatus === 'parcial'
+                ? 'bg-orange-50 border-orange-300 text-orange-800'
+                : 'bg-muted border-border text-muted-foreground'
+          }`}>
+            {conciliacaoStatus === 'fechado' ? (
+              <CheckCircle className="h-3.5 w-3.5" />
+            ) : conciliacaoStatus === 'parcial' ? (
+              <AlertTriangle className="h-3.5 w-3.5" />
+            ) : (
+              <Clock className="h-3.5 w-3.5" />
+            )}
+            Pasto: {conciliacaoStatus === 'fechado' ? 'Fechado' : conciliacaoStatus === 'parcial' ? 'Parcial' : 'Aberto'}
+          </div>
+        )}
+        {isRealizado && rebanhoStatus && (
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
+            rebanhoStatus === 'fechado'
+              ? 'bg-green-50 border-green-300 text-green-800'
+              : 'bg-muted border-border text-muted-foreground'
+          }`}>
+            {rebanhoStatus === 'fechado' ? (
+              <CheckCircle className="h-3.5 w-3.5" />
+            ) : (
+              <Clock className="h-3.5 w-3.5" />
+            )}
+            Rebanho: {rebanhoStatus === 'fechado' ? 'Fechado' : 'Aberto'}
+          </div>
+        )}
+        {valorRebanhoTotal > 0 && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-blue-50 border-blue-300 text-blue-800">
+            <DollarSign className="h-3.5 w-3.5" />
+            Valor Rebanho: {valorRebanhoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+          </div>
+        )}
+      </div>
+
       {/* Ano + régua de meses */}
       <div className="flex items-center gap-2">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
