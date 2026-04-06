@@ -69,6 +69,10 @@ interface Props {
   compraParaEditar?: Lancamento | null;
   /** Callback to return to the origin tab after edit cancel/save */
   onReturnFromEdit?: () => void;
+  /** Initial year filter for historico view */
+  initialAnoFiltro?: string;
+  /** Initial month filter for historico view */
+  initialMesFiltro?: string;
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
