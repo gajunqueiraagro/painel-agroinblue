@@ -11,7 +11,7 @@ import { STATUS_LABEL, type StatusOperacional } from '@/lib/statusOperacional';
 import { ReclassificacaoResumoPanel } from './ReclassificacaoResumoPanel';
 
 interface Props {
-  onAdicionar: (l: Omit<Lancamento, 'id'>) => void;
+  onAdicionar: (l: Omit<Lancamento, 'id'>) => Promise<string | undefined> | void;
   dataInicial?: string;
   lancamentos?: Lancamento[];
   ano?: number;
