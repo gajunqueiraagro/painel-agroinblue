@@ -64,7 +64,7 @@ export function ConsolidacaoCategoriaView({ data, ano, onBack }: Props) {
       </div>
 
       <div className="w-full flex justify-start mt-0">
-        <div className="w-[70%] min-w-[900px]">
+        <div className="w-[60%] min-w-[900px]">
           <div className="rounded-lg border border-orange-200">
             <table className="w-full table-fixed text-[10px]">
               <colgroup>
@@ -92,7 +92,7 @@ export function ConsolidacaoCategoriaView({ data, ano, onBack }: Props) {
                   <th className={TH}>GMD</th>
                   <th className={TH}>Prod. Bio</th>
                   <th className={TH}>Peso Final</th>
-                  <th className={`${TH} bg-orange-600/30`}>PM Final</th>
+                  <th className={`${TH} bg-orange-600/30`}>Peso Médio kg</th>
                 </tr>
               </thead>
               <tbody>
