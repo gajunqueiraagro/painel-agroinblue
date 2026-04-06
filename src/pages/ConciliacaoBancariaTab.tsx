@@ -306,7 +306,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos }: ConciliacaoP
           status = hasNaoConc ? 'nao_conciliado' : hasAtencao ? 'atencao' : 'conciliado';
         }
       } else {
-        status = getStatus(diferenca, saldoExtrato);
+        status = getConciliacaoStatus(diferenca, saldoExtrato);
       }
 
       saldoAcumulado += (totalEntradas - totalSaidas);
