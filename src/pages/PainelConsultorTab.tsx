@@ -926,7 +926,7 @@ function SourceInfoTooltip({ indicadorId, cenario }: { indicadorId?: string; cen
 }
 
 // ─── Component ───
-export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal }: Props) {
+export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaConsolidacao }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { pastos, categorias } = usePastos();
   const { lancamentos: lancPec, saldosIniciais } = useLancamentos();
