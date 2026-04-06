@@ -133,20 +133,23 @@ function CellWithTooltip({
       </TooltipTrigger>
       <TooltipContent
         side="top"
-        className="bg-white border border-border shadow-md p-2 text-xs max-w-[280px]"
+        className="bg-white border border-orange-200 shadow-lg p-2.5 max-w-[260px] rounded-lg"
       >
-        <p className="font-semibold text-foreground mb-1">{catLabel} — {mesLabel}</p>
+        <p className="font-bold text-[11px] text-orange-700 mb-1.5">{catLabel} — {mesLabel}</p>
         {breakdown.length === 0 ? (
-          <p className="text-muted-foreground italic">Sem movimentações</p>
+          <p className="text-muted-foreground italic text-[10px] pl-2">Sem movimentações</p>
         ) : (
-          breakdown.map((b, i) => (
-            <p key={i} className="text-foreground">
-              {b.tipoLabel}: <span className="font-medium">{fmt(b.quantidade)} cab</span>
-              {b.pesoTotal > 0 && (
-                <span className="text-muted-foreground"> | {fmt(b.pesoTotal, 1)} kg</span>
-              )}
-            </p>
-          ))
+          breakdown.map((b, i) => {
+            const pesoMedio = b.quantidade > 0 ? b.pesoTotal / b.quantidade : 0;
+            return (
+              <p key={i} className="text-[10px] text-foreground/80 pl-2 leading-relaxed">
+                {b.tipoLabel}: <span className="font-semibold text-foreground">{fmt(b.quantidade)} cab</span>
+                {pesoMedio > 0 && (
+                  <span className="text-muted-foreground"> | {fmt(pesoMedio, 1)} kg</span>
+                )}
+              </p>
+            );
+          })
         )}
       </TooltipContent>
     </Tooltip>
