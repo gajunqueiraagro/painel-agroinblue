@@ -419,7 +419,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
       </div>
 
       {/* Filtros secundários */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
           {([
             { value: 'realizado' as const, label: 'Realizado' },
@@ -444,7 +444,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
         {onNavigateToReclass && (
           <button
             onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: Number(mesFiltro) })}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 transition-colors ml-auto"
           >
             <RefreshCw className="h-3.5 w-3.5" />
             Reclass.
