@@ -429,25 +429,34 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
       </div>
 
       {/* Tabela */}
-      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
-          <table className="w-full text-[10px]">
+      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto" style={{ maxWidth: 610 }}>
+          <table className="text-[10px]" style={{ tableLayout: 'fixed', width: 610 }}>
+            <colgroup>
+              <col style={{ width: 70 }} />
+              <col style={{ width: 40 }} />
+              {COLUNAS_MOV.map(col => (
+                <col key={col.tipo} style={{ width: 40 }} />
+              ))}
+              <col style={{ width: 50 }} />
+              <col style={{ width: 50 }} />
+            </colgroup>
             <thead>
               <tr className="border-b bg-muted">
-                <th className="text-left px-1.5 py-1 font-bold text-foreground sticky left-0 bg-muted min-w-[70px]">
+                <th className="text-left px-1.5 py-1 font-bold text-foreground sticky left-0 bg-muted">
                   Categoria
                 </th>
-                <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[40px] bg-muted">
+                <th className="px-1.5 py-1 font-bold text-foreground text-center bg-muted">
                   Saldo Ini.
                 </th>
                 {COLUNAS_MOV.map(col => (
-                  <th key={col.tipo} className={`px-1.5 py-1 font-bold text-center min-w-[40px] ${col.entrada ? 'text-success' : 'text-destructive'}`}>
+                  <th key={col.tipo} className={`px-1.5 py-1 font-bold text-center ${col.entrada ? 'text-success' : 'text-destructive'}`}>
                     {col.label}
                   </th>
                 ))}
-                <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-muted">
+                <th className="px-1.5 py-1 font-bold text-foreground text-center bg-muted">
                   Saldo Fin.
                 </th>
-                <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-muted">
+                <th className="px-1.5 py-1 font-bold text-foreground text-center bg-muted">
                   Peso (kg)
                 </th>
               </tr>
