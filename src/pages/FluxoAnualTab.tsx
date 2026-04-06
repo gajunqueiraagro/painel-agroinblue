@@ -81,7 +81,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
             <ArrowLeft className="h-3.5 w-3.5" /> Voltar
           </Button>
           <h2 className="text-sm font-bold text-foreground">
-            Evolução — {mesLabel}/{anoFiltro}
+            Evolução de Categorias — {mesLabel}/{anoFiltro}
           </h2>
         </div>
         <EvolucaoCategoriaTab
