@@ -109,6 +109,13 @@ function fmtDate(d: string | null) {
   if (!d) return '-';
   try { return format(parseISO(d), 'dd/MM/yy'); } catch { return d; }
 }
+function formatNF(nf: string | null | undefined): string {
+  if (!nf) return '-';
+  const digits = nf.replace(/\D/g, '');
+  if (!digits) return '-';
+  const padded = digits.padStart(9, '0').slice(-9);
+  return `${padded.slice(0, 3)}.${padded.slice(3, 6)}.${padded.slice(6, 9)}`;
+}
 
 interface Props {
   onBack?: () => void;
