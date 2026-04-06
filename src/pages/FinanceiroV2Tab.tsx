@@ -813,18 +813,18 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
                     return (
                       <tr key={l.id} className="border-b italic !h-auto hover:bg-muted/50 transition-colors">
-                        <td className="font-mono w-[40px] px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-0 z-10 bg-background">{fmtDate(l.data_competencia)}</td>
-                        <td className="font-mono w-[40px] px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[40px] z-10 bg-background">{fmtDate(l.data_pagamento)}</td>
-                        <td className="truncate max-w-0 px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={l.descricao || ''}>{l.descricao || '-'}</td>
-                        <td className="truncate max-w-0 px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={fornNome || ''}>
+                        <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-0 z-10 bg-background text-center">{fmtDate(l.data_competencia)}</td>
+                        <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[62px] z-10 bg-background text-center">{fmtDate(l.data_pagamento)}</td>
+                        <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={l.descricao || ''}>{l.descricao || '-'}</td>
+                        <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
                         </td>
-                        <td className="truncate max-w-0 px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={l.centro_custo || ''}>{l.centro_custo || '-'}</td>
-                        <td className={`text-right font-semibold w-[110px] whitespace-nowrap px-2 py-1 align-middle text-[12px] leading-tight ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
+                        <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={l.centro_custo || ''}>{l.centro_custo || '-'}</td>
+                        <td className={`text-right font-semibold whitespace-nowrap px-2 py-1 align-middle text-[12px] leading-tight ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
                           {fmtValor(l.valor, l.sinal)}
                         </td>
-                        <td className="font-mono text-muted-foreground text-center w-[90px] px-1 py-1 align-middle text-[12px] leading-tight">{formatNF(l.nota_fiscal)}</td>
-                        <td className={`text-center w-[68px] px-1 py-1 align-middle text-[12px] leading-tight ${stColor}`}>{stLabel}</td>
+                        <td className="font-mono text-muted-foreground text-center px-1 py-1 align-middle text-[12px] leading-tight">{formatNF(l.nota_fiscal)}</td>
+                        <td className={`text-center px-1 py-1 align-middle text-[12px] leading-tight ${stColor}`}>{stLabel}</td>
                         <td className="!py-0 px-0 w-[40px] align-middle">
                           <div className="flex items-center justify-center gap-0.5">
                             <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => openEdit(l)} disabled={!canEditRow} title={rowMesFechado ? 'Mês fechado' : isHistoricoReadOnly ? 'Histórico antigo: somente leitura' : 'Editar'}>
