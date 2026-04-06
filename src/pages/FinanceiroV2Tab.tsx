@@ -17,6 +17,7 @@ import { useFechamentoMensal } from '@/hooks/useFechamentoMensal';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
 import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2ExportMenu';
+import { CorrecaoTransferenciasDialog } from '@/components/financeiro-v2/CorrecaoTransferenciasDialog';
 import { FechamentoMensalBanner } from '@/components/financeiro/FechamentoMensalBanner';
 import { format, parseISO } from 'date-fns';
 
