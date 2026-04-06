@@ -659,6 +659,9 @@ const Index = () => {
             setMetaLancMesFiltro(mesVal);
             setActiveTab('meta_movimentacoes');
           }}
+          onNavigateToReclass={() => {
+            setActiveTab('meta_movimentacoes');
+          }}
         />
       )}
       </div>

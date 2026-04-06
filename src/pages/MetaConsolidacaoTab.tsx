@@ -21,12 +21,12 @@ interface Props {
 
 type Screen = 'hub' | 'categoria' | 'mes';
 
-export function MetaConsolidacaoTab({ saldosIniciais, metaLancamentos, gmdRows, ano, onBack, onNavigateToLancamentos }: Props) {
+export function MetaConsolidacaoTab({ saldosIniciais, metaLancamentos, gmdRows, ano, onBack, onNavigateToLancamentos, onNavigateToReclass }: Props) {
   const data = useMetaConsolidacao(saldosIniciais, metaLancamentos, gmdRows, ano);
   const [screen, setScreen] = useState<Screen>('hub');
 
   if (screen === 'categoria') {
-    return <ConsolidacaoCategoriaView data={data} ano={ano} metaLancamentos={metaLancamentos} onBack={() => setScreen('hub')} onNavigateToLancamentos={onNavigateToLancamentos} />;
+    return <ConsolidacaoCategoriaView data={data} ano={ano} metaLancamentos={metaLancamentos} onBack={() => setScreen('hub')} onNavigateToLancamentos={onNavigateToLancamentos} onNavigateToReclass={onNavigateToReclass} />;
   }
 
   if (screen === 'mes') {
