@@ -632,6 +632,15 @@ const Index = () => {
           backLabel="Voltar para Metas"
         />
       )}
+      {activeTab === 'meta_consolidacao' && (
+        <MetaConsolidacaoTab
+          saldosIniciais={saldosIniciais}
+          metaLancamentos={metaLancamentos}
+          gmdRows={metaGmd.rows}
+          ano={Number(filtroGlobal.ano)}
+          onBack={() => setActiveTab('metas_hub')}
+        />
+      )}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
