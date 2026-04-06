@@ -617,14 +617,14 @@ const Index = () => {
       {activeTab === 'conta_boitel' && (
         <ContaBoitelTab onBack={() => setActiveTab('financeiro_v2_hub')} />
       )}
-      {activeTab === 'metas_hub' && (
-        <MetasHubTab onTabChange={handleTabChange} />
+      {activeTab === 'painel_consultor_hub' && (
+        <PainelConsultorHubTab onTabChange={handleTabChange} onBack={goToVisaoZooHub} />
       )}
       {activeTab === 'meta_gmd' && (
-        <MetaGmdTab onBack={() => setActiveTab('metas_hub')} />
+        <MetaGmdTab onBack={() => setActiveTab('painel_consultor_hub')} />
       )}
       {activeTab === 'meta_preco' && (
-        <MetaPrecoTab onBack={() => setActiveTab('metas_hub')} />
+        <MetaPrecoTab onBack={() => setActiveTab('painel_consultor_hub')} />
       )}
       {activeTab === 'meta_movimentacoes' && (
         <LancamentosTab
@@ -632,8 +632,8 @@ const Index = () => {
           onAdicionar={canEditZoo ? (metaAdicionar as any) : noOp}
           onEditar={canEditZoo ? (metaEditar as any) : noOp}
           onRemover={canEditZoo ? (metaRemover as any) : noOp}
-          onBackToConciliacao={() => setActiveTab('metas_hub')}
-          backLabel="Voltar para Metas"
+          onBackToConciliacao={() => setActiveTab('painel_consultor_hub')}
+          backLabel="Voltar para Painel do Consultor"
         />
       )}
       {activeTab === 'meta_consolidacao' && (
@@ -642,7 +642,7 @@ const Index = () => {
           metaLancamentos={metaLancamentos}
           gmdRows={metaGmd.rows}
           ano={Number(filtroGlobal.ano)}
-          onBack={() => setActiveTab('metas_hub')}
+          onBack={() => setActiveTab('painel_consultor_hub')}
         />
       )}
       </div>
