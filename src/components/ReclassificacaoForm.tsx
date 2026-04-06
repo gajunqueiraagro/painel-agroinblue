@@ -79,7 +79,7 @@ export function ReclassificacaoFormFields(props: Props & {
       {/* Status selector – same pattern as Venda/Abate/Transferência */}
       <div className="space-y-1">
         <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Status da Operação</Label>
-        <div className="grid grid-cols-3 gap-1">
+        <div className="grid grid-cols-2 gap-1">
           {STATUS_BUTTONS.map(s => {
             const selected = statusOp === s.value;
             return (
