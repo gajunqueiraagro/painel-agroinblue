@@ -37,7 +37,7 @@ import { VisaoAnualZootecnicaTab } from './VisaoAnualZootecnicaTab';
 import { FechamentoExecutivoTab } from './FechamentoExecutivoTab';
 import { AnaliseConsultorTab } from './AnaliseConsultorTab';
 import { PrecoMercadoTab } from './PrecoMercadoTab';
-import { MetasHubTab } from './MetasHubTab';
+import { PainelConsultorHubTab } from './PainelConsultorHubTab';
 import { MetaGmdTab } from './MetaGmdTab';
 import { MetaPrecoTab } from './MetaPrecoTab';
 import { GraficosAnaliseTab } from './GraficosAnaliseTab';
