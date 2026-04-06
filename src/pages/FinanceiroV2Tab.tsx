@@ -517,13 +517,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   // Compact select class
   const selCls = "h-6 text-[10px]";
   const itemCls = "text-[10px] py-0.5";
-  const lblCls = "text-[9px] text-muted-foreground font-medium leading-none mb-0.5 block";
+  const lblCls = "text-[9px] font-semibold leading-none mb-0.5 block text-[hsl(213_52%_24%)]";
 
   return (
-    <div className="space-y-1 pb-20">
+    <div className="space-y-1 pb-20" style={{ backgroundColor: '#F3F6FA' }}>
       {/* FILTERS */}
-      <Card className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(210_33%_97%)] shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
-        <CardContent className="p-2 space-y-1.5">
+      <Card className="rounded-lg bg-white" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
+        <CardContent className="p-2 space-y-1">
           {/* LINE 1: Ano | Mês | Tipo | Status | Fazenda | Atividade */}
           <div className="grid grid-cols-[62px_77px_106px_106px_0.35fr_110px] gap-1.5 items-end">
             <div>
