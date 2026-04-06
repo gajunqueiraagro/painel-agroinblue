@@ -791,18 +791,18 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
       {mode === 'list' && !hook.loading && ano && (
         <>
-          <div className="rounded-lg border overflow-auto relative" style={{ maxHeight: 'calc(100vh - 280px)' }}>
+          <div className="rounded-lg border border-[hsl(var(--border))] overflow-auto relative" style={{ maxHeight: 'calc(100vh - 280px)' }}>
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse">
-              <thead className="[&_tr]:border-b sticky top-0 z-20 bg-muted">
+              <thead className="[&_tr]:border-b sticky top-0 z-20 bg-primary">
                 <tr className="border-b !h-auto">
-                  <th className="px-0.5 py-[2px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground cursor-pointer select-none sticky left-0 z-30 bg-muted w-[40px]" onClick={() => toggleSort('data')}>Comp.{sortIcon('data')}</th>
-                  <th className="px-0.5 py-[2px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground cursor-pointer select-none sticky left-[40px] z-30 bg-muted w-[40px]" onClick={() => toggleSort('pgto')}>Pgto{sortIcon('pgto')}</th>
-                  <th className="px-1 py-[2px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto{sortIcon('produto')}</th>
-                  <th className="px-1 py-[2px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor{sortIcon('fornecedor')}</th>
-                  <th className="px-1 py-[2px] text-right align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground cursor-pointer select-none w-[110px]" onClick={() => toggleSort('valor')}>Valor{sortIcon('valor')}</th>
-                  <th className="px-1 py-[2px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground w-[72px]">NF</th>
-                  <th className="px-1 py-[2px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground w-[68px]">Status</th>
-                  <th className="px-1 py-[2px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-muted-foreground w-[40px]"></th>
+                  <th className="px-0.5 py-[3px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-0 z-30 bg-primary w-[40px]" onClick={() => toggleSort('data')}>Comp.{sortIcon('data')}</th>
+                  <th className="px-0.5 py-[3px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[40px] z-30 bg-primary w-[40px]" onClick={() => toggleSort('pgto')}>Pgto{sortIcon('pgto')}</th>
+                  <th className="px-1 py-[3px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto{sortIcon('produto')}</th>
+                  <th className="px-1 py-[3px] text-left align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor{sortIcon('fornecedor')}</th>
+                  <th className="px-1 py-[3px] text-right align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none w-[110px]" onClick={() => toggleSort('valor')}>Valor{sortIcon('valor')}</th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground w-[72px]">NF</th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground w-[68px]">Status</th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground w-[40px]"></th>
                 </tr>
               </thead>
               <tbody className="[&_tr:last-child]:border-0">
