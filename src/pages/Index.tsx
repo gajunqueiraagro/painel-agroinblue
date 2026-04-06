@@ -134,6 +134,7 @@ const Index = () => {
   const [movDrillLabel, setMovDrillLabel] = useState<string | undefined>(undefined);
   const [movBackTab, setMovBackTab] = useState<TabId | undefined>(undefined);
   const [lancamentosFromConciliacao, setLancamentosFromConciliacao] = useState(false);
+  const [conciliacaoContext, setConciliacaoContext] = useState<{ ano: string; mes: string; contaId: string } | null>(null);
   const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
   const [lancamentosFromFechamento, setLancamentosFromFechamento] = useState(false);
   const [lancamentosFromEvolCategoria, setLancamentosFromEvolCategoria] = useState(false);
