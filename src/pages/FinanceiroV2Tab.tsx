@@ -667,7 +667,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 value={produtoFiltro}
                 onChange={e => setProdutoFiltro(e.target.value)}
                 placeholder="Buscar..."
-                className="h-6 !text-[8px] placeholder:!text-[8px] leading-tight px-1.5 bg-background border-[hsl(210_20%_80%)]"
+                className="h-6 !text-[8px] placeholder:!text-[8px] leading-tight px-1.5 bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus-visible:ring-[#1E3A5F]"
                 autoCorrect="off"
                 autoCapitalize="none"
                 spellCheck={false}
