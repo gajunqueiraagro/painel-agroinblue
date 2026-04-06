@@ -292,10 +292,12 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       return undefined;
     }
 
+    const cenarioEfetivo = insertData.status_operacional === 'previsto' ? 'meta' : cenario;
+
     const { data, error } = await supabase.from('lancamentos').insert({
       fazenda_id: fazendaId,
       cliente_id: clienteId!,
-      cenario,
+      cenario: cenarioEfetivo,
       ...insertData,
     }).select().single();
 
