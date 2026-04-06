@@ -517,19 +517,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   // Compact select class
   const selCls = "h-6 text-[10px]";
   const itemCls = "text-[10px] py-0.5";
-  const lblCls = "text-[9px] text-muted-foreground font-medium leading-none mb-0.5 block";
+  const lblCls = "text-[9px] font-semibold leading-none mb-0.5 block text-[hsl(213_52%_24%)]";
 
   return (
-    <div className="space-y-1 pb-20">
+    <div className="space-y-1 pb-20" style={{ backgroundColor: '#F3F6FA' }}>
       {/* FILTERS */}
-      <Card className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(210_33%_97%)] shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
-        <CardContent className="p-2 space-y-1.5">
+      <Card className="rounded-lg bg-white" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
+        <CardContent className="p-2 space-y-1">
           {/* LINE 1: Ano | Mês | Tipo | Status | Fazenda | Atividade */}
           <div className="grid grid-cols-[62px_77px_106px_106px_0.35fr_110px] gap-1.5 items-end">
             <div>
               <label className={lblCls}>Ano</label>
               <Select value={ano} onValueChange={setAno}>
-                <SelectTrigger className={`${selCls} w-full bg-background border-[hsl(210_20%_80%)]`}><SelectValue /></SelectTrigger>
+                <SelectTrigger className={`${selCls} w-full bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
                 <SelectContent>{anos.map(a => <SelectItem key={a} value={a} className={itemCls}>{a}</SelectItem>)}</SelectContent>
               </Select>
             </div>
@@ -537,7 +537,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <label className={lblCls}>Mês</label>
               <Popover open={mesPopoverOpen} onOpenChange={setMesPopoverOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-6 text-[10px] justify-between font-normal px-1.5 w-full bg-background border-[hsl(210_20%_80%)]">
+                  <Button variant="outline" className="h-6 text-[10px] justify-between font-normal px-1.5 w-full bg-white border-[#C9D4E2] hover:border-[#AFC2D8]">
                     {mesLabel}
                     <ChevronsUpDown className="h-2.5 w-2.5 opacity-50" />
                   </Button>
@@ -561,7 +561,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div>
               <label className={lblCls}>Tipo</label>
               <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigem('__all__'); setContaDestino('__all__'); }}>
-                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)]`}><SelectValue /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
                   <SelectItem value="1-Entradas" className={itemCls}>Entradas</SelectItem>
@@ -573,7 +573,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div>
               <label className={lblCls}>Status</label>
               <Select value={statusTransacao} onValueChange={setStatusTransacao}>
-                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)]`}><SelectValue /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
                   <SelectItem value="previsto" className={itemCls}>{CENTRAL_STATUS_LABEL.previsto}</SelectItem>
@@ -586,7 +586,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div>
               <label className={lblCls}>Fazenda</label>
               <Select value={fazendaId} onValueChange={setFazendaId}>
-                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)]`}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
                   {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id} className={itemCls}>{f.nome}</SelectItem>)}
@@ -596,7 +596,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div>
               <label className={lblCls}>Atividade</label>
               <Select value={atividadeFiltro} onValueChange={setAtividadeFiltro}>
-                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)]`}><SelectValue /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
                   <SelectItem value="pecuaria" className={itemCls}>Pecuária</SelectItem>
@@ -607,11 +607,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           </div>
 
           {/* LINE 2: Conta Origem | Conta Destino | Macro | Centro | Subcentro */}
-          <div className="grid grid-cols-[145px_145px_130px_130px_130px] gap-1.5">
+          <div className="grid grid-cols-[145px_145px_130px_130px_130px] gap-1.5 items-end">
             <div>
               <label className={lblCls}>Conta Origem</label>
               <Select value={contaOrigem} onValueChange={setContaOrigem} disabled={isEntrada}>
-                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)] ${isEntrada ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isEntrada ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
                   {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
@@ -621,7 +621,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div>
               <label className={lblCls}>Conta Destino</label>
               <Select value={contaDestino} onValueChange={setContaDestino} disabled={isSaida}>
-                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)] ${isSaida ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isSaida ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
                   {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
@@ -660,14 +660,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           </div>
 
           {/* LINE 3: Produto | Fornecedor */}
-          <div className="grid grid-cols-[200px_300px] gap-1.5">
+          <div className="grid grid-cols-[200px_300px] gap-1.5 items-end">
             <div>
               <label className={lblCls}>Produto</label>
               <Input
                 value={produtoFiltro}
                 onChange={e => setProdutoFiltro(e.target.value)}
                 placeholder="Buscar..."
-                className="h-6 !text-[8px] placeholder:!text-[8px] leading-tight px-1.5 bg-background border-[hsl(210_20%_80%)]"
+                className="h-6 !text-[8px] placeholder:!text-[8px] leading-tight px-1.5 bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus-visible:ring-[#1E3A5F]"
                 autoCorrect="off"
                 autoCapitalize="none"
                 spellCheck={false}
@@ -748,7 +748,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 {mode === 'rapido' ? 'Lista' : 'Rápido'}
               </Button>
               {mode === 'list' && !mesFechadoAtivo && (
-                <Button size="sm" onClick={openNew} className="h-6 text-[10px] gap-0.5 px-2">
+                <Button size="sm" onClick={openNew} className="h-6 text-[10px] gap-0.5 px-2 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]">
                   <Plus className="h-3 w-3" /> Novo
                 </Button>
               )}
