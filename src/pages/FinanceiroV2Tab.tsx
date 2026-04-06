@@ -607,7 +607,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           </div>
 
           {/* LINE 2: Conta Origem | Conta Destino | Macro */}
-          <div className="grid grid-cols-[0.7fr_0.7fr_0.5fr] gap-1.5">
+          <div className="grid grid-cols-[0.35fr_0.35fr_0.3fr] gap-1.5">
             <div>
               <label className={lblCls}>Conta Origem</label>
               <Select value={contaOrigem} onValueChange={setContaOrigem} disabled={isEntrada}>
