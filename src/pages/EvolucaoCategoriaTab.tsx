@@ -376,7 +376,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
         </div>
       </div>
 
-      {/* Filtros secundários */}
+      {/* Filtros secundários — status badges na linha do título (via parent) + Realizado/Previsto + Reclass */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
@@ -400,55 +400,57 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
               </button>
             ))}
           </div>
+          {onNavigateToReclass && (
+            <button
+              onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: Number(mesFiltro) })}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 transition-colors"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Reclass.
+            </button>
+          )}
         </div>
 
-        {isRealizado && conciliacaoStatus && (
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
-            conciliacaoStatus === 'fechado'
-              ? 'bg-green-50 border-green-300 text-green-800'
-              : conciliacaoStatus === 'parcial'
-                ? 'bg-orange-50 border-orange-300 text-orange-800'
+        <div className="flex items-center gap-2 flex-wrap">
+          {isRealizado && conciliacaoStatus && (
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
+              conciliacaoStatus === 'fechado'
+                ? 'bg-green-50 border-green-300 text-green-800'
+                : conciliacaoStatus === 'parcial'
+                  ? 'bg-orange-50 border-orange-300 text-orange-800'
+                  : 'bg-muted border-border text-muted-foreground'
+            }`}>
+              {conciliacaoStatus === 'fechado' ? (
+                <CheckCircle className="h-3.5 w-3.5" />
+              ) : conciliacaoStatus === 'parcial' ? (
+                <AlertTriangle className="h-3.5 w-3.5" />
+              ) : (
+                <Clock className="h-3.5 w-3.5" />
+              )}
+              Pasto: {conciliacaoStatus === 'fechado' ? 'Fechado' : conciliacaoStatus === 'parcial' ? 'Parcial' : 'Aberto'}
+            </div>
+          )}
+          {isRealizado && rebanhoStatus && (
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
+              rebanhoStatus === 'fechado'
+                ? 'bg-green-50 border-green-300 text-green-800'
                 : 'bg-muted border-border text-muted-foreground'
-          }`}>
-            {conciliacaoStatus === 'fechado' ? (
-              <CheckCircle className="h-3.5 w-3.5" />
-            ) : conciliacaoStatus === 'parcial' ? (
-              <AlertTriangle className="h-3.5 w-3.5" />
-            ) : (
-              <Clock className="h-3.5 w-3.5" />
-            )}
-            Pasto: {conciliacaoStatus === 'fechado' ? 'Fechado' : conciliacaoStatus === 'parcial' ? 'Parcial' : 'Aberto'}
-          </div>
-        )}
-        {isRealizado && rebanhoStatus && (
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
-            rebanhoStatus === 'fechado'
-              ? 'bg-green-50 border-green-300 text-green-800'
-              : 'bg-muted border-border text-muted-foreground'
-          }`}>
-            {rebanhoStatus === 'fechado' ? (
-              <CheckCircle className="h-3.5 w-3.5" />
-            ) : (
-              <Clock className="h-3.5 w-3.5" />
-            )}
-            Rebanho: {rebanhoStatus === 'fechado' ? 'Fechado' : 'Aberto'}
-          </div>
-        )}
-        {valorRebanhoTotal > 0 && (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-blue-50 border-blue-300 text-blue-800">
-            <DollarSign className="h-3.5 w-3.5" />
-            Valor Rebanho: {valorRebanhoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
-          </div>
-        )}
-        {onNavigateToReclass && (
-          <button
-            onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: Number(mesFiltro) })}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 transition-colors"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Reclass.
-          </button>
-        )}
+            }`}>
+              {rebanhoStatus === 'fechado' ? (
+                <CheckCircle className="h-3.5 w-3.5" />
+              ) : (
+                <Clock className="h-3.5 w-3.5" />
+              )}
+              Rebanho: {rebanhoStatus === 'fechado' ? 'Fechado' : 'Aberto'}
+            </div>
+          )}
+          {valorRebanhoTotal > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-blue-50 border-blue-300 text-blue-800">
+              <DollarSign className="h-3.5 w-3.5" />
+              Valor Rebanho: {valorRebanhoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Tabela */}
