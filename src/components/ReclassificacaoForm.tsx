@@ -168,6 +168,7 @@ export function useReclassificacaoState(props: Props) {
   const [pesoKg, setPesoKg] = useState('');
   const [statusOp, setStatusOp] = useState<StatusOperacional>('conciliado');
   const [submitting, setSubmitting] = useState(false);
+  const [pesoAutoFilled, setPesoAutoFilled] = useState(false);
 
   const qtdInput = useIntegerInput(quantidade, setQuantidade);
   const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
