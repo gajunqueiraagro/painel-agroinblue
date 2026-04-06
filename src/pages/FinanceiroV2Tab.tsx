@@ -525,7 +525,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       <Card className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(210_33%_97%)] shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
         <CardContent className="p-2 space-y-1.5">
           {/* LINE 1: Ano | Mês | Tipo | Status | Fazenda | Atividade */}
-          <div className="grid grid-cols-[62px_77px_106px_80px_0.35fr_80px] gap-1.5 items-end">
+          <div className="grid grid-cols-[62px_77px_106px_106px_0.35fr_106px] gap-1.5 items-end">
             <div>
               <label className={lblCls}>Ano</label>
               <Select value={ano} onValueChange={setAno}>
@@ -607,7 +607,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           </div>
 
           {/* LINE 2: Conta Origem | Conta Destino | Macro */}
-          <div className="grid grid-cols-[0.35fr_0.35fr_0.3fr] gap-1.5">
+          <div className="grid grid-cols-[130px_130px_130px] gap-1.5">
             <div>
               <label className={lblCls}>Conta Origem</label>
               <Select value={contaOrigem} onValueChange={setContaOrigem} disabled={isEntrada}>
@@ -641,7 +641,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           </div>
 
           {/* LINE 3: Centro | Subcentro | Produto | Fornecedor */}
-          <div className="grid grid-cols-[1fr_1.4fr_1.4fr_1.6fr] gap-1.5">
+          <div className="grid grid-cols-[130px_130px_200px_200px] gap-1.5">
             <div>
               <label className={lblCls}>Centro</label>
               <SearchableSelect
