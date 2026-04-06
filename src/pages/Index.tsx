@@ -153,6 +153,7 @@ const Index = () => {
   const [lancamentosFromFluxoAnual, setLancamentosFromFluxoAnual] = useState(false);
   const [metaLancAnoFiltro, setMetaLancAnoFiltro] = useState<string | undefined>(undefined);
   const [metaLancMesFiltro, setMetaLancMesFiltro] = useState<string | undefined>(undefined);
+  const [metaLancAbaInicial, setMetaLancAbaInicial] = useState<'historico' | 'reclassificacao' | undefined>(undefined);
   const [abateParaEditar, setAbateParaEditar] = useState<Lancamento | null>(null);
   const [vendaParaEditar, setVendaParaEditar] = useState<Lancamento | null>(null);
   const [compraParaEditar, setCompraParaEditar] = useState<Lancamento | null>(null);
