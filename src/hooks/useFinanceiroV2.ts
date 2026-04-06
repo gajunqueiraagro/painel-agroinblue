@@ -210,7 +210,17 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       query = query.eq('fazenda_id', filtros.fazenda_id);
     }
 
-    if (filtros.meses && filtros.meses.length > 0 && !filtros.meses.includes('todos')) {
+    const isTodosAnos = !filtros.ano || filtros.ano === '__todos__';
+
+    if (isTodosAnos) {
+      // No year filter — optionally filter by month across all years
+      if (filtros.meses && filtros.meses.length > 0 && !filtros.meses.includes('todos')) {
+        // Filter by month suffix across all years (e.g. all Aprils)
+        const orParts = filtros.meses.map(m => `ano_mes.like.%-${m.padStart(2, '0')}`).join(',');
+        query = query.or(orParts);
+      }
+      // else: no month filter either → return all
+    } else if (filtros.meses && filtros.meses.length > 0 && !filtros.meses.includes('todos')) {
       const anoMeses = filtros.meses.map(m => `${filtros.ano}-${m.padStart(2, '0')}`);
       query = query.in('ano_mes', anoMeses);
     } else if (filtros.mes && filtros.mes !== 'todos') {
