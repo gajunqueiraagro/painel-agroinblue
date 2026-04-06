@@ -606,8 +606,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </div>
           </div>
 
-          {/* LINE 2: Conta Origem | Conta Destino | Macro */}
-          <div className="grid grid-cols-[130px_130px_130px] gap-1.5">
+          {/* LINE 2: Conta Origem | Conta Destino | Macro | Centro | Subcentro */}
+          <div className="grid grid-cols-[130px_130px_130px_130px_130px] gap-1.5">
             <div>
               <label className={lblCls}>Conta Origem</label>
               <Select value={contaOrigem} onValueChange={setContaOrigem} disabled={isEntrada}>
@@ -638,10 +638,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 placeholder="Buscar macro..."
               />
             </div>
-          </div>
-
-          {/* LINE 3: Centro | Subcentro | Produto | Fornecedor */}
-          <div className="grid grid-cols-[130px_130px_200px_200px] gap-1.5">
             <div>
               <label className={lblCls}>Centro</label>
               <SearchableSelect
@@ -661,6 +657,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 placeholder="Buscar subcentro..."
               />
             </div>
+          </div>
+
+          {/* LINE 3: Produto | Fornecedor */}
+          <div className="grid grid-cols-[200px_200px] gap-1.5">
             <div>
               <label className={lblCls}>Produto</label>
               <Input
