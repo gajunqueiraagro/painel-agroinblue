@@ -200,7 +200,21 @@ const Index = () => {
   });
   const metaGmd = useMetaGmd(filtroGlobal.ano);
   const metaLancamentosFiltrados = useMemo(() => filtrarPorCenario(metaLancamentos, 'meta'), [metaLancamentos]);
-  const metaConsolidacaoData = useMetaConsolidacao(saldosIniciais, metaLancamentosFiltrados, metaGmd.rows, Number(filtroGlobal.ano));
+  // For consolidation: ALL previsto records from both datasets (realizado + meta), deduplicated by ID
+  const todosPrevistos = useMemo(() => {
+    const previstoRealizado = lancamentos.filter(l => l.statusOperacional === 'previsto');
+    const previstoMeta = metaLancamentosFiltrados;
+    const seen = new Set<string>();
+    const result: Lancamento[] = [];
+    for (const l of [...previstoRealizado, ...previstoMeta]) {
+      if (!seen.has(l.id)) {
+        seen.add(l.id);
+        result.push(l);
+      }
+    }
+    return result;
+  }, [lancamentos, metaLancamentosFiltrados]);
+  const metaConsolidacaoData = useMetaConsolidacao(saldosIniciais, todosPrevistos, metaGmd.rows, Number(filtroGlobal.ano));
 
   const handleFiltroChange = useCallback((f: Partial<FiltroGlobal>) => {
     setFiltroGlobal(prev => ({ ...prev, ...f }));
@@ -681,7 +695,7 @@ const Index = () => {
       {activeTab === 'meta_consolidacao' && (
         <MetaConsolidacaoTab
           saldosIniciais={saldosIniciais}
-          metaLancamentos={metaLancamentosFiltrados}
+          metaLancamentos={todosPrevistos}
           gmdRows={metaGmd.rows}
           ano={Number(filtroGlobal.ano)}
           onBack={() => setActiveTab('painel_consultor_hub')}
