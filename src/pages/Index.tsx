@@ -195,6 +195,19 @@ const Index = () => {
     return lancamentos.filter(l => l.tipo !== 'transferencia_entrada' && l.tipo !== 'transferencia_saida');
   }, [lancamentos, isGlobal]);
 
+  // Merge realizado + meta for screens that need both cenários (Evolução, Fluxo Anual)
+  const lancamentosTodosCenarios = useMemo(() => {
+    const metaIds = new Set(metaLancamentos.map(l => l.id));
+    // Avoid duplicates: realizado first, then meta records not already present
+    const merged = [...lancamentosVisiveis];
+    for (const ml of metaLancamentos) {
+      if (!lancamentosVisiveis.some(l => l.id === ml.id)) {
+        merged.push(ml);
+      }
+    }
+    return merged;
+  }, [lancamentosVisiveis, metaLancamentos]);
+
   const navigateToMovimentacao = useCallback((subAba: SubAba, opts?: { ano?: string; mes?: string; label?: string; backTab?: TabId }) => {
     setSubAbaFinanceiro(subAba);
     setMovFiltroAno(opts?.ano);
