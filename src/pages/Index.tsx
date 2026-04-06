@@ -174,8 +174,24 @@ const Index = () => {
   const noOp = async () => {};
   const canEditZoo = canEdit('zootecnico') && !isGlobal;
   const canEditFin = canEdit('financeiro') && !isGlobal;
-  const wrappedAdicionar = canEditZoo ? adicionarLancamento : noOp;
-  const wrappedEditar = canEditZoo ? editarLancamento : noOp;
+
+  // Wrap adicionarLancamento to also reload meta data when a previsto record is saved
+  const wrappedAdicionar = canEditZoo ? (async (lancamento: Omit<Lancamento, 'id'>) => {
+    const result = await adicionarLancamento(lancamento);
+    if (result && lancamento.statusOperacional === 'previsto') {
+      metaLoadData();
+    }
+    return result;
+  }) : noOp;
+
+  // Wrap editarLancamento to also reload meta data when status changes
+  const wrappedEditar = canEditZoo ? (async (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => {
+    await editarLancamento(id, dados);
+    if (dados.statusOperacional === 'previsto') {
+      metaLoadData();
+    }
+  }) : noOp;
+
   const wrappedRemover = canEditZoo ? removerLancamento : noOp;
 
   const [filtroGlobal, setFiltroGlobal] = useState<FiltroGlobal>({
