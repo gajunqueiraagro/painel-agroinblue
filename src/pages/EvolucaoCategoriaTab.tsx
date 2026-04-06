@@ -327,11 +327,20 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
 
       const pesoMedio = pesosDb[cat.value] || null;
       const pastosQtd = pastosQtdPorCat[cat.value] || 0;
-      const delta = saldoFinal - pastosQtd;
+
+      // Use official RPC conciliation when available (same source as official conciliation screen)
+      let delta: number;
+      if (conciliacaoOficialLoaded) {
+        // RPC returns divergences keyed by categoria nome — if absent, means delta = 0
+        const oficialDiv = conciliacaoOficial[cat.label];
+        delta = oficialDiv ? oficialDiv.diferenca : 0;
+      } else {
+        delta = saldoFinal - pastosQtd;
+      }
 
       return { ...cat, saldoInicioMes, movs, saldoFinal, pesoMedio, pastosQtd, delta };
     });
-  }, [lancFiltrados, saldosIniciais, anoFiltro, mesFiltro, pesosDb, pastosQtdPorCat]);
+  }, [lancFiltrados, saldosIniciais, anoFiltro, mesFiltro, pesosDb, pastosQtdPorCat, conciliacaoOficial, conciliacaoOficialLoaded]);
 
   const totais = useMemo(() => {
     const saldoIni = dados.reduce((s, d) => s + d.saldoInicioMes, 0);
