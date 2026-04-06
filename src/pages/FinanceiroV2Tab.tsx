@@ -514,8 +514,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     return sortField === field ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
   };
 
-  const totalEntradas = sortedLancamentos.filter(l => l.sinal > 0).reduce((s, l) => s + l.valor, 0);
-  const totalSaidas = sortedLancamentos.filter(l => l.sinal < 0).reduce((s, l) => s + l.valor, 0);
+  const hasContaOrigemAtiva = contaOrigem && contaOrigem !== '__all__';
+  const hasContaDestinoAtiva = contaDestino && contaDestino !== '__all__';
+
+  const totalEntradas = (hasContaOrigemAtiva && !hasContaDestinoAtiva)
+    ? 0
+    : sortedLancamentos.filter(l => l.sinal > 0).reduce((s, l) => s + l.valor, 0);
+
+  const totalSaidas = (hasContaDestinoAtiva && !hasContaOrigemAtiva)
+    ? 0
+    : sortedLancamentos.filter(l => l.sinal < 0).reduce((s, l) => s + l.valor, 0);
 
   const toggleMes = (val: string) => {
     setMesesSelecionados(prev =>
