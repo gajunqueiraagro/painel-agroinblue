@@ -214,8 +214,8 @@ export function ConsolidacaoMesView({ data, ano, metaLancamentos, onBack, onNavi
               <tr className="bg-orange-500 text-white">
                 <th className={`${TH} text-left`}>Categoria</th>
                 <th className={`${TH} bg-orange-600/30`}>Saldo Inicial</th>
-                <th className={TH}>Entradas</th>
-                <th className={TH}>Saídas</th>
+                <th className={TH}>Entradas Externas</th>
+                <th className={TH}>Saídas Externas</th>
                 <th className={TH}>Evol. Cat. Entrada</th>
                 <th className={TH}>Evol. Cat. Saída</th>
                 <th className={`${TH} bg-orange-600/30`}>Saldo Final</th>
