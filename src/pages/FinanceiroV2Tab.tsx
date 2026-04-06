@@ -875,6 +875,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         defaultFazendaId={fazendaId !== '__all__' ? fazendaId : fazOperacionais[0]?.id || ''}
         onCriarFornecedor={hook.criarFornecedor}
       />
+
+      <CorrecaoTransferenciasDialog
+        open={correcaoOpen}
+        onClose={() => setCorrecaoOpen(false)}
+        contas={hook.contasBancarias}
+        onFixed={() => {
+          const filtros = buildFiltros();
+          if (filtros) hook.loadLancamentos(filtros);
+        }}
+      />
     </div>
   );
 }
