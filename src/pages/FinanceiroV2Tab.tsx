@@ -868,12 +868,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         onCriarFornecedor={hook.criarFornecedor}
       />
 
-      <CorrecaoTransferenciasDialog
-        open={correcaoOpen}
-        onClose={() => setCorrecaoOpen(false)}
-        contas={hook.contasBancarias}
-        onFixed={() => hook.loadLancamentos(filtros, hook.page)}
-      />
     </div>
   );
 }
