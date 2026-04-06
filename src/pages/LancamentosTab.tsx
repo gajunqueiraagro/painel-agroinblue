@@ -2570,6 +2570,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               onRequestRegister={reclassState.handleRegister}
               submitting={reclassState.submitting}
               canRegister={reclassState.canRegister}
+              onBack={onBackToConciliacao}
+              backLabel={backLabel}
             />
           </>
         ) : aba === 'historico' ? (
