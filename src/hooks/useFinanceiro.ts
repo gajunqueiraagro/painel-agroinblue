@@ -780,7 +780,7 @@ export function useFinanceiro() {
       const expandedRows: Array<{
         fazenda_id: string; cliente_id: string; lote_importacao_id: string;
         origem_lancamento: string; data_competencia: string; data_pagamento: string | null;
-        ano_mes: string; conta_bancaria_id: string | null; descricao: string | null;
+        ano_mes: string; conta_bancaria_id: string | null; conta_destino_id?: string | null; descricao: string | null;
         valor: number; sinal: number; status_transacao: string | null;
         tipo_operacao: string; macro_custo: string | null; centro_custo: string | null;
         subcentro: string | null; observacao: string | null; escopo_negocio: string;
