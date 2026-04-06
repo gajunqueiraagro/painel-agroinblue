@@ -462,7 +462,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
               </SelectContent>
             </Select>
 
-            {!loading && saldos.length > 0 && (
+            {!loading && saldos.length > 0 && filtroMes !== 'todos' && (
               <div className="flex items-center gap-2">
                 {grouped.map(g => (
                   <div key={g.tipo} className="border border-border rounded-md px-3 py-1">
