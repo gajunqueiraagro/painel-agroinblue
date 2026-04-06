@@ -630,7 +630,7 @@ const Index = () => {
       )}
       {activeTab === 'meta_movimentacoes' && (
         <LancamentosTab
-          lancamentos={metaLancamentos}
+          lancamentos={metaLancamentosFiltrados}
           onAdicionar={canEditZoo ? (metaAdicionar as any) : noOp}
           onEditar={canEditZoo ? (metaEditar as any) : noOp}
           onRemover={canEditZoo ? (metaRemover as any) : noOp}
