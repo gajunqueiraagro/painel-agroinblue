@@ -477,8 +477,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
       </div>
 
       {/* Tabela */}
-      <TooltipProvider delayDuration={200}>
-        <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
+      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
           <table className="w-full text-[10px]">
             <thead>
               <tr className="border-b bg-muted">
