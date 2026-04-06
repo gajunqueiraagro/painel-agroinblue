@@ -110,7 +110,7 @@ export function ReclassificacaoFormFields(props: Props & {
       <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-end">
         <div>
           <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">De (Origem)</Label>
-          <Select value={categoriaOrigem} onValueChange={v => { setCategoriaOrigem(v as Categoria); setPesoKg(''); }}>
+          <Select value={categoriaOrigem} onValueChange={v => { setCategoriaOrigem(v as Categoria); setPesoKg(''); setPesoAutoFilled(false); }}>
             <SelectTrigger className={`mt-0.5 h-8 text-[11px] ${borderAccent}`}><SelectValue /></SelectTrigger>
             <SelectContent className="max-h-52">
               {CATEGORIAS.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px]">{c.label}</SelectItem>)}
