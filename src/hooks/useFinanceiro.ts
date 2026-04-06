@@ -829,10 +829,14 @@ export function useFinanceiro() {
             transferencia_grupo_id: grupoId,
           });
         } else {
+          const rowSinal = sinalFromTipo(l.tipoOperacao);
+          const isEntry = rowSinal === 1;
           expandedRows.push({
             ...baseRow,
-            conta_bancaria_id: l.contaBancariaId,
-            sinal: sinalFromTipo(l.tipoOperacao),
+            // Directional: entries → conta_destino_id, exits → conta_bancaria_id
+            conta_bancaria_id: isEntry ? null : l.contaBancariaId,
+            conta_destino_id: isEntry ? l.contaBancariaId : null,
+            sinal: rowSinal,
             transferencia_grupo_id: null,
           });
         }
