@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { CATEGORIAS, Categoria, Lancamento, kgToArrobas } from '@/types/cattle';
+import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -10,7 +11,7 @@ import { STATUS_LABEL, type StatusOperacional } from '@/lib/statusOperacional';
 import { ReclassificacaoResumoPanel } from './ReclassificacaoResumoPanel';
 
 interface Props {
-  onAdicionar: (l: Omit<Lancamento, 'id'>) => void;
+  onAdicionar: (l: Omit<Lancamento, 'id'>) => Promise<string | undefined> | void;
   dataInicial?: string;
   lancamentos?: Lancamento[];
   ano?: number;
@@ -184,22 +185,42 @@ export function useReclassificacaoState(props: Props) {
   const destinoLabel = CATEGORIAS.find(c => c.value === categoriaDestino)?.label || '';
   const canRegister = !!quantidade && Number(quantidade) > 0 && categoriaOrigem !== categoriaDestino;
 
-  const handleRegister = () => {
-    if (!canRegister) return;
+  const handleRegister = async () => {
+    if (!canRegister || submitting) return;
     setSubmitting(true);
-    onAdicionar({
-      data,
-      tipo: 'reclassificacao',
-      quantidade: Number(quantidade),
-      categoria: categoriaOrigem,
-      categoriaDestino,
-      pesoMedioKg: pesoKg ? Number(pesoKg) : undefined,
-      pesoMedioArrobas: pesoKg ? kgToArrobas(Number(pesoKg)) : undefined,
-      statusOperacional: statusOp,
-    });
-    setQuantidade('');
-    setPesoKg('');
-    setSubmitting(false);
+    try {
+      const result = await onAdicionar({
+        data,
+        tipo: 'reclassificacao',
+        quantidade: Number(quantidade),
+        categoria: categoriaOrigem,
+        categoriaDestino,
+        pesoMedioKg: pesoKg ? Number(pesoKg) : undefined,
+        pesoMedioArrobas: pesoKg ? kgToArrobas(Number(pesoKg)) : undefined,
+        statusOperacional: statusOp,
+      });
+
+      if (result) {
+        const isPrev = statusOp === 'previsto';
+        toast.success('Reclassificação registrada com sucesso.', {
+          description: `${origemLabel} → ${destinoLabel} | ${Number(quantidade)} cab. | ${isPrev ? 'Previsto' : 'Realizado'}`,
+          style: isPrev ? { borderLeft: '4px solid #f97316' } : { borderLeft: '4px solid #16a34a' },
+        });
+        setQuantidade('');
+        setPesoKg('');
+      } else {
+        toast.error('Não foi possível registrar a reclassificação.', {
+          description: 'Verifique os dados e tente novamente.',
+        });
+      }
+    } catch (err: any) {
+      console.error('[Reclassificação] Erro ao salvar:', err);
+      toast.error('Erro ao registrar reclassificação.', {
+        description: err?.message || 'Erro desconhecido. Verifique os dados.',
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return {
