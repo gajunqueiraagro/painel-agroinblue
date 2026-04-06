@@ -607,11 +607,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           </div>
 
           {/* LINE 2: Conta Origem | Conta Destino | Macro */}
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-[0.7fr_0.7fr_0.5fr] gap-1.5">
             <div>
               <label className={lblCls}>Conta Origem</label>
               <Select value={contaOrigem} onValueChange={setContaOrigem} disabled={isEntrada}>
-                <SelectTrigger className={`${selCls} ${isEntrada ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)] ${isEntrada ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
                   {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
@@ -621,7 +621,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div>
               <label className={lblCls}>Conta Destino</label>
               <Select value={contaDestino} onValueChange={setContaDestino} disabled={isSaida}>
-                <SelectTrigger className={`${selCls} ${isSaida ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
+                <SelectTrigger className={`${selCls} bg-background border-[hsl(210_20%_80%)] ${isSaida ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
                   {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
