@@ -505,26 +505,21 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
           <table className="w-full text-[10px]">
             <thead>
               <tr className="border-b bg-muted">
-                <th className="text-left px-1.5 py-1 font-bold text-foreground sticky left-0 bg-muted min-w-[80px]">
+                <th className="text-left px-1.5 py-1 font-bold text-foreground sticky left-0 bg-muted min-w-[70px]">
                   Categoria
                 </th>
-                <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-muted">
+                <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[40px] bg-muted">
                   Saldo Ini.
                 </th>
                 {COLUNAS_MOV.map(col => (
-                  <th key={col.tipo} className={`px-1.5 py-1 font-bold text-center min-w-[45px] ${col.entrada ? 'text-success' : 'text-destructive'}`}>
+                  <th key={col.tipo} className={`px-1.5 py-1 font-bold text-center min-w-[40px] ${col.entrada ? 'text-success' : 'text-destructive'}`}>
                     {col.label}
                   </th>
                 ))}
                 <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-muted">
                   Saldo Fin.
                 </th>
-                {showDelta && (
-                  <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[30px] bg-muted" title="Divergência: Saldo Oficial − Alocado nos Pastos">
-                    Δ
-                  </th>
-                )}
-                <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[55px] bg-muted">
+                <th className="px-1.5 py-1 font-bold text-foreground text-center min-w-[50px] bg-muted">
                   Peso (kg)
                 </th>
               </tr>
