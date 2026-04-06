@@ -446,8 +446,8 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
           <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Novo</Button>
         </div>
 
-        {/* Filters */}
-        <div className="flex gap-2">
+        {/* Filters + Summary inline, sticky */}
+        <div className="sticky top-0 z-10 bg-background py-2 flex items-center gap-3 flex-wrap">
           <Select value={filtroAno} onValueChange={setFiltroAno}>
             <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -460,31 +460,26 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
               {MESES.map(m => <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>)}
             </SelectContent>
           </Select>
-        </div>
 
-        {/* Summary cards */}
-        {!loading && saldos.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {grouped.map(g => (
-              <Card key={g.tipo}>
-                <CardContent className="p-2">
-                  <p className="text-[10px] text-muted-foreground">{g.label}</p>
-                  <p className={`text-sm font-semibold tabular-nums ${g.totalFinal >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+          {!loading && saldos.length > 0 && (
+            <div className="flex items-center gap-2 ml-auto">
+              {grouped.map(g => (
+                <div key={g.tipo} className="border border-border rounded-md px-3 py-1">
+                  <p className="text-[10px] text-muted-foreground leading-tight">{g.label}</p>
+                  <p className={`text-base font-semibold tabular-nums leading-tight ${g.totalFinal >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                     {formatMoeda(g.totalFinal)}
                   </p>
-                </CardContent>
-              </Card>
-            ))}
-            <Card>
-              <CardContent className="p-2">
-                <p className="text-[10px] text-muted-foreground font-semibold">Total Geral</p>
-                <p className={`text-sm font-bold tabular-nums ${totalGeral >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                </div>
+              ))}
+              <div className="border border-border rounded-md px-3 py-1">
+                <p className="text-[10px] text-muted-foreground font-semibold leading-tight">Total Geral</p>
+                <p className={`text-base font-bold tabular-nums leading-tight ${totalGeral >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                   {formatMoeda(totalGeral)}
                 </p>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Table */}
         <Card>
