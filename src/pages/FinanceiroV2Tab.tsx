@@ -641,7 +641,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           </div>
 
           {/* LINE 3: Centro | Subcentro | Produto | Fornecedor */}
-          <div className="grid grid-cols-[1fr_1.4fr_1.4fr_1.6fr] gap-1.5">
+          <div className="grid grid-cols-[130px_130px_200px_200px] gap-1.5">
             <div>
               <label className={lblCls}>Centro</label>
               <SearchableSelect
