@@ -572,19 +572,31 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
 
                               return (
                                 <Tooltip>
-                                  <TooltipTrigger>
-                                    <Badge className={`text-[9px] px-1.5 py-0 font-medium border-0 ${
-                                      isConciliado
-                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                        : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                                    }`}>
-                                      {isConciliado ? '✅ Conciliado' : '❌ Não conciliado'}
-                                    </Badge>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      className="cursor-pointer"
+                                      onClick={() => {
+                                        if (onNavigateToConciliacao) {
+                                          const [y, m] = s.ano_mes.split('-');
+                                          onNavigateToConciliacao(y, m, s.conta_bancaria_id);
+                                        }
+                                      }}
+                                    >
+                                      <Badge className={`text-[9px] px-1.5 py-0 font-medium border-0 ${
+                                        isConciliado
+                                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                          : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                      }`}>
+                                        {isConciliado ? '✅ Conciliado' : '❌ Não conciliado'}
+                                      </Badge>
+                                    </button>
                                   </TooltipTrigger>
                                   <TooltipContent className="text-[10px]">
                                     {isConciliado
                                       ? 'Saldo extrato = Saldo calculado'
                                       : `Diferença: ${formatMoeda(diff)}`}
+                                    <br /><span className="text-muted-foreground">Clique para ver conciliação</span>
                                   </TooltipContent>
                                 </Tooltip>
                               );

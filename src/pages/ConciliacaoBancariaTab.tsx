@@ -411,6 +411,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
       <div className="p-3 space-y-2">
         {/* Header: filtros + meses */}
         <div className="flex items-center gap-2">
+          {onBack && (
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onBack}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
           <Select value={ano} onValueChange={setAno}>
             <SelectTrigger className="h-7 text-xs w-[72px]"><SelectValue /></SelectTrigger>
             <SelectContent>
