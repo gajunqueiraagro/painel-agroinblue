@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/tooltip';
 
 const MESES_LABELS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-const TH = "px-1.5 py-[3px] text-right font-semibold text-[10px] leading-tight";
+const TH = "px-1.5 py-[3px] text-center font-semibold text-[10px] leading-tight";
 const TD = "px-1.5 py-[3px] text-right text-[10px] leading-tight";
 
 const MACHOS = ['garrote', 'boi_magro', 'boi_gordo', 'touruno', 'bezerro_m', 'touro'];
