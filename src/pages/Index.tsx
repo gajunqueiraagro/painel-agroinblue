@@ -609,6 +609,15 @@ const Index = () => {
       {activeTab === 'conta_boitel' && (
         <ContaBoitelTab onBack={() => setActiveTab('financeiro_v2_hub')} />
       )}
+      {activeTab === 'metas_hub' && (
+        <MetasHubTab onTabChange={handleTabChange} />
+      )}
+      {activeTab === 'meta_gmd' && (
+        <MetaGmdTab onBack={() => setActiveTab('metas_hub')} />
+      )}
+      {activeTab === 'meta_preco' && (
+        <MetaPrecoTab onBack={() => setActiveTab('metas_hub')} />
+      )}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
