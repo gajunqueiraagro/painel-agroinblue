@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ContaBancariaV2 } from '@/hooks/useFinanceiroV2';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -68,7 +68,7 @@ export function CorrecaoTransferenciasDialog({ open, onClose, contas, onFixed }:
 
   const current = pendentes[currentIdx] || null;
 
-  const contasDisponiveis = contas.filter(c => 
+  const contasDisponiveis = contas.filter(c =>
     current && c.id !== current.conta_bancaria_id
   );
 
@@ -78,6 +78,13 @@ export function CorrecaoTransferenciasDialog({ open, onClose, contas, onFixed }:
 
   const handleSalvar = async () => {
     if (!current || !selectedDestino) return;
+
+    // Bloqueio explícito: mesma conta
+    if (current.conta_bancaria_id && selectedDestino === current.conta_bancaria_id) {
+      toast.error('Conta destino não pode ser igual à conta origem.');
+      return;
+    }
+
     setSaving(true);
 
     const { error } = await supabase
@@ -114,6 +121,8 @@ export function CorrecaoTransferenciasDialog({ open, onClose, contas, onFixed }:
     }
   };
 
+  const totalPendente = pendentes.length;
+
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
       <DialogContent className="max-w-lg">
@@ -124,37 +133,47 @@ export function CorrecaoTransferenciasDialog({ open, onClose, contas, onFixed }:
           </DialogTitle>
         </DialogHeader>
 
+        {/* Aviso de impacto */}
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800">
+          <Info className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>
+            Transferências sem conta destino comprometem a separação entre origem e destino na análise.
+          </span>
+        </div>
+
         {loading ? (
           <p className="text-sm text-muted-foreground py-4">Carregando...</p>
-        ) : pendentes.length === 0 ? (
+        ) : totalPendente === 0 ? (
           <div className="flex flex-col items-center gap-3 py-6">
             <Check className="h-10 w-10 text-emerald-500" />
             <p className="text-sm font-medium">Todas as transferências possuem conta destino.</p>
           </div>
         ) : current ? (
-          <div className="space-y-4">
-            {/* Progress */}
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{currentIdx + 1} de {pendentes.length} pendentes</span>
+          <div className="space-y-3">
+            {/* Progresso */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">
+                {currentIdx + 1} de {totalPendente}
+              </span>
               <Badge variant="outline" className="text-amber-600 border-amber-300">
-                {pendentes.length} sem destino
+                {totalPendente} pendente{totalPendente !== 1 ? 's' : ''}
               </Badge>
             </div>
 
-            {/* Card do lançamento */}
+            {/* Card detalhado */}
             <div className="rounded-md border p-3 space-y-2 bg-muted/30">
               <div className="flex justify-between text-sm">
-                <span className="font-medium">{current.descricao || '(Sem descrição)'}</span>
-                <span className="font-bold">{formatMoeda(current.valor)}</span>
+                <span className="font-medium truncate mr-2">{current.descricao || '(Sem descrição)'}</span>
+                <span className="font-bold whitespace-nowrap">{formatMoeda(current.valor)}</span>
               </div>
-              <div className="flex gap-4 text-xs text-muted-foreground">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
                 <span>Data: {current.data_pagamento || current.data_competencia}</span>
                 <span>Mês: {current.ano_mes}</span>
-              </div>
-              <div className="text-xs">
-                <span className="text-muted-foreground">Conta Origem: </span>
-                <span className="font-medium">
-                  {contaOrigemNome ? contaLabel(contaOrigemNome) : 'Não definida'}
+                <span className="col-span-2">
+                  Conta Origem:{' '}
+                  <span className="font-medium text-foreground">
+                    {contaOrigemNome ? contaLabel(contaOrigemNome) : 'Não definida'}
+                  </span>
                 </span>
               </div>
             </div>
