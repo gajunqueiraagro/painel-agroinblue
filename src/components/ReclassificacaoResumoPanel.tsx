@@ -32,6 +32,7 @@ export function ReclassificacaoResumoPanel({
   quantidade, pesoKg, origemLabel, destinoLabel,
   pesoMedioOrigem, statusOp,
   onRequestRegister, submitting, canRegister,
+  onBack, backLabel,
 }: Props) {
   const totalKg = quantidade * pesoKg;
   const arrobasCab = pesoKg ? pesoKg / 15 : 0;
