@@ -89,6 +89,7 @@ function CellWithTooltip({
   mesLabel,
   breakdown,
   hasData,
+  onClick,
   colorClass,
 }: {
   value: string;
@@ -97,6 +98,7 @@ function CellWithTooltip({
   mesLabel: string;
   breakdown: MovBreakdown[];
   hasData: boolean;
+  onClick?: () => void;
   colorClass: string;
 }) {
   if (!hasData) {
