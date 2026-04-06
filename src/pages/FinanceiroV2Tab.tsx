@@ -832,10 +832,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                         <td className="truncate max-w-0 px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
                         </td>
+                        <td className="truncate max-w-0 px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={l.centro_custo || ''}>{l.centro_custo || '-'}</td>
                         <td className={`text-right font-semibold w-[110px] whitespace-nowrap px-2 py-1 align-middle text-[12px] leading-tight ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
                           {fmtValor(l.valor, l.sinal)}
                         </td>
-                        <td className="font-mono text-muted-foreground text-center w-[72px] px-1 py-1 align-middle text-[12px] leading-tight">{l.nota_fiscal || '-'}</td>
+                        <td className="font-mono text-muted-foreground text-center w-[90px] px-1 py-1 align-middle text-[12px] leading-tight">{formatNF(l.nota_fiscal)}</td>
                         <td className={`text-center w-[68px] px-1 py-1 align-middle text-[12px] leading-tight ${stColor}`}>{stLabel}</td>
                         <td className="!py-0 px-0 w-[40px] align-middle">
                           <div className="flex items-center justify-center gap-0.5">
