@@ -36,7 +36,91 @@ function deriveCategoryInfo(
   return { pesoMedio: totalQtd > 0 ? totalPeso / totalQtd : null };
 }
 
-export function ReclassificacaoForm({ onAdicionar, dataInicial, lancamentos = [], ano }: Props) {
+/** Form fields (center column) */
+export function ReclassificacaoFormFields(props: Props & {
+  state: ReturnType<typeof useReclassificacaoState>;
+}) {
+  const { state } = props;
+  const {
+    categoriaOrigem, setCategoriaOrigem,
+    categoriaDestino, setCategoriaDestino,
+    data, setData,
+    qtdInput, pesoInput,
+    isPrevisto, setIsPrevisto,
+    origemInfo, setPesoKg,
+  } = state;
+
+  const fmtNum = (v: number | null, dec = 1) =>
+    v != null ? v.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec }) : '—';
+
+  return (
+    <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
+      <div className="flex items-center justify-between pb-1 border-b border-border/60">
+        <div className="flex items-center gap-1.5">
+          <RefreshCw className="h-3.5 w-3.5 text-orange-500" />
+          <span className="text-[12px] font-bold text-foreground">Evolução de Categoria</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className={`text-[10px] font-semibold ${!isPrevisto ? 'text-emerald-600' : 'text-muted-foreground'}`}>Realizado</span>
+          <Switch checked={isPrevisto} onCheckedChange={setIsPrevisto} className="data-[state=checked]:bg-orange-500 h-4 w-8" />
+          <span className={`text-[10px] font-semibold ${isPrevisto ? 'text-orange-600' : 'text-muted-foreground'}`}>Previsto</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-end">
+        <div>
+          <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">De (Origem)</Label>
+          <Select value={categoriaOrigem} onValueChange={v => { setCategoriaOrigem(v as Categoria); setPesoKg(''); }}>
+            <SelectTrigger className="mt-0.5 h-8 text-[11px]"><SelectValue /></SelectTrigger>
+            <SelectContent className="max-h-52">
+              {CATEGORIAS.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px]">{c.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground mb-1.5" />
+        <div>
+          <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Para (Destino)</Label>
+          <Select value={categoriaDestino} onValueChange={v => setCategoriaDestino(v as Categoria)}>
+            <SelectTrigger className="mt-0.5 h-8 text-[11px]"><SelectValue /></SelectTrigger>
+            <SelectContent className="max-h-52">
+              {CATEGORIAS.filter(c => c.value !== categoriaOrigem).map(c => (
+                <SelectItem key={c.value} value={c.value} className="text-[11px]">{c.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Data</Label>
+          <Input type="date" value={data} onChange={e => setData(e.target.value)} className="mt-0.5 h-8 text-[11px]" />
+        </div>
+        <div>
+          <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Qtd. Cabeças</Label>
+          <Input type="text" inputMode="numeric" value={qtdInput.displayValue} onChange={qtdInput.onChange} onBlur={qtdInput.onBlur} onFocus={qtdInput.onFocus} placeholder="0" className="mt-0.5 h-8 text-[11px] text-center font-bold" />
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between">
+          <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Peso Médio (kg)</Label>
+          {origemInfo.pesoMedio && (
+            <span className="text-[9px] text-orange-600 flex items-center gap-0.5">
+              <Scale className="h-2.5 w-2.5" />
+              Sugerido: {fmtNum(origemInfo.pesoMedio)} kg
+            </span>
+          )}
+        </div>
+        <Input type="text" inputMode="decimal" value={pesoInput.displayValue} onChange={pesoInput.onChange} onBlur={pesoInput.onBlur} onFocus={pesoInput.onFocus} placeholder={origemInfo.pesoMedio ? fmtNum(origemInfo.pesoMedio) : '0,00'} className="mt-0.5 h-8 text-[11px]" />
+      </div>
+    </div>
+  );
+}
+
+/** Shared state hook for the reclassificacao form */
+export function useReclassificacaoState(props: Props) {
+  const { onAdicionar, dataInicial, lancamentos = [], ano } = props;
   const [categoriaOrigem, setCategoriaOrigem] = useState<Categoria>('desmama_m');
   const [categoriaDestino, setCategoriaDestino] = useState<Categoria>('garrotes');
   const [quantidade, setQuantidade] = useState('');
@@ -59,15 +143,11 @@ export function ReclassificacaoForm({ onAdicionar, dataInicial, lancamentos = []
 
   const origemLabel = CATEGORIAS.find(c => c.value === categoriaOrigem)?.label || '';
   const destinoLabel = CATEGORIAS.find(c => c.value === categoriaDestino)?.label || '';
-
-  const fmtNum = (v: number | null, dec = 1) =>
-    v != null ? v.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec }) : '—';
+  const canRegister = !!quantidade && Number(quantidade) > 0 && categoriaOrigem !== categoriaDestino;
 
   const handleRegister = () => {
-    if (!quantidade || Number(quantidade) <= 0) return;
-    if (categoriaOrigem === categoriaDestino) return;
+    if (!canRegister) return;
     setSubmitting(true);
-
     onAdicionar({
       data,
       tipo: 'reclassificacao',
@@ -78,120 +158,21 @@ export function ReclassificacaoForm({ onAdicionar, dataInicial, lancamentos = []
       pesoMedioArrobas: pesoKg ? kgToArrobas(Number(pesoKg)) : undefined,
       statusOperacional: isPrevisto ? 'previsto' : 'conciliado',
     });
-
     setQuantidade('');
     setPesoKg('');
     setSubmitting(false);
   };
 
-  const canRegister = !!quantidade && Number(quantidade) > 0 && categoriaOrigem !== categoriaDestino;
-
   return {
-    form: (
-      <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
-        {/* Header with toggle */}
-        <div className="flex items-center justify-between pb-1 border-b border-border/60">
-          <div className="flex items-center gap-1.5">
-            <RefreshCw className="h-3.5 w-3.5 text-orange-500" />
-            <span className="text-[12px] font-bold text-foreground">Evolução de Categoria</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className={`text-[10px] font-semibold ${!isPrevisto ? 'text-emerald-600' : 'text-muted-foreground'}`}>
-              Realizado
-            </span>
-            <Switch
-              checked={isPrevisto}
-              onCheckedChange={setIsPrevisto}
-              className="data-[state=checked]:bg-orange-500 h-4 w-8"
-            />
-            <span className={`text-[10px] font-semibold ${isPrevisto ? 'text-orange-600' : 'text-muted-foreground'}`}>
-              Previsto
-            </span>
-          </div>
-        </div>
-
-        {/* Origem → Destino */}
-        <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-end">
-          <div>
-            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">De (Origem)</Label>
-            <Select value={categoriaOrigem} onValueChange={v => { setCategoriaOrigem(v as Categoria); setPesoKg(''); }}>
-              <SelectTrigger className="mt-0.5 h-8 text-[11px]"><SelectValue /></SelectTrigger>
-              <SelectContent className="max-h-52">
-                {CATEGORIAS.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px]">{c.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <ArrowRight className="h-3.5 w-3.5 text-muted-foreground mb-1.5" />
-          <div>
-            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Para (Destino)</Label>
-            <Select value={categoriaDestino} onValueChange={v => setCategoriaDestino(v as Categoria)}>
-              <SelectTrigger className="mt-0.5 h-8 text-[11px]"><SelectValue /></SelectTrigger>
-              <SelectContent className="max-h-52">
-                {CATEGORIAS.filter(c => c.value !== categoriaOrigem).map(c => (
-                  <SelectItem key={c.value} value={c.value} className="text-[11px]">{c.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Data + Quantidade */}
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Data</Label>
-            <Input type="date" value={data} onChange={e => setData(e.target.value)} className="mt-0.5 h-8 text-[11px]" />
-          </div>
-          <div>
-            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Qtd. Cabeças</Label>
-            <Input
-              type="text"
-              inputMode="numeric"
-              value={qtdInput.displayValue}
-              onChange={qtdInput.onChange}
-              onBlur={qtdInput.onBlur}
-              onFocus={qtdInput.onFocus}
-              placeholder="0"
-              className="mt-0.5 h-8 text-[11px] text-center font-bold"
-            />
-          </div>
-        </div>
-
-        {/* Peso médio */}
-        <div>
-          <div className="flex items-center justify-between">
-            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Peso Médio (kg)</Label>
-            {origemInfo.pesoMedio && (
-              <span className="text-[9px] text-orange-600 flex items-center gap-0.5">
-                <Scale className="h-2.5 w-2.5" />
-                Sugerido: {fmtNum(origemInfo.pesoMedio)} kg
-              </span>
-            )}
-          </div>
-          <Input
-            type="text"
-            inputMode="decimal"
-            value={pesoInput.displayValue}
-            onChange={pesoInput.onChange}
-            onBlur={pesoInput.onBlur}
-            onFocus={pesoInput.onFocus}
-            placeholder={origemInfo.pesoMedio ? fmtNum(origemInfo.pesoMedio) : '0,00'}
-            className="mt-0.5 h-8 text-[11px]"
-          />
-        </div>
-      </div>
-    ),
-    resumoPanel: (
-      <ReclassificacaoResumoPanel
-        quantidade={Number(quantidade) || 0}
-        pesoKg={Number(pesoKg) || 0}
-        origemLabel={origemLabel}
-        destinoLabel={destinoLabel}
-        pesoMedioOrigem={origemInfo.pesoMedio}
-        isPrevisto={isPrevisto}
-        onRequestRegister={handleRegister}
-        submitting={submitting}
-        canRegister={canRegister}
-      />
-    ),
+    categoriaOrigem, setCategoriaOrigem,
+    categoriaDestino, setCategoriaDestino,
+    quantidade, setQuantidade,
+    data, setData,
+    pesoKg, setPesoKg,
+    isPrevisto, setIsPrevisto,
+    submitting,
+    qtdInput, pesoInput,
+    origemInfo, origemLabel, destinoLabel,
+    canRegister, handleRegister,
   };
 }
