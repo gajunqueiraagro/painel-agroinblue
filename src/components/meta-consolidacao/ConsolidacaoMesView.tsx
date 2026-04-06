@@ -245,6 +245,7 @@ export function ConsolidacaoMesView({ data, ano, metaLancamentos, onBack, onNavi
                           mesLabel={mesLabel}
                           breakdown={eeBreakdown}
                           hasData={r.ee > 0}
+                          onClick={() => onNavigateToLancamentos?.(String(ano), selectedMes, r.categoria)}
                           colorClass="text-emerald-600"
                         />
                       </td>
@@ -256,6 +257,7 @@ export function ConsolidacaoMesView({ data, ano, metaLancamentos, onBack, onNavi
                           mesLabel={mesLabel}
                           breakdown={seBreakdown}
                           hasData={r.se > 0}
+                          onClick={() => onNavigateToLancamentos?.(String(ano), selectedMes, r.categoria)}
                           colorClass="text-red-600"
                         />
                       </td>
@@ -267,6 +269,7 @@ export function ConsolidacaoMesView({ data, ano, metaLancamentos, onBack, onNavi
                           mesLabel={mesLabel}
                           breakdown={eiBreakdown}
                           hasData={r.ei > 0}
+                          onClick={() => onNavigateToReclass?.(selectedMes)}
                           colorClass="text-emerald-600"
                         />
                       </td>
@@ -278,6 +281,7 @@ export function ConsolidacaoMesView({ data, ano, metaLancamentos, onBack, onNavi
                           mesLabel={mesLabel}
                           breakdown={siBreakdown}
                           hasData={r.siInternas > 0}
+                          onClick={() => onNavigateToReclass?.(selectedMes)}
                           colorClass="text-red-600"
                         />
                       </td>
