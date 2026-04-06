@@ -1196,7 +1196,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                     cenario === c
                       ? c === 'realizado'
                         ? 'bg-emerald-600 text-white'
-                        : 'bg-blue-600 text-white'
+                        : 'bg-orange-500 text-white'
                       : 'bg-card text-muted-foreground hover:bg-muted'
                   }`}
                 >
