@@ -567,14 +567,23 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
                             </TooltipTrigger>
                             <TooltipContent side="top" className="text-[10px] space-y-0.5 p-2">
                               <p className="font-bold text-foreground">{cat.label}</p>
-                              <div className="flex justify-between gap-4">
-                                <span className="text-muted-foreground">Oficial:</span>
-                                <span className="font-semibold">{cat.saldoFinal}</span>
-                              </div>
-                              <div className="flex justify-between gap-4">
-                                <span className="text-muted-foreground">Pastos:</span>
-                                <span className="font-semibold">{cat.pastosQtd}</span>
-                              </div>
+                              {(() => {
+                                const oficialDiv = conciliacaoOficialLoaded ? conciliacaoOficial[cat.label] : null;
+                                const sistemaVal = oficialDiv ? oficialDiv.saldo_sistema : cat.saldoFinal;
+                                const pastosVal = oficialDiv ? oficialDiv.saldo_pastos : cat.pastosQtd;
+                                return (
+                                  <>
+                                    <div className="flex justify-between gap-4">
+                                      <span className="text-muted-foreground">Sistema:</span>
+                                      <span className="font-semibold">{sistemaVal}</span>
+                                    </div>
+                                    <div className="flex justify-between gap-4">
+                                      <span className="text-muted-foreground">Pastos:</span>
+                                      <span className="font-semibold">{pastosVal}</span>
+                                    </div>
+                                  </>
+                                );
+                              })()}
                               <div className={`flex justify-between gap-4 font-bold ${deltaStyle.text}`}>
                                 <span>Diferença:</span>
                                 <span>{cat.delta > 0 ? `+${cat.delta}` : cat.delta}</span>
