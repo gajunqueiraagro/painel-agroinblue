@@ -107,9 +107,9 @@ export function isReclassificacao(tipo: TipoMovimentacao): boolean {
 }
 
 export function kgToArrobas(kg: number): number {
-  return Number((kg / 15).toFixed(2));
+  return Number((kg / 30).toFixed(2));
 }
 
 export function arrobasToKg(arrobas: number): number {
-  return Number((arrobas * 15).toFixed(2));
+  return Number((arrobas * 30).toFixed(2));
 }
