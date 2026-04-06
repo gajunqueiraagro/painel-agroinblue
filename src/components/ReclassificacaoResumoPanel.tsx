@@ -35,8 +35,8 @@ export function ReclassificacaoResumoPanel({
   onBack, backLabel,
 }: Props) {
   const totalKg = quantidade * pesoKg;
-  const arrobasCab = pesoKg ? pesoKg / 15 : 0;
-  const totalArrobas = totalKg / 15;
+  const arrobasCab = pesoKg ? pesoKg / 30 : 0;
+  const totalArrobas = totalKg / 30;
   const colors = STATUS_COLORS[statusOp];
 
   return (
