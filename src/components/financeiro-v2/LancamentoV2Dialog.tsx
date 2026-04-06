@@ -726,7 +726,7 @@ export function LancamentoV2Dialog({
     const form: LancamentoV2Form = {
       fazenda_id: fazendaId,
       conta_bancaria_id: contaBancariaId,
-      conta_destino_id: isTransferencia && contaDestinoId && contaDestinoId !== '__none__' ? contaDestinoId : null,
+      conta_destino_id: contaDestinoFinal,
       data_competencia: dataCompetencia,
       data_pagamento: dataPagamento || null,
       valor: Math.abs(valorNum),
