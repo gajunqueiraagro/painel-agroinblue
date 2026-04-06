@@ -291,7 +291,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
   const filtros: FiltrosV2 = useMemo(() => ({
     fazenda_id: fazendaId !== '__all__' ? fazendaId : undefined,
-    ano,
+    ano: ano,
     mes: mesesSelecionados.length === 0 ? 'todos' : undefined,
     meses: mesesSelecionados.length > 0 ? mesesSelecionados : undefined,
     conta_bancaria_id: contaOrigem !== '__all__' ? contaOrigem : undefined,
