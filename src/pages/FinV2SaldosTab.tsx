@@ -446,39 +446,41 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
           <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Novo</Button>
         </div>
 
-        {/* Filters + Summary inline, sticky */}
-        <div className="sticky top-0 z-10 bg-background py-2 flex items-center gap-3 flex-wrap">
-          <Select value={filtroAno} onValueChange={setFiltroAno}>
-            <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {ANOS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filtroMes} onValueChange={setFiltroMes}>
-            <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {MESES.map(m => <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>)}
-            </SelectContent>
-          </Select>
+        {/* Filters + Summary + Table Header — all sticky */}
+        <div className="sticky top-0 z-20 bg-background pb-0">
+          <div className="py-2 flex items-center gap-3 flex-wrap">
+            <Select value={filtroAno} onValueChange={setFiltroAno}>
+              <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {ANOS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filtroMes} onValueChange={setFiltroMes}>
+              <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {MESES.map(m => <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>)}
+              </SelectContent>
+            </Select>
 
-          {!loading && saldos.length > 0 && (
-            <div className="flex items-center gap-2 ml-auto">
-              {grouped.map(g => (
-                <div key={g.tipo} className="border border-border rounded-md px-3 py-1">
-                  <p className="text-[10px] text-muted-foreground leading-tight">{g.label}</p>
-                  <p className={`text-base font-semibold tabular-nums leading-tight ${g.totalFinal >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {formatMoeda(g.totalFinal)}
+            {!loading && saldos.length > 0 && (
+              <div className="flex items-center gap-2">
+                {grouped.map(g => (
+                  <div key={g.tipo} className="border border-border rounded-md px-3 py-1">
+                    <p className="text-[10px] text-muted-foreground leading-tight">{g.label}</p>
+                    <p className={`text-xl font-semibold tabular-nums leading-tight ${g.totalFinal >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {formatMoeda(g.totalFinal)}
+                    </p>
+                  </div>
+                ))}
+                <div className="border border-border rounded-md px-3 py-1">
+                  <p className="text-[10px] text-muted-foreground font-semibold leading-tight">Total Geral</p>
+                  <p className={`text-xl font-bold tabular-nums leading-tight ${totalGeral >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {formatMoeda(totalGeral)}
                   </p>
                 </div>
-              ))}
-              <div className="border border-border rounded-md px-3 py-1">
-                <p className="text-[10px] text-muted-foreground font-semibold leading-tight">Total Geral</p>
-                <p className={`text-base font-bold tabular-nums leading-tight ${totalGeral >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {formatMoeda(totalGeral)}
-                </p>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Table */}
