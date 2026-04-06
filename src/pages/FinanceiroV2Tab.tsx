@@ -329,7 +329,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       ok = await hook.criarLancamento(form);
     }
     if (ok) {
+      const scrollTop = scrollContainerRef.current?.scrollTop ?? 0;
       await hook.loadLancamentos(filtros, hook.page);
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = scrollTop;
+      });
       const refreshed = hook.lancamentos.find(l => l.id === id);
       console.log('[FinV2] after save reload', {
         id,
@@ -343,12 +347,24 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   };
   const handleDelete = async (id: string) => {
     const ok = await hook.excluirLancamento(id);
-    if (ok) hook.loadLancamentos(filtros, hook.page);
+    if (ok) {
+      const scrollTop = scrollContainerRef.current?.scrollTop ?? 0;
+      await hook.loadLancamentos(filtros, hook.page);
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = scrollTop;
+      });
+    }
     return ok;
   };
   const handleDuplicate = async (lanc: LancamentoV2) => {
     const ok = await hook.duplicarLancamento(lanc);
-    if (ok) hook.loadLancamentos(filtros, hook.page);
+    if (ok) {
+      const scrollTop = scrollContainerRef.current?.scrollTop ?? 0;
+      await hook.loadLancamentos(filtros, hook.page);
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = scrollTop;
+      });
+    }
   };
 
   const openNew = () => { setEditingLanc(null); setDialogOpen(true); };
