@@ -42,6 +42,7 @@ import { MetaGmdTab } from './MetaGmdTab';
 import { MetaPrecoTab } from './MetaPrecoTab';
 import { GraficosAnaliseTab } from './GraficosAnaliseTab';
 import { MetaConsolidacaoTab } from './MetaConsolidacaoTab';
+import { useMetaConsolidacao } from '@/hooks/useMetaConsolidacao';
 import { FinanceiroV2Tab } from './FinanceiroV2Tab';
 import { FinanceiroV2HubTab } from './FinanceiroV2HubTab';
 import { FinV2ContasTab } from './FinV2ContasTab';
@@ -178,6 +179,7 @@ const Index = () => {
     mes: new Date().getMonth() + 1,
   });
   const metaGmd = useMetaGmd(filtroGlobal.ano);
+  const metaConsolidacaoData = useMetaConsolidacao(saldosIniciais, metaLancamentos, metaGmd.rows, Number(filtroGlobal.ano));
 
   const handleFiltroChange = useCallback((f: Partial<FiltroGlobal>) => {
     setFiltroGlobal(prev => ({ ...prev, ...f }));
@@ -360,7 +362,7 @@ const Index = () => {
         <OperacaoHubTab onTabChange={handleTabChange} onBack={() => setActiveTab('resumo')} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
       )}
       {activeTab === 'painel_consultor' && (
-        <PainelConsultorTab onBack={() => setActiveTab('resumo')} onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
+        <PainelConsultorTab onBack={() => setActiveTab('resumo')} onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} metaConsolidacao={metaConsolidacaoData} />
       )}
       {activeTab === 'status_fechamentos' && (
         <StatusFechamentosTab
