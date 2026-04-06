@@ -699,13 +699,17 @@ const Index = () => {
           gmdRows={metaGmd.rows}
           ano={Number(filtroGlobal.ano)}
           onBack={() => setActiveTab('painel_consultor_hub')}
-          onNavigateToLancamentos={(anoVal, mesVal) => {
+          onNavigateToLancamentos={(anoVal, mesVal, catVal) => {
             setMetaLancAnoFiltro(anoVal);
             setMetaLancMesFiltro(mesVal);
             setActiveTab('meta_movimentacoes');
           }}
-          onNavigateToReclass={() => {
+          onNavigateToReclass={(mesVal) => {
             setMetaLancAbaInicial('reclassificacao');
+            if (mesVal) {
+              setMetaLancAnoFiltro(String(Number(filtroGlobal.ano)));
+              setMetaLancMesFiltro(mesVal);
+            }
             setActiveTab('meta_movimentacoes');
           }}
         />
