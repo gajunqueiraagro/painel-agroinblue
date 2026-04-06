@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 const STORAGE_KEY = 'gado-lancamentos';
 const SALDO_KEY = 'gado-saldo-inicial';
 
-export function useLancamentos() {
+export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [saldosIniciais, setSaldosIniciais] = useState<SaldoInicial[]>([]);
@@ -28,7 +28,7 @@ export function useLancamentos() {
       const fazendaIds = fazendas.map(f => f.id);
       
       const [lancRes, saldoRes] = await Promise.all([
-        supabase.from('lancamentos').select('*').in('fazenda_id', fazendaIds).eq('cancelado', false).order('data', { ascending: false }),
+        supabase.from('lancamentos').select('*').in('fazenda_id', fazendaIds).eq('cancelado', false).eq('cenario', cenario).order('data', { ascending: false }),
         supabase.from('saldos_iniciais').select('*').in('fazenda_id', fazendaIds),
       ]);
 
@@ -108,7 +108,7 @@ export function useLancamentos() {
 
     // Single fazenda mode
     const [lancRes, saldoRes] = await Promise.all([
-      supabase.from('lancamentos').select('*').eq('fazenda_id', fazendaId).eq('cancelado', false).order('data', { ascending: false }),
+      supabase.from('lancamentos').select('*').eq('fazenda_id', fazendaId).eq('cancelado', false).eq('cenario', cenario).order('data', { ascending: false }),
       supabase.from('saldos_iniciais').select('*').eq('fazenda_id', fazendaId),
     ]);
 
@@ -182,7 +182,7 @@ export function useLancamentos() {
     }
 
     setLoading(false);
-  }, [fazendaId, isGlobal, fazendas]);
+  }, [fazendaId, isGlobal, fazendas, cenario]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -295,6 +295,7 @@ export function useLancamentos() {
     const { data, error } = await supabase.from('lancamentos').insert({
       fazenda_id: fazendaId,
       cliente_id: clienteId!,
+      cenario,
       ...insertData,
     }).select().single();
 

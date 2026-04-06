@@ -123,6 +123,7 @@ const TITLES: Record<TabId, string> = {
   metas_hub: 'Metas / Previsto',
   meta_gmd: 'GMD Previsto',
   meta_preco: 'Preços Previstos',
+  meta_movimentacoes: 'Movimentações Meta',
 };
 
 const Index = () => {
@@ -158,6 +159,7 @@ const Index = () => {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clientes, clienteAtual } = useCliente();
   const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, countFinanceirosVinculados, setSaldoInicial, loadData } = useLancamentos();
+  const { lancamentos: metaLancamentos, adicionarLancamento: metaAdicionar, editarLancamento: metaEditar, removerLancamento: metaRemover, loadData: metaLoadData } = useLancamentos('meta');
   const { pendingCount, syncing, online, syncQueue } = useOfflineSync(fazendaAtual?.id === '__global__' ? undefined : fazendaAtual?.id, loadData);
 
   // Wrap edit actions based on permissions
@@ -617,6 +619,16 @@ const Index = () => {
       )}
       {activeTab === 'meta_preco' && (
         <MetaPrecoTab onBack={() => setActiveTab('metas_hub')} />
+      )}
+      {activeTab === 'meta_movimentacoes' && (
+        <LancamentosTab
+          lancamentos={metaLancamentos}
+          onAdicionar={canEditZoo ? (metaAdicionar as any) : noOp}
+          onEditar={canEditZoo ? (metaEditar as any) : noOp}
+          onRemover={canEditZoo ? (metaRemover as any) : noOp}
+          onBackToConciliacao={() => setActiveTab('metas_hub')}
+          backLabel="Voltar para Metas"
+        />
       )}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
