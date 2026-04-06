@@ -769,6 +769,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
       {mode === 'list' && !hook.loading && ano && (
         <>
+          <CorrecaoTransferenciasBanner
+            contas={hook.contasBancarias}
+            onFixed={() => hook.loadLancamentos(filtros, hook.page)}
+          />
            <div className="rounded-lg border border-[hsl(var(--border))] overflow-auto relative" style={{ maxHeight: 'calc(100vh - 260px)' }}>
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               <colgroup>
