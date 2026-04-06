@@ -529,7 +529,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <div>
               <label className={lblCls}>Ano</label>
               <Select value={ano} onValueChange={setAno}>
-                <SelectTrigger className={`${selCls} w-full bg-background border-[hsl(210_20%_80%)]`}><SelectValue /></SelectTrigger>
+                <SelectTrigger className={`${selCls} w-full bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
                 <SelectContent>{anos.map(a => <SelectItem key={a} value={a} className={itemCls}>{a}</SelectItem>)}</SelectContent>
               </Select>
             </div>
