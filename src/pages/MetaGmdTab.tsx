@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CATEGORIAS, type Categoria } from '@/types/cattle';
 import { MESES_NOMES } from '@/lib/calculos/labels';
 import { useMetaGmd } from '@/hooks/useMetaGmd';
-import { Save } from 'lucide-react';
+import { Save, ArrowLeft } from 'lucide-react';
 
 interface Props {
   onBack?: () => void;
