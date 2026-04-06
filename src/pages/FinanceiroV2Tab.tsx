@@ -698,6 +698,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                   <Plus className="h-3 w-3" /> Novo
                 </Button>
               )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setCorrecaoOpen(true)}
+                className="h-6 text-[10px] gap-0.5 px-2 border-amber-400 text-amber-700 hover:bg-amber-50"
+              >
+                <AlertTriangle className="h-3 w-3" /> Corrigir Transf.
+              </Button>
             </div>
           </div>
 
