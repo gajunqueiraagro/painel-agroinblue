@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/tooltip';
 
 const MESES_LABELS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-const TH = "px-1.5 py-[3px] text-right font-semibold text-[10px] leading-tight";
+const TH = "px-1.5 py-[3px] text-center font-semibold text-[10px] leading-tight";
 const TD = "px-1.5 py-[3px] text-right text-[10px] leading-tight";
 
 const MACHOS = ['garrote', 'boi_magro', 'boi_gordo', 'touruno', 'bezerro_m', 'touro'];
@@ -214,8 +214,8 @@ export function ConsolidacaoMesView({ data, ano, metaLancamentos, onBack, onNavi
               <tr className="bg-orange-500 text-white">
                 <th className={`${TH} text-left`}>Categoria</th>
                 <th className={`${TH} bg-orange-600/30`}>Saldo Inicial</th>
-                <th className={TH}>Entradas</th>
-                <th className={TH}>Saídas</th>
+                <th className={TH}>Entradas Externas</th>
+                <th className={TH}>Saídas Externas</th>
                 <th className={TH}>Evol. Cat. Entrada</th>
                 <th className={TH}>Evol. Cat. Saída</th>
                 <th className={`${TH} bg-orange-600/30`}>Saldo Final</th>
