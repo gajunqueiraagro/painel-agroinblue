@@ -341,26 +341,25 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   const MESES_CURTOS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
   return (
-    <div className="p-3 w-full space-y-2 animate-fade-in pb-20">
-      {/* Header: título + régua horizontal de meses */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 shrink-0">
-          <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-            <SelectTrigger className="h-7 text-xs font-bold w-20">
-              <SelectValue placeholder="Ano" />
-            </SelectTrigger>
-            <SelectContent>
-              {anosDisponiveis.map(a => (
-                <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <h2 className="text-sm font-bold text-foreground whitespace-nowrap">
-            Evolução de Categorias
-          </h2>
-        </div>
+    <div className="p-3 w-full space-y-1 animate-fade-in pb-20">
+      {/* Linha 1: título */}
+      <h2 className="text-sm font-bold text-foreground">Evolução de Categorias</h2>
 
-        <div className="flex items-center flex-1 justify-between">
+      {/* Linha 2: ano + régua de meses (limitada à largura até Recl.S) */}
+      <div className="flex items-center gap-2">
+        <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+          <SelectTrigger className="h-7 text-xs font-bold w-20 shrink-0">
+            <SelectValue placeholder="Ano" />
+          </SelectTrigger>
+          <SelectContent>
+            {anosDisponiveis.map(a => (
+              <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* 12 meses — max-w limitado para alinhar com coluna Recl.S */}
+        <div className="flex items-center gap-0.5" style={{ maxWidth: 'calc(80px + 50px + 10 * 45px)' }}>
           {MESES_CURTOS.map((label, i) => {
             const mesVal = String(i + 1).padStart(2, '0');
             const isActive = mesFiltro === mesVal;
@@ -368,7 +367,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
               <button
                 key={mesVal}
                 onClick={() => setMesFiltro(mesVal)}
-                className={`px-2 py-2 rounded-md text-xs font-semibold transition-all ${
+                className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-all ${
                   isActive
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
