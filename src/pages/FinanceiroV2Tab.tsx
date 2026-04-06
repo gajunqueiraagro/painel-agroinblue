@@ -525,7 +525,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       <Card className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(210_33%_97%)] shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
         <CardContent className="p-2 space-y-1.5">
           {/* LINE 1: Ano | Mês | Tipo | Status | Fazenda | Atividade */}
-          <div className="grid grid-cols-[62px_77px_106px_80px_0.35fr_80px] gap-1.5 items-end">
+          <div className="grid grid-cols-[62px_77px_106px_106px_0.35fr_106px] gap-1.5 items-end">
             <div>
               <label className={lblCls}>Ano</label>
               <Select value={ano} onValueChange={setAno}>
