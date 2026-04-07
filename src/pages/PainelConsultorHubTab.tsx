@@ -52,9 +52,9 @@ const items = [
     bg: 'bg-emerald-500/10',
   },
   {
-    id: 'meta_preco' as TabId,
-    title: 'Preços Meta',
-    desc: 'Preços de mercado do cenário meta',
+    id: 'precos_mercado_hub' as TabId,
+    title: 'Preços de Mercado',
+    desc: 'Preços reais, meta anual e referências de precificação',
     icon: DollarSign,
     color: 'text-blue-600',
     bg: 'bg-blue-500/10',
