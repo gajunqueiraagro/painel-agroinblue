@@ -266,6 +266,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
           rows: [
             r('Peso ini. (kg)', 'cab', pesoTotalIni, 'peso_ini_kg', true),
             r('Peso final (kg)', 'cab', pesoTotalFin, 'peso_fin_kg', true),
+            r('Peso fin. cab (kg)', 'med2', pesoTotalFin.map((p, i) => d.cabFin[i] > 0 ? p / d.cabFin[i] : NaN), 'peso_fin_cab_kg', true),
             r('Peso ini. (@)', 'cab', pesoTotalIni.map(v => Math.round(v / 30)), 'peso_ini_arr', true),
             r('Peso final (@)', 'cab', pesoTotalFin.map(v => Math.round(v / 30)), 'peso_fin_arr', true),
             r('Peso méd. ini.', 'med2', pesoMedioIni, 'peso_med_ini', true),
@@ -491,6 +492,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
           rows: [
             r('Peso ini. (kg)', 'cab', pesoIni, 'peso_ini_kg', true),
             r('Peso final (kg)', 'cab', pesoFin, 'peso_fin_kg', true),
+            r('Peso fin. cab (kg)', 'med2', pesoFin.map((p, i) => cabFin[i] > 0 ? p / cabFin[i] : NaN), 'peso_fin_cab_kg', true),
             r('Peso ini. (@)', 'cab', pesoIni.map(v => Math.round(v / 30)), 'peso_ini_arr', true),
             r('Peso final (@)', 'cab', pesoFin.map(v => Math.round(v / 30)), 'peso_fin_arr', true),
             r('Peso méd. ini.', 'med2', pesoMedIni, 'peso_med_ini', true),
@@ -725,6 +727,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
           rows: [
             r('Peso ini. (kg)', 'cab', pesoIni, 'peso_ini_kg', true),
             r('Peso final (kg)', 'cab', pesoFin, 'peso_fin_kg', true),
+            r('Peso fin. cab (kg)', 'med2', pesoFin.map((p, i) => cabFin[i] > 0 ? p / cabFin[i] : NaN), 'peso_fin_cab_kg', true),
             r('Peso ini. (@)', 'cab', pesoIni.map(v => Math.round(v / 30)), 'peso_ini_arr', true),
             r('Peso final (@)', 'cab', pesoFin.map(v => Math.round(v / 30)), 'peso_fin_arr', true),
             r('Peso méd. ini.', 'med2', pesoMedIni, 'peso_med_ini', true),
