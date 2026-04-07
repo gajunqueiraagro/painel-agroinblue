@@ -933,7 +933,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     if (isPrevisto) {
       // Fonte única: consolidação Meta validada
       if (metaConsolidacao && metaConsolidacao.length > 0) {
-        return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva, valorRebanhoMetaMes);
+        return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva, valorRebanhoMetaMes, valorRebanhoMes[0]);
       }
       // Fallback para view SQL apenas se consolidação não disponível
       return buildBlocosFromZootMensal(zootMeta || [], viewTab);
