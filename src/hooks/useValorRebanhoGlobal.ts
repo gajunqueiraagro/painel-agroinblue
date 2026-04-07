@@ -160,6 +160,7 @@ export function useValorRebanhoGlobal(
   const [snapshotItems, setSnapshotItems] = useState<Record<string, Record<string, SnapshotDetalheCategoria[]>>>({});
   const [precosAllFarms, setPrecosAllFarms] = useState<Record<string, Record<string, Record<string, number>>>>({});
   const [pesosPastosPorFazenda, setPesosPastosPorFazenda] = useState<Record<string, Record<string, number>>>({});
+  const [zootData, setZootData] = useState<Map<string, Map<number, Array<{ categoria_codigo: string; saldo_final: number; peso_medio_final: number | null }>>>>(new Map());
 
   const anoMes = `${anoFiltro}-${mesFiltro}`;
   const mesNum = Number(mesFiltro);
