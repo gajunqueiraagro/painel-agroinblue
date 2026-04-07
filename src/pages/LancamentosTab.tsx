@@ -229,7 +229,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   const internalEditOrigin = useRef<{ aba: Aba; anoFiltro: string; mesFiltro: string } | null>(null);
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
-  const [statusOp, setStatusOp] = useState<StatusOperacional>('realizado');
+  const [statusOp, setStatusOp] = useState<StatusOperacional | 'meta'>('realizado');
+  const { canEditMeta } = usePermissions();
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const reclassState = useReclassificacaoState({ onAdicionar, dataInicial, lancamentos, ano: Number(anoFiltro) });
