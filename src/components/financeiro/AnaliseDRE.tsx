@@ -113,14 +113,15 @@ function useValorRebanhoForDRE(fazendaId: string | undefined, anoFiltro: string,
 
 // ---------------------------------------------------------------------------
 // Calculate stock value: sum(qtd * pesoMedioKg * precoKg) for each category
+// saldoMap is now provided externally from the official source
 // ---------------------------------------------------------------------------
 function calcValorEstoque(
   saldosIniciais: SaldoInicial[],
-  lancamentosPecuarios: Lancamento[],
   precos: { categoria: string; preco_kg: number }[],
   ano: number,
   mes: number,
   pesosReais?: Record<string, number>,
+  saldoMap?: Map<string, number>,
 ): number {
   if (!precos || precos.length === 0) return 0;
   const precoMap = new Map(precos.map((p) => [p.categoria, p.preco_kg]));
@@ -136,11 +137,10 @@ function calcValorEstoque(
       }, 0);
   }
 
-  const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, ano, mes);
+  if (!saldoMap) return 0;
   let total = 0;
   for (const [cat, qtd] of saldoMap.entries()) {
     const preco = precoMap.get(cat) || 0;
-    // Use real weight from pesosReais (fechamento de pastos), fallback to saldo inicial
     const pesoKg = pesosReais?.[cat] ?? saldosIniciais.find((s) => s.ano === ano && s.categoria === cat)?.pesoMedioKg ?? 0;
     total += qtd * pesoKg * preco;
   }
