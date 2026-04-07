@@ -1149,13 +1149,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "fechamento_pasto_itens_categoria_id_fkey"
-            columns: ["categoria_id"]
-            isOneToOne: false
-            referencedRelation: "vw_zoot_categoria_mensal"
-            referencedColumns: ["categoria_id"]
-          },
-          {
             foreignKeyName: "fechamento_pasto_itens_fechamento_id_fkey"
             columns: ["fechamento_id"]
             isOneToOne: false
@@ -3994,22 +3987,7 @@ export type Database = {
           saldo_final: number | null
           saldo_inicial: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "saldos_iniciais_cliente_id_fkey"
-            columns: ["cliente_id"]
-            isOneToOne: false
-            referencedRelation: "clientes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "saldos_iniciais_fazenda_id_fkey"
-            columns: ["fazenda_id"]
-            isOneToOne: false
-            referencedRelation: "fazendas"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       vw_zoot_fazenda_mensal: {
         Row: {
