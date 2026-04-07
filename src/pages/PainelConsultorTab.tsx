@@ -29,15 +29,9 @@ import { useZootMensal, indexByMes, type ZootMensal } from '@/hooks/useZootMensa
 import { useZootCategoriaMensal, totalizarPorMes as totalizarViewPorMes } from '@/hooks/useZootCategoriaMensal';
 import { formatPainel, type PainelFormatType } from '@/lib/calculos/formatters';
 import {
-  calcSaldoMensalAcumulado,
-  calcResumoMovimentacoes,
-  calcUA,
   calcAreaProdutivaPecuaria,
-  calcSaldoPorCategoriaLegado,
 } from '@/lib/calculos/zootecnicos';
 import { supabase } from '@/integrations/supabase/client';
-import { isConciliado as isLancConciliado } from '@/lib/statusOperacional';
-import { loadPesosPastosCompleto, resolverPesoOficial } from '@/hooks/useFechamentoCategoria';
 import {
   isConciliado as isFinConciliado,
   isEntrada as isFinEntrada,
