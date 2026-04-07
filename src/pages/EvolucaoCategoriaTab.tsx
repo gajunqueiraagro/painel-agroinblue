@@ -13,10 +13,10 @@ interface Props {
 }
 
 const COLUNAS_CONSOLIDADAS = [
-  { key: 'entradas_externas', label: 'Entr. Ext.', entrada: true },
-  { key: 'evol_cat_entrada', label: 'Recl.E', entrada: true },
-  { key: 'saidas_externas', label: 'Saíd. Ext.', entrada: false },
-  { key: 'evol_cat_saida', label: 'Recl.S', entrada: false },
+  { key: 'entradas_externas', label: 'Entradas Externas', entrada: true },
+  { key: 'evol_cat_entrada', label: 'Evol. Cat. Entrada', entrada: true },
+  { key: 'saidas_externas', label: 'Saídas Externas', entrada: false },
+  { key: 'evol_cat_saida', label: 'Evol. Cat. Saída', entrada: false },
 ];
 
 export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, onNavigateToReclass }: Props) {
