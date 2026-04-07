@@ -88,7 +88,7 @@ export const META_VISUAL = {
 
 /** Retorna o cenário do lançamento */
 export function getCenario(l: Lancamento): Cenario {
-  return ((l as any).cenario as Cenario) || 'realizado';
+  return l.cenario || 'realizado';
 }
 
 /** Retorna o status_operacional do lançamento (pode ser undefined para META) */
