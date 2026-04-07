@@ -563,7 +563,7 @@ function GraficosContent({
 
   return (
     <div className="space-y-4">
-      {/* Toggle Realizado / Previsto */}
+      {/* Toggle Realizado / Meta */}
       <div className="flex bg-muted rounded-lg p-0.5">
         <button
           onClick={() => setCenario('realizado')}
@@ -572,17 +572,17 @@ function GraficosContent({
           Realizado
         </button>
         <button
-          onClick={() => setCenario('previsto')}
-          className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-colors ${cenario === 'previsto' ? 'bg-orange-500 text-white shadow-sm' : 'text-muted-foreground'}`}
+          onClick={() => setCenario('meta')}
+          className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-colors ${cenario === 'meta' ? 'bg-orange-500 text-white shadow-sm' : 'text-muted-foreground'}`}
         >
-          Previsto
+          Meta
         </button>
       </div>
 
-      {cenario === 'previsto' ? (
+      {cenario === 'meta' ? (
         <Card>
           <CardContent className="p-6 text-center">
-            <p className="text-sm text-muted-foreground">📈 Gráficos Previstos — em construção</p>
+            <p className="text-sm text-muted-foreground">📈 Gráficos Meta — em construção</p>
           </CardContent>
         </Card>
       ) : (
