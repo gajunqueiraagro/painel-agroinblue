@@ -22,19 +22,16 @@ interface Props {
   cenario?: Cenario;
 }
 
-/** Format number: returns '–' for zero/null, applies color logic externally */
 function fmt(v: number | null | undefined, decimals = 0): string {
   if (v === null || v === undefined || v === 0) return '–';
   return formatNum(v, decimals);
 }
 
-/** Color class based on value sign */
 function colorClass(v: number | null | undefined): string {
   if (v === null || v === undefined || v === 0) return 'text-muted-foreground';
   return v > 0 ? 'text-emerald-600' : 'text-red-500';
 }
 
-/** GMD color: >2.000 = red warning */
 function gmdColorClass(v: number | null): string {
   if (v === null) return 'text-muted-foreground';
   if (v > 2) return 'text-red-500 font-bold';
@@ -56,7 +53,6 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
   const byMes = useMemo(() => groupByMes(categoriaMensal), [categoriaMensal]);
   const catsMes = useMemo(() => (byMes[mesSel] || []).sort((a, b) => a.ordem_exibicao - b.ordem_exibicao), [byMes, mesSel]);
 
-  // Per-category derived values
   const catDerived = useMemo(() => {
     return catsMes.map(cat => {
       const ganho = cat.peso_total_final - cat.peso_total_inicial - cat.peso_entradas_externas + cat.peso_saidas_externas;
@@ -68,7 +64,6 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
     });
   }, [catsMes]);
 
-  // Totals row
   const totals = useMemo(() => {
     if (catsMes.length === 0) return null;
     const sum = (fn: (c: ZootCategoriaMensal) => number) => catsMes.reduce((s, c) => s + fn(c), 0);
@@ -97,7 +92,6 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
     };
   }, [catsMes]);
 
-  // Cell value based on view mode
   const getCellValue = (cat: typeof catDerived[0], col: string): string => {
     if (viewMode === 'cabecas') {
       switch (col) {
@@ -121,7 +115,6 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
         default: return '–';
       }
     }
-    // kg_total
     switch (col) {
       case 'saldo_ini': return fmt(cat.peso_total_inicial, 0);
       case 'ent_ext': return fmt(cat.peso_entradas_externas, 0);
@@ -253,71 +246,87 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
       ) : catsMes.length === 0 ? (
         <div className="text-center py-6 text-muted-foreground text-xs">Sem dados para {MESES_LABELS[mesSel - 1]}/{ano} ({cenarioLabel})</div>
       ) : (
-        <div className="overflow-x-auto border rounded-lg">
-          <table className="w-full text-[10px] border-collapse">
-            <thead>
-              <tr className="bg-muted/50">
-                <th className="text-left px-1.5 py-1 font-semibold text-muted-foreground border-b sticky left-0 bg-muted/50 z-10 min-w-[80px]">Categoria</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-muted-foreground border-b min-w-[55px]">Saldo Ini.</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-muted-foreground border-b min-w-[50px]">Ent. Ext.</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-muted-foreground border-b min-w-[55px]">Evol. (E)</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-muted-foreground border-b min-w-[50px]">Saí. Ext.</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-muted-foreground border-b min-w-[55px]">Evol. (S)</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-muted-foreground border-b min-w-[55px]">Saldo Fin.</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-muted-foreground border-b border-l-2 border-l-border min-w-[65px]">Peso Ini.</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-muted-foreground border-b min-w-[65px]">Peso Fin.</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-muted-foreground border-b min-w-[60px]">Ganho (kg)</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-muted-foreground border-b min-w-[35px]">Dias</th>
-                <th className="text-right px-1.5 py-1 font-semibold text-primary border-b min-w-[55px]">GMD</th>
-              </tr>
-            </thead>
-            <tbody>
-              {catDerived.map(cat => (
-                <tr key={cat.categoria_id} className="hover:bg-muted/20 border-b border-border/30">
-                  <td className="px-1.5 py-0.5 font-medium text-foreground sticky left-0 bg-background z-10 text-[10px]">{cat.categoria_nome}</td>
-                  <td className="text-right px-1.5 py-0.5 text-muted-foreground">{getCellValue(cat, 'saldo_ini')}</td>
-                  <td className={`text-right px-1.5 py-0.5 ${colorClass(cat.entradas_externas)}`}>{getCellValue(cat, 'ent_ext')}</td>
-                  <td className={`text-right px-1.5 py-0.5 ${colorClass(cat.evol_cat_entrada)}`}>{getCellValue(cat, 'evol_ent')}</td>
-                  <td className={`text-right px-1.5 py-0.5 ${colorClass(cat.saidas_externas ? -cat.saidas_externas : 0)}`}>{getCellValue(cat, 'sai_ext')}</td>
-                  <td className={`text-right px-1.5 py-0.5 ${colorClass(cat.evol_cat_saida ? -cat.evol_cat_saida : 0)}`}>{getCellValue(cat, 'evol_sai')}</td>
-                  <td className="text-right px-1.5 py-0.5 font-medium text-foreground">{getCellValue(cat, 'saldo_fin')}</td>
-                  <td className="text-right px-1.5 py-0.5 text-muted-foreground border-l-2 border-l-border">{fmt(cat.peso_total_inicial, 0)}</td>
-                  <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmt(cat.peso_total_final, 0)}</td>
-                  <td className={`text-right px-1.5 py-0.5 font-medium ${colorClass(cat.ganho)}`}>{fmt(cat.ganho, 0)}</td>
-                  <td className="text-right px-1.5 py-0.5 text-muted-foreground">{cat.dias_mes || '–'}</td>
-                  <td className={`text-right px-1.5 py-0.5 ${gmdColorClass(cat.gmd)}`}>
-                    {cat.gmd !== null ? formatNum(cat.gmd, 3) : '–'}
-                  </td>
+        <div className="flex justify-start">
+          <div className="overflow-x-auto border rounded-lg">
+            <table className="table-fixed text-[10px] border-collapse">
+              <colgroup>
+                <col style={{ width: '76px' }} />
+                <col style={{ width: '52px' }} />
+                <col style={{ width: '46px' }} />
+                <col style={{ width: '46px' }} />
+                <col style={{ width: '46px' }} />
+                <col style={{ width: '46px' }} />
+                <col style={{ width: '52px' }} />
+                <col style={{ width: '58px' }} />
+                <col style={{ width: '58px' }} />
+                <col style={{ width: '54px' }} />
+                <col style={{ width: '30px' }} />
+                <col style={{ width: '48px' }} />
+              </colgroup>
+              <thead>
+                <tr className="bg-muted/50">
+                  <th className="text-left px-1 py-0.5 font-semibold text-muted-foreground border-b">Categoria</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Saldo Ini.</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Ent.Ext</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Evol.(E)</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Saí.Ext</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Evol.(S)</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Saldo Fin.</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b border-l-2 border-l-border">Peso Ini.</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Peso Fin.</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Ganho</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Dias</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-primary border-b">GMD</th>
                 </tr>
-              ))}
-            </tbody>
-            {totals && (
-              <tfoot>
-                <tr className="bg-muted/30 font-bold border-t-2 border-border">
-                  <td className="px-1.5 py-1 text-foreground sticky left-0 bg-muted/30 z-10">TOTAL</td>
-                  <td className="text-right px-1.5 py-1 text-foreground">{getTotalCellValue('saldo_ini')}</td>
-                  <td className={`text-right px-1.5 py-1 ${colorClass(totals.entradasExternas)}`}>{getTotalCellValue('ent_ext')}</td>
-                  <td className={`text-right px-1.5 py-1 ${colorClass(totals.evolCatEntrada)}`}>{getTotalCellValue('evol_ent')}</td>
-                  <td className={`text-right px-1.5 py-1 ${colorClass(totals.saidasExternas ? -totals.saidasExternas : 0)}`}>{getTotalCellValue('sai_ext')}</td>
-                  <td className={`text-right px-1.5 py-1 ${colorClass(totals.evolCatSaida ? -totals.evolCatSaida : 0)}`}>{getTotalCellValue('evol_sai')}</td>
-                  <td className="text-right px-1.5 py-1 text-foreground">{getTotalCellValue('saldo_fin')}</td>
-                  <td className="text-right px-1.5 py-1 text-foreground border-l-2 border-l-border">{fmt(totals.pesoInicial, 0)}</td>
-                  <td className="text-right px-1.5 py-1 text-foreground">{fmt(totals.pesoFinal, 0)}</td>
-                  <td className={`text-right px-1.5 py-1 ${colorClass(totals.ganho)}`}>{fmt(totals.ganho, 0)}</td>
-                  <td className="text-right px-1.5 py-1 text-foreground">{totals.dias || '–'}</td>
-                  <td className={`text-right px-1.5 py-1 text-sm ${gmdColorClass(totals.gmd)}`}>
-                    {totals.gmd !== null ? formatNum(totals.gmd, 3) : '–'}
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
+              </thead>
+              <tbody>
+                {catDerived.map(cat => (
+                  <tr key={cat.categoria_id} className="hover:bg-muted/20 border-b border-border/30">
+                    <td className="px-1 py-0.5 font-medium text-foreground text-[10px] truncate">{cat.categoria_nome}</td>
+                    <td className="text-right px-1 py-0.5 text-muted-foreground">{getCellValue(cat, 'saldo_ini')}</td>
+                    <td className={`text-right px-1 py-0.5 ${colorClass(cat.entradas_externas)}`}>{getCellValue(cat, 'ent_ext')}</td>
+                    <td className={`text-right px-1 py-0.5 ${colorClass(cat.evol_cat_entrada)}`}>{getCellValue(cat, 'evol_ent')}</td>
+                    <td className={`text-right px-1 py-0.5 ${colorClass(cat.saidas_externas ? -cat.saidas_externas : 0)}`}>{getCellValue(cat, 'sai_ext')}</td>
+                    <td className={`text-right px-1 py-0.5 ${colorClass(cat.evol_cat_saida ? -cat.evol_cat_saida : 0)}`}>{getCellValue(cat, 'evol_sai')}</td>
+                    <td className="text-right px-1 py-0.5 font-medium text-foreground">{getCellValue(cat, 'saldo_fin')}</td>
+                    <td className="text-right px-1 py-0.5 text-muted-foreground border-l-2 border-l-border">{fmt(cat.peso_total_inicial, 0)}</td>
+                    <td className="text-right px-1 py-0.5 text-muted-foreground">{fmt(cat.peso_total_final, 0)}</td>
+                    <td className={`text-right px-1 py-0.5 font-medium ${colorClass(cat.ganho)}`}>{fmt(cat.ganho, 0)}</td>
+                    <td className="text-right px-1 py-0.5 text-muted-foreground">{cat.dias_mes || '–'}</td>
+                    <td className={`text-right px-1 py-0.5 ${gmdColorClass(cat.gmd)}`}>
+                      {cat.gmd !== null ? formatNum(cat.gmd, 3) : '–'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              {totals && (
+                <tfoot>
+                  <tr className="bg-muted/30 font-bold border-t-2 border-border">
+                    <td className="px-1 py-0.5 text-foreground">TOTAL</td>
+                    <td className="text-right px-1 py-0.5 text-foreground">{getTotalCellValue('saldo_ini')}</td>
+                    <td className={`text-right px-1 py-0.5 ${colorClass(totals.entradasExternas)}`}>{getTotalCellValue('ent_ext')}</td>
+                    <td className={`text-right px-1 py-0.5 ${colorClass(totals.evolCatEntrada)}`}>{getTotalCellValue('evol_ent')}</td>
+                    <td className={`text-right px-1 py-0.5 ${colorClass(totals.saidasExternas ? -totals.saidasExternas : 0)}`}>{getTotalCellValue('sai_ext')}</td>
+                    <td className={`text-right px-1 py-0.5 ${colorClass(totals.evolCatSaida ? -totals.evolCatSaida : 0)}`}>{getTotalCellValue('evol_sai')}</td>
+                    <td className="text-right px-1 py-0.5 text-foreground">{getTotalCellValue('saldo_fin')}</td>
+                    <td className="text-right px-1 py-0.5 text-foreground border-l-2 border-l-border">{fmt(totals.pesoInicial, 0)}</td>
+                    <td className="text-right px-1 py-0.5 text-foreground">{fmt(totals.pesoFinal, 0)}</td>
+                    <td className={`text-right px-1 py-0.5 ${colorClass(totals.ganho)}`}>{fmt(totals.ganho, 0)}</td>
+                    <td className="text-right px-1 py-0.5 text-foreground">{totals.dias || '–'}</td>
+                    <td className={`text-right px-1 py-0.5 ${gmdColorClass(totals.gmd)}`}>
+                      {totals.gmd !== null ? formatNum(totals.gmd, 3) : '–'}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
         </div>
       )}
 
       {/* Explicação do cálculo */}
       {totals && (
-        <div className="border rounded-lg p-2 bg-muted/20 space-y-1.5 text-[10px] text-muted-foreground">
+        <div className="border rounded-lg p-2 bg-muted/20 space-y-1.5 text-[10px] text-muted-foreground max-w-[612px]">
           <h3 className="font-semibold text-foreground text-xs">Fórmula do GMD (Total Fazenda) — {cenarioLabel}</h3>
           <div className="space-y-0.5 font-mono">
             <p>Ganho = Peso Fin. ({fmt(totals.pesoFinal, 0)}) − Peso Ini. ({fmt(totals.pesoInicial, 0)}) − Ent.Ext. ({fmt(totals.pesoEntradasExt, 0)}) + Saí.Ext. ({fmt(totals.pesoSaidasExt, 0)}) = <span className="font-bold text-foreground">{fmt(totals.ganho, 0)} kg</span></p>
