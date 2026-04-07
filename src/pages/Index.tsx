@@ -359,7 +359,7 @@ const Index = () => {
     indicadores: goToVisaoZooHub,
     visao_anual_zoo: goToVisaoZooHub,
     
-    preco_mercado: goToVisaoZooHub,
+    preco_mercado: () => setActiveTab('precos_mercado_hub'),
     graficos_analise: goToVisaoZooHub,
     movimentacao: goToVisaoZooHub,
     fluxo_anual: goToVisaoZooHub,
@@ -374,7 +374,6 @@ const Index = () => {
     meta_consolidacao: () => setActiveTab('painel_consultor_hub'),
     meta_movimentacoes: () => setActiveTab('painel_consultor_hub'),
     precos_mercado_hub: () => setActiveTab('painel_consultor_hub'),
-    preco_mercado: () => setActiveTab('precos_mercado_hub'),
     // Financeiro (analysis) sub-screens
     fin_caixa: () => setActiveTab('lancar_fin_hub'),
     analise_economica: () => setActiveTab('lancar_fin_hub'),
