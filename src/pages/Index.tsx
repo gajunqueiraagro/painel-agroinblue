@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import { BottomNav, TabId } from '@/components/BottomNav';
 import { Header } from '@/components/Header';
@@ -292,9 +292,13 @@ const Index = () => {
       setEditOriginMesFiltro(undefined);
     }
     if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
+    if (tab === 'conferencia_gmd') {
+      gmdOriginRef.current = activeTab as TabId;
+    }
     setActiveTab(tab);
-  }, [isGlobal, canViewTab]);
+  }, [isGlobal, canViewTab, activeTab]);
 
+  const gmdOriginRef = useRef<TabId>('painel_consultor');
   const goToResumo = useCallback(() => setActiveTab('resumo'), []);
   const goToLancarZooHub = useCallback(() => setActiveTab('lancar_zoo_hub'), []);
   const goToVisaoZooHub = useCallback(() => setActiveTab('visao_zoo_hub'), []);
@@ -425,7 +429,7 @@ const Index = () => {
         <PainelConsultorTab onBack={() => setActiveTab('painel_consultor_hub')} onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} metaConsolidacao={metaConsolidacaoData} />
       )}
       {activeTab === 'conferencia_gmd' && (
-        <ConferenciaGmdTab onBack={() => setActiveTab('painel_consultor')} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
+        <ConferenciaGmdTab onBack={() => setActiveTab(gmdOriginRef.current)} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
       )}
       {activeTab === 'status_fechamentos' && (
         <StatusFechamentosTab
