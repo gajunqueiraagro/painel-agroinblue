@@ -1135,10 +1135,10 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         <div className="px-2 space-y-1 mt-1 flex-1 overflow-auto">
           {previstoGlobalBloqueado ? (
             <div className="flex flex-col items-center justify-center py-12 text-center space-y-2">
-              <span className="text-sm font-semibold text-muted-foreground">Previsto indisponível no modo Global</span>
+              <span className="text-sm font-semibold text-muted-foreground">Meta indisponível no modo Global</span>
               <span className="text-xs text-muted-foreground/70 max-w-md">
-                A base prevista (meta) é registrada por fazenda individual.
-                Selecione uma fazenda específica para visualizar o cenário Previsto,
+                A base meta é registrada por fazenda individual.
+                Selecione uma fazenda específica para visualizar o cenário Meta,
                 ou alterne para o cenário Realizado.
               </span>
             </div>
