@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { format } from 'date-fns';
 import { useIntegerInput, useDecimalInput } from '@/hooks/useFormattedNumber';
 import { RefreshCw, ArrowRight, Scale } from 'lucide-react';
-import { STATUS_LABEL, type StatusOperacional } from '@/lib/statusOperacional';
+import { STATUS_LABEL, META_VISUAL, type StatusOperacional } from '@/lib/statusOperacional';
+import { usePermissions } from '@/hooks/usePermissions';
 import { ReclassificacaoResumoPanel } from './ReclassificacaoResumoPanel';
 
 interface Props {
@@ -17,41 +18,25 @@ interface Props {
   ano?: number;
 }
 
-const STATUS_DESCRIPTIONS: Partial<Record<StatusOperacional, string>> = {
-  previsto: 'Planejamento (meta). Gera lançamentos previstos que alimentam o fluxo projetado.',
-  programado: 'Operação definida, ainda não executada.',
+type StatusOpcao = 'realizado' | 'meta';
+
+const STATUS_DESCRIPTIONS: Record<StatusOpcao, string> = {
   realizado: 'Operação concluída. Impacta rebanho e financeiro.',
+  meta: META_VISUAL.description,
 };
 
-const STATUS_BUTTONS: { value: StatusOperacional; dot: string; activeBorder: string; activeBg: string }[] = [
-  { value: 'realizado', dot: 'bg-green-600', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
-  { value: 'previsto', dot: 'bg-orange-500', activeBorder: 'border-orange-400', activeBg: 'bg-orange-50 dark:bg-orange-950/30' },
+const STATUS_BUTTONS: { value: StatusOpcao; label: string; dot: string; activeBorder: string; activeBg: string }[] = [
+  { value: 'realizado', label: STATUS_LABEL.realizado, dot: 'bg-green-600', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
+  { value: 'meta', label: META_VISUAL.label, dot: META_VISUAL.dot, activeBorder: META_VISUAL.activeBorder, activeBg: META_VISUAL.activeBg },
 ];
 
-function deriveCategoryInfo(
-  categoria: Categoria,
-  lancamentos: Lancamento[],
-): { pesoMedio: number | null } {
-  const sorted = [...lancamentos]
-    .filter(l => l.categoria === categoria && l.pesoMedioKg && l.pesoMedioKg > 0)
-    .sort((a, b) => b.data.localeCompare(a.data));
+// ── Form Fields Component ──
 
-  if (sorted.length === 0) return { pesoMedio: null };
-
-  const recent = sorted.slice(0, 5);
-  let totalPeso = 0;
-  let totalQtd = 0;
-  for (const l of recent) {
-    totalPeso += (l.pesoMedioKg || 0) * l.quantidade;
-    totalQtd += l.quantidade;
-  }
-  return { pesoMedio: totalQtd > 0 ? totalPeso / totalQtd : null };
+interface FormFieldsProps {
+  state: ReturnType<typeof useReclassificacaoState>;
 }
 
-/** Form fields (center column) */
-export function ReclassificacaoFormFields(props: Props & {
-  state: ReturnType<typeof useReclassificacaoState>;
-}) {
+export function ReclassificacaoFormFields(props: FormFieldsProps) {
   const { state } = props;
   const {
     categoriaOrigem, setCategoriaOrigem,
@@ -62,8 +47,9 @@ export function ReclassificacaoFormFields(props: Props & {
     origemInfo, setPesoKg, setPesoAutoFilled,
   } = state;
 
-  const isPrevisto = statusOp === 'previsto';
-  const borderAccent = isPrevisto ? 'border-orange-400' : '';
+  const isMeta = statusOp === 'meta';
+  const borderAccent = isMeta ? 'border-orange-400' : '';
+  const { canEditMeta } = usePermissions();
 
   const fmtNum = (v: number | null, dec = 1) =>
     v != null ? v.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec }) : '—';
@@ -77,31 +63,34 @@ export function ReclassificacaoFormFields(props: Props & {
         </div>
       </div>
 
-      {/* Status selector – same pattern as Venda/Abate/Transferência */}
+      {/* Status selector – Realizado / META */}
       <div className="space-y-1">
         <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Status da Operação</Label>
         <div className="grid grid-cols-2 gap-1">
           {STATUS_BUTTONS.map(s => {
             const selected = statusOp === s.value;
+            const disabled = s.value === 'meta' && !canEditMeta;
             return (
               <button
                 key={s.value}
                 type="button"
-                onClick={() => setStatusOp(s.value)}
+                onClick={() => !disabled && setStatusOp(s.value)}
+                disabled={disabled}
                 className={`flex items-center justify-center gap-1 h-6 rounded-md border transition-all ${
+                  disabled ? 'opacity-40 cursor-not-allowed border-border bg-muted/10' :
                   selected ? `${s.activeBg} ${s.activeBorder}` : 'border-border bg-muted/10 hover:bg-muted/30'
                 }`}
+                title={disabled ? 'Somente consultores podem criar registros META' : undefined}
               >
                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selected ? s.dot : 'border border-muted-foreground/40 bg-transparent'}`} />
-                <span className={`text-[10px] font-bold ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>{STATUS_LABEL[s.value]}</span>
+                <span className={`text-[10px] font-bold ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>{s.label}</span>
               </button>
             );
           })}
         </div>
         <div className={`rounded-md border px-2 py-1 text-[9px] leading-snug ${
           statusOp === 'realizado' ? 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-800 text-green-800 dark:text-green-300'
-          : statusOp === 'previsto' ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-800 text-orange-800 dark:text-orange-300'
-          : 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-300'
+          : 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-800 text-orange-800 dark:text-orange-300'
         }`}>
           {STATUS_DESCRIPTIONS[statusOp]}
         </div>
@@ -109,134 +98,135 @@ export function ReclassificacaoFormFields(props: Props & {
 
       <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-end">
         <div>
-          <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">De (Origem)</Label>
-          <Select value={categoriaOrigem} onValueChange={v => { setCategoriaOrigem(v as Categoria); setPesoKg(''); setPesoAutoFilled(false); }}>
-            <SelectTrigger className={`mt-0.5 h-8 text-[11px] ${borderAccent}`}><SelectValue /></SelectTrigger>
-            <SelectContent className="max-h-52">
-              {CATEGORIAS.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px]">{c.label}</SelectItem>)}
+          <Label className="text-[10px] font-semibold">Origem</Label>
+          <Select value={categoriaOrigem} onValueChange={v => setCategoriaOrigem(v as Categoria)}>
+            <SelectTrigger className={`h-7 text-[11px] ${borderAccent}`}><SelectValue placeholder="Categoria..." /></SelectTrigger>
+            <SelectContent className="max-h-52 overflow-y-auto">
+              {CATEGORIAS.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1.5">{c.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
-        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground mb-1.5" />
+
+        <div className="flex items-center justify-center pt-4">
+          <ArrowRight className="h-4 w-4 text-muted-foreground" />
+        </div>
+
         <div>
-          <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Para (Destino)</Label>
+          <Label className="text-[10px] font-semibold">Destino</Label>
           <Select value={categoriaDestino} onValueChange={v => setCategoriaDestino(v as Categoria)}>
-            <SelectTrigger className={`mt-0.5 h-8 text-[11px] ${borderAccent}`}><SelectValue /></SelectTrigger>
-            <SelectContent className="max-h-52">
-              {CATEGORIAS.filter(c => c.value !== categoriaOrigem).map(c => (
-                <SelectItem key={c.value} value={c.value} className="text-[11px]">{c.label}</SelectItem>
-              ))}
+            <SelectTrigger className={`h-7 text-[11px] ${borderAccent}`}><SelectValue placeholder="Categoria..." /></SelectTrigger>
+            <SelectContent className="max-h-52 overflow-y-auto">
+              {CATEGORIAS.filter(c => c.value !== categoriaOrigem).map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1.5">{c.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2 items-end">
         <div>
-          <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Data</Label>
-          <Input type="date" value={data} onChange={e => setData(e.target.value)} className={`mt-0.5 h-8 text-[11px] ${borderAccent}`} />
+          <Label className="text-[10px] font-semibold">Data</Label>
+          <Input type="date" value={data} onChange={e => setData(e.target.value)} className={`h-7 text-[11px] ${borderAccent}`} />
         </div>
         <div>
-          <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Qtd. Cabeças</Label>
-          <Input type="text" inputMode="numeric" value={qtdInput.displayValue} onChange={qtdInput.onChange} onBlur={qtdInput.onBlur} onFocus={qtdInput.onFocus} placeholder="0" className={`mt-0.5 h-8 text-[11px] text-center font-bold ${borderAccent}`} />
+          <Label className="text-[10px] font-semibold">Qtd. Cab.</Label>
+          <Input type="text" inputMode="numeric" value={qtdInput.displayValue} onChange={qtdInput.onChange} onBlur={qtdInput.onBlur} onFocus={qtdInput.onFocus} placeholder="0" className={`h-7 text-[11px] text-right font-bold tabular-nums ${borderAccent}`} />
         </div>
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between">
-          <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Peso Médio (kg)</Label>
-          {origemInfo.pesoMedio && (
-            <span className="text-[9px] text-orange-600 flex items-center gap-0.5">
-              <Scale className="h-2.5 w-2.5" />
-              Sugerido: {fmtNum(origemInfo.pesoMedio)} kg
-            </span>
+        <div className="relative">
+          <Label className="text-[10px] font-semibold">Peso (kg)</Label>
+          <Input type="text" inputMode="decimal" value={pesoInput.displayValue} onChange={(e) => { pesoInput.onChange(e); setPesoAutoFilled(false); }} onBlur={pesoInput.onBlur} onFocus={pesoInput.onFocus} placeholder="0,00" className={`h-7 text-[11px] text-right tabular-nums ${borderAccent}`} />
+          {origemInfo && (
+            <button
+              type="button"
+              onClick={() => { setPesoKg(String(origemInfo.pesoMedioKg)); setPesoAutoFilled(true); }}
+              title={`Sugerir peso da categoria: ${fmtNum(origemInfo.pesoMedioKg)} kg`}
+              className="absolute right-1 top-5 p-0.5 rounded-sm hover:bg-muted transition"
+            >
+              <Scale className="h-3 w-3 text-muted-foreground" />
+            </button>
           )}
         </div>
-        <Input type="text" inputMode="decimal" value={pesoInput.displayValue} onChange={pesoInput.onChange} onBlur={pesoInput.onBlur} onFocus={pesoInput.onFocus} placeholder={origemInfo.pesoMedio ? fmtNum(origemInfo.pesoMedio) : '0,00'} className={`mt-0.5 h-8 text-[11px] ${borderAccent}`} />
       </div>
     </div>
   );
 }
 
-/** Shared state hook for the reclassificacao form */
-export function useReclassificacaoState(props: Props) {
-  const { onAdicionar, dataInicial, lancamentos = [], ano } = props;
-  const [categoriaOrigem, setCategoriaOrigem] = useState<Categoria>('desmama_m');
-  const [categoriaDestino, setCategoriaDestino] = useState<Categoria>('garrotes');
-  const [quantidade, setQuantidade] = useState('');
+// ── Hook ──
+
+export function useReclassificacaoState({ onAdicionar, dataInicial, lancamentos, ano }: Props) {
+  const [categoriaOrigem, setCategoriaOrigem] = useState<Categoria>('garrotes');
+  const [categoriaDestino, setCategoriaDestino] = useState<Categoria>('bois');
   const [data, setData] = useState(dataInicial || format(new Date(), 'yyyy-MM-dd'));
+  const [quantidade, setQuantidade] = useState('');
   const [pesoKg, setPesoKg] = useState('');
-  const [statusOp, setStatusOp] = useState<StatusOperacional>('realizado');
-  const [submitting, setSubmitting] = useState(false);
   const [pesoAutoFilled, setPesoAutoFilled] = useState(false);
+  const [statusOp, setStatusOp] = useState<StatusOpcao>('realizado');
 
   const qtdInput = useIntegerInput(quantidade, setQuantidade);
   const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
 
-  const origemInfo = useMemo(() => deriveCategoryInfo(categoriaOrigem, lancamentos), [categoriaOrigem, lancamentos]);
+  const origemInfo = useMemo(() => {
+    if (!lancamentos || !ano) return null;
+    const catLancs = lancamentos.filter(l => l.categoria === categoriaOrigem);
+    if (!catLancs.length) return null;
+    const totalQtd = catLancs.reduce((sum, l) => sum + l.quantidade, 0);
+    const totalPeso = catLancs.reduce((sum, l) => sum + (l.pesoMedioKg || 0) * l.quantidade, 0);
+    return {
+      pesoMedioKg: totalQtd > 0 ? Number((totalPeso / totalQtd).toFixed(2)) : null,
+    };
+  }, [lancamentos, categoriaOrigem, ano]);
 
   useEffect(() => {
-    if (origemInfo.pesoMedio && !pesoKg && !pesoAutoFilled) {
-      setPesoKg(origemInfo.pesoMedio.toFixed(2));
+    if (origemInfo?.pesoMedioKg && !pesoKg && !pesoAutoFilled) {
+      setPesoKg(String(origemInfo.pesoMedioKg));
       setPesoAutoFilled(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoriaOrigem]);
+  }, [origemInfo, categoriaOrigem]);
 
-  const origemLabel = CATEGORIAS.find(c => c.value === categoriaOrigem)?.label || '';
-  const destinoLabel = CATEGORIAS.find(c => c.value === categoriaDestino)?.label || '';
-  const canRegister = !!quantidade && Number(quantidade) > 0 && categoriaOrigem !== categoriaDestino;
+  const origemLabel = CATEGORIAS.find(c => c.value === categoriaOrigem)?.label || categoriaOrigem;
+  const destinoLabel = CATEGORIAS.find(c => c.value === categoriaDestino)?.label || categoriaDestino;
 
-  const handleRegister = async () => {
-    if (!canRegister || submitting) return;
-    setSubmitting(true);
-    try {
-      const result = await onAdicionar({
-        data,
-        tipo: 'reclassificacao',
-        quantidade: Number(quantidade),
-        categoria: categoriaOrigem,
-        categoriaDestino,
-        pesoMedioKg: pesoKg ? Number(pesoKg) : undefined,
-        pesoMedioArrobas: pesoKg ? kgToArrobas(Number(pesoKg)) : undefined,
-        statusOperacional: statusOp,
+  const handleSubmit = async () => {
+    if (!Number(quantidade) || categoriaOrigem === categoriaDestino) return;
+
+    const isMeta = statusOp === 'meta';
+
+    const result = await onAdicionar({
+      data,
+      tipo: 'reclassificacao',
+      quantidade: Number(quantidade),
+      categoria: categoriaOrigem,
+      categoriaDestino,
+      pesoMedioKg: pesoKg ? Number(pesoKg) : undefined,
+      pesoMedioArrobas: pesoKg ? kgToArrobas(Number(pesoKg)) : undefined,
+      statusOperacional: isMeta ? null : 'realizado',
+    });
+
+    if (result) {
+      toast.success('Reclassificação registrada com sucesso.', {
+        description: `${origemLabel} → ${destinoLabel} | ${Number(quantidade)} cab. | ${isMeta ? 'Meta' : 'Realizado'}`,
+        style: isMeta ? { borderLeft: '4px solid #f97316' } : { borderLeft: '4px solid #16a34a' },
       });
-
-      if (result) {
-        const isPrev = statusOp === 'previsto';
-        toast.success('Reclassificação registrada com sucesso.', {
-          description: `${origemLabel} → ${destinoLabel} | ${Number(quantidade)} cab. | ${isPrev ? 'Previsto' : 'Realizado'}`,
-          style: isPrev ? { borderLeft: '4px solid #f97316' } : { borderLeft: '4px solid #16a34a' },
-        });
-        setQuantidade('');
-        setPesoKg('');
-        setPesoAutoFilled(false);
-      } else {
-        toast.error('Não foi possível registrar a reclassificação.', {
-          description: 'Verifique os dados e tente novamente.',
-        });
-      }
-    } catch (err: any) {
-      console.error('[Reclassificação] Erro ao salvar:', err);
-      toast.error('Erro ao registrar reclassificação.', {
-        description: err?.message || 'Erro desconhecido. Verifique os dados.',
+      setQuantidade('');
+      setPesoKg('');
+      setPesoAutoFilled(false);
+    } else {
+      toast.error('Não foi possível registrar a reclassificação.', {
+        description: 'Verifique os campos e tente novamente.',
       });
-    } finally {
-      setSubmitting(false);
     }
   };
 
   return {
     categoriaOrigem, setCategoriaOrigem,
     categoriaDestino, setCategoriaDestino,
-    quantidade, setQuantidade,
     data, setData,
+    quantidade, setQuantidade,
     pesoKg, setPesoKg,
-    statusOp, setStatusOp,
-    submitting,
     qtdInput, pesoInput,
-    origemInfo, origemLabel, destinoLabel,
-    canRegister, handleRegister,
+    statusOp, setStatusOp,
+    origemInfo,
+    origemLabel, destinoLabel,
+    handleSubmit,
     setPesoAutoFilled,
   };
 }
