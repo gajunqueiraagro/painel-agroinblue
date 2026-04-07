@@ -2,10 +2,11 @@
  * Conferência de GMD — Auditoria completa do cálculo do GMD mensal.
  *
  * Fonte única: vw_zoot_categoria_mensal (via useZootCategoriaMensal).
- * Não recalcula — apenas lê, formata e exibe.
+ * Esta é a MESMA fonte usada por Evolução de Categorias e Valor do Rebanho.
+ * Não recalcula — apenas lê, formata, exibe e AUDITA divergências.
  */
 import { useState, useMemo } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useZootCategoriaMensal, groupByMes } from '@/hooks/useZootCategoriaMensal';
@@ -51,22 +52,18 @@ interface CatRow {
   saidas_externas: number;
   evol_cat_saida: number;
   saldo_final: number;
+  /** Saldo calculado aritmeticamente: ini + ent + evol_e - sai - evol_s */
+  saldo_calculado: number;
+  /** Divergência = saldo_final (fechamento) - saldo_calculado (aritmético) */
+  divergencia: number;
   pesoTotalIni: number;
   pesoTotalFin: number;
   pesoCabIni: number | null;
   pesoCabFin: number | null;
   pesoEntradasExt: number;
   pesoSaidasExt: number;
-  // kg medio per movement type
   kgMedioEntExt: number | null;
-  kgMedioEvolE: number | null;
   kgMedioSaiExt: number | null;
-  kgMedioEvolS: number | null;
-  // kg total per movement type
-  kgTotalEntExt: number;
-  kgTotalEvolE: number;
-  kgTotalSaiExt: number;
-  kgTotalEvolS: number;
   ganho: number;
   dias: number;
   cabMedia: number;
@@ -101,11 +98,9 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
       const dias = cat.dias_mes;
       const gmd = cabMedia > 0 && dias > 0 ? ganho / (cabMedia * dias) : null;
 
-      // kg medio per movement (peso / cabeças) — approximate via pesoCabIni for entries, pesoCabFin context
-      const kgMedioEntExt = div(pesoEntradasExt, cat.entradas_externas);
-      const kgMedioEvolE = null; // evol cat doesn't carry independent weight
-      const kgMedioSaiExt = div(pesoSaidasExt, cat.saidas_externas);
-      const kgMedioEvolS = null;
+      // Audit: saldo aritmético vs saldo do fechamento
+      const saldo_calculado = cat.saldo_inicial + cat.entradas_externas + cat.evol_cat_entrada - cat.saidas_externas - cat.evol_cat_saida;
+      const divergencia = cat.saldo_final - saldo_calculado;
 
       return {
         categoria_id: cat.categoria_id,
@@ -116,18 +111,18 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
         saidas_externas: cat.saidas_externas,
         evol_cat_saida: cat.evol_cat_saida,
         saldo_final: cat.saldo_final,
+        saldo_calculado,
+        divergencia,
         pesoTotalIni, pesoTotalFin, pesoCabIni, pesoCabFin,
         pesoEntradasExt, pesoSaidasExt,
-        kgMedioEntExt, kgMedioEvolE, kgMedioSaiExt, kgMedioEvolS,
-        kgTotalEntExt: pesoEntradasExt,
-        kgTotalEvolE: 0,
-        kgTotalSaiExt: pesoSaidasExt,
-        kgTotalEvolS: 0,
+        kgMedioEntExt: div(pesoEntradasExt, cat.entradas_externas),
+        kgMedioSaiExt: div(pesoSaidasExt, cat.saidas_externas),
         ganho, dias, cabMedia, gmd,
       };
     });
   }, [catsMes]);
 
+  // Totals
   const totals = useMemo(() => {
     if (rows.length === 0) return null;
     const s = (fn: (r: CatRow) => number) => rows.reduce((a, r) => a + fn(r), 0);
@@ -137,6 +132,8 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
     const saidasExternas = s(r => r.saidas_externas);
     const evolCatEntrada = s(r => r.evol_cat_entrada);
     const evolCatSaida = s(r => r.evol_cat_saida);
+    const saldoCalculado = s(r => r.saldo_calculado);
+    const divergencia = saldoFinal - saldoCalculado;
     const pesoTotalIni = s(r => r.pesoTotalIni);
     const pesoTotalFin = s(r => r.pesoTotalFin);
     const pesoEntradasExt = s(r => r.pesoEntradasExt);
@@ -149,7 +146,8 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
     const gmd = cabMedia > 0 && dias > 0 ? ganho / (cabMedia * dias) : null;
     return {
       saldoInicial, saldoFinal, entradasExternas, saidasExternas,
-      evolCatEntrada, evolCatSaida, pesoTotalIni, pesoTotalFin,
+      evolCatEntrada, evolCatSaida, saldoCalculado, divergencia,
+      pesoTotalIni, pesoTotalFin,
       pesoCabIni, pesoCabFin, pesoEntradasExt, pesoSaidasExt,
       kgMedioEntExt: div(pesoEntradasExt, entradasExternas),
       kgMedioSaiExt: div(pesoSaidasExt, saidasExternas),
@@ -162,48 +160,47 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
   const isKgM = viewMode === 'kg_medio';
   const isKgT = viewMode === 'kg_total';
 
-  // Helper to get the right value for movement columns per viewMode
+  // Divergence summary
+  const divergentRows = useMemo(() => rows.filter(r => r.divergencia !== 0), [rows]);
+  const hasDivergence = divergentRows.length > 0;
+
+  // Movement column value per viewMode
   function movVal(r: CatRow, field: 'saldo_inicial' | 'entradas_externas' | 'evol_cat_entrada' | 'saidas_externas' | 'evol_cat_saida' | 'saldo_final') {
-    if (isCab) {
-      return { v: r[field], dec: 0 };
-    }
+    if (isCab) return { v: r[field], dec: 0 };
     if (isKgM) {
       switch (field) {
         case 'saldo_inicial': return { v: r.pesoCabIni, dec: 1 };
         case 'saldo_final': return { v: r.pesoCabFin, dec: 1 };
         case 'entradas_externas': return { v: r.kgMedioEntExt, dec: 1 };
         case 'saidas_externas': return { v: r.kgMedioSaiExt, dec: 1 };
-        case 'evol_cat_entrada': return { v: r.kgMedioEvolE, dec: 1 };
-        case 'evol_cat_saida': return { v: r.kgMedioEvolS, dec: 1 };
+        case 'evol_cat_entrada': return { v: null as number | null, dec: 1 };
+        case 'evol_cat_saida': return { v: null as number | null, dec: 1 };
       }
     }
     // kg_total
     switch (field) {
       case 'saldo_inicial': return { v: r.pesoTotalIni, dec: 0 };
       case 'saldo_final': return { v: r.pesoTotalFin, dec: 0 };
-      case 'entradas_externas': return { v: r.kgTotalEntExt, dec: 0 };
-      case 'saidas_externas': return { v: r.kgTotalSaiExt, dec: 0 };
-      case 'evol_cat_entrada': return { v: r.kgTotalEvolE, dec: 0 };
-      case 'evol_cat_saida': return { v: r.kgTotalEvolS, dec: 0 };
+      case 'entradas_externas': return { v: r.pesoEntradasExt, dec: 0 };
+      case 'saidas_externas': return { v: r.pesoSaidasExt, dec: 0 };
+      case 'evol_cat_entrada': return { v: 0, dec: 0 };
+      case 'evol_cat_saida': return { v: 0, dec: 0 };
     }
   }
 
   function totalMovVal(field: 'saldoInicial' | 'entradasExternas' | 'evolCatEntrada' | 'saidasExternas' | 'evolCatSaida' | 'saldoFinal') {
     if (!totals) return { v: 0 as number | null, dec: 0 };
-    if (isCab) {
-      return { v: totals[field], dec: 0 };
-    }
+    if (isCab) return { v: totals[field], dec: 0 };
     if (isKgM) {
       switch (field) {
         case 'saldoInicial': return { v: totals.pesoCabIni, dec: 1 };
         case 'saldoFinal': return { v: totals.pesoCabFin, dec: 1 };
         case 'entradasExternas': return { v: totals.kgMedioEntExt, dec: 1 };
         case 'saidasExternas': return { v: totals.kgMedioSaiExt, dec: 1 };
-        case 'evolCatEntrada': return { v: null, dec: 1 };
-        case 'evolCatSaida': return { v: null, dec: 1 };
+        case 'evolCatEntrada': return { v: null as number | null, dec: 1 };
+        case 'evolCatSaida': return { v: null as number | null, dec: 1 };
       }
     }
-    // kg_total
     switch (field) {
       case 'saldoInicial': return { v: totals.pesoTotalIni, dec: 0 };
       case 'saldoFinal': return { v: totals.pesoTotalFin, dec: 0 };
@@ -233,11 +230,6 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
     return colorClass(v);
   }
 
-  function saldoStyle(field: string) {
-    if (field === 'saldo_final' || field === 'saldoFinal') return 'font-medium text-foreground';
-    return '';
-  }
-
   return (
     <div className="space-y-2 pb-24">
       {/* Header */}
@@ -251,7 +243,7 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
         }`}>{cenarioLabel}</span>
       </div>
 
-      {/* Filters — row 1: Cenário + ViewMode */}
+      {/* Filters — row 1: Ano + Cenário + ViewMode */}
       <div className="flex flex-wrap gap-1.5 items-center">
         <Select value={ano} onValueChange={setAno}>
           <SelectTrigger className="w-20 h-7 text-[10px]">
@@ -300,6 +292,32 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
         ))}
       </div>
 
+      {/* Divergence Alert */}
+      {hasDivergence && !isLoading && (
+        <div className="border border-red-300 bg-red-50 rounded-lg p-2 flex items-start gap-2 text-[10px]">
+          <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold text-red-700">
+              ⚠ Divergência detectada — Movimentações não batem com o fechamento de pastos
+            </p>
+            <p className="text-red-600 mt-0.5">
+              O saldo final (fechamento) difere do saldo calculado (ini + entradas − saídas).
+              Isso indica <strong>movimentações não registradas</strong> no sistema.
+            </p>
+            <div className="mt-1 space-y-0.5">
+              {divergentRows.map(r => (
+                <p key={r.categoria_id} className="text-red-600">
+                  <strong>{r.categoria_nome}</strong>: calculado = {r.saldo_calculado} cab, fechamento = {r.saldo_final} cab → <strong>divergência de {r.divergencia > 0 ? '+' : ''}{r.divergencia} cab</strong>
+                </p>
+              ))}
+            </div>
+            <p className="text-red-500 mt-1 text-[9px]">
+              Verifique se há compras, reclassificações ou transferências que não foram lançadas.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       {isLoading ? (
         <div className="text-center py-6 text-muted-foreground text-xs">Carregando...</div>
@@ -311,7 +329,6 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
             <table className="table-fixed text-[10px] border-collapse">
               <colgroup>
                 <col style={{ width: '80px' }} />
-                {/* 6 mov cols */}
                 <col style={{ width: '52px' }} />
                 <col style={{ width: '48px' }} />
                 <col style={{ width: '48px' }} />
@@ -324,25 +341,27 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
                 {/* Dias, GMD */}
                 <col style={{ width: '30px' }} />
                 <col style={{ width: '48px' }} />
+                {/* Divergência (only in cabeça mode) */}
+                {isCab && <col style={{ width: '38px' }} />}
               </colgroup>
               <thead>
                 <tr className="bg-muted/50">
                   <th className="text-left px-1 py-0.5 font-semibold text-muted-foreground border-b">Categoria</th>
                   {colHeaders.map((h, i) => (
-                    <th key={i} className={`text-right px-1 py-0.5 font-semibold text-muted-foreground border-b ${
-                      (i === 0 || i === 5) ? '' : ''
-                    }`}>{h}</th>
+                    <th key={i} className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">{h}</th>
                   ))}
                   <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b border-l-2 border-l-border">Kg/cab I</th>
                   <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Kg/cab F</th>
                   <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Dias</th>
                   <th className="text-right px-1 py-0.5 font-semibold text-primary border-b">GMD</th>
+                  {isCab && <th className="text-right px-1 py-0.5 font-semibold text-red-500 border-b border-l-2 border-l-border">Div.</th>}
                 </tr>
               </thead>
               <tbody>
                 {rows.map(r => {
+                  const hasDiv = r.divergencia !== 0;
                   return (
-                    <tr key={r.categoria_id} className="hover:bg-muted/20 border-b border-border/30">
+                    <tr key={r.categoria_id} className={`hover:bg-muted/20 border-b border-border/30 ${hasDiv ? 'bg-red-50/50' : ''}`}>
                       <td className="px-1 py-0.5 font-medium text-foreground truncate">{r.categoria_nome}</td>
                       {movFields.map((f, i) => {
                         const { v, dec } = movVal(r, f)!;
@@ -355,6 +374,11 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
                       <td className={`text-right px-1 py-0.5 ${gmdColorClass(r.gmd)}`}>
                         {r.gmd !== null ? formatNum(r.gmd, 3) : '–'}
                       </td>
+                      {isCab && (
+                        <td className={`text-right px-1 py-0.5 border-l-2 border-l-border font-bold ${hasDiv ? 'text-red-500' : 'text-emerald-600'}`}>
+                          {hasDiv ? (r.divergencia > 0 ? '+' : '') + r.divergencia : '✓'}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -365,7 +389,7 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
                     <td className="px-1 py-0.5 text-foreground">TOTAL</td>
                     {totalFields.map((f, i) => {
                       const { v, dec } = totalMovVal(f)!;
-                      const cls = (f === 'saldoFinal') ? 'text-foreground' : (f === 'saldoInicial' ? 'text-foreground' : movColor(f, v));
+                      const cls = (f === 'saldoFinal' || f === 'saldoInicial') ? 'text-foreground' : movColor(f, v);
                       return <td key={i} className={`text-right px-1 py-0.5 ${cls}`}>{fmt(v, dec)}</td>;
                     })}
                     <td className="text-right px-1 py-0.5 text-foreground border-l-2 border-l-border">{fmt(totals.pesoCabIni, 1)}</td>
@@ -374,6 +398,11 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
                     <td className={`text-right px-1 py-0.5 ${gmdColorClass(totals.gmd)}`}>
                       {totals.gmd !== null ? formatNum(totals.gmd, 3) : '–'}
                     </td>
+                    {isCab && (
+                      <td className={`text-right px-1 py-0.5 border-l-2 border-l-border font-bold ${totals.divergencia !== 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                        {totals.divergencia !== 0 ? (totals.divergencia > 0 ? '+' : '') + totals.divergencia : '✓'}
+                      </td>
+                    )}
                   </tr>
                 </tfoot>
               )}
@@ -384,7 +413,7 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
 
       {/* Fórmula */}
       {totals && (
-        <div className="border rounded-lg p-2 bg-muted/20 space-y-1.5 text-[10px] text-muted-foreground max-w-[612px]">
+        <div className="border rounded-lg p-2 bg-muted/20 space-y-1.5 text-[10px] text-muted-foreground max-w-[650px]">
           <h3 className="font-semibold text-foreground text-xs">Fórmula do GMD (Total Fazenda) — {cenarioLabel}</h3>
           <div className="space-y-0.5 font-mono">
             <p>Ganho = Peso Tot.Fin ({fmt(totals.pesoTotalFin, 0)}) − Peso Tot.Ini ({fmt(totals.pesoTotalIni, 0)}) − Ent.Ext.kg ({fmt(totals.pesoEntradasExt, 0)}) + Saí.Ext.kg ({fmt(totals.pesoSaidasExt, 0)}) = <span className="font-bold text-foreground">{fmt(totals.ganho, 0)} kg</span></p>
@@ -395,10 +424,16 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
               GMD = {fmt(totals.ganho, 0)} / ({formatNum(totals.cabMedia, 1)} × {totals.dias}) = {totals.gmd !== null ? formatNum(totals.gmd, 3) : '–'} kg/cab/dia
             </p>
           </div>
+          {hasDivergence && (
+            <div className="pt-1 border-t">
+              <p className="text-red-500 font-bold">
+                ⚠ GMD pode estar distorcido — divergência de {totals.divergencia > 0 ? '+' : ''}{totals.divergencia} cab entre movimentações e fechamento.
+              </p>
+            </div>
+          )}
           <div className="pt-1 text-[9px] text-muted-foreground/70 flex flex-wrap gap-x-4">
+            <span>• Fonte: vw_zoot_categoria_mensal (mesma do Evolução e Valor do Rebanho)</span>
             <span>• Evol. cat. não altera ganho</span>
-            <span>• Entradas ext. descontadas</span>
-            <span>• Saídas ext. somadas</span>
             <span className="text-red-500">• GMD {'>'} 2,000 = atenção</span>
           </div>
         </div>
