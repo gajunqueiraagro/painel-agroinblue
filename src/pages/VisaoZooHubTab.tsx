@@ -7,8 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent } from '@/components/ui/card';
 import { MESES_NOMES, MESES_COLS } from '@/lib/calculos/labels';
 import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
-import { calcSaldoPorCategoriaLegado, calcPesoMedioPonderado, calcUA, calcUAHa, calcAreaProdutivaPecuaria } from '@/lib/calculos/zootecnicos';
+import { calcPesoMedioPonderado, calcUA, calcUAHa, calcAreaProdutivaPecuaria } from '@/lib/calculos/zootecnicos';
 import { calcArrobasSafe } from '@/lib/calculos/economicos';
+import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { useFinanceiro, type FinanceiroLancamento, type RateioADM } from '@/hooks/useFinanceiro';
 import { useArrobasGlobal } from '@/hooks/useArrobasGlobal';
