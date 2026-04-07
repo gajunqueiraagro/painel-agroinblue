@@ -627,20 +627,31 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 <div>
                   <Label className="text-[10px] font-bold text-foreground">Status</Label>
                   <div className="flex gap-1 mt-0.5">
-                    {STATUS_OPTIONS_ZOOTECNICO.map(s => (
+                    {STATUS_OPTIONS_ZOOTECNICO_COM_META.map(s => {
+                      const disabled = s.value === 'meta' && !canEditMeta;
+                      return (
                       <button
                         key={s.value}
                         type="button"
-                        onClick={() => setCompraForm(f => ({ ...f, statusOperacional: s.value }))}
+                        onClick={() => !disabled && setCompraForm(f => ({
+                          ...f,
+                          statusOperacional: s.value === 'meta' ? undefined : s.value,
+                          cenario: s.value === 'meta' ? 'meta' : 'realizado',
+                          _uiStatus: s.value,
+                        }))}
+                        disabled={disabled}
                         className={`flex-1 py-1 rounded text-[10px] font-bold border-2 transition-all ${
-                          (compraForm.statusOperacional || 'realizado') === s.value
+                          disabled ? 'opacity-40 cursor-not-allowed' : ''
+                        } ${
+                          (compraForm._uiStatus || (lancamentoIsMeta ? 'meta' : (compraForm.statusOperacional || 'realizado'))) === s.value
                             ? `${s.bg} text-white border-transparent shadow-md`
                             : 'border-border text-muted-foreground bg-muted/30'
                         }`}
                       >
                         {s.label}
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
                 {/* Warning: zootécnico changes impact financeiro */}
