@@ -133,6 +133,7 @@ export function MetaPrecoTab({ onBack }: Props) {
   // Valor rebanho fechamento for realized comparisons
   const [valorRebDezAnt, setValorRebDezAnt] = useState<number>(0);
   const [valorRebMesAnoAnt, setValorRebMesAnoAnt] = useState<number>(0);
+  const [dezRealizadoValidado, setDezRealizadoValidado] = useState<{ valor: number; arrobas: number; cabecas: number } | null>(null);
 
   useEffect(() => {
     if (!fazendaId) return;
@@ -142,9 +143,12 @@ export function MetaPrecoTab({ onBack }: Props) {
     Promise.all([
       supabase.from('valor_rebanho_fechamento').select('valor_total').eq('fazenda_id', fazendaId).eq('ano_mes', dezAnoAntMes).maybeSingle(),
       supabase.from('valor_rebanho_fechamento').select('valor_total').eq('fazenda_id', fazendaId).eq('ano_mes', mesAnoAnt).maybeSingle(),
-    ]).then(([r1, r2]) => {
+      supabase.from('valor_rebanho_realizado_validado' as any).select('valor_total, arrobas_total, cabecas').eq('fazenda_id', fazendaId).eq('ano_mes', dezAnoAntMes).maybeSingle(),
+    ]).then(([r1, r2, r3]) => {
       setValorRebDezAnt(r1.data?.valor_total ?? 0);
       setValorRebMesAnoAnt(r2.data?.valor_total ?? 0);
+      const rd = r3.data as any;
+      setDezRealizadoValidado(rd ? { valor: Number(rd.valor_total) || 0, arrobas: Number(rd.arrobas_total) || 0, cabecas: Number(rd.cabecas) || 0 } : null);
     });
   }, [fazendaId, ano, mes]);
 
@@ -277,31 +281,30 @@ export function MetaPrecoTab({ onBack }: Props) {
     const arrobasArr: { label: string; value: number | null }[] = [];
     const precoArr: { label: string; value: number | null }[] = [];
 
-    // Point "I" — Realized Dec prior year (início do ano = Dez/ano-1)
-    const dezRealized = viewDataRealizadoAnoAnt?.filter(r => r.mes === 12) ?? [];
-    if (dezRealized.length > 0) {
-      const cabI = dezRealized.reduce((s, r) => s + r.saldo_final, 0);
-      const pesoI = dezRealized.reduce((s, r) => s + r.peso_total_final, 0);
-      const arrobasI = pesoI / 30;
-      valorArr.push({ label: 'I', value: valorRebDezAnt > 0 ? valorRebDezAnt : null });
-      arrobasArr.push({ label: 'I', value: cabI > 0 ? arrobasI : null });
-      precoArr.push({ label: 'I', value: valorRebDezAnt > 0 && arrobasI > 0 ? valorRebDezAnt / arrobasI : null });
+    // Point "I" — Realized Dec prior year from validated snapshot (fonte única)
+    if (dezRealizadoValidado && dezRealizadoValidado.arrobas > 0) {
+      const arrobasI = dezRealizadoValidado.arrobas;
+      const valorI = dezRealizadoValidado.valor;
+      valorArr.push({ label: 'I', value: valorI > 0 ? valorI : (valorRebDezAnt > 0 ? valorRebDezAnt : null) });
+      arrobasArr.push({ label: 'I', value: arrobasI });
+      precoArr.push({ label: 'I', value: valorI > 0 && arrobasI > 0 ? valorI / arrobasI : null });
     } else {
-      valorArr.push({ label: 'I', value: null });
+      // Fallback to old valor_rebanho_fechamento for valor only; arrobas stays null without validated snapshot
+      valorArr.push({ label: 'I', value: valorRebDezAnt > 0 ? valorRebDezAnt : null });
       arrobasArr.push({ label: 'I', value: null });
       precoArr.push({ label: 'I', value: null });
     }
 
-    // Points J–D from validated META snapshots + current month live
+    // Points J–D — exclusively from validated META snapshots
     const chartMonthLabels = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
     for (let i = 0; i < MESES_SHORT.length; i++) {
       const m = MESES_SHORT[i];
       const mesKey = `${ano}-${m.key}`;
       const snap = validadoSnapAll[mesKey];
 
-      // For the currently selected month, use live calculation; for others, use snapshot
       if (m.key === mes) {
-        // Live calculation from current prices
+        // For the currently selected month, use live calculation for valor (reflects unsaved price changes)
+        // but arrobas MUST come from snapshot or live zoot data
         const rowsMes = viewDataMeta?.filter(r => r.mes === Number(m.key)) ?? [];
         let totalValor = 0;
         let totalPesoKg = 0;
@@ -322,11 +325,16 @@ export function MetaPrecoTab({ onBack }: Props) {
 
         const totalArrobas = totalPesoKg / 30;
         valorArr.push({ label: chartMonthLabels[i], value: hasAnyPrice && totalValor > 0 ? totalValor : null });
-        arrobasArr.push({ label: chartMonthLabels[i], value: totalCab > 0 ? totalArrobas : null });
+        // Arrobas: use snapshot if available, otherwise live zoot
+        if (snap && snap.arrobas > 0) {
+          arrobasArr.push({ label: chartMonthLabels[i], value: snap.arrobas });
+        } else {
+          arrobasArr.push({ label: chartMonthLabels[i], value: totalCab > 0 ? totalArrobas : null });
+        }
         precoArr.push({ label: chartMonthLabels[i], value: hasAnyPrice && totalArrobas > 0 ? totalValor / totalArrobas : null });
-      } else if (snap && snap.valor > 0) {
+      } else if (snap && (snap.valor > 0 || snap.arrobas > 0)) {
         // Validated snapshot
-        valorArr.push({ label: chartMonthLabels[i], value: snap.valor });
+        valorArr.push({ label: chartMonthLabels[i], value: snap.valor > 0 ? snap.valor : null });
         arrobasArr.push({ label: chartMonthLabels[i], value: snap.arrobas > 0 ? snap.arrobas : null });
         precoArr.push({ label: chartMonthLabels[i], value: snap.precoArr > 0 ? snap.precoArr : null });
       } else {
@@ -338,7 +346,7 @@ export function MetaPrecoTab({ onBack }: Props) {
     }
 
     return { valor: valorArr, arrobas: arrobasArr, precoArroba: precoArr };
-  }, [viewDataMeta, viewDataRealizadoAnoAnt, valorRebDezAnt, mes, precosLocal, validadoSnapAll, ano]);
+  }, [viewDataMeta, dezRealizadoValidado, valorRebDezAnt, mes, precosLocal, validadoSnapAll, ano]);
 
   const temPreenchimento = Object.values(precosLocal).some(v => v > 0);
   const todosPreenchidos = ORDEM_CATEGORIAS_FIXA.every(c => (precosLocal[c] ?? 0) > 0);
