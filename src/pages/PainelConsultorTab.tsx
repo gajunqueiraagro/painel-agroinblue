@@ -253,8 +253,8 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
         {
           nome: 'Valor do Rebanho',
           rows: [
-            r('Valor reb. inicial', 'money', d.valorRebIni, 'valor_reb_ini', true),
-            r('Valor reb. final', 'money', d.valorRebFin, 'valor_reb_fin', true),
+            r('Valor reb. inicial', 'moneyInt', d.valorRebIni, 'valor_reb_ini', true),
+            r('Valor reb. final', 'moneyInt', d.valorRebFin, 'valor_reb_fin', true),
             r('Valor/cab final', 'money', valorPorCab, 'valor_cab_fin', true),
             r('Valor/@ final', 'money', valorPorArr, 'valor_arr_fin', true),
           ],
@@ -459,8 +459,8 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
         {
           nome: 'Valor do Rebanho',
           rows: [
-            r('Valor reb. inicial', 'money', vrmIni, 'valor_reb_ini', true),
-            r('Valor reb. final', 'money', vrm, 'valor_reb_fin', true),
+            r('Valor reb. inicial', 'moneyInt', vrmIni, 'valor_reb_ini', true),
+            r('Valor reb. final', 'moneyInt', vrm, 'valor_reb_fin', true),
             r('Valor/cab final', 'money', valorPorCabMeta, 'valor_cab_fin', true),
             r('Valor/@ final', 'money', valorPorArrMeta, 'valor_arr_fin', true),
           ],
@@ -674,8 +674,8 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
         {
           nome: 'Valor do Rebanho',
           rows: [
-            r('Valor reb. inicial', 'money', valorRebIni, 'valor_reb_ini', true),
-            r('Valor reb. final', 'money', valorRebFin, 'valor_reb_fin', true),
+            r('Valor reb. inicial', 'moneyInt', valorRebIni, 'valor_reb_ini', true),
+            r('Valor reb. final', 'moneyInt', valorRebFin, 'valor_reb_fin', true),
             r('Valor/cab final', 'money', valorPorCabMeta, 'valor_cab_fin', true),
             r('Valor/@ final', 'money', valorPorArrMeta, 'valor_arr_fin', true),
           ],
