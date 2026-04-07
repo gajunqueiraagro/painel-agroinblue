@@ -260,10 +260,10 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
   const hp = { currentKey: sortKey, currentDir: sortDir, onSort: toggleSort };
 
   return (
-    <table className="w-full table-auto border-collapse text-[10px]">
+    <table className="w-full min-w-[760px] md:min-w-0 table-auto border-collapse text-[10px]">
       <thead className="financeiro-table-head print:static">
         <tr className="border-b border-primary-foreground/15">
-          <SortableHeader label="Data" align="text-left" sortKey="data" {...hp} />
+          <SortableHeader label="Data" align="text-left" sortKey="data" sticky {...hp} />
           {showTipo && <th className={`${TABLE_HEAD_CELL} text-left`}>Tipo</th>}
           <SortableHeader label="Qtd" align="text-right" sortKey="qtd" {...hp} />
           <SortableHeader label="Categoria" align="text-left" sortKey="categoria" {...hp} />
@@ -285,7 +285,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
           const tipoInfo = SUB_ABA_LABELS[l.tipo as SubAba];
           return (
             <tr key={l.id} className="border-b border-border/70 leading-none hover:bg-muted/30">
-              <td className={`${TABLE_BODY_CELL} text-[9px]`}>{format(parseISO(l.data), 'dd/MM/yy')}</td>
+              <td className={`${TABLE_BODY_CELL} text-[9px] sticky left-0 z-20 bg-card border-r border-border/60 md:static md:border-r-0`}>{format(parseISO(l.data), 'dd/MM/yy')}</td>
               {showTipo && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{tipoInfo?.icon} {tipoInfo?.label || l.tipo}</td>}
               <td className={`${TABLE_BODY_CELL} text-right font-bold text-[9px]`}>{l.quantidade}</td>
               <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{cat}</td>
@@ -329,7 +329,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
         return (
            <tfoot>
             <tr className="bg-primary text-primary-foreground">
-              <td className={TABLE_FOOT_CELL}>TOTAL</td>
+              <td className={`${TABLE_FOOT_CELL} sticky left-0 z-20 bg-primary border-r border-primary-foreground/15 md:static md:border-r-0`}>TOTAL</td>
               {showTipo && <td className={TABLE_FOOT_CELL}></td>}
               <td className={`${TABLE_FOOT_CELL} text-right`}>{totals.qtd}</td>
               <td className={TABLE_FOOT_CELL}></td>
@@ -347,6 +347,8 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
           </tfoot>
         );
       })()}
+    </table>
+  );
     </table>
   );
 }
