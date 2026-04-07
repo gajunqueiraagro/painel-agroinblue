@@ -116,7 +116,7 @@ export function useStatusFechamentosAno(
       const idToCodigo = new Map((catsRes.data || []).map((c) => [c.id, c.codigo]));
 
       // Build saldo map from official view per month
-      const zootRows = (zootViewRes.data || []) as Array<{ mes: number; categoria_codigo: string; saldo_final: number }>;
+      const zootRows = ((zootViewRes.data || []) as unknown as Array<{ mes: number; categoria_codigo: string; saldo_final: number }>);
       const saldoOficialPorMes = new Map<number, Map<string, number>>();
       zootRows.forEach((r) => {
         if (!saldoOficialPorMes.has(r.mes)) saldoOficialPorMes.set(r.mes, new Map());
