@@ -102,11 +102,35 @@ export function MetaPrecoTab({ onBack }: Props) {
   const { perfil } = usePermissions();
   const isAdmin = perfil === 'admin_agroinblue';
 
+  const { fazendaAtual } = useFazenda();
+  const { clienteAtual } = useCliente();
+  const fazendaId = fazendaAtual?.id;
+
   // Meta consolidation data for qty/peso
   const { data: viewDataMeta } = useZootCategoriaMensal({ ano: Number(ano), cenario: 'meta' });
 
-  const anos = useMemo(() => {
-    const a: string[] = [];
+  // Realized data for Jan of current year (vs Inic. ano)
+  const { data: viewDataRealizadoAno } = useZootCategoriaMensal({ ano: Number(ano), cenario: 'realizado' });
+  // Realized data for same month of previous year (vs 1 ano)
+  const { data: viewDataRealizadoAnoAnt } = useZootCategoriaMensal({ ano: Number(ano) - 1, cenario: 'realizado' });
+
+  // Valor rebanho fechamento for realized comparisons
+  const [valorRebJan, setValorRebJan] = useState<number>(0);
+  const [valorRebMesAnoAnt, setValorRebMesAnoAnt] = useState<number>(0);
+
+  useEffect(() => {
+    if (!fazendaId) return;
+    const janAnoMes = `${ano}-01`;
+    const mesAnoAnt = `${Number(ano) - 1}-${mes}`;
+
+    Promise.all([
+      supabase.from('valor_rebanho_fechamento').select('valor_total').eq('fazenda_id', fazendaId).eq('ano_mes', janAnoMes).maybeSingle(),
+      supabase.from('valor_rebanho_fechamento').select('valor_total').eq('fazenda_id', fazendaId).eq('ano_mes', mesAnoAnt).maybeSingle(),
+    ]).then(([r1, r2]) => {
+      setValorRebJan(r1.data?.valor_total ?? 0);
+      setValorRebMesAnoAnt(r2.data?.valor_total ?? 0);
+    });
+  }, [fazendaId, ano, mes]);
     for (let y = now.getFullYear() + 1; y >= now.getFullYear() - 3; y--) a.push(String(y));
     return a;
   }, []);
