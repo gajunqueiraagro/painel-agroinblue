@@ -358,7 +358,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       fazendaOrigem: nomeFazenda || fazendaOrigem,
       fazendaDestino,
       data,
-      statusOperacional: statusOp,
+      statusOperacional: isCenarioMeta ? null : effectiveStatusOp,
       observacao,
       precoReferenciaArroba: transferenciaDetalhes?.precoReferenciaArroba || undefined,
       precoReferenciaCabeca: transferenciaDetalhes?.precoReferenciaCabeca || undefined,
@@ -379,7 +379,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       fazendaOrigem: nomeFazenda || fazendaOrigem,
       compradorNome: abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || '',
       data,
-      statusOperacional: statusOp,
+      statusOperacional: isCenarioMeta ? null : effectiveStatusOp,
       observacao,
       tipoPreco: tipoPrecoEngine,
       precoInput: vendaDetalhes.precoInput || vendaPrecoInput,
@@ -1339,7 +1339,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       valorTotal: valorTotalFinal,
       notaFiscal: abNotaFiscal || undefined,
       tipoPeso: tipoPesoFinal,
-      statusOperacional: statusOp,
+      statusOperacional: isCenarioMeta ? null : effectiveStatusOp,
       dataVenda: abateDataVenda || undefined,
       dataEmbarque: abateDataEmbarque || undefined,
       dataAbate: abateDataAbate || undefined,
@@ -1369,7 +1369,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             pesoKg: Number(pesoKg) || 0,
             categoria,
             data,
-            statusOperacional: statusOp,
+            statusOperacional: isCenarioMeta ? null : effectiveStatusOp,
             formaReceb: recebSnap?.formaReceb || 'avista',
             parcelas: recebSnap?.parcelas || [],
             fornecedorId: vendaDestinoFornecedorId || undefined,
@@ -1428,7 +1428,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             ...buildVendaSnapshot(vc || buildVendaCalculation({
               quantidade: Number(quantidade) || 0, pesoKg: Number(pesoKg) || 0, categoria,
               fazendaOrigem: nomeFazenda || fazendaOrigem, compradorNome: fornNome || '',
-              data, statusOperacional: statusOp, tipoPreco: 'por_kg', precoInput: vendaPrecoInput,
+              data, statusOperacional: isCenarioMeta ? null : effectiveStatusOp, tipoPreco: 'por_kg', precoInput: vendaPrecoInput,
             })),
             type: 'venda',
             ...vendaDetalhes,
@@ -1491,7 +1491,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             pesoKg: Number(pesoKg) || 0,
             data,
             categoria,
-            statusOp,
+            effectiveStatusOp,
             fazendaOrigem,
             fornecedorId: compraFornecedorId,
           });
@@ -1532,7 +1532,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               pesoKg: Number(pesoKg) || 0,
               data,
               categoria,
-              statusOp,
+              effectiveStatusOp,
               fazendaOrigem,
               fornecedorId: compraFornecedorId,
             });
@@ -1945,7 +1945,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           }}
           notaFiscal={notaFiscal}
           onNotaFiscalChange={setNotaFiscal}
-          statusOp={statusOp}
+          statusOp={effectiveStatusOp}
           lancamentoId={lastSavedLancamentoId || undefined}
           tipoPeso={tipoPeso}
           onTipoPesoChange={setTipoPeso}
@@ -1994,7 +1994,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           data={data}
           notaFiscal={notaFiscal}
           onNotaFiscalChange={setNotaFiscal}
-          statusOp={statusOp}
+          statusOp={effectiveStatusOp}
           lancamentoId={lastSavedLancamentoId || undefined}
           valorBruto={calc.valorBruto}
           valorLiquido={calc.valorLiquido}
@@ -2660,7 +2660,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   pesoKg={Number(pesoKg) || 0}
                   categoria={categoria}
                   dataAbate={data}
-                  statusOp={statusOp}
+                  statusOp={effectiveStatusOp}
                 />
                 {/* Hidden panel for financeiro generation */}
                 <div className="hidden">
@@ -2678,7 +2678,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     lancamentoId={editingAbateId || lastSavedLancamentoId || undefined}
                     mode={editingAbateId ? 'update' : 'create'}
                     onFinanceiroUpdated={() => {}}
-                    statusOperacional={statusOp}
+                    statusOperacional={effectiveStatusOp}
                   />
                 </div>
               </>
@@ -2729,7 +2729,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   categoria={categoria}
                   dataVenda={data}
                   compradorNome={abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || ''}
-                  statusOperacional={statusOp}
+                  statusOperacional={effectiveStatusOp}
                 />
                 {/* Hidden panel for financeiro generation */}
                 <div className="hidden">
@@ -2747,7 +2747,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     onCreateFornecedor={async () => {}}
                     notaFiscal={notaFiscal}
                     onNotaFiscalChange={setNotaFiscal}
-                    statusOp={statusOp}
+                    statusOp={effectiveStatusOp}
                     lancamentoId={lastSavedLancamentoId || undefined}
                     tipoPeso={tipoPeso}
                     onTipoPesoChange={() => {}}
@@ -2814,7 +2814,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   fazendaOrigem={nomeFazenda || fazendaOrigem}
                   fazendaDestino={fazendaDestino}
                   data={data}
-                  statusOp={statusOp}
+                  statusOp={effectiveStatusOp}
                   observacao={observacao}
                 />
               </>
@@ -2848,7 +2848,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         onConfirm={() => handleSubmit()}
         submitting={submitting}
         operacionais={{
-          status: statusOp,
+          status: effectiveStatusOp,
           data,
           quantidade: Number(quantidade) || 0,
           categoria,
