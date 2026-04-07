@@ -8,7 +8,7 @@ import { useState, useMemo } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useZootCategoriaMensal, groupByMes, type ZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
+import { useZootCategoriaMensal, groupByMes } from '@/hooks/useZootCategoriaMensal';
 import { formatNum } from '@/lib/calculos/formatters';
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -57,6 +57,16 @@ interface CatRow {
   pesoCabFin: number | null;
   pesoEntradasExt: number;
   pesoSaidasExt: number;
+  // kg medio per movement type
+  kgMedioEntExt: number | null;
+  kgMedioEvolE: number | null;
+  kgMedioSaiExt: number | null;
+  kgMedioEvolS: number | null;
+  // kg total per movement type
+  kgTotalEntExt: number;
+  kgTotalEvolE: number;
+  kgTotalSaiExt: number;
+  kgTotalEvolS: number;
   ganho: number;
   dias: number;
   cabMedia: number;
@@ -78,7 +88,6 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
   const byMes = useMemo(() => groupByMes(categoriaMensal), [categoriaMensal]);
   const catsMes = useMemo(() => (byMes[mesSel] || []).sort((a, b) => a.ordem_exibicao - b.ordem_exibicao), [byMes, mesSel]);
 
-  // Derive all calc fields per category
   const rows: CatRow[] = useMemo(() => {
     return catsMes.map(cat => {
       const pesoTotalIni = cat.peso_total_inicial;
@@ -91,6 +100,13 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
       const cabMedia = (cat.saldo_inicial + cat.saldo_final) / 2;
       const dias = cat.dias_mes;
       const gmd = cabMedia > 0 && dias > 0 ? ganho / (cabMedia * dias) : null;
+
+      // kg medio per movement (peso / cabeças) — approximate via pesoCabIni for entries, pesoCabFin context
+      const kgMedioEntExt = div(pesoEntradasExt, cat.entradas_externas);
+      const kgMedioEvolE = null; // evol cat doesn't carry independent weight
+      const kgMedioSaiExt = div(pesoSaidasExt, cat.saidas_externas);
+      const kgMedioEvolS = null;
+
       return {
         categoria_id: cat.categoria_id,
         categoria_nome: cat.categoria_nome,
@@ -101,12 +117,17 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
         evol_cat_saida: cat.evol_cat_saida,
         saldo_final: cat.saldo_final,
         pesoTotalIni, pesoTotalFin, pesoCabIni, pesoCabFin,
-        pesoEntradasExt, pesoSaidasExt, ganho, dias, cabMedia, gmd,
+        pesoEntradasExt, pesoSaidasExt,
+        kgMedioEntExt, kgMedioEvolE, kgMedioSaiExt, kgMedioEvolS,
+        kgTotalEntExt: pesoEntradasExt,
+        kgTotalEvolE: 0,
+        kgTotalSaiExt: pesoSaidasExt,
+        kgTotalEvolS: 0,
+        ganho, dias, cabMedia, gmd,
       };
     });
   }, [catsMes]);
 
-  // Totals
   const totals = useMemo(() => {
     if (rows.length === 0) return null;
     const s = (fn: (r: CatRow) => number) => rows.reduce((a, r) => a + fn(r), 0);
@@ -130,16 +151,92 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
       saldoInicial, saldoFinal, entradasExternas, saidasExternas,
       evolCatEntrada, evolCatSaida, pesoTotalIni, pesoTotalFin,
       pesoCabIni, pesoCabFin, pesoEntradasExt, pesoSaidasExt,
+      kgMedioEntExt: div(pesoEntradasExt, entradasExternas),
+      kgMedioSaiExt: div(pesoSaidasExt, saidasExternas),
       ganho, dias, cabMedia, gmd,
     };
   }, [rows]);
 
   const cenarioLabel = cenario === 'meta' ? 'Meta' : 'Realizado';
+  const isCab = viewMode === 'cabecas';
+  const isKgM = viewMode === 'kg_medio';
+  const isKgT = viewMode === 'kg_total';
 
-  // Column definitions change per viewMode
-  const movCols = viewMode === 'cabecas';
-  const showPesoTotal = viewMode === 'kg_total';
-  const showPesoCab = viewMode === 'kg_medio';
+  // Helper to get the right value for movement columns per viewMode
+  function movVal(r: CatRow, field: 'saldo_inicial' | 'entradas_externas' | 'evol_cat_entrada' | 'saidas_externas' | 'evol_cat_saida' | 'saldo_final') {
+    if (isCab) {
+      return { v: r[field], dec: 0 };
+    }
+    if (isKgM) {
+      switch (field) {
+        case 'saldo_inicial': return { v: r.pesoCabIni, dec: 1 };
+        case 'saldo_final': return { v: r.pesoCabFin, dec: 1 };
+        case 'entradas_externas': return { v: r.kgMedioEntExt, dec: 1 };
+        case 'saidas_externas': return { v: r.kgMedioSaiExt, dec: 1 };
+        case 'evol_cat_entrada': return { v: r.kgMedioEvolE, dec: 1 };
+        case 'evol_cat_saida': return { v: r.kgMedioEvolS, dec: 1 };
+      }
+    }
+    // kg_total
+    switch (field) {
+      case 'saldo_inicial': return { v: r.pesoTotalIni, dec: 0 };
+      case 'saldo_final': return { v: r.pesoTotalFin, dec: 0 };
+      case 'entradas_externas': return { v: r.kgTotalEntExt, dec: 0 };
+      case 'saidas_externas': return { v: r.kgTotalSaiExt, dec: 0 };
+      case 'evol_cat_entrada': return { v: r.kgTotalEvolE, dec: 0 };
+      case 'evol_cat_saida': return { v: r.kgTotalEvolS, dec: 0 };
+    }
+  }
+
+  function totalMovVal(field: 'saldoInicial' | 'entradasExternas' | 'evolCatEntrada' | 'saidasExternas' | 'evolCatSaida' | 'saldoFinal') {
+    if (!totals) return { v: 0 as number | null, dec: 0 };
+    if (isCab) {
+      return { v: totals[field], dec: 0 };
+    }
+    if (isKgM) {
+      switch (field) {
+        case 'saldoInicial': return { v: totals.pesoCabIni, dec: 1 };
+        case 'saldoFinal': return { v: totals.pesoCabFin, dec: 1 };
+        case 'entradasExternas': return { v: totals.kgMedioEntExt, dec: 1 };
+        case 'saidasExternas': return { v: totals.kgMedioSaiExt, dec: 1 };
+        case 'evolCatEntrada': return { v: null, dec: 1 };
+        case 'evolCatSaida': return { v: null, dec: 1 };
+      }
+    }
+    // kg_total
+    switch (field) {
+      case 'saldoInicial': return { v: totals.pesoTotalIni, dec: 0 };
+      case 'saldoFinal': return { v: totals.pesoTotalFin, dec: 0 };
+      case 'entradasExternas': return { v: totals.pesoEntradasExt, dec: 0 };
+      case 'saidasExternas': return { v: totals.pesoSaidasExt, dec: 0 };
+      case 'evolCatEntrada': return { v: 0, dec: 0 };
+      case 'evolCatSaida': return { v: 0, dec: 0 };
+    }
+  }
+
+  const colHeaders = isCab
+    ? ['Saldo Ini.', 'Ent.Ext', 'Evol.(E)', 'Saí.Ext', 'Evol.(S)', 'Saldo Fin.']
+    : isKgM
+      ? ['Kg/cab Ini.', 'Kg/cab E.E', 'Kg/cab Ev.E', 'Kg/cab S.E', 'Kg/cab Ev.S', 'Kg/cab Fin.']
+      : ['Kg Tot.Ini.', 'Kg E.Ext', 'Kg Ev.(E)', 'Kg S.Ext', 'Kg Ev.(S)', 'Kg Tot.Fin.'];
+
+  const movFields: Array<'saldo_inicial' | 'entradas_externas' | 'evol_cat_entrada' | 'saidas_externas' | 'evol_cat_saida' | 'saldo_final'> =
+    ['saldo_inicial', 'entradas_externas', 'evol_cat_entrada', 'saidas_externas', 'evol_cat_saida', 'saldo_final'];
+  const totalFields: Array<'saldoInicial' | 'entradasExternas' | 'evolCatEntrada' | 'saidasExternas' | 'evolCatSaida' | 'saldoFinal'> =
+    ['saldoInicial', 'entradasExternas', 'evolCatEntrada', 'saidasExternas', 'evolCatSaida', 'saldoFinal'];
+
+  function movColor(field: string, v: number | null | undefined) {
+    if (field === 'saldo_inicial' || field === 'saldo_final' || field === 'saldoInicial' || field === 'saldoFinal') return 'text-muted-foreground';
+    if (field.includes('saida') || field.includes('Saida') || field.includes('evol_cat_saida') || field.includes('evolCatSaida')) {
+      return colorClass(v ? -v : 0);
+    }
+    return colorClass(v);
+  }
+
+  function saldoStyle(field: string) {
+    if (field === 'saldo_final' || field === 'saldoFinal') return 'font-medium text-foreground';
+    return '';
+  }
 
   return (
     <div className="space-y-2 pb-24">
@@ -154,7 +251,7 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
         }`}>{cenarioLabel}</span>
       </div>
 
-      {/* Filters */}
+      {/* Filters — row 1: Cenário + ViewMode */}
       <div className="flex flex-wrap gap-1.5 items-center">
         <Select value={ano} onValueChange={setAno}>
           <SelectTrigger className="w-20 h-7 text-[10px]">
@@ -169,15 +266,6 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
         </Select>
 
         <div className="flex gap-0.5">
-          {MESES_LABELS.map((label, i) => (
-            <button key={i} onClick={() => setMesSel(i + 1)}
-              className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors ${
-                mesSel === i + 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}>{label}</button>
-          ))}
-        </div>
-
-        <div className="flex gap-0.5 ml-1">
           {(['realizado', 'meta'] as Cenario[]).map(c => (
             <button key={c} onClick={() => setCenario(c)}
               className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors ${
@@ -186,7 +274,9 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
           ))}
         </div>
 
-        <div className="flex gap-0.5 ml-auto">
+        <div className="w-px h-4 bg-border" />
+
+        <div className="flex gap-0.5">
           {([
             { key: 'cabecas' as ViewMode, label: 'Cabeça' },
             { key: 'kg_medio' as ViewMode, label: 'Kg Médio' },
@@ -200,6 +290,16 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
         </div>
       </div>
 
+      {/* Filters — row 2: Meses */}
+      <div className="flex gap-0.5">
+        {MESES_LABELS.map((label, i) => (
+          <button key={i} onClick={() => setMesSel(i + 1)}
+            className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors ${
+              mesSel === i + 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}>{label}</button>
+        ))}
+      </div>
+
       {/* Table */}
       {isLoading ? (
         <div className="text-center py-6 text-muted-foreground text-xs">Carregando...</div>
@@ -210,90 +310,66 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
           <div className="overflow-x-auto border rounded-lg">
             <table className="table-fixed text-[10px] border-collapse">
               <colgroup>
-                <col style={{ width: '76px' }} />
-                {/* Mov cols: 6 cols when cabecas, hidden otherwise but we show saldo ini/fin always */}
-                {movCols && <><col style={{ width: '48px' }} /><col style={{ width: '42px' }} /><col style={{ width: '42px' }} /><col style={{ width: '42px' }} /><col style={{ width: '42px' }} /><col style={{ width: '48px' }} /></>}
-                {/* Peso cols */}
-                {showPesoTotal && <><col style={{ width: '62px' }} /><col style={{ width: '62px' }} /></>}
-                {showPesoCab && <><col style={{ width: '58px' }} /><col style={{ width: '58px' }} /></>}
-                {/* Always: Ganho, Dias, GMD */}
-                {showPesoTotal && <col style={{ width: '54px' }} />}
+                <col style={{ width: '80px' }} />
+                {/* 6 mov cols */}
+                <col style={{ width: '52px' }} />
+                <col style={{ width: '48px' }} />
+                <col style={{ width: '48px' }} />
+                <col style={{ width: '48px' }} />
+                <col style={{ width: '48px' }} />
+                <col style={{ width: '52px' }} />
+                {/* fixed peso/cab ini + fin */}
+                <col style={{ width: '52px' }} />
+                <col style={{ width: '52px' }} />
+                {/* Dias, GMD */}
                 <col style={{ width: '30px' }} />
                 <col style={{ width: '48px' }} />
               </colgroup>
               <thead>
                 <tr className="bg-muted/50">
                   <th className="text-left px-1 py-0.5 font-semibold text-muted-foreground border-b">Categoria</th>
-                  {movCols && <>
-                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Saldo Ini.</th>
-                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Ent.Ext</th>
-                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Evol.(E)</th>
-                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Saí.Ext</th>
-                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Evol.(S)</th>
-                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Saldo Fin.</th>
-                  </>}
-                  {showPesoTotal && <>
-                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b border-l-2 border-l-border">Peso Tot.Ini</th>
-                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Peso Tot.Fin</th>
-                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Ganho (kg)</th>
-                  </>}
-                  {showPesoCab && <>
-                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b border-l-2 border-l-border">Peso/cab Ini</th>
-                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Peso/cab Fin</th>
-                  </>}
+                  {colHeaders.map((h, i) => (
+                    <th key={i} className={`text-right px-1 py-0.5 font-semibold text-muted-foreground border-b ${
+                      (i === 0 || i === 5) ? '' : ''
+                    }`}>{h}</th>
+                  ))}
+                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b border-l-2 border-l-border">Kg/cab I</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Kg/cab F</th>
                   <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Dias</th>
                   <th className="text-right px-1 py-0.5 font-semibold text-primary border-b">GMD</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map(r => (
-                  <tr key={r.categoria_id} className="hover:bg-muted/20 border-b border-border/30">
-                    <td className="px-1 py-0.5 font-medium text-foreground truncate">{r.categoria_nome}</td>
-                    {movCols && <>
-                      <td className="text-right px-1 py-0.5 text-muted-foreground">{fmt(r.saldo_inicial)}</td>
-                      <td className={`text-right px-1 py-0.5 ${colorClass(r.entradas_externas)}`}>{fmt(r.entradas_externas)}</td>
-                      <td className={`text-right px-1 py-0.5 ${colorClass(r.evol_cat_entrada)}`}>{fmt(r.evol_cat_entrada)}</td>
-                      <td className={`text-right px-1 py-0.5 ${colorClass(r.saidas_externas ? -r.saidas_externas : 0)}`}>{fmt(r.saidas_externas)}</td>
-                      <td className={`text-right px-1 py-0.5 ${colorClass(r.evol_cat_saida ? -r.evol_cat_saida : 0)}`}>{fmt(r.evol_cat_saida)}</td>
-                      <td className="text-right px-1 py-0.5 font-medium text-foreground">{fmt(r.saldo_final)}</td>
-                    </>}
-                    {showPesoTotal && <>
-                      <td className="text-right px-1 py-0.5 text-muted-foreground border-l-2 border-l-border">{fmt(r.pesoTotalIni, 0)}</td>
-                      <td className="text-right px-1 py-0.5 text-muted-foreground">{fmt(r.pesoTotalFin, 0)}</td>
-                      <td className={`text-right px-1 py-0.5 font-medium ${colorClass(r.ganho)}`}>{fmt(r.ganho, 0)}</td>
-                    </>}
-                    {showPesoCab && <>
+                {rows.map(r => {
+                  return (
+                    <tr key={r.categoria_id} className="hover:bg-muted/20 border-b border-border/30">
+                      <td className="px-1 py-0.5 font-medium text-foreground truncate">{r.categoria_nome}</td>
+                      {movFields.map((f, i) => {
+                        const { v, dec } = movVal(r, f)!;
+                        const cls = (f === 'saldo_final') ? 'font-medium text-foreground' : movColor(f, v);
+                        return <td key={i} className={`text-right px-1 py-0.5 ${cls}`}>{fmt(v, dec)}</td>;
+                      })}
                       <td className="text-right px-1 py-0.5 text-muted-foreground border-l-2 border-l-border">{fmt(r.pesoCabIni, 1)}</td>
                       <td className="text-right px-1 py-0.5 text-muted-foreground">{fmt(r.pesoCabFin, 1)}</td>
-                    </>}
-                    <td className="text-right px-1 py-0.5 text-muted-foreground">{r.dias || '–'}</td>
-                    <td className={`text-right px-1 py-0.5 ${gmdColorClass(r.gmd)}`}>
-                      {r.gmd !== null ? formatNum(r.gmd, 3) : '–'}
-                    </td>
-                  </tr>
-                ))}
+                      <td className="text-right px-1 py-0.5 text-muted-foreground">{r.dias || '–'}</td>
+                      <td className={`text-right px-1 py-0.5 ${gmdColorClass(r.gmd)}`}>
+                        {r.gmd !== null ? formatNum(r.gmd, 3) : '–'}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
               {totals && (
                 <tfoot>
                   <tr className="bg-muted/30 font-bold border-t-2 border-border">
                     <td className="px-1 py-0.5 text-foreground">TOTAL</td>
-                    {movCols && <>
-                      <td className="text-right px-1 py-0.5 text-foreground">{fmt(totals.saldoInicial)}</td>
-                      <td className={`text-right px-1 py-0.5 ${colorClass(totals.entradasExternas)}`}>{fmt(totals.entradasExternas)}</td>
-                      <td className={`text-right px-1 py-0.5 ${colorClass(totals.evolCatEntrada)}`}>{fmt(totals.evolCatEntrada)}</td>
-                      <td className={`text-right px-1 py-0.5 ${colorClass(totals.saidasExternas ? -totals.saidasExternas : 0)}`}>{fmt(totals.saidasExternas)}</td>
-                      <td className={`text-right px-1 py-0.5 ${colorClass(totals.evolCatSaida ? -totals.evolCatSaida : 0)}`}>{fmt(totals.evolCatSaida)}</td>
-                      <td className="text-right px-1 py-0.5 text-foreground">{fmt(totals.saldoFinal)}</td>
-                    </>}
-                    {showPesoTotal && <>
-                      <td className="text-right px-1 py-0.5 text-foreground border-l-2 border-l-border">{fmt(totals.pesoTotalIni, 0)}</td>
-                      <td className="text-right px-1 py-0.5 text-foreground">{fmt(totals.pesoTotalFin, 0)}</td>
-                      <td className={`text-right px-1 py-0.5 ${colorClass(totals.ganho)}`}>{fmt(totals.ganho, 0)}</td>
-                    </>}
-                    {showPesoCab && <>
-                      <td className="text-right px-1 py-0.5 text-foreground border-l-2 border-l-border">{fmt(totals.pesoCabIni, 1)}</td>
-                      <td className="text-right px-1 py-0.5 text-foreground">{fmt(totals.pesoCabFin, 1)}</td>
-                    </>}
+                    {totalFields.map((f, i) => {
+                      const { v, dec } = totalMovVal(f)!;
+                      const cls = (f === 'saldoFinal') ? 'text-foreground' : (f === 'saldoInicial' ? 'text-foreground' : movColor(f, v));
+                      return <td key={i} className={`text-right px-1 py-0.5 ${cls}`}>{fmt(v, dec)}</td>;
+                    })}
+                    <td className="text-right px-1 py-0.5 text-foreground border-l-2 border-l-border">{fmt(totals.pesoCabIni, 1)}</td>
+                    <td className="text-right px-1 py-0.5 text-foreground">{fmt(totals.pesoCabFin, 1)}</td>
                     <td className="text-right px-1 py-0.5 text-foreground">{totals.dias || '–'}</td>
                     <td className={`text-right px-1 py-0.5 ${gmdColorClass(totals.gmd)}`}>
                       {totals.gmd !== null ? formatNum(totals.gmd, 3) : '–'}
