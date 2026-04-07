@@ -295,16 +295,25 @@ export function MetaPrecoTab({ onBack }: Props) {
       precoArr.push({ label: 'I', value: null });
     }
 
-    // Points J–D — exclusively from validated META snapshots
+    // Points J–D — exclusively from validated META snapshots, limited to selected month
     const chartMonthLabels = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+    const mesSelecionado = Number(mes); // 1-based
     for (let i = 0; i < MESES_SHORT.length; i++) {
       const m = MESES_SHORT[i];
+      const mesNum = i + 1;
       const mesKey = `${ano}-${m.key}`;
       const snap = validadoSnapAll[mesKey];
 
+      // Months after selected month → null (not shown on chart)
+      if (mesNum > mesSelecionado) {
+        valorArr.push({ label: chartMonthLabels[i], value: null });
+        arrobasArr.push({ label: chartMonthLabels[i], value: null });
+        precoArr.push({ label: chartMonthLabels[i], value: null });
+        continue;
+      }
+
       if (m.key === mes) {
         // For the currently selected month, use live calculation for valor (reflects unsaved price changes)
-        // but arrobas MUST come from snapshot or live zoot data
         const rowsMes = viewDataMeta?.filter(r => r.mes === Number(m.key)) ?? [];
         let totalValor = 0;
         let totalPesoKg = 0;
@@ -325,7 +334,6 @@ export function MetaPrecoTab({ onBack }: Props) {
 
         const totalArrobas = totalPesoKg / 30;
         valorArr.push({ label: chartMonthLabels[i], value: hasAnyPrice && totalValor > 0 ? totalValor : null });
-        // Arrobas: use snapshot if available, otherwise live zoot
         if (snap && snap.arrobas > 0) {
           arrobasArr.push({ label: chartMonthLabels[i], value: snap.arrobas });
         } else {
@@ -333,12 +341,10 @@ export function MetaPrecoTab({ onBack }: Props) {
         }
         precoArr.push({ label: chartMonthLabels[i], value: hasAnyPrice && totalArrobas > 0 ? totalValor / totalArrobas : null });
       } else if (snap && (snap.valor > 0 || snap.arrobas > 0)) {
-        // Validated snapshot
         valorArr.push({ label: chartMonthLabels[i], value: snap.valor > 0 ? snap.valor : null });
         arrobasArr.push({ label: chartMonthLabels[i], value: snap.arrobas > 0 ? snap.arrobas : null });
         precoArr.push({ label: chartMonthLabels[i], value: snap.precoArr > 0 ? snap.precoArr : null });
       } else {
-        // No data for this month
         valorArr.push({ label: chartMonthLabels[i], value: null });
         arrobasArr.push({ label: chartMonthLabels[i], value: null });
         precoArr.push({ label: chartMonthLabels[i], value: null });
