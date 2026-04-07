@@ -867,23 +867,34 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
             <div>
               <Label className="font-bold text-foreground">Status</Label>
               <div className="flex gap-1 mt-1">
-                {STATUS_OPTIONS_ZOOTECNICO.map(s => (
+                {STATUS_OPTIONS_ZOOTECNICO_COM_META.map(s => {
+                  const disabled = (s.value === 'meta' && !canEditMeta) || p1Oficial;
+                  return (
                   <button
                     key={s.value}
                     type="button"
-                    onClick={() => !p1Oficial && setForm(f => ({ ...f, statusOperacional: s.value }))}
-                    disabled={p1Oficial}
+                    onClick={() => {
+                      if (disabled) return;
+                      setFormStatusMode(s.value as any);
+                      setForm(f => ({
+                        ...f,
+                        statusOperacional: s.value === 'meta' ? null : s.value,
+                        cenario: s.value === 'meta' ? 'meta' : 'realizado',
+                      }));
+                    }}
+                    disabled={disabled}
                     className={`flex-1 py-2 rounded-lg text-xs font-bold border-2 transition-all ${
-                      p1Oficial ? 'opacity-50 cursor-not-allowed' : ''
+                      disabled ? 'opacity-50 cursor-not-allowed' : ''
                     } ${
-                      (form.statusOperacional || 'realizado') === s.value
+                      formStatusMode === s.value
                         ? `${s.bg} text-white border-transparent shadow-md`
                         : 'border-border text-muted-foreground bg-muted/30'
                     }`}
                   >
                     {s.label}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
