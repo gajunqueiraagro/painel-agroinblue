@@ -10,6 +10,8 @@ export interface Permissions {
   canEdit: (modulo: 'zootecnico' | 'financeiro' | 'cadastros' | 'acessos' | 'pastos' | 'chuvas') => boolean;
   isReadOnly: boolean;
   isManager: boolean;
+  /** Somente admin_agroinblue pode criar/editar/excluir META */
+  canEditMeta: boolean;
 }
 
 // Financial-specific tabs
@@ -59,6 +61,8 @@ export function usePermissions(): Permissions {
       }
     };
 
-    return { perfil, canViewTab, canEdit, isReadOnly, isManager };
+    const canEditMeta = isAdmin;
+
+    return { perfil, canViewTab, canEdit, isReadOnly, isManager, canEditMeta };
   }, [perfil]);
 }

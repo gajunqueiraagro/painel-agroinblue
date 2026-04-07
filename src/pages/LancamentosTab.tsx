@@ -77,7 +77,8 @@ interface Props {
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
-import { STATUS_LABEL, STATUS_OPTIONS, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
+import { STATUS_LABEL, STATUS_OPTIONS_ZOOTECNICO, META_VISUAL, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const MOTIVOS_MORTE = [
   'Raio', 'Picada de cobra', 'Doença respiratória', 'Tristeza parasitária',
@@ -94,19 +95,19 @@ const ABA_CONFIG: { id: Aba; label: string; icon: React.ReactNode }[] = [
   { id: 'historico', label: 'Histórico', icon: <Clock className="h-4 w-4" /> },
 ];
 
-const STATUS_DESCRIPTIONS_DEFAULT: Partial<Record<StatusOperacional, string>> = {
-  previsto: 'Planejamento (meta). Alimenta o fluxo de caixa previsto, sem impacto no financeiro real.',
+const STATUS_DESCRIPTIONS_DEFAULT: Partial<Record<StatusOperacional | 'meta', string>> = {
+  meta: META_VISUAL.description,
   programado: 'Operação definida, ainda não executada.',
   realizado: 'Operação concluída. Impacta rebanho e financeiro.',
 };
 
-const STATUS_DESCRIPTIONS_ABATE: Partial<Record<StatusOperacional, string>> = {
-  previsto: 'Planejamento (meta). Gera lançamentos previstos que alimentam o fluxo de caixa previsto.',
+const STATUS_DESCRIPTIONS_ABATE: Partial<Record<StatusOperacional | 'meta', string>> = {
+  meta: META_VISUAL.description,
   programado: 'Venda fechada e animais escalados, mas o abate ainda não ocorreu. Os dados ainda são previsões operacionais e financeiras.',
   realizado: 'Abate concluído com dados reais de carcaça, bônus e descontos. Os valores refletem o resultado efetivo da operação.',
 };
 
-function getStatusDescription(tipo: TipoMovimentacao, status: StatusOperacional): string {
+function getStatusDescription(tipo: TipoMovimentacao, status: StatusOperacional | 'meta'): string {
   return tipo === 'abate' ? STATUS_DESCRIPTIONS_ABATE[status] : STATUS_DESCRIPTIONS_DEFAULT[status];
 }
 
@@ -228,7 +229,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   const internalEditOrigin = useRef<{ aba: Aba; anoFiltro: string; mesFiltro: string } | null>(null);
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
-  const [statusOp, setStatusOp] = useState<StatusOperacional>('realizado');
+  const [statusOp, setStatusOp] = useState<StatusOperacional | 'meta'>('realizado');
+  const { canEditMeta } = usePermissions();
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const reclassState = useReclassificacaoState({ onAdicionar, dataInicial, lancamentos, ano: Number(anoFiltro) });
@@ -295,6 +297,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const qtdInput = useIntegerInput(quantidade, setQuantidade);
   const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
 
+  const isCenarioMeta = statusOp === 'meta';
+  /** StatusOperacional efetivo para passar a componentes que não conhecem 'meta' */
+  const effectiveStatusOp: StatusOperacional = isCenarioMeta ? 'programado' : statusOp as StatusOperacional;
   const isPrevisto = statusOp === 'previsto';
   const isConfirmado = statusOp === 'programado';
   const isConciliado = statusOp === 'realizado';
@@ -353,7 +358,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       fazendaOrigem: nomeFazenda || fazendaOrigem,
       fazendaDestino,
       data,
-      statusOperacional: statusOp,
+      statusOperacional: isCenarioMeta ? null : effectiveStatusOp,
       observacao,
       precoReferenciaArroba: transferenciaDetalhes?.precoReferenciaArroba || undefined,
       precoReferenciaCabeca: transferenciaDetalhes?.precoReferenciaCabeca || undefined,
@@ -374,7 +379,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       fazendaOrigem: nomeFazenda || fazendaOrigem,
       compradorNome: abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || '',
       data,
-      statusOperacional: statusOp,
+      statusOperacional: isCenarioMeta ? null : effectiveStatusOp,
       observacao,
       tipoPreco: tipoPrecoEngine,
       precoInput: vendaDetalhes.precoInput || vendaPrecoInput,
@@ -1334,7 +1339,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       valorTotal: valorTotalFinal,
       notaFiscal: abNotaFiscal || undefined,
       tipoPeso: tipoPesoFinal,
-      statusOperacional: statusOp,
+      statusOperacional: isCenarioMeta ? null : effectiveStatusOp,
       dataVenda: abateDataVenda || undefined,
       dataEmbarque: abateDataEmbarque || undefined,
       dataAbate: abateDataAbate || undefined,
@@ -1364,7 +1369,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             pesoKg: Number(pesoKg) || 0,
             categoria,
             data,
-            statusOperacional: statusOp,
+            statusOperacional: isCenarioMeta ? null : effectiveStatusOp,
             formaReceb: recebSnap?.formaReceb || 'avista',
             parcelas: recebSnap?.parcelas || [],
             fornecedorId: vendaDestinoFornecedorId || undefined,
@@ -1423,7 +1428,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             ...buildVendaSnapshot(vc || buildVendaCalculation({
               quantidade: Number(quantidade) || 0, pesoKg: Number(pesoKg) || 0, categoria,
               fazendaOrigem: nomeFazenda || fazendaOrigem, compradorNome: fornNome || '',
-              data, statusOperacional: statusOp, tipoPreco: 'por_kg', precoInput: vendaPrecoInput,
+              data, statusOperacional: isCenarioMeta ? null : effectiveStatusOp, tipoPreco: 'por_kg', precoInput: vendaPrecoInput,
             })),
             type: 'venda',
             ...vendaDetalhes,
@@ -1486,7 +1491,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             pesoKg: Number(pesoKg) || 0,
             data,
             categoria,
-            statusOp,
+            statusOp: effectiveStatusOp,
             fazendaOrigem,
             fornecedorId: compraFornecedorId,
           });
@@ -1527,7 +1532,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               pesoKg: Number(pesoKg) || 0,
               data,
               categoria,
-              statusOp,
+              statusOp: effectiveStatusOp,
               fazendaOrigem,
               fornecedorId: compraFornecedorId,
             });
@@ -1940,7 +1945,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           }}
           notaFiscal={notaFiscal}
           onNotaFiscalChange={setNotaFiscal}
-          statusOp={statusOp}
+          statusOp={effectiveStatusOp}
           lancamentoId={lastSavedLancamentoId || undefined}
           tipoPeso={tipoPeso}
           onTipoPesoChange={setTipoPeso}
@@ -1989,7 +1994,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           data={data}
           notaFiscal={notaFiscal}
           onNotaFiscalChange={setNotaFiscal}
-          statusOp={statusOp}
+          statusOp={effectiveStatusOp}
           lancamentoId={lastSavedLancamentoId || undefined}
           valorBruto={calc.valorBruto}
           valorLiquido={calc.valorLiquido}
@@ -2241,25 +2246,29 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         <h2 className="text-[15px] font-semibold text-foreground">{editingAbateId ? (tipo === 'venda' ? 'Editar Venda' : tipo === 'abate' ? 'Editar Abate' : 'Editar Registro') : currentTipoLabel}</h2>
       </div>
 
-      {/* STATUS — inline label + cards + explanation below */}
+      {/* STATUS — inline label + cards (Zootécnico: Realizado, Programado, META) */}
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide shrink-0">Status</span>
           <div className="grid grid-cols-3 gap-1 flex-1">
             {([
-              { value: 'realizado' as StatusOperacional, label: STATUS_LABEL.realizado, dot: 'bg-green-600', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
-              { value: 'programado' as StatusOperacional, label: STATUS_LABEL.programado, dot: 'bg-blue-500', activeBorder: 'border-blue-400', activeBg: 'bg-blue-50 dark:bg-blue-950/30' },
-              { value: 'previsto' as StatusOperacional, label: STATUS_LABEL.previsto, dot: 'bg-orange-500', activeBorder: 'border-orange-400', activeBg: 'bg-orange-50 dark:bg-orange-950/30' },
+              { value: 'realizado' as const, label: STATUS_LABEL.realizado, dot: 'bg-green-600', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
+              { value: 'programado' as const, label: STATUS_LABEL.programado, dot: 'bg-blue-500', activeBorder: 'border-blue-400', activeBg: 'bg-blue-50 dark:bg-blue-950/30' },
+              { value: 'meta' as const, label: META_VISUAL.label, dot: META_VISUAL.dot, activeBorder: META_VISUAL.activeBorder, activeBg: META_VISUAL.activeBg },
             ]).map(s => {
               const selected = statusOp === s.value;
+              const disabled = s.value === 'meta' && !canEditMeta;
               return (
                 <button
                   key={s.value}
                   type="button"
-                  onClick={() => setStatusOp(s.value)}
+                  onClick={() => !disabled && setStatusOp(s.value)}
+                  disabled={disabled}
                   className={`flex items-center justify-center gap-1 h-6 rounded-md border transition-all ${
+                    disabled ? 'opacity-40 cursor-not-allowed border-border bg-muted/10' :
                     selected ? `${s.activeBg} ${s.activeBorder}` : 'border-border bg-muted/10 hover:bg-muted/30'
                   }`}
+                  title={disabled ? 'Somente consultores podem criar registros META' : undefined}
                 >
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selected ? s.dot : 'border border-muted-foreground/40 bg-transparent'}`} />
                   <span className={`text-[10px] font-bold ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>{s.label}</span>
@@ -2651,7 +2660,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   pesoKg={Number(pesoKg) || 0}
                   categoria={categoria}
                   dataAbate={data}
-                  statusOp={statusOp}
+                  statusOp={effectiveStatusOp}
                 />
                 {/* Hidden panel for financeiro generation */}
                 <div className="hidden">
@@ -2669,7 +2678,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     lancamentoId={editingAbateId || lastSavedLancamentoId || undefined}
                     mode={editingAbateId ? 'update' : 'create'}
                     onFinanceiroUpdated={() => {}}
-                    statusOperacional={statusOp}
+                    statusOperacional={effectiveStatusOp}
                   />
                 </div>
               </>
@@ -2720,7 +2729,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   categoria={categoria}
                   dataVenda={data}
                   compradorNome={abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || ''}
-                  statusOperacional={statusOp}
+                  statusOperacional={effectiveStatusOp}
                 />
                 {/* Hidden panel for financeiro generation */}
                 <div className="hidden">
@@ -2738,7 +2747,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     onCreateFornecedor={async () => {}}
                     notaFiscal={notaFiscal}
                     onNotaFiscalChange={setNotaFiscal}
-                    statusOp={statusOp}
+                    statusOp={effectiveStatusOp}
                     lancamentoId={lastSavedLancamentoId || undefined}
                     tipoPeso={tipoPeso}
                     onTipoPesoChange={() => {}}
@@ -2805,7 +2814,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   fazendaOrigem={nomeFazenda || fazendaOrigem}
                   fazendaDestino={fazendaDestino}
                   data={data}
-                  statusOp={statusOp}
+                  statusOp={effectiveStatusOp}
                   observacao={observacao}
                 />
               </>
@@ -2839,7 +2848,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         onConfirm={() => handleSubmit()}
         submitting={submitting}
         operacionais={{
-          status: statusOp,
+          status: isCenarioMeta ? 'meta' : effectiveStatusOp,
           data,
           quantidade: Number(quantidade) || 0,
           categoria,

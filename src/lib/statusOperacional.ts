@@ -29,6 +29,12 @@ export type StatusZootecnico = 'programado' | 'realizado';
 /** Status financeiro (completo) */
 export type StatusFinanceiro = 'previsto' | 'programado' | 'agendado' | 'realizado';
 
+/**
+ * Tipo unificado para filtro visual.
+ * 'meta' é um cenário, não um status operacional, mas aparece como opção de filtro.
+ */
+export type FiltroVisual = StatusOperacional | 'meta';
+
 // ── Labels ──
 
 export const STATUS_LABEL: Record<StatusOperacional, string> = {
@@ -47,20 +53,36 @@ export const STATUS_DESCRIPTION: Record<StatusOperacional, string> = {
 
 // ── Options para selects ──
 
+/** Opções para módulo zootécnico: Realizado, Programado */
 export const STATUS_OPTIONS_ZOOTECNICO: { value: StatusZootecnico; label: string; labelCurto: string; color: string; bg: string; description: string }[] = [
   { value: 'realizado', label: 'Realizado', labelCurto: 'Realizado', color: 'text-green-800 dark:text-green-400', bg: 'bg-green-700', description: STATUS_DESCRIPTION.realizado },
   { value: 'programado', label: 'Programado', labelCurto: 'Programado', color: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-500', description: STATUS_DESCRIPTION.programado },
 ];
 
+/** Opções para módulo financeiro: Realizado, Agendado, Programado, Previsto */
 export const STATUS_OPTIONS_FINANCEIRO: { value: StatusFinanceiro; label: string; labelCurto: string; color: string; bg: string; description: string }[] = [
   { value: 'realizado', label: 'Realizado', labelCurto: 'Realizado', color: 'text-green-800 dark:text-green-400', bg: 'bg-green-700', description: STATUS_DESCRIPTION.realizado },
   { value: 'agendado', label: 'Agendado', labelCurto: 'Agendado', color: 'text-purple-700 dark:text-purple-400', bg: 'bg-purple-500', description: STATUS_DESCRIPTION.agendado },
   { value: 'programado', label: 'Programado', labelCurto: 'Programado', color: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-500', description: STATUS_DESCRIPTION.programado },
-  { value: 'previsto', label: 'Previsto', labelCurto: 'Previsto', color: 'text-orange-700 dark:text-orange-400', bg: 'bg-orange-500', description: STATUS_DESCRIPTION.previsto },
+  { value: 'previsto', label: 'Previsto', labelCurto: 'Previsto', color: 'text-cyan-700 dark:text-cyan-400', bg: 'bg-cyan-600', description: STATUS_DESCRIPTION.previsto },
 ];
 
 /** Backwards-compatible: all status options (union) */
 export const STATUS_OPTIONS = STATUS_OPTIONS_FINANCEIRO;
+
+// ── META visual config ──
+
+export const META_VISUAL = {
+  label: 'Meta',
+  labelCurto: 'Meta',
+  color: 'text-orange-700 dark:text-orange-400',
+  bg: 'bg-orange-500',
+  dot: 'bg-orange-500',
+  activeBorder: 'border-orange-400',
+  activeBg: 'bg-orange-50 dark:bg-orange-950/30',
+  badgeCls: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400',
+  description: 'Planejamento oficial do consultor. Não impacta saldo nem caixa.',
+};
 
 // ── Getters ──
 
@@ -158,12 +180,12 @@ export function filtrarPorCenario(
 /** Badge config para exibição de status */
 export function getStatusBadge(l: Lancamento) {
   if (isMeta(l)) {
-    return { label: 'Meta', cls: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400' };
+    return { label: 'Meta', cls: META_VISUAL.badgeCls };
   }
   const st = l.statusOperacional;
   switch (st) {
     case 'previsto':
-      return { label: 'Previsto', cls: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400' };
+      return { label: 'Previsto', cls: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-400' };
     case 'programado':
       return { label: 'Programado', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400' };
     case 'agendado':

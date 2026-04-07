@@ -268,7 +268,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       valor_total: lancamento.valorTotal || null,
       nota_fiscal: lancamento.notaFiscal || null,
       tipo_peso: lancamento.tipoPeso || 'vivo',
-      status_operacional: cenario === 'meta' ? null : (lancamento.statusOperacional || 'realizado'),
+      status_operacional: lancamento.statusOperacional === null ? null : (lancamento.statusOperacional || 'realizado'),
       data_venda: lancamento.dataVenda || null,
       data_embarque: lancamento.dataEmbarque || null,
       data_abate: lancamento.dataAbate || null,
@@ -292,10 +292,13 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       return undefined;
     }
 
+    // Derive cenario from statusOperacional: null → meta, otherwise realizado
+    const effectiveCenario = lancamento.statusOperacional === null ? 'meta' : cenario;
+
     const { data, error } = await supabase.from('lancamentos').insert({
       fazenda_id: fazendaId,
       cliente_id: clienteId!,
-      cenario,
+      cenario: effectiveCenario,
       ...insertData,
     }).select().single();
 
@@ -377,7 +380,12 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     if (dados.tipoPeso !== undefined) update.tipo_peso = dados.tipoPeso;
     if (dados.statusOperacional !== undefined) {
       update.status_operacional = dados.statusOperacional;
-      // cenario is set by the hook's parameter, not derived from status
+      // Derive cenario from statusOperacional
+      if (dados.statusOperacional === null) {
+        update.cenario = 'meta';
+      } else {
+        update.cenario = 'realizado';
+      }
     }
     if (dados.dataVenda !== undefined) update.data_venda = dados.dataVenda;
     if (dados.dataEmbarque !== undefined) update.data_embarque = dados.dataEmbarque;

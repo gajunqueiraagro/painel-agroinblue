@@ -98,9 +98,9 @@ const STATUS_LABELS: Record<string, string> = {
   realizado: CENTRAL_STATUS_LABEL.realizado,
 };
 const STATUS_TEXT_COLORS: Record<string, string> = {
-  previsto: 'text-orange-500',
-  agendado: 'text-emerald-400',
-  programado: 'text-sky-500',
+  previsto: 'text-cyan-600 dark:text-cyan-400',
+  agendado: 'text-purple-600 dark:text-purple-400',
+  programado: 'text-blue-600 dark:text-blue-400',
   realizado: 'text-green-700 dark:text-green-400 font-bold',
 };
 
@@ -626,10 +626,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
-                  <SelectItem value="previsto" className={itemCls}>{CENTRAL_STATUS_LABEL.previsto}</SelectItem>
+                  <SelectItem value="realizado" className={itemCls}>{CENTRAL_STATUS_LABEL.realizado}</SelectItem>
                   <SelectItem value="agendado" className={itemCls}>Agendado</SelectItem>
-                  <SelectItem value="confirmado" className={itemCls}>{CENTRAL_STATUS_LABEL.programado}</SelectItem>
-                  <SelectItem value="conciliado" className={itemCls}>{CENTRAL_STATUS_LABEL.realizado}</SelectItem>
+                  <SelectItem value="programado" className={itemCls}>{CENTRAL_STATUS_LABEL.programado}</SelectItem>
+                  <SelectItem value="previsto" className={itemCls}>{CENTRAL_STATUS_LABEL.previsto}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -22,7 +22,8 @@ import { ptBR } from 'date-fns/locale';
 import { Pencil, Trash2, DollarSign, AlertTriangle } from 'lucide-react';
 import { AbateShareButtons } from '@/components/AbateExportMenu';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { STATUS_OPTIONS, getStatusBadge, getStatus, type StatusOperacional } from '@/lib/statusOperacional';
+import { STATUS_OPTIONS_ZOOTECNICO, getStatusBadge, getStatus, isMeta, type StatusOperacional } from '@/lib/statusOperacional';
+import { usePermissions } from '@/hooks/usePermissions';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 import { supabase } from '@/integrations/supabase/client';
 import { formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calculos/formatters';
@@ -44,8 +45,11 @@ interface Props {
 
 export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover, onCountFinanceiros, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia, fazendaId }: Props) {
   const { fazendaAtual, fazendas } = useFazenda();
+  const { canEditMeta } = usePermissions();
   const nomeFazenda = fazendaAtual?.nome || '';
   const outrasFazendas = useMemo(() => fazendas.filter(f => f.id !== fazendaAtual?.id), [fazendas, fazendaAtual]);
+  const lancamentoIsMeta = isMeta(lancamento);
+  const metaLocked = lancamentoIsMeta && !canEditMeta;
 
   // ─── P1 governance for this lancamento's month ───
   const lancAnoMes = useMemo(() => lancamento.data?.slice(0, 7), [lancamento.data]);
@@ -480,9 +484,18 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 </div>
               )}
 
+              {/* META lock banner */}
+              {metaLocked && (
+                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-2 py-1">
+                  <p className="text-[9px] text-amber-700 dark:text-amber-400 font-medium">
+                    🔒 Registro META — somente consultores podem editar ou excluir.
+                  </p>
+                </div>
+              )}
+
               {/* ── Ações ── */}
               <div className="flex gap-2 pt-0.5">
-                {!isTransferenciaEntrada && (
+                {!isTransferenciaEntrada && !metaLocked && (
                   <>
                     <Button variant="default" size="sm" className="flex-1 h-7 text-[10px] font-bold" onClick={handleEditClick}>
                       <Pencil className="h-3 w-3 mr-1" /> Editar
@@ -614,7 +627,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 <div>
                   <Label className="text-[10px] font-bold text-foreground">Status</Label>
                   <div className="flex gap-1 mt-0.5">
-                    {STATUS_OPTIONS.map(s => (
+                    {STATUS_OPTIONS_ZOOTECNICO.map(s => (
                       <button
                         key={s.value}
                         type="button"
@@ -833,7 +846,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
             <div>
               <Label className="font-bold text-foreground">Status</Label>
               <div className="flex gap-1 mt-1">
-                {STATUS_OPTIONS.map(s => (
+                {STATUS_OPTIONS_ZOOTECNICO.map(s => (
                   <button
                     key={s.value}
                     type="button"

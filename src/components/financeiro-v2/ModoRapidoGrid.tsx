@@ -50,7 +50,7 @@ function deriveStatus(dataPagamento: string): string {
   today.setHours(0, 0, 0, 0);
   const d = new Date(dataPagamento + 'T00:00:00');
   if (d > today) return 'agendado';
-  return 'confirmado';
+  return 'programado';
 }
 
 function createEmptyRow(inherit?: Partial<RowData>): RowData {
