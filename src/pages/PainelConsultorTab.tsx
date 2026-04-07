@@ -561,7 +561,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
 }
 
 // ─── Build blocos from MetaConsolidacao (validated consolidation) ───
-function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, valorRebanhoMetaMes?: number[]): Bloco[] {
+function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number): Bloco[] {
   // Aggregate across all categories per month
   const agg = (field: keyof MetaCategoriaMes): number[] =>
     Array.from({ length: 12 }, (_, i) => {
@@ -626,8 +626,8 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   // Valor do Rebanho META: lido direto da tabela persistida (sem recalcular)
   const vrm = valorRebanhoMetaMes || Array(12).fill(0);
   const valorRebFin = vrm;
-  // Valor reb. ini = valor do mês anterior (shift right, jan = 0)
-  const valorRebIni = [0, ...vrm.slice(0, 11)];
+  // Valor reb. ini META: Jan = realizado Dez ano anterior, Fev+ = META final mês anterior
+  const valorRebIni = [dezAnoAnteriorRealizado ?? 0, ...vrm.slice(0, 11)];
   const valorPorCabMeta = cabFin.map((c, i) => c > 0 && vrm[i] > 0 ? vrm[i] / c : 0);
   const arrobasEstoqueMeta = pesoFin.map(v => v / 30);
   const valorPorArrMeta = arrobasEstoqueMeta.map((a, i) => a > 0 && vrm[i] > 0 ? vrm[i] / a : 0);
@@ -933,7 +933,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     if (isPrevisto) {
       // Fonte única: consolidação Meta validada
       if (metaConsolidacao && metaConsolidacao.length > 0) {
-        return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva, valorRebanhoMetaMes);
+        return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva, valorRebanhoMetaMes, valorRebanhoMes[0]);
       }
       // Fallback para view SQL apenas se consolidação não disponível
       return buildBlocosFromZootMensal(zootMeta || [], viewTab);

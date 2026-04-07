@@ -127,25 +127,23 @@ export function MetaPrecoTab({ onBack }: Props) {
   // Meta consolidation data for qty/peso
   const { data: viewDataMeta } = useZootCategoriaMensal({ ano: Number(ano), cenario: 'meta' });
 
-  // Realized data for Jan of current year (vs Inic. ano)
-  const { data: viewDataRealizadoAno } = useZootCategoriaMensal({ ano: Number(ano), cenario: 'realizado' });
-  // Realized data for same month of previous year (vs 1 ano)
+  // Realized data for prior year (both Dec for vs Inic. ano, and same month for vs 1 ano)
   const { data: viewDataRealizadoAnoAnt } = useZootCategoriaMensal({ ano: Number(ano) - 1, cenario: 'realizado' });
 
   // Valor rebanho fechamento for realized comparisons
-  const [valorRebJan, setValorRebJan] = useState<number>(0);
+  const [valorRebDezAnt, setValorRebDezAnt] = useState<number>(0);
   const [valorRebMesAnoAnt, setValorRebMesAnoAnt] = useState<number>(0);
 
   useEffect(() => {
     if (!fazendaId) return;
-    const janAnoMes = `${ano}-01`;
+    const dezAnoAntMes = `${Number(ano) - 1}-12`;
     const mesAnoAnt = `${Number(ano) - 1}-${mes}`;
 
     Promise.all([
-      supabase.from('valor_rebanho_fechamento').select('valor_total').eq('fazenda_id', fazendaId).eq('ano_mes', janAnoMes).maybeSingle(),
+      supabase.from('valor_rebanho_fechamento').select('valor_total').eq('fazenda_id', fazendaId).eq('ano_mes', dezAnoAntMes).maybeSingle(),
       supabase.from('valor_rebanho_fechamento').select('valor_total').eq('fazenda_id', fazendaId).eq('ano_mes', mesAnoAnt).maybeSingle(),
     ]).then(([r1, r2]) => {
-      setValorRebJan(r1.data?.valor_total ?? 0);
+      setValorRebDezAnt(r1.data?.valor_total ?? 0);
       setValorRebMesAnoAnt(r2.data?.valor_total ?? 0);
     });
   }, [fazendaId, ano, mes]);
@@ -220,19 +218,19 @@ export function MetaPrecoTab({ onBack }: Props) {
   }, [rows]);
 
   // ---------- Comparison data ----------
-  // Realized totals for January of current year
-  const compJan = useMemo(() => {
-    if (!viewDataRealizadoAno) return null;
-    const janRows = viewDataRealizadoAno.filter(r => r.mes === 1);
-    if (janRows.length === 0) return null;
-    const cabecas = janRows.reduce((s, r) => s + r.saldo_final, 0);
-    const pesoTotalKg = janRows.reduce((s, r) => s + r.peso_total_final, 0);
+  // Realized totals for Dec prior year (vs Inic. ano)
+  const compDezAnt = useMemo(() => {
+    if (!viewDataRealizadoAnoAnt) return null;
+    const dezRows = viewDataRealizadoAnoAnt.filter(r => r.mes === 12);
+    if (dezRows.length === 0) return null;
+    const cabecas = dezRows.reduce((s, r) => s + r.saldo_final, 0);
+    const pesoTotalKg = dezRows.reduce((s, r) => s + r.peso_total_final, 0);
     const pesoMedio = cabecas > 0 ? pesoTotalKg / cabecas : 0;
     const totalArrobas = pesoTotalKg / 30;
-    const valorCabeca = valorRebJan > 0 && cabecas > 0 ? valorRebJan / cabecas : 0;
-    const precoArroba = valorRebJan > 0 && totalArrobas > 0 ? valorRebJan / totalArrobas : 0;
-    return { cabecas, pesoMedio, precoArroba, valorCabeca, totalArrobas, valor: valorRebJan };
-  }, [viewDataRealizadoAno, valorRebJan]);
+    const valorCabeca = valorRebDezAnt > 0 && cabecas > 0 ? valorRebDezAnt / cabecas : 0;
+    const precoArroba = valorRebDezAnt > 0 && totalArrobas > 0 ? valorRebDezAnt / totalArrobas : 0;
+    return { cabecas, pesoMedio, precoArroba, valorCabeca, totalArrobas, valor: valorRebDezAnt };
+  }, [viewDataRealizadoAnoAnt, valorRebDezAnt]);
 
   // Realized totals for same month of previous year
   const compAnoAnt = useMemo(() => {
@@ -255,15 +253,15 @@ export function MetaPrecoTab({ onBack }: Props) {
     const arrobasArr: { label: string; value: number | null }[] = [];
     const precoArr: { label: string; value: number | null }[] = [];
 
-    // Point "I" — Realized January (início do ano)
-    const janRealized = viewDataRealizadoAno?.filter(r => r.mes === 1) ?? [];
-    if (janRealized.length > 0) {
-      const cabI = janRealized.reduce((s, r) => s + r.saldo_final, 0);
-      const pesoI = janRealized.reduce((s, r) => s + r.peso_total_final, 0);
+    // Point "I" — Realized Dec prior year (início do ano = Dez/ano-1)
+    const dezRealized = viewDataRealizadoAnoAnt?.filter(r => r.mes === 12) ?? [];
+    if (dezRealized.length > 0) {
+      const cabI = dezRealized.reduce((s, r) => s + r.saldo_final, 0);
+      const pesoI = dezRealized.reduce((s, r) => s + r.peso_total_final, 0);
       const arrobasI = pesoI / 30;
-      valorArr.push({ label: 'I', value: valorRebJan > 0 ? valorRebJan : null });
+      valorArr.push({ label: 'I', value: valorRebDezAnt > 0 ? valorRebDezAnt : null });
       arrobasArr.push({ label: 'I', value: cabI > 0 ? arrobasI : null });
-      precoArr.push({ label: 'I', value: valorRebJan > 0 && arrobasI > 0 ? valorRebJan / arrobasI : null });
+      precoArr.push({ label: 'I', value: valorRebDezAnt > 0 && arrobasI > 0 ? valorRebDezAnt / arrobasI : null });
     } else {
       valorArr.push({ label: 'I', value: null });
       arrobasArr.push({ label: 'I', value: null });
@@ -304,7 +302,7 @@ export function MetaPrecoTab({ onBack }: Props) {
     }
 
     return { valor: valorArr, arrobas: arrobasArr, precoArroba: precoArr };
-  }, [viewDataMeta, viewDataRealizadoAno, valorRebJan, mes, precosLocal]);
+  }, [viewDataMeta, viewDataRealizadoAnoAnt, valorRebDezAnt, mes, precosLocal]);
 
   const temPreenchimento = Object.values(precosLocal).some(v => v > 0);
   const todosPreenchidos = ORDEM_CATEGORIAS_FIXA.every(c => (precosLocal[c] ?? 0) > 0);
@@ -393,17 +391,17 @@ export function MetaPrecoTab({ onBack }: Props) {
     if (!base || base <= 0 || !atual || atual <= 0) return null;
     return ((atual - base) / Math.abs(base)) * 100;
   };
-  const uVarValorIniAno = calcVar(totals.valor, compJan?.valor);
+  const uVarValorIniAno = calcVar(totals.valor, compDezAnt?.valor);
   const uVarValorAnoAnt = calcVar(totals.valor, compAnoAnt?.valor);
-  const uVarCabIniAno = calcVar(totals.cabecas, compJan?.cabecas);
+  const uVarCabIniAno = calcVar(totals.cabecas, compDezAnt?.cabecas);
   const uVarCabAnoAnt = calcVar(totals.cabecas, compAnoAnt?.cabecas);
-  const uVarPesoIniAno = calcVar(totals.pesoMedio, compJan?.pesoMedio);
+  const uVarPesoIniAno = calcVar(totals.pesoMedio, compDezAnt?.pesoMedio);
   const uVarPesoAnoAnt = calcVar(totals.pesoMedio, compAnoAnt?.pesoMedio);
-  const uVarArrobaIniAno = calcVar(totals.precoArroba, compJan?.precoArroba);
+  const uVarArrobaIniAno = calcVar(totals.precoArroba, compDezAnt?.precoArroba);
   const uVarArrobaAnoAnt = calcVar(totals.precoArroba, compAnoAnt?.precoArroba);
-  const uVarCabValIniAno = calcVar(totals.valorCabeca, compJan?.valorCabeca);
+  const uVarCabValIniAno = calcVar(totals.valorCabeca, compDezAnt?.valorCabeca);
   const uVarCabValAnoAnt = calcVar(totals.valorCabeca, compAnoAnt?.valorCabeca);
-  const uVarArrobasEstIniAno = calcVar(totals.totalArrobas, compJan?.totalArrobas);
+  const uVarArrobasEstIniAno = calcVar(totals.totalArrobas, compDezAnt?.totalArrobas);
   const uVarArrobasEstAnoAnt = calcVar(totals.totalArrobas, compAnoAnt?.totalArrobas);
 
   const getMesButtonClass = (mesVal: string) => {
