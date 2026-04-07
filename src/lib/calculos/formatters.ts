@@ -113,7 +113,15 @@ export function formatPadrao(val: number): string {
  * Formatador único do painel do consultor.
  * tipo: 'cab' | 'gmd' | 'med2' | 'peso3' | 'money' | 'padrao'
  */
-export type PainelFormatType = 'cab' | 'gmd' | 'med2' | 'peso3' | 'money' | 'padrao';
+export type PainelFormatType = 'cab' | 'gmd' | 'med2' | 'peso3' | 'money' | 'moneyInt' | 'padrao';
+
+/**
+ * Formata moeda sem casas decimais — ex: R$ 3.996.222
+ */
+export function formatMoedaInt(val: number | null | undefined): string {
+  if (val === null || val === undefined || isNaN(val)) return '-';
+  return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
 
 export function formatPainel(val: number, tipo: PainelFormatType): string {
   if (tipo === 'cab') return formatCabPainel(val);
@@ -121,5 +129,6 @@ export function formatPainel(val: number, tipo: PainelFormatType): string {
   if (tipo === 'med2') return formatMed2(val);
   if (tipo === 'peso3') return formatPeso3(val);
   if (tipo === 'money') return formatMoeda(val);
+  if (tipo === 'moneyInt') return formatMoedaInt(val);
   return formatPadrao(val);
 }
