@@ -95,6 +95,41 @@ const MESES_SHORT = [
 
 const CHART_LABELS = ['I', 'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
 
+function mapFonteToOrigem(fonte?: string): OrigemPeso {
+  if (fonte === 'fechamento') return 'pastos';
+  if (fonte === 'fallback_movimentacao') return 'lancamento';
+  return 'sem_base';
+}
+
+interface ResumoOficialLike {
+  rows: Array<{
+    categoriaId: string;
+    categoriaCodigo: string;
+    categoriaNome: string;
+    quantidadeFinal: number;
+    pesoMedioFinalKg: number | null;
+    origemPeso: OrigemPeso;
+  }>;
+}
+
+function extractResumoFromView(
+  viewData: ZootCategoriaMensal[] | undefined,
+  mes: number,
+): ResumoOficialLike {
+  if (!viewData) return { rows: [] };
+  const mesRows = viewData.filter(r => r.mes === mes);
+  return {
+    rows: mesRows.map(r => ({
+      categoriaId: r.categoria_id,
+      categoriaCodigo: r.categoria_codigo,
+      categoriaNome: r.categoria_nome,
+      quantidadeFinal: r.saldo_final,
+      pesoMedioFinalKg: r.peso_medio_final,
+      origemPeso: mapFonteToOrigem(r.fonte_oficial_mes),
+    })),
+  };
+}
+
 function calcVariacaoNullable(atual: number | null, anterior: number | null): number | null {
   if (atual === null || anterior === null || anterior === 0) return null;
   return ((atual - anterior) / Math.abs(anterior)) * 100;
