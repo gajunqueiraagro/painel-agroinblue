@@ -85,7 +85,7 @@ export function MetaPrecoTab({ onBack }: Props) {
   const renderFrigorifico = () => (
     <Card>
       <CardContent className="p-3 space-y-2">
-        <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">🥩 Preço Base Previsto (Frigorífico)</h3>
+        <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">🥩 Preço Base Meta (Frigorífico)</h3>
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b text-muted-foreground">
@@ -250,7 +250,7 @@ export function MetaPrecoTab({ onBack }: Props) {
               <AlertDialogDescription>
                 {temPreenchimento
                   ? 'Já existem valores preenchidos. Deseja sobrescrever?'
-                  : 'Replicar valores previstos do mês anterior?'}
+                  : 'Replicar valores meta do mês anterior?'}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -276,8 +276,8 @@ export function MetaPrecoTab({ onBack }: Props) {
         ) : (
           <>
             {renderFrigorifico()}
-            {renderMagro('🐂 Gado Magro — Machos (Previsto)', magroMacho)}
-            {renderMagro('🐄 Gado Magro — Fêmeas (Previsto)', magroFemea)}
+            {renderMagro('🐂 Gado Magro — Machos (Meta)', magroMacho)}
+            {renderMagro('🐄 Gado Magro — Fêmeas (Meta)', magroFemea)}
 
             <div className="flex flex-col gap-2 pt-2">
               {!isValidado && (
@@ -301,9 +301,9 @@ export function MetaPrecoTab({ onBack }: Props) {
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Validar preços previstos de {MESES_NOMES[Number(mes) - 1]}/{ano}?</AlertDialogTitle>
+                        <AlertDialogTitle>Validar preços meta de {MESES_NOMES[Number(mes) - 1]}/{ano}?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          Os preços previstos serão travados para este mês.
+                          Os preços meta serão travados para este mês.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
