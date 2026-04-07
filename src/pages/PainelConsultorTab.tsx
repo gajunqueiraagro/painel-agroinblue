@@ -68,6 +68,7 @@ interface Row {
   indicadorId?: string;  // maps to CATALOGO_INDICADORES
   format: PainelFormatType;
   valores: number[];     // 12 values
+  noTotal?: boolean;     // true = total column stays blank (stock indicators)
 }
 
 interface Bloco {
