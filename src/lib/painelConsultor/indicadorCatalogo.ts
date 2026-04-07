@@ -193,6 +193,7 @@ export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
   // ─── Mensal > Peso ───
   'peso_ini_kg': { id: 'peso_ini_kg', nome: 'Peso ini. (kg)', aba: 'mensal', bloco: 'Peso', realizado: FONTE_PESO_REAL, previsto: FONTE_PESO_PREVISTO },
   'peso_fin_kg': { id: 'peso_fin_kg', nome: 'Peso final (kg)', aba: 'mensal', bloco: 'Peso', realizado: FONTE_PESO_REAL, previsto: FONTE_PESO_PREVISTO },
+  'peso_fin_cab_kg': { id: 'peso_fin_cab_kg', nome: 'Peso fin. cab (kg)', aba: 'mensal', bloco: 'Peso', realizado: FONTE_PESO_REAL, previsto: FONTE_PESO_PREVISTO },
   'peso_ini_arr': { id: 'peso_ini_arr', nome: 'Peso ini. (@)', aba: 'mensal', bloco: 'Peso', realizado: FONTE_PESO_REAL, previsto: FONTE_PESO_PREVISTO },
   'peso_fin_arr': { id: 'peso_fin_arr', nome: 'Peso final (@)', aba: 'mensal', bloco: 'Peso', realizado: FONTE_PESO_REAL, previsto: FONTE_PESO_PREVISTO },
   'peso_med_ini': { id: 'peso_med_ini', nome: 'Peso méd. ini.', aba: 'mensal', bloco: 'Peso', realizado: FONTE_PESO_REAL, previsto: FONTE_PESO_PREVISTO },
