@@ -220,8 +220,8 @@ export function MetaPrecoTab({ onBack }: Props) {
   // ---------- Comparison data ----------
   // Realized totals for Dec prior year (vs Inic. ano)
   const compDezAnt = useMemo(() => {
-    if (!viewDataRealizadoDezAnt) return null;
-    const dezRows = viewDataRealizadoDezAnt.filter(r => r.mes === 12);
+    if (!viewDataRealizadoAnoAnt) return null;
+    const dezRows = viewDataRealizadoAnoAnt.filter(r => r.mes === 12);
     if (dezRows.length === 0) return null;
     const cabecas = dezRows.reduce((s, r) => s + r.saldo_final, 0);
     const pesoTotalKg = dezRows.reduce((s, r) => s + r.peso_total_final, 0);
@@ -230,7 +230,7 @@ export function MetaPrecoTab({ onBack }: Props) {
     const valorCabeca = valorRebDezAnt > 0 && cabecas > 0 ? valorRebDezAnt / cabecas : 0;
     const precoArroba = valorRebDezAnt > 0 && totalArrobas > 0 ? valorRebDezAnt / totalArrobas : 0;
     return { cabecas, pesoMedio, precoArroba, valorCabeca, totalArrobas, valor: valorRebDezAnt };
-  }, [viewDataRealizadoDezAnt, valorRebDezAnt]);
+  }, [viewDataRealizadoAnoAnt, valorRebDezAnt]);
 
   // Realized totals for same month of previous year
   const compAnoAnt = useMemo(() => {
@@ -254,7 +254,7 @@ export function MetaPrecoTab({ onBack }: Props) {
     const precoArr: { label: string; value: number | null }[] = [];
 
     // Point "I" — Realized Dec prior year (início do ano = Dez/ano-1)
-    const dezRealized = viewDataRealizadoDezAnt?.filter(r => r.mes === 12) ?? [];
+    const dezRealized = viewDataRealizadoAnoAnt?.filter(r => r.mes === 12) ?? [];
     if (dezRealized.length > 0) {
       const cabI = dezRealized.reduce((s, r) => s + r.saldo_final, 0);
       const pesoI = dezRealized.reduce((s, r) => s + r.peso_total_final, 0);
@@ -302,7 +302,7 @@ export function MetaPrecoTab({ onBack }: Props) {
     }
 
     return { valor: valorArr, arrobas: arrobasArr, precoArroba: precoArr };
-  }, [viewDataMeta, viewDataRealizadoDezAnt, valorRebDezAnt, mes, precosLocal]);
+  }, [viewDataMeta, viewDataRealizadoAnoAnt, valorRebDezAnt, mes, precosLocal]);
 
   const temPreenchimento = Object.values(precosLocal).some(v => v > 0);
   const todosPreenchidos = ORDEM_CATEGORIAS_FIXA.every(c => (precosLocal[c] ?? 0) > 0);
