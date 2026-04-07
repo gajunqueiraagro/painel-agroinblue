@@ -1,7 +1,7 @@
 /**
  * Preço de Mercado — define preços base mensais para cálculo do valor do rebanho.
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { MESES_NOMES } from '@/lib/calculos/labels';
 import { usePrecoMercado, BLOCOS_PRECO, type PrecoMercadoItem } from '@/hooks/usePrecoMercado';
 import { usePermissions } from '@/hooks/usePermissions';
+import { supabase } from '@/integrations/supabase/client';
 import { Lock, Unlock, Save, CheckCircle, AlertTriangle, Copy, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -39,6 +40,12 @@ const formatMoeda = (val: number): string => {
   return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
+/** Formata valor numérico para exibição no input com 2 casas decimais */
+const formatInputValue = (val: number): string => {
+  if (!val || val <= 0) return '';
+  return val.toFixed(2);
+};
+
 export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: Props) {
   const now = new Date();
   const [ano, setAno] = useState(filtroAnoInicial || String(now.getFullYear()));
@@ -50,6 +57,25 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
   const isAdmin = perfil === 'admin_agroinblue';
   const [showCopiarDialog, setShowCopiarDialog] = useState(false);
   const [copiando, setCopiando] = useState(false);
+
+  // Status de todos os meses do ano para colorir a régua
+  const [statusAno, setStatusAno] = useState<Record<string, string>>({});
+
+  const loadStatusAno = useCallback(async () => {
+    const { data } = await supabase
+      .from('preco_mercado_status')
+      .select('ano_mes, status')
+      .like('ano_mes', `${ano}-%`);
+    if (data) {
+      const map: Record<string, string> = {};
+      data.forEach((r: any) => { map[r.ano_mes] = r.status; });
+      setStatusAno(map);
+    }
+  }, [ano]);
+
+  useEffect(() => { loadStatusAno(); }, [loadStatusAno]);
+  // Refresh status bar when current month status changes
+  useEffect(() => { loadStatusAno(); }, [statusMes.status]);
 
   const anos = useMemo(() => {
     const a: string[] = [];
@@ -91,6 +117,16 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
   const agioColor = (val: number) =>
     val > 0 ? 'text-emerald-600' : val < 0 ? 'text-red-600' : 'text-muted-foreground';
 
+  const getMesButtonClass = (mesVal: string) => {
+    const isActive = mes === mesVal;
+    if (isActive) return 'bg-primary text-primary-foreground shadow-sm';
+    const key = `${ano}-${mesVal}`;
+    const st = statusAno[key];
+    if (st === 'validado') return 'bg-emerald-100 text-emerald-700 border border-emerald-300';
+    if (st === 'parcial' || st === 'rascunho') return 'bg-amber-100 text-amber-700 border border-amber-300';
+    return 'text-muted-foreground hover:bg-muted hover:text-foreground';
+  };
+
   const renderFrigorifico = () => (
     <Card className="flex-1 min-w-0">
       <CardContent className="p-2 space-y-1">
@@ -99,9 +135,9 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
           <thead>
             <tr className="border-b text-muted-foreground">
               <th className="text-left py-0.5 px-1 font-medium">Categoria</th>
-              <th className="text-right py-0.5 px-1 font-medium w-20">Valor</th>
-              <th className="text-right py-0.5 px-1 font-medium w-14">Ágio %</th>
-              <th className="text-right py-0.5 px-1 font-medium w-20">R$/@</th>
+              <th className="text-center py-0.5 px-1 font-medium w-20">R$/@</th>
+              <th className="text-center py-0.5 px-1 font-medium w-14">Ágio %</th>
+              <th className="text-center py-0.5 px-1 font-medium w-20">R$/@</th>
             </tr>
           </thead>
           <tbody>
@@ -118,13 +154,17 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
                       type="number"
                       step="0.01"
                       min="0"
-                      value={item.valor || ''}
+                      value={formatInputValue(item.valor)}
                       onChange={e => updateItem(item.bloco, item.categoria, 'valor', e.target.value)}
+                      onBlur={e => {
+                        const v = parseFloat(e.target.value) || 0;
+                        updateItem(item.bloco, item.categoria, 'valor', v.toFixed(2));
+                      }}
                       disabled={isValidado}
                       className="h-6 text-[10px] text-right w-full"
                     />
                   </td>
-                  <td className="py-0.5 px-1 text-right text-[10px]">
+                  <td className="py-0.5 px-1 text-center text-[10px]">
                     {isBoi ? (
                       <span className="text-muted-foreground">—</span>
                     ) : item.valor > 0 && boiGordoArroba > 0 ? (
@@ -135,7 +175,7 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
                       <span className="text-muted-foreground">-</span>
                     )}
                   </td>
-                  <td className="py-0.5 px-1 text-right font-semibold text-foreground text-[10px]">
+                  <td className="py-0.5 px-1 text-center font-semibold text-foreground text-[10px]">
                     {formatMoeda(item.valor)}
                   </td>
                 </tr>
@@ -155,9 +195,9 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
           <thead>
             <tr className="border-b text-muted-foreground">
               <th className="text-left py-0.5 px-1 font-medium">Categoria</th>
-              <th className="text-right py-0.5 px-1 font-medium w-16">R$/kg</th>
-              <th className="text-right py-0.5 px-1 font-medium w-14">Ágio %</th>
-              <th className="text-right py-0.5 px-1 font-medium w-20">R$/cab</th>
+              <th className="text-center py-0.5 px-1 font-medium w-16">R$/kg</th>
+              <th className="text-center py-0.5 px-1 font-medium w-14">Ágio %</th>
+              <th className="text-center py-0.5 px-1 font-medium w-20">R$/cab</th>
             </tr>
           </thead>
           <tbody>
@@ -173,13 +213,17 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
                       type="number"
                       step="0.01"
                       min="0"
-                      value={item.valor || ''}
+                      value={formatInputValue(item.valor)}
                       onChange={e => updateItem(item.bloco, item.categoria, 'valor', e.target.value)}
+                      onBlur={e => {
+                        const v = parseFloat(e.target.value) || 0;
+                        updateItem(item.bloco, item.categoria, 'valor', v.toFixed(2));
+                      }}
                       disabled={isValidado}
                       className="h-6 text-[10px] text-right w-full"
                     />
                   </td>
-                  <td className="py-0.5 px-1 text-right text-[10px]">
+                  <td className="py-0.5 px-1 text-center text-[10px]">
                     {item.valor > 0 && boiGordoKg > 0 ? (
                       <span className={agioColor(agioAuto)}>
                         {agioAuto >= 0 ? '+' : ''}{agioAuto.toFixed(1)}%
@@ -188,7 +232,7 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
                       <span className="text-muted-foreground">-</span>
                     )}
                   </td>
-                  <td className="py-0.5 px-1 text-right font-semibold text-foreground text-[10px]">
+                  <td className="py-0.5 px-1 text-center font-semibold text-foreground text-[10px]">
                     {formatMoeda(precoCab)}
                   </td>
                 </tr>
@@ -228,16 +272,11 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
               <div className="flex gap-0.5">
                 {MESES_ABREV.map((m, i) => {
                   const mesVal = String(i + 1).padStart(2, '0');
-                  const isActive = mes === mesVal;
                   return (
                     <button
                       key={i}
                       onClick={() => setMes(mesVal)}
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-all ${
-                        isActive
-                          ? 'bg-primary text-primary-foreground shadow-sm'
-                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                      }`}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-all ${getMesButtonClass(mesVal)}`}
                     >
                       {m}
                     </button>
