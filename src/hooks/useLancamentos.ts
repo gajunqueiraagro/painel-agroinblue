@@ -292,10 +292,13 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       return undefined;
     }
 
+    // Derive cenario from statusOperacional: null → meta, otherwise realizado
+    const effectiveCenario = lancamento.statusOperacional === null ? 'meta' : cenario;
+
     const { data, error } = await supabase.from('lancamentos').insert({
       fazenda_id: fazendaId,
       cliente_id: clienteId!,
-      cenario,
+      cenario: effectiveCenario,
       ...insertData,
     }).select().single();
 
