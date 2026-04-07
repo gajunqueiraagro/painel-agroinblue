@@ -268,7 +268,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       valor_total: lancamento.valorTotal || null,
       nota_fiscal: lancamento.notaFiscal || null,
       tipo_peso: lancamento.tipoPeso || 'vivo',
-      status_operacional: lancamento.statusOperacional || 'realizado',
+      status_operacional: cenario === 'meta' ? null : (lancamento.statusOperacional || 'realizado'),
       data_venda: lancamento.dataVenda || null,
       data_embarque: lancamento.dataEmbarque || null,
       data_abate: lancamento.dataAbate || null,
@@ -292,12 +292,10 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       return undefined;
     }
 
-    const cenarioEfetivo = insertData.status_operacional === 'previsto' ? 'meta' : cenario;
-
     const { data, error } = await supabase.from('lancamentos').insert({
       fazenda_id: fazendaId,
       cliente_id: clienteId!,
-      cenario: cenarioEfetivo,
+      cenario,
       ...insertData,
     }).select().single();
 
