@@ -148,6 +148,30 @@ export function MetaPrecoTab({ onBack }: Props) {
     });
   }, [fazendaId, ano, mes]);
 
+  // Fetch ALL validated META snapshots for chart (all 12 months)
+  const [validadoSnapAll, setValidadoSnapAll] = useState<Record<string, { valor: number; cabecas: number; arrobas: number; precoArr: number }>>({});
+  useEffect(() => {
+    if (!fazendaId) return;
+    const meses12 = Array.from({ length: 12 }, (_, i) => `${ano}-${String(i + 1).padStart(2, '0')}`);
+    supabase
+      .from('valor_rebanho_meta_validada' as any)
+      .select('ano_mes, valor_total, cabecas, arrobas_total, preco_arroba_medio')
+      .eq('fazenda_id', fazendaId)
+      .in('ano_mes', meses12)
+      .then(({ data }) => {
+        const map: Record<string, { valor: number; cabecas: number; arrobas: number; precoArr: number }> = {};
+        ((data as any[]) || []).forEach((row: any) => {
+          map[row.ano_mes] = {
+            valor: Number(row.valor_total) || 0,
+            cabecas: Number(row.cabecas) || 0,
+            arrobas: Number(row.arrobas_total) || 0,
+            precoArr: Number(row.preco_arroba_medio) || 0,
+          };
+        });
+        setValidadoSnapAll(map);
+      });
+  }, [fazendaId, ano, statusMes]);
+
   const anos = useMemo(() => {
     const a: string[] = [];
     for (let y = now.getFullYear() + 1; y >= now.getFullYear() - 3; y--) a.push(String(y));
@@ -247,7 +271,7 @@ export function MetaPrecoTab({ onBack }: Props) {
     return { cabecas, pesoMedio, precoArroba, valorCabeca, totalArrobas, valor: valorRebMesAnoAnt };
   }, [viewDataRealizadoAnoAnt, mes, valorRebMesAnoAnt]);
 
-  // ---------- Chart data (all 12 months) ----------
+  // ---------- Chart data (all 12 months) — uses validated snapshots ----------
   const chartData = useMemo(() => {
     const valorArr: { label: string; value: number | null }[] = [];
     const arrobasArr: { label: string; value: number | null }[] = [];
@@ -268,41 +292,53 @@ export function MetaPrecoTab({ onBack }: Props) {
       precoArr.push({ label: 'I', value: null });
     }
 
-    // Points J–D from META
+    // Points J–D from validated META snapshots + current month live
     const chartMonthLabels = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
     for (let i = 0; i < MESES_SHORT.length; i++) {
       const m = MESES_SHORT[i];
-      const mesNum = Number(m.key);
-      const rowsMes = viewDataMeta?.filter(r => r.mes === mesNum) ?? [];
+      const mesKey = `${ano}-${m.key}`;
+      const snap = validadoSnapAll[mesKey];
 
-      let totalValor = 0;
-      let totalPesoKg = 0;
-      let totalCab = 0;
-      let hasAnyPrice = false;
+      // For the currently selected month, use live calculation; for others, use snapshot
+      if (m.key === mes) {
+        // Live calculation from current prices
+        const rowsMes = viewDataMeta?.filter(r => r.mes === Number(m.key)) ?? [];
+        let totalValor = 0;
+        let totalPesoKg = 0;
+        let totalCab = 0;
+        let hasAnyPrice = false;
 
-      ORDEM_CATEGORIAS_FIXA.forEach(codigo => {
-        const metaRow = rowsMes.find(r => r.categoria_codigo === codigo);
-        const saldo = metaRow?.saldo_final ?? 0;
-        const pesoMedio = metaRow?.peso_medio_final ?? 0;
-        let precoArroba = 0;
-        if (m.key === mes) {
-          precoArroba = precosLocal[codigo] ?? 0;
-        }
-        if (precoArroba > 0) hasAnyPrice = true;
-        const precoKg = precoArroba > 0 ? precoArroba / 30 : 0;
-        totalValor += saldo * pesoMedio * precoKg;
-        totalPesoKg += saldo * pesoMedio;
-        totalCab += saldo;
-      });
+        ORDEM_CATEGORIAS_FIXA.forEach(codigo => {
+          const metaRow = rowsMes.find(r => r.categoria_codigo === codigo);
+          const saldo = metaRow?.saldo_final ?? 0;
+          const pesoMedio = metaRow?.peso_medio_final ?? 0;
+          const precoArroba = precosLocal[codigo] ?? 0;
+          if (precoArroba > 0) hasAnyPrice = true;
+          const precoKg = precoArroba > 0 ? precoArroba / 30 : 0;
+          totalValor += saldo * pesoMedio * precoKg;
+          totalPesoKg += saldo * pesoMedio;
+          totalCab += saldo;
+        });
 
-      const totalArrobas = totalPesoKg / 30;
-      valorArr.push({ label: chartMonthLabels[i], value: m.key === mes && hasAnyPrice ? totalValor : null });
-      arrobasArr.push({ label: chartMonthLabels[i], value: totalCab > 0 ? totalArrobas : null });
-      precoArr.push({ label: chartMonthLabels[i], value: m.key === mes && totalArrobas > 0 && hasAnyPrice ? totalValor / totalArrobas : null });
+        const totalArrobas = totalPesoKg / 30;
+        valorArr.push({ label: chartMonthLabels[i], value: hasAnyPrice && totalValor > 0 ? totalValor : null });
+        arrobasArr.push({ label: chartMonthLabels[i], value: totalCab > 0 ? totalArrobas : null });
+        precoArr.push({ label: chartMonthLabels[i], value: hasAnyPrice && totalArrobas > 0 ? totalValor / totalArrobas : null });
+      } else if (snap && snap.valor > 0) {
+        // Validated snapshot
+        valorArr.push({ label: chartMonthLabels[i], value: snap.valor });
+        arrobasArr.push({ label: chartMonthLabels[i], value: snap.arrobas > 0 ? snap.arrobas : null });
+        precoArr.push({ label: chartMonthLabels[i], value: snap.precoArr > 0 ? snap.precoArr : null });
+      } else {
+        // No data for this month
+        valorArr.push({ label: chartMonthLabels[i], value: null });
+        arrobasArr.push({ label: chartMonthLabels[i], value: null });
+        precoArr.push({ label: chartMonthLabels[i], value: null });
+      }
     }
 
     return { valor: valorArr, arrobas: arrobasArr, precoArroba: precoArr };
-  }, [viewDataMeta, viewDataRealizadoAnoAnt, valorRebDezAnt, mes, precosLocal]);
+  }, [viewDataMeta, viewDataRealizadoAnoAnt, valorRebDezAnt, mes, precosLocal, validadoSnapAll, ano]);
 
   const temPreenchimento = Object.values(precosLocal).some(v => v > 0);
   const todosPreenchidos = ORDEM_CATEGORIAS_FIXA.every(c => (precosLocal[c] ?? 0) > 0);
