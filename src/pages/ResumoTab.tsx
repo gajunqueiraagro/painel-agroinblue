@@ -12,7 +12,7 @@ import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 import { useResumoStatus, StatusNivel } from '@/hooks/useResumoStatus';
 import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { usePastos } from '@/hooks/usePastos';
+
 import { supabase } from '@/integrations/supabase/client';
 import { useZootMensal } from '@/hooks/useZootMensal';
 import { ChevronRight, AlertTriangle, CheckCircle2, TrendingUp, Wallet, BarChart3, Landmark, ClipboardCheck } from 'lucide-react';
