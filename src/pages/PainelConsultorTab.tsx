@@ -77,6 +77,13 @@ interface Bloco {
   rows: Row[];
 }
 
+// ─── Snapshot de peso validado ───
+interface PesoSnapshot {
+  cabecas: number[];    // 12 ou 13 valores
+  pesoMedio: number[];
+  arrobas: number[];
+}
+
 // ─── Monthly raw data struct ───
 interface MonthlyData {
   cabIni: number[];
