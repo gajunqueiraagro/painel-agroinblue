@@ -626,8 +626,8 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   // Valor do Rebanho META: lido direto da tabela persistida (sem recalcular)
   const vrm = valorRebanhoMetaMes || Array(12).fill(0);
   const valorRebFin = vrm;
-  // Valor reb. ini = valor do mês anterior (shift right, jan = 0)
-  const valorRebIni = [0, ...vrm.slice(0, 11)];
+  // Valor reb. ini META: Jan = realizado Dez ano anterior, Fev+ = META final mês anterior
+  const valorRebIni = [dezAnoAnteriorRealizado ?? 0, ...vrm.slice(0, 11)];
   const valorPorCabMeta = cabFin.map((c, i) => c > 0 && vrm[i] > 0 ? vrm[i] / c : 0);
   const arrobasEstoqueMeta = pesoFin.map(v => v / 30);
   const valorPorArrMeta = arrobasEstoqueMeta.map((a, i) => a > 0 && vrm[i] > 0 ? vrm[i] / a : 0);
