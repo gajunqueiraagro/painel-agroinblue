@@ -72,6 +72,7 @@ export interface Lancamento {
   valorTotal?: number;
   notaFiscal?: string;
   tipoPeso?: string;
+  cenario?: 'meta' | 'realizado';
   statusOperacional?: 'previsto' | 'programado' | 'agendado' | 'realizado' | null;
   // Abate workflow fields
   dataVenda?: string;
