@@ -213,19 +213,20 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
     return { indicador, format, valores, indicadorId, noTotal };
   };
 
-  // Se há snapshot validado de peso, usar como fonte oficial
-  const hasSnap = pesoSnap && pesoSnap.cabecas.some(v => v > 0);
+  // Se há snapshot validado de peso, usar EXCLUSIVAMENTE arrobas_total da tabela validada
+  const hasSnap = pesoSnap && pesoSnap.arrobas.some(v => v > 0);
   const pesoTotalFin = hasSnap
-    ? pesoSnap!.cabecas.map((c, i) => c * (pesoSnap!.pesoMedio[i] || 0))
+    ? pesoSnap!.arrobas.map(a => a * 30)
     : d.pesoTotalFin;
+  // Peso inicial: Dez do ano anterior vem de dezPesoSnap; Fev+ = final do mês anterior
   const pesoTotalIni = hasSnap
-    ? [d.pesoTotalIni[0], ...pesoTotalFin.slice(0, 11)]
+    ? [(dezPesoSnap ?? d.pesoTotalIni[0]), ...pesoTotalFin.slice(0, 11)]
     : d.pesoTotalIni;
   const pesoMedioFin = hasSnap
     ? pesoSnap!.pesoMedio
     : d.pesoMedioFin;
   const pesoMedioIni = hasSnap
-    ? [d.pesoMedioIni[0], ...pesoMedioFin.slice(0, 11)]
+    ? [(dezPesoSnap != null && d.cabIni[0] > 0 ? dezPesoSnap / d.cabIni[0] : d.pesoMedioIni[0]), ...pesoMedioFin.slice(0, 11)]
     : d.pesoMedioIni;
 
   const cabMedia = d.cabIni.map((v, i) => (v + d.cabFin[i]) / 2);
