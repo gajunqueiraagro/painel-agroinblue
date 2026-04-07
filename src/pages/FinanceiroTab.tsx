@@ -95,15 +95,16 @@ function getFazendaCellValue(l: Lancamento, fazendaMap: Map<string, string>): st
 }
 
 /* ── Sortable header cell ── */
-function SortableHeader({ label, align, sortKey, currentKey, currentDir, onSort }: {
+function SortableHeader({ label, align, sortKey, currentKey, currentDir, onSort, sticky = false }: {
   label: string; align: string; sortKey: string;
   currentKey: string | null; currentDir: SortDir;
   onSort: (key: string) => void;
+  sticky?: boolean;
 }) {
   const active = currentKey === sortKey;
   return (
     <th
-      className={`${TABLE_HEAD_CELL} ${align} cursor-pointer hover:bg-primary-foreground/10 transition-colors`}
+      className={`${TABLE_HEAD_CELL} ${align} cursor-pointer hover:bg-primary-foreground/10 transition-colors ${sticky ? 'sticky left-0 z-30 border-r border-primary-foreground/15 md:static md:border-r-0' : ''}`}
       onClick={() => onSort(sortKey)}
     >
       <span className="inline-flex items-center gap-0.5">
