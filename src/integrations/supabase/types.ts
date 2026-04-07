@@ -3981,8 +3981,12 @@ export type Database = {
           gmd: number | null
           mes: number | null
           ordem_exibicao: number | null
+          peso_entradas_externas: number | null
+          peso_evol_cat_entrada: number | null
+          peso_evol_cat_saida: number | null
           peso_medio_final: number | null
           peso_medio_inicial: number | null
+          peso_saidas_externas: number | null
           peso_total_final: number | null
           peso_total_inicial: number | null
           producao_biologica: number | null
