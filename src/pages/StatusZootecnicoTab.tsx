@@ -12,7 +12,6 @@ import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { TabId } from '@/components/BottomNav';
 import { supabase } from '@/integrations/supabase/client';
-import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
 import { useCliente } from '@/contexts/ClienteContext';
 import {
   statusFinanceiro as calcStatusFinanceiro,
@@ -114,7 +113,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
       const allFIds = allFazendas.map(f => f.id);
 
       // Fetch all data in bulk (including financeiro)
-      const [pastosRes, fpRes, vrRes, catsRes, finFechRes] = await Promise.all([
+      const [pastosRes, fpRes, vrRes, catsRes, finFechRes, viewRes] = await Promise.all([
         supabase.from('pastos').select('id, fazenda_id').eq('ativo', true).eq('entra_conciliacao', true).in('fazenda_id', fIds),
         supabase.from('fechamento_pastos').select('id, status, pasto_id, fazenda_id, updated_at').eq('ano_mes', anoMes).in('fazenda_id', fIds),
         supabase.from('valor_rebanho_mensal').select('categoria, fazenda_id').eq('ano_mes', anoMes).in('fazenda_id', fIds),
@@ -126,6 +125,12 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
               .eq('ano_mes', anoMes)
               .in('fazenda_id', allFIds)
           : Promise.resolve({ data: [] }),
+        supabase.from('vw_zoot_categoria_mensal' as any)
+          .select('fazenda_id, categoria_codigo, saldo_inicial, entradas_externas, saidas_externas, evol_cat_entrada, evol_cat_saida')
+          .in('fazenda_id', fIds)
+          .eq('ano', anoNum)
+          .eq('mes', mesFiltro)
+          .eq('cenario', 'realizado'),
       ]);
 
       const fpIds = (fpRes.data || []).map(f => f.id);
@@ -172,25 +177,12 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
         finByFaz.set(f.fazenda_id, list);
       });
 
-      // Filter lancamentos per fazenda
-      const lancByFaz = new Map<string, Lancamento[]>();
-      lancamentos.forEach(l => {
-        if (!l.fazendaId) return;
-        const list = lancByFaz.get(l.fazendaId) || [];
-        list.push(l);
-        lancByFaz.set(l.fazendaId, list);
-      });
-
-      // Fetch saldos_iniciais per fazenda from DB
-      const { data: saldosAllData } = await supabase
-        .from('saldos_iniciais')
-        .select('fazenda_id, ano, categoria, quantidade, peso_medio_kg')
-        .in('fazenda_id', fIds);
-      const saldosByFaz = new Map<string, SaldoInicial[]>();
-      (saldosAllData || []).forEach(s => {
-        const list = saldosByFaz.get(s.fazenda_id) || [];
-        list.push({ ano: s.ano, categoria: s.categoria as any, quantidade: s.quantidade, pesoMedioKg: s.peso_medio_kg ?? undefined });
-        saldosByFaz.set(s.fazenda_id, list);
+      // FONTE OFICIAL: saldo por movimentações (vw_zoot_categoria_mensal)
+      const viewByFaz = new Map<string, any[]>();
+      ((viewRes as any).data || []).forEach((r: any) => {
+        const list = viewByFaz.get(r.fazenda_id) || [];
+        list.push(r);
+        viewByFaz.set(r.fazenda_id, list);
       });
 
       const result: FazendaStatus[] = pecFazendas.map(faz => {
@@ -210,9 +202,14 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
         const dedupFps = Array.from(dedupByPasto.values());
         const fechados = dedupFps.filter(f => f.status === 'fechado').length;
 
-        const fazLanc = lancByFaz.get(faz.id) || [];
-        const fazSaldos = saldosByFaz.get(faz.id) || [];
-        const saldoMap = calcSaldoPorCategoriaLegado(fazSaldos, fazLanc, anoNum, mesFiltro);
+        // Saldo previsto por movimentações (fonte: vw_zoot_categoria_mensal)
+        const viewCats = viewByFaz.get(faz.id) || [];
+        const saldoMap = new Map<string, number>();
+        viewCats.forEach((cat: any) => {
+          const movSaldo = cat.saldo_inicial + cat.entradas_externas - cat.saidas_externas
+            + cat.evol_cat_entrada - cat.evol_cat_saida;
+          saldoMap.set(cat.categoria_codigo, (saldoMap.get(cat.categoria_codigo) || 0) + movSaldo);
+        });
         const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
 
         // Build alocado nos pastos (using deduplicated fechamentos)
@@ -264,7 +261,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
     } finally {
       setLoadingPerFarm(false);
     }
-  }, [isGlobal, fazendas, anoFiltro, mesFiltro, lancamentos, saldosIniciais, anoNum, clienteAtual]);
+  }, [isGlobal, fazendas, anoFiltro, mesFiltro, anoNum, clienteAtual]);
 
   useEffect(() => { loadPerFarm(); }, [loadPerFarm]);
 
@@ -295,7 +292,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
       const anoStr = anoFiltro;
       const anoMeses = Array.from({ length: 12 }, (_, i) => `${anoStr}-${String(i + 1).padStart(2, '0')}`);
 
-      const [pastosRes, fpRes, vrRes, catsRes, finFechRes] = await Promise.all([
+      const [pastosRes, fpRes, vrRes, catsRes, finFechRes, viewYearRes] = await Promise.all([
         fq(supabase.from('pastos').select('id').eq('ativo', true).eq('entra_conciliacao', true)),
         fq(
           supabase
@@ -316,6 +313,10 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
               .in('fazenda_id', fazendaIdsFin)
               .gte('ano_mes', anoMeses[0]).lte('ano_mes', anoMeses[11])
           : Promise.resolve({ data: [] }),
+        fq(supabase.from('vw_zoot_categoria_mensal' as any)
+          .select('mes, categoria_codigo, saldo_inicial, entradas_externas, saidas_externas, evol_cat_entrada, evol_cat_saida')
+          .eq('ano', Number(anoStr))
+          .eq('cenario', 'realizado')),
       ]);
 
       const pastosAtivosData = pastosRes.data || [];
@@ -354,6 +355,16 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
         finByMonth.set(f.ano_mes, list);
       });
 
+      // FONTE OFICIAL: saldo por movimentações agrupado por mês (vw_zoot_categoria_mensal)
+      const viewByMonthMap = new Map<number, Map<string, number>>();
+      ((viewYearRes as any).data || []).forEach((r: any) => {
+        if (!viewByMonthMap.has(r.mes)) viewByMonthMap.set(r.mes, new Map());
+        const catMap = viewByMonthMap.get(r.mes)!;
+        const movSaldo = r.saldo_inicial + r.entradas_externas - r.saidas_externas
+          + r.evol_cat_entrada - r.evol_cat_saida;
+        catMap.set(r.categoria_codigo, (catMap.get(r.categoria_codigo) || 0) + movSaldo);
+      });
+
       const result: MonthStatus[] = [];
       for (let m = 1; m <= 12; m++) {
         const am = anoMeses[m - 1];
@@ -382,8 +393,8 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
         const dedupFps = Array.from(dedupByPasto.values());
         const fechados = dedupFps.filter(f => f.status === 'fechado').length;
 
-        // Saldo oficial
-        const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, Number(anoStr), m);
+        // Saldo oficial por movimentações (fonte: vw_zoot_categoria_mensal)
+        const saldoMap = viewByMonthMap.get(m) || new Map<string, number>();
         const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
 
         // Build alocado nos pastos usando a MESMA base da linha Dif. validada no Fechamento de Pastos
@@ -438,7 +449,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
     } finally {
       setLoadingYear(false);
     }
-  }, [fazendaId, anoFiltro, lancamentos, saldosIniciais, isGlobal, isAdmin, clienteAtual]);
+  }, [fazendaId, anoFiltro, isGlobal, isAdmin, clienteAtual]);
 
   useEffect(() => { loadYear(); }, [loadYear]);
 

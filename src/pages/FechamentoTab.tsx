@@ -29,11 +29,12 @@ import {
 import { formatAnoMes } from '@/lib/dateUtils';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
-import { calcUA, calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
+import { calcUA } from '@/lib/calculos/zootecnicos';
 import { formatNum } from '@/lib/calculos/formatters';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { gerarSugestoes, type Sugestao } from '@/lib/calculos/sugestoesConciliacao';
+import { useZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
 
 const CAT_COLS = [
   { codigo: 'mamotes_m', sigla: 'MM' },
@@ -121,6 +122,9 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const [mesFiltro, setMesFiltro] = useState(mesDefault);
   const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
 
+  // FONTE OFICIAL: view zootécnica para saldo por movimentações (conciliação)
+  const { data: viewDataForConcil } = useZootCategoriaMensal({ ano: anoNum2, cenario: 'realizado' });
+
   useEffect(() => {
     if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
     if (filtroMesInicial) setMesFiltro(filtroMesInicial);
@@ -201,10 +205,18 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const anoNum = Number(anoMes.split('-')[0]);
   const mesNum = Number(anoMes.split('-')[1]);
 
-  const saldoMap = useMemo(
-    () => calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, anoNum, mesNum),
-    [saldosIniciais, lancamentos, anoNum, mesNum]
-  );
+  // FONTE OFICIAL: saldo previsto por movimentações (vw_zoot_categoria_mensal)
+  // Compara contra pastoDataByCat para detectar divergências de conciliação
+  const saldoMap = useMemo(() => {
+    const map = new Map<string, number>();
+    const monthData = (viewDataForConcil || []).filter(r => r.mes === mesNum);
+    for (const cat of monthData) {
+      const movSaldo = cat.saldo_inicial + cat.entradas_externas - cat.saidas_externas
+        + cat.evol_cat_entrada - cat.evol_cat_saida;
+      map.set(cat.categoria_codigo, (map.get(cat.categoria_codigo) || 0) + movSaldo);
+    }
+    return map;
+  }, [viewDataForConcil, mesNum]);
 
   // Fonte oficial da conciliação visual:
   // fechamento_pastos deduplicado por pasto (updated_at mais recente),
