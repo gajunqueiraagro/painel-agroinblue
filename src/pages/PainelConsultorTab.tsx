@@ -1301,6 +1301,11 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                 <Download className="h-3 w-3" />
                 Excel
               </Button>
+              {onTabChange && (
+                <Button variant="outline" size="sm" onClick={() => onTabChange('conferencia_gmd')} className="h-7 gap-1 text-[11px] px-2">
+                  Conferir GMD
+                </Button>
+              )}
             </div>
           </div>
 
