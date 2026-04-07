@@ -934,13 +934,14 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const [valorRebanhoMetaMes, setValorRebanhoMetaMes] = useState<number[]>(Array(12).fill(0));
   const [metaValorCabMes, setMetaValorCabMes] = useState<number[]>(Array(12).fill(0));
   const [metaPrecoArrMes, setMetaPrecoArrMes] = useState<number[]>(Array(12).fill(0));
+  const [metaPesoSnap, setMetaPesoSnap] = useState<PesoSnapshot>({ cabecas: Array(12).fill(0), pesoMedio: Array(12).fill(0), arrobas: Array(12).fill(0) });
 
   useEffect(() => {
     if (!fazendaId || fazendaId === '__global__') return;
     const meses = Array.from({ length: 12 }, (_, i) => `${anoNum}-${String(i + 1).padStart(2, '0')}`);
     supabase
       .from('valor_rebanho_meta_validada' as any)
-      .select('ano_mes, valor_total, valor_cabeca_medio, preco_arroba_medio')
+      .select('ano_mes, valor_total, valor_cabeca_medio, preco_arroba_medio, cabecas, peso_medio_kg, arrobas_total')
       .eq('fazenda_id', fazendaId)
       .in('ano_mes', meses)
       .then(({ data, error }) => {
@@ -948,17 +949,24 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         const vrm = Array(12).fill(0);
         const vcm = Array(12).fill(0);
         const vam = Array(12).fill(0);
+        const cab = Array(12).fill(0);
+        const pm = Array(12).fill(0);
+        const arr = Array(12).fill(0);
         (data as any[]).forEach((row: any) => {
           const idx = meses.indexOf(row.ano_mes);
           if (idx >= 0) {
             vrm[idx] = Number(row.valor_total) || 0;
             vcm[idx] = Number(row.valor_cabeca_medio) || 0;
             vam[idx] = Number(row.preco_arroba_medio) || 0;
+            cab[idx] = Number(row.cabecas) || 0;
+            pm[idx] = Number(row.peso_medio_kg) || 0;
+            arr[idx] = Number(row.arrobas_total) || 0;
           }
         });
         setValorRebanhoMetaMes(vrm);
         setMetaValorCabMes(vcm);
         setMetaPrecoArrMes(vam);
+        setMetaPesoSnap({ cabecas: cab, pesoMedio: pm, arrobas: arr });
       });
   }, [fazendaId, anoNum]);
   // Official source: view data for Realizado (replaces buildMonthlyData local calcs)
