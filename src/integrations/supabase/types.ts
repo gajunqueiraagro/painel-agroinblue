@@ -2929,7 +2929,7 @@ export type Database = {
           preco_arroba: number | null
           preco_medio_cabeca: number | null
           quantidade: number
-          status_operacional: string
+          status_operacional: string | null
           tipo: string
           tipo_abate: string | null
           tipo_peso: string | null
@@ -2976,7 +2976,7 @@ export type Database = {
           preco_arroba?: number | null
           preco_medio_cabeca?: number | null
           quantidade: number
-          status_operacional?: string
+          status_operacional?: string | null
           tipo: string
           tipo_abate?: string | null
           tipo_peso?: string | null
@@ -3023,7 +3023,7 @@ export type Database = {
           preco_arroba?: number | null
           preco_medio_cabeca?: number | null
           quantidade?: number
-          status_operacional?: string
+          status_operacional?: string | null
           tipo?: string
           tipo_abate?: string | null
           tipo_peso?: string | null
