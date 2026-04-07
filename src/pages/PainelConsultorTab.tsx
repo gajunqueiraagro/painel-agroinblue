@@ -630,7 +630,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
 
   const emptyMoney = Array(12).fill(0);
 
-  // Valor do Rebanho META: calculado live (mesma lógica da tela META)
+  // Valor do Rebanho META: lido do snapshot validado (valor_rebanho_meta_validada)
   const vrm = valorRebanhoMetaMes || Array(12).fill(0);
   const valorRebFin = vrm;
   // Valor reb. ini META: Jan = realizado Dez ano anterior, Fev+ = META final mês anterior
