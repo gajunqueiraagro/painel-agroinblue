@@ -882,8 +882,12 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const { data: zootMeta } = useZootMensal({ ano: anoNum, cenario: 'meta' });
 
   // Valor do Rebanho META persistido — leitura direta sem recalcular
-  const { getMonthlyValues: getMetaValues } = useValorRebanhoMetaAno(anoNum);
+  const { data: metaValData, getMonthlyValues: getMetaValues, loading: metaValLoading } = useValorRebanhoMetaAno(anoNum);
   const valorRebanhoMetaMes = useMemo(() => getMetaValues('valor_total'), [getMetaValues]);
+  const metaCabecasMes = useMemo(() => getMetaValues('cabecas'), [getMetaValues]);
+  const metaArrobasMes = useMemo(() => getMetaValues('arrobas_total'), [getMetaValues]);
+  const metaValorCabMes = useMemo(() => getMetaValues('valor_cabeca_medio'), [getMetaValues]);
+  const metaPrecoArrMes = useMemo(() => getMetaValues('preco_arroba_medio'), [getMetaValues]);
   // Official source: view data for Realizado (replaces buildMonthlyData local calcs)
   const { data: viewDataRealizado } = useZootCategoriaMensal({ ano: anoNum, cenario: 'realizado', global: isGlobal });
 
