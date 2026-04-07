@@ -68,6 +68,8 @@ interface Props {
   vendaParaEditar?: Lancamento | null;
   /** Compra para abrir em modo edição automaticamente */
   compraParaEditar?: Lancamento | null;
+  /** Transferência para abrir em modo edição automaticamente */
+  transferenciaParaEditar?: Lancamento | null;
   /** Callback to return to the origin tab after edit cancel/save */
   onReturnFromEdit?: () => void;
   /** Initial year filter for historico view */
@@ -184,7 +186,7 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
   });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
   const nomeFazenda = fazendaAtual?.nome || '';
@@ -1203,6 +1205,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       loadCompraForEdit(compraParaEditar);
     }
   }, [compraParaEditar, abateFornecedores]);
+
+  // Auto-load transferência for editing when navigated from another tab
+  useEffect(() => {
+    if (transferenciaParaEditar) {
+      loadTransferenciaForEdit(transferenciaParaEditar);
+    }
+  }, [transferenciaParaEditar]);
 
   useEffect(() => {
     if (!clienteAtual?.id) {

@@ -30,6 +30,7 @@ interface Props {
   onEditarAbate?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
   onEditarVenda?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
   onEditarCompra?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
+  onEditarTransferencia?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
 }
 
 export type SubAba = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
@@ -499,7 +500,7 @@ function getTopTabFromSubAba(subAba?: SubAba): TopTab {
   return 'entradas';
 }
 
-export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, filtroStatusInicial, onBack, drillDownLabel, onEditarAbate, onEditarVenda, onEditarCompra }: Props) {
+export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, filtroStatusInicial, onBack, drillDownLabel, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const fazendaMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -786,6 +787,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
             onEditarAbate={onEditarAbate ? (l) => { setDetalheId(null); onEditarAbate(l, { subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
             onEditarVenda={onEditarVenda ? (l) => { setDetalheId(null); onEditarVenda(l, { subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
             onEditarCompra={onEditarCompra ? (l) => { setDetalheId(null); onEditarCompra(l, { subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
+            onEditarTransferencia={onEditarTransferencia ? (l) => { setDetalheId(null); onEditarTransferencia(l, { subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
           />
         ) : null;
       })()}

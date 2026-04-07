@@ -158,6 +158,7 @@ const Index = () => {
   const [abateParaEditar, setAbateParaEditar] = useState<Lancamento | null>(null);
   const [vendaParaEditar, setVendaParaEditar] = useState<Lancamento | null>(null);
   const [compraParaEditar, setCompraParaEditar] = useState<Lancamento | null>(null);
+  const [transferenciaParaEditar, setTransferenciaParaEditar] = useState<Lancamento | null>(null);
   const [editOriginTab, setEditOriginTab] = useState<TabId | null>(null);
   const [editOriginSubAba, setEditOriginSubAba] = useState<SubAba | undefined>(undefined);
   const [editOriginStatusFiltro, setEditOriginStatusFiltro] = useState<string | undefined>(undefined);
@@ -279,6 +280,7 @@ const Index = () => {
       setAbateParaEditar(null);
       setVendaParaEditar(null);
       setCompraParaEditar(null);
+      setTransferenciaParaEditar(null);
       setEditOriginTab(null);
       setEditOriginSubAba(undefined);
       setEditOriginStatusFiltro(undefined);
@@ -486,13 +488,14 @@ const Index = () => {
           onEditar={wrappedEditar as any}
           onRemover={wrappedRemover as any}
           onCountFinanceiros={countFinanceirosVinculados}
-          abaInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? 'reclassificacao' : (abateParaEditar || vendaParaEditar) ? 'saida' : compraParaEditar ? 'entrada' : undefined}
+          abaInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? 'reclassificacao' : (abateParaEditar || vendaParaEditar || transferenciaParaEditar) ? 'saida' : compraParaEditar ? 'entrada' : undefined}
           onBackToConciliacao={lancamentosFromConciliacao ? goToFechamentoTab : lancamentosFromFechamento ? goToFechamentoTab : lancamentosFromEvolCategoria ? goToEvolucaoRebanhoHub : lancamentosFromFluxoAnual ? goToFluxoAnual : undefined}
           dataInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? `${filtroGlobal.ano}-${String(filtroGlobal.mes).padStart(2, '0')}-15` : undefined}
           backLabel={lancamentosFromFechamento ? 'Voltar para Lançamento de Pasto' : (lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? 'Voltar para Evolução por Categoria' : undefined}
           abateParaEditar={abateParaEditar}
           vendaParaEditar={vendaParaEditar}
           compraParaEditar={compraParaEditar}
+          transferenciaParaEditar={transferenciaParaEditar}
           onReturnFromEdit={editOriginTab ? () => {
             // Restore origin tab with saved filter context
             if (editOriginTab === 'financeiro') {
@@ -509,6 +512,7 @@ const Index = () => {
             setAbateParaEditar(null);
             setVendaParaEditar(null);
             setCompraParaEditar(null);
+            setTransferenciaParaEditar(null);
           } : undefined}
         />
       )}
@@ -542,6 +546,7 @@ const Index = () => {
           onEditarAbate={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setAbateParaEditar(l); setActiveTab('lancamentos'); }}
           onEditarVenda={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setVendaParaEditar(l); setActiveTab('lancamentos'); }}
           onEditarCompra={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setCompraParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarTransferencia={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setTransferenciaParaEditar(l); setActiveTab('lancamentos'); }}
         />
       )}
       {activeTab === 'acessos' && <AcessosTab />}
