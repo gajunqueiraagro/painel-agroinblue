@@ -1111,8 +1111,8 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
             return (
               <tr key={idx} className={`border-b border-border/20 hover:bg-muted/20 ${idx % 2 !== 0 ? 'bg-muted/10' : ''}`}>
-                <td className="sticky left-0 z-10 bg-card text-[10px] font-medium py-0.5 px-1.5 leading-tight border-r border-border/30" title={row.indicador}>
-                  <span className="truncate inline-block max-w-[90px] align-middle">{row.indicador}</span>
+                <td className={`sticky left-0 z-10 text-[10px] font-medium py-0.5 px-1.5 leading-tight border-r border-border/30 ${idx % 2 !== 0 ? 'bg-muted/10' : 'bg-card'}`} title={row.indicador} style={{ boxShadow: '2px 0 4px -1px rgba(0,0,0,0.06)' }}>
+                  <span className="truncate inline-block max-w-[80px] align-middle">{row.indicador}</span>
                   <SourceInfoTooltip indicadorId={row.indicadorId} cenario={cenario} />
                 </td>
                 {row.valores.map((v, i) => {
