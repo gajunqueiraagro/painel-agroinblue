@@ -34,6 +34,10 @@ export interface ZootCategoriaMensal {
   peso_total_final: number;
   peso_medio_inicial: number | null;
   peso_medio_final: number | null;
+  peso_entradas_externas: number;
+  peso_saidas_externas: number;
+  peso_evol_cat_entrada: number;
+  peso_evol_cat_saida: number;
   dias_mes: number;
   gmd: number | null;
   producao_biologica: number;
