@@ -1206,6 +1206,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
   }, [compraParaEditar, abateFornecedores]);
 
+  // Auto-load transferência for editing when navigated from another tab
+  useEffect(() => {
+    if (transferenciaParaEditar) {
+      loadTransferenciaForEdit(transferenciaParaEditar);
+    }
+  }, [transferenciaParaEditar]);
+
   useEffect(() => {
     if (!clienteAtual?.id) {
       setAbateFornecedores([]);
