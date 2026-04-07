@@ -53,7 +53,7 @@ export const STATUS_DESCRIPTION: Record<StatusOperacional, string> = {
 
 // ── Options para selects ──
 
-/** Opções para módulo zootécnico: Realizado, Programado */
+/** Opções operacionais para módulo zootécnico (sem Meta): Realizado, Programado */
 export const STATUS_OPTIONS_ZOOTECNICO: { value: StatusZootecnico; label: string; labelCurto: string; color: string; bg: string; description: string }[] = [
   { value: 'realizado', label: 'Realizado', labelCurto: 'Realizado', color: 'text-green-800 dark:text-green-400', bg: 'bg-green-700', description: STATUS_DESCRIPTION.realizado },
   { value: 'programado', label: 'Programado', labelCurto: 'Programado', color: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-500', description: STATUS_DESCRIPTION.programado },
@@ -83,6 +83,13 @@ export const META_VISUAL = {
   badgeCls: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400',
   description: 'Planejamento oficial do consultor. Não impacta saldo nem caixa.',
 };
+
+/** Opções completas para módulo zootécnico: Realizado, Programado, Meta */
+export const STATUS_OPTIONS_ZOOTECNICO_COM_META: { value: StatusZootecnico | 'meta'; label: string; labelCurto: string; color: string; bg: string; description: string }[] = [
+  { value: 'realizado', label: 'Realizado', labelCurto: 'Realizado', color: 'text-green-800 dark:text-green-400', bg: 'bg-green-700', description: STATUS_DESCRIPTION.realizado },
+  { value: 'programado', label: 'Programado', labelCurto: 'Programado', color: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-500', description: STATUS_DESCRIPTION.programado },
+  { value: 'meta', label: META_VISUAL.label, labelCurto: META_VISUAL.labelCurto, color: META_VISUAL.color, bg: META_VISUAL.bg, description: META_VISUAL.description },
+];
 
 // ── Getters ──
 

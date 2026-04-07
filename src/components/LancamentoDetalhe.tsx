@@ -22,7 +22,7 @@ import { ptBR } from 'date-fns/locale';
 import { Pencil, Trash2, DollarSign, AlertTriangle } from 'lucide-react';
 import { AbateShareButtons } from '@/components/AbateExportMenu';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { STATUS_OPTIONS_ZOOTECNICO, getStatusBadge, getStatus, isMeta, type StatusOperacional } from '@/lib/statusOperacional';
+import { STATUS_OPTIONS_ZOOTECNICO_COM_META, getStatusBadge, getStatus, isMeta, type StatusOperacional } from '@/lib/statusOperacional';
 import { usePermissions } from '@/hooks/usePermissions';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 import { supabase } from '@/integrations/supabase/client';
@@ -58,6 +58,10 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
 
   const [editando, setEditando] = useState(false);
   const [form, setForm] = useState({ ...lancamento });
+  /** UI-only: tracks whether 'meta' is selected in the status toggle (for edit forms) */
+  const [formStatusMode, setFormStatusMode] = useState<'realizado' | 'programado' | 'meta'>(
+    lancamentoIsMeta ? 'meta' : ((lancamento.statusOperacional as any) || 'realizado')
+  );
 
   // Confirmation modal state
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -68,6 +72,9 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   // Unified purchase edit sheet
   const [compraEditSheetOpen, setCompraEditSheetOpen] = useState(false);
   const [compraForm, setCompraForm] = useState({ ...lancamento });
+  const [compraStatusMode, setCompraStatusMode] = useState<'realizado' | 'programado' | 'meta'>(
+    lancamentoIsMeta ? 'meta' : ((lancamento.statusOperacional as any) || 'realizado')
+  );
   const [compraSaving, setCompraSaving] = useState(false);
   const [compraZooSaved, setCompraZooSaved] = useState(false);
 
@@ -128,11 +135,13 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     } else if (isCompra) {
       // Fallback: Open unified purchase edit sheet
       setCompraForm({ ...lancamento });
+      setCompraStatusMode(lancamentoIsMeta ? 'meta' : ((lancamento.statusOperacional as any) || 'realizado'));
       setCompraZooSaved(false);
       setNotaFiscalEdit(lancamento.notaFiscal || '');
       setCompraEditSheetOpen(true);
     } else {
       setForm({ ...lancamento });
+      setFormStatusMode(lancamentoIsMeta ? 'meta' : ((lancamento.statusOperacional as any) || 'realizado'));
       setEditando(true);
     }
   };
@@ -153,7 +162,8 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       pesoMedioKg: form.pesoMedioKg ? Number(form.pesoMedioKg) : undefined,
       pesoMedioArrobas: form.pesoMedioKg ? kgToArrobas(Number(form.pesoMedioKg)) : undefined,
       precoMedioCabeca: form.precoMedioCabeca ? Number(form.precoMedioCabeca) : undefined,
-      statusOperacional: form.statusOperacional === undefined ? null : (form.statusOperacional || null),
+      cenario: formStatusMode === 'meta' ? 'meta' : 'realizado',
+      statusOperacional: formStatusMode === 'meta' ? null : (form.statusOperacional || null),
     });
     setEditando(false);
     onClose();
@@ -172,7 +182,8 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
         fazendaDestino: nomeFazenda,
         pesoMedioKg: compraForm.pesoMedioKg ? Number(compraForm.pesoMedioKg) : undefined,
         pesoMedioArrobas: compraForm.pesoMedioKg ? kgToArrobas(Number(compraForm.pesoMedioKg)) : undefined,
-        statusOperacional: compraForm.statusOperacional === undefined ? null : (compraForm.statusOperacional || null),
+        cenario: compraStatusMode === 'meta' ? 'meta' : 'realizado',
+        statusOperacional: compraStatusMode === 'meta' ? null : (compraForm.statusOperacional || null),
       });
       setCompraZooSaved(true);
     } finally {
@@ -627,20 +638,34 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 <div>
                   <Label className="text-[10px] font-bold text-foreground">Status</Label>
                   <div className="flex gap-1 mt-0.5">
-                    {STATUS_OPTIONS_ZOOTECNICO.map(s => (
+                    {STATUS_OPTIONS_ZOOTECNICO_COM_META.map(s => {
+                      const disabled = s.value === 'meta' && !canEditMeta;
+                      return (
                       <button
                         key={s.value}
                         type="button"
-                        onClick={() => setCompraForm(f => ({ ...f, statusOperacional: s.value }))}
+                        onClick={() => {
+                          if (disabled) return;
+                          setCompraStatusMode(s.value as any);
+                          setCompraForm(f => ({
+                            ...f,
+                            statusOperacional: s.value === 'meta' ? null : s.value,
+                            cenario: s.value === 'meta' ? 'meta' : 'realizado',
+                          }));
+                        }}
+                        disabled={disabled}
                         className={`flex-1 py-1 rounded text-[10px] font-bold border-2 transition-all ${
-                          (compraForm.statusOperacional || 'realizado') === s.value
+                          disabled ? 'opacity-40 cursor-not-allowed' : ''
+                        } ${
+                          compraStatusMode === s.value
                             ? `${s.bg} text-white border-transparent shadow-md`
                             : 'border-border text-muted-foreground bg-muted/30'
                         }`}
                       >
                         {s.label}
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
                 {/* Warning: zootécnico changes impact financeiro */}
@@ -846,23 +871,34 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
             <div>
               <Label className="font-bold text-foreground">Status</Label>
               <div className="flex gap-1 mt-1">
-                {STATUS_OPTIONS_ZOOTECNICO.map(s => (
+                {STATUS_OPTIONS_ZOOTECNICO_COM_META.map(s => {
+                  const disabled = (s.value === 'meta' && !canEditMeta) || p1Oficial;
+                  return (
                   <button
                     key={s.value}
                     type="button"
-                    onClick={() => !p1Oficial && setForm(f => ({ ...f, statusOperacional: s.value }))}
-                    disabled={p1Oficial}
+                    onClick={() => {
+                      if (disabled) return;
+                      setFormStatusMode(s.value as any);
+                      setForm(f => ({
+                        ...f,
+                        statusOperacional: s.value === 'meta' ? null : s.value,
+                        cenario: s.value === 'meta' ? 'meta' : 'realizado',
+                      }));
+                    }}
+                    disabled={disabled}
                     className={`flex-1 py-2 rounded-lg text-xs font-bold border-2 transition-all ${
-                      p1Oficial ? 'opacity-50 cursor-not-allowed' : ''
+                      disabled ? 'opacity-50 cursor-not-allowed' : ''
                     } ${
-                      (form.statusOperacional || 'realizado') === s.value
+                      formStatusMode === s.value
                         ? `${s.bg} text-white border-transparent shadow-md`
                         : 'border-border text-muted-foreground bg-muted/30'
                     }`}
                   >
                     {s.label}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
