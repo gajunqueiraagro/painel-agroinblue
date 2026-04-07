@@ -384,7 +384,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
 }
 
 // ─── Build blocos from vw_zoot_fazenda_mensal (for Meta cenário) ───
-function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanhoMetaMes?: number[], valorRebanhoMetaMesAnteriorOuDez?: number[], metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot): Bloco[] {
+function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanhoMetaMes?: number[], valorRebanhoMetaMesAnteriorOuDez?: number[], metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }): Bloco[] {
   const byMes = indexByMes(rows);
   const get = (field: keyof ZootMensal): number[] =>
     Array.from({ length: 12 }, (_, i) => {
@@ -392,7 +392,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
       return m ? (Number(m[field]) || 0) : 0;
     });
 
-  const cabIni = get('cabecas_inicio');
+  const cabIniRaw = get('cabecas_inicio');
   const cabFin = get('cabecas_final');
   const entradas = get('entradas');
   const saidas = get('saidas');
@@ -400,10 +400,19 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
   const pesoFinRaw = get('peso_total_final_kg');
   const pesoMedFinRaw = get('peso_medio_final_kg');
 
+  // Override cabIni[0] (Jan) with Dec realizado validado
+  const cabIni = [...cabIniRaw];
+  if (dezRealizadoSnap && dezRealizadoSnap.cabecas > 0) {
+    cabIni[0] = dezRealizadoSnap.cabecas;
+  }
+
   // Snapshot validado de peso sobrescreve view quando disponível
   const hasSnap = pesoSnap && pesoSnap.cabecas.some(v => v > 0);
   const pesoFin = hasSnap ? pesoSnap!.cabecas.map((c, i) => c * (pesoSnap!.pesoMedio[i] || 0)) : pesoFinRaw;
-  const pesoIni = hasSnap ? [pesoIniRaw[0], ...pesoFin.slice(0, 11)] : pesoIniRaw;
+  // Peso ini: Jan = Dez realizado validado; Fev+ = Meta final mês anterior
+  const dezPesoKg = dezRealizadoSnap ? dezRealizadoSnap.arrobas * 30 : 0;
+  const pesoIniJan = dezPesoKg > 0 ? dezPesoKg : pesoIniRaw[0];
+  const pesoIni = hasSnap ? [pesoIniJan, ...pesoFin.slice(0, 11)] : pesoIniRaw;
   const pesoMedFin = hasSnap ? pesoSnap!.pesoMedio : pesoMedFinRaw;
   // GMD: usar NaN como sentinela quando meta não projetou ganho de peso
   // (gmd_numerador_kg=0 com rebanho presente = "sem projeção de GMD", não "GMD=0")
@@ -420,7 +429,11 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
   const areaProd = get('area_produtiva_ha');
   const lotacao = get('lotacao_ua_ha');
 
-  const pesoMedIni = cabIni.map((c, i) => c > 0 ? pesoIni[i] / c : 0);
+  // Peso médio ini: Jan = Dez realizado validado pesoMedioKg; Fev+ = meta final mês anterior
+  const pesoMedIniJan = dezRealizadoSnap && dezRealizadoSnap.pesoMedioKg > 0
+    ? dezRealizadoSnap.pesoMedioKg
+    : (cabIni[0] > 0 ? pesoIni[0] / cabIni[0] : 0);
+  const pesoMedIni = [pesoMedIniJan, ...pesoMedFin.slice(0, 11)];
   const cabMedia = cabIni.map((v, i) => (v + cabFin[i]) / 2);
   const gmdNum = get('gmd_numerador_kg');
   const arrobasProd = gmdNum.map((v, i) => {
@@ -596,7 +609,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
 }
 
 // ─── Build blocos from MetaConsolidacao (validated consolidation) ───
-function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number, metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot): Bloco[] {
+function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number, metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }): Bloco[] {
   // Aggregate across all categories per month
   const agg = (field: keyof MetaCategoriaMes): number[] =>
     Array.from({ length: 12 }, (_, i) => {
@@ -606,7 +619,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
         .reduce((s, c) => s + (Number(c[field]) || 0), 0);
     });
 
-  const cabIni = agg('si');
+  const cabIniRaw = agg('si');
   const cabFin = agg('sf');
   const entradas = agg('ee');
   const saidas = agg('se');
@@ -614,10 +627,19 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   const pesoFinRaw = agg('pesoTotalFinal');
   const prodBio = agg('producaoBio');
 
+  // Override cabIni[0] (Jan) with Dec realizado validado
+  const cabIni = [...cabIniRaw];
+  if (dezRealizadoSnap && dezRealizadoSnap.cabecas > 0) {
+    cabIni[0] = dezRealizadoSnap.cabecas;
+  }
+
   // Snapshot validado de peso sobrescreve consolidação quando disponível
   const hasSnap = pesoSnap && pesoSnap.cabecas.some(v => v > 0);
   const pesoFin = hasSnap ? pesoSnap!.cabecas.map((c, i) => c * (pesoSnap!.pesoMedio[i] || 0)) : pesoFinRaw;
-  const pesoIni = hasSnap ? [pesoIniRaw[0], ...pesoFin.slice(0, 11)] : pesoIniRaw;
+  // Peso ini: Jan = Dez realizado validado; Fev+ = Meta final mês anterior
+  const dezPesoKg = dezRealizadoSnap ? dezRealizadoSnap.arrobas * 30 : 0;
+  const pesoIniJan = dezPesoKg > 0 ? dezPesoKg : pesoIniRaw[0];
+  const pesoIni = hasSnap ? [pesoIniJan, ...pesoFin.slice(0, 11)] : pesoIniRaw;
 
   // Peso médio final = peso total final / SF (weighted across categories)
   const pesoMedFinRaw = Array.from({ length: 12 }, (_, i) => {
@@ -626,7 +648,11 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   });
   const pesoMedFin = hasSnap ? pesoSnap!.pesoMedio : pesoMedFinRaw;
 
-  const pesoMedIni = cabIni.map((c, i) => c > 0 ? pesoIni[i] / c : 0);
+  // Peso médio ini: Jan = Dez realizado validado pesoMedioKg; Fev+ = meta final mês anterior
+  const pesoMedIniJan = dezRealizadoSnap && dezRealizadoSnap.pesoMedioKg > 0
+    ? dezRealizadoSnap.pesoMedioKg
+    : (cabIni[0] > 0 ? pesoIni[0] / cabIni[0] : 0);
+  const pesoMedIni = [pesoMedIniJan, ...pesoMedFin.slice(0, 11)];
   const cabMedia = cabIni.map((v, i) => (v + cabFin[i]) / 2);
 
   // GMD: produção biológica / (cab média × dias)
@@ -1064,12 +1090,17 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
       // Valor reb. ini META: Jan = realizado Dez ano anterior, Fev+ = META final mês anterior
       const valorRebIniMeta = [valorRebanhoMes[0] ?? 0, ...valorRebanhoMetaMes.slice(0, 11)];
 
+      // Dez realizado validado — snapshot base para Jan da META
+      const dezSnap = realPesoSnap.arrobas[0] > 0
+        ? { cabecas: realPesoSnap.cabecas[0], pesoMedioKg: realPesoSnap.pesoMedio[0], arrobas: realPesoSnap.arrobas[0] }
+        : undefined;
+
       // Consolidação Meta valida os blocos zootécnicos; valor do rebanho vem do snapshot validado
       if (metaConsolidacao && metaConsolidacao.length > 0) {
-        return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap);
+        return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap);
       }
 
-      return buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes, metaPesoSnap);
+      return buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap);
     }
     // Realizado: slice(1) removes Dec prev year index for 12-month arrays
     const realPesoSnap12: PesoSnapshot = {
