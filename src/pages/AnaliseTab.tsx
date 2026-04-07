@@ -7,7 +7,7 @@ import { TrendingUp, TrendingDown, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TabId } from '@/components/BottomNav';
 import { parseISO, format } from 'date-fns';
-import { calcSaldoMensalArray, calcSaldoPorCategoriaLegado } from '@/lib/calculos';
+import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { MESES_NOMES } from '@/lib/calculos/labels';
 import { formatPercent, formatCabecas } from '@/lib/calculos/formatters';
 interface Props {
@@ -37,23 +37,29 @@ export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange, isGlobal 
   const anoAnterior = String(anoNum - 1);
   const anoAntNum = anoNum - 1;
 
-  // Saldo mensal via lib central
-  const saldoMensalAtual = useMemo(() => calcSaldoMensalArray(saldosIniciais, lancamentos, anoNum), [saldosIniciais, lancamentos, anoNum]);
-  const saldoMensalAnt = useMemo(() => calcSaldoMensalArray(saldosIniciais, lancamentos, anoAntNum), [saldosIniciais, lancamentos, anoAntNum]);
+  // FONTE OFICIAL: useRebanhoOficial
+  const rebanhoAtual = useRebanhoOficial({ ano: anoNum, cenario: 'realizado', global: isGlobal });
+  const rebanhoAnt = useRebanhoOficial({ ano: anoAntNum, cenario: 'realizado', global: isGlobal });
 
-  const chartData = MESES_NOMES.map((nome, i) => ({
-    mes: nome,
-    [anoFiltro]: saldoMensalAtual[i].saldo,
-    [anoAnterior]: saldoMensalAnt[i].saldo,
-  }));
+  const chartData = MESES_NOMES.map((nome, i) => {
+    const mes = i + 1;
+    return {
+      mes: nome,
+      [anoFiltro]: rebanhoAtual.getSaldoFinalTotal(mes),
+      [anoAnterior]: rebanhoAnt.getSaldoFinalTotal(mes),
+    };
+  });
 
-  // Pie chart: saldo atual por categoria via lib central
+  // Pie chart: saldo atual por categoria via fonte oficial
   const porCategoria = useMemo(() => {
-    const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, anoNum);
+    // Use the latest month that has data
+    const now = new Date();
+    const mesAtual = anoNum === now.getFullYear() ? now.getMonth() + 1 : 12;
+    const saldoMap = rebanhoAtual.getSaldoMap(mesAtual);
     return CATEGORIAS
       .map(cat => ({ name: cat.label, value: saldoMap.get(cat.value) || 0, categoria: cat.value }))
       .filter(c => c.value > 0);
-  }, [saldosIniciais, lancamentos, anoNum]);
+  }, [rebanhoAtual.getSaldoMap, anoNum]);
 
   const totalRebanho = porCategoria.reduce((s, c) => s + c.value, 0);
 
