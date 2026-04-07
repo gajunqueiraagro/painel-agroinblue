@@ -39,7 +39,7 @@ interface Props {
 }
 
 type Vista = 'mes' | 'acumulado';
-type Cenario = 'realizado' | 'previsto';
+type Cenario = 'realizado' | 'meta';
 type SubView = 'main' | 'graficos-estoque' | 'graficos-producao';
 
 export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabChange, filtroAnoInicial, filtroMesInicial, renderBottom }: Props) {
@@ -81,8 +81,10 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
 
   // Filter lancamentos by cenario
   const lancsFiltrados = useMemo(() => {
-    const statusMatch = cenario === 'realizado' ? 'realizado' : 'previsto';
-    return lancamentos.filter(l => (l.statusOperacional || 'realizado') === statusMatch);
+    if (cenario === 'meta') {
+      return lancamentos.filter(l => l.cenario === 'meta');
+    }
+    return lancamentos.filter(l => (l.statusOperacional || 'realizado') === 'realizado');
   }, [lancamentos, cenario]);
 
   const zoo = useIndicadoresZootecnicos(fazendaId, anoNum, mesFiltro, lancsFiltrados, saldosIniciais, pastos, categorias, globalFazendaIds);
@@ -246,7 +248,7 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
             Acumulado
           </button>
         </div>
-        {/* Toggle Realizado | Previsto */}
+        {/* Toggle Realizado | Meta */}
         <div className="flex bg-muted rounded-md p-0.5 max-w-xs">
           <button
             onClick={() => setCenario('realizado')}
@@ -255,10 +257,10 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
             Realizado
           </button>
           <button
-            onClick={() => setCenario('previsto')}
-            className={`flex-1 text-[11px] font-bold py-1 rounded transition-colors ${cenario === 'previsto' ? 'bg-orange-500 text-white shadow-sm' : 'text-muted-foreground'}`}
+            onClick={() => setCenario('meta')}
+            className={`flex-1 text-[11px] font-bold py-1 rounded transition-colors ${cenario === 'meta' ? 'bg-orange-500 text-white shadow-sm' : 'text-muted-foreground'}`}
           >
-            Previsto
+            Meta
           </button>
         </div>
       </div>
