@@ -74,7 +74,7 @@ function fmtDate(d?: string) {
 
 export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operacionais, financeiros, submitting }: Props) {
   const catLabel = CATEGORIAS.find(c => c.value === operacionais.categoria)?.label || operacionais.categoria;
-  const statusCfg = STATUS_MAP[operacionais.status] || STATUS_MAP.conciliado;
+  const statusCfg = STATUS_MAP[operacionais.status] || STATUS_MAP.realizado;
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
