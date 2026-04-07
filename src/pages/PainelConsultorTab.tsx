@@ -194,7 +194,7 @@ function rollingAvg(arr: number[]): number[] {
 }
 
 function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
-  const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string): Row => {
+  const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string, noTotal?: boolean): Row => {
     let valores: number[];
     switch (tab) {
       case 'mensal': valores = raw; break;
@@ -202,7 +202,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
       case 'acumulado': valores = cumSum(raw); break;
       case 'media_periodo': valores = rollingAvg(raw); break;
     }
-    return { indicador, format, valores, indicadorId };
+    return { indicador, format, valores, indicadorId, noTotal };
   };
 
   const cabMedia = d.cabIni.map((v, i) => (v + d.cabFin[i]) / 2);
