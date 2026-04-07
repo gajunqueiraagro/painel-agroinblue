@@ -135,7 +135,7 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
           <thead>
             <tr className="border-b text-muted-foreground">
               <th className="text-left py-0.5 px-1 font-medium">Categoria</th>
-              <th className="text-center py-0.5 px-1 font-medium w-20">R$/@</th>
+              <th className="text-center py-0.5 px-1 font-medium w-24">R$/@</th>
               <th className="text-center py-0.5 px-1 font-medium w-14">Ágio %</th>
               <th className="text-center py-0.5 px-1 font-medium w-20">R$/@</th>
             </tr>
@@ -195,7 +195,7 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
           <thead>
             <tr className="border-b text-muted-foreground">
               <th className="text-left py-0.5 px-1 font-medium">Categoria</th>
-              <th className="text-center py-0.5 px-1 font-medium w-16">R$/kg</th>
+              <th className="text-center py-0.5 px-1 font-medium w-24">R$/kg</th>
               <th className="text-center py-0.5 px-1 font-medium w-14">Ágio %</th>
               <th className="text-center py-0.5 px-1 font-medium w-20">R$/cab</th>
             </tr>
