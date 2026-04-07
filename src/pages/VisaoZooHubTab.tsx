@@ -43,7 +43,7 @@ import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
 type Bloco = 'indicadores' | 'dre';
 type Vista = 'mes' | 'acumulado';
-type Cenario = 'realizado' | 'previsto';
+type Cenario = 'realizado' | 'meta';
 
 interface Props {
   lancamentos: Lancamento[];
