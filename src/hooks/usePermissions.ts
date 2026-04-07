@@ -59,6 +59,8 @@ export function usePermissions(): Permissions {
       }
     };
 
-    return { perfil, canViewTab, canEdit, isReadOnly, isManager };
+    const canEditMeta = isAdmin;
+
+    return { perfil, canViewTab, canEdit, isReadOnly, isManager, canEditMeta };
   }, [perfil]);
 }
