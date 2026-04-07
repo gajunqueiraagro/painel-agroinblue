@@ -38,6 +38,7 @@ import { FechamentoExecutivoTab } from './FechamentoExecutivoTab';
 import { AnaliseConsultorTab } from './AnaliseConsultorTab';
 import { PrecoMercadoTab } from './PrecoMercadoTab';
 import { PainelConsultorHubTab } from './PainelConsultorHubTab';
+import { PrecosMercadoHubTab } from './PrecosMercadoHubTab';
 import { MetaGmdTab } from './MetaGmdTab';
 import { MetaPrecoTab } from './MetaPrecoTab';
 import { GraficosAnaliseTab } from './GraficosAnaliseTab';
@@ -129,6 +130,7 @@ const TITLES: Record<TabId, string> = {
   meta_preco: 'Preços Meta',
   meta_movimentacoes: 'Movimentações Meta',
   meta_consolidacao: 'Consolidação Meta',
+  precos_mercado_hub: 'Preços de Mercado',
 };
 
 const Index = () => {
@@ -368,9 +370,11 @@ const Index = () => {
     analise_consultor: goToVisaoZooHub,
     painel_consultor: () => setActiveTab('painel_consultor_hub'),
     meta_gmd: () => setActiveTab('painel_consultor_hub'),
-    meta_preco: () => setActiveTab('painel_consultor_hub'),
+    meta_preco: () => setActiveTab('precos_mercado_hub'),
     meta_consolidacao: () => setActiveTab('painel_consultor_hub'),
     meta_movimentacoes: () => setActiveTab('painel_consultor_hub'),
+    precos_mercado_hub: () => setActiveTab('painel_consultor_hub'),
+    preco_mercado: () => setActiveTab('precos_mercado_hub'),
     // Financeiro (analysis) sub-screens
     fin_caixa: () => setActiveTab('lancar_fin_hub'),
     analise_economica: () => setActiveTab('lancar_fin_hub'),
@@ -678,8 +682,14 @@ const Index = () => {
       {activeTab === 'meta_gmd' && (
         <MetaGmdTab onBack={() => setActiveTab('painel_consultor_hub')} />
       )}
+      {activeTab === 'precos_mercado_hub' && (
+        <PrecosMercadoHubTab onTabChange={handleTabChange} onBack={() => setActiveTab('painel_consultor_hub')} />
+      )}
       {activeTab === 'meta_preco' && (
-        <MetaPrecoTab onBack={() => setActiveTab('painel_consultor_hub')} />
+        <MetaPrecoTab onBack={() => setActiveTab('precos_mercado_hub')} />
+      )}
+      {activeTab === 'preco_mercado' && (
+        <PrecoMercadoTab onBack={() => setActiveTab('precos_mercado_hub')} />
       )}
       {activeTab === 'meta_movimentacoes' && (
         <LancamentosTab
