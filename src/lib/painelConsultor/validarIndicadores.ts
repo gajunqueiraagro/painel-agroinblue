@@ -9,7 +9,8 @@
 import { CATALOGO_INDICADORES } from './indicadorCatalogo';
 
 interface BlocoGenerico {
-  titulo: string;
+  nome?: string;
+  titulo?: string;
   rows: { indicador: string; indicadorId?: string }[];
 }
 
@@ -26,7 +27,7 @@ export function warnIndicadoresSemCatalogo(
       if (row.indicadorId && !CATALOGO_INDICADORES[row.indicadorId]) {
         ausentes.push({
           id: row.indicadorId,
-          bloco: bloco.titulo,
+          bloco: bloco.nome || bloco.titulo || '?',
           linha: row.indicador,
         });
       }
