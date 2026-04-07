@@ -628,9 +628,17 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   const valorRebFin = vrm;
   // Valor reb. ini META: Jan = realizado Dez ano anterior, Fev+ = META final mês anterior
   const valorRebIni = [dezAnoAnteriorRealizado ?? 0, ...vrm.slice(0, 11)];
-  const valorPorCabMeta = cabFin.map((c, i) => c > 0 && vrm[i] > 0 ? vrm[i] / c : 0);
+  const valorPorCabMeta = cabFin.map((c, i) => {
+    // Prefer persisted valor_cabeca_medio, fallback to calculation
+    if (metaValorCabMes && metaValorCabMes[i] > 0) return metaValorCabMes[i];
+    return c > 0 && vrm[i] > 0 ? vrm[i] / c : 0;
+  });
   const arrobasEstoqueMeta = pesoFin.map(v => v / 30);
-  const valorPorArrMeta = arrobasEstoqueMeta.map((a, i) => a > 0 && vrm[i] > 0 ? vrm[i] / a : 0);
+  const valorPorArrMeta = arrobasEstoqueMeta.map((a, i) => {
+    // Prefer persisted preco_arroba_medio, fallback to calculation
+    if (metaPrecoArrMes && metaPrecoArrMes[i] > 0) return metaPrecoArrMes[i];
+    return a > 0 && vrm[i] > 0 ? vrm[i] / a : 0;
+  });
   const varValorRebMeta = valorRebFin.map((v, i) => v - valorRebIni[i]);
 
   switch (tab) {
