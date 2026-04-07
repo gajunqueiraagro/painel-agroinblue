@@ -10,6 +10,8 @@ export interface Permissions {
   canEdit: (modulo: 'zootecnico' | 'financeiro' | 'cadastros' | 'acessos' | 'pastos' | 'chuvas') => boolean;
   isReadOnly: boolean;
   isManager: boolean;
+  /** Somente admin_agroinblue pode criar/editar/excluir META */
+  canEditMeta: boolean;
 }
 
 // Financial-specific tabs
