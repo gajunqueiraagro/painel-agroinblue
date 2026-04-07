@@ -411,7 +411,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
   const desfruteCab = saidas;
   const desfrute_arr = saidas.map((v, i) => pesoMedFin[i] > 0 ? (v * pesoMedFin[i]) / 30 : 0);
 
-  const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string): Row => {
+  const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string, noTotal?: boolean): Row => {
     let valores: number[];
     switch (tab) {
       case 'mensal': valores = raw; break;
@@ -419,7 +419,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
       case 'acumulado': valores = cumSum(raw); break;
       case 'media_periodo': valores = rollingAvg(raw); break;
     }
-    return { indicador, format, valores, indicadorId };
+    return { indicador, format, valores, indicadorId, noTotal };
   };
 
   // Financial rows are empty for previsto (sem_fonte)
