@@ -978,6 +978,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   // ── Leitura oficial do Valor do Rebanho REALIZADO validado ──
   const [realValorCabMes, setRealValorCabMes] = useState<number[]>(Array(13).fill(0));
   const [realPrecoArrMes, setRealPrecoArrMes] = useState<number[]>(Array(13).fill(0));
+  const [realPesoSnap, setRealPesoSnap] = useState<PesoSnapshot>({ cabecas: Array(13).fill(0), pesoMedio: Array(13).fill(0), arrobas: Array(13).fill(0) });
 
   useEffect(() => {
     if (!fazendaId) { setValorRebanhoMes(Array(13).fill(0)); return; }
@@ -991,11 +992,12 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         setValorRebanhoMes(Array(13).fill(0));
         setRealValorCabMes(Array(13).fill(0));
         setRealPrecoArrMes(Array(13).fill(0));
+        setRealPesoSnap({ cabecas: Array(13).fill(0), pesoMedio: Array(13).fill(0), arrobas: Array(13).fill(0) });
         return;
       }
       const { data, error } = await supabase
         .from('valor_rebanho_realizado_validado' as any)
-        .select('ano_mes, valor_total, valor_cabeca_medio, preco_arroba_medio')
+        .select('ano_mes, valor_total, valor_cabeca_medio, preco_arroba_medio, cabecas, peso_medio_kg, arrobas_total')
         .in('fazenda_id', fazendaIds)
         .in('ano_mes', todasMeses);
       if (error) {
@@ -1012,19 +1014,31 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         setValorRebanhoMes(todasMeses.map(mes => totais.get(mes) || 0));
         setRealValorCabMes(Array(13).fill(0));
         setRealPrecoArrMes(Array(13).fill(0));
+        setRealPesoSnap({ cabecas: Array(13).fill(0), pesoMedio: Array(13).fill(0), arrobas: Array(13).fill(0) });
         return;
       }
       const totais = new Map(todasMeses.map(mes => [mes, 0]));
       const vcMap = new Map(todasMeses.map(mes => [mes, 0]));
       const paMap = new Map(todasMeses.map(mes => [mes, 0]));
+      const cabMap = new Map(todasMeses.map(mes => [mes, 0]));
+      const pmMap = new Map(todasMeses.map(mes => [mes, 0]));
+      const arrMap = new Map(todasMeses.map(mes => [mes, 0]));
       (data as any[] || []).forEach((row: any) => {
         totais.set(row.ano_mes, (totais.get(row.ano_mes) || 0) + (Number(row.valor_total) || 0));
         vcMap.set(row.ano_mes, Number(row.valor_cabeca_medio) || 0);
         paMap.set(row.ano_mes, Number(row.preco_arroba_medio) || 0);
+        cabMap.set(row.ano_mes, Number(row.cabecas) || 0);
+        pmMap.set(row.ano_mes, Number(row.peso_medio_kg) || 0);
+        arrMap.set(row.ano_mes, Number(row.arrobas_total) || 0);
       });
       setValorRebanhoMes(todasMeses.map(mes => totais.get(mes) || 0));
       setRealValorCabMes(todasMeses.map(mes => vcMap.get(mes) || 0));
       setRealPrecoArrMes(todasMeses.map(mes => paMap.get(mes) || 0));
+      setRealPesoSnap({
+        cabecas: todasMeses.map(mes => cabMap.get(mes) || 0),
+        pesoMedio: todasMeses.map(mes => pmMap.get(mes) || 0),
+        arrobas: todasMeses.map(mes => arrMap.get(mes) || 0),
+      });
     })();
   }, [fazendaId, anoNum, fazendas]);
 
