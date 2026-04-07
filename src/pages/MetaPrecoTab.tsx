@@ -191,7 +191,7 @@ export function MetaPrecoTab({ onBack }: Props) {
 
       return {
         codigo,
-        nome: metaRow?.categoria_nome || codigo,
+        nome: CATEGORIA_LABELS[codigo] || metaRow?.categoria_nome || codigo,
         saldo,
         pesoMedio,
         precoArroba,
