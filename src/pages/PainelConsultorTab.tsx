@@ -1085,7 +1085,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         </colgroup>
         <thead className="sticky top-0 z-10">
           <tr className="bg-muted border-b">
-            <th className="sticky left-0 z-20 bg-muted/90 text-left text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border-r border-border/40">
+            <th className="sticky left-0 z-20 bg-muted text-left text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 border-r border-border/40" style={{ boxShadow: '2px 0 4px -1px rgba(0,0,0,0.08)' }}>
               Indicador
             </th>
             {MESES_LABELS.map((m, i) => (
