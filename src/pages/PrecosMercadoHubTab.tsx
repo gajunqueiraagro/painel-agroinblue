@@ -47,13 +47,13 @@ export function PrecosMercadoHubTab({ onTabChange, onBack }: Props) {
   return (
     <div className="w-full px-4 pt-2 animate-fade-in pb-24">
       {onBack && (
-        <button onClick={onBack} className="flex items-center gap-1 text-xs text-primary hover:underline mb-3">
-          <ArrowLeft className="h-3.5 w-3.5" />
+        <button onClick={onBack} className="flex items-center gap-1 text-[11px] text-primary hover:underline mb-2">
+          <ArrowLeft className="h-3 w-3" />
           Voltar para Painel do Consultor
         </button>
       )}
 
-      <p className="text-xs text-muted-foreground mb-4 px-1">
+      <p className="text-[11px] text-muted-foreground mb-3 px-1">
         Gerencie os preços de mercado e as referências de precificação.
       </p>
 
@@ -64,18 +64,18 @@ export function PrecosMercadoHubTab({ onTabChange, onBack }: Props) {
             <Card
               key={item.id}
               onClick={() => !isDisabled && onTabChange(item.id)}
-              className={`transition-all aspect-square ${
+              className={`transition-all ${
                 isDisabled
                   ? 'opacity-50 cursor-not-allowed'
                   : 'cursor-pointer hover:shadow-md hover:border-primary/40 active:scale-[0.98]'
               } ${item.border}`}
             >
-              <div className="flex flex-col items-center justify-center text-center gap-2 p-3 h-full">
-                <div className={`rounded-xl p-2.5 ${item.bg}`}>
-                  <item.icon className={`h-5 w-5 ${item.color}`} />
+              <div className="flex flex-col items-center justify-center text-center gap-1.5 p-3 py-4">
+                <div className={`rounded-xl p-3 ${item.bg}`}>
+                  <item.icon className={`h-7 w-7 ${item.color}`} />
                 </div>
                 <div>
-                  <h3 className="text-[11px] font-bold text-foreground leading-tight">{item.title}</h3>
+                  <h3 className="text-xs font-bold text-foreground leading-tight">{item.title}</h3>
                   {item.subtitle && (
                     <span className="text-[9px] text-muted-foreground italic">{item.subtitle}</span>
                   )}
