@@ -727,7 +727,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
           rows: [
             r('Peso ini. (kg)', 'cab', pesoIni, 'peso_ini_kg', true),
             r('Peso final (kg)', 'cab', pesoFin, 'peso_fin_kg', true),
-            r('Peso fin. cab (kg)', 'med2', pesoFin.map((p, i) => cabFin[i] > 0 ? p / cabFin[i] : NaN), 'peso_fin_cab_kg', true),
+            r('Peso fin. cab (kg)', 'med2', pesoFin.map((p, i) => { const c = hasSnap && pesoSnap!.cabecas[i] > 0 ? pesoSnap!.cabecas[i] : cabFin[i]; return c > 0 ? p / c : NaN; }), 'peso_fin_cab_kg', true),
             r('Peso ini. (@)', 'cab', pesoIni.map(v => Math.round(v / 30)), 'peso_ini_arr', true),
             r('Peso final (@)', 'cab', pesoFin.map(v => Math.round(v / 30)), 'peso_fin_arr', true),
             r('Peso méd. ini.', 'med2', pesoMedIni, 'peso_med_ini', true),
