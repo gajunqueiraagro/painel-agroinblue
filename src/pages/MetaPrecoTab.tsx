@@ -36,12 +36,26 @@ const ORDEM_CATEGORIAS_FIXA = [
   'mamotes_f', 'desmama_f', 'novilhas', 'vacas',
 ];
 
+const CATEGORIA_LABELS: Record<string, string> = {
+  mamotes_m: 'Mamotes M',
+  desmama_m: 'Desmama M',
+  garrotes: 'Garrotes',
+  bois: 'Bois',
+  touros: 'Touros',
+  mamotes_f: 'Mamotes F',
+  desmama_f: 'Desmama F',
+  novilhas: 'Novilhas',
+  vacas: 'Vacas',
+};
+
 const MESES_SHORT = [
   { key: '01', label: 'Jan' }, { key: '02', label: 'Fev' }, { key: '03', label: 'Mar' },
   { key: '04', label: 'Abr' }, { key: '05', label: 'Mai' }, { key: '06', label: 'Jun' },
   { key: '07', label: 'Jul' }, { key: '08', label: 'Ago' }, { key: '09', label: 'Set' },
   { key: '10', label: 'Out' }, { key: '11', label: 'Nov' }, { key: '12', label: 'Dez' },
 ];
+
+const CHART_LABELS = ['I', 'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
 
 const STATUS_CONFIG = {
   rascunho: { label: 'Rascunho', color: 'bg-amber-500/20 text-amber-700 border-amber-300', icon: AlertTriangle },
