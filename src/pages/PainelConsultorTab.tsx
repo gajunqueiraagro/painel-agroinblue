@@ -2,14 +2,14 @@
  * Painel do Consultor — PC-100 (modelo oficial de auditoria)
  *
  * Abas: Valores Mensais | Médios do Mês | Acumulados | Média do Período
- * Cenários: Realizado | Previsto
+ * Cenários: Realizado | Meta
  * Blocos colapsáveis por aba com indicadores oficiais.
  *
  * Regra de fonte: "Fechamento sempre vence."
  * Formatação: cab=inteiro, gmd=3 casas, padrao/med2=2 casas, money=R$
  *
- * REGRA CRÍTICA: Previsto NUNCA faz fallback para Realizado.
- * Se não há fonte prevista, a célula fica vazia.
+ * REGRA CRÍTICA: Meta NUNCA faz fallback para Realizado.
+ * Se não há fonte meta, a célula fica vazia.
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -844,7 +844,7 @@ function SourceInfoTooltip({ indicadorId, cenario }: { indicadorId?: string; cen
           <span className="text-muted-foreground">Status:</span>
           <span className={`font-semibold ${statusInfo.color}`}>● {statusInfo.label}</span>
         </div>
-        <div><span className="text-muted-foreground">Fonte:</span> {fonte.fonte_tipo === 'sem_fonte' ? 'Sem base configurada' : fonte.fonte_tabela}</div>
+        <div><span className="text-muted-foreground">Fonte:</span> {fonte.fonte_tipo === 'sem_fonte' ? 'Sem base meta configurada' : fonte.fonte_tabela}</div>
         {fonte.fonte_campo && <div><span className="text-muted-foreground">Campo:</span> {fonte.fonte_campo}</div>}
         <div><span className="text-muted-foreground">Regra:</span> {fonte.regra_calculo}</div>
         <div><span className="text-muted-foreground">Prioridade:</span> {fonte.regra_prioridade}</div>
@@ -992,8 +992,8 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   ];
 
   /**
-   * REGRA CRÍTICA: No cenário "Previsto", verificar se o indicador
-   * tem fonte prevista configurada. Se fonte_tipo === 'sem_fonte',
+   * REGRA CRÍTICA: No cenário "Meta", verificar se o indicador
+   * tem fonte meta configurada. Se fonte_tipo === 'sem_fonte',
    * retornar string vazia — NUNCA copiar valor do Realizado.
    */
 
