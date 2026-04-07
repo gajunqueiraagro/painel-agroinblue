@@ -2848,7 +2848,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         onConfirm={() => handleSubmit()}
         submitting={submitting}
         operacionais={{
-          status: effectiveStatusOp,
+          status: isCenarioMeta ? 'meta' : effectiveStatusOp,
           data,
           quantidade: Number(quantidade) || 0,
           categoria,
