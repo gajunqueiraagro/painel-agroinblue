@@ -581,30 +581,38 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     });
   }, [frozenDetalhadoSelecionado, categorias, resumoOficial.rows]);
 
+  // Build metrics for ANY month: physical data (qty/weight) ALWAYS from the view,
+  // financial data (valor) from snapshot prices applied to view quantities.
   const buildFrozenMetrics = useCallback((mesKey: string): MetricasExibicao | null => {
-    const snapshotCabecalho = historicoPorMes[mesKey] ?? null;
     const snapshotDetalhado = historicoDetalhadoPorMes[mesKey] ?? [];
+    const snapshotCabecalho = historicoPorMes[mesKey] ?? null;
 
-    if (!snapshotCabecalho && snapshotDetalhado.length === 0) return null;
+    // Determine which view data to use based on the month's year
+    const [keyAno, keyMes] = mesKey.split('-').map(Number);
+    const viewData = keyAno === Number(anoFiltro) ? viewDataAnoAtual : viewDataAnoAnterior;
+    const viewRows = (viewData || []).filter(r => r.mes === keyMes);
 
-    // For the currently selected month, use official closure data for qty/weight
-    // and recalculate value using snapshot prices
-    if (mesKey === anoMes && resumoOficial.rows.length > 0) {
-      const itensPorCategoria = new Map(snapshotDetalhado.map(item => [item.categoria, item]));
-      let totalValor = 0;
-      let totalCab = 0;
-      let totalPesoKg = 0;
-      resumoOficial.rows.forEach(row => {
-        const precoKg = Number(itensPorCategoria.get(row.categoriaCodigo)?.preco_kg) || 0;
-        const pesoMedio = row.pesoMedioFinalKg || 0;
-        totalCab += row.quantidadeFinal;
-        totalPesoKg += row.quantidadeFinal * pesoMedio;
-        totalValor += row.quantidadeFinal * pesoMedio * precoKg;
+    // If no view data AND no snapshot, nothing to show
+    if (viewRows.length === 0 && snapshotDetalhado.length === 0 && !snapshotCabecalho) return null;
+
+    // Physical herd data ALWAYS from the official view
+    const itensPorCategoria = new Map(snapshotDetalhado.map(item => [item.categoria, item]));
+    let totalValor = 0;
+    let totalCab = 0;
+    let totalPesoKg = 0;
+
+    if (viewRows.length > 0) {
+      viewRows.forEach(row => {
+        const precoKg = Number(itensPorCategoria.get(row.categoria_codigo)?.preco_kg) || 0;
+        const pesoMedio = row.peso_medio_final || 0;
+        totalCab += row.saldo_final;
+        totalPesoKg += row.saldo_final * pesoMedio;
+        totalValor += row.saldo_final * pesoMedio * precoKg;
       });
       return buildMetricsFromTotals(totalValor, totalCab, totalPesoKg);
     }
 
-    // For other months, use snapshot as-is
+    // Fallback: if view has no data for this month, use snapshot (legacy closed months)
     const metricasDetalhadas = aggregateMetricsFromSnapshotItems(snapshotDetalhado);
     if (!snapshotCabecalho && !metricasDetalhadas) return null;
 
@@ -613,7 +621,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       metricasDetalhadas?.cabecas ?? null,
       snapshotCabecalho?.pesoKg ?? metricasDetalhadas?.pesoTotalKg ?? null,
     );
-  }, [historicoPorMes, historicoDetalhadoPorMes, anoMes, resumoOficial.rows]);
+  }, [historicoPorMes, historicoDetalhadoPorMes, anoFiltro, viewDataAnoAtual, viewDataAnoAnterior]);
 
   const metricasSelecionado = useMemo(() => {
     if (fonteMes === 'live') return metricasLiveSelecionado;
