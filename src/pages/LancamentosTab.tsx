@@ -297,6 +297,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const qtdInput = useIntegerInput(quantidade, setQuantidade);
   const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
 
+  const isCenarioMeta = statusOp === 'meta';
   const isPrevisto = statusOp === 'previsto';
   const isConfirmado = statusOp === 'programado';
   const isConciliado = statusOp === 'realizado';
