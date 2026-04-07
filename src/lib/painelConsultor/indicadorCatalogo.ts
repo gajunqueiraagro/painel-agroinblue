@@ -105,35 +105,34 @@ const FONTE_VALOR_REB_REAL: FonteIndicador = {
 
 const FONTE_VALOR_REB_META_BASE: FonteIndicador = {
   fonte_tipo: 'meta',
-  fonte_tabela: 'vw_zoot_categoria_mensal + meta_valor_rebanho_precos',
-  fonte_campo: 'saldo_final × peso_medio_final × (preco_arroba / 30)',
-  regra_calculo: 'Cálculo live: mesma lógica da tela Valor do Rebanho META (consolidação × preços)',
-  regra_prioridade: '1. Cálculo a partir da view meta + preços do cliente; 2. vazio se não houver preços',
+  fonte_tabela: 'valor_rebanho_meta_validada',
+  fonte_campo: 'valor_total, valor_cabeca_medio, preco_arroba_medio',
+  regra_calculo: 'Leitura direta do snapshot validado na tela Valor do Rebanho META',
+  regra_prioridade: '1. Snapshot oficial validado; 2. vazio se não houver validação',
   tela_origem: '/meta-preco',
   tela_label: 'Valor do Rebanho META',
   permite_fallback: false,
-  observacao: 'Fonte única: mesma função da tela META, sem persistência separada',
+  observacao: 'Fonte única auditável — persistida ao clicar VALIDAR',
 };
 
 const FONTE_VALOR_REB_META_INICIAL: FonteIndicador = {
   ...FONTE_VALOR_REB_META_BASE,
-  regra_calculo: 'Jan = Dez do ano anterior (realizado); Fev+ = valor calculado META do mês anterior',
-  regra_prioridade: '1. Dez/ano-1 realizado; 2. Fev+ valor META calculado do mês anterior; 3. vazio se não houver',
+  regra_calculo: 'Jan = Dez do ano anterior (realizado); Fev+ = valor_total validado do mês anterior',
 };
 
 const FONTE_VALOR_REB_META_FINAL: FonteIndicador = {
   ...FONTE_VALOR_REB_META_BASE,
-  regra_calculo: 'Cálculo live do valor total META no mês corrente',
+  regra_calculo: 'Snapshot oficial do valor total validado no mês corrente',
 };
 
 const FONTE_VALOR_CAB_META_FINAL: FonteIndicador = {
   ...FONTE_VALOR_REB_META_BASE,
-  regra_calculo: 'valor_total / cabeças (calculado live)',
+  regra_calculo: 'Snapshot oficial do valor/cab validado no mês corrente',
 };
 
 const FONTE_VALOR_ARR_META_FINAL: FonteIndicador = {
   ...FONTE_VALOR_REB_META_BASE,
-  regra_calculo: 'valor_total / arrobas_estoque (calculado live)',
+  regra_calculo: 'Snapshot oficial do valor/@ validado no mês corrente',
 };
 
 // ─── Desempenho / Produção ───
