@@ -561,7 +561,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
 }
 
 // ─── Build blocos from MetaConsolidacao (validated consolidation) ───
-function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, valorRebanhoMetaMes?: number[]): Bloco[] {
+function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number): Bloco[] {
   // Aggregate across all categories per month
   const agg = (field: keyof MetaCategoriaMes): number[] =>
     Array.from({ length: 12 }, (_, i) => {
