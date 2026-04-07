@@ -510,10 +510,10 @@ function DREContent({
 }) {
   return (
     <div className="space-y-4">
-      {cenario === 'previsto' ? (
+      {cenario === 'meta' ? (
         <Card>
           <CardContent className="p-6 text-center">
-            <p className="text-sm text-muted-foreground">📋 DRE Previsto — em construção</p>
+            <p className="text-sm text-muted-foreground">📋 DRE Meta — em construção</p>
           </CardContent>
         </Card>
       ) : (
