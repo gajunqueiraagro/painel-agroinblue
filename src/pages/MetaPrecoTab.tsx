@@ -22,6 +22,10 @@ import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { toast } from 'sonner';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
+import { supabase } from '@/integrations/supabase/client';
+import { useFazenda } from '@/contexts/FazendaContext';
+import { useCliente } from '@/contexts/ClienteContext';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface Props {
   onBack?: () => void;
@@ -98,8 +102,35 @@ export function MetaPrecoTab({ onBack }: Props) {
   const { perfil } = usePermissions();
   const isAdmin = perfil === 'admin_agroinblue';
 
+  const { fazendaAtual } = useFazenda();
+  const { clienteAtual } = useCliente();
+  const fazendaId = fazendaAtual?.id;
+
   // Meta consolidation data for qty/peso
   const { data: viewDataMeta } = useZootCategoriaMensal({ ano: Number(ano), cenario: 'meta' });
+
+  // Realized data for Jan of current year (vs Inic. ano)
+  const { data: viewDataRealizadoAno } = useZootCategoriaMensal({ ano: Number(ano), cenario: 'realizado' });
+  // Realized data for same month of previous year (vs 1 ano)
+  const { data: viewDataRealizadoAnoAnt } = useZootCategoriaMensal({ ano: Number(ano) - 1, cenario: 'realizado' });
+
+  // Valor rebanho fechamento for realized comparisons
+  const [valorRebJan, setValorRebJan] = useState<number>(0);
+  const [valorRebMesAnoAnt, setValorRebMesAnoAnt] = useState<number>(0);
+
+  useEffect(() => {
+    if (!fazendaId) return;
+    const janAnoMes = `${ano}-01`;
+    const mesAnoAnt = `${Number(ano) - 1}-${mes}`;
+
+    Promise.all([
+      supabase.from('valor_rebanho_fechamento').select('valor_total').eq('fazenda_id', fazendaId).eq('ano_mes', janAnoMes).maybeSingle(),
+      supabase.from('valor_rebanho_fechamento').select('valor_total').eq('fazenda_id', fazendaId).eq('ano_mes', mesAnoAnt).maybeSingle(),
+    ]).then(([r1, r2]) => {
+      setValorRebJan(r1.data?.valor_total ?? 0);
+      setValorRebMesAnoAnt(r2.data?.valor_total ?? 0);
+    });
+  }, [fazendaId, ano, mes]);
 
   const anos = useMemo(() => {
     const a: string[] = [];
@@ -169,6 +200,36 @@ export function MetaPrecoTab({ onBack }: Props) {
     const precoKg = pesoTotalKg > 0 ? valor / pesoTotalKg : 0;
     return { cabecas, pesoMedio, precoKg, precoArroba, valorCabeca, valor, totalArrobas };
   }, [rows]);
+
+  // ---------- Comparison data ----------
+  // Realized totals for January of current year
+  const compJan = useMemo(() => {
+    if (!viewDataRealizadoAno) return null;
+    const janRows = viewDataRealizadoAno.filter(r => r.mes === 1);
+    if (janRows.length === 0) return null;
+    const cabecas = janRows.reduce((s, r) => s + r.saldo_final, 0);
+    const pesoTotalKg = janRows.reduce((s, r) => s + r.peso_total_final, 0);
+    const pesoMedio = cabecas > 0 ? pesoTotalKg / cabecas : 0;
+    const totalArrobas = pesoTotalKg / 30;
+    const valorCabeca = valorRebJan > 0 && cabecas > 0 ? valorRebJan / cabecas : 0;
+    const precoArroba = valorRebJan > 0 && totalArrobas > 0 ? valorRebJan / totalArrobas : 0;
+    return { cabecas, pesoMedio, precoArroba, valorCabeca, totalArrobas, valor: valorRebJan };
+  }, [viewDataRealizadoAno, valorRebJan]);
+
+  // Realized totals for same month of previous year
+  const compAnoAnt = useMemo(() => {
+    if (!viewDataRealizadoAnoAnt) return null;
+    const mesNum = Number(mes);
+    const mesRows = viewDataRealizadoAnoAnt.filter(r => r.mes === mesNum);
+    if (mesRows.length === 0) return null;
+    const cabecas = mesRows.reduce((s, r) => s + r.saldo_final, 0);
+    const pesoTotalKg = mesRows.reduce((s, r) => s + r.peso_total_final, 0);
+    const pesoMedio = cabecas > 0 ? pesoTotalKg / cabecas : 0;
+    const totalArrobas = pesoTotalKg / 30;
+    const valorCabeca = valorRebMesAnoAnt > 0 && cabecas > 0 ? valorRebMesAnoAnt / cabecas : 0;
+    const precoArroba = valorRebMesAnoAnt > 0 && totalArrobas > 0 ? valorRebMesAnoAnt / totalArrobas : 0;
+    return { cabecas, pesoMedio, precoArroba, valorCabeca, totalArrobas, valor: valorRebMesAnoAnt };
+  }, [viewDataRealizadoAnoAnt, mes, valorRebMesAnoAnt]);
 
   // ---------- Chart data (all 12 months) ----------
   const chartData = useMemo(() => {
@@ -470,42 +531,45 @@ export function MetaPrecoTab({ onBack }: Props) {
             </div>
           </div>
 
-          {/* Summary card */}
-          <div className="min-w-[200px] flex-1 space-y-1">
+          {/* Summary card — 5-column executive layout */}
+          <div className="min-w-[280px] flex-1 space-y-1">
             <Card className="bg-orange-500/5 border-orange-500/20">
               <CardContent className="p-2">
-                <div className="flex gap-3">
-                  <div className="shrink-0">
-                    <p className="text-[8px] text-orange-600 font-medium uppercase tracking-wider">
-                      Valor do Rebanho META — {mesLabel}/{ano}
-                    </p>
-                    <p className="text-lg font-extrabold text-foreground leading-tight mt-0.5">
+                {/* Header row with value highlight */}
+                <div className="mb-1.5">
+                  <p className="text-[8px] text-orange-600 font-medium uppercase tracking-wider">
+                    Valor do Rebanho META — {mesLabel}/{ano}
+                  </p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-lg font-extrabold text-foreground leading-tight">
                       {totals.valor > 0 ? formatMoeda(totals.valor) : '—'}
                     </p>
-                    <p className="text-[8px] text-muted-foreground mt-0.5">
-                      Cenário de planejamento
-                    </p>
+                    <CompBadge meta={totals.valor} base={compJan?.valor ?? 0} tooltip={compJan?.valor ? `Jan: ${formatMoeda(compJan.valor)}` : undefined} />
+                    <CompBadge meta={totals.valor} base={compAnoAnt?.valor ?? 0} tooltip={compAnoAnt?.valor ? `${MESES_SHORT.find(m => m.key === mes)?.label}/${Number(ano) - 1}: ${formatMoeda(compAnoAnt.valor)}` : undefined} />
                   </div>
+                </div>
 
-                  <div className="flex-1 min-w-0 text-[10px] ml-4">
-                    <div className="grid grid-cols-[auto_80px] gap-x-2 items-center">
-                      <span className="text-[7px] text-muted-foreground font-medium">Indicador</span>
-                      <span className="text-[7px] text-muted-foreground font-medium text-right">Valor</span>
+                {/* 5-column grid */}
+                <div className="grid grid-cols-[120px_82px_72px_72px] gap-x-1 items-center text-center">
+                  <span className="text-[7px] text-muted-foreground font-semibold text-left">Indicador</span>
+                  <span className="text-[7px] text-muted-foreground font-semibold">Valor</span>
+                  <span className="text-[7px] text-muted-foreground font-semibold">vs Inic. ano</span>
+                  <span className="text-[7px] text-muted-foreground font-semibold">vs 1 ano</span>
 
-                      {[
-                        { label: 'Cabeças', value: totals.cabecas > 0 ? formatNum(totals.cabecas, 0) : '—' },
-                        { label: 'Peso médio', value: totals.pesoMedio > 0 ? `${formatNum(totals.pesoMedio, 2)} kg` : '—' },
-                        { label: 'R$/@ médio', value: totals.precoArroba > 0 ? formatMoeda(totals.precoArroba) : '—' },
-                        { label: 'R$/cab', value: totals.valorCabeca > 0 ? formatMoeda(totals.valorCabeca) : '—' },
-                        { label: '@s estoque', value: totals.totalArrobas > 0 ? formatNum(totals.totalArrobas, 2) : '—' },
-                      ].map(ind => (
-                        <React.Fragment key={ind.label}>
-                          <span className="text-muted-foreground text-[8px] truncate">{ind.label}</span>
-                          <span className="text-right font-semibold text-foreground tabular-nums text-[9px]">{ind.value}</span>
-                        </React.Fragment>
-                      ))}
-                    </div>
-                  </div>
+                  {[
+                    { label: 'Cabeças', val: totals.cabecas, fmt: (v: number) => formatNum(v, 0), baseJan: compJan?.cabecas, baseAA: compAnoAnt?.cabecas, fmtBase: (v: number) => formatNum(v, 0) },
+                    { label: 'Peso médio', val: totals.pesoMedio, fmt: (v: number) => `${formatNum(v, 2)} kg`, baseJan: compJan?.pesoMedio, baseAA: compAnoAnt?.pesoMedio, fmtBase: (v: number) => `${formatNum(v, 2)} kg` },
+                    { label: 'R$/@ médio', val: totals.precoArroba, fmt: (v: number) => formatMoeda(v), baseJan: compJan?.precoArroba, baseAA: compAnoAnt?.precoArroba, fmtBase: (v: number) => formatMoeda(v) },
+                    { label: 'R$/cab', val: totals.valorCabeca, fmt: (v: number) => formatMoeda(v), baseJan: compJan?.valorCabeca, baseAA: compAnoAnt?.valorCabeca, fmtBase: (v: number) => formatMoeda(v) },
+                    { label: '@s estoque', val: totals.totalArrobas, fmt: (v: number) => formatNum(v, 2), baseJan: compJan?.totalArrobas, baseAA: compAnoAnt?.totalArrobas, fmtBase: (v: number) => formatNum(v, 2) },
+                  ].map(ind => (
+                    <React.Fragment key={ind.label}>
+                      <span className="text-muted-foreground text-[8px] truncate text-left">{ind.label}</span>
+                      <span className="font-semibold text-foreground tabular-nums text-[9px]">{ind.val > 0 ? ind.fmt(ind.val) : '—'}</span>
+                      <CompBadge meta={ind.val} base={ind.baseJan ?? 0} tooltip={ind.baseJan ? `Jan: ${ind.fmtBase(ind.baseJan)}` : undefined} />
+                      <CompBadge meta={ind.val} base={ind.baseAA ?? 0} tooltip={ind.baseAA ? `${MESES_SHORT.find(m => m.key === mes)?.label}/${Number(ano) - 1}: ${ind.fmtBase(ind.baseAA)}` : undefined} />
+                    </React.Fragment>
+                  ))}
                 </div>
               </CardContent>
             </Card>
@@ -522,4 +586,32 @@ export function MetaPrecoTab({ onBack }: Props) {
       )}
     </div>
   );
+}
+
+/* ---------- Comparison badge ---------- */
+function CompBadge({ meta, base, tooltip }: { meta: number; base: number; tooltip?: string }) {
+  if (!base || base <= 0 || !meta || meta <= 0) {
+    return <span className="text-[8px] text-muted-foreground tabular-nums text-center">—</span>;
+  }
+  const pct = ((meta - base) / base) * 100;
+  const isPositive = pct > 0;
+  const isZero = Math.abs(pct) < 0.05;
+  const colorClass = isZero
+    ? 'text-muted-foreground'
+    : isPositive
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : 'text-red-500 dark:text-red-400';
+  const label = `${isPositive ? '+' : ''}${formatNum(pct, 1)}%`;
+
+  if (tooltip) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className={`text-[8px] font-medium tabular-nums text-center cursor-help ${colorClass}`}>{label}</span>
+        </TooltipTrigger>
+        <TooltipContent className="text-[10px]">{tooltip}</TooltipContent>
+      </Tooltip>
+    );
+  }
+  return <span className={`text-[8px] font-medium tabular-nums text-center ${colorClass}`}>{label}</span>;
 }
