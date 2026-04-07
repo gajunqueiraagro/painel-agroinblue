@@ -362,7 +362,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
 }
 
 // ─── Build blocos from vw_zoot_fazenda_mensal (for Previsto cenário) ───
-function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
+function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanhoMetaMes?: number[], valorRebanhoMetaMesAnteriorOuDez?: number[], metaValorCabMes?: number[], metaPrecoArrMes?: number[]): Bloco[] {
   const byMes = indexByMes(rows);
   const get = (field: keyof ZootMensal): number[] =>
     Array.from({ length: 12 }, (_, i) => {
@@ -385,7 +385,6 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
     const gmdVal = Number(m.gmd_kg_cab_dia) || 0;
     const gmdNumerador = Number(m.gmd_numerador_kg) || 0;
     const temRebanho = Number(m.cabecas_inicio) > 0 || Number(m.cabecas_final) > 0;
-    // Se tem rebanho mas numerador é zero, meta não projetou ganho → sem base
     if (temRebanho && gmdNumerador === 0 && gmdVal === 0) return NaN;
     return gmdVal;
   });
@@ -393,11 +392,9 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
   const areaProd = get('area_produtiva_ha');
   const lotacao = get('lotacao_ua_ha');
 
-  // Derived
   const pesoMedIni = cabIni.map((c, i) => c > 0 ? pesoIni[i] / c : 0);
   const cabMedia = cabIni.map((v, i) => (v + cabFin[i]) / 2);
   const gmdNum = get('gmd_numerador_kg');
-  // Produção: se gmd_numerador é zero com rebanho, também sem base
   const arrobasProd = gmdNum.map((v, i) => {
     const temRebanho = cabIni[i] > 0 || cabFin[i] > 0;
     if (temRebanho && v === 0) return NaN;
@@ -423,8 +420,18 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
     return { indicador, format, valores, indicadorId, noTotal };
   };
 
-  // Financial rows are empty for previsto (sem_fonte)
   const emptyMoney = Array(12).fill(0);
+  const vrm = valorRebanhoMetaMes || Array(12).fill(0);
+  const vrmIni = valorRebanhoMetaMesAnteriorOuDez || Array(12).fill(0);
+  const valorPorCabMeta = cabFin.map((c, i) => {
+    if (metaValorCabMes && metaValorCabMes[i] > 0) return metaValorCabMes[i];
+    return c > 0 && vrm[i] > 0 ? vrm[i] / c : 0;
+  });
+  const valorPorArrMeta = pesoFin.map((peso, i) => {
+    if (metaPrecoArrMes && metaPrecoArrMes[i] > 0) return metaPrecoArrMes[i];
+    const arrobas = peso > 0 ? peso / 30 : 0;
+    return arrobas > 0 && vrm[i] > 0 ? vrm[i] / arrobas : 0;
+  });
 
   switch (tab) {
     case 'mensal':
@@ -452,10 +459,10 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
         {
           nome: 'Valor do Rebanho',
           rows: [
-            r('Valor reb. inicial', 'money', emptyMoney, 'valor_reb_ini', true),
-            r('Valor reb. final', 'money', emptyMoney, 'valor_reb_fin', true),
-            r('Valor/cab final', 'money', emptyMoney, 'valor_cab_fin', true),
-            r('Valor/@ final', 'money', emptyMoney, 'valor_arr_fin', true),
+            r('Valor reb. inicial', 'money', vrmIni, 'valor_reb_ini', true),
+            r('Valor reb. final', 'money', vrm, 'valor_reb_fin', true),
+            r('Valor/cab final', 'money', valorPorCabMeta, 'valor_cab_fin', true),
+            r('Valor/@ final', 'money', valorPorArrMeta, 'valor_arr_fin', true),
           ],
         },
       ];
@@ -943,15 +950,18 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const blocos = useMemo(() => {
     if (previstoGlobalBloqueado) return [];
     if (isPrevisto) {
-      // Fonte única: consolidação Meta validada
+      // Fonte oficial do valor META é sempre a tabela persistida valor_rebanho_meta
+      const valorRebIniMeta = [valorRebanhoMes[0] ?? 0, ...(valorRebanhoMetaMes || Array(12).fill(0)).slice(0, 11)];
+
+      // Consolidação Meta valida os blocos zootécnicos; valor do rebanho vem sempre da base persistida
       if (metaConsolidacao && metaConsolidacao.length > 0) {
         return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes);
       }
-      // Fallback para view SQL apenas se consolidação não disponível
-      return buildBlocosFromZootMensal(zootMeta || [], viewTab);
+
+      return buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes);
     }
     return buildBlocosForTab(monthlyData, viewTab);
-  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacao, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes]);
+  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacao, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes]);
 
   useEffect(() => {
     if (blocos.length > 0) {
