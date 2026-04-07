@@ -939,7 +939,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
       return buildBlocosFromZootMensal(zootMeta || [], viewTab);
     }
     return buildBlocosForTab(monthlyData, viewTab);
-  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacao, areaProdutiva]);
+  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacao, areaProdutiva, valorRebanhoMetaMes]);
 
   useEffect(() => {
     if (blocos.length > 0) {
