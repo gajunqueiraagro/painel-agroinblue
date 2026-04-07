@@ -431,8 +431,8 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
         {
           nome: 'Rebanho',
           rows: [
-            r('Reb. inicial (cab)', 'cab', cabIni, 'reb_inicial'),
-            r('Reb. final (cab)', 'cab', cabFin, 'reb_final'),
+            r('Reb. inicial (cab)', 'cab', cabIni, 'reb_inicial', true),
+            r('Reb. final (cab)', 'cab', cabFin, 'reb_final', true),
             r('Entradas (cab)', 'cab', entradas, 'entradas_cab'),
             r('Saídas (cab)', 'cab', saidas, 'saidas_cab'),
           ],
@@ -440,21 +440,21 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
         {
           nome: 'Peso',
           rows: [
-            r('Peso ini. (kg)', 'padrao', pesoIni, 'peso_ini_kg'),
-            r('Peso final (kg)', 'padrao', pesoFin, 'peso_fin_kg'),
-            r('Peso ini. (@)', 'padrao', pesoIni.map(v => v / 30), 'peso_ini_arr'),
-            r('Peso final (@)', 'padrao', pesoFin.map(v => v / 30), 'peso_fin_arr'),
-            r('Peso méd. ini.', 'med2', pesoMedIni, 'peso_med_ini'),
-            r('Peso méd. final', 'med2', pesoMedFin, 'peso_med_fin'),
+            r('Peso ini. (kg)', 'cab', pesoIni, 'peso_ini_kg', true),
+            r('Peso final (kg)', 'cab', pesoFin, 'peso_fin_kg', true),
+            r('Peso ini. (@)', 'cab', pesoIni.map(v => Math.round(v / 30)), 'peso_ini_arr', true),
+            r('Peso final (@)', 'cab', pesoFin.map(v => Math.round(v / 30)), 'peso_fin_arr', true),
+            r('Peso méd. ini.', 'med2', pesoMedIni, 'peso_med_ini', true),
+            r('Peso méd. final', 'med2', pesoMedFin, 'peso_med_fin', true),
           ],
         },
         {
           nome: 'Valor do Rebanho',
           rows: [
-            r('Valor reb. inicial', 'money', emptyMoney, 'valor_reb_ini'),
-            r('Valor reb. final', 'money', emptyMoney, 'valor_reb_fin'),
-            r('Valor/cab final', 'money', emptyMoney, 'valor_cab_fin'),
-            r('Valor/@ final', 'money', emptyMoney, 'valor_arr_fin'),
+            r('Valor reb. inicial', 'money', emptyMoney, 'valor_reb_ini', true),
+            r('Valor reb. final', 'money', emptyMoney, 'valor_reb_fin', true),
+            r('Valor/cab final', 'money', emptyMoney, 'valor_cab_fin', true),
+            r('Valor/@ final', 'money', emptyMoney, 'valor_arr_fin', true),
           ],
         },
       ];
