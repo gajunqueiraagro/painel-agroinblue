@@ -971,14 +971,14 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   // REGRA: Meta em modo Global desabilitado — sem agregação oficial ainda
   const previstoGlobalBloqueado = isPrevisto && isGlobal;
 
-  // Blocos: Realizado usa buildMonthlyData, Meta usa cálculo live (mesma lógica da tela META)
+  // Blocos: Realizado usa buildMonthlyData, Meta usa snapshot validado (valor_rebanho_meta_validada)
   const blocos = useMemo(() => {
     if (previstoGlobalBloqueado) return [];
     if (isPrevisto) {
       // Valor reb. ini META: Jan = realizado Dez ano anterior, Fev+ = META final mês anterior
       const valorRebIniMeta = [valorRebanhoMes[0] ?? 0, ...valorRebanhoMetaMes.slice(0, 11)];
 
-      // Consolidação Meta valida os blocos zootécnicos; valor calculado live
+      // Consolidação Meta valida os blocos zootécnicos; valor do rebanho vem do snapshot validado
       if (metaConsolidacao && metaConsolidacao.length > 0) {
         return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes);
       }
