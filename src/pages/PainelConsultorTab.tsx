@@ -45,6 +45,7 @@ import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 import { CATALOGO_INDICADORES, getFonteStatusLabel, type FonteIndicador, type IndicadorMeta } from '@/lib/painelConsultor/indicadorCatalogo';
+import { useValorRebanhoMetaAno } from '@/hooks/useValorRebanhoMeta';
 
 // ─── Constants ───
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -560,7 +561,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
 }
 
 // ─── Build blocos from MetaConsolidacao (validated consolidation) ───
-function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number): Bloco[] {
+function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, valorRebanhoMetaMes?: number[]): Bloco[] {
   // Aggregate across all categories per month
   const agg = (field: keyof MetaCategoriaMes): number[] =>
     Array.from({ length: 12 }, (_, i) => {
@@ -622,6 +623,16 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
 
   const emptyMoney = Array(12).fill(0);
 
+  // Valor do Rebanho META: lido direto da tabela persistida (sem recalcular)
+  const vrm = valorRebanhoMetaMes || Array(12).fill(0);
+  const valorRebFin = vrm;
+  // Valor reb. ini = valor do mês anterior (shift right, jan = 0)
+  const valorRebIni = [0, ...vrm.slice(0, 11)];
+  const valorPorCabMeta = cabFin.map((c, i) => c > 0 && vrm[i] > 0 ? vrm[i] / c : 0);
+  const arrobasEstoqueMeta = pesoFin.map(v => v / 30);
+  const valorPorArrMeta = arrobasEstoqueMeta.map((a, i) => a > 0 && vrm[i] > 0 ? vrm[i] / a : 0);
+  const varValorRebMeta = valorRebFin.map((v, i) => v - valorRebIni[i]);
+
   switch (tab) {
     case 'mensal':
       return [
@@ -648,10 +659,10 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
         {
           nome: 'Valor do Rebanho',
           rows: [
-            r('Valor reb. inicial', 'money', emptyMoney, 'valor_reb_ini', true),
-            r('Valor reb. final', 'money', emptyMoney, 'valor_reb_fin', true),
-            r('Valor/cab final', 'money', emptyMoney, 'valor_cab_fin', true),
-            r('Valor/@ final', 'money', emptyMoney, 'valor_arr_fin', true),
+            r('Valor reb. inicial', 'money', valorRebIni, 'valor_reb_ini', true),
+            r('Valor reb. final', 'money', valorRebFin, 'valor_reb_fin', true),
+            r('Valor/cab final', 'money', valorPorCabMeta, 'valor_cab_fin', true),
+            r('Valor/@ final', 'money', valorPorArrMeta, 'valor_arr_fin', true),
           ],
         },
       ];
@@ -719,7 +730,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
             r('Rec. pec. comp. acum.', 'money', emptyMoney, 'rec_pec_comp_acum'),
             r('Res. oper. acum.', 'money', emptyMoney, 'res_oper_acum'),
             r('EBITDA acum.', 'money', emptyMoney, 'ebitda_acum'),
-            r('Var. valor reb.', 'money', emptyMoney, 'var_valor_reb'),
+            r('Var. valor reb.', 'money', varValorRebMeta, 'var_valor_reb'),
           ],
         },
       ];
@@ -870,6 +881,9 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const { status: statusPilares, refetch: refetchPilares } = useStatusPilares(fazendaId, mesAtualRef);
   const { data: zootMeta } = useZootMensal({ ano: anoNum, cenario: 'meta' });
 
+  // Valor do Rebanho META persistido — leitura direta sem recalcular
+  const { getMonthlyValues: getMetaValues } = useValorRebanhoMetaAno(anoNum);
+  const valorRebanhoMetaMes = useMemo(() => getMetaValues('valor_total'), [getMetaValues]);
   // Official source: view data for Realizado (replaces buildMonthlyData local calcs)
   const { data: viewDataRealizado } = useZootCategoriaMensal({ ano: anoNum, cenario: 'realizado', global: isGlobal });
 
@@ -919,13 +933,13 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     if (isPrevisto) {
       // Fonte única: consolidação Meta validada
       if (metaConsolidacao && metaConsolidacao.length > 0) {
-        return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva);
+        return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva, valorRebanhoMetaMes);
       }
       // Fallback para view SQL apenas se consolidação não disponível
       return buildBlocosFromZootMensal(zootMeta || [], viewTab);
     }
     return buildBlocosForTab(monthlyData, viewTab);
-  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacao, areaProdutiva]);
+  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacao, areaProdutiva, valorRebanhoMetaMes]);
 
   useEffect(() => {
     if (blocos.length > 0) {

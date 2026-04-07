@@ -26,6 +26,8 @@ import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as Recharts
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { salvarValorRebanhoMeta, type ValorRebanhoMetaItem } from '@/hooks/useValorRebanhoMeta';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface Props {
@@ -119,6 +121,7 @@ export function MetaPrecoTab({ onBack }: Props) {
 
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
+  const { user } = useAuth();
   const fazendaId = fazendaAtual?.id;
 
   // Meta consolidation data for qty/peso
@@ -319,12 +322,50 @@ export function MetaPrecoTab({ onBack }: Props) {
     setPrecosDisplay(prev => ({ ...prev, [codigo]: num > 0 ? fmtArroba(num) : '' }));
   };
 
-  const handleSalvar = (status: 'rascunho' | 'parcial' | 'validado') => {
+  const handleSalvar = async (status: 'rascunho' | 'parcial' | 'validado') => {
     const items: MetaPrecoCategoria[] = ORDEM_CATEGORIAS_FIXA.map(codigo => ({
       categoria: codigo,
       preco_arroba: precosLocal[codigo] ?? 0,
     }));
-    salvar(items, status);
+    await salvar(items, status);
+
+    // Persistir valor do rebanho META calculado
+    if (fazendaId && clienteAtual?.id) {
+      try {
+        const metaItens: ValorRebanhoMetaItem[] = rows
+          .filter(r => r.saldo > 0 || r.valorTotal > 0)
+          .map(r => ({
+            categoria: r.codigo,
+            quantidade: r.saldo,
+            peso_medio_kg: r.pesoMedio,
+            preco_arroba: r.precoArroba,
+            preco_kg: r.precoKg,
+            valor_cabeca: r.valorCabeca,
+            valor_total_categoria: r.valorTotal,
+          }));
+
+        await salvarValorRebanhoMeta({
+          fazendaId,
+          clienteId: clienteAtual.id,
+          anoMes,
+          totais: {
+            valor_total: totals.valor,
+            cabecas: totals.cabecas,
+            peso_total_kg: totals.cabecas * totals.pesoMedio,
+            peso_medio_kg: totals.pesoMedio,
+            arrobas_total: totals.totalArrobas,
+            preco_arroba_medio: totals.precoArroba,
+            valor_cabeca_medio: totals.valorCabeca,
+          },
+          itens: metaItens,
+          status,
+          validadoPor: status === 'validado' ? user?.id : null,
+        });
+      } catch (e: any) {
+        console.error('Erro ao persistir valor_rebanho_meta:', e);
+        // Não bloqueia o fluxo — preços já foram salvos
+      }
+    }
   };
 
   const handleCopiarMesAnterior = async () => {
