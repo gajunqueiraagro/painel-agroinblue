@@ -22,7 +22,7 @@ import { ptBR } from 'date-fns/locale';
 import { Pencil, Trash2, DollarSign, AlertTriangle } from 'lucide-react';
 import { AbateShareButtons } from '@/components/AbateExportMenu';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { STATUS_OPTIONS_ZOOTECNICO_ZOOTECNICO, getStatusBadge, getStatus, isMeta, type StatusOperacional } from '@/lib/statusOperacional';
+import { STATUS_OPTIONS_ZOOTECNICO, getStatusBadge, getStatus, isMeta, type StatusOperacional } from '@/lib/statusOperacional';
 import { usePermissions } from '@/hooks/usePermissions';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 import { supabase } from '@/integrations/supabase/client';
