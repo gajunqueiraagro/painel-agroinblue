@@ -131,6 +131,9 @@ export function MetaPrecoTab({ onBack }: Props) {
       setValorRebMesAnoAnt(r2.data?.valor_total ?? 0);
     });
   }, [fazendaId, ano, mes]);
+
+  const anos = useMemo(() => {
+    const a: string[] = [];
     for (let y = now.getFullYear() + 1; y >= now.getFullYear() - 3; y--) a.push(String(y));
     return a;
   }, []);
