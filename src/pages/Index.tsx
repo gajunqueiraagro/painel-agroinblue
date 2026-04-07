@@ -40,6 +40,7 @@ import { PrecoMercadoTab } from './PrecoMercadoTab';
 import { PainelConsultorHubTab } from './PainelConsultorHubTab';
 import { PrecosMercadoHubTab } from './PrecosMercadoHubTab';
 import { MetaGmdTab } from './MetaGmdTab';
+import { ConferenciaGmdTab } from './ConferenciaGmdTab';
 import { MetaPrecoTab } from './MetaPrecoTab';
 import { GraficosAnaliseTab } from './GraficosAnaliseTab';
 import { MetaConsolidacaoTab } from './MetaConsolidacaoTab';
@@ -375,6 +376,7 @@ const Index = () => {
     meta_consolidacao: () => setActiveTab('painel_consultor_hub'),
     meta_movimentacoes: () => setActiveTab('painel_consultor_hub'),
     precos_mercado_hub: () => setActiveTab('painel_consultor_hub'),
+    conferencia_gmd: () => setActiveTab('painel_consultor'),
     // Financeiro (analysis) sub-screens
     fin_caixa: () => setActiveTab('lancar_fin_hub'),
     analise_economica: () => setActiveTab('lancar_fin_hub'),
