@@ -368,7 +368,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
               <div className="text-center">
                 <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">Rebanho Atual</p>
                 <p className="text-3xl font-extrabold text-foreground tabular-nums leading-tight">
-                  {formatNum(zootecnico.rebanhoAtual)}
+                  {formatNum(zooKpis.saldoFinal)}
                 </p>
                 <p className="text-[10px] text-muted-foreground">cabeças</p>
               </div>
