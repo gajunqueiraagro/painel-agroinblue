@@ -255,15 +255,15 @@ export function MetaPrecoTab({ onBack }: Props) {
     const arrobasArr: { label: string; value: number | null }[] = [];
     const precoArr: { label: string; value: number | null }[] = [];
 
-    // Point "I" — Realized January (início do ano)
-    const janRealized = viewDataRealizadoAno?.filter(r => r.mes === 1) ?? [];
-    if (janRealized.length > 0) {
-      const cabI = janRealized.reduce((s, r) => s + r.saldo_final, 0);
-      const pesoI = janRealized.reduce((s, r) => s + r.peso_total_final, 0);
+    // Point "I" — Realized Dec prior year (início do ano = Dez/ano-1)
+    const dezRealized = viewDataRealizadoDezAnt?.filter(r => r.mes === 12) ?? [];
+    if (dezRealized.length > 0) {
+      const cabI = dezRealized.reduce((s, r) => s + r.saldo_final, 0);
+      const pesoI = dezRealized.reduce((s, r) => s + r.peso_total_final, 0);
       const arrobasI = pesoI / 30;
-      valorArr.push({ label: 'I', value: valorRebJan > 0 ? valorRebJan : null });
+      valorArr.push({ label: 'I', value: valorRebDezAnt > 0 ? valorRebDezAnt : null });
       arrobasArr.push({ label: 'I', value: cabI > 0 ? arrobasI : null });
-      precoArr.push({ label: 'I', value: valorRebJan > 0 && arrobasI > 0 ? valorRebJan / arrobasI : null });
+      precoArr.push({ label: 'I', value: valorRebDezAnt > 0 && arrobasI > 0 ? valorRebDezAnt / arrobasI : null });
     } else {
       valorArr.push({ label: 'I', value: null });
       arrobasArr.push({ label: 'I', value: null });
@@ -304,7 +304,7 @@ export function MetaPrecoTab({ onBack }: Props) {
     }
 
     return { valor: valorArr, arrobas: arrobasArr, precoArroba: precoArr };
-  }, [viewDataMeta, viewDataRealizadoAno, valorRebJan, mes, precosLocal]);
+  }, [viewDataMeta, viewDataRealizadoDezAnt, valorRebDezAnt, mes, precosLocal]);
 
   const temPreenchimento = Object.values(precosLocal).some(v => v > 0);
   const todosPreenchidos = ORDEM_CATEGORIAS_FIXA.every(c => (precosLocal[c] ?? 0) > 0);
@@ -393,17 +393,17 @@ export function MetaPrecoTab({ onBack }: Props) {
     if (!base || base <= 0 || !atual || atual <= 0) return null;
     return ((atual - base) / Math.abs(base)) * 100;
   };
-  const uVarValorIniAno = calcVar(totals.valor, compJan?.valor);
+  const uVarValorIniAno = calcVar(totals.valor, compDezAnt?.valor);
   const uVarValorAnoAnt = calcVar(totals.valor, compAnoAnt?.valor);
-  const uVarCabIniAno = calcVar(totals.cabecas, compJan?.cabecas);
+  const uVarCabIniAno = calcVar(totals.cabecas, compDezAnt?.cabecas);
   const uVarCabAnoAnt = calcVar(totals.cabecas, compAnoAnt?.cabecas);
-  const uVarPesoIniAno = calcVar(totals.pesoMedio, compJan?.pesoMedio);
+  const uVarPesoIniAno = calcVar(totals.pesoMedio, compDezAnt?.pesoMedio);
   const uVarPesoAnoAnt = calcVar(totals.pesoMedio, compAnoAnt?.pesoMedio);
-  const uVarArrobaIniAno = calcVar(totals.precoArroba, compJan?.precoArroba);
+  const uVarArrobaIniAno = calcVar(totals.precoArroba, compDezAnt?.precoArroba);
   const uVarArrobaAnoAnt = calcVar(totals.precoArroba, compAnoAnt?.precoArroba);
-  const uVarCabValIniAno = calcVar(totals.valorCabeca, compJan?.valorCabeca);
+  const uVarCabValIniAno = calcVar(totals.valorCabeca, compDezAnt?.valorCabeca);
   const uVarCabValAnoAnt = calcVar(totals.valorCabeca, compAnoAnt?.valorCabeca);
-  const uVarArrobasEstIniAno = calcVar(totals.totalArrobas, compJan?.totalArrobas);
+  const uVarArrobasEstIniAno = calcVar(totals.totalArrobas, compDezAnt?.totalArrobas);
   const uVarArrobasEstAnoAnt = calcVar(totals.totalArrobas, compAnoAnt?.totalArrobas);
 
   const getMesButtonClass = (mesVal: string) => {
