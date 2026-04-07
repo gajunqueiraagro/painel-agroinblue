@@ -127,25 +127,25 @@ export function MetaPrecoTab({ onBack }: Props) {
   // Meta consolidation data for qty/peso
   const { data: viewDataMeta } = useZootCategoriaMensal({ ano: Number(ano), cenario: 'meta' });
 
-  // Realized data for Jan of current year (vs Inic. ano)
-  const { data: viewDataRealizadoAno } = useZootCategoriaMensal({ ano: Number(ano), cenario: 'realizado' });
+  // Realized data for Dec prior year (vs Inic. ano = Dez/ano-1)
+  const { data: viewDataRealizadoDezAnt } = useZootCategoriaMensal({ ano: Number(ano) - 1, cenario: 'realizado' });
   // Realized data for same month of previous year (vs 1 ano)
   const { data: viewDataRealizadoAnoAnt } = useZootCategoriaMensal({ ano: Number(ano) - 1, cenario: 'realizado' });
 
   // Valor rebanho fechamento for realized comparisons
-  const [valorRebJan, setValorRebJan] = useState<number>(0);
+  const [valorRebDezAnt, setValorRebDezAnt] = useState<number>(0);
   const [valorRebMesAnoAnt, setValorRebMesAnoAnt] = useState<number>(0);
 
   useEffect(() => {
     if (!fazendaId) return;
-    const janAnoMes = `${ano}-01`;
+    const dezAnoAntMes = `${Number(ano) - 1}-12`;
     const mesAnoAnt = `${Number(ano) - 1}-${mes}`;
 
     Promise.all([
-      supabase.from('valor_rebanho_fechamento').select('valor_total').eq('fazenda_id', fazendaId).eq('ano_mes', janAnoMes).maybeSingle(),
+      supabase.from('valor_rebanho_fechamento').select('valor_total').eq('fazenda_id', fazendaId).eq('ano_mes', dezAnoAntMes).maybeSingle(),
       supabase.from('valor_rebanho_fechamento').select('valor_total').eq('fazenda_id', fazendaId).eq('ano_mes', mesAnoAnt).maybeSingle(),
     ]).then(([r1, r2]) => {
-      setValorRebJan(r1.data?.valor_total ?? 0);
+      setValorRebDezAnt(r1.data?.valor_total ?? 0);
       setValorRebMesAnoAnt(r2.data?.valor_total ?? 0);
     });
   }, [fazendaId, ano, mes]);
@@ -220,19 +220,19 @@ export function MetaPrecoTab({ onBack }: Props) {
   }, [rows]);
 
   // ---------- Comparison data ----------
-  // Realized totals for January of current year
-  const compJan = useMemo(() => {
-    if (!viewDataRealizadoAno) return null;
-    const janRows = viewDataRealizadoAno.filter(r => r.mes === 1);
-    if (janRows.length === 0) return null;
-    const cabecas = janRows.reduce((s, r) => s + r.saldo_final, 0);
-    const pesoTotalKg = janRows.reduce((s, r) => s + r.peso_total_final, 0);
+  // Realized totals for Dec prior year (vs Inic. ano)
+  const compDezAnt = useMemo(() => {
+    if (!viewDataRealizadoDezAnt) return null;
+    const dezRows = viewDataRealizadoDezAnt.filter(r => r.mes === 12);
+    if (dezRows.length === 0) return null;
+    const cabecas = dezRows.reduce((s, r) => s + r.saldo_final, 0);
+    const pesoTotalKg = dezRows.reduce((s, r) => s + r.peso_total_final, 0);
     const pesoMedio = cabecas > 0 ? pesoTotalKg / cabecas : 0;
     const totalArrobas = pesoTotalKg / 30;
-    const valorCabeca = valorRebJan > 0 && cabecas > 0 ? valorRebJan / cabecas : 0;
-    const precoArroba = valorRebJan > 0 && totalArrobas > 0 ? valorRebJan / totalArrobas : 0;
-    return { cabecas, pesoMedio, precoArroba, valorCabeca, totalArrobas, valor: valorRebJan };
-  }, [viewDataRealizadoAno, valorRebJan]);
+    const valorCabeca = valorRebDezAnt > 0 && cabecas > 0 ? valorRebDezAnt / cabecas : 0;
+    const precoArroba = valorRebDezAnt > 0 && totalArrobas > 0 ? valorRebDezAnt / totalArrobas : 0;
+    return { cabecas, pesoMedio, precoArroba, valorCabeca, totalArrobas, valor: valorRebDezAnt };
+  }, [viewDataRealizadoDezAnt, valorRebDezAnt]);
 
   // Realized totals for same month of previous year
   const compAnoAnt = useMemo(() => {
