@@ -98,9 +98,9 @@ const STATUS_LABELS: Record<string, string> = {
   realizado: CENTRAL_STATUS_LABEL.realizado,
 };
 const STATUS_TEXT_COLORS: Record<string, string> = {
-  previsto: 'text-orange-500',
-  agendado: 'text-emerald-400',
-  programado: 'text-sky-500',
+  previsto: 'text-cyan-600 dark:text-cyan-400',
+  agendado: 'text-purple-600 dark:text-purple-400',
+  programado: 'text-blue-600 dark:text-blue-400',
   realizado: 'text-green-700 dark:text-green-400 font-bold',
 };
 
