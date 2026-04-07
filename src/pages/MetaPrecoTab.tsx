@@ -623,8 +623,8 @@ export function MetaPrecoTab({ onBack }: Props) {
                       {totals.valor > 0 ? formatMoeda(totals.valor) : '—'}
                     </p>
                     <div className="flex flex-col gap-0 mt-0.5">
-                      <MetaVariacaoBadge valor={uVarValorIniAno} label="vs ini. ano" showLabel />
-                      <MetaVariacaoBadge valor={uVarValorAnoAnt} label="vs 1 ano" showLabel />
+                      <MetaVariacaoBadge valor={uVarValorIniAno} label="vs ini. ano" showLabel baseVal={compDezAnt?.valor} atualVal={totals.valor} fmt="money" tooltipLabel="vs início do ano" />
+                      <MetaVariacaoBadge valor={uVarValorAnoAnt} label="vs 1 ano" showLabel baseVal={compAnoAnt?.valor} atualVal={totals.valor} fmt="money" tooltipLabel="vs 1 ano" />
                     </div>
                   </div>
 
@@ -636,17 +636,17 @@ export function MetaPrecoTab({ onBack }: Props) {
                       <span className="text-[8px] text-muted-foreground font-medium text-right">vs 1 ano</span>
 
                       {[
-                        { label: 'Cabeças', value: totals.cabecas > 0 ? formatNum(totals.cabecas, 0) : '—', varIni: uVarCabIniAno, varAno: uVarCabAnoAnt },
-                        { label: 'Peso médio', value: totals.pesoMedio > 0 ? `${formatNum(totals.pesoMedio, 2)} kg` : '—', varIni: uVarPesoIniAno, varAno: uVarPesoAnoAnt },
-                        { label: 'R$/@ médio', value: totals.precoArroba > 0 ? formatMoeda(totals.precoArroba) : '—', varIni: uVarArrobaIniAno, varAno: uVarArrobaAnoAnt },
-                        { label: 'R$/cab', value: totals.valorCabeca > 0 ? formatMoeda(totals.valorCabeca) : '—', varIni: uVarCabValIniAno, varAno: uVarCabValAnoAnt },
-                        { label: '@s estoque', value: totals.totalArrobas > 0 ? formatNum(totals.totalArrobas, 2) : '—', varIni: uVarArrobasEstIniAno, varAno: uVarArrobasEstAnoAnt },
+                        { label: 'Cabeças', value: totals.cabecas > 0 ? formatNum(totals.cabecas, 0) : '—', varIni: uVarCabIniAno, varAno: uVarCabAnoAnt, fmt: 'int' as const, baseIni: compDezAnt?.cabecas, baseAno: compAnoAnt?.cabecas, atual: totals.cabecas },
+                        { label: 'Peso médio', value: totals.pesoMedio > 0 ? `${formatNum(totals.pesoMedio, 2)} kg` : '—', varIni: uVarPesoIniAno, varAno: uVarPesoAnoAnt, fmt: 'kg' as const, baseIni: compDezAnt?.pesoMedio, baseAno: compAnoAnt?.pesoMedio, atual: totals.pesoMedio },
+                        { label: 'R$/@ médio', value: totals.precoArroba > 0 ? formatMoeda(totals.precoArroba) : '—', varIni: uVarArrobaIniAno, varAno: uVarArrobaAnoAnt, fmt: 'money' as const, baseIni: compDezAnt?.precoArroba, baseAno: compAnoAnt?.precoArroba, atual: totals.precoArroba },
+                        { label: 'R$/cab', value: totals.valorCabeca > 0 ? formatMoeda(totals.valorCabeca) : '—', varIni: uVarCabValIniAno, varAno: uVarCabValAnoAnt, fmt: 'money' as const, baseIni: compDezAnt?.valorCabeca, baseAno: compAnoAnt?.valorCabeca, atual: totals.valorCabeca },
+                        { label: '@s estoque', value: totals.totalArrobas > 0 ? formatNum(totals.totalArrobas, 2) : '—', varIni: uVarArrobasEstIniAno, varAno: uVarArrobasEstAnoAnt, fmt: 'dec2' as const, baseIni: compDezAnt?.totalArrobas, baseAno: compAnoAnt?.totalArrobas, atual: totals.totalArrobas },
                       ].map(ind => (
                         <React.Fragment key={ind.label}>
                           <span className="text-muted-foreground text-[9px] truncate">{ind.label}</span>
                           <span className="text-right font-semibold text-foreground tabular-nums">{ind.value}</span>
-                          <span className="text-right"><MetaVariacaoBadge valor={ind.varIni} label="" /></span>
-                          <span className="text-right"><MetaVariacaoBadge valor={ind.varAno} label="" /></span>
+                          <span className="text-right"><MetaVariacaoBadge valor={ind.varIni} label="" baseVal={ind.baseIni} atualVal={ind.atual} fmt={ind.fmt} tooltipLabel="vs início do ano" /></span>
+                          <span className="text-right"><MetaVariacaoBadge valor={ind.varAno} label="" baseVal={ind.baseAno} atualVal={ind.atual} fmt={ind.fmt} tooltipLabel="vs 1 ano" /></span>
                         </React.Fragment>
                       ))}
                     </div>
