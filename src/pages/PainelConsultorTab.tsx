@@ -194,7 +194,7 @@ function rollingAvg(arr: number[]): number[] {
   return r;
 }
 
-function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
+function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[], realPrecoArr?: number[]): Bloco[] {
   const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string, noTotal?: boolean): Row => {
     let valores: number[];
     switch (tab) {
@@ -218,14 +218,13 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
     const pm = d.pesoMedioFin[i];
     return pm > 0 ? (v * pm) / 30 : 0;
   });
-  const valorPorCab = d.valorRebFin.map((v, i) => {
-    const c = d.cabFin[i];
-    return c > 0 ? v / c : 0;
-  });
-  const valorPorArr = d.valorRebFin.map((v, i) => {
-    const pf = d.pesoTotalFin[i];
-    return pf > 0 ? v / (pf / 30) : 0;
-  });
+  // Use persisted snapshot values when available; fallback to calculation
+  const valorPorCab = realValorCab && realValorCab.some(v => v > 0)
+    ? d.valorRebFin.map((v, i) => realValorCab[i] || (d.cabFin[i] > 0 ? v / d.cabFin[i] : 0))
+    : d.valorRebFin.map((v, i) => { const c = d.cabFin[i]; return c > 0 ? v / c : 0; });
+  const valorPorArr = realPrecoArr && realPrecoArr.some(v => v > 0)
+    ? d.valorRebFin.map((v, i) => realPrecoArr[i] || (d.pesoTotalFin[i] > 0 ? v / (d.pesoTotalFin[i] / 30) : 0))
+    : d.valorRebFin.map((v, i) => { const pf = d.pesoTotalFin[i]; return pf > 0 ? v / (pf / 30) : 0; });
 
   switch (tab) {
     case 'mensal':
