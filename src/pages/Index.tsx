@@ -131,6 +131,7 @@ const TITLES: Record<TabId, string> = {
   meta_movimentacoes: 'Movimentações Meta',
   meta_consolidacao: 'Consolidação Meta',
   precos_mercado_hub: 'Preços de Mercado',
+  conferencia_gmd: 'Conferência de GMD',
 };
 
 const Index = () => {
