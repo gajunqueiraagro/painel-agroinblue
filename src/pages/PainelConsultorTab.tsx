@@ -77,6 +77,13 @@ interface Bloco {
   rows: Row[];
 }
 
+// ─── Snapshot de peso validado ───
+interface PesoSnapshot {
+  cabecas: number[];    // 12 ou 13 valores
+  pesoMedio: number[];
+  arrobas: number[];
+}
+
 // ─── Monthly raw data struct ───
 interface MonthlyData {
   cabIni: number[];
@@ -194,7 +201,7 @@ function rollingAvg(arr: number[]): number[] {
   return r;
 }
 
-function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[], realPrecoArr?: number[]): Bloco[] {
+function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[], realPrecoArr?: number[], pesoSnap?: PesoSnapshot): Bloco[] {
   const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string, noTotal?: boolean): Row => {
     let valores: number[];
     switch (tab) {
@@ -206,16 +213,31 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
     return { indicador, format, valores, indicadorId, noTotal };
   };
 
+  // Se há snapshot validado de peso, usar como fonte oficial
+  const hasSnap = pesoSnap && pesoSnap.cabecas.some(v => v > 0);
+  const pesoTotalFin = hasSnap
+    ? pesoSnap!.cabecas.map((c, i) => c * (pesoSnap!.pesoMedio[i] || 0))
+    : d.pesoTotalFin;
+  const pesoTotalIni = hasSnap
+    ? [d.pesoTotalIni[0], ...pesoTotalFin.slice(0, 11)]
+    : d.pesoTotalIni;
+  const pesoMedioFin = hasSnap
+    ? pesoSnap!.pesoMedio
+    : d.pesoMedioFin;
+  const pesoMedioIni = hasSnap
+    ? [d.pesoMedioIni[0], ...pesoMedioFin.slice(0, 11)]
+    : d.pesoMedioIni;
+
   const cabMedia = d.cabIni.map((v, i) => (v + d.cabFin[i]) / 2);
   const uaMedia = cabMedia.map((v, i) => {
-    const pm = d.pesoMedioFin[i];
+    const pm = pesoMedioFin[i];
     return pm > 0 ? (v * pm) / 450 : 0;
   });
   const lotUaHa = uaMedia.map(v => d.areaProd > 0 ? v / d.areaProd : 0);
   const arrHa = d.arrobasProd.map(v => d.areaProd > 0 ? v / d.areaProd : 0);
   const desfruteCab = d.saidas;
   const desfrute_arr = d.saidas.map((v, i) => {
-    const pm = d.pesoMedioFin[i];
+    const pm = pesoMedioFin[i];
     return pm > 0 ? (v * pm) / 30 : 0;
   });
   // Use persisted snapshot values when available; fallback to calculation
@@ -223,8 +245,8 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
     ? d.valorRebFin.map((v, i) => realValorCab[i] || (d.cabFin[i] > 0 ? v / d.cabFin[i] : 0))
     : d.valorRebFin.map((v, i) => { const c = d.cabFin[i]; return c > 0 ? v / c : 0; });
   const valorPorArr = realPrecoArr && realPrecoArr.some(v => v > 0)
-    ? d.valorRebFin.map((v, i) => realPrecoArr[i] || (d.pesoTotalFin[i] > 0 ? v / (d.pesoTotalFin[i] / 30) : 0))
-    : d.valorRebFin.map((v, i) => { const pf = d.pesoTotalFin[i]; return pf > 0 ? v / (pf / 30) : 0; });
+    ? d.valorRebFin.map((v, i) => realPrecoArr[i] || (pesoTotalFin[i] > 0 ? v / (pesoTotalFin[i] / 30) : 0))
+    : d.valorRebFin.map((v, i) => { const pf = pesoTotalFin[i]; return pf > 0 ? v / (pf / 30) : 0; });
 
   switch (tab) {
     case 'mensal':
@@ -241,12 +263,12 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
         {
           nome: 'Peso',
           rows: [
-            r('Peso ini. (kg)', 'cab', d.pesoTotalIni, 'peso_ini_kg', true),
-            r('Peso final (kg)', 'cab', d.pesoTotalFin, 'peso_fin_kg', true),
-            r('Peso ini. (@)', 'cab', d.pesoTotalIni.map(v => Math.round(v / 30)), 'peso_ini_arr', true),
-            r('Peso final (@)', 'cab', d.pesoTotalFin.map(v => Math.round(v / 30)), 'peso_fin_arr', true),
-            r('Peso méd. ini.', 'med2', d.pesoMedioIni, 'peso_med_ini', true),
-            r('Peso méd. final', 'med2', d.pesoMedioFin, 'peso_med_fin', true),
+            r('Peso ini. (kg)', 'cab', pesoTotalIni, 'peso_ini_kg', true),
+            r('Peso final (kg)', 'cab', pesoTotalFin, 'peso_fin_kg', true),
+            r('Peso ini. (@)', 'cab', pesoTotalIni.map(v => Math.round(v / 30)), 'peso_ini_arr', true),
+            r('Peso final (@)', 'cab', pesoTotalFin.map(v => Math.round(v / 30)), 'peso_fin_arr', true),
+            r('Peso méd. ini.', 'med2', pesoMedioIni, 'peso_med_ini', true),
+            r('Peso méd. final', 'med2', pesoMedioFin, 'peso_med_fin', true),
           ],
         },
         {
@@ -361,7 +383,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
 }
 
 // ─── Build blocos from vw_zoot_fazenda_mensal (for Meta cenário) ───
-function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanhoMetaMes?: number[], valorRebanhoMetaMesAnteriorOuDez?: number[], metaValorCabMes?: number[], metaPrecoArrMes?: number[]): Bloco[] {
+function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanhoMetaMes?: number[], valorRebanhoMetaMesAnteriorOuDez?: number[], metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot): Bloco[] {
   const byMes = indexByMes(rows);
   const get = (field: keyof ZootMensal): number[] =>
     Array.from({ length: 12 }, (_, i) => {
@@ -373,9 +395,15 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
   const cabFin = get('cabecas_final');
   const entradas = get('entradas');
   const saidas = get('saidas');
-  const pesoIni = get('peso_inicio_kg');
-  const pesoFin = get('peso_total_final_kg');
-  const pesoMedFin = get('peso_medio_final_kg');
+  const pesoIniRaw = get('peso_inicio_kg');
+  const pesoFinRaw = get('peso_total_final_kg');
+  const pesoMedFinRaw = get('peso_medio_final_kg');
+
+  // Snapshot validado de peso sobrescreve view quando disponível
+  const hasSnap = pesoSnap && pesoSnap.cabecas.some(v => v > 0);
+  const pesoFin = hasSnap ? pesoSnap!.cabecas.map((c, i) => c * (pesoSnap!.pesoMedio[i] || 0)) : pesoFinRaw;
+  const pesoIni = hasSnap ? [pesoIniRaw[0], ...pesoFin.slice(0, 11)] : pesoIniRaw;
+  const pesoMedFin = hasSnap ? pesoSnap!.pesoMedio : pesoMedFinRaw;
   // GMD: usar NaN como sentinela quando meta não projetou ganho de peso
   // (gmd_numerador_kg=0 com rebanho presente = "sem projeção de GMD", não "GMD=0")
   const gmd = Array.from({ length: 12 }, (_, i) => {
@@ -567,7 +595,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
 }
 
 // ─── Build blocos from MetaConsolidacao (validated consolidation) ───
-function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number, metaValorCabMes?: number[], metaPrecoArrMes?: number[]): Bloco[] {
+function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number, metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot): Bloco[] {
   // Aggregate across all categories per month
   const agg = (field: keyof MetaCategoriaMes): number[] =>
     Array.from({ length: 12 }, (_, i) => {
@@ -581,15 +609,21 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   const cabFin = agg('sf');
   const entradas = agg('ee');
   const saidas = agg('se');
-  const pesoIni = agg('pesoInicial');
-  const pesoFin = agg('pesoTotalFinal');
+  const pesoIniRaw = agg('pesoInicial');
+  const pesoFinRaw = agg('pesoTotalFinal');
   const prodBio = agg('producaoBio');
 
+  // Snapshot validado de peso sobrescreve consolidação quando disponível
+  const hasSnap = pesoSnap && pesoSnap.cabecas.some(v => v > 0);
+  const pesoFin = hasSnap ? pesoSnap!.cabecas.map((c, i) => c * (pesoSnap!.pesoMedio[i] || 0)) : pesoFinRaw;
+  const pesoIni = hasSnap ? [pesoIniRaw[0], ...pesoFin.slice(0, 11)] : pesoIniRaw;
+
   // Peso médio final = peso total final / SF (weighted across categories)
-  const pesoMedFin = Array.from({ length: 12 }, (_, i) => {
+  const pesoMedFinRaw = Array.from({ length: 12 }, (_, i) => {
     const sf = cabFin[i];
-    return sf > 0 ? pesoFin[i] / sf : 0;
+    return sf > 0 ? pesoFinRaw[i] / sf : 0;
   });
+  const pesoMedFin = hasSnap ? pesoSnap!.pesoMedio : pesoMedFinRaw;
 
   const pesoMedIni = cabIni.map((c, i) => c > 0 ? pesoIni[i] / c : 0);
   const cabMedia = cabIni.map((v, i) => (v + cabFin[i]) / 2);
@@ -900,13 +934,14 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const [valorRebanhoMetaMes, setValorRebanhoMetaMes] = useState<number[]>(Array(12).fill(0));
   const [metaValorCabMes, setMetaValorCabMes] = useState<number[]>(Array(12).fill(0));
   const [metaPrecoArrMes, setMetaPrecoArrMes] = useState<number[]>(Array(12).fill(0));
+  const [metaPesoSnap, setMetaPesoSnap] = useState<PesoSnapshot>({ cabecas: Array(12).fill(0), pesoMedio: Array(12).fill(0), arrobas: Array(12).fill(0) });
 
   useEffect(() => {
     if (!fazendaId || fazendaId === '__global__') return;
     const meses = Array.from({ length: 12 }, (_, i) => `${anoNum}-${String(i + 1).padStart(2, '0')}`);
     supabase
       .from('valor_rebanho_meta_validada' as any)
-      .select('ano_mes, valor_total, valor_cabeca_medio, preco_arroba_medio')
+      .select('ano_mes, valor_total, valor_cabeca_medio, preco_arroba_medio, cabecas, peso_medio_kg, arrobas_total')
       .eq('fazenda_id', fazendaId)
       .in('ano_mes', meses)
       .then(({ data, error }) => {
@@ -914,17 +949,24 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         const vrm = Array(12).fill(0);
         const vcm = Array(12).fill(0);
         const vam = Array(12).fill(0);
+        const cab = Array(12).fill(0);
+        const pm = Array(12).fill(0);
+        const arr = Array(12).fill(0);
         (data as any[]).forEach((row: any) => {
           const idx = meses.indexOf(row.ano_mes);
           if (idx >= 0) {
             vrm[idx] = Number(row.valor_total) || 0;
             vcm[idx] = Number(row.valor_cabeca_medio) || 0;
             vam[idx] = Number(row.preco_arroba_medio) || 0;
+            cab[idx] = Number(row.cabecas) || 0;
+            pm[idx] = Number(row.peso_medio_kg) || 0;
+            arr[idx] = Number(row.arrobas_total) || 0;
           }
         });
         setValorRebanhoMetaMes(vrm);
         setMetaValorCabMes(vcm);
         setMetaPrecoArrMes(vam);
+        setMetaPesoSnap({ cabecas: cab, pesoMedio: pm, arrobas: arr });
       });
   }, [fazendaId, anoNum]);
   // Official source: view data for Realizado (replaces buildMonthlyData local calcs)
@@ -936,6 +978,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   // ── Leitura oficial do Valor do Rebanho REALIZADO validado ──
   const [realValorCabMes, setRealValorCabMes] = useState<number[]>(Array(13).fill(0));
   const [realPrecoArrMes, setRealPrecoArrMes] = useState<number[]>(Array(13).fill(0));
+  const [realPesoSnap, setRealPesoSnap] = useState<PesoSnapshot>({ cabecas: Array(13).fill(0), pesoMedio: Array(13).fill(0), arrobas: Array(13).fill(0) });
 
   useEffect(() => {
     if (!fazendaId) { setValorRebanhoMes(Array(13).fill(0)); return; }
@@ -949,11 +992,12 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         setValorRebanhoMes(Array(13).fill(0));
         setRealValorCabMes(Array(13).fill(0));
         setRealPrecoArrMes(Array(13).fill(0));
+        setRealPesoSnap({ cabecas: Array(13).fill(0), pesoMedio: Array(13).fill(0), arrobas: Array(13).fill(0) });
         return;
       }
       const { data, error } = await supabase
         .from('valor_rebanho_realizado_validado' as any)
-        .select('ano_mes, valor_total, valor_cabeca_medio, preco_arroba_medio')
+        .select('ano_mes, valor_total, valor_cabeca_medio, preco_arroba_medio, cabecas, peso_medio_kg, arrobas_total')
         .in('fazenda_id', fazendaIds)
         .in('ano_mes', todasMeses);
       if (error) {
@@ -970,19 +1014,31 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         setValorRebanhoMes(todasMeses.map(mes => totais.get(mes) || 0));
         setRealValorCabMes(Array(13).fill(0));
         setRealPrecoArrMes(Array(13).fill(0));
+        setRealPesoSnap({ cabecas: Array(13).fill(0), pesoMedio: Array(13).fill(0), arrobas: Array(13).fill(0) });
         return;
       }
       const totais = new Map(todasMeses.map(mes => [mes, 0]));
       const vcMap = new Map(todasMeses.map(mes => [mes, 0]));
       const paMap = new Map(todasMeses.map(mes => [mes, 0]));
+      const cabMap = new Map(todasMeses.map(mes => [mes, 0]));
+      const pmMap = new Map(todasMeses.map(mes => [mes, 0]));
+      const arrMap = new Map(todasMeses.map(mes => [mes, 0]));
       (data as any[] || []).forEach((row: any) => {
         totais.set(row.ano_mes, (totais.get(row.ano_mes) || 0) + (Number(row.valor_total) || 0));
         vcMap.set(row.ano_mes, Number(row.valor_cabeca_medio) || 0);
         paMap.set(row.ano_mes, Number(row.preco_arroba_medio) || 0);
+        cabMap.set(row.ano_mes, Number(row.cabecas) || 0);
+        pmMap.set(row.ano_mes, Number(row.peso_medio_kg) || 0);
+        arrMap.set(row.ano_mes, Number(row.arrobas_total) || 0);
       });
       setValorRebanhoMes(todasMeses.map(mes => totais.get(mes) || 0));
       setRealValorCabMes(todasMeses.map(mes => vcMap.get(mes) || 0));
       setRealPrecoArrMes(todasMeses.map(mes => paMap.get(mes) || 0));
+      setRealPesoSnap({
+        cabecas: todasMeses.map(mes => cabMap.get(mes) || 0),
+        pesoMedio: todasMeses.map(mes => pmMap.get(mes) || 0),
+        arrobas: todasMeses.map(mes => arrMap.get(mes) || 0),
+      });
     })();
   }, [fazendaId, anoNum, fazendas]);
 
@@ -1009,13 +1065,19 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
       // Consolidação Meta valida os blocos zootécnicos; valor do rebanho vem do snapshot validado
       if (metaConsolidacao && metaConsolidacao.length > 0) {
-        return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes);
+        return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap);
       }
 
-      return buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes);
+      return buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes, metaPesoSnap);
     }
-    return buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1));
-  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacao, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes]);
+    // Realizado: slice(1) removes Dec prev year index for 12-month arrays
+    const realPesoSnap12: PesoSnapshot = {
+      cabecas: realPesoSnap.cabecas.slice(1),
+      pesoMedio: realPesoSnap.pesoMedio.slice(1),
+      arrobas: realPesoSnap.arrobas.slice(1),
+    };
+    return buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12);
+  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacao, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap]);
 
   useEffect(() => {
     if (blocos.length > 0) {

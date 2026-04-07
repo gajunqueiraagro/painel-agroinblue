@@ -61,9 +61,15 @@ const FONTE_REBANHO_PREVISTO: FonteIndicador = {
 };
 
 const FONTE_PESO_PREVISTO: FonteIndicador = {
-  ...FONTE_ZOOT_VIEW_PREVISTO,
-  fonte_campo: 'peso_inicio_kg, peso_total_final_kg, peso_medio_final_kg (cenario=meta)',
-  regra_calculo: 'Peso previsto da view zootécnica oficial',
+  fonte_tipo: 'meta',
+  fonte_tabela: 'valor_rebanho_meta_validada',
+  fonte_campo: 'cabecas, peso_medio_kg, arrobas_total',
+  regra_calculo: 'Peso lido do snapshot validado na tela Valor do Rebanho META',
+  regra_prioridade: '1. Snapshot validado META; 2. View zootécnica meta (fallback)',
+  tela_origem: '/meta-preco',
+  tela_label: 'Valor do Rebanho META',
+  permite_fallback: true,
+  observacao: 'Quando validado, peso vem da mesma tabela de snapshot do valor do rebanho',
 };
 
 // ─── Rebanho ───
@@ -82,13 +88,14 @@ const FONTE_REBANHO_REAL: FonteIndicador = {
 // ─── Peso ───
 const FONTE_PESO_REAL: FonteIndicador = {
   fonte_tipo: 'fechamento',
-  fonte_tabela: 'fechamento_pasto_itens',
-  fonte_campo: 'peso_medio_kg × quantidade',
-  regra_calculo: 'Peso total = Σ(categoria.quantidade × categoria.peso_medio_kg)',
-  regra_prioridade: '1. Fechamento oficial; 2. Peso por categoria dos pastos',
-  tela_origem: '/fechamento',
-  tela_label: 'Fechamento de Pastos',
+  fonte_tabela: 'valor_rebanho_realizado_validado',
+  fonte_campo: 'cabecas, peso_medio_kg, arrobas_total',
+  regra_calculo: 'Peso lido do snapshot validado na tela Valor do Rebanho',
+  regra_prioridade: '1. Snapshot oficial validado; 2. Fechamento de pastos (fallback)',
+  tela_origem: '/valor-rebanho',
+  tela_label: 'Valor do Rebanho',
   permite_fallback: true,
+  observacao: 'Peso e valor vêm da mesma tabela de snapshot validado',
 };
 
 // ─── Valor do Rebanho (Realizado) ───
