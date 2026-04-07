@@ -669,8 +669,27 @@ export function MetaPrecoTab({ onBack }: Props) {
   );
 }
 
-/* ---------- VariacaoBadge — replica exata do ValorRebanhoTab ---------- */
-function MetaVariacaoBadge({ valor, label, showLabel }: { valor: number | null; label: string; showLabel?: boolean }) {
+/* ---------- Format helper for tooltip ---------- */
+type MetaFmt = 'money' | 'int' | 'kg' | 'dec2';
+
+function fmtTooltipVal(v: number | undefined, fmt: MetaFmt): string {
+  if (v === undefined || v === null) return '—';
+  if (fmt === 'money') return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
+  if (fmt === 'int') return Math.round(v).toLocaleString('pt-BR');
+  if (fmt === 'kg') return `${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg`;
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/* ---------- VariacaoBadge — replica exata do ValorRebanhoTab + tooltip ---------- */
+function MetaVariacaoBadge({ valor, label, showLabel, baseVal, atualVal, fmt, tooltipLabel }: {
+  valor: number | null;
+  label: string;
+  showLabel?: boolean;
+  baseVal?: number;
+  atualVal?: number;
+  fmt?: MetaFmt;
+  tooltipLabel?: string;
+}) {
   if (valor === null) return null;
   const isPositive = valor > 0;
   const isNeutral = Math.abs(valor) < 0.1;
@@ -682,12 +701,27 @@ function MetaVariacaoBadge({ valor, label, showLabel }: { valor: number | null; 
       : 'text-destructive';
 
   const formattedVal = Math.abs(valor).toFixed(1).replace('.', ',');
+  const hasTooltip = baseVal !== undefined && atualVal !== undefined && fmt && tooltipLabel;
 
-  return (
-    <span className={`inline-flex items-center gap-0.5 text-[8px] font-semibold tabular-nums ${color}`}>
+  const badge = (
+    <span className={`inline-flex items-center gap-0.5 text-[8px] font-semibold tabular-nums ${color} ${hasTooltip ? 'cursor-help' : ''}`}>
       <Icon className="h-2.5 w-2.5" />
       {formattedVal}%
       {showLabel && <span className="font-normal text-muted-foreground ml-0.5">{label}</span>}
     </span>
+  );
+
+  if (!hasTooltip) return badge;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{badge}</TooltipTrigger>
+      <TooltipContent side="top" className="text-[10px] leading-relaxed p-2 max-w-[220px]">
+        <p className="font-semibold text-foreground mb-0.5">{tooltipLabel}</p>
+        <p className="text-muted-foreground">Base: <span className="text-foreground font-medium">{fmtTooltipVal(baseVal, fmt)}</span></p>
+        <p className="text-muted-foreground">Atual: <span className="text-foreground font-medium">{fmtTooltipVal(atualVal, fmt)}</span></p>
+        <p className="text-muted-foreground">Variação: <span className={`font-medium ${color}`}>{isPositive ? '+' : ''}{formattedVal}%</span></p>
+      </TooltipContent>
+    </Tooltip>
   );
 }
