@@ -288,16 +288,16 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                     <td className={`px-1.5 py-0.5 font-bold text-foreground sticky left-0 ${catBg}`}>
                       {d.categoria_nome}
                     </td>
-                    <td className={`px-1.5 py-0.5 text-center font-semibold ${isRealizado ? 'bg-primary/5' : 'bg-orange-500/5'} ${d.saldo_inicial === 0 ? 'text-transparent' : 'text-foreground'}`}>
-                      {d.saldo_inicial}
+                    <td className={`px-1.5 py-0.5 text-center font-semibold ${isRealizado ? 'bg-primary/5' : 'bg-orange-500/5'} ${isFutureMonth || d.saldo_inicial === 0 ? 'text-transparent' : 'text-foreground'}`}>
+                      {isFutureMonth ? '' : d.saldo_inicial}
                     </td>
                     {vals.map((val, j) => (
                       <td key={j} className={`px-1.5 py-0.5 text-center font-semibold ${val > 0 ? (COLUNAS_CONSOLIDADAS[j].entrada ? 'text-success' : 'text-destructive') : 'text-transparent'}`}>
                         {val || '–'}
                       </td>
                     ))}
-                    <td className={`px-1.5 py-0.5 text-center font-extrabold ${isRealizado ? 'bg-primary/5' : 'bg-orange-500/5'} ${d.saldo_final === 0 ? 'text-transparent' : 'text-foreground'}`}>
-                      {d.saldo_final}
+                    <td className={`px-1.5 py-0.5 text-center font-extrabold ${isRealizado ? 'bg-primary/5' : 'bg-orange-500/5'} ${isFutureMonth || d.saldo_final === 0 ? 'text-transparent' : 'text-foreground'}`}>
+                      {isFutureMonth ? '' : d.saldo_final}
                     </td>
                     <td className={`px-1.5 py-0.5 text-center italic text-[9px] ${isRealizado ? 'bg-primary/5' : 'bg-orange-500/5'} ${!d.peso_medio_final || d.peso_medio_final <= 0 ? 'text-transparent' : 'text-foreground'}`}>
                       {formatPeso(d.peso_medio_final)}
@@ -307,12 +307,12 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
               })}
               <tr className={`border-t-2 ${isRealizado ? 'bg-primary/15' : 'bg-orange-500/15'}`}>
                 <td className={`px-1.5 py-1 font-extrabold text-foreground sticky left-0 ${isRealizado ? 'bg-primary/15' : 'bg-orange-500/15'}`}>TOTAL</td>
-                <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoIni}</td>
+                <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{isFutureMonth ? '' : totais.saldoIni}</td>
                 <td className="px-1.5 py-1 text-center font-extrabold text-success">{totais.entradasExt || '–'}</td>
                 <td className="px-1.5 py-1 text-center font-extrabold text-success">{totais.evolEntrada || '–'}</td>
                 <td className="px-1.5 py-1 text-center font-extrabold text-destructive">{totais.saidasExt || '–'}</td>
                 <td className="px-1.5 py-1 text-center font-extrabold text-destructive">{totais.evolSaida || '–'}</td>
-                <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{totais.saldoFin}</td>
+                <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{isFutureMonth ? '' : totais.saldoFin}</td>
                 <td className={`px-1.5 py-1 text-center italic text-[9px] font-semibold ${!totais.pesoMedio || totais.pesoMedio <= 0 ? 'text-transparent' : 'text-foreground'}`}>
                   {formatPeso(totais.pesoMedio)}
                 </td>
