@@ -640,17 +640,20 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                       <button
                         key={s.value}
                         type="button"
-                        onClick={() => !disabled && setCompraForm(f => ({
-                          ...f,
-                          statusOperacional: s.value === 'meta' ? undefined : s.value,
-                          cenario: s.value === 'meta' ? 'meta' : 'realizado',
-                          _uiStatus: s.value,
-                        }))}
+                        onClick={() => {
+                          if (disabled) return;
+                          setCompraStatusMode(s.value as any);
+                          setCompraForm(f => ({
+                            ...f,
+                            statusOperacional: s.value === 'meta' ? null : s.value,
+                            cenario: s.value === 'meta' ? 'meta' : 'realizado',
+                          }));
+                        }}
                         disabled={disabled}
                         className={`flex-1 py-1 rounded text-[10px] font-bold border-2 transition-all ${
                           disabled ? 'opacity-40 cursor-not-allowed' : ''
                         } ${
-                          (compraForm._uiStatus || (lancamentoIsMeta ? 'meta' : (compraForm.statusOperacional || 'realizado'))) === s.value
+                          compraStatusMode === s.value
                             ? `${s.bg} text-white border-transparent shadow-md`
                             : 'border-border text-muted-foreground bg-muted/30'
                         }`}
