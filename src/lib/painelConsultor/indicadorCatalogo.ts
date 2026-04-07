@@ -2,7 +2,7 @@
  * Catálogo oficial de fonte por indicador — Painel do Consultor
  *
  * Cada indicador tem definição formal de origem para cada cenário.
- * Regra: Previsto NUNCA faz fallback para Realizado.
+ * Regra: Meta NUNCA faz fallback para Realizado.
  */
 
 export type FonteTipo = 'fechamento' | 'operacional' | 'view_sql' | 'calculado' | 'financeiro_v2' | 'meta' | 'sem_fonte';
@@ -33,12 +33,12 @@ const SEM_PREVISTO: FonteIndicador = {
   fonte_tipo: 'sem_fonte',
   fonte_tabela: '',
   fonte_campo: '',
-  regra_calculo: 'Sem base prevista configurada',
-  regra_prioridade: 'Não há fonte prevista — exibir vazio',
+  regra_calculo: 'Sem base meta configurada',
+  regra_prioridade: 'Não há fonte meta — exibir vazio',
   tela_origem: '',
   tela_label: '',
   permite_fallback: false,
-  observacao: 'Previsto ainda não implementado para este indicador',
+  observacao: 'Meta ainda não implementada para este indicador',
 };
 
 // ─── Previsto Zootécnico (fonte oficial: vw_zoot_fazenda_mensal cenario=meta) ───
@@ -268,7 +268,7 @@ export function getFonteStatusLabel(fonte: FonteIndicador): { label: string; sta
     case 'fechamento':
       return { label: 'Fechado', status: 'fechada', color: 'text-emerald-600' };
     case 'meta':
-      return { label: 'Previsto validado', status: 'prevista', color: 'text-blue-600' };
+      return { label: 'Meta validada', status: 'prevista', color: 'text-blue-600' };
     case 'operacional':
     case 'view_sql':
     case 'calculado':

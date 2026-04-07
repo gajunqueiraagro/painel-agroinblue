@@ -2,14 +2,14 @@
  * Painel do Consultor — PC-100 (modelo oficial de auditoria)
  *
  * Abas: Valores Mensais | Médios do Mês | Acumulados | Média do Período
- * Cenários: Realizado | Previsto
+ * Cenários: Realizado | Meta
  * Blocos colapsáveis por aba com indicadores oficiais.
  *
  * Regra de fonte: "Fechamento sempre vence."
  * Formatação: cab=inteiro, gmd=3 casas, padrao/med2=2 casas, money=R$
  *
- * REGRA CRÍTICA: Previsto NUNCA faz fallback para Realizado.
- * Se não há fonte prevista, a célula fica vazia.
+ * REGRA CRÍTICA: Meta NUNCA faz fallback para Realizado.
+ * Se não há fonte meta, a célula fica vazia.
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -361,7 +361,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
 }
 }
 
-// ─── Build blocos from vw_zoot_fazenda_mensal (for Previsto cenário) ───
+// ─── Build blocos from vw_zoot_fazenda_mensal (for Meta cenário) ───
 function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanhoMetaMes?: number[], valorRebanhoMetaMesAnteriorOuDez?: number[], metaValorCabMes?: number[], metaPrecoArrMes?: number[]): Bloco[] {
   const byMes = indexByMes(rows);
   const get = (field: keyof ZootMensal): number[] =>
@@ -844,7 +844,7 @@ function SourceInfoTooltip({ indicadorId, cenario }: { indicadorId?: string; cen
           <span className="text-muted-foreground">Status:</span>
           <span className={`font-semibold ${statusInfo.color}`}>● {statusInfo.label}</span>
         </div>
-        <div><span className="text-muted-foreground">Fonte:</span> {fonte.fonte_tipo === 'sem_fonte' ? 'Sem base configurada' : fonte.fonte_tabela}</div>
+        <div><span className="text-muted-foreground">Fonte:</span> {fonte.fonte_tipo === 'sem_fonte' ? 'Sem base meta configurada' : fonte.fonte_tabela}</div>
         {fonte.fonte_campo && <div><span className="text-muted-foreground">Campo:</span> {fonte.fonte_campo}</div>}
         <div><span className="text-muted-foreground">Regra:</span> {fonte.regra_calculo}</div>
         <div><span className="text-muted-foreground">Prioridade:</span> {fonte.regra_prioridade}</div>
@@ -943,10 +943,10 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
   const isPrevisto = cenario === 'meta';
 
-  // REGRA: Previsto em modo Global desabilitado — sem agregação oficial ainda
+  // REGRA: Meta em modo Global desabilitado — sem agregação oficial ainda
   const previstoGlobalBloqueado = isPrevisto && isGlobal;
 
-  // Blocos: Realizado usa buildMonthlyData, Previsto usa vw_zoot_fazenda_mensal (meta)
+  // Blocos: Realizado usa buildMonthlyData, Meta usa valor_rebanho_meta + vw_zoot_fazenda_mensal
   const blocos = useMemo(() => {
     if (previstoGlobalBloqueado) return [];
     if (isPrevisto) {
@@ -992,8 +992,8 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   ];
 
   /**
-   * REGRA CRÍTICA: No cenário "Previsto", verificar se o indicador
-   * tem fonte prevista configurada. Se fonte_tipo === 'sem_fonte',
+   * REGRA CRÍTICA: No cenário "Meta", verificar se o indicador
+   * tem fonte meta configurada. Se fonte_tipo === 'sem_fonte',
    * retornar string vazia — NUNCA copiar valor do Realizado.
    */
 
@@ -1035,7 +1035,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         </thead>
         <tbody>
           {blocoRows.map((row, idx) => {
-            // REGRA: Previsto sem fonte = toda linha vazia
+            // REGRA: Meta sem fonte = toda linha vazia
             const previstoSemFonte = isPrevisto && !hasPrevistoSource(row.indicadorId);
             const tot = (previstoSemFonte || row.noTotal) ? null : totalForRow(row, viewTab, monthCutoff);
 
@@ -1050,7 +1050,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                   let cellContent = '';
                   let isSemBase = false;
                   if (previstoSemFonte) {
-                    cellContent = '';  // sem base prevista
+                    cellContent = '';  // sem base meta
                   } else if (isFuture) {
                     cellContent = '';  // mês futuro (only for Realizado)
                   } else if (isNaN(v)) {
@@ -1085,7 +1085,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
           })}
         </tbody>
       </table>
-      {/* Previsto banner when all rows have no source */}
+      {/* Meta banner when all rows have no source */}
       {isPrevisto && blocoRows.every(r => !hasPrevistoSource(r.indicadorId)) && (
         <div className="text-center text-[10px] text-muted-foreground py-2 bg-muted/20 border-t border-border/20">
           Sem base meta configurada para este bloco
