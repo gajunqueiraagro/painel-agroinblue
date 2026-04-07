@@ -197,7 +197,7 @@ export function MetaPrecoTab({ onBack }: Props) {
         {onBack && (
           <button onClick={onBack} className="flex items-center gap-1 text-xs text-primary hover:underline mb-1">
             <ArrowLeft className="h-3.5 w-3.5" />
-            Voltar para Painel do Consultor
+            Voltar para Preços de Mercado
           </button>
         )}
         <Card>
