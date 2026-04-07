@@ -4070,6 +4070,21 @@ export type Database = {
         }
         Returns: string
       }
+      fn_auditoria_consistencia_zoot: {
+        Args: { p_fazenda_id?: string }
+        Returns: {
+          ano: number
+          cat_peso_total_final: number
+          cat_saldo_final: number
+          cenario: string
+          diff_peso_total_final: number
+          diff_saldo_final: number
+          faz_peso_total_final: number
+          faz_saldo_final: number
+          fazenda_id: string
+          mes: number
+        }[]
+      }
       get_status_pilares_fechamento: {
         Args: { _ano_mes: string; _fazenda_id: string }
         Returns: Json
