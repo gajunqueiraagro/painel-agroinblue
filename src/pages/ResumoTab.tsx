@@ -74,183 +74,83 @@ function StatusBadge({ nivel, label }: { nivel: StatusNivel; label: string }) {
 // ---------------------------------------------------------------------------
 // Zoo KPIs hook — uses official weight hierarchy (fechamento > lancamento > saldo)
 // ---------------------------------------------------------------------------
+// Zoo KPIs — official source: vw_zoot_fazenda_mensal
+// ---------------------------------------------------------------------------
 
-function useZooKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: number, mes: number) {
-  const { pastos, categorias } = usePastos();
-  const { fazendaAtual } = useFazenda();
-  const fazendaId = fazendaAtual?.id;
-
-  // Load fechamento weights for each month jan→mes
-  const [pesosPorMes, setPesosPorMes] = useState<Record<number, Record<string, number>>>({});
-  const [loadingPesos, setLoadingPesos] = useState(false);
-
-  useEffect(() => {
-    if (!fazendaId || fazendaId === '__global__' || !categorias.length) {
-      setPesosPorMes({});
-      return;
-    }
-    let cancelled = false;
-    setLoadingPesos(true);
-    (async () => {
-      const result: Record<number, Record<string, number>> = {};
-      for (let m = 1; m <= mes; m++) {
-        const anoMes = `${ano}-${String(m).padStart(2, '0')}`;
-        result[m] = await loadPesosPastosPorCategoria(fazendaId, anoMes, categorias);
-      }
-      if (!cancelled) {
-        setPesosPorMes(result);
-        setLoadingPesos(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [fazendaId, ano, mes, categorias]);
+function useZooKpis(ano: number, mes: number) {
+  const { data: rows } = useZootMensal({ ano, cenario: 'realizado' });
 
   return useMemo(() => {
-    // Saldo final no mês filtrado (snapshot)
-    const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
-    const saldoFinal = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
+    const mesDado = (rows || []).find(r => r.mes === mes);
+    const saldoFinal = mesDado?.cabecas_final ?? 0;
+    const pesoMedio = mesDado?.peso_medio_final_kg ?? null;
+    const area = mesDado?.area_produtiva_ha ?? 0;
+    const pesoTotalKg = mesDado?.peso_total_final_kg ?? 0;
+    const lotacaoKgHa = pesoTotalKg > 0 && area > 0 ? pesoTotalKg / area : null;
 
-    // Acumulado: for each month, use official weight hierarchy
-    let sumSaldo = 0;
-    let sumPesoTotal = 0;
-    let sumArea = 0;
-    let mesesComDado = 0;
-
-    for (let m = 1; m <= mes; m++) {
-      const sM = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, m);
-      const st = Array.from(sM.values()).reduce((a, v) => a + v, 0);
-      if (st <= 0) continue;
-      mesesComDado++;
-      sumSaldo += st;
-
-      // Use official weight hierarchy per category for this month
-      const pesosPastosMes = pesosPorMes[m] || {};
-      let pesoTotalMes = 0;
-      for (const [cat, qtd] of sM.entries()) {
-        if (qtd <= 0) continue;
-        const { valor: pesoKg } = resolverPesoOficial(
-          cat, pesosPastosMes, saldosIniciais, lancamentos, ano, m,
-        );
-        if (pesoKg) pesoTotalMes += pesoKg * qtd;
-      }
-      sumPesoTotal += pesoTotalMes;
-
-      // Area for this month (same pastos snapshot — model doesn't track monthly area changes)
-      sumArea += calcAreaProdutivaPecuaria(pastos);
-    }
-
-    const rebanhoMedio = mesesComDado > 0 ? sumSaldo / mesesComDado : 0;
-    const pesoMedio = sumSaldo > 0 ? sumPesoTotal / sumSaldo : null;
-    const areaMedia = mesesComDado > 0 ? sumArea / mesesComDado : calcAreaProdutivaPecuaria(pastos);
-    const pesoTotalMedioKg = pesoMedio && rebanhoMedio > 0 ? pesoMedio * rebanhoMedio : null;
-    const lotacaoKgHa = pesoTotalMedioKg && areaMedia > 0 ? pesoTotalMedioKg / areaMedia : null;
-
-    const end = `${ano}-${String(mes).padStart(2, '0')}-31`;
-    const lancsAcum = lancamentos.filter(l => l.data >= `${ano}-01-01` && l.data <= end);
-    const saidasAcum = lancsAcum.filter(l => TIPOS_SAIDA.includes(l.tipo));
-    const arrobasSaidas = saidasAcum.reduce((s, l) => s + calcArrobasSafe(l), 0);
-    return { saldoFinal, pesoMedio, lotacaoKgHa, arrobasSaidas, area: areaMedia, loadingPesos };
-  }, [lancamentos, saldosIniciais, ano, mes, pastos, pesosPorMes, loadingPesos]);
+    return { saldoFinal, pesoMedio, lotacaoKgHa, area };
+  }, [rows, mes]);
 }
 
 // ---------------------------------------------------------------------------
-// Per-farm KPIs for global view (table)
+// Per-farm KPIs for global view (table) — official source
 // ---------------------------------------------------------------------------
 
 interface FarmKpi {
   id: string;
   nome: string;
-  rebanho: number;         // saldo final no mês filtrado
-  pesoMedio: number | null; // média ponderada acumulada
-  area: number;            // área produtiva média do período
-  lotacaoKgHa: number | null; // kg/ha médio do período
+  rebanho: number;
+  pesoMedio: number | null;
+  area: number;
+  lotacaoKgHa: number | null;
 }
 
-function useGlobalFarmKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: number, mes: number) {
-  const { fazendas } = useFazenda();
-  const { categorias } = usePastos();
-  const [allPastos, setAllPastos] = useState<{ fazenda_id: string; ativo: boolean; entra_conciliacao: boolean; area_produtiva_ha: number | null }[]>([]);
-  const [allPesosPorFazMes, setAllPesosPorFazMes] = useState<Record<string, Record<number, Record<string, number>>>>({});
+function useGlobalFarmKpis(ano: number, mes: number) {
+  const { fazendas, isGlobal } = useFazenda();
+  const [farmRows, setFarmRows] = useState<FarmKpi[]>([]);
 
-  const pecuariaIds = useMemo(() =>
-    fazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false).map(f => f.id),
+  const pecuarias = useMemo(() =>
+    fazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false),
   [fazendas]);
 
   useEffect(() => {
-    if (pecuariaIds.length === 0) return;
-    supabase.from('pastos').select('fazenda_id, ativo, entra_conciliacao, area_produtiva_ha').in('fazenda_id', pecuariaIds)
-      .then(({ data }) => { if (data) setAllPastos(data); });
-  }, [pecuariaIds]);
-
-  // Load fechamento weights for all farms × all months
-  useEffect(() => {
-    if (pecuariaIds.length === 0 || !categorias.length) return;
+    if (!isGlobal || pecuarias.length === 0) { setFarmRows([]); return; }
     let cancelled = false;
     (async () => {
-      const result: Record<string, Record<number, Record<string, number>>> = {};
-      for (const fId of pecuariaIds) {
-        result[fId] = {};
-        for (let m = 1; m <= mes; m++) {
-          const anoMes = `${ano}-${String(m).padStart(2, '0')}`;
-          result[fId][m] = await loadPesosPastosPorCategoria(fId, anoMes, categorias);
-        }
-      }
-      if (!cancelled) setAllPesosPorFazMes(result);
+      const { data, error } = await supabase
+        .from('vw_zoot_fazenda_mensal' as any)
+        .select('*')
+        .in('fazenda_id', pecuarias.map(f => f.id))
+        .eq('ano', ano)
+        .eq('mes', mes)
+        .eq('cenario', 'realizado');
+
+      if (cancelled || error || !data) return;
+
+      const rows = (data as any[]).map((r: any) => {
+        const faz = pecuarias.find(f => f.id === r.fazenda_id);
+        const pesoTotal = r.peso_total_final_kg ?? 0;
+        const area = r.area_produtiva_ha ?? 0;
+        return {
+          id: r.fazenda_id as string,
+          nome: faz?.nome || '?',
+          rebanho: (r.cabecas_final ?? 0) as number,
+          pesoMedio: (r.peso_medio_final_kg ?? null) as number | null,
+          area,
+          lotacaoKgHa: pesoTotal > 0 && area > 0 ? pesoTotal / area : null,
+        };
+      }).filter(f => f.rebanho !== 0);
+
+      if (!cancelled) setFarmRows(rows);
     })();
     return () => { cancelled = true; };
-  }, [pecuariaIds, ano, mes, categorias]);
+  }, [isGlobal, pecuarias, ano, mes]);
 
   return useMemo(() => {
-    const pecuarias = fazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false);
-
-    const farms: FarmKpi[] = pecuarias.map(faz => {
-      const lancsFaz = lancamentos.filter(l => l.fazendaId === faz.id);
-      const saldosFaz = saldosIniciais.filter(s => s.fazendaId === faz.id);
-      const pastosFaz = allPastos.filter(p => p.fazenda_id === faz.id);
-
-      // Saldo final no mês filtrado
-      const saldoMap = calcSaldoPorCategoriaLegado(saldosFaz, lancsFaz, ano, mes);
-      const rebanho = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
-
-      // Acumulado with official weight hierarchy
-      let sumSaldo = 0;
-      let sumPesoTotal = 0;
-      let mesesComDado = 0;
-
-      for (let m = 1; m <= mes; m++) {
-        const saldoM = calcSaldoPorCategoriaLegado(saldosFaz, lancsFaz, ano, m);
-        const saldoTotal = Array.from(saldoM.values()).reduce((s, v) => s + v, 0);
-        if (saldoTotal <= 0) continue;
-        mesesComDado++;
-        sumSaldo += saldoTotal;
-
-        const pesosPastosMes = allPesosPorFazMes[faz.id]?.[m] || {};
-        let pesoTotalMes = 0;
-        for (const [cat, qtd] of saldoM.entries()) {
-          if (qtd <= 0) continue;
-          const { valor: pesoKg } = resolverPesoOficial(cat, pesosPastosMes, saldosFaz, lancsFaz, ano, m);
-          if (pesoKg) pesoTotalMes += pesoKg * qtd;
-        }
-        sumPesoTotal += pesoTotalMes;
-      }
-
-      const pesoMedio = sumSaldo > 0 ? sumPesoTotal / sumSaldo : null;
-      const area = calcAreaProdutivaPecuaria(pastosFaz);
-      const pesoTotalKg = pesoMedio && rebanho > 0 ? pesoMedio * rebanho : null;
-      const lotacaoKgHa = pesoTotalKg && area > 0 ? pesoTotalKg / area : null;
-
-      return { id: faz.id, nome: faz.nome, rebanho, pesoMedio, area, lotacaoKgHa };
-    }).filter(f => f.rebanho !== 0);
-
-    // Global consolidated row — derived directly from farm KPIs
-    const globalRebanho = farms.reduce((s, f) => s + f.rebanho, 0);
-    const globalArea = farms.reduce((s, f) => s + f.area, 0);
-
-    // Peso Médio Global = Σ(qtd × pesoMedio) / Σ(qtd) — weighted by rebanho
-    const globalPesoTotal = farms.reduce((s, f) => s + (f.pesoMedio ? f.rebanho * f.pesoMedio : 0), 0);
+    const globalRebanho = farmRows.reduce((s, f) => s + f.rebanho, 0);
+    const globalArea = farmRows.reduce((s, f) => s + f.area, 0);
+    const globalPesoTotal = farmRows.reduce((s, f) => s + (f.pesoMedio ? f.rebanho * f.pesoMedio : 0), 0);
     const globalPesoMedio = globalRebanho > 0 ? globalPesoTotal / globalRebanho : null;
-
-    // KG/HA Global = Σ peso total / Σ área
     const globalLotacao = globalPesoTotal > 0 && globalArea > 0 ? globalPesoTotal / globalArea : null;
 
     const globalRow: FarmKpi = {
@@ -258,8 +158,8 @@ function useGlobalFarmKpis(lancamentos: Lancamento[], saldosIniciais: SaldoInici
       pesoMedio: globalPesoMedio, area: globalArea, lotacaoKgHa: globalLotacao,
     };
 
-    return { farms, globalRow };
-  }, [fazendas, lancamentos, saldosIniciais, ano, mes, allPastos, allPesosPorFazMes, categorias]);
+    return { farms: farmRows, globalRow };
+  }, [farmRows]);
 }
 
 // ---------------------------------------------------------------------------
