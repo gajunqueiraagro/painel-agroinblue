@@ -851,9 +851,6 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const [ano, setAno] = useState(filtroGlobal?.ano || String(new Date().getFullYear()));
   const [viewTab, setViewTab] = useState<ViewTab>('mensal');
   const [cenario, setCenario] = useState<Cenario>('realizado');
-  const [pesosPorMes, setPesosPorMes] = useState<Record<string, Record<string, number>>>({});
-  const [qtdPorMes, setQtdPorMes] = useState<Record<string, Record<string, number>>>({});
-  const [pesoMedioGeralPorMes, setPesoMedioGeralPorMes] = useState<Record<string, number | null>>({});
   const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(Array(13).fill(0));
   const [openBlocos, setOpenBlocos] = useState<Record<string, boolean>>({});
   const [showDivP1, setShowDivP1] = useState(false);
@@ -878,27 +875,11 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const { status: statusPilares, refetch: refetchPilares } = useStatusPilares(fazendaId, mesAtualRef);
   const { data: zootMeta } = useZootMensal({ ano: anoNum, cenario: 'meta' });
 
+  // Official source: view data for Realizado (replaces buildMonthlyData local calcs)
+  const { data: viewDataRealizado } = useZootCategoriaMensal({ ano: anoNum, cenario: 'realizado', global: isGlobal });
+
   // Month cutoff: months > cutoff are blank
   const monthCutoff = useMemo(() => getCurrentMonthCutoff(anoNum), [anoNum]);
-
-  useEffect(() => {
-    if (!fazendaId || fazendaId === '__global__' || categorias.length === 0) { setPesosPorMes({}); setPesoMedioGeralPorMes({}); setQtdPorMes({}); return; }
-    (async () => {
-      const result: Record<string, Record<string, number>> = {};
-      const pmResult: Record<string, number | null> = {};
-      const qtdResult: Record<string, Record<string, number>> = {};
-      for (let m = 1; m <= 12; m++) {
-        const anoMes = `${anoNum}-${String(m).padStart(2, '0')}`;
-        const r = await loadPesosPastosCompleto(fazendaId, anoMes, categorias);
-        result[anoMes] = r.porCategoria;
-        pmResult[anoMes] = r.pesoMedioGeralPastos;
-        qtdResult[anoMes] = r.quantidadePorCategoria;
-      }
-      setPesosPorMes(result);
-      setPesoMedioGeralPorMes(pmResult);
-      setQtdPorMes(qtdResult);
-    })();
-  }, [fazendaId, anoNum, categorias]);
 
   useEffect(() => {
     if (!fazendaId) { setValorRebanhoMes(Array(13).fill(0)); return; }
@@ -925,9 +906,11 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
   const areaProdutiva = useMemo(() => calcAreaProdutivaPecuaria(pastos), [pastos]);
 
+  const viewTotals = useMemo(() => totalizarViewPorMes(viewDataRealizado || []), [viewDataRealizado]);
+
   const monthlyData = useMemo(() =>
-    buildMonthlyData(lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes, pesoMedioGeralPorMes, qtdPorMes),
-    [lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes, pesoMedioGeralPorMes, qtdPorMes],
+    buildMonthlyDataFromView(viewTotals, viewDataRealizado || [], lancFin, anoNum, areaProdutiva, valorRebanhoMes),
+    [viewTotals, viewDataRealizado, lancFin, anoNum, areaProdutiva, valorRebanhoMes],
   );
 
   const isPrevisto = cenario === 'previsto';
