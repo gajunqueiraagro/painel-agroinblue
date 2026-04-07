@@ -57,6 +57,9 @@ const MESES_SHORT = [
 
 const CHART_LABELS = ['I', 'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
 
+/* Fixed grid widths for the META summary card — easy to tweak */
+const META_CARD_GRID = '310px 140px 140px 140px 140px';
+
 const STATUS_CONFIG = {
   rascunho: { label: 'Rascunho', color: 'bg-amber-500/20 text-amber-700 border-amber-300', icon: AlertTriangle },
   parcial: { label: 'Parcial', color: 'bg-orange-500/20 text-orange-700 border-orange-300', icon: AlertTriangle },
