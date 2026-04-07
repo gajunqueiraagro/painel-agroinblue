@@ -618,13 +618,6 @@ const Index = () => {
       {activeTab === 'analise_consultor' && (
         <AnaliseConsultorTab />
       )}
-      {activeTab === 'preco_mercado' && (
-        <PrecoMercadoTab
-          filtroAnoInicial={filtroGlobal.ano}
-          filtroMesInicial={filtroGlobal.mes}
-          onBack={goToVisaoZooHub}
-        />
-      )}
       {activeTab === 'graficos_analise' && (
         <GraficosAnaliseTab
           lancamentos={lancamentosVisiveis}
