@@ -85,8 +85,6 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
           </h2>
         </div>
         <EvolucaoCategoriaTab
-          lancamentos={lancamentos}
-          saldosIniciais={saldosIniciais}
           initialAno={anoFiltro}
           initialMes={drilldownMonth}
           initialCenario={statusFiltro}
