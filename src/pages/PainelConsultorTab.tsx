@@ -1076,8 +1076,8 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
   // ─── Table render ───
   const renderBlocoTable = (blocoRows: Row[]) => (
-    <div className="overflow-x-auto border rounded border-border/40">
-      <table className="text-[10px] border-collapse" style={{ tableLayout: 'fixed', minWidth: '900px' }}>
+    <div className="overflow-x-auto border rounded border-border/40 -mx-2 sm:mx-0">
+      <table className="text-[10px] border-collapse" style={{ tableLayout: 'fixed', minWidth: '780px' }}>
         <colgroup>
           <col style={{ width: '120px', minWidth: '120px' }} />
           {MESES_LABELS.map((_, i) => <col key={i} style={{ width: '58px', minWidth: '58px' }} />)}
