@@ -135,11 +135,13 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     } else if (isCompra) {
       // Fallback: Open unified purchase edit sheet
       setCompraForm({ ...lancamento });
+      setCompraStatusMode(lancamentoIsMeta ? 'meta' : ((lancamento.statusOperacional as any) || 'realizado'));
       setCompraZooSaved(false);
       setNotaFiscalEdit(lancamento.notaFiscal || '');
       setCompraEditSheetOpen(true);
     } else {
       setForm({ ...lancamento });
+      setFormStatusMode(lancamentoIsMeta ? 'meta' : ((lancamento.statusOperacional as any) || 'realizado'));
       setEditando(true);
     }
   };
