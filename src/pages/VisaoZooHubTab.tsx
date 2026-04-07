@@ -843,17 +843,16 @@ const DOT_STYLE = { r: 2, strokeWidth: 1.5, fill: 'hsl(var(--background))' };
 const ACTIVE_DOT_STYLE = { r: 4, strokeWidth: 2, fill: 'hsl(var(--primary))' };
 
 function GraficosContent({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro, pastos }: GraficosContentProps) {
+  // FONTE OFICIAL
+  const rebanhoAtual = useRebanhoOficial({ ano: anoNum, cenario: 'realizado' });
+  const rebanhoAnt = useRebanhoOficial({ ano: anoNum - 1, cenario: 'realizado' });
+
   const chartData = useMemo(() => {
-    const buildYear = (ano: number) => {
+    const buildYear = (rebanho: typeof rebanhoAtual, ano: number) => {
       const data: any[] = [];
       for (let m = 1; m <= 12; m++) {
-        const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, m);
-        const cab = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
-        const itens = Array.from(saldoMap.entries()).filter(([, q]) => q > 0).map(([cat, q]) => {
-          const si = saldosIniciais.find(s => s.ano === ano && s.categoria === cat);
-          return { quantidade: q, pesoKg: si?.pesoMedioKg ?? null };
-        });
-        const pm = calcPesoMedioPonderado(itens);
+        const cab = rebanho.getSaldoFinalTotal(m);
+        const pm = rebanho.getPesoMedioRebanho(m);
         const areaPec = calcAreaProdutivaPecuaria(pastos);
         const kgha = pm && areaPec > 0 ? (cab * pm) / areaPec : null;
         const mesStr = `${ano}-${String(m).padStart(2, '0')}`;
@@ -863,8 +862,8 @@ function GraficosContent({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro, 
       }
       return data;
     };
-    const atual = buildYear(anoNum);
-    const anterior = buildYear(anoNum - 1);
+    const atual = buildYear(rebanhoAtual, anoNum);
+    const anterior = buildYear(rebanhoAnt, anoNum - 1);
     return MESES_NOMES.map((mes, i) => {
       const isFuturo = i + 1 > mesFiltro;
       return {
@@ -875,7 +874,7 @@ function GraficosContent({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro, 
         [`kgHa_${anoNum - 1}`]: anterior[i]?.kgHa,
       };
     });
-  }, [lancamentos, saldosIniciais, anoNum, mesFiltro, pastos]);
+  }, [rebanhoAtual, rebanhoAnt, lancamentos, anoNum, mesFiltro, pastos]);
 
   const prodData = useMemo(() => {
     if (!zoo.historico || zoo.historico.length < 2) return [];
