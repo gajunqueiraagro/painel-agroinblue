@@ -13,7 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
-import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
+// FONTE OFICIAL: vw_zoot_categoria_mensal (sem calcSaldoPorCategoriaLegado)
 import {
   statusFinanceiro as calcStatusFinanceiro,
   statusCategorias as calcStatusCategorias,
