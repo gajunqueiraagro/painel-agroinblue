@@ -300,7 +300,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const isCenarioMeta = statusOp === 'meta';
   /** StatusOperacional efetivo para passar a componentes que não conhecem 'meta' */
   const effectiveStatusOp: StatusOperacional = isCenarioMeta ? 'programado' : statusOp as StatusOperacional;
-  const isPrevisto = isCenarioMeta; // Meta usa estilo laranja (anteriormente "Previsto")
+  const isMeta = isCenarioMeta; // Meta usa estilo laranja
   const isConfirmado = statusOp === 'programado';
   const isConciliado = statusOp === 'realizado';
   const isAbate = tipo === 'abate';

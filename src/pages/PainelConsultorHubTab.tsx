@@ -45,7 +45,7 @@ const items = [
   },
   {
     id: 'meta_gmd' as TabId,
-    title: 'GMD Previsto',
+    title: 'GMD Meta',
     desc: 'GMD meta por categoria e mês',
     icon: TrendingUp,
     color: 'text-emerald-600',
@@ -53,7 +53,7 @@ const items = [
   },
   {
     id: 'meta_preco' as TabId,
-    title: 'Preços Previstos',
+    title: 'Preços Meta',
     desc: 'Preços de mercado do cenário meta',
     icon: DollarSign,
     color: 'text-blue-600',
@@ -65,7 +65,7 @@ export function PainelConsultorHubTab({ onTabChange }: Props) {
   return (
     <div className="w-full px-4 pt-2 animate-fade-in pb-24">
       <p className="text-xs text-muted-foreground mb-4 px-1">
-        Gerencie o cenário previsto e acesse os dados de auditoria.
+        Gerencie o cenário meta e acesse os dados de auditoria.
       </p>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

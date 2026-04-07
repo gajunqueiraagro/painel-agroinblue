@@ -1,5 +1,5 @@
 /**
- * Hub de Metas/Previsto — sub-abas GMD Previsto, Preços Previstos, Movimentações Meta e Consolidação.
+ * Hub de Metas — sub-abas GMD Meta, Preços Meta, Movimentações Meta e Consolidação.
  */
 import { Card, CardContent } from '@/components/ui/card';
 import { TrendingUp, DollarSign, ArrowLeftRight, Table2 } from 'lucide-react';
@@ -12,7 +12,7 @@ interface Props {
 const items = [
   {
     id: 'meta_movimentacoes' as TabId,
-    title: 'Movimentações Previstas',
+    title: 'Movimentações Meta',
     desc: 'Registre compras, vendas, abates e reclassificações do cenário meta',
     icon: ArrowLeftRight,
     color: 'text-orange-600',
@@ -26,14 +26,14 @@ const items = [
   },
   {
     id: 'meta_gmd' as TabId,
-    title: 'GMD Previsto',
+    title: 'GMD Meta',
     desc: 'Defina o GMD meta por categoria e mês',
     icon: TrendingUp,
     color: 'text-emerald-600',
   },
   {
     id: 'meta_preco' as TabId,
-    title: 'Preços Previstos',
+    title: 'Preços Meta',
     desc: 'Preços de mercado para o cenário meta',
     icon: DollarSign,
     color: 'text-blue-600',
@@ -45,7 +45,7 @@ export function MetasHubTab({ onTabChange }: Props) {
     <div className="w-full px-4 animate-fade-in pb-24">
       <div className="p-4 space-y-3">
         <p className="text-xs text-muted-foreground">
-          Configure as metas de desempenho e preços previstos para alimentar o cenário "Previsto" do Painel do Consultor.
+          Configure as metas de desempenho e preços para alimentar o cenário "Meta" do Painel do Consultor.
         </p>
         {items.map(item => (
           <Card

@@ -1,5 +1,5 @@
 /**
- * Preços Previstos — mesma estrutura do Preço de Mercado, para cenário meta.
+ * Preços Meta — mesma estrutura do Preço de Mercado, para cenário meta.
  */
 import { useState, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
