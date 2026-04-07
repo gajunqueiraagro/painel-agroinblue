@@ -530,7 +530,7 @@ const Index = () => {
       )}
       {activeTab === 'financeiro' && (
         <FinanceiroTab
-          lancamentos={lancamentosVisiveis}
+          lancamentos={lancamentosTodosCenarios}
           onEditar={wrappedEditar as any}
           onRemover={wrappedRemover as any}
           subAbaInicial={subAbaFinanceiro}

@@ -13,7 +13,7 @@ import { fmtValor, formatMoeda, formatKg, formatArroba, formatPercent, formatCab
 import { MESES_OPTIONS } from '@/lib/calculos/labels';
 import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 
-type StatusFiltro = 'todos' | 'realizado' | 'programado' | 'previsto';
+type StatusFiltro = 'todos' | 'realizado' | 'programado' | 'meta';
 type SortDir = 'asc' | 'desc' | null;
 
 interface Props {
@@ -53,6 +53,43 @@ const SUB_ABA_LABELS: Record<SubAba, { label: string; icon: string }> = {
 const TABLE_HEAD_CELL = 'px-[3px] py-1 text-[8px] font-bold uppercase tracking-[0.02em] whitespace-nowrap select-none';
 const TABLE_BODY_CELL = 'px-[3px] py-[3px] align-middle whitespace-nowrap overflow-hidden text-ellipsis';
 const TABLE_FOOT_CELL = 'px-[3px] py-1.5 whitespace-nowrap text-[10px] font-bold';
+
+function normalizeStatusFiltro(value?: string): StatusFiltro {
+  if (value === 'previsto') return 'meta';
+  if (value === 'realizado' || value === 'programado' || value === 'meta') return value;
+  return 'todos';
+}
+
+function normalizeZooLancamento(lancamento: Lancamento): Lancamento {
+  if (lancamento.cenario === 'meta' || lancamento.statusOperacional === 'previsto') {
+    return {
+      ...lancamento,
+      cenario: 'meta',
+      statusOperacional: null,
+    };
+  }
+
+  return lancamento;
+}
+
+function getStatusFiltroLabel(statusFiltro: StatusFiltro): string {
+  switch (statusFiltro) {
+    case 'realizado':
+      return 'Realizado';
+    case 'programado':
+      return 'Programado';
+    case 'meta':
+      return 'Meta';
+    default:
+      return 'Todos';
+  }
+}
+
+function getStatusOrdenacao(lancamento: Lancamento): 'realizado' | 'programado' | 'meta' {
+  if (lancamento.cenario === 'meta') return 'meta';
+  if (lancamento.statusOperacional === 'programado') return 'programado';
+  return 'realizado';
+}
 
 function getFazendaColumnHeader(tipo: string): string {
   switch (tipo) {
@@ -126,7 +163,7 @@ function ResumoLateral({ lancamentos, subAba, anoFiltro, mesFiltro, statusFiltro
   statusFiltro: StatusFiltro;
   categoriaFiltro: string;
 }) {
-  const statusLabel = statusFiltro === 'todos' ? 'Todos' : statusFiltro === 'realizado' ? 'Realizado' : statusFiltro === 'programado' ? 'Programado' : 'Previsto';
+  const statusLabel = getStatusFiltroLabel(statusFiltro);
   const mesLabel = mesFiltro === 'todos' ? 'Todos' : (MESES_OPTIONS.find(m => m.value === mesFiltro)?.label || mesFiltro);
   const tipoLabel = SUB_ABA_LABELS[subAba]?.label || subAba;
   const catLabel = categoriaFiltro === 'todas' ? 'Todas' : (CATEGORIAS.find(c => c.value === categoriaFiltro)?.label || categoriaFiltro);
@@ -227,7 +264,7 @@ function useSortableTable() {
         case 'liqArroba': va = a.c.liqArroba; vb = b.c.liqArroba; break;
         case 'liqKg': va = a.c.liqKg; vb = b.c.liqKg; break;
         case 'liqCab': va = a.c.liqCabeca; vb = b.c.liqCabeca; break;
-        case 'status': va = a.l.statusOperacional || ''; vb = b.l.statusOperacional || ''; break;
+        case 'status': va = getStatusOrdenacao(a.l); vb = getStatusOrdenacao(b.l); break;
       }
       if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb as string) : (vb as string).localeCompare(va);
       return sortDir === 'asc' ? (va as number) - (vb as number) : (vb as number) - (va as number);
@@ -469,6 +506,10 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
     fazendas.forEach(f => m.set(f.id, f.nome));
     return m;
   }, [fazendas]);
+  const lancamentosNormalizados = useMemo(
+    () => lancamentos.map(normalizeZooLancamento),
+    [lancamentos],
+  );
   const [topTab, setTopTab] = useState<TopTab>(subAbaInicial ? getTopTabFromSubAba(subAbaInicial) : 'entradas');
   const [subAba, setSubAba] = useState<SubAba>(subAbaInicial || 'abate');
   const [detalheId, setDetalheId] = useState<string | null>(null);
@@ -483,21 +524,21 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));
-    lancamentos.forEach(l => {
+    lancamentosNormalizados.forEach(l => {
       try { anos.add(format(parseISO(l.data), 'yyyy')); } catch {}
     });
     return Array.from(anos).sort().reverse();
-  }, [lancamentos]);
+  }, [lancamentosNormalizados]);
 
   const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState(filtroMesInicial || 'todos');
-  const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>((filtroStatusInicial as StatusFiltro) || 'todos');
+  const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>(normalizeStatusFiltro(filtroStatusInicial));
   const [categoriaFiltro, setCategoriaFiltro] = useState('todas');
 
   useEffect(() => {
     if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
     if (filtroMesInicial) setMesFiltro(filtroMesInicial);
-    if (filtroStatusInicial) setStatusFiltro(filtroStatusInicial as StatusFiltro);
+    if (filtroStatusInicial) setStatusFiltro(normalizeStatusFiltro(filtroStatusInicial));
   }, [filtroAnoInicial, filtroMesInicial, filtroStatusInicial]);
 
   const filtrados = useMemo(() => {
@@ -510,7 +551,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       tiposFilter = [subAba];
     }
 
-    return lancamentos
+    return lancamentosNormalizados
       .filter(l => {
         try {
           const d = parseISO(l.data);
@@ -518,15 +559,15 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           if (mesFiltro !== 'todos' && format(d, 'MM') !== mesFiltro) return false;
           if (!tiposFilter.includes(l.tipo)) return false;
           const st = l.statusOperacional || 'realizado';
-          if (statusFiltro === 'realizado' && st !== 'realizado') return false;
-          if (statusFiltro === 'programado' && st !== 'programado') return false;
-          if (statusFiltro === 'previsto' && st !== 'previsto') return false;
+          if (statusFiltro === 'realizado' && (l.cenario !== 'realizado' || st !== 'realizado')) return false;
+          if (statusFiltro === 'programado' && (l.cenario !== 'realizado' || st !== 'programado')) return false;
+          if (statusFiltro === 'meta' && l.cenario !== 'meta') return false;
           if (categoriaFiltro !== 'todas' && l.categoria !== categoriaFiltro) return false;
           return true;
         } catch { return false; }
       })
       .sort((a, b) => a.data.localeCompare(b.data));
-  }, [lancamentos, anoFiltro, mesFiltro, topTab, subAba, statusFiltro, categoriaFiltro]);
+  }, [lancamentosNormalizados, anoFiltro, mesFiltro, topTab, subAba, statusFiltro, categoriaFiltro]);
 
   /* Categories available in current type */
   const categoriasDisponiveis = useMemo(() => {
@@ -534,11 +575,11 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
     if (topTab === 'todas') tiposFilter = [...ENTRY_TYPES, ...EXIT_TYPES];
     else tiposFilter = [subAba];
     const cats = new Set<string>();
-    lancamentos.forEach(l => {
+    lancamentosNormalizados.forEach(l => {
       if (tiposFilter.includes(l.tipo)) cats.add(l.categoria);
     });
     return CATEGORIAS.filter(c => cats.has(c.value));
-  }, [lancamentos, topTab, subAba]);
+  }, [lancamentosNormalizados, topTab, subAba]);
 
   const isFinancial = FINANCIAL_TYPES.includes(subAba);
 
@@ -676,7 +717,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
             {([
               { value: 'realizado' as StatusFiltro, label: 'Realizado', activeClass: 'bg-success text-success-foreground' },
               { value: 'programado' as StatusFiltro, label: 'Programado', activeClass: 'bg-secondary text-secondary-foreground' },
-              { value: 'previsto' as StatusFiltro, label: 'Previsto', activeClass: 'bg-warning text-warning-foreground' },
+              { value: 'meta' as StatusFiltro, label: 'Meta', activeClass: 'bg-warning text-warning-foreground' },
             ]).map(s => (
               <button
                 key={s.value}
@@ -734,7 +775,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
       {/* Detail modal */}
       {(() => {
-        const lancamentoDetalhe = detalheId ? lancamentos.find(l => l.id === detalheId) : null;
+        const lancamentoDetalhe = detalheId ? lancamentosNormalizados.find(l => l.id === detalheId) : null;
         return lancamentoDetalhe ? (
           <LancamentoDetalhe
             lancamento={lancamentoDetalhe}
