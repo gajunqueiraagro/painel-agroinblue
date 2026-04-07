@@ -3204,6 +3204,79 @@ export type Database = {
           },
         ]
       }
+      meta_valor_rebanho_precos: {
+        Row: {
+          ano_mes: string
+          categoria: string
+          cliente_id: string
+          created_at: string
+          id: string
+          preco_arroba: number
+        }
+        Insert: {
+          ano_mes: string
+          categoria: string
+          cliente_id: string
+          created_at?: string
+          id?: string
+          preco_arroba?: number
+        }
+        Update: {
+          ano_mes?: string
+          categoria?: string
+          cliente_id?: string
+          created_at?: string
+          id?: string
+          preco_arroba?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_valor_rebanho_precos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_valor_rebanho_status: {
+        Row: {
+          ano_mes: string
+          cliente_id: string
+          created_at: string
+          id: string
+          status: string
+          validado_em: string | null
+          validado_por: string | null
+        }
+        Insert: {
+          ano_mes: string
+          cliente_id: string
+          created_at?: string
+          id?: string
+          status?: string
+          validado_em?: string | null
+          validado_por?: string | null
+        }
+        Update: {
+          ano_mes?: string
+          cliente_id?: string
+          created_at?: string
+          id?: string
+          status?: string
+          validado_em?: string | null
+          validado_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_valor_rebanho_status_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pasto_condicoes: {
         Row: {
           altura_pasto_cm: number | null
