@@ -201,7 +201,7 @@ function rollingAvg(arr: number[]): number[] {
   return r;
 }
 
-function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[], realPrecoArr?: number[], pesoSnap?: PesoSnapshot): Bloco[] {
+function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[], realPrecoArr?: number[], pesoSnap?: PesoSnapshot, dezPesoSnap?: number): Bloco[] {
   const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string, noTotal?: boolean): Row => {
     let valores: number[];
     switch (tab) {
