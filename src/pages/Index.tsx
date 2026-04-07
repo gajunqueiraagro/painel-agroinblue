@@ -292,9 +292,13 @@ const Index = () => {
       setEditOriginMesFiltro(undefined);
     }
     if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
+    if (tab === 'conferencia_gmd') {
+      gmdOriginRef.current = activeTab as TabId;
+    }
     setActiveTab(tab);
-  }, [isGlobal, canViewTab]);
+  }, [isGlobal, canViewTab, activeTab]);
 
+  const gmdOriginRef = useRef<TabId>('painel_consultor');
   const goToResumo = useCallback(() => setActiveTab('resumo'), []);
   const goToLancarZooHub = useCallback(() => setActiveTab('lancar_zoo_hub'), []);
   const goToVisaoZooHub = useCallback(() => setActiveTab('visao_zoo_hub'), []);
