@@ -27,6 +27,10 @@ function fmt(v: number | null | undefined, decimals = 0): string {
   return formatNum(v, decimals);
 }
 
+function div(num: number, den: number): number | null {
+  return den > 0 ? num / den : null;
+}
+
 function colorClass(v: number | null | undefined): string {
   if (v === null || v === undefined || v === 0) return 'text-muted-foreground';
   return v > 0 ? 'text-emerald-600' : 'text-red-500';
@@ -36,6 +40,27 @@ function gmdColorClass(v: number | null): string {
   if (v === null) return 'text-muted-foreground';
   if (v > 2) return 'text-red-500 font-bold';
   return 'text-primary font-bold';
+}
+
+interface CatRow {
+  categoria_id: string;
+  categoria_nome: string;
+  saldo_inicial: number;
+  entradas_externas: number;
+  evol_cat_entrada: number;
+  saidas_externas: number;
+  evol_cat_saida: number;
+  saldo_final: number;
+  pesoTotalIni: number;
+  pesoTotalFin: number;
+  pesoCabIni: number | null;
+  pesoCabFin: number | null;
+  pesoEntradasExt: number;
+  pesoSaidasExt: number;
+  ganho: number;
+  dias: number;
+  cabMedia: number;
+  gmd: number | null;
 }
 
 export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicial = 'realizado' }: Props) {
@@ -53,115 +78,72 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
   const byMes = useMemo(() => groupByMes(categoriaMensal), [categoriaMensal]);
   const catsMes = useMemo(() => (byMes[mesSel] || []).sort((a, b) => a.ordem_exibicao - b.ordem_exibicao), [byMes, mesSel]);
 
-  const catDerived = useMemo(() => {
+  // Derive all calc fields per category
+  const rows: CatRow[] = useMemo(() => {
     return catsMes.map(cat => {
-      const ganho = cat.peso_total_final - cat.peso_total_inicial - cat.peso_entradas_externas + cat.peso_saidas_externas;
+      const pesoTotalIni = cat.peso_total_inicial;
+      const pesoTotalFin = cat.peso_total_final;
+      const pesoCabIni = div(pesoTotalIni, cat.saldo_inicial);
+      const pesoCabFin = div(pesoTotalFin, cat.saldo_final);
+      const pesoEntradasExt = cat.peso_entradas_externas;
+      const pesoSaidasExt = cat.peso_saidas_externas;
+      const ganho = pesoTotalFin - pesoTotalIni - pesoEntradasExt + pesoSaidasExt;
       const cabMedia = (cat.saldo_inicial + cat.saldo_final) / 2;
-      const gmd = cabMedia > 0 && cat.dias_mes > 0 ? ganho / (cabMedia * cat.dias_mes) : null;
-      const kgMedioIni = cat.saldo_inicial > 0 ? cat.peso_total_inicial / cat.saldo_inicial : null;
-      const kgMedioFin = cat.saldo_final > 0 ? cat.peso_total_final / cat.saldo_final : null;
-      return { ...cat, ganho, cabMedia, gmd, kgMedioIni, kgMedioFin };
+      const dias = cat.dias_mes;
+      const gmd = cabMedia > 0 && dias > 0 ? ganho / (cabMedia * dias) : null;
+      return {
+        categoria_id: cat.categoria_id,
+        categoria_nome: cat.categoria_nome,
+        saldo_inicial: cat.saldo_inicial,
+        entradas_externas: cat.entradas_externas,
+        evol_cat_entrada: cat.evol_cat_entrada,
+        saidas_externas: cat.saidas_externas,
+        evol_cat_saida: cat.evol_cat_saida,
+        saldo_final: cat.saldo_final,
+        pesoTotalIni, pesoTotalFin, pesoCabIni, pesoCabFin,
+        pesoEntradasExt, pesoSaidasExt, ganho, dias, cabMedia, gmd,
+      };
     });
   }, [catsMes]);
 
+  // Totals
   const totals = useMemo(() => {
-    if (catsMes.length === 0) return null;
-    const sum = (fn: (c: ZootCategoriaMensal) => number) => catsMes.reduce((s, c) => s + fn(c), 0);
-    const saldoInicial = sum(c => c.saldo_inicial);
-    const saldoFinal = sum(c => c.saldo_final);
-    const entradasExternas = sum(c => c.entradas_externas);
-    const saidasExternas = sum(c => c.saidas_externas);
-    const evolCatEntrada = sum(c => c.evol_cat_entrada);
-    const evolCatSaida = sum(c => c.evol_cat_saida);
-    const pesoInicial = sum(c => c.peso_total_inicial);
-    const pesoFinal = sum(c => c.peso_total_final);
-    const pesoEntradasExt = sum(c => c.peso_entradas_externas);
-    const pesoSaidasExt = sum(c => c.peso_saidas_externas);
-    const dias = catsMes[0]?.dias_mes || 0;
-    const ganho = pesoFinal - pesoInicial - pesoEntradasExt + pesoSaidasExt;
+    if (rows.length === 0) return null;
+    const s = (fn: (r: CatRow) => number) => rows.reduce((a, r) => a + fn(r), 0);
+    const saldoInicial = s(r => r.saldo_inicial);
+    const saldoFinal = s(r => r.saldo_final);
+    const entradasExternas = s(r => r.entradas_externas);
+    const saidasExternas = s(r => r.saidas_externas);
+    const evolCatEntrada = s(r => r.evol_cat_entrada);
+    const evolCatSaida = s(r => r.evol_cat_saida);
+    const pesoTotalIni = s(r => r.pesoTotalIni);
+    const pesoTotalFin = s(r => r.pesoTotalFin);
+    const pesoEntradasExt = s(r => r.pesoEntradasExt);
+    const pesoSaidasExt = s(r => r.pesoSaidasExt);
+    const pesoCabIni = div(pesoTotalIni, saldoInicial);
+    const pesoCabFin = div(pesoTotalFin, saldoFinal);
+    const ganho = pesoTotalFin - pesoTotalIni - pesoEntradasExt + pesoSaidasExt;
     const cabMedia = (saldoInicial + saldoFinal) / 2;
+    const dias = rows[0]?.dias || 0;
     const gmd = cabMedia > 0 && dias > 0 ? ganho / (cabMedia * dias) : null;
-    const kgMedioIni = saldoInicial > 0 ? pesoInicial / saldoInicial : null;
-    const kgMedioFin = saldoFinal > 0 ? pesoFinal / saldoFinal : null;
-
     return {
       saldoInicial, saldoFinal, entradasExternas, saidasExternas,
-      evolCatEntrada, evolCatSaida, pesoInicial, pesoFinal,
-      pesoEntradasExt, pesoSaidasExt, ganho, dias, cabMedia, gmd,
-      kgMedioIni, kgMedioFin,
+      evolCatEntrada, evolCatSaida, pesoTotalIni, pesoTotalFin,
+      pesoCabIni, pesoCabFin, pesoEntradasExt, pesoSaidasExt,
+      ganho, dias, cabMedia, gmd,
     };
-  }, [catsMes]);
-
-  const getCellValue = (cat: typeof catDerived[0], col: string): string => {
-    if (viewMode === 'cabecas') {
-      switch (col) {
-        case 'saldo_ini': return fmt(cat.saldo_inicial);
-        case 'ent_ext': return fmt(cat.entradas_externas);
-        case 'evol_ent': return fmt(cat.evol_cat_entrada);
-        case 'sai_ext': return fmt(cat.saidas_externas);
-        case 'evol_sai': return fmt(cat.evol_cat_saida);
-        case 'saldo_fin': return fmt(cat.saldo_final);
-        default: return '–';
-      }
-    }
-    if (viewMode === 'kg_medio') {
-      switch (col) {
-        case 'saldo_ini': return fmt(cat.kgMedioIni, 1);
-        case 'ent_ext': return '–';
-        case 'evol_ent': return '–';
-        case 'sai_ext': return '–';
-        case 'evol_sai': return '–';
-        case 'saldo_fin': return fmt(cat.kgMedioFin, 1);
-        default: return '–';
-      }
-    }
-    switch (col) {
-      case 'saldo_ini': return fmt(cat.peso_total_inicial, 0);
-      case 'ent_ext': return fmt(cat.peso_entradas_externas, 0);
-      case 'evol_ent': return fmt(cat.peso_evol_cat_entrada, 0);
-      case 'sai_ext': return fmt(cat.peso_saidas_externas, 0);
-      case 'evol_sai': return fmt(cat.peso_evol_cat_saida, 0);
-      case 'saldo_fin': return fmt(cat.peso_total_final, 0);
-      default: return '–';
-    }
-  };
-
-  const getTotalCellValue = (col: string): string => {
-    if (!totals) return '–';
-    if (viewMode === 'cabecas') {
-      switch (col) {
-        case 'saldo_ini': return fmt(totals.saldoInicial);
-        case 'ent_ext': return fmt(totals.entradasExternas);
-        case 'evol_ent': return fmt(totals.evolCatEntrada);
-        case 'sai_ext': return fmt(totals.saidasExternas);
-        case 'evol_sai': return fmt(totals.evolCatSaida);
-        case 'saldo_fin': return fmt(totals.saldoFinal);
-        default: return '–';
-      }
-    }
-    if (viewMode === 'kg_medio') {
-      switch (col) {
-        case 'saldo_ini': return fmt(totals.kgMedioIni, 1);
-        case 'saldo_fin': return fmt(totals.kgMedioFin, 1);
-        default: return '–';
-      }
-    }
-    switch (col) {
-      case 'saldo_ini': return fmt(totals.pesoInicial, 0);
-      case 'ent_ext': return fmt(totals.pesoEntradasExt, 0);
-      case 'evol_ent': return '–';
-      case 'sai_ext': return fmt(totals.pesoSaidasExt, 0);
-      case 'evol_sai': return '–';
-      case 'saldo_fin': return fmt(totals.pesoFinal, 0);
-      default: return '–';
-    }
-  };
+  }, [rows]);
 
   const cenarioLabel = cenario === 'meta' ? 'Meta' : 'Realizado';
 
+  // Column definitions change per viewMode
+  const movCols = viewMode === 'cabecas';
+  const showPesoTotal = viewMode === 'kg_total';
+  const showPesoCab = viewMode === 'kg_medio';
+
   return (
     <div className="space-y-2 pb-24">
-      {/* Header compact */}
+      {/* Header */}
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="icon" onClick={onBack} className="h-6 w-6">
           <ArrowLeft className="h-3.5 w-3.5" />
@@ -172,7 +154,7 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
         }`}>{cenarioLabel}</span>
       </div>
 
-      {/* Filters - compact */}
+      {/* Filters */}
       <div className="flex flex-wrap gap-1.5 items-center">
         <Select value={ano} onValueChange={setAno}>
           <SelectTrigger className="w-20 h-7 text-[10px]">
@@ -188,54 +170,32 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
 
         <div className="flex gap-0.5">
           {MESES_LABELS.map((label, i) => (
-            <button
-              key={i}
-              onClick={() => setMesSel(i + 1)}
+            <button key={i} onClick={() => setMesSel(i + 1)}
               className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors ${
-                mesSel === i + 1
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}
-            >
-              {label}
-            </button>
+                mesSel === i + 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}>{label}</button>
           ))}
         </div>
 
-        {/* Cenário toggle */}
         <div className="flex gap-0.5 ml-1">
           {(['realizado', 'meta'] as Cenario[]).map(c => (
-            <button
-              key={c}
-              onClick={() => setCenario(c)}
+            <button key={c} onClick={() => setCenario(c)}
               className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors ${
-                cenario === c
-                  ? c === 'meta' ? 'bg-orange-500 text-white' : 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}
-            >
-              {c === 'meta' ? 'Meta' : 'Realizado'}
-            </button>
+                cenario === c ? (c === 'meta' ? 'bg-orange-500 text-white' : 'bg-primary text-primary-foreground') : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}>{c === 'meta' ? 'Meta' : 'Realizado'}</button>
           ))}
         </div>
 
         <div className="flex gap-0.5 ml-auto">
           {([
-            { key: 'cabecas', label: 'Cabeça' },
-            { key: 'kg_medio', label: 'Kg Médio' },
-            { key: 'kg_total', label: 'Kg Total' },
-          ] as { key: ViewMode; label: string }[]).map(v => (
-            <button
-              key={v.key}
-              onClick={() => setViewMode(v.key)}
+            { key: 'cabecas' as ViewMode, label: 'Cabeça' },
+            { key: 'kg_medio' as ViewMode, label: 'Kg Médio' },
+            { key: 'kg_total' as ViewMode, label: 'Kg Total' },
+          ]).map(v => (
+            <button key={v.key} onClick={() => setViewMode(v.key)}
               className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors ${
-                viewMode === v.key
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}
-            >
-              {v.label}
-            </button>
+                viewMode === v.key ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}>{v.label}</button>
           ))}
         </div>
       </div>
@@ -243,7 +203,7 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
       {/* Table */}
       {isLoading ? (
         <div className="text-center py-6 text-muted-foreground text-xs">Carregando...</div>
-      ) : catsMes.length === 0 ? (
+      ) : rows.length === 0 ? (
         <div className="text-center py-6 text-muted-foreground text-xs">Sem dados para {MESES_LABELS[mesSel - 1]}/{ano} ({cenarioLabel})</div>
       ) : (
         <div className="flex justify-start">
@@ -251,50 +211,64 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
             <table className="table-fixed text-[10px] border-collapse">
               <colgroup>
                 <col style={{ width: '76px' }} />
-                <col style={{ width: '52px' }} />
-                <col style={{ width: '46px' }} />
-                <col style={{ width: '46px' }} />
-                <col style={{ width: '46px' }} />
-                <col style={{ width: '46px' }} />
-                <col style={{ width: '52px' }} />
-                <col style={{ width: '58px' }} />
-                <col style={{ width: '58px' }} />
-                <col style={{ width: '54px' }} />
+                {/* Mov cols: 6 cols when cabecas, hidden otherwise but we show saldo ini/fin always */}
+                {movCols && <><col style={{ width: '48px' }} /><col style={{ width: '42px' }} /><col style={{ width: '42px' }} /><col style={{ width: '42px' }} /><col style={{ width: '42px' }} /><col style={{ width: '48px' }} /></>}
+                {/* Peso cols */}
+                {showPesoTotal && <><col style={{ width: '62px' }} /><col style={{ width: '62px' }} /></>}
+                {showPesoCab && <><col style={{ width: '58px' }} /><col style={{ width: '58px' }} /></>}
+                {/* Always: Ganho, Dias, GMD */}
+                {showPesoTotal && <col style={{ width: '54px' }} />}
                 <col style={{ width: '30px' }} />
                 <col style={{ width: '48px' }} />
               </colgroup>
               <thead>
                 <tr className="bg-muted/50">
                   <th className="text-left px-1 py-0.5 font-semibold text-muted-foreground border-b">Categoria</th>
-                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Saldo Ini.</th>
-                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Ent.Ext</th>
-                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Evol.(E)</th>
-                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Saí.Ext</th>
-                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Evol.(S)</th>
-                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Saldo Fin.</th>
-                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b border-l-2 border-l-border">Peso Ini.</th>
-                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Peso Fin.</th>
-                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Ganho</th>
+                  {movCols && <>
+                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Saldo Ini.</th>
+                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Ent.Ext</th>
+                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Evol.(E)</th>
+                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Saí.Ext</th>
+                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Evol.(S)</th>
+                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Saldo Fin.</th>
+                  </>}
+                  {showPesoTotal && <>
+                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b border-l-2 border-l-border">Peso Tot.Ini</th>
+                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Peso Tot.Fin</th>
+                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Ganho (kg)</th>
+                  </>}
+                  {showPesoCab && <>
+                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b border-l-2 border-l-border">Peso/cab Ini</th>
+                    <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Peso/cab Fin</th>
+                  </>}
                   <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Dias</th>
                   <th className="text-right px-1 py-0.5 font-semibold text-primary border-b">GMD</th>
                 </tr>
               </thead>
               <tbody>
-                {catDerived.map(cat => (
-                  <tr key={cat.categoria_id} className="hover:bg-muted/20 border-b border-border/30">
-                    <td className="px-1 py-0.5 font-medium text-foreground text-[10px] truncate">{cat.categoria_nome}</td>
-                    <td className="text-right px-1 py-0.5 text-muted-foreground">{getCellValue(cat, 'saldo_ini')}</td>
-                    <td className={`text-right px-1 py-0.5 ${colorClass(cat.entradas_externas)}`}>{getCellValue(cat, 'ent_ext')}</td>
-                    <td className={`text-right px-1 py-0.5 ${colorClass(cat.evol_cat_entrada)}`}>{getCellValue(cat, 'evol_ent')}</td>
-                    <td className={`text-right px-1 py-0.5 ${colorClass(cat.saidas_externas ? -cat.saidas_externas : 0)}`}>{getCellValue(cat, 'sai_ext')}</td>
-                    <td className={`text-right px-1 py-0.5 ${colorClass(cat.evol_cat_saida ? -cat.evol_cat_saida : 0)}`}>{getCellValue(cat, 'evol_sai')}</td>
-                    <td className="text-right px-1 py-0.5 font-medium text-foreground">{getCellValue(cat, 'saldo_fin')}</td>
-                    <td className="text-right px-1 py-0.5 text-muted-foreground border-l-2 border-l-border">{fmt(cat.peso_total_inicial, 0)}</td>
-                    <td className="text-right px-1 py-0.5 text-muted-foreground">{fmt(cat.peso_total_final, 0)}</td>
-                    <td className={`text-right px-1 py-0.5 font-medium ${colorClass(cat.ganho)}`}>{fmt(cat.ganho, 0)}</td>
-                    <td className="text-right px-1 py-0.5 text-muted-foreground">{cat.dias_mes || '–'}</td>
-                    <td className={`text-right px-1 py-0.5 ${gmdColorClass(cat.gmd)}`}>
-                      {cat.gmd !== null ? formatNum(cat.gmd, 3) : '–'}
+                {rows.map(r => (
+                  <tr key={r.categoria_id} className="hover:bg-muted/20 border-b border-border/30">
+                    <td className="px-1 py-0.5 font-medium text-foreground truncate">{r.categoria_nome}</td>
+                    {movCols && <>
+                      <td className="text-right px-1 py-0.5 text-muted-foreground">{fmt(r.saldo_inicial)}</td>
+                      <td className={`text-right px-1 py-0.5 ${colorClass(r.entradas_externas)}`}>{fmt(r.entradas_externas)}</td>
+                      <td className={`text-right px-1 py-0.5 ${colorClass(r.evol_cat_entrada)}`}>{fmt(r.evol_cat_entrada)}</td>
+                      <td className={`text-right px-1 py-0.5 ${colorClass(r.saidas_externas ? -r.saidas_externas : 0)}`}>{fmt(r.saidas_externas)}</td>
+                      <td className={`text-right px-1 py-0.5 ${colorClass(r.evol_cat_saida ? -r.evol_cat_saida : 0)}`}>{fmt(r.evol_cat_saida)}</td>
+                      <td className="text-right px-1 py-0.5 font-medium text-foreground">{fmt(r.saldo_final)}</td>
+                    </>}
+                    {showPesoTotal && <>
+                      <td className="text-right px-1 py-0.5 text-muted-foreground border-l-2 border-l-border">{fmt(r.pesoTotalIni, 0)}</td>
+                      <td className="text-right px-1 py-0.5 text-muted-foreground">{fmt(r.pesoTotalFin, 0)}</td>
+                      <td className={`text-right px-1 py-0.5 font-medium ${colorClass(r.ganho)}`}>{fmt(r.ganho, 0)}</td>
+                    </>}
+                    {showPesoCab && <>
+                      <td className="text-right px-1 py-0.5 text-muted-foreground border-l-2 border-l-border">{fmt(r.pesoCabIni, 1)}</td>
+                      <td className="text-right px-1 py-0.5 text-muted-foreground">{fmt(r.pesoCabFin, 1)}</td>
+                    </>}
+                    <td className="text-right px-1 py-0.5 text-muted-foreground">{r.dias || '–'}</td>
+                    <td className={`text-right px-1 py-0.5 ${gmdColorClass(r.gmd)}`}>
+                      {r.gmd !== null ? formatNum(r.gmd, 3) : '–'}
                     </td>
                   </tr>
                 ))}
@@ -303,15 +277,23 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
                 <tfoot>
                   <tr className="bg-muted/30 font-bold border-t-2 border-border">
                     <td className="px-1 py-0.5 text-foreground">TOTAL</td>
-                    <td className="text-right px-1 py-0.5 text-foreground">{getTotalCellValue('saldo_ini')}</td>
-                    <td className={`text-right px-1 py-0.5 ${colorClass(totals.entradasExternas)}`}>{getTotalCellValue('ent_ext')}</td>
-                    <td className={`text-right px-1 py-0.5 ${colorClass(totals.evolCatEntrada)}`}>{getTotalCellValue('evol_ent')}</td>
-                    <td className={`text-right px-1 py-0.5 ${colorClass(totals.saidasExternas ? -totals.saidasExternas : 0)}`}>{getTotalCellValue('sai_ext')}</td>
-                    <td className={`text-right px-1 py-0.5 ${colorClass(totals.evolCatSaida ? -totals.evolCatSaida : 0)}`}>{getTotalCellValue('evol_sai')}</td>
-                    <td className="text-right px-1 py-0.5 text-foreground">{getTotalCellValue('saldo_fin')}</td>
-                    <td className="text-right px-1 py-0.5 text-foreground border-l-2 border-l-border">{fmt(totals.pesoInicial, 0)}</td>
-                    <td className="text-right px-1 py-0.5 text-foreground">{fmt(totals.pesoFinal, 0)}</td>
-                    <td className={`text-right px-1 py-0.5 ${colorClass(totals.ganho)}`}>{fmt(totals.ganho, 0)}</td>
+                    {movCols && <>
+                      <td className="text-right px-1 py-0.5 text-foreground">{fmt(totals.saldoInicial)}</td>
+                      <td className={`text-right px-1 py-0.5 ${colorClass(totals.entradasExternas)}`}>{fmt(totals.entradasExternas)}</td>
+                      <td className={`text-right px-1 py-0.5 ${colorClass(totals.evolCatEntrada)}`}>{fmt(totals.evolCatEntrada)}</td>
+                      <td className={`text-right px-1 py-0.5 ${colorClass(totals.saidasExternas ? -totals.saidasExternas : 0)}`}>{fmt(totals.saidasExternas)}</td>
+                      <td className={`text-right px-1 py-0.5 ${colorClass(totals.evolCatSaida ? -totals.evolCatSaida : 0)}`}>{fmt(totals.evolCatSaida)}</td>
+                      <td className="text-right px-1 py-0.5 text-foreground">{fmt(totals.saldoFinal)}</td>
+                    </>}
+                    {showPesoTotal && <>
+                      <td className="text-right px-1 py-0.5 text-foreground border-l-2 border-l-border">{fmt(totals.pesoTotalIni, 0)}</td>
+                      <td className="text-right px-1 py-0.5 text-foreground">{fmt(totals.pesoTotalFin, 0)}</td>
+                      <td className={`text-right px-1 py-0.5 ${colorClass(totals.ganho)}`}>{fmt(totals.ganho, 0)}</td>
+                    </>}
+                    {showPesoCab && <>
+                      <td className="text-right px-1 py-0.5 text-foreground border-l-2 border-l-border">{fmt(totals.pesoCabIni, 1)}</td>
+                      <td className="text-right px-1 py-0.5 text-foreground">{fmt(totals.pesoCabFin, 1)}</td>
+                    </>}
                     <td className="text-right px-1 py-0.5 text-foreground">{totals.dias || '–'}</td>
                     <td className={`text-right px-1 py-0.5 ${gmdColorClass(totals.gmd)}`}>
                       {totals.gmd !== null ? formatNum(totals.gmd, 3) : '–'}
@@ -324,12 +306,12 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
         </div>
       )}
 
-      {/* Explicação do cálculo */}
+      {/* Fórmula */}
       {totals && (
         <div className="border rounded-lg p-2 bg-muted/20 space-y-1.5 text-[10px] text-muted-foreground max-w-[612px]">
           <h3 className="font-semibold text-foreground text-xs">Fórmula do GMD (Total Fazenda) — {cenarioLabel}</h3>
           <div className="space-y-0.5 font-mono">
-            <p>Ganho = Peso Fin. ({fmt(totals.pesoFinal, 0)}) − Peso Ini. ({fmt(totals.pesoInicial, 0)}) − Ent.Ext. ({fmt(totals.pesoEntradasExt, 0)}) + Saí.Ext. ({fmt(totals.pesoSaidasExt, 0)}) = <span className="font-bold text-foreground">{fmt(totals.ganho, 0)} kg</span></p>
+            <p>Ganho = Peso Tot.Fin ({fmt(totals.pesoTotalFin, 0)}) − Peso Tot.Ini ({fmt(totals.pesoTotalIni, 0)}) − Ent.Ext.kg ({fmt(totals.pesoEntradasExt, 0)}) + Saí.Ext.kg ({fmt(totals.pesoSaidasExt, 0)}) = <span className="font-bold text-foreground">{fmt(totals.ganho, 0)} kg</span></p>
           </div>
           <div className="pt-0.5 border-t space-y-0.5 font-mono">
             <p>Cab. médias = ({fmt(totals.saldoInicial)} + {fmt(totals.saldoFinal)}) / 2 = {formatNum(totals.cabMedia, 1)} · Dias = {totals.dias}</p>
