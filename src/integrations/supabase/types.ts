@@ -1149,6 +1149,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "fechamento_pasto_itens_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "vw_zoot_categoria_mensal"
+            referencedColumns: ["categoria_id"]
+          },
+          {
             foreignKeyName: "fechamento_pasto_itens_fechamento_id_fkey"
             columns: ["fechamento_id"]
             isOneToOne: false
@@ -3949,6 +3956,50 @@ export type Database = {
           },
           {
             foreignKeyName: "financeiro_lancamentos_v2_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vw_zoot_categoria_mensal: {
+        Row: {
+          ano: number | null
+          ano_mes: string | null
+          categoria_codigo: string | null
+          categoria_id: string | null
+          categoria_nome: string | null
+          cenario: string | null
+          cliente_id: string | null
+          dias_mes: number | null
+          entradas_externas: number | null
+          evol_cat_entrada: number | null
+          evol_cat_saida: number | null
+          fazenda_id: string | null
+          fonte_oficial_mes: string | null
+          gmd: number | null
+          mes: number | null
+          ordem_exibicao: number | null
+          peso_medio_final: number | null
+          peso_medio_inicial: number | null
+          peso_total_final: number | null
+          peso_total_inicial: number | null
+          producao_biologica: number | null
+          saidas_externas: number | null
+          saldo_final: number | null
+          saldo_inicial: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saldos_iniciais_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saldos_iniciais_fazenda_id_fkey"
             columns: ["fazenda_id"]
             isOneToOne: false
             referencedRelation: "fazendas"
