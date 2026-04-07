@@ -91,16 +91,17 @@ const FONTE_PESO_REAL: FonteIndicador = {
   permite_fallback: true,
 };
 
-// ─── Valor do Rebanho ───
+// ─── Valor do Rebanho (Realizado) ───
 const FONTE_VALOR_REB_REAL: FonteIndicador = {
   fonte_tipo: 'fechamento',
-  fonte_tabela: 'valor_rebanho_fechamento',
-  fonte_campo: 'valor_total',
-  regra_calculo: 'Valor total fechado do rebanho no mês',
-  regra_prioridade: '1. Fechamento oficial do valor do rebanho',
+  fonte_tabela: 'valor_rebanho_realizado_validado',
+  fonte_campo: 'valor_total, valor_cabeca_medio, preco_arroba_medio',
+  regra_calculo: 'Leitura direta do snapshot validado na tela Valor do Rebanho',
+  regra_prioridade: '1. Snapshot oficial validado; 2. vazio se não houver validação',
   tela_origem: '/valor-rebanho',
   tela_label: 'Valor do Rebanho',
   permite_fallback: false,
+  observacao: 'Fonte única auditável — persistida ao clicar Salvar e Fechar',
 };
 
 const FONTE_VALOR_REB_META_BASE: FonteIndicador = {
