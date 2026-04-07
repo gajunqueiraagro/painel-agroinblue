@@ -53,7 +53,7 @@ const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'S
 const TRIM_BORDER_INDEXES = new Set([3, 6, 9]);
 
 type ViewTab = 'mensal' | 'medio' | 'acumulado' | 'media_periodo';
-type Cenario = 'realizado' | 'previsto';
+type Cenario = 'realizado' | 'meta';
 
 interface Props {
   onBack: () => void;

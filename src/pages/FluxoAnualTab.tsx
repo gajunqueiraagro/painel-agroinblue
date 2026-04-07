@@ -55,7 +55,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   }, [lancamentos, saldosIniciais]);
 
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
-  const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'previsto'>('realizado');
+  const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'meta'>('realizado');
 
   // Fonte única oficial de indicadores mensais (view consolidada)
   const cenarioView = statusFiltro === 'realizado' ? 'realizado' : 'meta';
