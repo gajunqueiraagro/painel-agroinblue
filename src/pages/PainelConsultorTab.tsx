@@ -945,13 +945,13 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     if (isPrevisto) {
       // Fonte única: consolidação Meta validada
       if (metaConsolidacao && metaConsolidacao.length > 0) {
-        return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva, valorRebanhoMetaMes, valorRebanhoMes[0]);
+        return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes);
       }
       // Fallback para view SQL apenas se consolidação não disponível
       return buildBlocosFromZootMensal(zootMeta || [], viewTab);
     }
     return buildBlocosForTab(monthlyData, viewTab);
-  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacao, areaProdutiva, valorRebanhoMetaMes]);
+  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacao, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes]);
 
   useEffect(() => {
     if (blocos.length > 0) {
