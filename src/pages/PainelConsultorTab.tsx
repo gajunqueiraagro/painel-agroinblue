@@ -1035,7 +1035,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         </thead>
         <tbody>
           {blocoRows.map((row, idx) => {
-            // REGRA: Previsto sem fonte = toda linha vazia
+            // REGRA: Meta sem fonte = toda linha vazia
             const previstoSemFonte = isPrevisto && !hasPrevistoSource(row.indicadorId);
             const tot = (previstoSemFonte || row.noTotal) ? null : totalForRow(row, viewTab, monthCutoff);
 
@@ -1050,7 +1050,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                   let cellContent = '';
                   let isSemBase = false;
                   if (previstoSemFonte) {
-                    cellContent = '';  // sem base prevista
+                    cellContent = '';  // sem base meta
                   } else if (isFuture) {
                     cellContent = '';  // mês futuro (only for Realizado)
                   } else if (isNaN(v)) {
