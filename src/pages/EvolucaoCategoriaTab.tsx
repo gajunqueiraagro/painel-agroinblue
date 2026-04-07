@@ -23,7 +23,9 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
   const { fazendaAtual } = useFazenda();
   const fazendaId = fazendaAtual?.id;
 
-  const currentYear = new Date().getFullYear();
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth() + 1;
   const [anoFiltro, setAnoFiltro] = useState(initialAno || String(currentYear));
   const [mesFiltro, setMesFiltro] = useState(initialMes || String(new Date().getMonth() + 1).padStart(2, '0'));
   const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'meta'>(
