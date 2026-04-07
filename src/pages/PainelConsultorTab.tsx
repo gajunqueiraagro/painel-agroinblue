@@ -609,7 +609,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
         .reduce((s, c) => s + (Number(c[field]) || 0), 0);
     });
 
-  const cabIni = agg('si');
+  const cabIniRaw = agg('si');
   const cabFin = agg('sf');
   const entradas = agg('ee');
   const saidas = agg('se');
@@ -617,12 +617,18 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   const pesoFinRaw = agg('pesoTotalFinal');
   const prodBio = agg('producaoBio');
 
+  // Override cabIni[0] (Jan) with Dec realizado validado
+  const cabIni = [...cabIniRaw];
+  if (dezRealizadoSnap && dezRealizadoSnap.cabecas > 0) {
+    cabIni[0] = dezRealizadoSnap.cabecas;
+  }
+
   // Snapshot validado de peso sobrescreve consolidação quando disponível
   const hasSnap = pesoSnap && pesoSnap.cabecas.some(v => v > 0);
   const pesoFin = hasSnap ? pesoSnap!.cabecas.map((c, i) => c * (pesoSnap!.pesoMedio[i] || 0)) : pesoFinRaw;
   // Peso ini: Jan = Dez realizado validado; Fev+ = Meta final mês anterior
   const dezPesoKg = dezRealizadoSnap ? dezRealizadoSnap.arrobas * 30 : 0;
-  const pesoIniJan = hasSnap && dezPesoKg > 0 ? dezPesoKg : pesoIniRaw[0];
+  const pesoIniJan = dezPesoKg > 0 ? dezPesoKg : pesoIniRaw[0];
   const pesoIni = hasSnap ? [pesoIniJan, ...pesoFin.slice(0, 11)] : pesoIniRaw;
 
   // Peso médio final = peso total final / SF (weighted across categories)
@@ -632,7 +638,11 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   });
   const pesoMedFin = hasSnap ? pesoSnap!.pesoMedio : pesoMedFinRaw;
 
-  const pesoMedIni = cabIni.map((c, i) => c > 0 ? pesoIni[i] / c : 0);
+  // Peso médio ini: Jan = Dez realizado validado pesoMedioKg; Fev+ = meta final mês anterior
+  const pesoMedIniJan = dezRealizadoSnap && dezRealizadoSnap.pesoMedioKg > 0
+    ? dezRealizadoSnap.pesoMedioKg
+    : (cabIni[0] > 0 ? pesoIni[0] / cabIni[0] : 0);
+  const pesoMedIni = [pesoMedIniJan, ...pesoMedFin.slice(0, 11)];
   const cabMedia = cabIni.map((v, i) => (v + cabFin[i]) / 2);
 
   // GMD: produção biológica / (cab média × dias)
