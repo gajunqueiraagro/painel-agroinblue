@@ -1001,7 +1001,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
           {blocoRows.map((row, idx) => {
             // REGRA: Previsto sem fonte = toda linha vazia
             const previstoSemFonte = isPrevisto && !hasPrevistoSource(row.indicadorId);
-            const tot = previstoSemFonte ? null : totalForRow(row, viewTab, monthCutoff);
+            const tot = (previstoSemFonte || row.noTotal) ? null : totalForRow(row, viewTab, monthCutoff);
 
             return (
               <tr key={idx} className={`border-b border-border/20 hover:bg-muted/20 ${idx % 2 !== 0 ? 'bg-muted/10' : ''}`}>
