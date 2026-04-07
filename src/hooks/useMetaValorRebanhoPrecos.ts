@@ -103,7 +103,9 @@ export function useMetaValorRebanhoPrecos(anoMes: string) {
       toast.success(labels[novoStatus]);
       await loadData();
     } catch (e: any) {
+      console.error('Erro ao salvar preços META:', e);
       toast.error('Erro ao salvar: ' + e.message);
+      throw e;
     } finally {
       setSaving(false);
     }
