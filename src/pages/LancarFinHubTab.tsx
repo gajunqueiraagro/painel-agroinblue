@@ -8,7 +8,7 @@ import { usePastos } from '@/hooks/usePastos';
 import { useFinanceiro, isDesembolsoProdutivo, type FinanceiroLancamento, type RateioADM } from '@/hooks/useFinanceiro';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { useArrobasGlobal } from '@/hooks/useArrobasGlobal';
-import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
+import { useZootCategoriaMensal, groupByMes } from '@/hooks/useZootCategoriaMensal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { KpiCard } from '@/components/indicadores/KpiCard';
@@ -84,6 +84,9 @@ export function LancarFinHubTab({ onTabChange, filtroGlobal, lancamentosPecuario
     lancamentosPecuarios, saldosIniciais, pastos, categorias,
   );
 
+  // FONTE OFICIAL: view zootécnica para médias mensais de rebanho
+  const { data: viewDataAnoFin } = useZootCategoriaMensal({ ano: anoNum, cenario: 'realizado' });
+
   const fazendaIdsReais = useMemo(
     () => fazendas.filter(f => f.id !== '__global__').map(f => f.id),
     [fazendas],
@@ -94,11 +97,9 @@ export function LancarFinHubTab({ onTabChange, filtroGlobal, lancamentosPecuario
     anoNum, localMes, fazendaIdsReais,
   );
 
-  // Cabeças médias
+  // Cabeças médias (FONTE OFICIAL: vw_zoot_categoria_mensal)
   const zooData = useMemo(() => {
-    const saldoInicialAno = saldosIniciais
-      .filter(s => s.ano === anoNum)
-      .reduce((sum, s) => sum + s.quantidade, 0);
+    const byMes = groupByMes(viewDataAnoFin || []);
 
     const saldoAnterior = zoo.gmdAberturaMes.estoqueInicialDetalhe.reduce((s, d) => s + d.cabecas, 0);
     const saldoFinalMes = zoo.saldoFinalMes;
@@ -106,10 +107,9 @@ export function LancarFinHubTab({ onTabChange, filtroGlobal, lancamentosPecuario
 
     const rebanhosMensais: { mes: number; media: number }[] = [];
     for (let m = 1; m <= localMes; m++) {
-      const sInicio = m === 1
-        ? saldoInicialAno
-        : Array.from(calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, anoNum, m - 1).values()).reduce((s, v) => s + v, 0);
-      const sFim = Array.from(calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, anoNum, m).values()).reduce((s, v) => s + v, 0);
+      const catsM = byMes[m] || [];
+      const sFim = catsM.reduce((s, c) => s + c.saldo_final, 0);
+      const sInicio = catsM.reduce((s, c) => s + c.saldo_inicial, 0);
       rebanhosMensais.push({ mes: m, media: (sInicio + sFim) / 2 });
     }
 
@@ -122,7 +122,7 @@ export function LancarFinHubTab({ onTabChange, filtroGlobal, lancamentosPecuario
       : zoo.arrobasProduzidasAcumulado;
 
     return { cabMediaMes, cabMediaAcum, arrobasProduzidasAcum, rebanhosMensais };
-  }, [zoo, saldosIniciais, anoNum, localMes, lancamentosPecuarios, isGlobal, arrobasGlobal.somaArrobas]);
+  }, [zoo, viewDataAnoFin, localMes, isGlobal, arrobasGlobal.somaArrobas]);
 
   // Financial indicators
   const ind = useMemo(() => {
