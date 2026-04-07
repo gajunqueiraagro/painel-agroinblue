@@ -12,8 +12,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import type { CategoriaRebanho } from '@/hooks/usePastos';
-import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
-import { resolverPesoOficial, loadPesosPastosPorCategoria } from '@/hooks/useFechamentoCategoria';
 import type { SnapshotDetalheCategoria } from '@/hooks/useValorRebanho';
 import type { OrigemPeso } from '@/hooks/useFechamentoCategoria';
 
@@ -162,6 +160,7 @@ export function useValorRebanhoGlobal(
   const [snapshotItems, setSnapshotItems] = useState<Record<string, Record<string, SnapshotDetalheCategoria[]>>>({});
   const [precosAllFarms, setPrecosAllFarms] = useState<Record<string, Record<string, Record<string, number>>>>({});
   const [pesosPastosPorFazenda, setPesosPastosPorFazenda] = useState<Record<string, Record<string, number>>>({});
+  const [zootData, setZootData] = useState<Map<string, Map<number, Array<{ categoria_codigo: string; saldo_final: number; peso_medio_final: number | null }>>>>(new Map());
 
   const anoMes = `${anoFiltro}-${mesFiltro}`;
   const mesNum = Number(mesFiltro);
@@ -183,7 +182,7 @@ export function useValorRebanhoGlobal(
         ...Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`),
       ];
 
-      const [headersRes, itensRes, precosRes, pesosResults] = await Promise.all([
+      const [headersRes, itensRes, precosRes, zootViewRes] = await Promise.all([
         supabase
           .from('valor_rebanho_fechamento')
           .select('fazenda_id, ano_mes, valor_total, peso_total_kg, status')
@@ -200,13 +199,13 @@ export function useValorRebanhoGlobal(
           .select('fazenda_id, ano_mes, categoria, preco_kg')
           .in('fazenda_id', fazendaIds)
           .in('ano_mes', anoMeses),
-        // Load pesos pastos for the selected month (for live calc)
-        Promise.all(
-          fazendaIds.map(async fid => {
-            const pesos = await loadPesosPastosPorCategoria(fid, anoMes, categorias);
-            return { fid, pesos };
-          })
-        ),
+        // FONTE OFICIAL: vw_zoot_categoria_mensal para dados físicos
+        supabase
+          .from('vw_zoot_categoria_mensal' as any)
+          .select('fazenda_id, mes, categoria_codigo, saldo_final, peso_medio_final')
+          .in('fazenda_id', fazendaIds)
+          .eq('ano', Number(anoFiltro))
+          .eq('cenario', 'realizado'),
       ]);
 
       // Parse headers: fazendaId -> anoMes -> {valor, pesoKg}
@@ -244,10 +243,20 @@ export function useValorRebanhoGlobal(
       });
       setPrecosAllFarms(pMap);
 
-      // Pesos pastos
-      const ppMap: Record<string, Record<string, number>> = {};
-      pesosResults.forEach(r => { ppMap[r.fid] = r.pesos; });
-      setPesosPastosPorFazenda(ppMap);
+      // Build zoot view data per farm per month
+      const zootRows = ((zootViewRes.data || []) as unknown as Array<{ fazenda_id: string; mes: number; categoria_codigo: string; saldo_final: number; peso_medio_final: number | null }>);
+      const zootByFarmMes = new Map<string, Map<number, Array<{ categoria_codigo: string; saldo_final: number; peso_medio_final: number | null }>>>();
+      zootRows.forEach(r => {
+        if (!zootByFarmMes.has(r.fazenda_id)) zootByFarmMes.set(r.fazenda_id, new Map());
+        const farmMap = zootByFarmMes.get(r.fazenda_id)!;
+        if (!farmMap.has(r.mes)) farmMap.set(r.mes, []);
+        farmMap.get(r.mes)!.push({ categoria_codigo: r.categoria_codigo, saldo_final: r.saldo_final, peso_medio_final: r.peso_medio_final });
+      });
+
+      // Store in state for computeLiveRowsForFarm
+      setPesosPastosPorFazenda({}); // Clear old state
+      // Store zoot data in a ref-like state
+      setZootData(zootByFarmMes);
     } catch (err) {
       console.error('Erro ao carregar dados globais de valor do rebanho:', err);
     } finally {
@@ -277,22 +286,28 @@ export function useValorRebanhoGlobal(
     return 'misto'; // Some farms closed, some open
   }, [fazendaIds, snapshotHeaders, snapshotItems]);
 
-  // Compute live rows for a farm for a given month
+  // Compute live rows for a farm for a given month — FONTE OFICIAL: zootData
   const computeLiveRowsForFarm = useCallback((
     fid: string,
     ano: number,
     mes: number,
   ): SnapshotDetalheCategoria[] => {
-    const farmLancs = lancamentos.filter(l => l.fazendaId === fid);
-    const farmSaldos = saldosIniciais.filter(s => (s as any).fazendaId === fid || (s as any).fazenda_id === fid);
-    const saldoMap = calcSaldoPorCategoriaLegado(farmSaldos, farmLancs, ano, mes);
-    const pesosMap = pesosPastosPorFazenda[fid] || {};
+    const farmZoot = zootData.get(fid)?.get(mes) || [];
     const precosMap = precosAllFarms[fid]?.[`${ano}-${String(mes).padStart(2, '0')}`] || {};
+
+    // Build saldo and peso maps from official view
+    const saldoMap = new Map<string, number>();
+    const pesoMap = new Map<string, number>();
+    farmZoot.forEach(r => {
+      saldoMap.set(r.categoria_codigo, (saldoMap.get(r.categoria_codigo) || 0) + r.saldo_final);
+      if (r.peso_medio_final != null && r.saldo_final > 0) {
+        pesoMap.set(r.categoria_codigo, r.peso_medio_final);
+      }
+    });
 
     return ORDEM_CATEGORIAS_FIXA.map(codigo => {
       const qty = saldoMap.get(codigo) || 0;
-      const { valor: pesoMedio } = resolverPesoOficial(codigo, pesosMap, farmSaldos, farmLancs, ano, mes);
-      const peso = pesoMedio || 0;
+      const peso = pesoMap.get(codigo) || 0;
       const precoKg = precosMap[codigo] || 0;
       const valorTotal = qty * peso * precoKg;
       return {
@@ -303,7 +318,7 @@ export function useValorRebanhoGlobal(
         valor_total_categoria: valorTotal,
       };
     });
-  }, [lancamentos, saldosIniciais, pesosPastosPorFazenda, precosAllFarms]);
+  }, [zootData, precosAllFarms]);
 
   // Aggregate rows for a given month
   const getAggregatedRowsForMonth = useCallback((mes: string, ano: number, mesNum: number): GlobalCategoriaRow[] => {

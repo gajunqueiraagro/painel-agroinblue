@@ -5,7 +5,7 @@
 import { useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
-import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
+import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
 interface Props {
@@ -39,13 +39,17 @@ export function VariacaoEstoqueExplicacao({
   const [aberto, setAberto] = useState(false);
   const anoNum = Number(anoFiltro);
 
+  // FONTE OFICIAL
+  const rebanho = useRebanhoOficial({ ano: anoNum, cenario: 'realizado' });
+
   const dados = useMemo(() => {
     // ── BLOCO FÍSICO ──
     const cabInicio = saldosIniciais
       .filter(s => s.ano === anoNum)
       .reduce((sum, s) => sum + s.quantidade, 0);
 
-    const saldoFimMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, anoNum, mesLimite);
+    // FONTE OFICIAL: saldo final do mês
+    const saldoFimMap = rebanho.getSaldoMap(mesLimite);
     const cabFim = Array.from(saldoFimMap.values()).reduce((s, v) => s + v, 0);
     const deltaCab = cabFim - cabInicio;
 
@@ -57,8 +61,10 @@ export function VariacaoEstoqueExplicacao({
       }, 0);
 
     let arrobasFim = 0;
+    // Use official weight from rebanho or fallback to pesosReais prop
+    const pesoMapOficial = rebanho.getPesoMedioMap(mesLimite);
     for (const [cat, qtd] of saldoFimMap.entries()) {
-      const pesoKg = pesosReaisFinal?.[cat] ?? saldosIniciais.find(s => s.ano === anoNum && s.categoria === cat)?.pesoMedioKg ?? 0;
+      const pesoKg = pesoMapOficial.get(cat) ?? pesosReaisFinal?.[cat] ?? saldosIniciais.find(s => s.ano === anoNum && s.categoria === cat)?.pesoMedioKg ?? 0;
       arrobasFim += qtd * (pesoKg / 30);
     }
     const deltaArrobas = arrobasFim - arrobasInicio;

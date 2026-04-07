@@ -15,7 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { TabId } from '@/components/BottomNav';
-import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
+// FONTE OFICIAL: vw_zoot_categoria_mensal (sem calcSaldoPorCategoriaLegado)
 import {
   statusFinanceiro as calcStatusFinanceiro,
   statusCategorias as calcStatusCategorias,
@@ -97,7 +97,7 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
       const anoMeses = Array.from({ length: 12 }, (_, i) => `${anoStr}-${String(i + 1).padStart(2, '0')}`);
 
       // Parallel fetches
-      const [pastosRes, fpRes, vrRes, itensRes, catsRes, finFechRes] = await Promise.all([
+      const [pastosRes, fpRes, vrRes, itensRes, catsRes, finFechRes, zootViewRes] = await Promise.all([
         // Pastos ativos
         fq(supabase.from('pastos').select('id').eq('ativo', true).eq('entra_conciliacao', true)),
         // Fechamento pastos — mesma base operacional da tela Fechamento de Pastos
@@ -125,6 +125,21 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
               .in('fazenda_id', fazendaIdsFin)
               .gte('ano_mes', anoMeses[0]).lte('ano_mes', anoMeses[11])
           : Promise.resolve({ data: [] }),
+        // FONTE OFICIAL: vw_zoot_categoria_mensal para saldos
+        (() => {
+          let q = supabase
+            .from('vw_zoot_categoria_mensal' as any)
+            .select('mes, categoria_codigo, saldo_final')
+            .eq('ano', Number(anoStr))
+            .eq('cenario', 'realizado');
+          if (isGlob) {
+            // For global, we query all farms — client_id not available here directly
+            q = q.in('fazenda_id', fazendaIdsPec);
+          } else {
+            q = q.eq('fazenda_id', fazendaId);
+          }
+          return q;
+        })(),
       ]);
 
       const fpAll = fpRes.data || [];
@@ -134,6 +149,15 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
       const pastosAtivosData = pastosRes.data || [];
       const totalPastos = pastosAtivosData.length;
       const activePastoIds = new Set(pastosAtivosData.map((p: any) => p.id));
+
+      // Build saldo map from official view per month
+      const zootRows = ((zootViewRes.data || []) as unknown as Array<{ mes: number; categoria_codigo: string; saldo_final: number }>);
+      const saldoOficialPorMes = new Map<number, Map<string, number>>();
+      zootRows.forEach((r) => {
+        if (!saldoOficialPorMes.has(r.mes)) saldoOficialPorMes.set(r.mes, new Map());
+        const m = saldoOficialPorMes.get(r.mes)!;
+        m.set(r.categoria_codigo, (m.get(r.categoria_codigo) || 0) + r.saldo_final);
+      });
 
       // Fetch itens
       const fpIds = fpAll.map(f => f.id);
@@ -199,8 +223,8 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
         const dedupFps = Array.from(dedupByPasto.values());
         const fechados = dedupFps.filter(f => f.status === 'fechado').length;
 
-        // Saldo oficial
-        const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, anoNum, m);
+        // Saldo oficial — FONTE ÚNICA: vw_zoot_categoria_mensal
+        const saldoMap = saldoOficialPorMes.get(m) || new Map<string, number>();
         const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
 
         // Build alocado nos pastos usando a MESMA base operacional da linha Pasto

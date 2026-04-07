@@ -7,8 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent } from '@/components/ui/card';
 import { MESES_NOMES, MESES_COLS } from '@/lib/calculos/labels';
 import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
-import { calcSaldoPorCategoriaLegado, calcPesoMedioPonderado, calcUA, calcUAHa, calcAreaProdutivaPecuaria } from '@/lib/calculos/zootecnicos';
+import { calcPesoMedioPonderado, calcUA, calcUAHa, calcAreaProdutivaPecuaria } from '@/lib/calculos/zootecnicos';
 import { calcArrobasSafe } from '@/lib/calculos/economicos';
+import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { useFinanceiro, type FinanceiroLancamento, type RateioADM } from '@/hooks/useFinanceiro';
 import { useArrobasGlobal } from '@/hooks/useArrobasGlobal';
@@ -182,6 +183,10 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
 
   const zoo = useIndicadoresZootecnicos(fazendaId, anoNum, mesFiltro, lancsFiltrados, saldosIniciais, pastos, categorias, globalFazendaIds);
 
+  // FONTE OFICIAL para comparações kg/ha
+  const rebanhoAtual = useRebanhoOficial({ ano: anoNum, cenario: 'realizado', global: isGlobal });
+  const rebanhoAnt = useRebanhoOficial({ ano: anoNum - 1, cenario: 'realizado', global: isGlobal });
+
   const mesLabel = MESES_COLS.find(m => m.key === String(mesFiltro).padStart(2, '0'))?.label || '';
 
   // Peso / kg/ha
@@ -189,7 +194,7 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
     ? zoo.saldoFinalMes * zoo.pesoMedioRebanhoKg : null;
   const kgHa = pesoTotalKg && zoo.areaProdutiva > 0 ? pesoTotalKg / zoo.areaProdutiva : null;
 
-  // kg/ha comparisons
+  // kg/ha comparisons — FONTE OFICIAL
   const kgHaComps = useMemo(() => {
     const buildComp = (atual: number | null, ref: number | null) => {
       if (atual === null || ref === null || (atual === 0 && ref === 0)) return null;
@@ -198,39 +203,26 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
       return { diferencaPercentual: pct, disponivel: true } as any;
     };
     const mesAntMes = mesFiltro > 1 ? mesFiltro - 1 : 12;
-    const mesAntAno = mesFiltro > 1 ? anoNum : anoNum - 1;
-    const sMapAnt = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, mesAntAno, mesAntMes);
-    const cabAnt = Array.from(sMapAnt.values()).reduce((s, v) => s + v, 0);
-    const pmAnt = calcPesoMedioPonderado(Array.from(sMapAnt.entries()).filter(([,q]) => q > 0).map(([cat, q]) => {
-      const si = saldosIniciais.find(s => s.ano === mesAntAno && s.categoria === cat);
-      return { quantidade: q, pesoKg: si?.pesoMedioKg ?? null };
-    }));
+    const rebanhoRef = mesFiltro > 1 ? rebanhoAtual : rebanhoAnt;
+    const cabAnt = rebanhoRef.getSaldoFinalTotal(mesAntMes);
+    const pmAnt = rebanhoRef.getPesoMedioRebanho(mesAntMes);
     const kgHaAnt = cabAnt > 0 && pmAnt && zoo.areaProdutiva > 0 ? (cabAnt * pmAnt) / zoo.areaProdutiva : null;
 
-    const sMapYoY = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, anoNum - 1, mesFiltro);
-    const cabYoY = Array.from(sMapYoY.values()).reduce((s, v) => s + v, 0);
-    const pmYoY = calcPesoMedioPonderado(Array.from(sMapYoY.entries()).filter(([,q]) => q > 0).map(([cat, q]) => {
-      const si = saldosIniciais.find(s => s.ano === anoNum - 1 && s.categoria === cat);
-      return { quantidade: q, pesoKg: si?.pesoMedioKg ?? null };
-    }));
+    const cabYoY = rebanhoAnt.getSaldoFinalTotal(mesFiltro);
+    const pmYoY = rebanhoAnt.getPesoMedioRebanho(mesFiltro);
     const kgHaYoY = cabYoY > 0 && pmYoY && zoo.areaProdutiva > 0 ? (cabYoY * pmYoY) / zoo.areaProdutiva : null;
     return { mensal: buildComp(kgHa, kgHaAnt), anual: buildComp(kgHa, kgHaYoY) };
-  }, [kgHa, saldosIniciais, lancamentos, anoNum, mesFiltro, zoo.areaProdutiva]);
+  }, [kgHa, rebanhoAtual, rebanhoAnt, anoNum, mesFiltro, zoo.areaProdutiva]);
 
-  // Acumulado
+  // Acumulado — FONTE OFICIAL
   const acumulado = useMemo(() => {
     type Snap = { cab: number; pesoMedio: number | null; kgTotal: number; area: number; ua: number };
-    const buildSnapshots = (ano: number, ateMes: number): Snap[] => {
+    const buildSnapshots = (rebanho: typeof rebanhoAtual, ateMes: number): Snap[] => {
       const snaps: Snap[] = [];
       for (let m = 1; m <= ateMes; m++) {
-        const sMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, m);
-        const cab = Array.from(sMap.values()).reduce((s, v) => s + v, 0);
-        const itensPeso = Array.from(sMap.entries()).filter(([, q]) => q > 0).map(([cat, q]) => {
-          const si = saldosIniciais.find(s => s.ano === ano && s.categoria === cat);
-          return { quantidade: q, pesoKg: si?.pesoMedioKg ?? null };
-        });
-        const pm = calcPesoMedioPonderado(itensPeso);
-        const kgTot = cab * (pm || 0);
+        const cab = rebanho.getSaldoFinalTotal(m);
+        const pm = rebanho.getPesoMedioRebanho(m);
+        const kgTot = rebanho.getPesoTotalRebanho(m);
         const area = calcAreaProdutivaPecuaria(pastos);
         const ua = calcUA(cab, pm);
         snaps.push({ cab, pesoMedio: pm, kgTotal: kgTot, area, ua });
@@ -257,9 +249,9 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
       const pct = ref !== 0 ? (diff / Math.abs(ref)) * 100 : null;
       return { diferencaPercentual: pct, disponivel: true } as any;
     };
-    const atual = calcAvgs(buildSnapshots(anoNum, mesFiltro));
-    const mom = mesFiltro > 1 ? calcAvgs(buildSnapshots(anoNum, mesFiltro - 1)) : null;
-    const yoy = calcAvgs(buildSnapshots(anoNum - 1, mesFiltro));
+    const atual = calcAvgs(buildSnapshots(rebanhoAtual, mesFiltro));
+    const mom = mesFiltro > 1 ? calcAvgs(buildSnapshots(rebanhoAtual, mesFiltro - 1)) : null;
+    const yoy = calcAvgs(buildSnapshots(rebanhoAnt, mesFiltro));
     return {
       ...atual,
       compCab: { mensal: comp(atual.cabMedia, mom?.cabMedia ?? null), anual: comp(atual.cabMedia, yoy.cabMedia) },
@@ -268,7 +260,7 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
       compUaHa: { mensal: comp(atual.uaHaMedio, mom?.uaHaMedio ?? null), anual: comp(atual.uaHaMedio, yoy.uaHaMedio) },
       compKgHa: { mensal: comp(atual.kgHaMedio, mom?.kgHaMedio ?? null), anual: comp(atual.kgHaMedio, yoy.kgHaMedio) },
     };
-  }, [saldosIniciais, lancamentos, anoNum, mesFiltro, pastos]);
+  }, [rebanhoAtual, rebanhoAnt, anoNum, mesFiltro, pastos]);
 
   // DRE data: lancamentos financeiros conciliados por mês
   const lancConciliadosPorMes = useMemo(() => {
@@ -851,17 +843,16 @@ const DOT_STYLE = { r: 2, strokeWidth: 1.5, fill: 'hsl(var(--background))' };
 const ACTIVE_DOT_STYLE = { r: 4, strokeWidth: 2, fill: 'hsl(var(--primary))' };
 
 function GraficosContent({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro, pastos }: GraficosContentProps) {
+  // FONTE OFICIAL
+  const rebanhoAtual = useRebanhoOficial({ ano: anoNum, cenario: 'realizado' });
+  const rebanhoAnt = useRebanhoOficial({ ano: anoNum - 1, cenario: 'realizado' });
+
   const chartData = useMemo(() => {
-    const buildYear = (ano: number) => {
+    const buildYear = (rebanho: typeof rebanhoAtual, ano: number) => {
       const data: any[] = [];
       for (let m = 1; m <= 12; m++) {
-        const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, m);
-        const cab = Array.from(saldoMap.values()).reduce((s, v) => s + v, 0);
-        const itens = Array.from(saldoMap.entries()).filter(([, q]) => q > 0).map(([cat, q]) => {
-          const si = saldosIniciais.find(s => s.ano === ano && s.categoria === cat);
-          return { quantidade: q, pesoKg: si?.pesoMedioKg ?? null };
-        });
-        const pm = calcPesoMedioPonderado(itens);
+        const cab = rebanho.getSaldoFinalTotal(m);
+        const pm = rebanho.getPesoMedioRebanho(m);
         const areaPec = calcAreaProdutivaPecuaria(pastos);
         const kgha = pm && areaPec > 0 ? (cab * pm) / areaPec : null;
         const mesStr = `${ano}-${String(m).padStart(2, '0')}`;
@@ -871,8 +862,8 @@ function GraficosContent({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro, 
       }
       return data;
     };
-    const atual = buildYear(anoNum);
-    const anterior = buildYear(anoNum - 1);
+    const atual = buildYear(rebanhoAtual, anoNum);
+    const anterior = buildYear(rebanhoAnt, anoNum - 1);
     return MESES_NOMES.map((mes, i) => {
       const isFuturo = i + 1 > mesFiltro;
       return {
@@ -883,7 +874,7 @@ function GraficosContent({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro, 
         [`kgHa_${anoNum - 1}`]: anterior[i]?.kgHa,
       };
     });
-  }, [lancamentos, saldosIniciais, anoNum, mesFiltro, pastos]);
+  }, [rebanhoAtual, rebanhoAnt, lancamentos, anoNum, mesFiltro, pastos]);
 
   const prodData = useMemo(() => {
     if (!zoo.historico || zoo.historico.length < 2) return [];
