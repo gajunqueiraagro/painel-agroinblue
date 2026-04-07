@@ -424,6 +424,9 @@ const Index = () => {
       {activeTab === 'painel_consultor' && (
         <PainelConsultorTab onBack={() => setActiveTab('painel_consultor_hub')} onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} metaConsolidacao={metaConsolidacaoData} />
       )}
+      {activeTab === 'conferencia_gmd' && (
+        <ConferenciaGmdTab onBack={() => setActiveTab('painel_consultor')} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
+      )}
       {activeTab === 'status_fechamentos' && (
         <StatusFechamentosTab
           ano={filtroGlobal.ano}
