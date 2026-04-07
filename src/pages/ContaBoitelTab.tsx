@@ -185,7 +185,7 @@ export function ContaBoitelTab({ onBack }: Props) {
     const saldoLiquidoEsperado = saldoAReceberBoitel - adiantRecebidos - (selected.custo_frete || 0);
 
     const totalRealizado = lancamentos
-      .filter(l => l.status_transacao === 'conciliado' || l.status_transacao === 'confirmado')
+      .filter(l => l.status_transacao === 'realizado' || l.status_transacao === 'programado')
       .reduce((s, l) => s + (l.sinal * l.valor), 0);
 
     const totalEntradas = lancamentos.filter(l => l.sinal > 0).reduce((s, l) => s + l.valor, 0);
@@ -223,7 +223,7 @@ export function ContaBoitelTab({ onBack }: Props) {
       fazenda_id: fazendaAtual.id,
       tipo_operacao: config.tipo_operacao,
       sinal: config.sinal,
-      status_transacao: 'confirmado',
+      status_transacao: 'programado',
       origem_lancamento: 'boitel',
       boitel_lote_id: selected.id,
       macro_custo: cls.macro_custo,

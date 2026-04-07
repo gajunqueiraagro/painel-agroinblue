@@ -81,8 +81,8 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
 
   // Filter lancamentos by cenario
   const lancsFiltrados = useMemo(() => {
-    const statusMatch = cenario === 'realizado' ? 'conciliado' : 'previsto';
-    return lancamentos.filter(l => (l.statusOperacional || 'conciliado') === statusMatch);
+    const statusMatch = cenario === 'realizado' ? 'realizado' : 'previsto';
+    return lancamentos.filter(l => (l.statusOperacional || 'realizado') === statusMatch);
   }, [lancamentos, cenario]);
 
   const zoo = useIndicadoresZootecnicos(fazendaId, anoNum, mesFiltro, lancsFiltrados, saldosIniciais, pastos, categorias, globalFazendaIds);

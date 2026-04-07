@@ -19,12 +19,12 @@ interface Props {
 
 const STATUS_DESCRIPTIONS: Record<StatusOperacional, string> = {
   previsto: 'Planejamento (meta). Gera lançamentos previstos que alimentam o fluxo projetado.',
-  confirmado: 'Operação já definida, ainda não executada. Quando concluída, alterar para Realizado.',
-  conciliado: 'Operação já realizada. Impacta rebanho e financeiro real.',
+  programado: 'Operação definida, ainda não executada.',
+  realizado: 'Operação concluída. Impacta rebanho e financeiro.',
 };
 
 const STATUS_BUTTONS: { value: StatusOperacional; dot: string; activeBorder: string; activeBg: string }[] = [
-  { value: 'conciliado', dot: 'bg-green-600', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
+  { value: 'realizado', dot: 'bg-green-600', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
   { value: 'previsto', dot: 'bg-orange-500', activeBorder: 'border-orange-400', activeBg: 'bg-orange-50 dark:bg-orange-950/30' },
 ];
 
@@ -99,7 +99,7 @@ export function ReclassificacaoFormFields(props: Props & {
           })}
         </div>
         <div className={`rounded-md border px-2 py-1 text-[9px] leading-snug ${
-          statusOp === 'conciliado' ? 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-800 text-green-800 dark:text-green-300'
+          statusOp === 'realizado' ? 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-800 text-green-800 dark:text-green-300'
           : statusOp === 'previsto' ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-800 text-orange-800 dark:text-orange-300'
           : 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-300'
         }`}>
@@ -166,7 +166,7 @@ export function useReclassificacaoState(props: Props) {
   const [quantidade, setQuantidade] = useState('');
   const [data, setData] = useState(dataInicial || format(new Date(), 'yyyy-MM-dd'));
   const [pesoKg, setPesoKg] = useState('');
-  const [statusOp, setStatusOp] = useState<StatusOperacional>('conciliado');
+  const [statusOp, setStatusOp] = useState<StatusOperacional>('realizado');
   const [submitting, setSubmitting] = useState(false);
   const [pesoAutoFilled, setPesoAutoFilled] = useState(false);
 

@@ -301,7 +301,7 @@ export async function gerarFinanceiroBoitel(
     if (clsAdiant) {
       inserts.push({
         cliente_id: clienteId, fazenda_id: fazendaId,
-        tipo_operacao: '2-Saídas', sinal: -1, status_transacao: 'confirmado',
+        tipo_operacao: '2-Saídas', sinal: -1, status_transacao: 'programado',
         origem_lancamento: 'boitel', movimentacao_rebanho_id: lancamentoId,
         boitel_lote_id: loteId,
         macro_custo: clsAdiant.macro_custo, centro_custo: clsAdiant.centro_custo, subcentro: clsAdiant.subcentro,
@@ -326,7 +326,7 @@ export async function gerarFinanceiroBoitel(
     parcelas.forEach((p, i) => {
       inserts.push({
         cliente_id: clienteId, fazenda_id: fazendaId,
-        tipo_operacao: '1-Entradas', sinal: 1, status_transacao: 'confirmado',
+        tipo_operacao: '1-Entradas', sinal: 1, status_transacao: 'programado',
         origem_lancamento: 'boitel', movimentacao_rebanho_id: lancamentoId,
         boitel_lote_id: loteId,
         macro_custo: clasReceita.macro_custo, centro_custo: clasReceita.centro_custo, subcentro: clasReceita.subcentro,
@@ -341,7 +341,7 @@ export async function gerarFinanceiroBoitel(
   } else {
     inserts.push({
       cliente_id: clienteId, fazenda_id: fazendaId,
-      tipo_operacao: '1-Entradas', sinal: 1, status_transacao: 'confirmado',
+      tipo_operacao: '1-Entradas', sinal: 1, status_transacao: 'programado',
       origem_lancamento: 'boitel', movimentacao_rebanho_id: lancamentoId,
       boitel_lote_id: loteId,
       macro_custo: clasReceita.macro_custo, centro_custo: clasReceita.centro_custo, subcentro: clasReceita.subcentro,
@@ -367,7 +367,7 @@ export async function gerarFinanceiroBoitel(
     if (!cls) continue;
     inserts.push({
       cliente_id: clienteId, fazenda_id: fazendaId,
-      tipo_operacao: '2-Saídas', sinal: -1, status_transacao: 'confirmado',
+      tipo_operacao: '2-Saídas', sinal: -1, status_transacao: 'programado',
       origem_lancamento: 'boitel', movimentacao_rebanho_id: lancamentoId,
       boitel_lote_id: loteId,
       macro_custo: cls.macro_custo, centro_custo: cls.centro_custo, subcentro: cls.subcentro,

@@ -516,9 +516,9 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           if (format(d, 'yyyy') !== anoFiltro) return false;
           if (mesFiltro !== 'todos' && format(d, 'MM') !== mesFiltro) return false;
           if (!tiposFilter.includes(l.tipo)) return false;
-          const st = l.statusOperacional || 'conciliado';
-          if (statusFiltro === 'realizado' && st !== 'conciliado') return false;
-          if (statusFiltro === 'programado' && st !== 'confirmado') return false;
+          const st = l.statusOperacional || 'realizado';
+          if (statusFiltro === 'realizado' && st !== 'realizado') return false;
+          if (statusFiltro === 'programado' && st !== 'programado') return false;
           if (statusFiltro === 'previsto' && st !== 'previsto') return false;
           if (categoriaFiltro !== 'todas' && l.categoria !== categoriaFiltro) return false;
           return true;

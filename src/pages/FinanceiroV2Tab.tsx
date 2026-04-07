@@ -94,14 +94,14 @@ const MESES_LIST = [
 const STATUS_LABELS: Record<string, string> = {
   previsto: CENTRAL_STATUS_LABEL.previsto,
   agendado: 'Agendado',
-  confirmado: CENTRAL_STATUS_LABEL.confirmado,
-  conciliado: CENTRAL_STATUS_LABEL.conciliado,
+  programado: CENTRAL_STATUS_LABEL.programado,
+  realizado: CENTRAL_STATUS_LABEL.realizado,
 };
 const STATUS_TEXT_COLORS: Record<string, string> = {
   previsto: 'text-orange-500',
   agendado: 'text-emerald-400',
-  confirmado: 'text-sky-500',
-  conciliado: 'text-green-700 dark:text-green-400 font-bold',
+  programado: 'text-sky-500',
+  realizado: 'text-green-700 dark:text-green-400 font-bold',
 };
 
 function fmtValor(v: number, sinal: number) {
@@ -628,8 +628,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                   <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
                   <SelectItem value="previsto" className={itemCls}>{CENTRAL_STATUS_LABEL.previsto}</SelectItem>
                   <SelectItem value="agendado" className={itemCls}>Agendado</SelectItem>
-                  <SelectItem value="confirmado" className={itemCls}>{CENTRAL_STATUS_LABEL.confirmado}</SelectItem>
-                  <SelectItem value="conciliado" className={itemCls}>{CENTRAL_STATUS_LABEL.conciliado}</SelectItem>
+                  <SelectItem value="confirmado" className={itemCls}>{CENTRAL_STATUS_LABEL.programado}</SelectItem>
+                  <SelectItem value="conciliado" className={itemCls}>{CENTRAL_STATUS_LABEL.realizado}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

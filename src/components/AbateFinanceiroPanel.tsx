@@ -32,7 +32,7 @@ interface Props {
   lancamentoId?: string;
   mode?: 'create' | 'update';
   onFinanceiroUpdated?: () => void;
-  statusOperacional?: 'previsto' | 'confirmado' | 'conciliado';
+  statusOperacional?: 'previsto' | 'programado' | 'agendado' | 'realizado';
 }
 
 export interface AbateFinanceiroPanelRef {
@@ -43,7 +43,7 @@ export interface AbateFinanceiroPanelRef {
 export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(function AbateFinanceiroPanel({
   quantidade, categoria, data, valorLiquido, totalDescontos = 0, frigorifico,
   fornecedorId, notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated,
-  statusOperacional = 'conciliado',
+  statusOperacional = 'realizado',
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
@@ -225,7 +225,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
         fazenda_id: fazendaAtual.id,
         tipo_operacao: '1-Entradas',
         sinal: 1,
-        status_transacao: isPrevisto ? 'previsto' : 'confirmado',
+        status_transacao: isPrevisto ? 'previsto' : 'programado',
         origem_lancamento: 'movimentacao_rebanho',
         movimentacao_rebanho_id: targetLancamentoId,
         macro_custo: clasReceita.macro_custo,
@@ -288,7 +288,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
           fazenda_id: fazendaAtual.id,
           tipo_operacao: '2-Saídas',
           sinal: -1,
-          status_transacao: isPrevisto ? 'previsto' : 'confirmado',
+          status_transacao: isPrevisto ? 'previsto' : 'programado',
           origem_lancamento: 'movimentacao_rebanho',
           movimentacao_rebanho_id: targetLancamentoId,
           macro_custo: clasDed.macro_custo,

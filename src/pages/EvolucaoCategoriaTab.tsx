@@ -88,7 +88,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
           .eq('fazenda_id', fazendaId)
           .eq('ano_mes', anoMes);
 
-        const fechados = (fechamentos || []).filter(f => f.status === 'fechado' || f.status === 'conciliado').length;
+        const fechados = (fechamentos || []).filter(f => f.status === 'fechado' || f.status === 'realizado').length;
 
         if (fechados === 0) setConciliacaoStatus('aberto');
         else if (fechados >= totalPastos) setConciliacaoStatus('fechado');

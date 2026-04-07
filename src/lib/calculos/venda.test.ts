@@ -14,7 +14,7 @@ function baseInput(overrides: Partial<VendaCalculationInput> = {}): VendaCalcula
     fazendaOrigem: 'Fazenda A',
     compradorNome: 'Comprador X',
     data: '2025-06-15',
-    statusOperacional: 'confirmado',
+    statusOperacional: 'programado',
     tipoPreco: 'por_arroba',
     precoInput: 300,
     ...overrides,

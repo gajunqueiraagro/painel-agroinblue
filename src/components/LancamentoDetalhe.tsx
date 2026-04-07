@@ -149,7 +149,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       pesoMedioKg: form.pesoMedioKg ? Number(form.pesoMedioKg) : undefined,
       pesoMedioArrobas: form.pesoMedioKg ? kgToArrobas(Number(form.pesoMedioKg)) : undefined,
       precoMedioCabeca: form.precoMedioCabeca ? Number(form.precoMedioCabeca) : undefined,
-      statusOperacional: form.statusOperacional || 'conciliado',
+      statusOperacional: form.statusOperacional || 'realizado',
     });
     setEditando(false);
     onClose();
@@ -168,7 +168,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
         fazendaDestino: nomeFazenda,
         pesoMedioKg: compraForm.pesoMedioKg ? Number(compraForm.pesoMedioKg) : undefined,
         pesoMedioArrobas: compraForm.pesoMedioKg ? kgToArrobas(Number(compraForm.pesoMedioKg)) : undefined,
-        statusOperacional: compraForm.statusOperacional || 'conciliado',
+        statusOperacional: compraForm.statusOperacional || 'realizado',
       });
       setCompraZooSaved(true);
     } finally {
@@ -620,7 +620,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                         type="button"
                         onClick={() => setCompraForm(f => ({ ...f, statusOperacional: s.value }))}
                         className={`flex-1 py-1 rounded text-[10px] font-bold border-2 transition-all ${
-                          (compraForm.statusOperacional || 'conciliado') === s.value
+                          (compraForm.statusOperacional || 'realizado') === s.value
                             ? `${s.bg} text-white border-transparent shadow-md`
                             : 'border-border text-muted-foreground bg-muted/30'
                         }`}
@@ -687,7 +687,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                   pesoKg={compraZooSaved ? (compraForm.pesoMedioKg || 0) : (lancamento.pesoMedioKg || 0)}
                   data={compraZooSaved ? compraForm.data : lancamento.data}
                   categoria={compraZooSaved ? compraForm.categoria : lancamento.categoria}
-                  statusOp={(compraZooSaved ? (compraForm.statusOperacional || 'conciliado') : (lancamento.statusOperacional || 'conciliado')) as StatusOperacional}
+                  statusOp={(compraZooSaved ? (compraForm.statusOperacional || 'realizado') : (lancamento.statusOperacional || 'realizado')) as StatusOperacional}
                   fazendaOrigem={compraZooSaved ? (compraForm.fazendaOrigem || '') : (lancamento.fazendaOrigem || '')}
                   notaFiscal={notaFiscalEdit}
                   onNotaFiscalChange={setNotaFiscalEdit}
@@ -842,7 +842,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                     className={`flex-1 py-2 rounded-lg text-xs font-bold border-2 transition-all ${
                       p1Oficial ? 'opacity-50 cursor-not-allowed' : ''
                     } ${
-                      (form.statusOperacional || 'conciliado') === s.value
+                      (form.statusOperacional || 'realizado') === s.value
                         ? `${s.bg} text-white border-transparent shadow-md`
                         : 'border-border text-muted-foreground bg-muted/30'
                     }`}

@@ -1121,7 +1121,7 @@ export function DashboardFinanceiro({
                     </TableHeader>
                     <TableBody>
                       {auditStatus.map(s => {
-                        const usado = s.status.toLowerCase() === 'conciliado';
+                        const usado = s.status.toLowerCase() === 'realizado';
                         return (
                           <TableRow key={s.status} className={usado ? 'bg-green-50 dark:bg-green-950/20' : 'opacity-60'}>
                             <TableCell className="text-[10px] px-2 py-1 font-bold">{s.status}</TableCell>

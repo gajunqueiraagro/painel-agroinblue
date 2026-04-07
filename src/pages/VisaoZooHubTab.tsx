@@ -64,7 +64,7 @@ function formatMoedaCompacto(val: number): string {
 const TIPOS_SAIDA_DESFRUTE = ['abate', 'venda', 'consumo', 'transferencia_saida'];
 
 const isConciliado = (l: FinanceiroLancamento) =>
-  (l.status_transacao || '').toLowerCase() === 'conciliado';
+  (l.status_transacao || '').toLowerCase() === 'realizado';
 
 const datePagtoAnoMes = (l: FinanceiroLancamento): string | null => {
   if (!l.data_pagamento || l.data_pagamento.length < 7) return null;
@@ -175,8 +175,8 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
 
   // Filter lancamentos by cenario
   const lancsFiltrados = useMemo(() => {
-    const statusMatch = cenario === 'realizado' ? 'conciliado' : 'previsto';
-    return lancamentos.filter(l => (l.statusOperacional || 'conciliado') === statusMatch);
+    const statusMatch = cenario === 'realizado' ? 'realizado' : 'previsto';
+    return lancamentos.filter(l => (l.statusOperacional || 'realizado') === statusMatch);
   }, [lancamentos, cenario]);
 
   const zoo = useIndicadoresZootecnicos(fazendaId, anoNum, mesFiltro, lancsFiltrados, saldosIniciais, pastos, categorias, globalFazendaIds);

@@ -70,7 +70,7 @@ interface MesCard {
   saldoCalculado: number;
   saldoExtrato: number | null;
   diferenca: number;
-  status: 'conciliado' | 'atencao' | 'nao_conciliado' | 'pendente';
+  status: 'realizado' | 'atencao' | 'nao_conciliado' | 'pendente';
   saldoRow: SaldoRow | null;
   lancamentos: LancamentoResumo[];
 }
@@ -105,9 +105,9 @@ function contaLabel(c: ContaRef): string {
 // Use shared getConciliacaoStatus from conciliacaoCalc
 
 const STATUS_CONFIG = {
-  conciliado: { label: 'Realizado', color: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300', icon: CheckCircle2, iconColor: 'text-green-600' },
+  realizado: { label: 'Realizado', color: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300', icon: CheckCircle2, iconColor: 'text-green-600' },
   atencao: { label: 'Atenção', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300', icon: AlertTriangle, iconColor: 'text-yellow-600' },
-  nao_conciliado: { label: 'Não Conciliado', color: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300', icon: XCircle, iconColor: 'text-red-600' },
+  nao_realizado: { label: 'Não Conciliado', color: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300', icon: XCircle, iconColor: 'text-red-600' },
   pendente: { label: 'Pendente', color: 'bg-muted text-muted-foreground', icon: AlertTriangle, iconColor: 'text-muted-foreground' },
 };
 
@@ -303,11 +303,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             }
             const accCalc = accSaldoInicial + accEntradas - accSaidas;
             const accDiff = Math.abs((accSaldoRow.saldo_final || 0) - accCalc);
-            return accDiff < 0.01 ? 'conciliado' as const : accDiff <= 100 ? 'atencao' as const : 'nao_conciliado' as const;
+            return accDiff < 0.01 ? 'realizado' as const : accDiff <= 100 ? 'atencao' as const : 'nao_conciliado' as const;
           });
           const hasNaoConc = perAccountStatuses.some(s => s === 'nao_conciliado');
           const hasAtencao = perAccountStatuses.some(s => s === 'atencao');
-          status = hasNaoConc ? 'nao_conciliado' : hasAtencao ? 'atencao' : 'conciliado';
+          status = hasNaoConc ? 'nao_conciliado' : hasAtencao ? 'atencao' : 'realizado';
         }
       } else {
         status = getConciliacaoStatus(diferenca, saldoExtrato);
@@ -341,7 +341,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const summary = useMemo(() => {
     const totalEntradas = mesCards.reduce((s, c) => s + c.totalEntradas, 0);
     const totalSaidas = mesCards.reduce((s, c) => s + c.totalSaidas, 0);
-    const conciliados = mesCards.filter(c => c.status === 'conciliado').length;
+    const conciliados = mesCards.filter(c => c.status === 'realizado').length;
     const pendentes = mesCards.filter(c => c.status === 'pendente').length;
     const naoConc = mesCards.filter(c => c.status === 'nao_conciliado').length;
     return { totalEntradas, totalSaidas, saldo: totalEntradas - totalSaidas, conciliados, pendentes, naoConc };
@@ -456,7 +456,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           const cfg = STATUS_CONFIG[card.status];
           const StatusIcon = cfg.icon;
           const diffAbs = Math.abs(card.diferenca);
-          const isConciliado = card.status === 'conciliado';
+          const isConciliado = card.status === 'realizado';
           const isPendente = card.status === 'pendente';
 
           return (

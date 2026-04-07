@@ -225,7 +225,7 @@ const MACROS_RATEIO_ADM_PRODUTIVO = new Set([
 
 /** Base ADM para avaliação de rateio */
 const isADMBaseRateio = (l: FinanceiroLancamento) =>
-  (l.status_transacao || '').toLowerCase().trim() === 'conciliado' &&
+  (l.status_transacao || '').toLowerCase().trim() === 'realizado' &&
   (l.tipo_operacao || '').startsWith('2') &&
   !!l.data_realizacao;
 

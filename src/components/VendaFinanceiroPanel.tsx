@@ -103,8 +103,8 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
   const isPrevisto = statusOp === 'previsto';
-  const isConfirmado = statusOp === 'confirmado';
-  const isConciliado = statusOp === 'conciliado';
+  const isConfirmado = statusOp === 'programado';
+  const isConciliado = statusOp === 'realizado';
 
   const [formaReceb, setFormaReceb] = useState<'avista' | 'prazo'>('avista');
   const [qtdParcelas, setQtdParcelas] = useState('1');
@@ -548,7 +548,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       }
 
       const clasReceita = planoReceita.find(p => subcentroCandidates.indexOf(p.subcentro!) >= 0) || planoReceita[0];
-      const statusFin = isPrevisto ? 'previsto' : 'confirmado';
+      const statusFin = isPrevisto ? 'previsto' : 'programado';
 
       const baseRecord: Record<string, any> = {
         cliente_id: clienteAtual.id,

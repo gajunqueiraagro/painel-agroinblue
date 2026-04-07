@@ -52,7 +52,7 @@ export const isReposicaoBovinos = (l: FinanceiroLancamento) => {
 
 /** É Conciliado */
 export const isConciliado = (l: FinanceiroLancamento) =>
-  (l.status_transacao || '').toLowerCase().trim() === 'conciliado';
+  (l.status_transacao || '').toLowerCase().trim() === 'realizado';
 
 /** É Outras Entradas Financeiras */
 export const isOutrasEntradas = (l: FinanceiroLancamento) =>
