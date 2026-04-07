@@ -2244,25 +2244,29 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         <h2 className="text-[15px] font-semibold text-foreground">{editingAbateId ? (tipo === 'venda' ? 'Editar Venda' : tipo === 'abate' ? 'Editar Abate' : 'Editar Registro') : currentTipoLabel}</h2>
       </div>
 
-      {/* STATUS — inline label + cards + explanation below */}
+      {/* STATUS — inline label + cards (Zootécnico: Realizado, Programado, META) */}
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide shrink-0">Status</span>
           <div className="grid grid-cols-3 gap-1 flex-1">
             {([
-              { value: 'realizado' as StatusOperacional, label: STATUS_LABEL.realizado, dot: 'bg-green-600', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
-              { value: 'programado' as StatusOperacional, label: STATUS_LABEL.programado, dot: 'bg-blue-500', activeBorder: 'border-blue-400', activeBg: 'bg-blue-50 dark:bg-blue-950/30' },
-              { value: 'previsto' as StatusOperacional, label: STATUS_LABEL.previsto, dot: 'bg-orange-500', activeBorder: 'border-orange-400', activeBg: 'bg-orange-50 dark:bg-orange-950/30' },
+              { value: 'realizado' as const, label: STATUS_LABEL.realizado, dot: 'bg-green-600', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
+              { value: 'programado' as const, label: STATUS_LABEL.programado, dot: 'bg-blue-500', activeBorder: 'border-blue-400', activeBg: 'bg-blue-50 dark:bg-blue-950/30' },
+              { value: 'meta' as const, label: META_VISUAL.label, dot: META_VISUAL.dot, activeBorder: META_VISUAL.activeBorder, activeBg: META_VISUAL.activeBg },
             ]).map(s => {
               const selected = statusOp === s.value;
+              const disabled = s.value === 'meta' && !canEditMeta;
               return (
                 <button
                   key={s.value}
                   type="button"
-                  onClick={() => setStatusOp(s.value)}
+                  onClick={() => !disabled && setStatusOp(s.value)}
+                  disabled={disabled}
                   className={`flex items-center justify-center gap-1 h-6 rounded-md border transition-all ${
+                    disabled ? 'opacity-40 cursor-not-allowed border-border bg-muted/10' :
                     selected ? `${s.activeBg} ${s.activeBorder}` : 'border-border bg-muted/10 hover:bg-muted/30'
                   }`}
+                  title={disabled ? 'Somente consultores podem criar registros META' : undefined}
                 >
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selected ? s.dot : 'border border-muted-foreground/40 bg-transparent'}`} />
                   <span className={`text-[10px] font-bold ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>{s.label}</span>
