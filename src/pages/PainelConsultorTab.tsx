@@ -361,7 +361,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
 }
 }
 
-// ─── Build blocos from vw_zoot_fazenda_mensal (for Previsto cenário) ───
+// ─── Build blocos from vw_zoot_fazenda_mensal (for Meta cenário) ───
 function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanhoMetaMes?: number[], valorRebanhoMetaMesAnteriorOuDez?: number[], metaValorCabMes?: number[], metaPrecoArrMes?: number[]): Bloco[] {
   const byMes = indexByMes(rows);
   const get = (field: keyof ZootMensal): number[] =>
@@ -943,10 +943,10 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
   const isPrevisto = cenario === 'meta';
 
-  // REGRA: Previsto em modo Global desabilitado — sem agregação oficial ainda
+  // REGRA: Meta em modo Global desabilitado — sem agregação oficial ainda
   const previstoGlobalBloqueado = isPrevisto && isGlobal;
 
-  // Blocos: Realizado usa buildMonthlyData, Previsto usa vw_zoot_fazenda_mensal (meta)
+  // Blocos: Realizado usa buildMonthlyData, Meta usa valor_rebanho_meta + vw_zoot_fazenda_mensal
   const blocos = useMemo(() => {
     if (previstoGlobalBloqueado) return [];
     if (isPrevisto) {
@@ -1085,7 +1085,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
           })}
         </tbody>
       </table>
-      {/* Previsto banner when all rows have no source */}
+      {/* Meta banner when all rows have no source */}
       {isPrevisto && blocoRows.every(r => !hasPrevistoSource(r.indicadorId)) && (
         <div className="text-center text-[10px] text-muted-foreground py-2 bg-muted/20 border-t border-border/20">
           Sem base meta configurada para este bloco
