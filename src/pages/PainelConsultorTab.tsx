@@ -522,7 +522,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
             r('Rec. pec. comp. acum.', 'money', emptyMoney, 'rec_pec_comp_acum'),
             r('Res. oper. acum.', 'money', emptyMoney, 'res_oper_acum'),
             r('EBITDA acum.', 'money', emptyMoney, 'ebitda_acum'),
-            r('Var. valor reb.', 'money', varValorRebMeta, 'var_valor_reb'),
+            r('Var. valor reb.', 'money', emptyMoney, 'var_valor_reb'),
           ],
         },
       ];
