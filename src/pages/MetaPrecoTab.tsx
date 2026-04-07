@@ -361,24 +361,32 @@ export function MetaPrecoTab({ onBack }: Props) {
         validadoPor: status === 'validado' ? user?.id : null,
       });
 
-      console.log('SALVO valor_rebanho_meta:', {
-        fazendaId,
-        anoMes,
-        totals,
-      });
+      console.log('SALVO valor_rebanho_meta:', { fazendaId, anoMes, totals });
 
-      const { data: verificacao, error: verificacaoError } = await supabase
-        .from('valor_rebanho_meta')
-        .select('*')
-        .eq('fazenda_id', fazendaId)
-        .eq('ano_mes', anoMes);
-
-      if (verificacaoError) throw verificacaoError;
-
-      console.log('VERIFICAÇÃO SALVAMENTO:', verificacao);
-
-      if (!verificacao || verificacao.length === 0) {
-        throw new Error('Registro não encontrado em valor_rebanho_meta após o salvamento.');
+      // Persistir snapshot oficial na tabela de validação (somente ao VALIDAR)
+      if (status === 'validado') {
+        const { error: upsertErr } = await supabase
+          .from('valor_rebanho_meta_validada' as any)
+          .upsert({
+            fazenda_id: fazendaId,
+            cliente_id: clienteAtual.id,
+            ano_mes: anoMes,
+            valor_total: totals.valor,
+            cabecas: totals.cabecas,
+            peso_medio_kg: totals.pesoMedio,
+            arrobas_total: totals.totalArrobas,
+            preco_arroba_medio: totals.precoArroba,
+            valor_cabeca_medio: totals.valorCabeca,
+            status: 'validado',
+            validado_por: user?.id || null,
+            validado_em: new Date().toISOString(),
+          } as any, { onConflict: 'fazenda_id,ano_mes' } as any);
+        if (upsertErr) {
+          console.error('Erro ao persistir valor_rebanho_meta_validada:', upsertErr);
+          toast.error('Erro ao gravar snapshot validado');
+          throw upsertErr;
+        }
+        console.log('PERSISTIDO valor_rebanho_meta_validada:', { fazendaId, anoMes, valor: totals.valor });
       }
 
       await salvar(items, status);
