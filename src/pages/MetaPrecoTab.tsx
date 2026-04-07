@@ -127,9 +127,7 @@ export function MetaPrecoTab({ onBack }: Props) {
   // Meta consolidation data for qty/peso
   const { data: viewDataMeta } = useZootCategoriaMensal({ ano: Number(ano), cenario: 'meta' });
 
-  // Realized data for Dec prior year (vs Inic. ano = Dez/ano-1)
-  const { data: viewDataRealizadoDezAnt } = useZootCategoriaMensal({ ano: Number(ano) - 1, cenario: 'realizado' });
-  // Realized data for same month of previous year (vs 1 ano)
+  // Realized data for prior year (both Dec for vs Inic. ano, and same month for vs 1 ano)
   const { data: viewDataRealizadoAnoAnt } = useZootCategoriaMensal({ ano: Number(ano) - 1, cenario: 'realizado' });
 
   // Valor rebanho fechamento for realized comparisons
