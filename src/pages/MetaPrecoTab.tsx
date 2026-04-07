@@ -531,42 +531,45 @@ export function MetaPrecoTab({ onBack }: Props) {
             </div>
           </div>
 
-          {/* Summary card */}
-          <div className="min-w-[200px] flex-1 space-y-1">
+          {/* Summary card — 5-column executive layout */}
+          <div className="min-w-[280px] flex-1 space-y-1">
             <Card className="bg-orange-500/5 border-orange-500/20">
               <CardContent className="p-2">
-                <div className="flex gap-3">
-                  <div className="shrink-0">
-                    <p className="text-[8px] text-orange-600 font-medium uppercase tracking-wider">
-                      Valor do Rebanho META — {mesLabel}/{ano}
-                    </p>
-                    <p className="text-lg font-extrabold text-foreground leading-tight mt-0.5">
+                {/* Header row with value highlight */}
+                <div className="mb-1.5">
+                  <p className="text-[8px] text-orange-600 font-medium uppercase tracking-wider">
+                    Valor do Rebanho META — {mesLabel}/{ano}
+                  </p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-lg font-extrabold text-foreground leading-tight">
                       {totals.valor > 0 ? formatMoeda(totals.valor) : '—'}
                     </p>
-                    <p className="text-[8px] text-muted-foreground mt-0.5">
-                      Cenário de planejamento
-                    </p>
+                    <CompBadge meta={totals.valor} base={compJan?.valor ?? 0} tooltip={compJan?.valor ? `Jan: ${formatMoeda(compJan.valor)}` : undefined} />
+                    <CompBadge meta={totals.valor} base={compAnoAnt?.valor ?? 0} tooltip={compAnoAnt?.valor ? `${MESES_SHORT.find(m => m.key === mes)?.label}/${Number(ano) - 1}: ${formatMoeda(compAnoAnt.valor)}` : undefined} />
                   </div>
+                </div>
 
-                  <div className="flex-1 min-w-0 text-[10px] ml-4">
-                    <div className="grid grid-cols-[auto_80px] gap-x-2 items-center">
-                      <span className="text-[7px] text-muted-foreground font-medium">Indicador</span>
-                      <span className="text-[7px] text-muted-foreground font-medium text-right">Valor</span>
+                {/* 5-column grid */}
+                <div className="grid grid-cols-[120px_82px_72px_72px] gap-x-1 items-center text-center">
+                  <span className="text-[7px] text-muted-foreground font-semibold text-left">Indicador</span>
+                  <span className="text-[7px] text-muted-foreground font-semibold">Valor</span>
+                  <span className="text-[7px] text-muted-foreground font-semibold">vs Inic. ano</span>
+                  <span className="text-[7px] text-muted-foreground font-semibold">vs 1 ano</span>
 
-                      {[
-                        { label: 'Cabeças', value: totals.cabecas > 0 ? formatNum(totals.cabecas, 0) : '—' },
-                        { label: 'Peso médio', value: totals.pesoMedio > 0 ? `${formatNum(totals.pesoMedio, 2)} kg` : '—' },
-                        { label: 'R$/@ médio', value: totals.precoArroba > 0 ? formatMoeda(totals.precoArroba) : '—' },
-                        { label: 'R$/cab', value: totals.valorCabeca > 0 ? formatMoeda(totals.valorCabeca) : '—' },
-                        { label: '@s estoque', value: totals.totalArrobas > 0 ? formatNum(totals.totalArrobas, 2) : '—' },
-                      ].map(ind => (
-                        <React.Fragment key={ind.label}>
-                          <span className="text-muted-foreground text-[8px] truncate">{ind.label}</span>
-                          <span className="text-right font-semibold text-foreground tabular-nums text-[9px]">{ind.value}</span>
-                        </React.Fragment>
-                      ))}
-                    </div>
-                  </div>
+                  {[
+                    { label: 'Cabeças', val: totals.cabecas, fmt: (v: number) => formatNum(v, 0), baseJan: compJan?.cabecas, baseAA: compAnoAnt?.cabecas, fmtBase: (v: number) => formatNum(v, 0) },
+                    { label: 'Peso médio', val: totals.pesoMedio, fmt: (v: number) => `${formatNum(v, 2)} kg`, baseJan: compJan?.pesoMedio, baseAA: compAnoAnt?.pesoMedio, fmtBase: (v: number) => `${formatNum(v, 2)} kg` },
+                    { label: 'R$/@ médio', val: totals.precoArroba, fmt: (v: number) => formatMoeda(v), baseJan: compJan?.precoArroba, baseAA: compAnoAnt?.precoArroba, fmtBase: (v: number) => formatMoeda(v) },
+                    { label: 'R$/cab', val: totals.valorCabeca, fmt: (v: number) => formatMoeda(v), baseJan: compJan?.valorCabeca, baseAA: compAnoAnt?.valorCabeca, fmtBase: (v: number) => formatMoeda(v) },
+                    { label: '@s estoque', val: totals.totalArrobas, fmt: (v: number) => formatNum(v, 2), baseJan: compJan?.totalArrobas, baseAA: compAnoAnt?.totalArrobas, fmtBase: (v: number) => formatNum(v, 2) },
+                  ].map(ind => (
+                    <React.Fragment key={ind.label}>
+                      <span className="text-muted-foreground text-[8px] truncate text-left">{ind.label}</span>
+                      <span className="font-semibold text-foreground tabular-nums text-[9px]">{ind.val > 0 ? ind.fmt(ind.val) : '—'}</span>
+                      <CompBadge meta={ind.val} base={ind.baseJan ?? 0} tooltip={ind.baseJan ? `Jan: ${ind.fmtBase(ind.baseJan)}` : undefined} />
+                      <CompBadge meta={ind.val} base={ind.baseAA ?? 0} tooltip={ind.baseAA ? `${MESES_SHORT.find(m => m.key === mes)?.label}/${Number(ano) - 1}: ${ind.fmtBase(ind.baseAA)}` : undefined} />
+                    </React.Fragment>
+                  ))}
                 </div>
               </CardContent>
             </Card>
@@ -583,4 +586,32 @@ export function MetaPrecoTab({ onBack }: Props) {
       )}
     </div>
   );
+}
+
+/* ---------- Comparison badge ---------- */
+function CompBadge({ meta, base, tooltip }: { meta: number; base: number; tooltip?: string }) {
+  if (!base || base <= 0 || !meta || meta <= 0) {
+    return <span className="text-[8px] text-muted-foreground tabular-nums text-center">—</span>;
+  }
+  const pct = ((meta - base) / base) * 100;
+  const isPositive = pct > 0;
+  const isZero = Math.abs(pct) < 0.05;
+  const colorClass = isZero
+    ? 'text-muted-foreground'
+    : isPositive
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : 'text-red-500 dark:text-red-400';
+  const label = `${isPositive ? '+' : ''}${formatNum(pct, 1)}%`;
+
+  if (tooltip) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className={`text-[8px] font-medium tabular-nums text-center cursor-help ${colorClass}`}>{label}</span>
+        </TooltipTrigger>
+        <TooltipContent className="text-[10px]">{tooltip}</TooltipContent>
+      </Tooltip>
+    );
+  }
+  return <span className={`text-[8px] font-medium tabular-nums text-center ${colorClass}`}>{label}</span>;
 }
