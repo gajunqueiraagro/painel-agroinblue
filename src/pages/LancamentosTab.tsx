@@ -300,7 +300,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const isCenarioMeta = statusOp === 'meta';
   /** StatusOperacional efetivo para passar a componentes que não conhecem 'meta' */
   const effectiveStatusOp: StatusOperacional = isCenarioMeta ? 'programado' : statusOp as StatusOperacional;
-  const isPrevisto = statusOp === 'previsto';
+  const isPrevisto = isCenarioMeta; // Meta usa estilo laranja (anteriormente "Previsto")
   const isConfirmado = statusOp === 'programado';
   const isConciliado = statusOp === 'realizado';
   const isAbate = tipo === 'abate';
@@ -1742,8 +1742,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   const tiposDisponiveis = aba === 'entrada' ? TIPOS_ENTRADA : TIPOS_SAIDA;
 
-  const previstoInputClass = isPrevisto ? 'border-orange-400 text-orange-800 dark:text-orange-300' : '';
-  const previstoLabelClass = isPrevisto ? 'text-orange-700 dark:text-orange-400' : '';
+  const metaInputClass = isCenarioMeta ? 'border-orange-400 text-orange-800 dark:text-orange-300' : '';
+  const metaLabelClass = isCenarioMeta ? 'text-orange-700 dark:text-orange-400' : '';
 
   const showExtraDates = !isAbate && (isConfirmado || isConciliado) && (isVenda || isTransferencia);
   const showFormaPagamento = !isAbate && (isConfirmado || isConciliado) && (isVenda || isCompra || isTransferencia);
@@ -2059,8 +2059,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
       {usaPrecoKg && (
         <div>
-          <Label className={`text-[11px] ${previstoLabelClass}`}>R$/kg (preço base)</Label>
-          <Input type="number" value={precoKg} onChange={e => setPrecoKg(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${previstoInputClass}`} />
+          <Label className={`text-[11px] ${metaLabelClass}`}>R$/kg (preço base)</Label>
+          <Input type="number" value={precoKg} onChange={e => setPrecoKg(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${metaInputClass}`} />
         </div>
       )}
 
@@ -2124,8 +2124,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <Separator />
           <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Ajustes (R$)</h4>
           <div className="space-y-1.5">
-            <div><Label className="text-[11px]">Bônus</Label><Input type="number" value={bonus} onChange={e => setBonus(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
-            <div><Label className="text-[11px]">Descontos</Label><Input type="number" value={descontos} onChange={e => setDescontos(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
+            <div><Label className="text-[11px]">Bônus</Label><Input type="number" value={bonus} onChange={e => setBonus(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${metaInputClass}`} /></div>
+            <div><Label className="text-[11px]">Descontos</Label><Input type="number" value={descontos} onChange={e => setDescontos(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${metaInputClass}`} /></div>
           </div>
         </>
       )}
@@ -2133,7 +2133,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       {/* Valor líquido override */}
       <Separator />
       <div>
-        <Label className={`text-[11px] font-semibold ${previstoLabelClass || 'text-foreground'}`}>Valor total líquido (R$)</Label>
+        <Label className={`text-[11px] font-semibold ${metaLabelClass || 'text-foreground'}`}>Valor total líquido (R$)</Label>
         <Input
           type="number"
           value={calc.valorLiquido > 0 ? String(Math.round(calc.valorLiquido * 100) / 100) : ''}
@@ -2149,7 +2149,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             }
           }}
           placeholder="Informe o valor total líquido"
-          className={`h-8 text-[12px] font-bold ${previstoInputClass}`}
+          className={`h-8 text-[12px] font-bold ${metaInputClass}`}
         />
         <p className="text-[10px] text-muted-foreground mt-0.5">Retro-calcula o preço base automaticamente</p>
       </div>
@@ -2160,9 +2160,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <Separator />
           <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Despesas Operacionais</h4>
           <div className="space-y-1.5">
-            <div><Label className="text-[11px]">Comissão (%)</Label><Input type="number" value={comissaoPct} onChange={e => setComissaoPct(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
-            <div><Label className="text-[11px]">Frete (R$)</Label><Input type="number" value={frete} onChange={e => setFrete(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
-            <div><Label className="text-[11px]">Outras (R$)</Label><Input type="number" value={outrasDespesas} onChange={e => setOutrasDespesas(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${previstoInputClass}`} /></div>
+            <div><Label className="text-[11px]">Comissão (%)</Label><Input type="number" value={comissaoPct} onChange={e => setComissaoPct(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${metaInputClass}`} /></div>
+            <div><Label className="text-[11px]">Frete (R$)</Label><Input type="number" value={frete} onChange={e => setFrete(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${metaInputClass}`} /></div>
+            <div><Label className="text-[11px]">Outras (R$)</Label><Input type="number" value={outrasDespesas} onChange={e => setOutrasDespesas(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${metaInputClass}`} /></div>
           </div>
         </>
       )}
@@ -2291,16 +2291,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       {/* Row 1: Data | Qtd | Peso | Categoria | Obs */}
       <div className="grid grid-cols-[1.2fr_0.8fr_1fr_1.5fr_2.5fr] gap-2 items-end">
         <div>
-          <Label className={`font-bold text-[11px] ${previstoLabelClass}`}>{isAbate ? 'Data Abate' : 'Data'}</Label>
-          <Input tabIndex={1} type="date" value={data} onChange={e => setData(e.target.value)} className={`mt-0.5 h-7 text-[11px] ${previstoInputClass}`} />
+          <Label className={`font-bold text-[11px] ${metaLabelClass}`}>{isAbate ? 'Data Abate' : 'Data'}</Label>
+          <Input tabIndex={1} type="date" value={data} onChange={e => setData(e.target.value)} className={`mt-0.5 h-7 text-[11px] ${metaInputClass}`} />
         </div>
         <div>
-          <Label className={`font-bold text-[11px] whitespace-nowrap ${previstoLabelClass}`}>Qtd. Cab.</Label>
-          <Input tabIndex={2} type="text" inputMode="numeric" value={qtdInput.displayValue} onChange={qtdInput.onChange} onBlur={qtdInput.onBlur} onFocus={qtdInput.onFocus} placeholder="0" className={`mt-0.5 h-7 text-[11px] text-right font-bold tabular-nums ${previstoInputClass}`} />
+          <Label className={`font-bold text-[11px] whitespace-nowrap ${metaLabelClass}`}>Qtd. Cab.</Label>
+          <Input tabIndex={2} type="text" inputMode="numeric" value={qtdInput.displayValue} onChange={qtdInput.onChange} onBlur={qtdInput.onBlur} onFocus={qtdInput.onFocus} placeholder="0" className={`mt-0.5 h-7 text-[11px] text-right font-bold tabular-nums ${metaInputClass}`} />
         </div>
         <div>
-          <Label className={`font-bold text-[11px] ${previstoLabelClass}`}>Peso (kg)</Label>
-          <Input tabIndex={3} type="text" inputMode="decimal" value={pesoInput.displayValue} onChange={pesoInput.onChange} onBlur={pesoInput.onBlur} onFocus={pesoInput.onFocus} placeholder="0,00" className={`mt-0.5 h-7 text-[11px] text-right tabular-nums ${previstoInputClass}`} />
+          <Label className={`font-bold text-[11px] ${metaLabelClass}`}>Peso (kg)</Label>
+          <Input tabIndex={3} type="text" inputMode="decimal" value={pesoInput.displayValue} onChange={pesoInput.onChange} onBlur={pesoInput.onBlur} onFocus={pesoInput.onFocus} placeholder="0,00" className={`mt-0.5 h-7 text-[11px] text-right tabular-nums ${metaInputClass}`} />
         </div>
         <div>
           <Label className="font-bold text-[11px]">Categoria</Label>
