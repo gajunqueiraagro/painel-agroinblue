@@ -201,7 +201,7 @@ function rollingAvg(arr: number[]): number[] {
   return r;
 }
 
-function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[], realPrecoArr?: number[]): Bloco[] {
+function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[], realPrecoArr?: number[], pesoSnap?: PesoSnapshot): Bloco[] {
   const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string, noTotal?: boolean): Row => {
     let valores: number[];
     switch (tab) {
@@ -213,16 +213,31 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
     return { indicador, format, valores, indicadorId, noTotal };
   };
 
+  // Se há snapshot validado de peso, usar como fonte oficial
+  const hasSnap = pesoSnap && pesoSnap.cabecas.some(v => v > 0);
+  const pesoTotalFin = hasSnap
+    ? pesoSnap!.cabecas.map((c, i) => c * (pesoSnap!.pesoMedio[i] || 0))
+    : d.pesoTotalFin;
+  const pesoTotalIni = hasSnap
+    ? [d.pesoTotalIni[0], ...pesoTotalFin.slice(0, 11)]
+    : d.pesoTotalIni;
+  const pesoMedioFin = hasSnap
+    ? pesoSnap!.pesoMedio
+    : d.pesoMedioFin;
+  const pesoMedioIni = hasSnap
+    ? [d.pesoMedioIni[0], ...pesoMedioFin.slice(0, 11)]
+    : d.pesoMedioIni;
+
   const cabMedia = d.cabIni.map((v, i) => (v + d.cabFin[i]) / 2);
   const uaMedia = cabMedia.map((v, i) => {
-    const pm = d.pesoMedioFin[i];
+    const pm = pesoMedioFin[i];
     return pm > 0 ? (v * pm) / 450 : 0;
   });
   const lotUaHa = uaMedia.map(v => d.areaProd > 0 ? v / d.areaProd : 0);
   const arrHa = d.arrobasProd.map(v => d.areaProd > 0 ? v / d.areaProd : 0);
   const desfruteCab = d.saidas;
   const desfrute_arr = d.saidas.map((v, i) => {
-    const pm = d.pesoMedioFin[i];
+    const pm = pesoMedioFin[i];
     return pm > 0 ? (v * pm) / 30 : 0;
   });
   // Use persisted snapshot values when available; fallback to calculation
@@ -230,8 +245,8 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
     ? d.valorRebFin.map((v, i) => realValorCab[i] || (d.cabFin[i] > 0 ? v / d.cabFin[i] : 0))
     : d.valorRebFin.map((v, i) => { const c = d.cabFin[i]; return c > 0 ? v / c : 0; });
   const valorPorArr = realPrecoArr && realPrecoArr.some(v => v > 0)
-    ? d.valorRebFin.map((v, i) => realPrecoArr[i] || (d.pesoTotalFin[i] > 0 ? v / (d.pesoTotalFin[i] / 30) : 0))
-    : d.valorRebFin.map((v, i) => { const pf = d.pesoTotalFin[i]; return pf > 0 ? v / (pf / 30) : 0; });
+    ? d.valorRebFin.map((v, i) => realPrecoArr[i] || (pesoTotalFin[i] > 0 ? v / (pesoTotalFin[i] / 30) : 0))
+    : d.valorRebFin.map((v, i) => { const pf = pesoTotalFin[i]; return pf > 0 ? v / (pf / 30) : 0; });
 
   switch (tab) {
     case 'mensal':
@@ -248,12 +263,12 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
         {
           nome: 'Peso',
           rows: [
-            r('Peso ini. (kg)', 'cab', d.pesoTotalIni, 'peso_ini_kg', true),
-            r('Peso final (kg)', 'cab', d.pesoTotalFin, 'peso_fin_kg', true),
-            r('Peso ini. (@)', 'cab', d.pesoTotalIni.map(v => Math.round(v / 30)), 'peso_ini_arr', true),
-            r('Peso final (@)', 'cab', d.pesoTotalFin.map(v => Math.round(v / 30)), 'peso_fin_arr', true),
-            r('Peso méd. ini.', 'med2', d.pesoMedioIni, 'peso_med_ini', true),
-            r('Peso méd. final', 'med2', d.pesoMedioFin, 'peso_med_fin', true),
+            r('Peso ini. (kg)', 'cab', pesoTotalIni, 'peso_ini_kg', true),
+            r('Peso final (kg)', 'cab', pesoTotalFin, 'peso_fin_kg', true),
+            r('Peso ini. (@)', 'cab', pesoTotalIni.map(v => Math.round(v / 30)), 'peso_ini_arr', true),
+            r('Peso final (@)', 'cab', pesoTotalFin.map(v => Math.round(v / 30)), 'peso_fin_arr', true),
+            r('Peso méd. ini.', 'med2', pesoMedioIni, 'peso_med_ini', true),
+            r('Peso méd. final', 'med2', pesoMedioFin, 'peso_med_fin', true),
           ],
         },
         {
