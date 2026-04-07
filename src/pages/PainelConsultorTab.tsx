@@ -881,6 +881,9 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const { status: statusPilares, refetch: refetchPilares } = useStatusPilares(fazendaId, mesAtualRef);
   const { data: zootMeta } = useZootMensal({ ano: anoNum, cenario: 'meta' });
 
+  // Valor do Rebanho META persistido — leitura direta sem recalcular
+  const { getMonthlyValues: getMetaValues } = useValorRebanhoMetaAno(anoNum);
+  const valorRebanhoMetaMes = useMemo(() => getMetaValues('valor_total'), [getMetaValues]);
   // Official source: view data for Realizado (replaces buildMonthlyData local calcs)
   const { data: viewDataRealizado } = useZootCategoriaMensal({ ano: anoNum, cenario: 'realizado', global: isGlobal });
 
