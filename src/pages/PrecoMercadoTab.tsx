@@ -26,10 +26,17 @@ const STATUS_CONFIG = {
   validado: { label: 'Validado', color: 'bg-emerald-500/20 text-emerald-700 border-emerald-300', icon: CheckCircle },
 };
 
+const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
 /** Extrai o peso médio (kg) a partir do nome da categoria */
 const getPesoMedio = (categoria: string): number => {
   const match = categoria.match(/(\d+)\s*kg/);
   return match ? parseInt(match[1]) : 0;
+};
+
+const formatMoeda = (val: number): string => {
+  if (!val || val <= 0) return '-';
+  return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
 export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: Props) {
@@ -63,7 +70,6 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
   const magroMacho = itens.filter(i => i.bloco === 'magro_macho');
   const magroFemea = itens.filter(i => i.bloco === 'magro_femea');
 
-  // Preço boi gordo em R$/kg vivo (para cálculo de ágio automático do magro)
   const boiGordoArroba = frigorifico.find(i => i.categoria === 'Boi Gordo')?.valor || 0;
   const boiGordoKg = boiGordoArroba > 0 ? boiGordoArroba / 30 : 0;
 
@@ -86,16 +92,16 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
     val > 0 ? 'text-emerald-600' : val < 0 ? 'text-red-600' : 'text-muted-foreground';
 
   const renderFrigorifico = () => (
-    <Card>
-      <CardContent className="p-3 space-y-2">
-        <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">🥩 Preço Base (Frigorífico no MS)</h3>
-        <table className="w-full text-xs">
+    <Card className="flex-1 min-w-0">
+      <CardContent className="p-2 space-y-1">
+        <h3 className="text-[10px] font-bold text-foreground uppercase tracking-wider">🥩 Preço Base (Frigorífico MS)</h3>
+        <table className="w-full text-[10px]">
           <thead>
             <tr className="border-b text-muted-foreground">
-              <th className="text-left py-1 px-1 font-medium">Categoria</th>
-              <th className="text-right py-1 px-1 font-medium w-24">Valor</th>
-              <th className="text-right py-1 px-1 font-medium w-20">Ágio %</th>
-              <th className="text-right py-1 px-1 font-medium w-24">R$/@</th>
+              <th className="text-left py-0.5 px-1 font-medium">Categoria</th>
+              <th className="text-right py-0.5 px-1 font-medium w-20">Valor</th>
+              <th className="text-right py-0.5 px-1 font-medium w-14">Ágio %</th>
+              <th className="text-right py-0.5 px-1 font-medium w-20">R$/@</th>
             </tr>
           </thead>
           <tbody>
@@ -106,8 +112,8 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
                 : 0;
               return (
                 <tr key={item.categoria} className={idx % 2 ? 'bg-muted/20' : ''}>
-                  <td className="py-1 px-1 font-medium text-foreground whitespace-nowrap">{item.categoria}</td>
-                  <td className="py-1 px-1">
+                  <td className="py-0.5 px-1 font-medium text-foreground whitespace-nowrap text-[10px]">{item.categoria}</td>
+                  <td className="py-0.5 px-1">
                     <Input
                       type="number"
                       step="0.01"
@@ -115,10 +121,10 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
                       value={item.valor || ''}
                       onChange={e => updateItem(item.bloco, item.categoria, 'valor', e.target.value)}
                       disabled={isValidado}
-                      className="h-7 text-xs text-right w-full"
+                      className="h-6 text-[10px] text-right w-full"
                     />
                   </td>
-                  <td className="py-1 px-1 text-right">
+                  <td className="py-0.5 px-1 text-right text-[10px]">
                     {isBoi ? (
                       <span className="text-muted-foreground">—</span>
                     ) : item.valor > 0 && boiGordoArroba > 0 ? (
@@ -129,8 +135,8 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
                       <span className="text-muted-foreground">-</span>
                     )}
                   </td>
-                  <td className="py-1 px-1 text-right font-semibold text-foreground">
-                    {item.valor > 0 ? item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
+                  <td className="py-0.5 px-1 text-right font-semibold text-foreground text-[10px]">
+                    {formatMoeda(item.valor)}
                   </td>
                 </tr>
               );
@@ -142,16 +148,16 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
   );
 
   const renderMagro = (title: string, items: PrecoMercadoItem[]) => (
-    <Card key={title}>
-      <CardContent className="p-3 space-y-2">
-        <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">{title}</h3>
-        <table className="w-full text-xs">
+    <Card key={title} className="flex-1 min-w-0">
+      <CardContent className="p-2 space-y-1">
+        <h3 className="text-[10px] font-bold text-foreground uppercase tracking-wider">{title}</h3>
+        <table className="w-full text-[10px]">
           <thead>
             <tr className="border-b text-muted-foreground">
-              <th className="text-left py-1 px-1 font-medium">Categoria</th>
-              <th className="text-right py-1 px-1 font-medium w-20">R$/kg</th>
-              <th className="text-right py-1 px-1 font-medium w-20">Ágio %</th>
-              <th className="text-right py-1 px-1 font-medium w-24">R$/cab</th>
+              <th className="text-left py-0.5 px-1 font-medium">Categoria</th>
+              <th className="text-right py-0.5 px-1 font-medium w-16">R$/kg</th>
+              <th className="text-right py-0.5 px-1 font-medium w-14">Ágio %</th>
+              <th className="text-right py-0.5 px-1 font-medium w-20">R$/cab</th>
             </tr>
           </thead>
           <tbody>
@@ -161,8 +167,8 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
               const agioAuto = calcAgioAuto(item.valor);
               return (
                 <tr key={`${item.bloco}-${item.categoria}`} className={idx % 2 ? 'bg-muted/20' : ''}>
-                  <td className="py-1 px-1 font-medium text-foreground whitespace-nowrap text-[11px]">{item.categoria}</td>
-                  <td className="py-1 px-1">
+                  <td className="py-0.5 px-1 font-medium text-foreground whitespace-nowrap text-[10px]">{item.categoria}</td>
+                  <td className="py-0.5 px-1">
                     <Input
                       type="number"
                       step="0.01"
@@ -170,10 +176,10 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
                       value={item.valor || ''}
                       onChange={e => updateItem(item.bloco, item.categoria, 'valor', e.target.value)}
                       disabled={isValidado}
-                      className="h-7 text-xs text-right w-full"
+                      className="h-6 text-[10px] text-right w-full"
                     />
                   </td>
-                  <td className="py-1 px-1 text-right">
+                  <td className="py-0.5 px-1 text-right text-[10px]">
                     {item.valor > 0 && boiGordoKg > 0 ? (
                       <span className={agioColor(agioAuto)}>
                         {agioAuto >= 0 ? '+' : ''}{agioAuto.toFixed(1)}%
@@ -182,8 +188,8 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
                       <span className="text-muted-foreground">-</span>
                     )}
                   </td>
-                  <td className="py-1 px-1 text-right font-semibold text-foreground">
-                    {precoCab > 0 ? precoCab.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '-'}
+                  <td className="py-0.5 px-1 text-right font-semibold text-foreground text-[10px]">
+                    {formatMoeda(precoCab)}
                   </td>
                 </tr>
               );
@@ -196,29 +202,20 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
 
   return (
     <div className="w-full px-4 animate-fade-in pb-24">
-      <div className="p-4 space-y-3">
+      <div className="py-2 space-y-2">
         {onBack && (
-          <button onClick={onBack} className="flex items-center gap-1 text-xs text-primary hover:underline mb-1">
-            <ArrowLeft className="h-3.5 w-3.5" />
+          <button onClick={onBack} className="flex items-center gap-1 text-[11px] text-primary hover:underline">
+            <ArrowLeft className="h-3 w-3" />
             Voltar para Preços de Mercado
           </button>
         )}
-        {/* Filtro mês/ano + status */}
+
+        {/* Filtro ano + meses régua + status */}
         <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Select value={mes} onValueChange={setMes}>
-                <SelectTrigger className="w-28 h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MESES_NOMES.map((m, i) => (
-                    <SelectItem key={i} value={String(i + 1).padStart(2, '0')}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <CardContent className="p-2">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <Select value={ano} onValueChange={setAno}>
-                <SelectTrigger className="w-20 h-8 text-xs">
+                <SelectTrigger className="w-[68px] h-7 text-[11px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -227,20 +224,42 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
                   ))}
                 </SelectContent>
               </Select>
-              <Badge variant="outline" className={`ml-auto text-[10px] px-2 py-0.5 ${stCfg.color}`}>
-                <StIcon className="h-3 w-3 mr-1" />
+
+              <div className="flex gap-0.5">
+                {MESES_ABREV.map((m, i) => {
+                  const mesVal = String(i + 1).padStart(2, '0');
+                  const isActive = mes === mesVal;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setMes(mesVal)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-all ${
+                        isActive
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <Badge variant="outline" className={`ml-auto text-[9px] px-1.5 py-0 ${stCfg.color}`}>
+                <StIcon className="h-2.5 w-2.5 mr-0.5" />
                 {stCfg.label}
               </Badge>
+
               {isAdmin && !isValidado && (
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs h-8"
+                  className="text-[10px] h-6 px-2"
                   onClick={() => setShowCopiarDialog(true)}
                   disabled={copiando || loading}
                 >
-                  <Copy className="h-3.5 w-3.5 mr-1" />
-                  Mês Anterior
+                  <Copy className="h-3 w-3 mr-0.5" />
+                  Mês Ant.
                 </Button>
               )}
             </div>
@@ -279,29 +298,32 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
           <div className="text-center py-8 text-muted-foreground text-sm">Carregando...</div>
         ) : (
           <>
-            {renderFrigorifico()}
-            {renderMagro('🐂 Gado Magro — Machos', magroMacho)}
-            {renderMagro('🐄 Gado Magro — Fêmeas', magroFemea)}
+            {/* 3 cards lado a lado */}
+            <div className="flex gap-2">
+              {renderFrigorifico()}
+              {renderMagro('🐂 Magro — Machos', magroMacho)}
+              {renderMagro('🐄 Magro — Fêmeas', magroFemea)}
+            </div>
 
             {/* Actions */}
             {isAdmin && (
-              <div className="flex flex-col gap-2 pt-2">
+              <div className="flex flex-col gap-2 pt-1">
                 {!isValidado && (
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      className="flex-1 text-xs"
+                      className="flex-1 text-[11px] h-7"
                       onClick={() => handleSalvar(temPreenchimento && !todosPreenchidos ? 'parcial' : 'rascunho')}
                       disabled={saving}
                     >
-                      <Save className="h-3.5 w-3.5 mr-1" />
+                      <Save className="h-3 w-3 mr-1" />
                       Salvar Rascunho
                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button size="sm" className="flex-1 text-xs" disabled={saving || !todosPreenchidos}>
-                          <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                        <Button size="sm" className="flex-1 text-[11px] h-7" disabled={saving || !todosPreenchidos}>
+                          <CheckCircle className="h-3 w-3 mr-1" />
                           Validar Mês
                         </Button>
                       </AlertDialogTrigger>
@@ -324,8 +346,8 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
                 {isValidado && (
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="outline" size="sm" className="text-xs">
-                        <Unlock className="h-3.5 w-3.5 mr-1" />
+                      <Button variant="outline" size="sm" className="text-[11px] h-7">
+                        <Unlock className="h-3 w-3 mr-1" />
                         Reabrir para Edição
                       </Button>
                     </AlertDialogTrigger>
@@ -347,8 +369,8 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
             )}
 
             {!isAdmin && (
-              <div className="text-center py-4 text-muted-foreground text-xs flex items-center justify-center gap-1">
-                <Lock className="h-3.5 w-3.5" />
+              <div className="text-center py-3 text-muted-foreground text-[11px] flex items-center justify-center gap-1">
+                <Lock className="h-3 w-3" />
                 Apenas administradores podem editar preços de mercado
               </div>
             )}
