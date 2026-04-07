@@ -325,45 +325,67 @@ export function MetaPrecoTab({ onBack }: Props) {
       categoria: codigo,
       preco_arroba: precosLocal[codigo] ?? 0,
     }));
-    await salvar(items, status);
 
-    // Persistir valor do rebanho META calculado
-    if (fazendaId && clienteAtual?.id) {
-      try {
-        const metaItens: ValorRebanhoMetaItem[] = rows
-          .filter(r => r.saldo > 0 || r.valorTotal > 0)
-          .map(r => ({
-            categoria: r.codigo,
-            quantidade: r.saldo,
-            peso_medio_kg: r.pesoMedio,
-            preco_arroba: r.precoArroba,
-            preco_kg: r.precoKg,
-            valor_cabeca: r.valorCabeca,
-            valor_total_categoria: r.valorTotal,
-          }));
-
-        await salvarValorRebanhoMeta({
-          fazendaId,
-          clienteId: clienteAtual.id,
-          anoMes,
-          totais: {
-            valor_total: totals.valor,
-            cabecas: totals.cabecas,
-            peso_total_kg: totals.cabecas * totals.pesoMedio,
-            peso_medio_kg: totals.pesoMedio,
-            arrobas_total: totals.totalArrobas,
-            preco_arroba_medio: totals.precoArroba,
-            valor_cabeca_medio: totals.valorCabeca,
-          },
-          itens: metaItens,
-          status,
-          validadoPor: status === 'validado' ? user?.id : null,
-        });
-        console.log('[MetaPrecoTab] valor_rebanho_meta salvo com sucesso para', anoMes);
-      } catch (e: any) {
-        console.error('[MetaPrecoTab] Erro ao persistir valor_rebanho_meta:', e?.message || e, e?.details || '', e?.hint || '');
-        toast.error('Erro ao salvar valor do rebanho META: ' + (e?.message || 'erro desconhecido'));
+    try {
+      if (!fazendaId || !clienteAtual?.id) {
+        throw new Error('Fazenda ou cliente não selecionado para salvar o valor do rebanho META.');
       }
+
+      const metaItens: ValorRebanhoMetaItem[] = rows
+        .filter(r => r.saldo > 0 || r.valorTotal > 0)
+        .map(r => ({
+          categoria: r.codigo,
+          quantidade: r.saldo,
+          peso_medio_kg: r.pesoMedio,
+          preco_arroba: r.precoArroba,
+          preco_kg: r.precoKg,
+          valor_cabeca: r.valorCabeca,
+          valor_total_categoria: r.valorTotal,
+        }));
+
+      await salvarValorRebanhoMeta({
+        fazendaId,
+        clienteId: clienteAtual.id,
+        anoMes,
+        totais: {
+          valor_total: totals.valor,
+          cabecas: totals.cabecas,
+          peso_total_kg: totals.cabecas * totals.pesoMedio,
+          peso_medio_kg: totals.pesoMedio,
+          arrobas_total: totals.totalArrobas,
+          preco_arroba_medio: totals.precoArroba,
+          valor_cabeca_medio: totals.valorCabeca,
+        },
+        itens: metaItens,
+        status,
+        validadoPor: status === 'validado' ? user?.id : null,
+      });
+
+      console.log('SALVO valor_rebanho_meta:', {
+        fazendaId,
+        anoMes,
+        totals,
+      });
+
+      const { data: verificacao, error: verificacaoError } = await supabase
+        .from('valor_rebanho_meta')
+        .select('*')
+        .eq('fazenda_id', fazendaId)
+        .eq('ano_mes', anoMes);
+
+      if (verificacaoError) throw verificacaoError;
+
+      console.log('VERIFICAÇÃO SALVAMENTO:', verificacao);
+
+      if (!verificacao || verificacao.length === 0) {
+        throw new Error('Registro não encontrado em valor_rebanho_meta após o salvamento.');
+      }
+
+      await salvar(items, status);
+    } catch (e: any) {
+      console.error('Erro ao salvar valor_rebanho_meta:', e);
+      window.alert('Erro ao salvar valor do rebanho META');
+      throw e;
     }
   };
 

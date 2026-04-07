@@ -100,13 +100,13 @@ export async function salvarValorRebanhoMeta(params: {
 }) {
   const { fazendaId, clienteId, anoMes, totais, itens, status, validadoPor } = params;
 
-  // Upsert totais
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from('valor_rebanho_meta')
     .select('id')
     .eq('fazenda_id', fazendaId)
     .eq('ano_mes', anoMes)
     .maybeSingle();
+  if (existingError) throw existingError;
 
   let metaId: string;
 
@@ -141,10 +141,11 @@ export async function salvarValorRebanhoMeta(params: {
   }
 
   // Replace itens
-  await supabase
+  const { error: deleteError } = await supabase
     .from('valor_rebanho_meta_itens')
     .delete()
     .eq('meta_id', metaId);
+  if (deleteError) throw deleteError;
 
   if (itens.length > 0) {
     const rows = itens.map(it => ({
