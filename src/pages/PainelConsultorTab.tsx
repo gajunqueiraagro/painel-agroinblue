@@ -1118,6 +1118,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
   useEffect(() => {
     if (blocos.length > 0) {
+      warnIndicadoresSemCatalogo(blocos);
       setOpenBlocos(prev => {
         const next: Record<string, boolean> = {};
         blocos.forEach((b, i) => {
