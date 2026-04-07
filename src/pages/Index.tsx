@@ -158,6 +158,7 @@ const Index = () => {
   const [abateParaEditar, setAbateParaEditar] = useState<Lancamento | null>(null);
   const [vendaParaEditar, setVendaParaEditar] = useState<Lancamento | null>(null);
   const [compraParaEditar, setCompraParaEditar] = useState<Lancamento | null>(null);
+  const [transferenciaParaEditar, setTransferenciaParaEditar] = useState<Lancamento | null>(null);
   const [editOriginTab, setEditOriginTab] = useState<TabId | null>(null);
   const [editOriginSubAba, setEditOriginSubAba] = useState<SubAba | undefined>(undefined);
   const [editOriginStatusFiltro, setEditOriginStatusFiltro] = useState<string | undefined>(undefined);
