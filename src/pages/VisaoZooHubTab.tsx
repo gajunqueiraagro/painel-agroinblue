@@ -374,8 +374,8 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
               Realizado
             </button>
             <button
-              onClick={() => setCenario('previsto')}
-              className={`px-2 text-[10px] font-bold py-0.5 rounded transition-colors ${cenario === 'previsto' ? 'bg-orange-500 text-white shadow-sm' : 'text-muted-foreground'}`}
+              onClick={() => setCenario('meta')}
+              className={`px-2 text-[10px] font-bold py-0.5 rounded transition-colors ${cenario === 'meta' ? 'bg-orange-500 text-white shadow-sm' : 'text-muted-foreground'}`}
             >
               Previsto
             </button>
