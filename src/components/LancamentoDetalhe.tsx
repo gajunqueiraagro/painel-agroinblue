@@ -153,7 +153,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       pesoMedioKg: form.pesoMedioKg ? Number(form.pesoMedioKg) : undefined,
       pesoMedioArrobas: form.pesoMedioKg ? kgToArrobas(Number(form.pesoMedioKg)) : undefined,
       precoMedioCabeca: form.precoMedioCabeca ? Number(form.precoMedioCabeca) : undefined,
-      statusOperacional: form.statusOperacional || 'realizado',
+      statusOperacional: form.statusOperacional === undefined ? null : (form.statusOperacional || null),
     });
     setEditando(false);
     onClose();
