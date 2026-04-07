@@ -622,6 +622,16 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
 
   const emptyMoney = Array(12).fill(0);
 
+  // Valor do Rebanho META: lido direto da tabela persistida (sem recalcular)
+  const vrm = valorRebanhoMetaMes || Array(12).fill(0);
+  const valorRebFin = vrm;
+  // Valor reb. ini = valor do mês anterior (shift right, jan = 0)
+  const valorRebIni = [0, ...vrm.slice(0, 11)];
+  const valorPorCabMeta = cabFin.map((c, i) => c > 0 && vrm[i] > 0 ? vrm[i] / c : 0);
+  const arrobasEstoqueMeta = pesoFin.map(v => v / 30);
+  const valorPorArrMeta = arrobasEstoqueMeta.map((a, i) => a > 0 && vrm[i] > 0 ? vrm[i] / a : 0);
+  const varValorRebMeta = valorRebFin.map((v, i) => v - valorRebIni[i]);
+
   switch (tab) {
     case 'mensal':
       return [
@@ -648,10 +658,10 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
         {
           nome: 'Valor do Rebanho',
           rows: [
-            r('Valor reb. inicial', 'money', emptyMoney, 'valor_reb_ini', true),
-            r('Valor reb. final', 'money', emptyMoney, 'valor_reb_fin', true),
-            r('Valor/cab final', 'money', emptyMoney, 'valor_cab_fin', true),
-            r('Valor/@ final', 'money', emptyMoney, 'valor_arr_fin', true),
+            r('Valor reb. inicial', 'money', valorRebIni, 'valor_reb_ini', true),
+            r('Valor reb. final', 'money', valorRebFin, 'valor_reb_fin', true),
+            r('Valor/cab final', 'money', valorPorCabMeta, 'valor_cab_fin', true),
+            r('Valor/@ final', 'money', valorPorArrMeta, 'valor_arr_fin', true),
           ],
         },
       ];
