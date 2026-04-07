@@ -172,7 +172,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
         fazendaDestino: nomeFazenda,
         pesoMedioKg: compraForm.pesoMedioKg ? Number(compraForm.pesoMedioKg) : undefined,
         pesoMedioArrobas: compraForm.pesoMedioKg ? kgToArrobas(Number(compraForm.pesoMedioKg)) : undefined,
-        statusOperacional: compraForm.statusOperacional || 'realizado',
+        statusOperacional: compraForm.statusOperacional === undefined ? null : (compraForm.statusOperacional || null),
       });
       setCompraZooSaved(true);
     } finally {
