@@ -36,7 +36,7 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
   const [precosRebanho, setPrecosRebanho] = useState<Record<string, number>>({});
 
   const ano = Number(anoFiltro);
-
+  const isFutureMonth = statusFiltro === 'realizado' && (ano > currentYear || (ano === currentYear && Number(mesFiltro) > currentMonth));
   // Fetch from unified view
   const { data: viewData = [], isLoading } = useZootCategoriaMensal({
     ano,
