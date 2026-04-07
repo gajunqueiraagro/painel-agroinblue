@@ -385,6 +385,8 @@ export function MetaPrecoTab({ onBack }: Props) {
   const StIcon = stCfg.icon;
   const mesLabel = MESES_COLS.find(m => m.key === mes)?.label || mes;
   const mesAnoAnteriorLabel = `${MESES_SHORT.find(m => m.key === mes)?.label || mes}/${Number(ano) - 1}`;
+  const labelBaseIniAno = `Dez/${Number(ano) - 1}`;
+  const labelBaseAnoAnt = `${MESES_SHORT.find(m => m.key === mes)?.label || mes}/${Number(ano) - 1}`;
 
   // Variações — mesma lógica do ValorRebanhoTab
   const calcVar = (atual: number, base: number | undefined): number | null => {
@@ -623,8 +625,8 @@ export function MetaPrecoTab({ onBack }: Props) {
                       {totals.valor > 0 ? formatMoeda(totals.valor) : '—'}
                     </p>
                     <div className="flex flex-col gap-0 mt-0.5">
-                      <MetaVariacaoBadge valor={uVarValorIniAno} label="vs ini. ano" showLabel baseVal={compDezAnt?.valor} atualVal={totals.valor} fmt="money" tooltipLabel="vs início do ano" />
-                      <MetaVariacaoBadge valor={uVarValorAnoAnt} label="vs 1 ano" showLabel baseVal={compAnoAnt?.valor} atualVal={totals.valor} fmt="money" tooltipLabel="vs 1 ano" />
+                      <MetaVariacaoBadge valor={uVarValorIniAno} label="vs ini. ano" showLabel baseVal={compDezAnt?.valor} atualVal={totals.valor} fmt="money" tooltipLabel="vs início do ano" baseLabel={labelBaseIniAno} />
+                      <MetaVariacaoBadge valor={uVarValorAnoAnt} label="vs 1 ano" showLabel baseVal={compAnoAnt?.valor} atualVal={totals.valor} fmt="money" tooltipLabel="vs 1 ano" baseLabel={labelBaseAnoAnt} />
                     </div>
                   </div>
 
@@ -645,8 +647,8 @@ export function MetaPrecoTab({ onBack }: Props) {
                         <React.Fragment key={ind.label}>
                           <span className="text-muted-foreground text-[9px] truncate">{ind.label}</span>
                           <span className="text-right font-semibold text-foreground tabular-nums">{ind.value}</span>
-                          <span className="text-right"><MetaVariacaoBadge valor={ind.varIni} label="" baseVal={ind.baseIni} atualVal={ind.atual} fmt={ind.fmt} tooltipLabel="vs início do ano" /></span>
-                          <span className="text-right"><MetaVariacaoBadge valor={ind.varAno} label="" baseVal={ind.baseAno} atualVal={ind.atual} fmt={ind.fmt} tooltipLabel="vs 1 ano" /></span>
+                          <span className="text-right"><MetaVariacaoBadge valor={ind.varIni} label="" baseVal={ind.baseIni} atualVal={ind.atual} fmt={ind.fmt} tooltipLabel="vs início do ano" baseLabel={labelBaseIniAno} /></span>
+                          <span className="text-right"><MetaVariacaoBadge valor={ind.varAno} label="" baseVal={ind.baseAno} atualVal={ind.atual} fmt={ind.fmt} tooltipLabel="vs 1 ano" baseLabel={labelBaseAnoAnt} /></span>
                         </React.Fragment>
                       ))}
                     </div>
@@ -681,7 +683,7 @@ function fmtTooltipVal(v: number | undefined, fmt: MetaFmt): string {
 }
 
 /* ---------- VariacaoBadge — replica exata do ValorRebanhoTab + tooltip ---------- */
-function MetaVariacaoBadge({ valor, label, showLabel, baseVal, atualVal, fmt, tooltipLabel }: {
+function MetaVariacaoBadge({ valor, label, showLabel, baseVal, atualVal, fmt, tooltipLabel, baseLabel }: {
   valor: number | null;
   label: string;
   showLabel?: boolean;
@@ -689,6 +691,7 @@ function MetaVariacaoBadge({ valor, label, showLabel, baseVal, atualVal, fmt, to
   atualVal?: number;
   fmt?: MetaFmt;
   tooltipLabel?: string;
+  baseLabel?: string;
 }) {
   if (valor === null) return null;
   const isPositive = valor > 0;
@@ -718,7 +721,7 @@ function MetaVariacaoBadge({ valor, label, showLabel, baseVal, atualVal, fmt, to
       <TooltipTrigger asChild>{badge}</TooltipTrigger>
       <TooltipContent side="top" className="text-[10px] leading-relaxed p-2 max-w-[220px]">
         <p className="font-semibold text-foreground mb-0.5">{tooltipLabel}</p>
-        <p className="text-muted-foreground">Base: <span className="text-foreground font-medium">{fmtTooltipVal(baseVal, fmt)}</span></p>
+        <p className="text-muted-foreground">{baseLabel || 'Base'}: <span className="text-foreground font-medium">{fmtTooltipVal(baseVal, fmt)}</span></p>
         <p className="text-muted-foreground">Atual: <span className="text-foreground font-medium">{fmtTooltipVal(atualVal, fmt)}</span></p>
         <p className="text-muted-foreground">Variação: <span className={`font-medium ${color}`}>{isPositive ? '+' : ''}{formattedVal}%</span></p>
       </TooltipContent>
