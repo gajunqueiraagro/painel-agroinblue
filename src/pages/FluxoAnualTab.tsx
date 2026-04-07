@@ -113,7 +113,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
           <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
             {([
               { value: 'realizado' as const, label: 'Realizado' },
-              { value: 'previsto' as const, label: 'Previsto' },
+              { value: 'meta' as const, label: 'Meta' },
             ]).map(opt => (
               <button
                 key={opt.value}
@@ -197,8 +197,8 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
             </tr>
 
             {FLUXO_LINHAS.map((li, i) => {
-              const corPositiva = statusFiltro === 'previsto' ? 'text-orange-500' : 'text-success';
-              const corNegativa = statusFiltro === 'previsto' ? 'text-orange-400' : 'text-destructive';
+              const corPositiva = statusFiltro === 'meta' ? 'text-orange-500' : 'text-success';
+              const corNegativa = statusFiltro === 'meta' ? 'text-orange-400' : 'text-destructive';
               const rowBg = li.sinal === '+' ? 'bg-emerald-50/40' : 'bg-red-50/30';
               const colFirstBg = li.sinal === '+' ? 'bg-emerald-50/60' : 'bg-red-50/50';
               return (

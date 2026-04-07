@@ -907,7 +907,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     [viewTotals, viewDataRealizado, lancFin, anoNum, areaProdutiva, valorRebanhoMes],
   );
 
-  const isPrevisto = cenario === 'previsto';
+  const isPrevisto = cenario === 'meta';
 
   // REGRA: Previsto em modo Global desabilitado — sem agregação oficial ainda
   const previstoGlobalBloqueado = isPrevisto && isGlobal;
@@ -1081,11 +1081,11 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
             {/* Cenário toggle */}
             <div className="flex items-center rounded-md border border-border/50 overflow-hidden h-7">
-              {(['realizado', 'previsto'] as Cenario[]).map(c => (
+              {(['realizado', 'meta'] as Cenario[]).map(c => (
                 <button
                   key={c}
                   onClick={() => setCenario(c)}
-                  className={`px-2 text-[11px] font-semibold h-full transition-colors capitalize ${
+                  className={`px-2 text-[11px] font-semibold h-full transition-colors ${
                     cenario === c
                       ? c === 'realizado'
                         ? 'bg-emerald-600 text-white'
@@ -1093,7 +1093,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                       : 'bg-card text-muted-foreground hover:bg-muted'
                   }`}
                 >
-                  {c.charAt(0).toUpperCase() + c.slice(1)}
+                  {c === 'realizado' ? 'Realizado' : 'Meta'}
                 </button>
               ))}
             </div>
