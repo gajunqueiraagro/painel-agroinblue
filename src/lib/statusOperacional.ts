@@ -59,8 +59,6 @@ export const STATUS_OPTIONS_ZOOTECNICO: { value: StatusZootecnico; label: string
   { value: 'programado', label: 'Programado', labelCurto: 'Programado', color: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-500', description: STATUS_DESCRIPTION.programado },
 ];
 
-// STATUS_OPTIONS_ZOOTECNICO_COM_META is defined after META_VISUAL below
-
 /** Opções para módulo financeiro: Realizado, Agendado, Programado, Previsto */
 export const STATUS_OPTIONS_FINANCEIRO: { value: StatusFinanceiro; label: string; labelCurto: string; color: string; bg: string; description: string }[] = [
   { value: 'realizado', label: 'Realizado', labelCurto: 'Realizado', color: 'text-green-800 dark:text-green-400', bg: 'bg-green-700', description: STATUS_DESCRIPTION.realizado },
