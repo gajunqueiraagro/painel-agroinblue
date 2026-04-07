@@ -1178,7 +1178,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setFazendaOrigem(l.fazendaOrigem || '');
     setFazendaDestino(l.fazendaDestino || '');
     setObservacao(l.observacao || '');
-    setStatusOp((l.statusOperacional as StatusOperacional) || 'realizado');
+    setStatusOp(l.cenario === 'meta' ? 'meta' : ((l.statusOperacional as StatusOperacional) || 'realizado'));
 
     // Hydrate from snapshot
     const snap = l.detalhesSnapshot;
