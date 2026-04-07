@@ -58,13 +58,15 @@ const MESES_SHORT = [
 const CHART_LABELS = ['I', 'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
 
 /* Fixed grid widths for the META summary card — easy to tweak */
-const META_CARD_COL_1 = 330;
-const META_CARD_COL_2 = 160;
+const META_CARD_COL_1 = 340;
+const META_CARD_COL_2 = 170;
 const META_CARD_COL_3 = 150;
 const META_CARD_COL_4 = 140;
 const META_CARD_COL_5 = 140;
+const META_CARD_ROW_HEIGHT = 32;
 const META_CARD_GRID = `${META_CARD_COL_1}px ${META_CARD_COL_2}px ${META_CARD_COL_3}px ${META_CARD_COL_4}px ${META_CARD_COL_5}px`;
 const META_METRICS_GRID = `${META_CARD_COL_2}px ${META_CARD_COL_3}px ${META_CARD_COL_4}px ${META_CARD_COL_5}px`;
+const META_CARD_TOTAL_WIDTH = META_CARD_COL_1 + META_CARD_COL_2 + META_CARD_COL_3 + META_CARD_COL_4 + META_CARD_COL_5;
 
 const STATUS_CONFIG = {
   rascunho: { label: 'Rascunho', color: 'bg-amber-500/20 text-amber-700 border-amber-300', icon: AlertTriangle },
@@ -353,6 +355,50 @@ export function MetaPrecoTab({ onBack }: Props) {
   const stCfg = STATUS_CONFIG[statusMes.status];
   const StIcon = stCfg.icon;
   const mesLabel = MESES_COLS.find(m => m.key === mes)?.label || mes;
+  const mesAnoAnteriorLabel = `${MESES_SHORT.find(m => m.key === mes)?.label || mes}/${Number(ano) - 1}`;
+  const summaryMetrics = [
+    {
+      label: 'Cabeças',
+      value: totals.cabecas,
+      formatValue: (value: number) => formatNum(value, 0),
+      baseJan: compJan?.cabecas ?? 0,
+      baseAnoAnterior: compAnoAnt?.cabecas ?? 0,
+      formatBase: (value: number) => formatNum(value, 0),
+    },
+    {
+      label: 'Peso médio',
+      value: totals.pesoMedio,
+      formatValue: (value: number) => `${formatNum(value, 2)} kg`,
+      baseJan: compJan?.pesoMedio ?? 0,
+      baseAnoAnterior: compAnoAnt?.pesoMedio ?? 0,
+      formatBase: (value: number) => `${formatNum(value, 2)} kg`,
+    },
+    {
+      label: 'R$/@ médio',
+      value: totals.precoArroba,
+      formatValue: (value: number) => formatMoeda(value),
+      baseJan: compJan?.precoArroba ?? 0,
+      baseAnoAnterior: compAnoAnt?.precoArroba ?? 0,
+      formatBase: (value: number) => formatMoeda(value),
+    },
+    {
+      label: 'R$/cab',
+      value: totals.valorCabeca,
+      formatValue: (value: number) => formatMoeda(value),
+      baseJan: compJan?.valorCabeca ?? 0,
+      baseAnoAnterior: compAnoAnt?.valorCabeca ?? 0,
+      formatBase: (value: number) => formatMoeda(value),
+    },
+    {
+      label: '@s estoque',
+      value: totals.totalArrobas,
+      formatValue: (value: number) => formatNum(value, 2),
+      baseJan: compJan?.totalArrobas ?? 0,
+      baseAnoAnterior: compAnoAnt?.totalArrobas ?? 0,
+      formatBase: (value: number) => formatNum(value, 2),
+    },
+  ];
+  const metaSummaryRows = `auto repeat(${summaryMetrics.length}, ${META_CARD_ROW_HEIGHT}px)`;
 
   const getMesButtonClass = (mesVal: string) => {
     const key = `${ano}-${mesVal}`;
@@ -563,45 +609,96 @@ export function MetaPrecoTab({ onBack }: Props) {
 
           {/* Summary card — compact horizontal executive layout */}
           <div className="min-w-[280px] flex-1 space-y-1">
-            <Card className="bg-orange-500/5 border-orange-500/20">
-              <CardContent className="p-0">
-                <div style={{ display: 'inline-grid', gridTemplateColumns: META_CARD_GRID }}>
-                  {/* Row 0 — header */}
-                  <span className="text-[8px] text-orange-600 font-semibold uppercase tracking-wider truncate px-2 py-[3px] border-b border-orange-200/40">Valor do Rebanho META — {mesLabel}/{ano}</span>
-                  <span className="text-[7px] text-muted-foreground font-semibold text-left px-1 py-[3px] border-b border-orange-200/40">Indicador</span>
-                  <span className="text-[7px] text-muted-foreground font-semibold text-right px-1 py-[3px] border-b border-orange-200/40">Valor</span>
-                  <span className="text-[7px] text-muted-foreground font-semibold text-right px-1 py-[3px] border-b border-orange-200/40">vs Inic. ano</span>
-                  <span className="text-[7px] text-muted-foreground font-semibold text-right px-1 py-[3px] border-b border-orange-200/40">vs 1 ano</span>
-
-                  {/* Row 1+ — Col 1: value block (spans 5 metric rows) */}
-                  <div className="px-2 py-1 border-r border-orange-200/40" style={{ gridRow: '2 / 7' }}>
-                    <p className="text-base font-extrabold text-foreground leading-tight">
-                      {totals.valor > 0 ? formatMoeda(totals.valor) : '—'}
-                    </p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <CompBadge meta={totals.valor} base={compJan?.valor ?? 0} tooltip={compJan?.valor ? `Jan: ${formatMoeda(compJan.valor)}` : undefined} />
-                      <CompBadge meta={totals.valor} base={compAnoAnt?.valor ?? 0} tooltip={compAnoAnt?.valor ? `${MESES_SHORT.find(m => m.key === mes)?.label}/${Number(ano) - 1}: ${formatMoeda(compAnoAnt.valor)}` : undefined} />
+            <div className="overflow-x-auto">
+              <Card className="w-max max-w-none bg-orange-500/5 border-orange-500/20">
+                <CardContent className="p-0">
+                  <div
+                    className="grid"
+                    style={{
+                      gridTemplateColumns: META_CARD_GRID,
+                      gridTemplateRows: metaSummaryRows,
+                      width: META_CARD_TOTAL_WIDTH,
+                      alignItems: 'start',
+                    }}
+                  >
+                    <div className="px-2 py-1 border-b border-orange-200/40 text-[8px] font-semibold uppercase tracking-wider text-orange-600 whitespace-nowrap">
+                      Valor do Rebanho META — {mesLabel}/{ano}
                     </div>
-                  </div>
+                    <div className="px-2 py-1 border-b border-orange-200/40 text-[8px] font-semibold text-foreground text-center whitespace-nowrap">
+                      Indicador
+                    </div>
+                    <div className="px-2 py-1 border-b border-orange-200/40 text-[8px] font-semibold text-foreground text-center whitespace-nowrap">
+                      Valor
+                    </div>
+                    <div className="px-2 py-1 border-b border-orange-200/40 text-[8px] font-semibold text-foreground text-center whitespace-nowrap">
+                      vs Inic. ano
+                    </div>
+                    <div className="px-2 py-1 border-b border-orange-200/40 text-[8px] font-semibold text-foreground text-center whitespace-nowrap">
+                      vs 1 ano
+                    </div>
 
-                  {/* Metric rows — each row fills cols 2-5 */}
-                  {[
-                    { label: 'Cabeças', val: totals.cabecas, fmt: (v: number) => formatNum(v, 0), baseJan: compJan?.cabecas, baseAA: compAnoAnt?.cabecas, fmtBase: (v: number) => formatNum(v, 0) },
-                    { label: 'Peso médio', val: totals.pesoMedio, fmt: (v: number) => `${formatNum(v, 2)} kg`, baseJan: compJan?.pesoMedio, baseAA: compAnoAnt?.pesoMedio, fmtBase: (v: number) => `${formatNum(v, 2)} kg` },
-                    { label: 'R$/@ médio', val: totals.precoArroba, fmt: (v: number) => formatMoeda(v), baseJan: compJan?.precoArroba, baseAA: compAnoAnt?.precoArroba, fmtBase: (v: number) => formatMoeda(v) },
-                    { label: 'R$/cab', val: totals.valorCabeca, fmt: (v: number) => formatMoeda(v), baseJan: compJan?.valorCabeca, baseAA: compAnoAnt?.valorCabeca, fmtBase: (v: number) => formatMoeda(v) },
-                    { label: '@s estoque', val: totals.totalArrobas, fmt: (v: number) => formatNum(v, 2), baseJan: compJan?.totalArrobas, baseAA: compAnoAnt?.totalArrobas, fmtBase: (v: number) => formatNum(v, 2) },
-                  ].map(ind => (
-                    <React.Fragment key={ind.label}>
-                      <span className="text-muted-foreground text-[8px] truncate text-left px-1 py-[2px]">{ind.label}</span>
-                      <span className="font-semibold text-foreground tabular-nums text-[9px] text-right px-1 py-[2px]">{ind.val > 0 ? ind.fmt(ind.val) : '—'}</span>
-                      <span className="text-right px-1 py-[2px]"><CompBadge meta={ind.val} base={ind.baseJan ?? 0} tooltip={ind.baseJan ? `Jan: ${ind.fmtBase(ind.baseJan)}` : undefined} /></span>
-                      <span className="text-right px-1 py-[2px]"><CompBadge meta={ind.val} base={ind.baseAA ?? 0} tooltip={ind.baseAA ? `${MESES_SHORT.find(m => m.key === mes)?.label}/${Number(ano) - 1}: ${ind.fmtBase(ind.baseAA)}` : undefined} /></span>
-                    </React.Fragment>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    <div
+                      className="px-2 pt-2 pb-1 border-r border-orange-200/40"
+                      style={{
+                        gridColumn: '1',
+                        gridRow: `2 / ${summaryMetrics.length + 2}`,
+                        alignSelf: 'start',
+                      }}
+                    >
+                      <p className="text-[22px] font-extrabold text-foreground leading-none tabular-nums">
+                        {totals.valor > 0 ? formatMoeda(totals.valor) : '—'}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1 text-[11px]">
+                        <CompBadge meta={totals.valor} base={compJan?.valor ?? 0} tooltip={compJan?.valor ? `Jan: ${formatMoeda(compJan.valor)}` : undefined} />
+                        <CompBadge meta={totals.valor} base={compAnoAnt?.valor ?? 0} tooltip={compAnoAnt?.valor ? `${mesAnoAnteriorLabel}: ${formatMoeda(compAnoAnt.valor)}` : undefined} />
+                      </div>
+                    </div>
+
+                    {summaryMetrics.map((metric, index) => {
+                      const gridRow = index + 2;
+                      const rowBorderClass = index < summaryMetrics.length - 1 ? 'border-b border-orange-200/30' : '';
+
+                      return (
+                        <React.Fragment key={metric.label}>
+                          <div
+                            className={`px-2 text-[13px] leading-none text-foreground self-center whitespace-nowrap ${rowBorderClass}`}
+                            style={{ gridColumn: '2', gridRow }}
+                          >
+                            {metric.label}
+                          </div>
+                          <div
+                            className={`px-2 text-[13px] leading-none font-medium text-foreground text-right tabular-nums self-center whitespace-nowrap ${rowBorderClass}`}
+                            style={{ gridColumn: '3', gridRow }}
+                          >
+                            {metric.value > 0 ? metric.formatValue(metric.value) : '—'}
+                          </div>
+                          <div
+                            className={`px-2 text-[13px] leading-none text-right tabular-nums self-center whitespace-nowrap ${rowBorderClass}`}
+                            style={{ gridColumn: '4', gridRow }}
+                          >
+                            <CompBadge
+                              meta={metric.value}
+                              base={metric.baseJan}
+                              tooltip={metric.baseJan ? `Jan: ${metric.formatBase(metric.baseJan)}` : undefined}
+                            />
+                          </div>
+                          <div
+                            className={`px-2 text-[13px] leading-none text-right tabular-nums self-center whitespace-nowrap ${rowBorderClass}`}
+                            style={{ gridColumn: '5', gridRow }}
+                          >
+                            <CompBadge
+                              meta={metric.value}
+                              base={metric.baseAnoAnterior}
+                              tooltip={metric.baseAnoAnterior ? `${mesAnoAnteriorLabel}: ${metric.formatBase(metric.baseAnoAnterior)}` : undefined}
+                            />
+                          </div>
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
             {/* Mini charts — same structure as Valor do Rebanho */}
             <div className="flex gap-3">
