@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { MESES_NOMES } from '@/lib/calculos/labels';
 import { usePrecoMercado, BLOCOS_PRECO, type PrecoMercadoItem } from '@/hooks/usePrecoMercado';
 import { usePermissions } from '@/hooks/usePermissions';
-import { Lock, Unlock, Save, CheckCircle, AlertTriangle, Copy } from 'lucide-react';
+import { Lock, Unlock, Save, CheckCircle, AlertTriangle, Copy, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Props {
@@ -197,6 +197,12 @@ export function PrecoMercadoTab({ filtroAnoInicial, filtroMesInicial, onBack }: 
   return (
     <div className="w-full px-4 animate-fade-in pb-24">
       <div className="p-4 space-y-3">
+        {onBack && (
+          <button onClick={onBack} className="flex items-center gap-1 text-xs text-primary hover:underline mb-1">
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Voltar para Preços de Mercado
+          </button>
+        )}
         {/* Filtro mês/ano + status */}
         <Card>
           <CardContent className="p-3">
