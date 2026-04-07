@@ -395,9 +395,15 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
   const cabFin = get('cabecas_final');
   const entradas = get('entradas');
   const saidas = get('saidas');
-  const pesoIni = get('peso_inicio_kg');
-  const pesoFin = get('peso_total_final_kg');
-  const pesoMedFin = get('peso_medio_final_kg');
+  const pesoIniRaw = get('peso_inicio_kg');
+  const pesoFinRaw = get('peso_total_final_kg');
+  const pesoMedFinRaw = get('peso_medio_final_kg');
+
+  // Snapshot validado de peso sobrescreve view quando disponível
+  const hasSnap = pesoSnap && pesoSnap.cabecas.some(v => v > 0);
+  const pesoFin = hasSnap ? pesoSnap!.cabecas.map((c, i) => c * (pesoSnap!.pesoMedio[i] || 0)) : pesoFinRaw;
+  const pesoIni = hasSnap ? [pesoIniRaw[0], ...pesoFin.slice(0, 11)] : pesoIniRaw;
+  const pesoMedFin = hasSnap ? pesoSnap!.pesoMedio : pesoMedFinRaw;
   // GMD: usar NaN como sentinela quando meta não projetou ganho de peso
   // (gmd_numerador_kg=0 com rebanho presente = "sem projeção de GMD", não "GMD=0")
   const gmd = Array.from({ length: 12 }, (_, i) => {
