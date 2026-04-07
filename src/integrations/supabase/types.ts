@@ -3907,6 +3907,125 @@ export type Database = {
           },
         ]
       }
+      valor_rebanho_meta: {
+        Row: {
+          ano_mes: string
+          arrobas_total: number
+          cabecas: number
+          cliente_id: string
+          created_at: string
+          fazenda_id: string
+          id: string
+          peso_medio_kg: number
+          peso_total_kg: number
+          preco_arroba_medio: number
+          status: string
+          updated_at: string
+          validado_em: string | null
+          validado_por: string | null
+          valor_cabeca_medio: number
+          valor_total: number
+        }
+        Insert: {
+          ano_mes: string
+          arrobas_total?: number
+          cabecas?: number
+          cliente_id: string
+          created_at?: string
+          fazenda_id: string
+          id?: string
+          peso_medio_kg?: number
+          peso_total_kg?: number
+          preco_arroba_medio?: number
+          status?: string
+          updated_at?: string
+          validado_em?: string | null
+          validado_por?: string | null
+          valor_cabeca_medio?: number
+          valor_total?: number
+        }
+        Update: {
+          ano_mes?: string
+          arrobas_total?: number
+          cabecas?: number
+          cliente_id?: string
+          created_at?: string
+          fazenda_id?: string
+          id?: string
+          peso_medio_kg?: number
+          peso_total_kg?: number
+          preco_arroba_medio?: number
+          status?: string
+          updated_at?: string
+          validado_em?: string | null
+          validado_por?: string | null
+          valor_cabeca_medio?: number
+          valor_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "valor_rebanho_meta_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "valor_rebanho_meta_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      valor_rebanho_meta_itens: {
+        Row: {
+          categoria: string
+          created_at: string
+          id: string
+          meta_id: string
+          peso_medio_kg: number
+          preco_arroba: number
+          preco_kg: number
+          quantidade: number
+          valor_cabeca: number
+          valor_total_categoria: number
+        }
+        Insert: {
+          categoria: string
+          created_at?: string
+          id?: string
+          meta_id: string
+          peso_medio_kg?: number
+          preco_arroba?: number
+          preco_kg?: number
+          quantidade?: number
+          valor_cabeca?: number
+          valor_total_categoria?: number
+        }
+        Update: {
+          categoria?: string
+          created_at?: string
+          id?: string
+          meta_id?: string
+          peso_medio_kg?: number
+          preco_arroba?: number
+          preco_kg?: number
+          quantidade?: number
+          valor_cabeca?: number
+          valor_total_categoria?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "valor_rebanho_meta_itens_meta_id_fkey"
+            columns: ["meta_id"]
+            isOneToOne: false
+            referencedRelation: "valor_rebanho_meta"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       vw_financeiro_auditoria_competencia_caixa: {
