@@ -40,8 +40,8 @@ function viewToMetaCategoriaMes(rows: ZootCategoriaMensal[]): MetaCategoriaMes[]
       sf: r.saldo_final,
       cabMedias: (r.saldo_inicial + r.saldo_final) / 2,
       pesoInicial: r.peso_total_inicial,
-      pesoEntradas: 0, // detail not needed for display
-      pesoSaidas: 0,
+      pesoEntradas: r.peso_entradas_externas + r.peso_evol_cat_entrada,
+      pesoSaidas: r.peso_saidas_externas + r.peso_evol_cat_saida,
       gmd: r.gmd || 0,
       dias: r.dias_mes,
       producaoBio: r.producao_biologica,
