@@ -94,13 +94,13 @@ const ABA_CONFIG: { id: Aba; label: string; icon: React.ReactNode }[] = [
   { id: 'historico', label: 'Histórico', icon: <Clock className="h-4 w-4" /> },
 ];
 
-const STATUS_DESCRIPTIONS_DEFAULT: Record<StatusOperacional, string> = {
+const STATUS_DESCRIPTIONS_DEFAULT: Partial<Record<StatusOperacional, string>> = {
   previsto: 'Planejamento (meta). Alimenta o fluxo de caixa previsto, sem impacto no financeiro real.',
   programado: 'Operação definida, ainda não executada.',
   realizado: 'Operação concluída. Impacta rebanho e financeiro.',
 };
 
-const STATUS_DESCRIPTIONS_ABATE: Record<StatusOperacional, string> = {
+const STATUS_DESCRIPTIONS_ABATE: Partial<Record<StatusOperacional, string>> = {
   previsto: 'Planejamento (meta). Gera lançamentos previstos que alimentam o fluxo de caixa previsto.',
   programado: 'Venda fechada e animais escalados, mas o abate ainda não ocorreu. Os dados ainda são previsões operacionais e financeiras.',
   realizado: 'Abate concluído com dados reais de carcaça, bônus e descontos. Os valores refletem o resultado efetivo da operação.',

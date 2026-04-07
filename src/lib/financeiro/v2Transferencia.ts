@@ -1,6 +1,6 @@
 export const TIPO_OPERACAO_TRANSFERENCIA = '3-Transferência';
 
-type StatusTransacaoNormalizada = 'previsto' | 'agendado' | 'confirmado' | 'realizado';
+type StatusTransacaoNormalizada = 'previsto' | 'agendado' | 'programado' | 'realizado';
 
 const STATUS_TRANSACAO_VALIDOS = new Set<StatusTransacaoNormalizada>([
   'previsto',

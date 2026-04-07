@@ -17,7 +17,7 @@ interface Props {
   ano?: number;
 }
 
-const STATUS_DESCRIPTIONS: Record<StatusOperacional, string> = {
+const STATUS_DESCRIPTIONS: Partial<Record<StatusOperacional, string>> = {
   previsto: 'Planejamento (meta). Gera lançamentos previstos que alimentam o fluxo projetado.',
   programado: 'Operação definida, ainda não executada.',
   realizado: 'Operação concluída. Impacta rebanho e financeiro.',
