@@ -1,54 +1,68 @@
-## Plano: Cenário Meta — Movimentações + Consolidação
+## Reestruturação: Cenário + Status Operacional
 
-### Definição do Modelo
-- **Movimentações** são a fonte da verdade (não tabelas de input manual)
-- **GMD** atua apenas sobre o estoque remanescente
-- **Pesos de saída** vêm da própria movimentação
-- **Tela por categoria** = consolidação/visualização
+### Situação atual no banco
+- 255 registros: `status_operacional='conciliado'`, `cenario='realizado'`
+- 116 registros: `status_operacional='previsto'`, `cenario='meta'`
+- Nenhum registro com `status_operacional='confirmado'`
 
----
-
-### 1. Migration: Coluna `cenario` na tabela `lancamentos`
-- Adicionar coluna `cenario text NOT NULL DEFAULT 'realizado'`
-- Valores possíveis: `'realizado'`, `'meta'`
-- Índice parcial para queries do meta
-- **Importante**: Os triggers existentes (guard_mes_fechado_p1, audit, auto_transferencia) devem ser atualizados para ignorar lançamentos com cenario='meta' — o meta não participa de fechamentos nem conciliação
-
-### 2. Atualizar triggers existentes
-- `guard_lancamento_mes_fechado_p1`: ignorar cenario='meta'
-- `audit_trigger_lancamentos`: registrar mas com módulo 'meta'
-- `auto_create_transferencia_entrada`: ignorar cenario='meta' (transferências meta não geram par automático)
-- `validar_conciliacao_rebanho`: filtrar apenas cenario='realizado'
-
-### 3. Tela de Movimentação Meta
-- Reutilizar a lógica de `MovimentacaoTab` existente
-- Filtro fixo `cenario='meta'`
-- Mesmos campos: tipo, categoria, quantidade, peso, data
-- Acessível via Hub Metas
-
-### 4. Tela de Consolidação por Categoria/Mês
-- Grid somente-leitura que consolida:
-  - SI (do mês anterior ou saldo inicial)
-  - EE, SE, EI, SiI (das movimentações meta)
-  - GMD previsto (da tabela `meta_gmd_mensal`)
-  - SF, Peso Final, Produção Biológica (calculados)
-- Fórmula:
-  ```
-  SF = SI + EE - SE + EI - SiI
-  Cab Médias = (SI + SF) / 2
-  Produção Bio = Cab Médias × GMD × Dias
-  Peso Total Final = PtInicial + PtEntradas - PtSaídas + Produção Bio
-  Peso Médio Final = Peso Total Final / SF
-  ```
-
-### 5. Integração com Painel do Consultor
-- View `vw_zoot_fazenda_mensal` cenario='meta' consumirá as movimentações meta + GMD previsto
-- Mesmos indicadores do realizado, alimentados por dados planejados
+### Mapeamento de migração
+| Atual | Novo |
+|-------|------|
+| `conciliado` + `realizado` | `realizado` + `realizado` |
+| `previsto` + `meta` | **NULL** + `meta` |
+| `confirmado` (se houver) | `programado` + `realizado` |
 
 ---
 
-### Ordem de execução
-1. Migration (coluna + triggers)
-2. Tela de movimentação meta
-3. Tela de consolidação por categoria
-4. Integração com view/painel
+### Fase 1 — Banco de dados (migration)
+1. **Migrar dados**: `conciliado` → `realizado`, `confirmado` → `programado`, META → `status_operacional = NULL`
+2. **Atualizar triggers**:
+   - `auto_create_transferencia_entrada`: adaptar para novos valores
+   - `sync_transferencia_update`: adaptar para novos valores
+   - `guard_lancamento_mes_fechado_p1`: META = `cenario='meta'` (já funciona)
+   - `validar_conciliacao_rebanho`: filtrar `status_operacional IS NOT NULL` ao invés de `!= 'previsto'`
+   - `audit_trigger_lancamentos`: funciona sem mudança
+3. **Criar CHECK constraint** (ou trigger de validação):
+   - `cenario='meta'` → `status_operacional IS NULL`
+   - `cenario='realizado'` → `status_operacional IN ('previsto','programado','agendado','realizado')`
+4. **RLS para META**: Criar função `can_edit_meta()` que retorna `true` apenas para `admin_agroinblue`
+
+---
+
+### Fase 2 — Hooks e lógica (código)
+1. **`statusOperacional.ts`**: Reestruturar completamente
+   - Remover mapeamento `previsto/confirmado/conciliado`
+   - Novos valores: `programado | realizado` (zoot) + `previsto | programado | agendado | realizado` (fin)
+   - META não é status, é cenário
+2. **`useLancamentos.ts`**: Atualizar insert/update para usar novos valores
+3. **`useMetaConsolidacao.ts`**: Filtrar `cenario='meta'` (sem checar status)
+4. **`useFechamento.ts`** e hooks de saldo: Filtrar `cenario='realizado' AND status_operacional='realizado'`
+5. **Cálculos**: `isConciliado()` → `isRealizado()`, `isPrevisto()` → `isMeta()` (cenário)
+
+---
+
+### Fase 3 — UI e permissões (componentes)
+1. **`LancamentosTab.tsx`**: Novo seletor de status com valores corretos por módulo
+2. **Filtros de tela**: Zoot operacional = `cenario='realizado'`, META = `cenario='meta'`
+3. **Permissão META no frontend**: Bloquear criação/edição/exclusão para perfis != `admin_agroinblue`
+4. **Badges e labels**: Atualizar cores e textos
+5. **Consolidação e painéis**: Validar que leitura está correta
+
+---
+
+### Valores finais por módulo
+
+**Zootécnico operacional:**
+- Programado: `cenario='realizado'`, `status_operacional='programado'`
+- Realizado: `cenario='realizado'`, `status_operacional='realizado'`
+
+**Financeiro operacional:**
+- Previsto: `cenario='realizado'`, `status_operacional='previsto'`
+- Programado: `cenario='realizado'`, `status_operacional='programado'`
+- Agendado: `cenario='realizado'`, `status_operacional='agendado'`
+- Realizado: `cenario='realizado'`, `status_operacional='realizado'`
+
+**META (ambos módulos):**
+- `cenario='meta'`, `status_operacional=NULL`
+
+### Começo pela Fase 1 (migration) após aprovação.
