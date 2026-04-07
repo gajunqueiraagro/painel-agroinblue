@@ -133,6 +133,7 @@ export function MetaPrecoTab({ onBack }: Props) {
   // Valor rebanho fechamento for realized comparisons
   const [valorRebDezAnt, setValorRebDezAnt] = useState<number>(0);
   const [valorRebMesAnoAnt, setValorRebMesAnoAnt] = useState<number>(0);
+  const [dezRealizadoValidado, setDezRealizadoValidado] = useState<{ valor: number; arrobas: number; cabecas: number } | null>(null);
 
   useEffect(() => {
     if (!fazendaId) return;
@@ -142,9 +143,12 @@ export function MetaPrecoTab({ onBack }: Props) {
     Promise.all([
       supabase.from('valor_rebanho_fechamento').select('valor_total').eq('fazenda_id', fazendaId).eq('ano_mes', dezAnoAntMes).maybeSingle(),
       supabase.from('valor_rebanho_fechamento').select('valor_total').eq('fazenda_id', fazendaId).eq('ano_mes', mesAnoAnt).maybeSingle(),
-    ]).then(([r1, r2]) => {
+      supabase.from('valor_rebanho_realizado_validado' as any).select('valor_total, arrobas_total, cabecas').eq('fazenda_id', fazendaId).eq('ano_mes', dezAnoAntMes).maybeSingle(),
+    ]).then(([r1, r2, r3]) => {
       setValorRebDezAnt(r1.data?.valor_total ?? 0);
       setValorRebMesAnoAnt(r2.data?.valor_total ?? 0);
+      const rd = r3.data as any;
+      setDezRealizadoValidado(rd ? { valor: Number(rd.valor_total) || 0, arrobas: Number(rd.arrobas_total) || 0, cabecas: Number(rd.cabecas) || 0 } : null);
     });
   }, [fazendaId, ano, mes]);
 
