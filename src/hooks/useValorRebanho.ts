@@ -208,6 +208,29 @@ export function useValorRebanho(anoMes: string) {
 
       if (fechamentoError) throw fechamentoError;
 
+      // ── Snapshot oficial para Painel do Consultor (realizado) ──
+      const totalCabecas = itensFechamento.reduce((s, i) => s + (i.quantidade ?? 0), 0);
+      const totalPesoKg = pesoTotalKg ?? 0;
+      const pesoMedioKg = totalCabecas > 0 ? totalPesoKg / totalCabecas : 0;
+      const totalArrobas = totalPesoKg / 30;
+      const precoArrobaMedio = totalArrobas > 0 ? (valorTotal ?? 0) / totalArrobas : 0;
+      const valorCabecaMedio = totalCabecas > 0 ? (valorTotal ?? 0) / totalCabecas : 0;
+
+      await supabase
+        .from('valor_rebanho_realizado_validado' as any)
+        .upsert({
+          fazenda_id: fazendaId,
+          cliente_id: fazendaAtual.cliente_id,
+          ano_mes: anoMes,
+          valor_total: valorTotal ?? 0,
+          cabecas: totalCabecas,
+          peso_medio_kg: pesoMedioKg,
+          arrobas_total: totalArrobas,
+          preco_arroba_medio: precoArrobaMedio,
+          valor_cabeca_medio: valorCabecaMedio,
+          status: 'validado',
+        } as any, { onConflict: 'fazenda_id,ano_mes' });
+
       toast.success('Valores salvos e fechamento registrado');
       await loadPrecos();
       await loadFechamentoStatus();

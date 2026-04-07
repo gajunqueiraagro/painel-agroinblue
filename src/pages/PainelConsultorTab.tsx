@@ -194,7 +194,7 @@ function rollingAvg(arr: number[]): number[] {
   return r;
 }
 
-function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
+function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[], realPrecoArr?: number[]): Bloco[] {
   const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string, noTotal?: boolean): Row => {
     let valores: number[];
     switch (tab) {
@@ -218,14 +218,13 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab): Bloco[] {
     const pm = d.pesoMedioFin[i];
     return pm > 0 ? (v * pm) / 30 : 0;
   });
-  const valorPorCab = d.valorRebFin.map((v, i) => {
-    const c = d.cabFin[i];
-    return c > 0 ? v / c : 0;
-  });
-  const valorPorArr = d.valorRebFin.map((v, i) => {
-    const pf = d.pesoTotalFin[i];
-    return pf > 0 ? v / (pf / 30) : 0;
-  });
+  // Use persisted snapshot values when available; fallback to calculation
+  const valorPorCab = realValorCab && realValorCab.some(v => v > 0)
+    ? d.valorRebFin.map((v, i) => realValorCab[i] || (d.cabFin[i] > 0 ? v / d.cabFin[i] : 0))
+    : d.valorRebFin.map((v, i) => { const c = d.cabFin[i]; return c > 0 ? v / c : 0; });
+  const valorPorArr = realPrecoArr && realPrecoArr.some(v => v > 0)
+    ? d.valorRebFin.map((v, i) => realPrecoArr[i] || (d.pesoTotalFin[i] > 0 ? v / (d.pesoTotalFin[i] / 30) : 0))
+    : d.valorRebFin.map((v, i) => { const pf = d.pesoTotalFin[i]; return pf > 0 ? v / (pf / 30) : 0; });
 
   switch (tab) {
     case 'mensal':
@@ -934,6 +933,10 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   // Month cutoff: months > cutoff are blank
   const monthCutoff = useMemo(() => getCurrentMonthCutoff(anoNum), [anoNum]);
 
+  // ── Leitura oficial do Valor do Rebanho REALIZADO validado ──
+  const [realValorCabMes, setRealValorCabMes] = useState<number[]>(Array(13).fill(0));
+  const [realPrecoArrMes, setRealPrecoArrMes] = useState<number[]>(Array(13).fill(0));
+
   useEffect(() => {
     if (!fazendaId) { setValorRebanhoMes(Array(13).fill(0)); return; }
     (async () => {
@@ -942,18 +945,44 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
       const todasMeses = [dezAnoAnterior, ...meses];
       const fazendaIds = fazendaId === '__global__'
         ? fazendas.filter(f => f.tem_pecuaria !== false).map(f => f.id) : [fazendaId];
-      if (fazendaIds.length === 0) { setValorRebanhoMes(Array(13).fill(0)); return; }
+      if (fazendaIds.length === 0) {
+        setValorRebanhoMes(Array(13).fill(0));
+        setRealValorCabMes(Array(13).fill(0));
+        setRealPrecoArrMes(Array(13).fill(0));
+        return;
+      }
       const { data, error } = await supabase
-        .from('valor_rebanho_fechamento')
-        .select('ano_mes, valor_total')
+        .from('valor_rebanho_realizado_validado' as any)
+        .select('ano_mes, valor_total, valor_cabeca_medio, preco_arroba_medio')
         .in('fazenda_id', fazendaIds)
         .in('ano_mes', todasMeses);
-      if (error) { setValorRebanhoMes(Array(13).fill(0)); return; }
+      if (error) {
+        // Fallback to old table if new one has no data yet
+        const { data: oldData } = await supabase
+          .from('valor_rebanho_fechamento')
+          .select('ano_mes, valor_total')
+          .in('fazenda_id', fazendaIds)
+          .in('ano_mes', todasMeses);
+        const totais = new Map(todasMeses.map(mes => [mes, 0]));
+        (oldData || []).forEach(row => {
+          totais.set(row.ano_mes, (totais.get(row.ano_mes) || 0) + (Number(row.valor_total) || 0));
+        });
+        setValorRebanhoMes(todasMeses.map(mes => totais.get(mes) || 0));
+        setRealValorCabMes(Array(13).fill(0));
+        setRealPrecoArrMes(Array(13).fill(0));
+        return;
+      }
       const totais = new Map(todasMeses.map(mes => [mes, 0]));
-      (data || []).forEach(row => {
+      const vcMap = new Map(todasMeses.map(mes => [mes, 0]));
+      const paMap = new Map(todasMeses.map(mes => [mes, 0]));
+      (data as any[] || []).forEach((row: any) => {
         totais.set(row.ano_mes, (totais.get(row.ano_mes) || 0) + (Number(row.valor_total) || 0));
+        vcMap.set(row.ano_mes, Number(row.valor_cabeca_medio) || 0);
+        paMap.set(row.ano_mes, Number(row.preco_arroba_medio) || 0);
       });
       setValorRebanhoMes(todasMeses.map(mes => totais.get(mes) || 0));
+      setRealValorCabMes(todasMeses.map(mes => vcMap.get(mes) || 0));
+      setRealPrecoArrMes(todasMeses.map(mes => paMap.get(mes) || 0));
     })();
   }, [fazendaId, anoNum, fazendas]);
 
@@ -985,8 +1014,8 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
       return buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes);
     }
-    return buildBlocosForTab(monthlyData, viewTab);
-  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacao, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes]);
+    return buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1));
+  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacao, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes]);
 
   useEffect(() => {
     if (blocos.length > 0) {
