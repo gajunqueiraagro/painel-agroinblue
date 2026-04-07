@@ -1051,7 +1051,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
       {/* Previsto banner when all rows have no source */}
       {isPrevisto && blocoRows.every(r => !hasPrevistoSource(r.indicadorId)) && (
         <div className="text-center text-[10px] text-muted-foreground py-2 bg-muted/20 border-t border-border/20">
-          Sem base prevista configurada para este bloco
+          Sem base meta configurada para este bloco
         </div>
       )}
     </div>
