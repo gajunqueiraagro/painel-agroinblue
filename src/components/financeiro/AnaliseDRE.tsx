@@ -37,9 +37,7 @@ import type { FinanceiroLancamento, RateioADM } from "@/hooks/useFinanceiro";
 import type { Lancamento, SaldoInicial } from "@/types/cattle";
 import type { CategoriaRebanho, Pasto } from "@/hooks/usePastos";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { calcSaldoPorCategoriaLegado } from "@/lib/calculos/zootecnicos";
-import { useFechamentoCategoria, loadPesosPastosPorCategoria } from "@/hooks/useFechamentoCategoria";
-import { resolverPesoOficial } from "@/hooks/useFechamentoCategoria";
+import { useRebanhoOficial } from "@/hooks/useRebanhoOficial";
 
 interface Props {
   lancConciliadosPorMes: Map<string, FinanceiroLancamento[]>;
