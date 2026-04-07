@@ -176,10 +176,10 @@ const Index = () => {
   const canEditZoo = canEdit('zootecnico') && !isGlobal;
   const canEditFin = canEdit('financeiro') && !isGlobal;
 
-  // Wrap adicionarLancamento to also reload meta data when a previsto record is saved
+  // Wrap adicionarLancamento to also reload meta data when a META record is saved
   const wrappedAdicionar = canEditZoo ? (async (lancamento: Omit<Lancamento, 'id'>) => {
     const result = await adicionarLancamento(lancamento);
-    if (result && lancamento.statusOperacional === 'previsto') {
+    if (result && lancamento.statusOperacional === null) {
       metaLoadData();
     }
     return result;
@@ -188,7 +188,7 @@ const Index = () => {
   // Wrap editarLancamento to also reload meta data when status changes
   const wrappedEditar = canEditZoo ? (async (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => {
     await editarLancamento(id, dados);
-    if (dados.statusOperacional === 'previsto') {
+    if (dados.statusOperacional === null) {
       metaLoadData();
     }
   }) : noOp;
