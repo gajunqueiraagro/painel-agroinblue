@@ -26,17 +26,12 @@ import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import { usePastos } from '@/hooks/usePastos';
 import { useZootMensal, indexByMes, type ZootMensal } from '@/hooks/useZootMensal';
+import { useZootCategoriaMensal, totalizarPorMes as totalizarViewPorMes } from '@/hooks/useZootCategoriaMensal';
 import { formatPainel, type PainelFormatType } from '@/lib/calculos/formatters';
 import {
-  calcSaldoMensalAcumulado,
-  calcResumoMovimentacoes,
-  calcUA,
   calcAreaProdutivaPecuaria,
-  calcSaldoPorCategoriaLegado,
 } from '@/lib/calculos/zootecnicos';
 import { supabase } from '@/integrations/supabase/client';
-import { isConciliado as isLancConciliado } from '@/lib/statusOperacional';
-import { loadPesosPastosCompleto, resolverPesoOficial } from '@/hooks/useFechamentoCategoria';
 import {
   isConciliado as isFinConciliado,
   isEntrada as isFinEntrada,
@@ -107,95 +102,42 @@ interface MonthlyData {
   varValorReb: number[];
 }
 
-function buildMonthlyData(
-  lancPec: Lancamento[],
-  saldosIniciais: SaldoInicial[],
+function buildMonthlyDataFromView(
+  viewTotals: ReturnType<typeof totalizarViewPorMes>,
+  viewRows: import('@/hooks/useZootCategoriaMensal').ZootCategoriaMensal[],
   lancFin: FinanceiroLancamento[],
   ano: number,
   areaProdutiva: number,
-  pesosPorMes: Record<string, Record<string, number>>,
   valorRebanhoMes: number[],
-  pesoMedioGeralPorMes: Record<string, number | null>,
-  qtdPorMes: Record<string, Record<string, number>>,
 ): MonthlyData {
-  const { saldoInicioMes, saldoFinalAno, saldoInicialAno } = calcSaldoMensalAcumulado(saldosIniciais, lancPec, ano);
-
-  const saldoFimMes = (m: number): number => {
-    if (m >= 12) return saldoFinalAno;
-    const next = String(m + 1).padStart(2, '0');
-    return saldoInicioMes[next] ?? 0;
-  };
-
-  const lancAno = lancPec.filter(l => l.data.substring(0, 4) === String(ano) && isLancConciliado(l));
-  const lancMes = (m: number) => {
-    const prefix = `${ano}-${String(m).padStart(2, '0')}`;
-    return lancAno.filter(l => l.data.startsWith(prefix));
-  };
-
-  const tiposEntrada = ['nascimento', 'compra', 'transferencia_entrada'];
-  const tiposSaida = ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'];
-
-  const cabIniMes = (m: number) => {
-    const k = String(m).padStart(2, '0');
-    return m === 1 ? saldoInicialAno : (saldoInicioMes[k] ?? 0);
-  };
-
-  // cabFinMes: use fechamento_pastos quantities when available
-  const cabFinMes = (m: number) => {
-    const anoMesKey = `${ano}-${String(m).padStart(2, '0')}`;
-    const qtdMap = qtdPorMes[anoMesKey];
-    if (qtdMap && Object.keys(qtdMap).length > 0) {
-      return Object.values(qtdMap).reduce((s, v) => s + v, 0);
-    }
-    return saldoFimMes(m);
-  };
-
-  const entradasCabMes = (m: number) => {
-    const resumo = calcResumoMovimentacoes(lancPec, `${ano}-${String(m).padStart(2, '0')}`);
-    return resumo.totalEntradas;
-  };
-  const saidasCabMes = (m: number) => {
-    const resumo = calcResumoMovimentacoes(lancPec, `${ano}-${String(m).padStart(2, '0')}`);
-    return resumo.totalSaidas;
-  };
-
-  // pesoFinKgArr: use fechamento_pastos quantities + weights when available
-  const pesoFinKgArr = Array.from({ length: 12 }, (_, i) => {
-    const m = i + 1;
-    const anoMesKey = `${ano}-${String(m).padStart(2, '0')}`;
-    const pesosMap = pesosPorMes[anoMesKey] || {};
-    const qtdMap = qtdPorMes[anoMesKey];
-
-    // If fechamento data exists, use its quantities and weights exclusively
-    if (qtdMap && Object.keys(qtdMap).length > 0) {
-      let total = 0;
-      Object.entries(qtdMap).forEach(([cat, qtd]) => {
-        const peso = pesosMap[cat] || 0;
-        total += qtd * peso;
-      });
-      return total;
-    }
-
-    // Fallback for months without fechamento: use saldo conciliado
-    const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancPec, ano, m);
-    let total = 0;
-    saldoMap.forEach((qtd, cat) => {
-      const { valor: pesoMedio } = resolverPesoOficial(cat, pesosMap, saldosIniciais, lancPec, ano, m);
-      total += qtd * (pesoMedio || 0);
-    });
-    return total;
-  });
-
-  const pesoIniMesCalc = (m: number) => {
-    if (m === 1) return saldosIniciais.filter(s => s.ano === ano).reduce((s, si) => s + si.quantidade * (si.pesoMedioKg || 0), 0);
-    return pesoFinKgArr[m - 2] ?? 0;
-  };
-  const pesoFinMesCalc = (m: number) => pesoFinKgArr[m - 1] ?? 0;
+  const mk = (fn: (m: number) => number) => Array.from({ length: 12 }, (_, i) => fn(i + 1));
   const diasNoMes = (m: number): number => new Date(ano, m, 0).getDate();
 
-  const entradasKgMes = (m: number) => lancMes(m).filter(l => tiposEntrada.includes(l.tipo)).reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
-  const saidasKgMes = (m: number) => lancMes(m).filter(l => tiposSaida.includes(l.tipo)).reduce((s, l) => s + l.quantidade * (l.pesoMedioKg || 0), 0);
+  // Zootechnical data from official view
+  const cabIni = mk(m => viewTotals[m]?.saldo_inicial ?? 0);
+  const cabFin = mk(m => viewTotals[m]?.saldo_final ?? 0);
+  const entradas = mk(m => (viewTotals[m]?.entradas_externas ?? 0) + (viewTotals[m]?.evol_cat_entrada ?? 0));
+  const saidas = mk(m => (viewTotals[m]?.saidas_externas ?? 0) + (viewTotals[m]?.evol_cat_saida ?? 0));
+  const pesoTotalIni = mk(m => viewTotals[m]?.peso_total_inicial ?? 0);
+  const pesoTotalFin = mk(m => viewTotals[m]?.peso_total_final ?? 0);
+  const pesoMedioIni = mk(m => { const c = cabIni[m - 1]; return c > 0 ? pesoTotalIni[m - 1] / c : 0; });
+  const pesoMedioFin = mk(m => { const c = cabFin[m - 1]; return c > 0 ? pesoTotalFin[m - 1] / c : 0; });
 
+  // GMD: weighted average from view rows
+  const gmd = mk(m => {
+    const mesRows = viewRows.filter(r => r.mes === m);
+    const cabMedia = (cabIni[m - 1] + cabFin[m - 1]) / 2;
+    if (cabMedia <= 0) return 0;
+    // Use producao_biologica from view
+    const prodBio = mesRows.reduce((s, r) => s + r.producao_biologica, 0);
+    const dias = diasNoMes(m);
+    return dias > 0 ? prodBio / cabMedia / dias : 0;
+  });
+
+  const arrobasProd = mk(m => (viewTotals[m]?.producao_biologica ?? 0) / 30);
+  const prodKg = mk(m => viewTotals[m]?.producao_biologica ?? 0);
+
+  // Financial data (kept as-is from useFinanceiro)
   const concFin = lancFin.filter(l => isFinConciliado(l));
   const finDoAno = concFin.filter(l => datePagtoAno(l) === ano);
   const finDoMes = (m: number) => finDoAno.filter(l => datePagtoMes(l) === m);
@@ -206,41 +148,9 @@ function buildMonthlyData(
   const deducMes = (m: number) => finDoMes(m).filter(l => isFinSaida(l) && classificarSaida(l) === 'Dedução de Receitas').reduce((s, l) => s + Math.abs(l.valor), 0);
   const desembPecMes = (m: number) => finDoMes(m).filter(l => isFinSaida(l) && classificarSaida(l) === 'Desemb. Produtivo Pec.').reduce((s, l) => s + Math.abs(l.valor), 0);
 
-  const mk = (fn: (m: number) => number) => Array.from({ length: 12 }, (_, i) => fn(i + 1));
-
-  const cabIni = mk(cabIniMes);
-  const cabFin = mk(cabFinMes);
-  const entradas = mk(entradasCabMes);
-  const saidas = mk(saidasCabMes);
-  const pesoTotalIni = mk(pesoIniMesCalc);
-  const pesoTotalFin = mk(pesoFinMesCalc);
-  const pesoMedioIni = mk(m => { const c = cabIniMes(m); return c > 0 ? pesoIniMesCalc(m) / c : 0; });
-  const pesoMedioFin = mk(m => {
-    const anoMesKey = `${ano}-${String(m).padStart(2, '0')}`;
-    const pmPastos = pesoMedioGeralPorMes[anoMesKey];
-    if (pmPastos !== null && pmPastos !== undefined && pmPastos > 0) return pmPastos;
-    const c = cabFinMes(m);
-    return c > 0 ? pesoFinMesCalc(m) / c : 0;
-  });
-
-  const arrobasProd = mk(m => {
-    const pFin = pesoFinMesCalc(m);
-    const pIni = pesoIniMesCalc(m);
-    if (pFin <= 0 || pIni <= 0) return 0;
-    return (pFin - pIni - entradasKgMes(m) + saidasKgMes(m)) / 30;
-  });
-  const prodKg = arrobasProd.map(v => v * 30);
-
-  const gmd = mk(m => {
-    const rebMedio = (cabIniMes(m) + cabFinMes(m)) / 2;
-    const dias = diasNoMes(m);
-    if (rebMedio <= 0 || dias <= 0) return 0;
-    return (pesoFinMesCalc(m) - pesoIniMesCalc(m) - entradasKgMes(m) + saidasKgMes(m)) / rebMedio / dias;
-  });
-
   // valorRebanhoMes has 13 elements: [0]=Dec prev year, [1]=Jan, ..., [12]=Dec
-  const valorRebFin = valorRebanhoMes.slice(1); // 12 elements: Jan-Dec
-  const valorRebIni = valorRebanhoMes.slice(0, 12); // 12 elements: Dec(prev)→Nov = initial for Jan→Dec
+  const valorRebFin = valorRebanhoMes.slice(1);
+  const valorRebIni = valorRebanhoMes.slice(0, 12);
 
   const entFinArr = mk(entFinMes);
   const saiFinArr = mk(saiFinMes);
@@ -935,9 +845,6 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const [ano, setAno] = useState(filtroGlobal?.ano || String(new Date().getFullYear()));
   const [viewTab, setViewTab] = useState<ViewTab>('mensal');
   const [cenario, setCenario] = useState<Cenario>('realizado');
-  const [pesosPorMes, setPesosPorMes] = useState<Record<string, Record<string, number>>>({});
-  const [qtdPorMes, setQtdPorMes] = useState<Record<string, Record<string, number>>>({});
-  const [pesoMedioGeralPorMes, setPesoMedioGeralPorMes] = useState<Record<string, number | null>>({});
   const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(Array(13).fill(0));
   const [openBlocos, setOpenBlocos] = useState<Record<string, boolean>>({});
   const [showDivP1, setShowDivP1] = useState(false);
@@ -962,27 +869,11 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const { status: statusPilares, refetch: refetchPilares } = useStatusPilares(fazendaId, mesAtualRef);
   const { data: zootMeta } = useZootMensal({ ano: anoNum, cenario: 'meta' });
 
+  // Official source: view data for Realizado (replaces buildMonthlyData local calcs)
+  const { data: viewDataRealizado } = useZootCategoriaMensal({ ano: anoNum, cenario: 'realizado', global: isGlobal });
+
   // Month cutoff: months > cutoff are blank
   const monthCutoff = useMemo(() => getCurrentMonthCutoff(anoNum), [anoNum]);
-
-  useEffect(() => {
-    if (!fazendaId || fazendaId === '__global__' || categorias.length === 0) { setPesosPorMes({}); setPesoMedioGeralPorMes({}); setQtdPorMes({}); return; }
-    (async () => {
-      const result: Record<string, Record<string, number>> = {};
-      const pmResult: Record<string, number | null> = {};
-      const qtdResult: Record<string, Record<string, number>> = {};
-      for (let m = 1; m <= 12; m++) {
-        const anoMes = `${anoNum}-${String(m).padStart(2, '0')}`;
-        const r = await loadPesosPastosCompleto(fazendaId, anoMes, categorias);
-        result[anoMes] = r.porCategoria;
-        pmResult[anoMes] = r.pesoMedioGeralPastos;
-        qtdResult[anoMes] = r.quantidadePorCategoria;
-      }
-      setPesosPorMes(result);
-      setPesoMedioGeralPorMes(pmResult);
-      setQtdPorMes(qtdResult);
-    })();
-  }, [fazendaId, anoNum, categorias]);
 
   useEffect(() => {
     if (!fazendaId) { setValorRebanhoMes(Array(13).fill(0)); return; }
@@ -1009,9 +900,11 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
   const areaProdutiva = useMemo(() => calcAreaProdutivaPecuaria(pastos), [pastos]);
 
+  const viewTotals = useMemo(() => totalizarViewPorMes(viewDataRealizado || []), [viewDataRealizado]);
+
   const monthlyData = useMemo(() =>
-    buildMonthlyData(lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes, pesoMedioGeralPorMes, qtdPorMes),
-    [lancPec, saldosIniciais, lancFin, anoNum, areaProdutiva, pesosPorMes, valorRebanhoMes, pesoMedioGeralPorMes, qtdPorMes],
+    buildMonthlyDataFromView(viewTotals, viewDataRealizado || [], lancFin, anoNum, areaProdutiva, valorRebanhoMes),
+    [viewTotals, viewDataRealizado, lancFin, anoNum, areaProdutiva, valorRebanhoMes],
   );
 
   const isPrevisto = cenario === 'previsto';

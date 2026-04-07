@@ -19,9 +19,8 @@ import { useZootCategoriaMensal, type ZootCategoriaMensal } from '@/hooks/useZoo
 import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
 import { supabase } from '@/integrations/supabase/client';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
-import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
-import { supabase } from '@/integrations/supabase/client';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
+
+type OrigemPeso = 'pastos' | 'lancamento' | 'saldo_inicial' | 'sem_base';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -95,6 +94,41 @@ const MESES_SHORT = [
 ];
 
 const CHART_LABELS = ['I', 'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+
+function mapFonteToOrigem(fonte?: string): OrigemPeso {
+  if (fonte === 'fechamento') return 'pastos';
+  if (fonte === 'fallback_movimentacao') return 'lancamento';
+  return 'sem_base';
+}
+
+interface ResumoOficialLike {
+  rows: Array<{
+    categoriaId: string;
+    categoriaCodigo: string;
+    categoriaNome: string;
+    quantidadeFinal: number;
+    pesoMedioFinalKg: number | null;
+    origemPeso: OrigemPeso;
+  }>;
+}
+
+function extractResumoFromView(
+  viewData: ZootCategoriaMensal[] | undefined,
+  mes: number,
+): ResumoOficialLike {
+  if (!viewData) return { rows: [] };
+  const mesRows = viewData.filter(r => r.mes === mes);
+  return {
+    rows: mesRows.map(r => ({
+      categoriaId: r.categoria_id,
+      categoriaCodigo: r.categoria_codigo,
+      categoriaNome: r.categoria_nome,
+      quantidadeFinal: r.saldo_final,
+      pesoMedioFinalKg: r.peso_medio_final,
+      origemPeso: mapFonteToOrigem(r.fonte_oficial_mes),
+    })),
+  };
+}
 
 function calcVariacaoNullable(atual: number | null, anterior: number | null): number | null {
   if (atual === null || anterior === null || anterior === 0) return null;
@@ -267,6 +301,10 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const { itens: precosMercado } = usePrecoMercado(anoMes);
 
+  // Official source: view data (replaces useFechamentoCategoria)
+  const { data: viewDataAnoAtual } = useZootCategoriaMensal({ ano: Number(anoFiltro), cenario: 'realizado' });
+  const { data: viewDataAnoAnterior } = useZootCategoriaMensal({ ano: Number(anoFiltro) - 1, cenario: 'realizado' });
+
   const precosSugeridos = useMemo(() => {
     const map: Record<string, number> = {};
     Object.entries(MAPA_PRECO_MERCADO).forEach(([codigo, ref]) => {
@@ -281,14 +319,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const [precosLocal, setPrecosLocal] = useState<Record<string, number>>({});
   const [precosDisplay, setPrecosDisplay] = useState<Record<string, string>>({});
 
-  const resumoOficial = useFechamentoCategoria(
-    fazendaId,
-    Number(anoFiltro),
-    Number(mesFiltro),
-    lancamentos,
-    saldosIniciais,
-    categorias,
-  );
+  const resumoOficial = useMemo(() => extractResumoFromView(viewDataAnoAtual, Number(mesFiltro)), [viewDataAnoAtual, mesFiltro]);
 
   const categoriasComSugestao = useMemo(() => {
     const set = new Set<string>();
@@ -396,24 +427,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const anoMesAnterior = mesNum > 1 ? `${anoFiltro}-${mesAnteriorKey}` : `${Number(anoFiltro) - 1}-12`;
   const anoMesDezAnterior = `${Number(anoFiltro) - 1}-12`;
 
-  const resumoMesAnterior = useFechamentoCategoria(
-    fazendaId,
-    mesNum > 1 ? Number(anoFiltro) : Number(anoFiltro) - 1,
-    mesNum > 1 ? mesNum - 1 : 12,
-    lancamentos,
-    saldosIniciais,
-    categorias,
-  );
+  const resumoMesAnterior = useMemo(() => {
+    const mesAnt = mesNum > 1 ? mesNum - 1 : 12;
+    const data = mesNum > 1 ? viewDataAnoAtual : viewDataAnoAnterior;
+    return extractResumoFromView(data, mesAnt);
+  }, [viewDataAnoAtual, viewDataAnoAnterior, mesNum]);
   const { precos: precosMesAnterior } = useValorRebanho(anoMesAnterior);
 
-  const resumoDezAnterior = useFechamentoCategoria(
-    fazendaId,
-    Number(anoFiltro) - 1,
-    12,
-    lancamentos,
-    saldosIniciais,
-    categorias,
-  );
+  const resumoDezAnterior = useMemo(() => extractResumoFromView(viewDataAnoAnterior, 12), [viewDataAnoAnterior]);
   const { precos: precosDezAnterior } = useValorRebanho(anoMesDezAnterior);
 
   const metricasMesAnteriorLive = useMemo(() => {
