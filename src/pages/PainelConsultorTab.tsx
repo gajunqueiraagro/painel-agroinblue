@@ -392,7 +392,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
       return m ? (Number(m[field]) || 0) : 0;
     });
 
-  const cabIni = get('cabecas_inicio');
+  const cabIniRaw = get('cabecas_inicio');
   const cabFin = get('cabecas_final');
   const entradas = get('entradas');
   const saidas = get('saidas');
@@ -400,12 +400,18 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
   const pesoFinRaw = get('peso_total_final_kg');
   const pesoMedFinRaw = get('peso_medio_final_kg');
 
+  // Override cabIni[0] (Jan) with Dec realizado validado
+  const cabIni = [...cabIniRaw];
+  if (dezRealizadoSnap && dezRealizadoSnap.cabecas > 0) {
+    cabIni[0] = dezRealizadoSnap.cabecas;
+  }
+
   // Snapshot validado de peso sobrescreve view quando disponível
   const hasSnap = pesoSnap && pesoSnap.cabecas.some(v => v > 0);
   const pesoFin = hasSnap ? pesoSnap!.cabecas.map((c, i) => c * (pesoSnap!.pesoMedio[i] || 0)) : pesoFinRaw;
   // Peso ini: Jan = Dez realizado validado; Fev+ = Meta final mês anterior
   const dezPesoKg = dezRealizadoSnap ? dezRealizadoSnap.arrobas * 30 : 0;
-  const pesoIniJan = hasSnap && dezPesoKg > 0 ? dezPesoKg : pesoIniRaw[0];
+  const pesoIniJan = dezPesoKg > 0 ? dezPesoKg : pesoIniRaw[0];
   const pesoIni = hasSnap ? [pesoIniJan, ...pesoFin.slice(0, 11)] : pesoIniRaw;
   const pesoMedFin = hasSnap ? pesoSnap!.pesoMedio : pesoMedFinRaw;
   // GMD: usar NaN como sentinela quando meta não projetou ganho de peso
@@ -423,7 +429,11 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
   const areaProd = get('area_produtiva_ha');
   const lotacao = get('lotacao_ua_ha');
 
-  const pesoMedIni = cabIni.map((c, i) => c > 0 ? pesoIni[i] / c : 0);
+  // Peso médio ini: Jan = Dez realizado validado pesoMedioKg; Fev+ = meta final mês anterior
+  const pesoMedIniJan = dezRealizadoSnap && dezRealizadoSnap.pesoMedioKg > 0
+    ? dezRealizadoSnap.pesoMedioKg
+    : (cabIni[0] > 0 ? pesoIni[0] / cabIni[0] : 0);
+  const pesoMedIni = [pesoMedIniJan, ...pesoMedFin.slice(0, 11)];
   const cabMedia = cabIni.map((v, i) => (v + cabFin[i]) / 2);
   const gmdNum = get('gmd_numerador_kg');
   const arrobasProd = gmdNum.map((v, i) => {
