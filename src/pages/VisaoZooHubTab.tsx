@@ -173,10 +173,11 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
     setMesFiltro(n === new Date().getFullYear() ? new Date().getMonth() + 1 : 12);
   };
 
-  // Filter lancamentos by cenario
+  // Filter lancamentos by cenario — useLancamentos already filters by cenario param
+  // For 'realizado' cenario, only use status 'realizado' for calculations
   const lancsFiltrados = useMemo(() => {
-    const statusMatch = cenario === 'realizado' ? 'realizado' : 'previsto';
-    return lancamentos.filter(l => (l.statusOperacional || 'realizado') === statusMatch);
+    if (cenario === 'meta') return lancamentos; // META: all records from cenario='meta'
+    return lancamentos.filter(l => (l.statusOperacional || 'realizado') === 'realizado');
   }, [lancamentos, cenario]);
 
   const zoo = useIndicadoresZootecnicos(fazendaId, anoNum, mesFiltro, lancsFiltrados, saldosIniciais, pastos, categorias, globalFazendaIds);
