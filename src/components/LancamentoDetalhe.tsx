@@ -58,6 +58,10 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
 
   const [editando, setEditando] = useState(false);
   const [form, setForm] = useState({ ...lancamento });
+  /** UI-only: tracks whether 'meta' is selected in the status toggle (for edit forms) */
+  const [formStatusMode, setFormStatusMode] = useState<'realizado' | 'programado' | 'meta'>(
+    lancamentoIsMeta ? 'meta' : ((lancamento.statusOperacional as any) || 'realizado')
+  );
 
   // Confirmation modal state
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -68,6 +72,9 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   // Unified purchase edit sheet
   const [compraEditSheetOpen, setCompraEditSheetOpen] = useState(false);
   const [compraForm, setCompraForm] = useState({ ...lancamento });
+  const [compraStatusMode, setCompraStatusMode] = useState<'realizado' | 'programado' | 'meta'>(
+    lancamentoIsMeta ? 'meta' : ((lancamento.statusOperacional as any) || 'realizado')
+  );
   const [compraSaving, setCompraSaving] = useState(false);
   const [compraZooSaved, setCompraZooSaved] = useState(false);
 
