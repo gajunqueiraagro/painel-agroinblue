@@ -32,7 +32,7 @@ import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
 type SubTab = 'indicadores' | 'dre' | 'graficos';
 type Vista = 'mes' | 'acumulado';
-type Cenario = 'realizado' | 'previsto';
+type Cenario = 'realizado' | 'meta';
 
 interface Props {
   onTabChange: (tab: TabId, filtro?: { ano: string; mes: number }) => void;
