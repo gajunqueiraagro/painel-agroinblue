@@ -286,22 +286,28 @@ export function useValorRebanhoGlobal(
     return 'misto'; // Some farms closed, some open
   }, [fazendaIds, snapshotHeaders, snapshotItems]);
 
-  // Compute live rows for a farm for a given month
+  // Compute live rows for a farm for a given month — FONTE OFICIAL: zootData
   const computeLiveRowsForFarm = useCallback((
     fid: string,
     ano: number,
     mes: number,
   ): SnapshotDetalheCategoria[] => {
-    const farmLancs = lancamentos.filter(l => l.fazendaId === fid);
-    const farmSaldos = saldosIniciais.filter(s => (s as any).fazendaId === fid || (s as any).fazenda_id === fid);
-    const saldoMap = calcSaldoPorCategoriaLegado(farmSaldos, farmLancs, ano, mes);
-    const pesosMap = pesosPastosPorFazenda[fid] || {};
+    const farmZoot = zootData.get(fid)?.get(mes) || [];
     const precosMap = precosAllFarms[fid]?.[`${ano}-${String(mes).padStart(2, '0')}`] || {};
+
+    // Build saldo and peso maps from official view
+    const saldoMap = new Map<string, number>();
+    const pesoMap = new Map<string, number>();
+    farmZoot.forEach(r => {
+      saldoMap.set(r.categoria_codigo, (saldoMap.get(r.categoria_codigo) || 0) + r.saldo_final);
+      if (r.peso_medio_final != null && r.saldo_final > 0) {
+        pesoMap.set(r.categoria_codigo, r.peso_medio_final);
+      }
+    });
 
     return ORDEM_CATEGORIAS_FIXA.map(codigo => {
       const qty = saldoMap.get(codigo) || 0;
-      const { valor: pesoMedio } = resolverPesoOficial(codigo, pesosMap, farmSaldos, farmLancs, ano, mes);
-      const peso = pesoMedio || 0;
+      const peso = pesoMap.get(codigo) || 0;
       const precoKg = precosMap[codigo] || 0;
       const valorTotal = qty * peso * precoKg;
       return {
@@ -312,7 +318,7 @@ export function useValorRebanhoGlobal(
         valor_total_categoria: valorTotal,
       };
     });
-  }, [lancamentos, saldosIniciais, pesosPastosPorFazenda, precosAllFarms]);
+  }, [zootData, precosAllFarms]);
 
   // Aggregate rows for a given month
   const getAggregatedRowsForMonth = useCallback((mes: string, ano: number, mesNum: number): GlobalCategoriaRow[] => {
