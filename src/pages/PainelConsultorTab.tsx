@@ -26,6 +26,7 @@ import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import { usePastos } from '@/hooks/usePastos';
 import { useZootMensal, indexByMes, type ZootMensal } from '@/hooks/useZootMensal';
+import { useZootCategoriaMensal, totalizarPorMes as totalizarViewPorMes } from '@/hooks/useZootCategoriaMensal';
 import { formatPainel, type PainelFormatType } from '@/lib/calculos/formatters';
 import {
   calcSaldoMensalAcumulado,
