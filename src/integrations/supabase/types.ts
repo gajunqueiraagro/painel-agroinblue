@@ -4095,6 +4095,69 @@ export type Database = {
           },
         ]
       }
+      valor_rebanho_realizado_validado: {
+        Row: {
+          ano_mes: string
+          arrobas_total: number
+          cabecas: number
+          cliente_id: string
+          created_at: string
+          fazenda_id: string
+          id: string
+          peso_medio_kg: number
+          preco_arroba_medio: number
+          status: string
+          updated_at: string
+          valor_cabeca_medio: number
+          valor_total: number
+        }
+        Insert: {
+          ano_mes: string
+          arrobas_total?: number
+          cabecas?: number
+          cliente_id: string
+          created_at?: string
+          fazenda_id: string
+          id?: string
+          peso_medio_kg?: number
+          preco_arroba_medio?: number
+          status?: string
+          updated_at?: string
+          valor_cabeca_medio?: number
+          valor_total?: number
+        }
+        Update: {
+          ano_mes?: string
+          arrobas_total?: number
+          cabecas?: number
+          cliente_id?: string
+          created_at?: string
+          fazenda_id?: string
+          id?: string
+          peso_medio_kg?: number
+          preco_arroba_medio?: number
+          status?: string
+          updated_at?: string
+          valor_cabeca_medio?: number
+          valor_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "valor_rebanho_realizado_validado_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "valor_rebanho_realizado_validado_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       vw_financeiro_auditoria_competencia_caixa: {
