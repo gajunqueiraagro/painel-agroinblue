@@ -45,6 +45,7 @@ import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 import { CATALOGO_INDICADORES, getFonteStatusLabel, type FonteIndicador, type IndicadorMeta } from '@/lib/painelConsultor/indicadorCatalogo';
+import { useValorRebanhoMetaAno } from '@/hooks/useValorRebanhoMeta';
 
 // ─── Constants ───
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
