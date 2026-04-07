@@ -581,30 +581,38 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     });
   }, [frozenDetalhadoSelecionado, categorias, resumoOficial.rows]);
 
+  // Build metrics for ANY month: physical data (qty/weight) ALWAYS from the view,
+  // financial data (valor) from snapshot prices applied to view quantities.
   const buildFrozenMetrics = useCallback((mesKey: string): MetricasExibicao | null => {
-    const snapshotCabecalho = historicoPorMes[mesKey] ?? null;
     const snapshotDetalhado = historicoDetalhadoPorMes[mesKey] ?? [];
+    const snapshotCabecalho = historicoPorMes[mesKey] ?? null;
 
-    if (!snapshotCabecalho && snapshotDetalhado.length === 0) return null;
+    // Determine which view data to use based on the month's year
+    const [keyAno, keyMes] = mesKey.split('-').map(Number);
+    const viewData = keyAno === Number(anoFiltro) ? viewDataAnoAtual : viewDataAnoAnterior;
+    const viewRows = (viewData || []).filter(r => r.mes === keyMes);
 
-    // For the currently selected month, use official closure data for qty/weight
-    // and recalculate value using snapshot prices
-    if (mesKey === anoMes && resumoOficial.rows.length > 0) {
-      const itensPorCategoria = new Map(snapshotDetalhado.map(item => [item.categoria, item]));
-      let totalValor = 0;
-      let totalCab = 0;
-      let totalPesoKg = 0;
-      resumoOficial.rows.forEach(row => {
-        const precoKg = Number(itensPorCategoria.get(row.categoriaCodigo)?.preco_kg) || 0;
-        const pesoMedio = row.pesoMedioFinalKg || 0;
-        totalCab += row.quantidadeFinal;
-        totalPesoKg += row.quantidadeFinal * pesoMedio;
-        totalValor += row.quantidadeFinal * pesoMedio * precoKg;
+    // If no view data AND no snapshot, nothing to show
+    if (viewRows.length === 0 && snapshotDetalhado.length === 0 && !snapshotCabecalho) return null;
+
+    // Physical herd data ALWAYS from the official view
+    const itensPorCategoria = new Map(snapshotDetalhado.map(item => [item.categoria, item]));
+    let totalValor = 0;
+    let totalCab = 0;
+    let totalPesoKg = 0;
+
+    if (viewRows.length > 0) {
+      viewRows.forEach(row => {
+        const precoKg = Number(itensPorCategoria.get(row.categoria_codigo)?.preco_kg) || 0;
+        const pesoMedio = row.peso_medio_final || 0;
+        totalCab += row.saldo_final;
+        totalPesoKg += row.saldo_final * pesoMedio;
+        totalValor += row.saldo_final * pesoMedio * precoKg;
       });
       return buildMetricsFromTotals(totalValor, totalCab, totalPesoKg);
     }
 
-    // For other months, use snapshot as-is
+    // Fallback: if view has no data for this month, use snapshot (legacy closed months)
     const metricasDetalhadas = aggregateMetricsFromSnapshotItems(snapshotDetalhado);
     if (!snapshotCabecalho && !metricasDetalhadas) return null;
 
@@ -613,7 +621,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       metricasDetalhadas?.cabecas ?? null,
       snapshotCabecalho?.pesoKg ?? metricasDetalhadas?.pesoTotalKg ?? null,
     );
-  }, [historicoPorMes, historicoDetalhadoPorMes, anoMes, resumoOficial.rows]);
+  }, [historicoPorMes, historicoDetalhadoPorMes, anoFiltro, viewDataAnoAtual, viewDataAnoAnterior]);
 
   const metricasSelecionado = useMemo(() => {
     if (fonteMes === 'live') return metricasLiveSelecionado;
@@ -657,51 +665,66 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     });
   }, [mesNum]);
 
+  // Helper: get view-based physical metrics for a given month key
+  const getViewMetricsForMonth = useCallback((mesKey: string): { cabecas: number; pesoKg: number } | null => {
+    const [keyAno, keyMes] = mesKey.split('-').map(Number);
+    const viewData = keyAno === Number(anoFiltro) ? viewDataAnoAtual : viewDataAnoAnterior;
+    const viewRows = (viewData || []).filter(r => r.mes === keyMes);
+    if (viewRows.length === 0) return null;
+    let cabecas = 0;
+    let pesoKg = 0;
+    viewRows.forEach(r => {
+      cabecas += r.saldo_final;
+      pesoKg += r.saldo_final * (r.peso_medio_final || 0);
+    });
+    return { cabecas, pesoKg };
+  }, [anoFiltro, viewDataAnoAtual, viewDataAnoAnterior]);
+
   const chartDataValor = useMemo(() => {
     return buildChartData((mes) => {
       if (mes === 0) {
         const dezKey = `${Number(anoFiltro) - 1}-12`;
-        return getFrozen(dezKey)?.valor ?? null;
+        return buildFrozenMetrics(dezKey)?.valor ?? null;
       }
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
       if (mes === mesNum && fonteMes === 'live') {
         return metricasLiveSelecionado.valor;
       }
-      return getFrozen(key)?.valor ?? null;
+      return buildFrozenMetrics(key)?.valor ?? null;
     });
-  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.valor, getFrozen]);
+  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.valor, buildFrozenMetrics]);
 
   const chartDataArrobas = useMemo(() => {
     return buildChartData((mes) => {
       if (mes === 0) {
         const dezKey = `${Number(anoFiltro) - 1}-12`;
-        const frozen = getFrozen(dezKey);
-        return frozen ? frozen.pesoKg / 30 : null;
+        const vm = getViewMetricsForMonth(dezKey);
+        return vm ? vm.pesoKg / 30 : null;
       }
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
       if (mes === mesNum && fonteMes === 'live') {
         return metricasLiveSelecionado.totalArrobas;
       }
-      const frozen = getFrozen(key);
-      return frozen ? frozen.pesoKg / 30 : null;
+      const vm = getViewMetricsForMonth(key);
+      return vm ? vm.pesoKg / 30 : null;
     });
-  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.totalArrobas, getFrozen]);
+  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.totalArrobas, getViewMetricsForMonth]);
 
   const chartDataPrecoArroba = useMemo(() => {
     return buildChartData((mes) => {
       if (mes === 0) {
         const dezKey = `${Number(anoFiltro) - 1}-12`;
-        const frozen = getFrozen(dezKey);
-        return frozen && frozen.pesoKg > 0 ? frozen.valor / (frozen.pesoKg / 30) : null;
+        const metrics = buildFrozenMetrics(dezKey);
+        return metrics?.precoArroba ?? null;
       }
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
       if (mes === mesNum && fonteMes === 'live') {
         return metricasLiveSelecionado.precoArroba;
       }
-      const frozen = getFrozen(key);
-      return frozen && frozen.pesoKg > 0 ? frozen.valor / (frozen.pesoKg / 30) : null;
+      const metrics = buildFrozenMetrics(key);
+      return metrics?.precoArroba ?? null;
     });
-  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.precoArroba, getFrozen]);
+  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.precoArroba, buildFrozenMetrics]);
 
   const handlePrecoChange = (codigo: string, value: string) => {
     const sanitized = value.replace(/[^0-9.,]/g, '');
