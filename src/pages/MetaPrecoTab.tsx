@@ -201,6 +201,36 @@ export function MetaPrecoTab({ onBack }: Props) {
     return { cabecas, pesoMedio, precoKg, precoArroba, valorCabeca, valor, totalArrobas };
   }, [rows]);
 
+  // ---------- Comparison data ----------
+  // Realized totals for January of current year
+  const compJan = useMemo(() => {
+    if (!viewDataRealizadoAno) return null;
+    const janRows = viewDataRealizadoAno.filter(r => r.mes === 1);
+    if (janRows.length === 0) return null;
+    const cabecas = janRows.reduce((s, r) => s + r.saldo_final, 0);
+    const pesoTotalKg = janRows.reduce((s, r) => s + r.peso_total_final, 0);
+    const pesoMedio = cabecas > 0 ? pesoTotalKg / cabecas : 0;
+    const totalArrobas = pesoTotalKg / 30;
+    const valorCabeca = valorRebJan > 0 && cabecas > 0 ? valorRebJan / cabecas : 0;
+    const precoArroba = valorRebJan > 0 && totalArrobas > 0 ? valorRebJan / totalArrobas : 0;
+    return { cabecas, pesoMedio, precoArroba, valorCabeca, totalArrobas, valor: valorRebJan };
+  }, [viewDataRealizadoAno, valorRebJan]);
+
+  // Realized totals for same month of previous year
+  const compAnoAnt = useMemo(() => {
+    if (!viewDataRealizadoAnoAnt) return null;
+    const mesNum = Number(mes);
+    const mesRows = viewDataRealizadoAnoAnt.filter(r => r.mes === mesNum);
+    if (mesRows.length === 0) return null;
+    const cabecas = mesRows.reduce((s, r) => s + r.saldo_final, 0);
+    const pesoTotalKg = mesRows.reduce((s, r) => s + r.peso_total_final, 0);
+    const pesoMedio = cabecas > 0 ? pesoTotalKg / cabecas : 0;
+    const totalArrobas = pesoTotalKg / 30;
+    const valorCabeca = valorRebMesAnoAnt > 0 && cabecas > 0 ? valorRebMesAnoAnt / cabecas : 0;
+    const precoArroba = valorRebMesAnoAnt > 0 && totalArrobas > 0 ? valorRebMesAnoAnt / totalArrobas : 0;
+    return { cabecas, pesoMedio, precoArroba, valorCabeca, totalArrobas, valor: valorRebMesAnoAnt };
+  }, [viewDataRealizadoAnoAnt, mes, valorRebMesAnoAnt]);
+
   // ---------- Chart data (all 12 months) ----------
   const chartData = useMemo(() => {
     if (!viewDataMeta) return { valor: [] as any[], arrobas: [] as any[], precoArroba: [] as any[] };
