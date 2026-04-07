@@ -40,6 +40,7 @@ import { PrecoMercadoTab } from './PrecoMercadoTab';
 import { PainelConsultorHubTab } from './PainelConsultorHubTab';
 import { PrecosMercadoHubTab } from './PrecosMercadoHubTab';
 import { MetaGmdTab } from './MetaGmdTab';
+import { ConferenciaGmdTab } from './ConferenciaGmdTab';
 import { MetaPrecoTab } from './MetaPrecoTab';
 import { GraficosAnaliseTab } from './GraficosAnaliseTab';
 import { MetaConsolidacaoTab } from './MetaConsolidacaoTab';
@@ -131,6 +132,7 @@ const TITLES: Record<TabId, string> = {
   meta_movimentacoes: 'Movimentações Meta',
   meta_consolidacao: 'Consolidação Meta',
   precos_mercado_hub: 'Preços de Mercado',
+  conferencia_gmd: 'Conferência de GMD',
 };
 
 const Index = () => {
@@ -374,6 +376,7 @@ const Index = () => {
     meta_consolidacao: () => setActiveTab('painel_consultor_hub'),
     meta_movimentacoes: () => setActiveTab('painel_consultor_hub'),
     precos_mercado_hub: () => setActiveTab('painel_consultor_hub'),
+    conferencia_gmd: () => setActiveTab('painel_consultor'),
     // Financeiro (analysis) sub-screens
     fin_caixa: () => setActiveTab('lancar_fin_hub'),
     analise_economica: () => setActiveTab('lancar_fin_hub'),
@@ -420,6 +423,9 @@ const Index = () => {
       )}
       {activeTab === 'painel_consultor' && (
         <PainelConsultorTab onBack={() => setActiveTab('painel_consultor_hub')} onTabChange={handleTabChange} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} metaConsolidacao={metaConsolidacaoData} />
+      )}
+      {activeTab === 'conferencia_gmd' && (
+        <ConferenciaGmdTab onBack={() => setActiveTab('painel_consultor')} filtroGlobal={{ ano: filtroGlobal.ano, mes: filtroGlobal.mes }} />
       )}
       {activeTab === 'status_fechamentos' && (
         <StatusFechamentosTab
