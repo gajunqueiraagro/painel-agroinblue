@@ -26,6 +26,8 @@ import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as Recharts
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { salvarValorRebanhoMeta, type ValorRebanhoMetaItem } from '@/hooks/useValorRebanhoMeta';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface Props {
