@@ -2,6 +2,10 @@
  * Preços para Meta Anual — Motor de precificação oficial do cenário META.
  * Layout espelhado do ValorRebanhoTab com tema laranja (META).
  * Fonte única de preços para Valor do Rebanho META e Painel do Consultor META.
+ *
+ * Cálculos:
+ *   R$/kg = R$/@ ÷ 30
+ *   R$/cab = Peso × R$/kg
  */
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,6 +21,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { toast } from 'sonner';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 
 interface Props {
   onBack?: () => void;
@@ -53,6 +58,29 @@ interface LinhaTabela {
 
 function fmtArroba(v: number): string {
   return v > 0 ? v.toFixed(2).replace('.', ',') : '0,00';
+}
+
+/* ---------- Mini chart (same as ValorRebanhoTab) ---------- */
+function MiniChart({ data, color, title }: { data: { label: string; value: number | null }[]; color: string; title: string }) {
+  return (
+    <div className="flex-1 min-w-0">
+      <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5 truncate">{title}</p>
+      <div className="h-[150px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+            <XAxis dataKey="label" tick={{ fontSize: 8 }} interval={0} tickLine={false} axisLine={false} />
+            <YAxis hide domain={['auto', 'auto']} />
+            <RechartsTooltip
+              contentStyle={{ fontSize: 10, padding: '2px 6px' }}
+              labelStyle={{ fontSize: 9 }}
+              formatter={(v: number) => [formatNum(v, 1), '']}
+            />
+            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.5} dot={{ r: 2.5, fill: color, strokeWidth: 0 }} activeDot={{ r: 4 }} connectNulls={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
 }
 
 export function MetaPrecoTab({ onBack }: Props) {
@@ -105,14 +133,14 @@ export function MetaPrecoTab({ onBack }: Props) {
     return map;
   }, [viewDataMeta, mes]);
 
-  // Build table rows
+  // Build table rows — R$/kg = R$/@ ÷ 30
   const rows = useMemo<LinhaTabela[]>(() => {
     return ORDEM_CATEGORIAS_FIXA.map(codigo => {
       const metaRow = metaRowsByCategoria.get(codigo);
       const saldo = metaRow?.saldo_final ?? 0;
       const pesoMedio = metaRow?.peso_medio_final ?? 0;
       const precoArroba = precosLocal[codigo] ?? 0;
-      const precoKg = precoArroba > 0 ? precoArroba / 15 : 0;
+      const precoKg = precoArroba > 0 ? precoArroba / 30 : 0;
       const valorCabeca = pesoMedio > 0 && precoKg > 0 ? pesoMedio * precoKg : 0;
       const valorTotal = saldo * pesoMedio * precoKg;
 
@@ -139,8 +167,58 @@ export function MetaPrecoTab({ onBack }: Props) {
     const precoArroba = totalArrobas > 0 ? valor / totalArrobas : 0;
     const valorCabeca = cabecas > 0 ? valor / cabecas : 0;
     const precoKg = pesoTotalKg > 0 ? valor / pesoTotalKg : 0;
-    return { cabecas, pesoMedio, precoKg, precoArroba, valorCabeca, valor };
+    return { cabecas, pesoMedio, precoKg, precoArroba, valorCabeca, valor, totalArrobas };
   }, [rows]);
+
+  // ---------- Chart data (all 12 months) ----------
+  const chartData = useMemo(() => {
+    if (!viewDataMeta) return { valor: [] as any[], arrobas: [] as any[], precoArroba: [] as any[] };
+
+    const valorArr: { label: string; value: number | null }[] = [];
+    const arrobasArr: { label: string; value: number | null }[] = [];
+    const precoArr: { label: string; value: number | null }[] = [];
+
+    for (const m of MESES_SHORT) {
+      const mesNum = Number(m.key);
+      const rowsMes = viewDataMeta.filter(r => r.mes === mesNum);
+
+      // Load prices for this month from precos hook (only current month has local state)
+      // For charts we use the saved precos for all months
+      let totalValor = 0;
+      let totalPesoKg = 0;
+      let totalCab = 0;
+      let hasAnyPrice = false;
+
+      ORDEM_CATEGORIAS_FIXA.forEach(codigo => {
+        const metaRow = rowsMes.find(r => r.categoria_codigo === codigo);
+        const saldo = metaRow?.saldo_final ?? 0;
+        const pesoMedio = metaRow?.peso_medio_final ?? 0;
+
+        // For current month use local state, for others we don't have saved prices easily
+        // We'll use local state only for current month
+        let precoArroba = 0;
+        if (m.key === mes) {
+          precoArroba = precosLocal[codigo] ?? 0;
+        }
+        // For other months we'd need to load from DB — charts will show current month only for now
+        // This is a simplified version; full implementation would load all months' prices
+
+        if (precoArroba > 0) hasAnyPrice = true;
+        const precoKg = precoArroba > 0 ? precoArroba / 30 : 0;
+        totalValor += saldo * pesoMedio * precoKg;
+        totalPesoKg += saldo * pesoMedio;
+        totalCab += saldo;
+      });
+
+      const totalArrobas = totalPesoKg / 30;
+
+      valorArr.push({ label: m.label, value: m.key === mes && hasAnyPrice ? totalValor : null });
+      arrobasArr.push({ label: m.label, value: totalCab > 0 ? totalArrobas : null });
+      precoArr.push({ label: m.label, value: m.key === mes && totalArrobas > 0 && hasAnyPrice ? totalValor / totalArrobas : null });
+    }
+
+    return { valor: valorArr, arrobas: arrobasArr, precoArroba: precoArr };
+  }, [viewDataMeta, mes, precosLocal]);
 
   const temPreenchimento = Object.values(precosLocal).some(v => v > 0);
   const todosPreenchidos = ORDEM_CATEGORIAS_FIXA.every(c => (precosLocal[c] ?? 0) > 0);
@@ -198,44 +276,45 @@ export function MetaPrecoTab({ onBack }: Props) {
   const hasMetaData = metaRowsByCategoria.size > 0;
 
   return (
-    <div className="p-2 w-full space-y-1.5 animate-fade-in pb-16">
-      {/* Back + Toolbar */}
+    <div className="p-1.5 w-full space-y-1 animate-fade-in pb-16">
+      {/* Back */}
       {onBack && (
-        <button onClick={onBack} className="flex items-center gap-1 text-xs text-orange-600 hover:underline">
-          <ArrowLeft className="h-3.5 w-3.5" />
+        <button onClick={onBack} className="flex items-center gap-1 text-[10px] text-orange-600 hover:underline py-0">
+          <ArrowLeft className="h-3 w-3" />
           Voltar para Preços de Mercado
         </button>
       )}
 
-      <div className="flex gap-1.5 items-center flex-wrap">
+      {/* Toolbar — compact */}
+      <div className="flex gap-1 items-center flex-wrap">
         <Select value={ano} onValueChange={setAno}>
-          <SelectTrigger className="w-20 h-7 text-xs font-bold border-orange-300">
+          <SelectTrigger className="w-[68px] h-6 text-[10px] font-bold border-orange-300">
             <SelectValue placeholder="Ano" />
           </SelectTrigger>
           <SelectContent>
             {anos.map(a => (
-              <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
+              <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        <Badge variant="outline" className={`text-[10px] px-2 py-0.5 ${stCfg.color}`}>
-          <StIcon className="h-3 w-3 mr-1" />
+        <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-5 ${stCfg.color}`}>
+          <StIcon className="h-2.5 w-2.5 mr-0.5" />
           {stCfg.label}
         </Badge>
 
         {!isValidado && (
-          <Button variant="outline" size="sm" onClick={handleCopiarMesAnterior} className="gap-1 h-7 text-xs px-2 border-orange-300 text-orange-700 hover:bg-orange-50">
-            <Copy className="h-3 w-3" /> Mês anterior
+          <Button variant="outline" size="sm" onClick={handleCopiarMesAnterior} className="gap-0.5 h-6 text-[10px] px-1.5 border-orange-300 text-orange-700 hover:bg-orange-50">
+            <Copy className="h-2.5 w-2.5" /> Mês anterior
           </Button>
         )}
 
-        <div className="ml-auto flex gap-1.5">
+        <div className="ml-auto flex gap-1">
           {isValidado && isAdmin && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1 h-7 text-xs px-2 border-orange-300 text-orange-700">
-                  <Unlock className="h-3 w-3" /> Reabrir
+                <Button variant="outline" size="sm" className="gap-0.5 h-6 text-[10px] px-1.5 border-orange-300 text-orange-700">
+                  <Unlock className="h-2.5 w-2.5" /> Reabrir
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
@@ -256,16 +335,16 @@ export function MetaPrecoTab({ onBack }: Props) {
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1 h-7 text-xs px-2 border-orange-300 text-orange-700 hover:bg-orange-50"
+                className="gap-0.5 h-6 text-[10px] px-1.5 border-orange-300 text-orange-700 hover:bg-orange-50"
                 onClick={() => handleSalvar(temPreenchimento && !todosPreenchidos ? 'parcial' : 'rascunho')}
                 disabled={saving}
               >
-                <Save className="h-3 w-3" /> Rascunho
+                <Save className="h-2.5 w-2.5" /> Rascunho
               </Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button size="sm" className="gap-1 h-7 text-xs px-3 bg-orange-500 hover:bg-orange-600 text-white" disabled={saving || !todosPreenchidos}>
-                    <CheckCircle className="h-3 w-3" /> Validar
+                  <Button size="sm" className="gap-0.5 h-6 text-[10px] px-2 bg-orange-500 hover:bg-orange-600 text-white" disabled={saving || !todosPreenchidos}>
+                    <CheckCircle className="h-2.5 w-2.5" /> Validar
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
@@ -285,12 +364,12 @@ export function MetaPrecoTab({ onBack }: Props) {
       </div>
 
       {/* Month ruler */}
-      <div className="flex gap-0.5 bg-orange-50 dark:bg-orange-950/20 rounded-md p-0.5 border border-orange-200 dark:border-orange-900/30">
+      <div className="flex gap-0.5 bg-orange-50 dark:bg-orange-950/20 rounded p-0.5 border border-orange-200 dark:border-orange-900/30">
         {MESES_SHORT.map(m => (
           <button
             key={m.key}
             onClick={() => setMes(m.key)}
-            className={`flex-1 text-center text-[11px] font-semibold py-1 rounded transition-colors ${getMesButtonClass(m.key)}`}
+            className={`flex-1 text-center text-[10px] font-semibold py-0.5 rounded transition-colors ${getMesButtonClass(m.key)}`}
           >
             {m.label}
           </button>
@@ -298,8 +377,8 @@ export function MetaPrecoTab({ onBack }: Props) {
       </div>
 
       {!hasMetaData && (
-        <div className="flex items-center gap-1.5 text-[10px] bg-orange-500/10 text-orange-700 dark:text-orange-400 rounded px-2 py-1 border border-orange-500/30">
-          <AlertTriangle className="h-3 w-3 shrink-0" />
+        <div className="flex items-center gap-1 text-[9px] bg-orange-500/10 text-orange-700 dark:text-orange-400 rounded px-2 py-0.5 border border-orange-500/30">
+          <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
           <span>Nenhuma meta de rebanho encontrada para {mesLabel}/{ano}. Defina a Consolidação Meta antes de precificar.</span>
         </div>
       )}
@@ -307,38 +386,39 @@ export function MetaPrecoTab({ onBack }: Props) {
       {loading ? (
         <div className="text-center py-8 text-muted-foreground text-sm">Carregando...</div>
       ) : (
+        <>
         <div className="flex gap-3 items-start">
           {/* Table */}
-          <div className="flex-1 max-w-[55%] min-w-0 bg-card rounded-lg shadow-sm border overflow-x-auto">
+          <div className="flex-1 max-w-[50%] min-w-0 bg-card rounded-lg shadow-sm border overflow-x-auto">
             <table className="w-full text-[11px]">
               <thead>
                 <tr className="border-b bg-orange-500/15">
-                  <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider bg-orange-500/25">Categoria</th>
-                  <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Qtd</th>
-                  <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Peso</th>
-                  <th className="text-center px-1 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider w-[80px]">R$/@</th>
-                  <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">R$/kg</th>
-                  <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">R$/cab</th>
-                  <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Valor Total</th>
+                  <th className="text-center px-1 py-0.5 font-semibold text-foreground text-[9px] uppercase tracking-wider bg-orange-500/25">Categoria</th>
+                  <th className="text-center px-1 py-0.5 font-semibold text-foreground text-[9px] uppercase tracking-wider">Qtd</th>
+                  <th className="text-center px-1 py-0.5 font-semibold text-foreground text-[9px] uppercase tracking-wider">Peso</th>
+                  <th className="text-center px-0.5 py-0.5 font-semibold text-foreground text-[9px] uppercase tracking-wider w-[80px]">R$/@</th>
+                  <th className="text-center px-1 py-0.5 font-semibold text-foreground text-[9px] uppercase tracking-wider">R$/kg</th>
+                  <th className="text-center px-1 py-0.5 font-semibold text-foreground text-[9px] uppercase tracking-wider">R$/cab</th>
+                  <th className="text-center px-1 py-0.5 font-semibold text-foreground text-[9px] uppercase tracking-wider">Valor Total</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={r.codigo} className={`border-b ${i % 2 === 0 ? '' : 'bg-muted/20'}`}>
-                    <td className="px-1.5 py-0.5 text-foreground text-[9.5px] italic whitespace-nowrap bg-orange-500/10">
+                    <td className="px-1 py-0 text-foreground text-[9px] italic whitespace-nowrap bg-orange-500/10">
                       {r.nome}
                     </td>
-                    <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
+                    <td className="px-1 py-0 text-right text-foreground tabular-nums italic text-[9px]">
                       {r.saldo > 0 ? formatNum(r.saldo, 0) : '-'}
                     </td>
-                    <td className="px-1.5 py-0.5 text-right tabular-nums italic text-[9.5px]">
+                    <td className="px-1 py-0 text-right tabular-nums italic text-[9px]">
                       {r.saldo > 0 && r.pesoMedio > 0 ? formatNum(r.pesoMedio, 2) : '-'}
                     </td>
-                    <td className="px-0.5 py-0.5 w-[80px]">
+                    <td className="px-0.5 py-0 w-[80px]">
                       <Input
                         type="text"
                         inputMode="decimal"
-                        className={`h-5 text-right !text-[9px] leading-none tabular-nums italic px-1 w-full border-orange-300 focus:border-orange-500 focus:ring-orange-500/20`}
+                        className="h-[18px] text-right !text-[9px] leading-none tabular-nums italic px-1 w-full border-orange-300 focus:border-orange-500 focus:ring-orange-500/20"
                         placeholder="0,00"
                         value={precosDisplay[r.codigo] ?? ''}
                         onChange={e => handlePrecoChange(r.codigo, e.target.value)}
@@ -346,13 +426,13 @@ export function MetaPrecoTab({ onBack }: Props) {
                         disabled={isValidado}
                       />
                     </td>
-                    <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
+                    <td className="px-1 py-0 text-right text-foreground tabular-nums italic text-[9px]">
                       {r.precoKg > 0 ? formatNum(r.precoKg, 2) : '-'}
                     </td>
-                    <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
+                    <td className="px-1 py-0 text-right text-foreground tabular-nums italic text-[9px]">
                       {r.valorCabeca > 0 ? formatMoeda(r.valorCabeca) : '-'}
                     </td>
-                    <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
+                    <td className="px-1 py-0 text-right text-foreground tabular-nums italic text-[9px]">
                       {r.valorTotal > 0 ? formatMoeda(r.valorTotal) : '-'}
                     </td>
                   </tr>
@@ -360,68 +440,68 @@ export function MetaPrecoTab({ onBack }: Props) {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 bg-orange-500/25">
-                  <td className="px-1.5 py-1 font-bold text-foreground text-[11px] italic bg-orange-500/30">TOTAL</td>
-                  <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">
+                  <td className="px-1 py-0.5 font-bold text-foreground text-[10px] italic bg-orange-500/30">TOTAL</td>
+                  <td className="px-1 py-0.5 text-right font-bold text-foreground tabular-nums italic text-[10px]">
                     {totals.cabecas > 0 ? formatNum(totals.cabecas, 0) : '—'}
                   </td>
-                  <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">
+                  <td className="px-1 py-0.5 text-right text-foreground tabular-nums italic text-[10px]">
                     {totals.pesoMedio > 0 ? formatNum(totals.pesoMedio, 2) : '—'}
                   </td>
-                  <td className="px-1 py-1 text-center text-foreground tabular-nums italic text-[11px] w-[80px]">
+                  <td className="px-0.5 py-0.5 text-center text-foreground tabular-nums italic text-[10px] w-[80px]">
                     {totals.precoArroba > 0 ? formatMoeda(totals.precoArroba) : '—'}
                   </td>
-                  <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">
+                  <td className="px-1 py-0.5 text-right text-foreground tabular-nums italic text-[10px]">
                     {totals.precoKg > 0 ? formatNum(totals.precoKg, 2) : '—'}
                   </td>
-                  <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">
+                  <td className="px-1 py-0.5 text-right text-foreground tabular-nums italic text-[10px]">
                     {totals.valorCabeca > 0 ? formatMoeda(totals.valorCabeca) : '—'}
                   </td>
-                  <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">
+                  <td className="px-1 py-0.5 text-right font-bold text-foreground tabular-nums italic text-[10px]">
                     {totals.valor > 0 ? formatMoeda(totals.valor) : '—'}
                   </td>
                 </tr>
               </tfoot>
             </table>
 
-            <div className="flex items-center justify-end px-1.5 py-0.5 border-t">
-              <p className="text-[9px] text-muted-foreground">
-                R$/kg = R$/@ ÷ 15 • R$/cab = Peso × R$/kg
+            <div className="flex items-center justify-end px-1 py-0 border-t">
+              <p className="text-[8px] text-muted-foreground">
+                R$/kg = R$/@ ÷ 30 • R$/cab = Peso × R$/kg
               </p>
             </div>
           </div>
 
           {/* Summary card */}
-          <div className="min-w-[200px] flex-1 space-y-1.5">
+          <div className="min-w-[200px] flex-1 space-y-1">
             <Card className="bg-orange-500/5 border-orange-500/20">
-              <CardContent className="p-2.5">
+              <CardContent className="p-2">
                 <div className="flex gap-3">
                   <div className="shrink-0">
-                    <p className="text-[9px] text-orange-600 font-medium uppercase tracking-wider">
+                    <p className="text-[8px] text-orange-600 font-medium uppercase tracking-wider">
                       Valor do Rebanho META — {mesLabel}/{ano}
                     </p>
-                    <p className="text-xl font-extrabold text-foreground leading-tight mt-0.5">
+                    <p className="text-lg font-extrabold text-foreground leading-tight mt-0.5">
                       {totals.valor > 0 ? formatMoeda(totals.valor) : '—'}
                     </p>
-                    <p className="text-[9px] text-muted-foreground mt-1">
+                    <p className="text-[8px] text-muted-foreground mt-0.5">
                       Cenário de planejamento
                     </p>
                   </div>
 
                   <div className="flex-1 min-w-0 text-[10px] ml-4">
                     <div className="grid grid-cols-[auto_80px] gap-x-2 items-center">
-                      <span className="text-[8px] text-muted-foreground font-medium">Indicador</span>
-                      <span className="text-[8px] text-muted-foreground font-medium text-right">Valor</span>
+                      <span className="text-[7px] text-muted-foreground font-medium">Indicador</span>
+                      <span className="text-[7px] text-muted-foreground font-medium text-right">Valor</span>
 
                       {[
                         { label: 'Cabeças', value: totals.cabecas > 0 ? formatNum(totals.cabecas, 0) : '—' },
                         { label: 'Peso médio', value: totals.pesoMedio > 0 ? `${formatNum(totals.pesoMedio, 2)} kg` : '—' },
                         { label: 'R$/@ médio', value: totals.precoArroba > 0 ? formatMoeda(totals.precoArroba) : '—' },
                         { label: 'R$/cab', value: totals.valorCabeca > 0 ? formatMoeda(totals.valorCabeca) : '—' },
-                        { label: '@s estoque', value: totals.cabecas > 0 ? formatNum(rows.reduce((s, r) => s + r.saldo * r.pesoMedio, 0) / 30, 2) : '—' },
+                        { label: '@s estoque', value: totals.totalArrobas > 0 ? formatNum(totals.totalArrobas, 2) : '—' },
                       ].map(ind => (
                         <React.Fragment key={ind.label}>
-                          <span className="text-muted-foreground text-[9px] truncate">{ind.label}</span>
-                          <span className="text-right font-semibold text-foreground tabular-nums">{ind.value}</span>
+                          <span className="text-muted-foreground text-[8px] truncate">{ind.label}</span>
+                          <span className="text-right font-semibold text-foreground tabular-nums text-[9px]">{ind.value}</span>
                         </React.Fragment>
                       ))}
                     </div>
@@ -430,20 +510,15 @@ export function MetaPrecoTab({ onBack }: Props) {
               </CardContent>
             </Card>
 
-            <Card className="border-orange-200 dark:border-orange-900/30">
-              <CardContent className="p-2.5">
-                <p className="text-[9px] text-orange-600 font-medium uppercase tracking-wider mb-1">Sobre esta tela</p>
-                <ul className="text-[9px] text-muted-foreground space-y-0.5 list-disc pl-3">
-                  <li>Base única de precificação META</li>
-                  <li>Alimenta Painel do Consultor (META)</li>
-                  <li>Alimenta Valor do Rebanho (META)</li>
-                  <li>Preços definidos por categoria em R$/@</li>
-                  <li>Sem preço → sem valor calculado</li>
-                </ul>
-              </CardContent>
-            </Card>
+            {/* Mini charts — same structure as Valor do Rebanho */}
+            <div className="flex gap-3">
+              <MiniChart data={chartData.valor} color="hsl(25, 95%, 53%)" title="Valor do Rebanho" />
+              <MiniChart data={chartData.arrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
+              <MiniChart data={chartData.precoArroba} color="hsl(25, 80%, 45%)" title="R$/@ Médio" />
+            </div>
           </div>
         </div>
+        </>
       )}
     </div>
   );
