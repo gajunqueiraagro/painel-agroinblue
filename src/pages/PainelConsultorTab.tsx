@@ -1070,12 +1070,17 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
       // Valor reb. ini META: Jan = realizado Dez ano anterior, Fev+ = META final mês anterior
       const valorRebIniMeta = [valorRebanhoMes[0] ?? 0, ...valorRebanhoMetaMes.slice(0, 11)];
 
+      // Dez realizado validado — snapshot base para Jan da META
+      const dezSnap = realPesoSnap.arrobas[0] > 0
+        ? { cabecas: realPesoSnap.cabecas[0], pesoMedioKg: realPesoSnap.pesoMedio[0], arrobas: realPesoSnap.arrobas[0] }
+        : undefined;
+
       // Consolidação Meta valida os blocos zootécnicos; valor do rebanho vem do snapshot validado
       if (metaConsolidacao && metaConsolidacao.length > 0) {
-        return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap);
+        return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap);
       }
 
-      return buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes, metaPesoSnap);
+      return buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap);
     }
     // Realizado: slice(1) removes Dec prev year index for 12-month arrays
     const realPesoSnap12: PesoSnapshot = {
