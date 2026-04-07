@@ -1491,7 +1491,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             pesoKg: Number(pesoKg) || 0,
             data,
             categoria,
-            effectiveStatusOp,
+            statusOp: effectiveStatusOp,
             fazendaOrigem,
             fornecedorId: compraFornecedorId,
           });
