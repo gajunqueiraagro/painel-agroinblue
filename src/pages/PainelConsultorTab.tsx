@@ -1079,9 +1079,9 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     <div className="overflow-x-auto border rounded border-border/40 -mx-2 sm:mx-0">
       <table className="text-[10px] border-collapse" style={{ tableLayout: 'fixed', minWidth: '780px' }}>
         <colgroup>
-          <col style={{ width: '120px', minWidth: '120px' }} />
-          {MESES_LABELS.map((_, i) => <col key={i} style={{ width: '58px', minWidth: '58px' }} />)}
-          <col style={{ width: '68px', minWidth: '68px' }} />
+          <col style={{ width: '100px', minWidth: '100px' }} />
+          {MESES_LABELS.map((_, i) => <col key={i} style={{ width: '54px', minWidth: '54px' }} />)}
+          <col style={{ width: '60px', minWidth: '60px' }} />
         </colgroup>
         <thead className="sticky top-0 z-10">
           <tr className="bg-muted border-b">
