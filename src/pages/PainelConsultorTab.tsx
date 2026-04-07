@@ -1014,8 +1014,8 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
       return buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes);
     }
-    return buildBlocosForTab(monthlyData, viewTab);
-  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacao, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes]);
+    return buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1));
+  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacao, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes]);
 
   useEffect(() => {
     if (blocos.length > 0) {
