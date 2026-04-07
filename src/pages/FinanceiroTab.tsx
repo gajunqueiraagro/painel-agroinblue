@@ -349,8 +349,6 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
       })()}
     </table>
   );
-    </table>
-  );
 }
 
 function AbateTable({ lancamentos, onEdit, isGlobal, fazendaMap }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; isGlobal?: boolean; fazendaMap?: Map<string, string> }) {
