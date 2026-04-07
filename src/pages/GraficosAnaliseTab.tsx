@@ -41,7 +41,7 @@ const GRID = { strokeDasharray: '3 3', stroke: 'hsl(var(--border))', strokeOpaci
 const AXIS_TICK = { fontSize: 10, fill: 'hsl(var(--muted-foreground))' };
 
 const isConciliado = (l: FinanceiroLancamento) =>
-  (l.status_transacao || '').toLowerCase() === 'conciliado';
+  (l.status_transacao || '').toLowerCase() === 'realizado';
 
 const datePagtoAnoMes = (l: FinanceiroLancamento): string | null => {
   if (!l.data_pagamento || l.data_pagamento.length < 7) return null;

@@ -23,13 +23,13 @@ export interface MovSummary {
 }
 
 /** Status de conciliação único no sistema */
-export type ConciliacaoStatus = 'conciliado' | 'atencao' | 'nao_conciliado' | 'pendente';
+export type ConciliacaoStatus = 'realizado' | 'atencao' | 'nao_conciliado' | 'pendente';
 
 /**
  * Only these status_transacao values count as "realised" for reconciliation.
  * Used as filter in Supabase queries and client-side checks.
  */
-export const STATUS_REALIZADOS = ['conciliado'] as const;
+export const STATUS_REALIZADOS = ['realizado'] as const;
 
 /**
  * Build a per-account/per-month movement summary from a list of lancamentos.
@@ -83,7 +83,7 @@ export function calcConciliacaoDiff(
 export function getConciliacaoStatus(diferenca: number, saldoExtrato: number | null): ConciliacaoStatus {
   if (saldoExtrato === null) return 'pendente';
   const abs = Math.abs(diferenca);
-  if (abs < 0.01) return 'conciliado';
+  if (abs < 0.01) return 'realizado';
   if (abs <= 100) return 'atencao';
   return 'nao_conciliado';
 }

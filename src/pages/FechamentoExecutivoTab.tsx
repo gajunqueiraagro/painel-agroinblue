@@ -89,7 +89,7 @@ export function FechamentoExecutivoTab({ onBack, filtroAnoInicial, filtroMesInic
     const lancs = finData || [];
 
     // Financial aggregations
-    const conciliados = lancs.filter(l => (l.status_transacao || '').toLowerCase().trim() === 'conciliado');
+    const conciliados = lancs.filter(l => (l.status_transacao || '').toLowerCase().trim() === 'realizado');
     const entradas = conciliados.filter(l => (l.tipo_operacao || '').startsWith('1'));
     const saidas = conciliados.filter(l => (l.tipo_operacao || '').startsWith('2'));
 

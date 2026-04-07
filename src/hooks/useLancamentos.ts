@@ -76,7 +76,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
           valorTotal: l.valor_total ?? undefined,
           notaFiscal: l.nota_fiscal ?? undefined,
           tipoPeso: l.tipo_peso ?? 'vivo',
-          statusOperacional: l.status_operacional ?? 'conciliado',
+          statusOperacional: l.status_operacional ?? 'realizado',
           dataVenda: l.data_venda ?? undefined,
           dataEmbarque: l.data_embarque ?? undefined,
           dataAbate: l.data_abate ?? undefined,
@@ -156,7 +156,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         valorTotal: l.valor_total ?? undefined,
         notaFiscal: l.nota_fiscal ?? undefined,
         tipoPeso: l.tipo_peso ?? 'vivo',
-        statusOperacional: l.status_operacional ?? 'conciliado',
+        statusOperacional: l.status_operacional ?? 'realizado',
         dataVenda: l.data_venda ?? undefined,
         dataEmbarque: l.data_embarque ?? undefined,
         dataAbate: l.data_abate ?? undefined,
@@ -268,7 +268,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       valor_total: lancamento.valorTotal || null,
       nota_fiscal: lancamento.notaFiscal || null,
       tipo_peso: lancamento.tipoPeso || 'vivo',
-      status_operacional: lancamento.statusOperacional || 'conciliado',
+      status_operacional: cenario === 'meta' ? null : (lancamento.statusOperacional || 'realizado'),
       data_venda: lancamento.dataVenda || null,
       data_embarque: lancamento.dataEmbarque || null,
       data_abate: lancamento.dataAbate || null,
@@ -292,12 +292,10 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       return undefined;
     }
 
-    const cenarioEfetivo = insertData.status_operacional === 'previsto' ? 'meta' : cenario;
-
     const { data, error } = await supabase.from('lancamentos').insert({
       fazenda_id: fazendaId,
       cliente_id: clienteId!,
-      cenario: cenarioEfetivo,
+      cenario,
       ...insertData,
     }).select().single();
 
@@ -334,7 +332,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         valorTotal: data.valor_total ?? undefined,
         notaFiscal: data.nota_fiscal ?? undefined,
         tipoPeso: (data.tipo_peso as 'vivo' | 'morto') ?? 'vivo',
-        statusOperacional: (data.status_operacional as StatusOperacional) ?? 'conciliado',
+        statusOperacional: (data.status_operacional as StatusOperacional) ?? 'realizado',
         dataVenda: (data as any).data_venda ?? undefined,
         dataEmbarque: (data as any).data_embarque ?? undefined,
         dataAbate: (data as any).data_abate ?? undefined,
@@ -379,11 +377,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     if (dados.tipoPeso !== undefined) update.tipo_peso = dados.tipoPeso;
     if (dados.statusOperacional !== undefined) {
       update.status_operacional = dados.statusOperacional;
-      if (dados.statusOperacional === 'previsto') {
-        update.cenario = 'meta';
-      } else {
-        update.cenario = 'realizado';
-      }
+      // cenario is set by the hook's parameter, not derived from status
     }
     if (dados.dataVenda !== undefined) update.data_venda = dados.dataVenda;
     if (dados.dataEmbarque !== undefined) update.data_embarque = dados.dataEmbarque;

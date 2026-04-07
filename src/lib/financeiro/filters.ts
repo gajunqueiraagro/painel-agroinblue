@@ -5,7 +5,7 @@
  * Qualquer alteração aqui impacta ambos os módulos.
  *
  * Regras:
- * - Conciliado: status_transacao (lowercase, trimmed) === 'conciliado'
+ * - Conciliado: status_transacao (lowercase, trimmed) === 'realizado'
  * - Entrada: tipo_operacao começa com '1'
  * - Saída: tipo_operacao começa com '2'
  * - Data base: data_pagamento (YYYY-MM-DD ou YYYY-MM)
@@ -27,7 +27,7 @@ const normTipo = (v: string | null | undefined): string =>
 
 /** Lançamento conciliado? */
 export const isConciliado = (l: FinanceiroLancamentoBase): boolean =>
-  norm(l.status_transacao) === 'conciliado';
+  norm(l.status_transacao) === 'realizado';
 
 /**
  * Lançamento de entrada — somente tipo_operacao 1*
@@ -107,7 +107,7 @@ export function calcFinanceiroFromLancamentos(
     // Auditoria
     audit: {
       base: 'financeiro_lancamentos_v2',
-      filtroStatus: 'conciliado',
+      filtroStatus: 'realizado',
       filtroData: 'data_pagamento',
       classificacao: 'tipo_operacao: 1*=entrada, 2*=saída, 3*=transferência (resgate=entrada, aplicação=saída)',
       periodo: `${mesesRange[0]} a ${mesesRange[mesesRange.length - 1]}`,

@@ -65,10 +65,10 @@ interface Props {
   categoria: string;
   dataVenda: string;
   compradorNome: string;
-  statusOperacional?: 'previsto' | 'confirmado' | 'conciliado';
+  statusOperacional?: 'previsto' | 'programado' | 'agendado' | 'realizado';
 }
 
-export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quantidade, pesoKg, categoria, dataVenda, compradorNome, statusOperacional = 'conciliado' }: Props) {
+export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quantidade, pesoKg, categoria, dataVenda, compradorNome, statusOperacional = 'realizado' }: Props) {
   const [tipoVenda, setTipoVenda] = useState<TipoVendaPe>(initialData.tipoVenda);
   const [tipoPreco, setTipoPreco] = useState<TipoPrecoVenda>(initialData.tipoPreco);
   const [precoInput, setPrecoInput] = useState(initialData.precoInput);
@@ -110,7 +110,7 @@ export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quanti
   const peso = pesoKg || 0;
   const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria || '-';
 
-  const isPrevisto = statusOperacional === 'previsto' || statusOperacional === 'confirmado';
+  const isPrevisto = statusOperacional === 'previsto' || statusOperacional === 'programado';
   const labelSuffix = isPrevisto ? ' Prev.' : '';
 
   // ── Use engine as single source of truth ──

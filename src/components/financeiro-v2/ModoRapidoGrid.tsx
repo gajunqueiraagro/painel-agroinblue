@@ -35,8 +35,8 @@ interface Props {
 }
 
 const TIPOS = ['1-Entradas', '2-Saídas', '3-Transferências'];
-const STATUS_LIST = ['previsto', 'agendado', 'confirmado', 'conciliado'];
-const STATUS_UI_LABEL: Record<string, string> = { previsto: STATUS_LABEL_MAP.previsto, agendado: 'Agendado', confirmado: STATUS_LABEL_MAP.confirmado, conciliado: STATUS_LABEL_MAP.conciliado };
+const STATUS_LIST = ['previsto', 'agendado', 'programado', 'realizado'];
+const STATUS_UI_LABEL: Record<string, string> = { previsto: STATUS_LABEL_MAP.previsto, agendado: 'Agendado', programado: STATUS_LABEL_MAP.programado, realizado: STATUS_LABEL_MAP.realizado };
 
 const COLS = ['data_competencia', 'data_pagamento', 'tipo_operacao', 'conta_bancaria_id', 'descricao', 'valor', 'subcentro', 'status_transacao'] as const;
 type ColKey = typeof COLS[number];

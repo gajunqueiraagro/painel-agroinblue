@@ -44,7 +44,7 @@ interface Props {
 // ---------------------------------------------------------------------------
 
 const isConciliado = (l: FinanceiroLancamento) =>
-  (l.status_transacao || '').toLowerCase() === 'conciliado';
+  (l.status_transacao || '').toLowerCase() === 'realizado';
 
 const datePagtoAnoMes = (l: FinanceiroLancamento): string | null => {
   if (!l.data_pagamento || l.data_pagamento.length < 7) return null;

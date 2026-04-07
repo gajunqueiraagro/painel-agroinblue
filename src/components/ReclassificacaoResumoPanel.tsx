@@ -22,9 +22,9 @@ function fmt(v: number | null, dec = 1) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 
-const STATUS_COLORS: Record<StatusOperacional, { text: string; bg: string }> = {
-  conciliado: { text: 'text-green-600', bg: 'bg-green-500' },
-  confirmado: { text: 'text-blue-600', bg: 'bg-blue-500' },
+const STATUS_COLORS: Partial<Record<StatusOperacional, { text: string; bg: string }>> = {
+  realizado: { text: 'text-green-600', bg: 'bg-green-500' },
+  programado: { text: 'text-blue-600', bg: 'bg-blue-500' },
   previsto: { text: 'text-orange-600', bg: 'bg-orange-500' },
 };
 

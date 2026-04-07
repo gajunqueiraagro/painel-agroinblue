@@ -94,16 +94,16 @@ const ABA_CONFIG: { id: Aba; label: string; icon: React.ReactNode }[] = [
   { id: 'historico', label: 'Histórico', icon: <Clock className="h-4 w-4" /> },
 ];
 
-const STATUS_DESCRIPTIONS_DEFAULT: Record<StatusOperacional, string> = {
+const STATUS_DESCRIPTIONS_DEFAULT: Partial<Record<StatusOperacional, string>> = {
   previsto: 'Planejamento (meta). Alimenta o fluxo de caixa previsto, sem impacto no financeiro real.',
-  confirmado: 'Operação já definida, ainda não executada. Quando concluída, alterar para Realizado.',
-  conciliado: 'Operação já realizada. Impacta rebanho e financeiro real.',
+  programado: 'Operação definida, ainda não executada.',
+  realizado: 'Operação concluída. Impacta rebanho e financeiro.',
 };
 
-const STATUS_DESCRIPTIONS_ABATE: Record<StatusOperacional, string> = {
+const STATUS_DESCRIPTIONS_ABATE: Partial<Record<StatusOperacional, string>> = {
   previsto: 'Planejamento (meta). Gera lançamentos previstos que alimentam o fluxo de caixa previsto.',
-  confirmado: 'Venda fechada e animais escalados, mas o abate ainda não ocorreu. Os dados ainda são previsões operacionais e financeiras.',
-  conciliado: 'Abate concluído com dados reais de carcaça, bônus e descontos. Os valores refletem o resultado efetivo da operação.',
+  programado: 'Venda fechada e animais escalados, mas o abate ainda não ocorreu. Os dados ainda são previsões operacionais e financeiras.',
+  realizado: 'Abate concluído com dados reais de carcaça, bônus e descontos. Os valores refletem o resultado efetivo da operação.',
 };
 
 function getStatusDescription(tipo: TipoMovimentacao, status: StatusOperacional): string {
@@ -228,7 +228,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   const internalEditOrigin = useRef<{ aba: Aba; anoFiltro: string; mesFiltro: string } | null>(null);
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
-  const [statusOp, setStatusOp] = useState<StatusOperacional>('conciliado');
+  const [statusOp, setStatusOp] = useState<StatusOperacional>('realizado');
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const reclassState = useReclassificacaoState({ onAdicionar, dataInicial, lancamentos, ano: Number(anoFiltro) });
@@ -296,8 +296,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
 
   const isPrevisto = statusOp === 'previsto';
-  const isConfirmado = statusOp === 'confirmado';
-  const isConciliado = statusOp === 'conciliado';
+  const isConfirmado = statusOp === 'programado';
+  const isConciliado = statusOp === 'realizado';
   const isAbate = tipo === 'abate';
   const isNascimento = tipo === 'nascimento';
   const isMorte = tipo === 'morte';
@@ -555,7 +555,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setFazendaOrigem('');
     setFazendaDestino('');
     setData('');
-    setStatusOp('conciliado');
+    setStatusOp('realizado');
     setLastSavedLancamentoId(null);
     setEditingAbateId(null);
     setDetalheId(null);
@@ -576,7 +576,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setQuantidade(''); setCategoria(''); setPesoKg('');
     setFazendaOrigem(''); setFazendaDestino('');
     setData(format(new Date(), 'yyyy-MM-dd'));
-    setObservacao(''); setStatusOp('conciliado');
+    setObservacao(''); setStatusOp('realizado');
     resetFinancialFields();
     // Restore internal origin context if editing from within the same tab
     const ctx = internalEditOrigin.current;
@@ -618,7 +618,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setFazendaOrigem(l.fazendaOrigem || '');
     setFazendaDestino(l.fazendaDestino || '');
     setObservacao(l.observacao || '');
-    setStatusOp((l.statusOperacional as StatusOperacional) || 'conciliado');
+    setStatusOp((l.statusOperacional as StatusOperacional) || 'realizado');
     setNotaFiscal(l.notaFiscal || '');
 
     // 3. Check for snapshot first (PRIORITY 1)
@@ -859,7 +859,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setFazendaOrigem(l.fazendaOrigem || '');
     setFazendaDestino(l.fazendaDestino || '');
     setObservacao(l.observacao || '');
-    setStatusOp((l.statusOperacional as StatusOperacional) || 'conciliado');
+    setStatusOp((l.statusOperacional as StatusOperacional) || 'realizado');
     setNotaFiscal(l.notaFiscal || '');
 
     // 3. Fornecedor: use pendingFornecedorMatch ref for robust loading
@@ -1042,7 +1042,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setFazendaOrigem(l.fazendaOrigem || '');
     setFazendaDestino(l.fazendaDestino || '');
     setObservacao(l.observacao || '');
-    setStatusOp((l.statusOperacional as StatusOperacional) || 'conciliado');
+    setStatusOp((l.statusOperacional as StatusOperacional) || 'realizado');
     setNotaFiscal(l.notaFiscal || '');
 
     // Fornecedor: use pendingFornecedorMatch ref for robust loading
@@ -1173,7 +1173,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setFazendaOrigem(l.fazendaOrigem || '');
     setFazendaDestino(l.fazendaDestino || '');
     setObservacao(l.observacao || '');
-    setStatusOp((l.statusOperacional as StatusOperacional) || 'conciliado');
+    setStatusOp((l.statusOperacional as StatusOperacional) || 'realizado');
 
     // Hydrate from snapshot
     const snap = l.detalhesSnapshot;
@@ -1263,7 +1263,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         if (compraDetalhes.tipoPreco === 'por_cab') return (Number(quantidade) || 0) * (Number(compraDetalhes.precoCab) || 0);
         return Number(compraDetalhes.valorTotal) || 0;
       })();
-      if ((statusOp === 'confirmado' || statusOp === 'conciliado') && valorBase <= 0) {
+      if ((statusOp === 'programado' || statusOp === 'realizado') && valorBase <= 0) {
         toast.error('Preencha o preço base antes de registrar a compra.');
         return;
       }
@@ -1456,7 +1456,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
           setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('conciliado');
+          setObservacao(''); setStatusOp('realizado');
           resetFinancialFields();
           toast.success('Abate atualizado com financeiro!');
           restoreEditOrigin();
@@ -1471,7 +1471,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
           setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('conciliado');
+          setObservacao(''); setStatusOp('realizado');
           resetFinancialFields();
           toast.success('Venda atualizada com financeiro!');
           restoreEditOrigin();
@@ -1495,7 +1495,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
           setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('conciliado');
+          setObservacao(''); setStatusOp('realizado');
           resetFinancialFields();
           setCompraDetalhes(null);
           toast.success('Compra atualizada com financeiro!');
@@ -1506,7 +1506,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
           setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('conciliado');
+          setObservacao(''); setStatusOp('realizado');
           resetFinancialFields();
           toast.success('Registro atualizado com sucesso!');
           restoreEditOrigin();
@@ -1537,7 +1537,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
           setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('conciliado');
+          setObservacao(''); setStatusOp('realizado');
           resetFinancialFields();
           toast.success('Compra registrada com sucesso!');
         } else if (isAbate && (isConciliado || isConfirmado || isPrevisto) && returnedId) {
@@ -1549,7 +1549,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
           setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('conciliado');
+          setObservacao(''); setStatusOp('realizado');
           resetFinancialFields();
           toast.success('Abate registrado com financeiro!');
         } else if (isVenda && returnedId) {
@@ -1564,7 +1564,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
           setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('conciliado');
+          setObservacao(''); setStatusOp('realizado');
           resetFinancialFields();
           toast.success('Venda registrada com sucesso!');
         } else if (isConsumo && returnedId) {
@@ -1576,7 +1576,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
           setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('conciliado');
+          setObservacao(''); setStatusOp('realizado');
           resetFinancialFields();
           toast.success('Consumo registrado com sucesso!');
         } else if (returnedId) {
@@ -1585,7 +1585,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setPesoKg(tipo === 'nascimento' ? '30' : '');
           setFazendaOrigem(''); setFazendaDestino('');
           setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('conciliado');
+          setObservacao(''); setStatusOp('realizado');
           resetFinancialFields();
           toast.success('Lançamento registrado!');
         } else if (!returnedId) {
@@ -2247,8 +2247,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide shrink-0">Status</span>
           <div className="grid grid-cols-3 gap-1 flex-1">
             {([
-              { value: 'conciliado' as StatusOperacional, label: STATUS_LABEL.conciliado, dot: 'bg-green-600', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
-              { value: 'confirmado' as StatusOperacional, label: STATUS_LABEL.confirmado, dot: 'bg-blue-500', activeBorder: 'border-blue-400', activeBg: 'bg-blue-50 dark:bg-blue-950/30' },
+              { value: 'realizado' as StatusOperacional, label: STATUS_LABEL.realizado, dot: 'bg-green-600', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
+              { value: 'programado' as StatusOperacional, label: STATUS_LABEL.programado, dot: 'bg-blue-500', activeBorder: 'border-blue-400', activeBg: 'bg-blue-50 dark:bg-blue-950/30' },
               { value: 'previsto' as StatusOperacional, label: STATUS_LABEL.previsto, dot: 'bg-orange-500', activeBorder: 'border-orange-400', activeBg: 'bg-orange-50 dark:bg-orange-950/30' },
             ]).map(s => {
               const selected = statusOp === s.value;
@@ -2269,7 +2269,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           </div>
         </div>
         <div className={`rounded-md border px-2 py-1 text-[9px] leading-snug ${
-          statusOp === 'conciliado' ? 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-800 text-green-800 dark:text-green-300'
+          statusOp === 'realizado' ? 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-800 text-green-800 dark:text-green-300'
           : statusOp === 'previsto' ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-800 text-orange-800 dark:text-orange-300'
           : 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-300'
         }`}>
@@ -2505,7 +2505,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-0.5 shrink-0">
-                  {l.tipo === 'abate' && (l.statusOperacional === 'confirmado' || l.statusOperacional === 'conciliado') && (
+                  {l.tipo === 'abate' && (l.statusOperacional === 'programado' || l.statusOperacional === 'realizado') && (
                     <AbateExportDialog lancamento={l} fazendaNome={nomeFazenda} />
                   )}
                   {(() => {

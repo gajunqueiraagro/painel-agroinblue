@@ -1,12 +1,12 @@
 export const TIPO_OPERACAO_TRANSFERENCIA = '3-Transferência';
 
-type StatusTransacaoNormalizada = 'previsto' | 'agendado' | 'confirmado' | 'conciliado';
+type StatusTransacaoNormalizada = 'previsto' | 'agendado' | 'programado' | 'realizado';
 
 const STATUS_TRANSACAO_VALIDOS = new Set<StatusTransacaoNormalizada>([
   'previsto',
   'agendado',
-  'confirmado',
-  'conciliado',
+  'programado',
+  'realizado',
 ]);
 
 export function isTransferenciaTipo(tipoOperacao?: string | null): boolean {

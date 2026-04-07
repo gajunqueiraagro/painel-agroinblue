@@ -33,7 +33,7 @@ export interface VendaCalculationInput {
   fazendaOrigem: string;
   compradorNome: string;
   data: string;
-  statusOperacional: 'previsto' | 'confirmado' | 'conciliado';
+  statusOperacional: 'previsto' | 'programado' | 'agendado' | 'realizado';
   observacao?: string;
 
   // Preço — prioridade: por_arroba > por_kg > por_cab
@@ -70,7 +70,7 @@ export interface VendaCalculation {
   fazendaOrigem: string;
   compradorNome: string;
   data: string;
-  statusOperacional: 'previsto' | 'confirmado' | 'conciliado';
+  statusOperacional: 'previsto' | 'programado' | 'agendado' | 'realizado';
   observacao: string;
   tipoVenda: string;
   tipoPreco: TipoPrecoVenda;

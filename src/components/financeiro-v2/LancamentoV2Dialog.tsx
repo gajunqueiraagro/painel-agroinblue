@@ -41,8 +41,8 @@ const TIPOS_OPERACAO = [
 const STATUS_OPTIONS = [
   { value: 'previsto', label: STATUS_LABEL.previsto },
   { value: 'agendado', label: 'Agendado' },
-  { value: 'confirmado', label: STATUS_LABEL.confirmado },
-  { value: 'conciliado', label: STATUS_LABEL.conciliado },
+  { value: 'programado', label: STATUS_LABEL.programado },
+  { value: 'realizado', label: STATUS_LABEL.realizado },
 ];
 
 function deriveStatus(dataPagamento: string): string {
@@ -521,7 +521,7 @@ export function LancamentoV2Dialog({
 
   const handleDataPagamentoChange = (val: string) => {
     setDataPagamento(val);
-    if (statusTransacao !== 'conciliado') {
+    if (statusTransacao !== 'realizado') {
       setStatusTransacao(deriveStatus(val));
     }
   };
@@ -701,7 +701,7 @@ export function LancamentoV2Dialog({
           data_pagamento: row.dataPagamento || dataPagamento,
           valor: parcelaVal,
           tipo_operacao: tipoOperacao,
-          status_transacao: 'confirmado',
+          status_transacao: 'programado',
           descricao: parcelaDesc,
           macro_custo: macroCusto,
           centro_custo: centroCusto,

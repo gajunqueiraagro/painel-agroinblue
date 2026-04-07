@@ -47,7 +47,7 @@ const normTipo = (v: string | null | undefined): string =>
 
 /** Lançamento conciliado? */
 export const isConciliado = (l: LancamentoClassificavel): boolean =>
-  norm(l.status_transacao) === 'conciliado';
+  norm(l.status_transacao) === 'realizado';
 
 /** É entrada (tipo_operacao 1*) */
 export const isEntrada = (l: LancamentoClassificavel): boolean => {

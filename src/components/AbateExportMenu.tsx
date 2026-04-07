@@ -231,7 +231,7 @@ async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
   doc.text(splitObs, 20, yObs);
   doc.setTextColor(0, 0, 0);
 
-  doc.save(`escala_confirmado_${format(parseISO(l.data), 'ddMMyyyy')}.pdf`);
+  doc.save(`escala_programado_${format(parseISO(l.data), 'ddMMyyyy')}.pdf`);
 }
 
 // ── PDF Realizado ──
@@ -308,8 +308,8 @@ async function pdfRealizado(l: Lancamento, fazendaNome?: string) {
 // ── Component: botões inline para o detalhe ──
 export function AbateShareButtons({ lancamento, fazendaNome }: { lancamento: Lancamento; fazendaNome?: string }) {
   const status = getStatus(lancamento);
-  if (status !== 'confirmado' && status !== 'conciliado') return null;
-  const isConfirmado = status === 'confirmado';
+  if (status !== 'programado' && status !== 'realizado') return null;
+  const isConfirmado = status === 'programado';
   const label = isConfirmado ? 'Escala' : 'Abate Final';
 
   return (
@@ -335,8 +335,8 @@ export function AbateShareButtons({ lancamento, fazendaNome }: { lancamento: Lan
 export function AbateExportDialog({ lancamento, fazendaNome }: { lancamento: Lancamento; fazendaNome?: string }) {
   const [open, setOpen] = useState(false);
   const status = getStatus(lancamento);
-  if (status !== 'confirmado' && status !== 'conciliado') return null;
-  const isConfirmado = status === 'confirmado';
+  if (status !== 'programado' && status !== 'realizado') return null;
+  const isConfirmado = status === 'programado';
   const titulo = isConfirmado ? 'Compartilhar Escala' : 'Compartilhar Abate Final';
 
   return (

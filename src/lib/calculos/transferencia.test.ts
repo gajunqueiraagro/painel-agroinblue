@@ -15,7 +15,7 @@ function baseInput(overrides: Partial<TransferenciaCalculationInput> = {}): Tran
     fazendaOrigem: 'Fazenda A',
     fazendaDestino: 'Fazenda B',
     data: '2025-06-15',
-    statusOperacional: 'confirmado',
+    statusOperacional: 'programado',
     ...overrides,
   };
 }

@@ -27,7 +27,7 @@ export interface TransferenciaCalculationInput {
   fazendaOrigem: string;
   fazendaDestino: string;
   data: string;
-  statusOperacional: 'previsto' | 'confirmado' | 'conciliado';
+  statusOperacional: 'previsto' | 'programado' | 'agendado' | 'realizado';
   observacao?: string;
   // Econômico / gerencial (opcional)
   precoReferenciaArroba?: number | string | null;   // R$/@
@@ -46,7 +46,7 @@ export interface TransferenciaCalculation {
   fazendaOrigem: string;
   fazendaDestino: string;
   data: string;
-  statusOperacional: 'previsto' | 'confirmado' | 'conciliado';
+  statusOperacional: 'previsto' | 'programado' | 'agendado' | 'realizado';
   observacao: string;
 
   // Econômico (gerencial — não gera financeiro)
