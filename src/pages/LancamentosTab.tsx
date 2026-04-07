@@ -300,7 +300,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const isCenarioMeta = statusOp === 'meta';
   /** StatusOperacional efetivo para passar a componentes que não conhecem 'meta' */
   const effectiveStatusOp: StatusOperacional = isCenarioMeta ? 'programado' : statusOp as StatusOperacional;
-  const isPrevisto = isCenarioMeta; // Meta usa estilo laranja (anteriormente "Previsto")
+  const isMeta = isCenarioMeta; // Meta usa estilo laranja
   const isConfirmado = statusOp === 'programado';
   const isConciliado = statusOp === 'realizado';
   const isAbate = tipo === 'abate';
@@ -1451,7 +1451,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     try {
       if (editingAbateId) {
         onEditar(editingAbateId, lancamentoDados);
-        if (isAbate && (isConciliado || isConfirmado || isPrevisto)) {
+        if (isAbate && (isConciliado || isConfirmado || isMeta)) {
           // Auto-generate/update financeiro for abate
           if (abateFinanceiroRef.current) {
             await abateFinanceiroRef.current.generateFinanceiro(editingAbateId);
@@ -1545,7 +1545,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('realizado');
           resetFinancialFields();
           toast.success('Compra registrada com sucesso!');
-        } else if (isAbate && (isConciliado || isConfirmado || isPrevisto) && returnedId) {
+        } else if (isAbate && (isConciliado || isConfirmado || isMeta) && returnedId) {
           // Auto-generate financeiro for abate (like Compras)
           if (abateFinanceiroRef.current) {
             await abateFinanceiroRef.current.generateFinanceiro(returnedId);
@@ -2065,10 +2065,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       )}
 
       {calc.valorBruto > 0 && (
-        <div className={`rounded-md p-2 text-[12px] ${isPrevisto ? 'bg-orange-100 dark:bg-orange-950/30' : 'bg-muted/30'}`}>
+        <div className={`rounded-md p-2 text-[12px] ${isMeta ? 'bg-orange-100 dark:bg-orange-950/30' : 'bg-muted/30'}`}>
           <div className="flex justify-between">
-            <span className={isPrevisto ? 'text-orange-700 dark:text-orange-400' : 'text-muted-foreground'}>Valor total bruto</span>
-            <strong className={isPrevisto ? 'text-orange-800 dark:text-orange-300' : ''}>{formatMoeda(calc.valorBruto)}</strong>
+            <span className={isMeta ? 'text-orange-700 dark:text-orange-400' : 'text-muted-foreground'}>Valor total bruto</span>
+            <strong className={isMeta ? 'text-orange-800 dark:text-orange-300' : ''}>{formatMoeda(calc.valorBruto)}</strong>
           </div>
         </div>
       )}
@@ -2169,10 +2169,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
       {/* Final value */}
       {calc.valorBruto > 0 && (
-        <div className={`rounded-md p-2 ${isPrevisto ? 'bg-orange-200/50 dark:bg-orange-950/50' : 'bg-primary/10'}`}>
+        <div className={`rounded-md p-2 ${isMeta ? 'bg-orange-200/50 dark:bg-orange-950/50' : 'bg-primary/10'}`}>
           <div className="flex justify-between text-[12px] font-bold">
-            <span className={isPrevisto ? 'text-orange-800 dark:text-orange-300' : ''}>Valor líquido final</span>
-            <span className={isPrevisto ? 'text-orange-800 dark:text-orange-300' : 'text-primary'}>{formatMoeda(calc.valorLiquido)}</span>
+            <span className={isMeta ? 'text-orange-800 dark:text-orange-300' : ''}>Valor líquido final</span>
+            <span className={isMeta ? 'text-orange-800 dark:text-orange-300' : 'text-primary'}>{formatMoeda(calc.valorLiquido)}</span>
           </div>
           {calc.liqCabeca > 0 && (
             <div className="flex justify-between text-[11px] mt-0.5">

@@ -8,7 +8,7 @@ import { CheckCircle, AlertTriangle, Clock, RefreshCw, DollarSign } from 'lucide
 interface Props {
   initialAno?: string;
   initialMes?: string;
-  initialCenario?: 'realizado' | 'previsto' | 'meta';
+  initialCenario?: 'realizado' | 'meta';
   onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
 }
 
@@ -27,7 +27,7 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
   const [anoFiltro, setAnoFiltro] = useState(initialAno || String(currentYear));
   const [mesFiltro, setMesFiltro] = useState(initialMes || String(new Date().getMonth() + 1).padStart(2, '0'));
   const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'meta'>(
-    initialCenario === 'previsto' || initialCenario === 'meta' ? 'meta' : 'realizado'
+    initialCenario === 'meta' ? 'meta' : 'realizado'
   );
   const [conciliacaoStatus, setConciliacaoStatus] = useState<'aberto' | 'fechado' | 'parcial' | null>(null);
   const [rebanhoStatus, setRebanhoStatus] = useState<'aberto' | 'fechado' | null>(null);

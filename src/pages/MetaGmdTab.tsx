@@ -1,5 +1,5 @@
 /**
- * Meta GMD — GMD previsto por categoria por mês.
+ * Meta GMD — GMD meta por categoria por mês.
  */
 import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
@@ -49,7 +49,7 @@ export function MetaGmdTab({ onBack }: Props) {
               Voltar
             </button>
           )}
-          <h2 className="text-sm font-semibold text-orange-600">GMD Previsto</h2>
+          <h2 className="text-sm font-semibold text-orange-600">GMD Meta</h2>
           <div className="ml-auto flex items-center gap-2">
             <span className="text-[10px] font-semibold text-muted-foreground">Ano:</span>
             <Select value={ano} onValueChange={setAno}>
@@ -158,7 +158,7 @@ export function MetaGmdTab({ onBack }: Props) {
         )}
 
         <p className="text-[9px] text-muted-foreground text-center">
-          Valores em kg/cab/dia · Cenário Previsto (Meta)
+          Valores em kg/cab/dia · Cenário Meta
         </p>
       </div>
     </div>

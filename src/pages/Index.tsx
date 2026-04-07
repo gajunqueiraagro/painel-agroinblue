@@ -125,8 +125,8 @@ const TITLES: Record<TabId, string> = {
   auditoria: 'Central de Auditoria',
   conta_boitel: 'Conta Boitel',
   status_fechamentos: 'Central de Fechamento',
-  meta_gmd: 'GMD Previsto',
-  meta_preco: 'Preços Previstos',
+  meta_gmd: 'GMD Meta',
+  meta_preco: 'Preços Meta',
   meta_movimentacoes: 'Movimentações Meta',
   meta_consolidacao: 'Consolidação Meta',
 };
@@ -201,13 +201,13 @@ const Index = () => {
   });
   const metaGmd = useMetaGmd(filtroGlobal.ano);
   const metaLancamentosFiltrados = useMemo(() => filtrarPorCenario(metaLancamentos, 'meta'), [metaLancamentos]);
-  // For consolidation: ALL previsto records from both datasets (realizado + meta), deduplicated by ID
-  const todosPrevistos = useMemo(() => {
-    const previstoRealizado = lancamentos.filter(l => l.statusOperacional === 'previsto');
-    const previstoMeta = metaLancamentosFiltrados;
+  // For consolidation: ALL meta records from both datasets, deduplicated by ID
+  const todosMeta = useMemo(() => {
+    const metaFromRealizado = lancamentos.filter(l => l.statusOperacional === 'previsto');
+    const metaFromCenario = metaLancamentosFiltrados;
     const seen = new Set<string>();
     const result: Lancamento[] = [];
-    for (const l of [...previstoRealizado, ...previstoMeta]) {
+    for (const l of [...metaFromRealizado, ...metaFromCenario]) {
       if (!seen.has(l.id)) {
         seen.add(l.id);
         result.push(l);
@@ -215,7 +215,7 @@ const Index = () => {
     }
     return result;
   }, [lancamentos, metaLancamentosFiltrados]);
-  const metaConsolidacaoData = useMetaConsolidacao(saldosIniciais, todosPrevistos, metaGmd.rows, Number(filtroGlobal.ano));
+  const metaConsolidacaoData = useMetaConsolidacao(saldosIniciais, todosMeta, metaGmd.rows, Number(filtroGlobal.ano));
 
   const handleFiltroChange = useCallback((f: Partial<FiltroGlobal>) => {
     setFiltroGlobal(prev => ({ ...prev, ...f }));
@@ -696,14 +696,14 @@ const Index = () => {
       )}
       {activeTab === 'meta_consolidacao' && (
         <MetaConsolidacaoTab
-          metaLancamentos={todosPrevistos}
+          metaLancamentos={todosMeta}
           ano={Number(filtroGlobal.ano)}
           onBack={() => setActiveTab('painel_consultor_hub')}
           onNavigateToLancamentos={(anoVal, mesVal, catVal) => {
             setSubAbaFinanceiro(undefined);
             setMovFiltroAno(anoVal);
             setMovFiltroMes(mesVal);
-            setMovFiltroStatus('previsto');
+            setMovFiltroStatus('meta');
             setMovBackTab('meta_consolidacao');
             setMovDrillLabel('Voltar para Consolidação');
             setActiveTab('financeiro');
