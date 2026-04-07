@@ -121,6 +121,7 @@ export function MetaPrecoTab({ onBack }: Props) {
 
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
+  const { user } = useAuth();
   const fazendaId = fazendaAtual?.id;
 
   // Meta consolidation data for qty/peso
