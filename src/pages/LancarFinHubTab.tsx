@@ -397,10 +397,10 @@ function IndicadoresContent({
         </button>
       </div>
 
-      {cenario === 'previsto' ? (
+      {cenario === 'meta' ? (
         <Card>
           <CardContent className="p-6 text-center">
-            <p className="text-sm text-muted-foreground">📊 Indicadores Previstos — em construção</p>
+            <p className="text-sm text-muted-foreground">📊 Indicadores Meta — em construção</p>
           </CardContent>
         </Card>
       ) : (

@@ -309,6 +309,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   }, [dados, precosRebanho]);
 
   const isRealizado = statusFiltro === 'realizado';
+  const isMeta = statusFiltro === 'meta';
 
   const formatPeso = (v: number | null) => {
     if (v === null || v === undefined || v <= 0) return '—';
