@@ -623,7 +623,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setFazendaOrigem(l.fazendaOrigem || '');
     setFazendaDestino(l.fazendaDestino || '');
     setObservacao(l.observacao || '');
-    setStatusOp((l.statusOperacional as StatusOperacional) || 'realizado');
+    setStatusOp(l.cenario === 'meta' ? 'meta' : ((l.statusOperacional as StatusOperacional) || 'realizado'));
     setNotaFiscal(l.notaFiscal || '');
 
     // 3. Check for snapshot first (PRIORITY 1)
