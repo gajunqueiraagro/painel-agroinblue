@@ -609,15 +609,21 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   const cabFin = agg('sf');
   const entradas = agg('ee');
   const saidas = agg('se');
-  const pesoIni = agg('pesoInicial');
-  const pesoFin = agg('pesoTotalFinal');
+  const pesoIniRaw = agg('pesoInicial');
+  const pesoFinRaw = agg('pesoTotalFinal');
   const prodBio = agg('producaoBio');
 
+  // Snapshot validado de peso sobrescreve consolidação quando disponível
+  const hasSnap = pesoSnap && pesoSnap.cabecas.some(v => v > 0);
+  const pesoFin = hasSnap ? pesoSnap!.cabecas.map((c, i) => c * (pesoSnap!.pesoMedio[i] || 0)) : pesoFinRaw;
+  const pesoIni = hasSnap ? [pesoIniRaw[0], ...pesoFin.slice(0, 11)] : pesoIniRaw;
+
   // Peso médio final = peso total final / SF (weighted across categories)
-  const pesoMedFin = Array.from({ length: 12 }, (_, i) => {
+  const pesoMedFinRaw = Array.from({ length: 12 }, (_, i) => {
     const sf = cabFin[i];
-    return sf > 0 ? pesoFin[i] / sf : 0;
+    return sf > 0 ? pesoFinRaw[i] / sf : 0;
   });
+  const pesoMedFin = hasSnap ? pesoSnap!.pesoMedio : pesoMedFinRaw;
 
   const pesoMedIni = cabIni.map((c, i) => c > 0 ? pesoIni[i] / c : 0);
   const cabMedia = cabIni.map((v, i) => (v + cabFin[i]) / 2);
