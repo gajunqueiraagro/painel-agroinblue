@@ -45,6 +45,7 @@ import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 import { CATALOGO_INDICADORES, getFonteStatusLabel, type FonteIndicador, type IndicadorMeta } from '@/lib/painelConsultor/indicadorCatalogo';
+import { warnIndicadoresSemCatalogo } from '@/lib/painelConsultor/validarIndicadores';
 import { useCliente } from '@/contexts/ClienteContext';
 
 // ─── Constants ───
@@ -1117,6 +1118,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
   useEffect(() => {
     if (blocos.length > 0) {
+      warnIndicadoresSemCatalogo(blocos);
       setOpenBlocos(prev => {
         const next: Record<string, boolean> = {};
         blocos.forEach((b, i) => {
