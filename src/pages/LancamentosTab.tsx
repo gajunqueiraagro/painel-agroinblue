@@ -2563,10 +2563,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         {aba === 'reclassificacao' ? (
           <>
             <ReclassificacaoFormFields
-              onAdicionar={onAdicionar}
-              dataInicial={dataInicial}
-              lancamentos={lancamentos}
-              ano={Number(anoFiltro)}
               state={reclassState}
             />
             <ReclassificacaoResumoPanel
@@ -2574,11 +2570,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               pesoKg={Number(reclassState.pesoKg) || 0}
               origemLabel={reclassState.origemLabel}
               destinoLabel={reclassState.destinoLabel}
-              pesoMedioOrigem={reclassState.origemInfo.pesoMedio}
+              pesoMedioOrigem={reclassState.origemInfo?.pesoMedioKg ?? null}
               statusOp={reclassState.statusOp}
-              onRequestRegister={reclassState.handleRegister}
-              submitting={reclassState.submitting}
-              canRegister={reclassState.canRegister}
+              onRequestRegister={reclassState.handleSubmit}
+              submitting={false}
+              canRegister={!!(Number(reclassState.quantidade) > 0 && reclassState.categoriaOrigem !== reclassState.categoriaDestino)}
               onBack={onBackToConciliacao}
               backLabel={backLabel}
             />

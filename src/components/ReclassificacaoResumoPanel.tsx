@@ -1,7 +1,9 @@
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { RefreshCw, ArrowLeft } from 'lucide-react';
-import { STATUS_LABEL, type StatusOperacional } from '@/lib/statusOperacional';
+import { STATUS_LABEL, META_VISUAL, type StatusOperacional } from '@/lib/statusOperacional';
+
+type StatusOpcao = StatusOperacional | 'meta';
 
 interface Props {
   quantidade: number;
@@ -9,7 +11,7 @@ interface Props {
   origemLabel: string;
   destinoLabel: string;
   pesoMedioOrigem: number | null;
-  statusOp: StatusOperacional;
+  statusOp: StatusOpcao;
   onRequestRegister: () => void;
   submitting: boolean;
   canRegister: boolean;
@@ -22,10 +24,12 @@ function fmt(v: number | null, dec = 1) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 
-const STATUS_COLORS: Partial<Record<StatusOperacional, { text: string; bg: string }>> = {
-  realizado: { text: 'text-green-600', bg: 'bg-green-500' },
-  programado: { text: 'text-blue-600', bg: 'bg-blue-500' },
-  previsto: { text: 'text-orange-600', bg: 'bg-orange-500' },
+const STATUS_COLORS: Record<StatusOpcao, { text: string; bg: string; label: string }> = {
+  realizado: { text: 'text-green-600', bg: 'bg-green-500', label: STATUS_LABEL.realizado },
+  programado: { text: 'text-blue-600', bg: 'bg-blue-500', label: STATUS_LABEL.programado },
+  agendado: { text: 'text-purple-600', bg: 'bg-purple-500', label: STATUS_LABEL.agendado },
+  previsto: { text: 'text-cyan-600', bg: 'bg-cyan-500', label: STATUS_LABEL.previsto },
+  meta: { text: 'text-orange-600', bg: 'bg-orange-500', label: META_VISUAL.label },
 };
 
 export function ReclassificacaoResumoPanel({
@@ -37,7 +41,7 @@ export function ReclassificacaoResumoPanel({
   const totalKg = quantidade * pesoKg;
   const arrobasCab = pesoKg ? pesoKg / 30 : 0;
   const totalArrobas = totalKg / 30;
-  const colors = STATUS_COLORS[statusOp];
+  const colors = STATUS_COLORS[statusOp] || STATUS_COLORS.realizado;
 
   return (
     <div className="bg-card rounded-md border shadow-sm p-2 space-y-1.5 self-start">
@@ -71,7 +75,7 @@ export function ReclassificacaoResumoPanel({
         <span className="text-muted-foreground">Cenário</span>
         <span className="flex items-center gap-1">
           <span className={`w-1.5 h-1.5 rounded-full ${colors.bg}`} />
-          <strong className={colors.text}>{STATUS_LABEL[statusOp]}</strong>
+          <strong className={colors.text}>{colors.label}</strong>
         </span>
       </div>
 
@@ -79,7 +83,7 @@ export function ReclassificacaoResumoPanel({
 
       <Button
         type="button"
-        className={`w-full h-7 text-[10px] font-bold ${statusOp === 'previsto' ? 'bg-orange-500 hover:bg-orange-600' : ''}`}
+        className={`w-full h-7 text-[10px] font-bold ${statusOp === 'meta' ? 'bg-orange-500 hover:bg-orange-600' : ''}`}
         onClick={onRequestRegister}
         disabled={!canRegister || submitting}
       >
