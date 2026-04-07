@@ -148,6 +148,30 @@ export function MetaPrecoTab({ onBack }: Props) {
     });
   }, [fazendaId, ano, mes]);
 
+  // Fetch ALL validated META snapshots for chart (all 12 months)
+  const [validadoSnapAll, setValidadoSnapAll] = useState<Record<string, { valor: number; cabecas: number; arrobas: number; precoArr: number }>>({});
+  useEffect(() => {
+    if (!fazendaId) return;
+    const meses12 = Array.from({ length: 12 }, (_, i) => `${ano}-${String(i + 1).padStart(2, '0')}`);
+    supabase
+      .from('valor_rebanho_meta_validada' as any)
+      .select('ano_mes, valor_total, cabecas, arrobas_total, preco_arroba_medio')
+      .eq('fazenda_id', fazendaId)
+      .in('ano_mes', meses12)
+      .then(({ data }) => {
+        const map: Record<string, { valor: number; cabecas: number; arrobas: number; precoArr: number }> = {};
+        ((data as any[]) || []).forEach((row: any) => {
+          map[row.ano_mes] = {
+            valor: Number(row.valor_total) || 0,
+            cabecas: Number(row.cabecas) || 0,
+            arrobas: Number(row.arrobas_total) || 0,
+            precoArr: Number(row.preco_arroba_medio) || 0,
+          };
+        });
+        setValidadoSnapAll(map);
+      });
+  }, [fazendaId, ano, statusMes]);
+
   const anos = useMemo(() => {
     const a: string[] = [];
     for (let y = now.getFullYear() + 1; y >= now.getFullYear() - 3; y--) a.push(String(y));
