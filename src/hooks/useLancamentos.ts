@@ -380,7 +380,12 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     if (dados.tipoPeso !== undefined) update.tipo_peso = dados.tipoPeso;
     if (dados.statusOperacional !== undefined) {
       update.status_operacional = dados.statusOperacional;
-      // cenario is set by the hook's parameter, not derived from status
+      // Derive cenario from statusOperacional
+      if (dados.statusOperacional === null) {
+        update.cenario = 'meta';
+      } else {
+        update.cenario = 'realizado';
+      }
     }
     if (dados.dataVenda !== undefined) update.data_venda = dados.dataVenda;
     if (dados.dataEmbarque !== undefined) update.data_embarque = dados.dataEmbarque;
