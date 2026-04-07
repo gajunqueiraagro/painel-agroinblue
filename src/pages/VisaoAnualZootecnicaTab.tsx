@@ -158,7 +158,6 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
         const m = saldoOficialPorMes.get(r.mes)!;
         m.set(r.categoria_codigo, (m.get(r.categoria_codigo) || 0) + r.saldo_final);
       });
-      const activePastoIds = new Set(pastosAtivosData.map((p: any) => p.id));
 
       // Fetch itens
       const fpIds = fpAll.map(f => f.id);
