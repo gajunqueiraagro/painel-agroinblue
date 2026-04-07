@@ -238,10 +238,15 @@ export function ResumoPastosTab({ onTabChange }: Props) {
                       {r.kgHa != null && <p><span className="text-muted-foreground">kg/ha:</span> {formatNum(r.kgHa, 0)}</p>}
                       {r.categorias.length > 0 && (
                         <div className="pt-1 border-t border-border/50 space-y-0.5">
-                          {r.categorias.slice(0, 5).map(cat => (
-                            <div key={cat.nome} className="flex justify-between">
-                              <span className="text-muted-foreground truncate mr-2">{cat.nome}</span>
-                              <span className="font-semibold tabular-nums">{cat.quantidade}</span>
+                          {r.categorias.map(cat => (
+                            <div key={cat.nome} className="flex items-center justify-between gap-2">
+                              <span className="text-muted-foreground truncate">{cat.nome}</span>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className="font-semibold tabular-nums">{cat.quantidade}</span>
+                                {cat.pesoMedio != null && cat.pesoMedio > 0 && (
+                                  <span className="text-muted-foreground tabular-nums text-[10px]">({formatNum(cat.pesoMedio, 0)} kg)</span>
+                                )}
+                              </div>
                             </div>
                           ))}
                         </div>
