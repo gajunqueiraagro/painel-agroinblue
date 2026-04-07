@@ -300,7 +300,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const isCenarioMeta = statusOp === 'meta';
   /** StatusOperacional efetivo para passar a componentes que não conhecem 'meta' */
   const effectiveStatusOp: StatusOperacional = isCenarioMeta ? 'programado' : statusOp as StatusOperacional;
-  const isPrevisto = statusOp === 'previsto';
+  const isPrevisto = isCenarioMeta; // Meta usa estilo laranja (anteriormente "Previsto")
   const isConfirmado = statusOp === 'programado';
   const isConciliado = statusOp === 'realizado';
   const isAbate = tipo === 'abate';
@@ -1742,8 +1742,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   const tiposDisponiveis = aba === 'entrada' ? TIPOS_ENTRADA : TIPOS_SAIDA;
 
-  const previstoInputClass = isPrevisto ? 'border-orange-400 text-orange-800 dark:text-orange-300' : '';
-  const previstoLabelClass = isPrevisto ? 'text-orange-700 dark:text-orange-400' : '';
+  const metaInputClass = isCenarioMeta ? 'border-orange-400 text-orange-800 dark:text-orange-300' : '';
+  const metaLabelClass = isCenarioMeta ? 'text-orange-700 dark:text-orange-400' : '';
 
   const showExtraDates = !isAbate && (isConfirmado || isConciliado) && (isVenda || isTransferencia);
   const showFormaPagamento = !isAbate && (isConfirmado || isConciliado) && (isVenda || isCompra || isTransferencia);
