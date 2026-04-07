@@ -45,7 +45,7 @@ import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 import { CATALOGO_INDICADORES, getFonteStatusLabel, type FonteIndicador, type IndicadorMeta } from '@/lib/painelConsultor/indicadorCatalogo';
-import { useValorRebanhoMetaAno } from '@/hooks/useValorRebanhoMeta';
+import { useCliente } from '@/contexts/ClienteContext';
 
 // ─── Constants ───
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -895,14 +895,67 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   }, [ano, filtroGlobal?.mes]);
   const { status: statusPilares, refetch: refetchPilares } = useStatusPilares(fazendaId, mesAtualRef);
   const { data: zootMeta } = useZootMensal({ ano: anoNum, cenario: 'meta' });
+  const { clienteAtual } = useCliente();
+  const clienteId = clienteAtual?.id;
 
-  // Valor do Rebanho META persistido — leitura direta sem recalcular
-  const { data: metaValData, getMonthlyValues: getMetaValues, loading: metaValLoading } = useValorRebanhoMetaAno(anoNum);
-  const valorRebanhoMetaMes = useMemo(() => getMetaValues('valor_total'), [getMetaValues]);
-  const metaCabecasMes = useMemo(() => getMetaValues('cabecas'), [getMetaValues]);
-  const metaArrobasMes = useMemo(() => getMetaValues('arrobas_total'), [getMetaValues]);
-  const metaValorCabMes = useMemo(() => getMetaValues('valor_cabeca_medio'), [getMetaValues]);
-  const metaPrecoArrMes = useMemo(() => getMetaValues('preco_arroba_medio'), [getMetaValues]);
+  // Dados por categoria da view meta (para cálculo live de valor do rebanho)
+  const { data: viewDataMeta } = useZootCategoriaMensal({ ano: anoNum, cenario: 'meta', global: isGlobal });
+
+  // Preços META por categoria (mesma fonte da tela "Valor do Rebanho META")
+  const [metaPrecosCat, setMetaPrecosCat] = useState<Record<string, Record<string, number>>>({});
+  useEffect(() => {
+    if (!clienteId) return;
+    const meses = Array.from({ length: 12 }, (_, i) => `${anoNum}-${String(i + 1).padStart(2, '0')}`);
+    supabase
+      .from('meta_valor_rebanho_precos' as any)
+      .select('ano_mes, categoria, preco_arroba')
+      .eq('cliente_id', clienteId)
+      .in('ano_mes', meses)
+      .then(({ data, error }) => {
+        if (error || !data) return;
+        const map: Record<string, Record<string, number>> = {};
+        (data as any[]).forEach((r: any) => {
+          if (!map[r.ano_mes]) map[r.ano_mes] = {};
+          map[r.ano_mes][r.categoria] = Number(r.preco_arroba) || 0;
+        });
+        setMetaPrecosCat(map);
+      });
+  }, [clienteId, anoNum]);
+
+  // Cálculo live do Valor do Rebanho META (mesma lógica da tela META)
+  const { valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes } = useMemo(() => {
+    const vrm = Array(12).fill(0);
+    const vcm = Array(12).fill(0);
+    const vam = Array(12).fill(0);
+    if (!viewDataMeta) return { valorRebanhoMetaMes: vrm, metaValorCabMes: vcm, metaPrecoArrMes: vam };
+
+    for (let i = 0; i < 12; i++) {
+      const mesNum = i + 1;
+      const anoMes = `${anoNum}-${String(mesNum).padStart(2, '0')}`;
+      const precosMes = metaPrecosCat[anoMes] || {};
+      const rowsMes = viewDataMeta.filter(r => r.mes === mesNum);
+
+      let totalValor = 0;
+      let totalPesoKg = 0;
+      let totalCab = 0;
+
+      for (const row of rowsMes) {
+        const saldo = row.saldo_final || 0;
+        const pesoMedio = row.peso_medio_final || 0;
+        const precoArroba = precosMes[row.categoria_codigo] || 0;
+        const precoKg = precoArroba > 0 ? precoArroba / 30 : 0;
+        totalValor += saldo * pesoMedio * precoKg;
+        totalPesoKg += saldo * pesoMedio;
+        totalCab += saldo;
+      }
+
+      vrm[i] = totalValor;
+      vcm[i] = totalCab > 0 ? totalValor / totalCab : 0;
+      const totalArrobas = totalPesoKg / 30;
+      vam[i] = totalArrobas > 0 ? totalValor / totalArrobas : 0;
+    }
+    return { valorRebanhoMetaMes: vrm, metaValorCabMes: vcm, metaPrecoArrMes: vam };
+  }, [viewDataMeta, metaPrecosCat, anoNum]);
   // Official source: view data for Realizado (replaces buildMonthlyData local calcs)
   const { data: viewDataRealizado } = useZootCategoriaMensal({ ano: anoNum, cenario: 'realizado', global: isGlobal });
 
