@@ -13,7 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
-import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
+// FONTE OFICIAL: vw_zoot_categoria_mensal (sem calcSaldoPorCategoriaLegado)
 import {
   statusFinanceiro as calcStatusFinanceiro,
   statusCategorias as calcStatusCategorias,
@@ -254,12 +254,12 @@ export function useStatusZootecnico(
       setPastosRascunho(detalhesPastos.reduce((s, f) => s + f.rascunho, 0));
       setPastosNaoIniciados(detalhesPastos.reduce((s, f) => s + f.naoIniciados, 0));
 
-      // --- Categorias comparison (via calcStatusCategorias — single source of truth) ---
-      // Deduplicate: keep only the most recent fechamento per pasto ATIVO (mesma base da tela Fechamento de Pastos)
+      // --- Categorias comparison (FONTE OFICIAL: vw_zoot_categoria_mensal) ---
+      // Deduplicate: keep only the most recent fechamento per pasto ATIVO
       const activePastoIds = new Set(pastosData.map((p: any) => p.id));
       const dedupFechByPasto = new Map<string, { id: string; updated_at: string }>();
       fpData.forEach((f: any) => {
-        if (!activePastoIds.has(f.pasto_id)) return; // Ignora pastos inativos
+        if (!activePastoIds.has(f.pasto_id)) return;
         const existing = dedupFechByPasto.get(f.pasto_id);
         if (!existing || (f.updated_at || '') >= (existing.updated_at || '')) {
           dedupFechByPasto.set(f.pasto_id, { id: f.id, updated_at: f.updated_at || '' });
@@ -267,7 +267,26 @@ export function useStatusZootecnico(
       });
       const fechIds = Array.from(dedupFechByPasto.values()).map(v => v.id);
 
-      const saldoMap = calcSaldoPorCategoriaLegado(saldosIniciais, lancamentos, ano, mes);
+      // FONTE OFICIAL: buscar saldo final por categoria da view validada
+      let viewQuery = supabase
+        .from('vw_zoot_categoria_mensal' as any)
+        .select('categoria_codigo, saldo_final')
+        .eq('ano', ano)
+        .eq('mes', mes)
+        .eq('cenario', 'realizado');
+
+      if (isGlobal) {
+        if (clienteAtual?.id) viewQuery = viewQuery.eq('cliente_id', clienteAtual.id);
+      } else {
+        viewQuery = viewQuery.eq('fazenda_id', fazendaId);
+      }
+
+      const { data: viewRows } = await viewQuery;
+      const saldoMap = new Map<string, number>();
+      (viewRows || []).forEach((r: any) => {
+        const current = saldoMap.get(r.categoria_codigo) || 0;
+        saldoMap.set(r.categoria_codigo, current + (Number(r.saldo_final) || 0));
+      });
       const catsComSaldo = Array.from(saldoMap.entries()).filter(([, q]) => q > 0);
       setCategoriasComSaldo(catsComSaldo.length);
 
@@ -294,29 +313,17 @@ export function useStatusZootecnico(
         }
       }
 
-      // === DIAGNOSTIC LOGS (temporary) ===
       console.log(`[STATUS-ZOO] anoMes=${anoMes} fazenda=${fazendaId}`);
-      console.log('[STATUS-ZOO] SALDO OFICIAL (sistema)', Array.from(new Map(catsComSaldo).entries()));
+      console.log('[STATUS-ZOO] SALDO OFICIAL (view)', Array.from(saldoMap.entries()));
       console.log('[STATUS-ZOO] ALOCADO PASTOS (fechamento)', Array.from(alocadoPastosCodigo.entries()));
-      console.log('[STATUS-ZOO] temItensPastos=', temItensPastos, 'fechIds.length=', fechIds.length);
-      console.log('[STATUS-ZOO] fpData raw count=', fpData.length, 'dedup count=', dedupFechByPasto.size, 'pastosAtivos=', pastosData.length);
 
-      // Use calcStatusCategorias from statusMensal.ts — THE official rule
+      // Use calcStatusCategorias — THE official rule
       const catsResult = calcStatusCategorias({
         saldoOficial: new Map(catsComSaldo),
         alocadoPastos: alocadoPastosCodigo,
         temItensPastos,
         pastosAtivos: pastosData.length,
       });
-
-      console.log('[STATUS-ZOO] RESULTADO:', JSON.stringify({
-        status: catsResult.status,
-        catsDivergentes: catsResult.catsDivergentes,
-        difTotalCabecas: catsResult.difTotalCabecas,
-        difTotalLiquida: catsResult.difTotalLiquida,
-        saldoTotalOficial: catsResult.saldoTotalOficial,
-        totalAlocadoPastos: catsResult.totalAlocadoPastos,
-      }));
 
       // Build description
       let descCatsComputed = '';
