@@ -3,6 +3,8 @@ import { usePastos, TIPOS_USO } from '@/hooks/usePastos';
 import { useFechamento } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { BarChart3 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { format } from 'date-fns';
@@ -187,6 +189,13 @@ export function ResumoPastosTab({ onTabChange }: Props) {
                 )}
               </div>
             </div>
+            {/* Right: GMD button */}
+            {onTabChange && (
+              <Button variant="outline" size="sm" className="h-7 gap-1 text-[10px] px-2 shrink-0" onClick={() => onTabChange('conferencia_gmd')}>
+                <BarChart3 className="h-3 w-3" />
+                Conferir GMD
+              </Button>
+            )}
           </div>
         </div>
 
