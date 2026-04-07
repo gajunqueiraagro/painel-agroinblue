@@ -561,7 +561,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab): Bloco[] {
 }
 
 // ─── Build blocos from MetaConsolidacao (validated consolidation) ───
-function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number): Bloco[] {
+function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number, metaValorCabMes?: number[], metaPrecoArrMes?: number[]): Bloco[] {
   // Aggregate across all categories per month
   const agg = (field: keyof MetaCategoriaMes): number[] =>
     Array.from({ length: 12 }, (_, i) => {
@@ -628,9 +628,17 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   const valorRebFin = vrm;
   // Valor reb. ini META: Jan = realizado Dez ano anterior, Fev+ = META final mês anterior
   const valorRebIni = [dezAnoAnteriorRealizado ?? 0, ...vrm.slice(0, 11)];
-  const valorPorCabMeta = cabFin.map((c, i) => c > 0 && vrm[i] > 0 ? vrm[i] / c : 0);
+  const valorPorCabMeta = cabFin.map((c, i) => {
+    // Prefer persisted valor_cabeca_medio, fallback to calculation
+    if (metaValorCabMes && metaValorCabMes[i] > 0) return metaValorCabMes[i];
+    return c > 0 && vrm[i] > 0 ? vrm[i] / c : 0;
+  });
   const arrobasEstoqueMeta = pesoFin.map(v => v / 30);
-  const valorPorArrMeta = arrobasEstoqueMeta.map((a, i) => a > 0 && vrm[i] > 0 ? vrm[i] / a : 0);
+  const valorPorArrMeta = arrobasEstoqueMeta.map((a, i) => {
+    // Prefer persisted preco_arroba_medio, fallback to calculation
+    if (metaPrecoArrMes && metaPrecoArrMes[i] > 0) return metaPrecoArrMes[i];
+    return a > 0 && vrm[i] > 0 ? vrm[i] / a : 0;
+  });
   const varValorRebMeta = valorRebFin.map((v, i) => v - valorRebIni[i]);
 
   switch (tab) {
@@ -882,8 +890,12 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const { data: zootMeta } = useZootMensal({ ano: anoNum, cenario: 'meta' });
 
   // Valor do Rebanho META persistido — leitura direta sem recalcular
-  const { getMonthlyValues: getMetaValues } = useValorRebanhoMetaAno(anoNum);
+  const { data: metaValData, getMonthlyValues: getMetaValues, loading: metaValLoading } = useValorRebanhoMetaAno(anoNum);
   const valorRebanhoMetaMes = useMemo(() => getMetaValues('valor_total'), [getMetaValues]);
+  const metaCabecasMes = useMemo(() => getMetaValues('cabecas'), [getMetaValues]);
+  const metaArrobasMes = useMemo(() => getMetaValues('arrobas_total'), [getMetaValues]);
+  const metaValorCabMes = useMemo(() => getMetaValues('valor_cabeca_medio'), [getMetaValues]);
+  const metaPrecoArrMes = useMemo(() => getMetaValues('preco_arroba_medio'), [getMetaValues]);
   // Official source: view data for Realizado (replaces buildMonthlyData local calcs)
   const { data: viewDataRealizado } = useZootCategoriaMensal({ ano: anoNum, cenario: 'realizado', global: isGlobal });
 
@@ -933,13 +945,13 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     if (isPrevisto) {
       // Fonte única: consolidação Meta validada
       if (metaConsolidacao && metaConsolidacao.length > 0) {
-        return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva, valorRebanhoMetaMes, valorRebanhoMes[0]);
+        return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes);
       }
       // Fallback para view SQL apenas se consolidação não disponível
       return buildBlocosFromZootMensal(zootMeta || [], viewTab);
     }
     return buildBlocosForTab(monthlyData, viewTab);
-  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacao, areaProdutiva, valorRebanhoMetaMes]);
+  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacao, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes]);
 
   useEffect(() => {
     if (blocos.length > 0) {

@@ -359,9 +359,10 @@ export function MetaPrecoTab({ onBack }: Props) {
           status,
           validadoPor: status === 'validado' ? user?.id : null,
         });
+        console.log('[MetaPrecoTab] valor_rebanho_meta salvo com sucesso para', anoMes);
       } catch (e: any) {
-        console.error('Erro ao persistir valor_rebanho_meta:', e);
-        // Não bloqueia o fluxo — preços já foram salvos
+        console.error('[MetaPrecoTab] Erro ao persistir valor_rebanho_meta:', e?.message || e, e?.details || '', e?.hint || '');
+        toast.error('Erro ao salvar valor do rebanho META: ' + (e?.message || 'erro desconhecido'));
       }
     }
   };
