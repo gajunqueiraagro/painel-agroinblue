@@ -13,7 +13,7 @@ interface Props {
   saldosIniciais: SaldoInicial[];
   initialAno?: string;
   initialMes?: string;
-  initialCenario?: 'realizado' | 'previsto';
+  initialCenario?: 'realizado' | 'previsto' | 'meta';
   onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
 }
 
@@ -53,7 +53,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
 
   const [anoFiltro, setAnoFiltro] = useState(initialAno || String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState(initialMes || format(new Date(), 'MM'));
-  const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'previsto'>(initialCenario || 'realizado');
+  const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'meta'>(initialCenario === 'previsto' || initialCenario === 'meta' ? 'meta' : 'realizado');
   const [pesosDb, setPesosDb] = useState<Record<string, number>>({});
   const [conciliacaoStatus, setConciliacaoStatus] = useState<'aberto' | 'fechado' | 'parcial' | null>(null);
   const [rebanhoStatus, setRebanhoStatus] = useState<'aberto' | 'fechado' | null>(null);
@@ -309,6 +309,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
   }, [dados, precosRebanho]);
 
   const isRealizado = statusFiltro === 'realizado';
+  const isMeta = statusFiltro === 'meta';
 
   const formatPeso = (v: number | null) => {
     if (v === null || v === undefined || v <= 0) return '—';
@@ -400,7 +401,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
         <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
           {([
             { value: 'realizado' as const, label: 'Realizado' },
-            { value: 'previsto' as const, label: 'Previsto' },
+            { value: 'meta' as const, label: 'Meta' },
           ]).map(opt => (
             <button
               key={opt.value}

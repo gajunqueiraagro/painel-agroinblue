@@ -433,7 +433,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           </Select>
           <div className="flex flex-1 gap-0.5 rounded-md overflow-hidden ml-2">
             {mesCards.map(c => {
-              const cfg = STATUS_CONFIG[c.status];
+              const cfg = STATUS_CONFIG[c.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.pendente;
               const isSelected = selectedMes === c.mes;
               return (
                 <button
@@ -453,7 +453,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           <div className="text-center text-xs text-muted-foreground py-8">Carregando...</div>
         ) : selectedCard && (() => {
           const card = selectedCard;
-          const cfg = STATUS_CONFIG[card.status];
+          const cfg = STATUS_CONFIG[card.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.pendente;
           const StatusIcon = cfg.icon;
           const diffAbs = Math.abs(card.diferenca);
           const isConciliado = card.status === 'realizado';
