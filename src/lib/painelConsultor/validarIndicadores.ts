@@ -1,30 +1,49 @@
 /**
- * Guard de desenvolvimento — detecta indicadores usados no painel
- * que não estão registrados no catálogo oficial.
+ * Validação estrutural de indicadores — Build-safe guard
  *
- * Roda SOMENTE em dev (import.meta.env.DEV).
- * Nunca bloqueia UI — apenas console.warn.
+ * Garante que todo indicadorId usado no painel esteja registrado
+ * no catálogo oficial (indicadorCatalogo.ts).
+ *
+ * - DEV  → console.warn (não bloqueia)
+ * - PROD → throw Error (bloqueia build/runtime)
+ *
+ * Reutilizável para qualquer painel que use a mesma estrutura de blocos.
  */
 
 import { CATALOGO_INDICADORES } from './indicadorCatalogo';
 
-interface BlocoGenerico {
+export interface BlocoGenerico {
   nome?: string;
   titulo?: string;
   rows: { indicador: string; indicadorId?: string }[];
 }
 
-export function warnIndicadoresSemCatalogo(
-  blocos: BlocoGenerico[],
-  contexto = 'PainelConsultor',
-): void {
-  if (!import.meta.env.DEV) return;
+export interface IndicadorAusente {
+  id: string;
+  bloco: string;
+  linha: string;
+}
 
-  const ausentes: { id: string; bloco: string; linha: string }[] = [];
+/** Coleta todos os indicadorId de uma lista de blocos */
+export function collectIndicadores(blocos: BlocoGenerico[]): string[] {
+  const ids: string[] = [];
+  for (const bloco of blocos) {
+    for (const row of bloco.rows) {
+      if (row.indicadorId) ids.push(row.indicadorId);
+    }
+  }
+  return [...new Set(ids)];
+}
+
+/** Retorna lista detalhada de indicadores não registrados no catálogo */
+export function getIndicadoresSemCatalogo(blocos: BlocoGenerico[]): IndicadorAusente[] {
+  const ausentes: IndicadorAusente[] = [];
+  const vistos = new Set<string>();
 
   for (const bloco of blocos) {
     for (const row of bloco.rows) {
-      if (row.indicadorId && !CATALOGO_INDICADORES[row.indicadorId]) {
+      if (row.indicadorId && !CATALOGO_INDICADORES[row.indicadorId] && !vistos.has(row.indicadorId)) {
+        vistos.add(row.indicadorId);
         ausentes.push({
           id: row.indicadorId,
           bloco: bloco.nome || bloco.titulo || '?',
@@ -34,13 +53,39 @@ export function warnIndicadoresSemCatalogo(
     }
   }
 
+  return ausentes;
+}
+
+/**
+ * Validação central — comportamento por ambiente:
+ * - DEV:  console.warn detalhado
+ * - PROD: throw Error (impede execução com dados incompletos)
+ */
+export function assertIndicadoresValidos(
+  blocos: BlocoGenerico[],
+  contexto = 'PainelConsultor',
+): void {
+  const ausentes = getIndicadoresSemCatalogo(blocos);
   if (ausentes.length === 0) return;
 
   const ids = ausentes.map(a => a.id).join(', ');
-  console.warn(
-    `[${contexto}] ⚠️ Indicadores sem cadastro no catálogo: ${ids}`,
-  );
-  for (const a of ausentes) {
-    console.warn(`  → Bloco: ${a.bloco} | Linha: ${a.linha} | ID: ${a.id}`);
+  const detalhes = ausentes
+    .map(a => `  → Bloco: ${a.bloco} | Linha: ${a.linha} | ID: ${a.id}`)
+    .join('\n');
+
+  const msg = `[${contexto}] Indicadores sem cadastro no catálogo: ${ids}\n${detalhes}`;
+
+  if (import.meta.env.DEV) {
+    console.warn(`⚠️ ${msg}`);
+  } else {
+    throw new Error(msg);
   }
+}
+
+/** Alias legado — redireciona para assertIndicadoresValidos */
+export function warnIndicadoresSemCatalogo(
+  blocos: BlocoGenerico[],
+  contexto = 'PainelConsultor',
+): void {
+  assertIndicadoresValidos(blocos, contexto);
 }
