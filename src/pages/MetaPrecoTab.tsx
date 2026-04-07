@@ -15,6 +15,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Save, Copy, Lock, Unlock, AlertTriangle, CheckCircle, ArrowLeft } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { useMetaValorRebanhoPrecos, type MetaPrecoCategoria } from '@/hooks/useMetaValorRebanhoPrecos';
 import { useZootCategoriaMensal, type ZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -56,17 +57,6 @@ const MESES_SHORT = [
 ];
 
 const CHART_LABELS = ['I', 'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
-
-/* Fixed grid widths for the META summary card — easy to tweak */
-const META_CARD_COL_1 = 340;
-const META_CARD_COL_2 = 170;
-const META_CARD_COL_3 = 150;
-const META_CARD_COL_4 = 140;
-const META_CARD_COL_5 = 140;
-const META_CARD_ROW_HEIGHT = 32;
-const META_CARD_GRID = `${META_CARD_COL_1}px ${META_CARD_COL_2}px ${META_CARD_COL_3}px ${META_CARD_COL_4}px ${META_CARD_COL_5}px`;
-const META_METRICS_GRID = `${META_CARD_COL_2}px ${META_CARD_COL_3}px ${META_CARD_COL_4}px ${META_CARD_COL_5}px`;
-const META_CARD_TOTAL_WIDTH = META_CARD_COL_1 + META_CARD_COL_2 + META_CARD_COL_3 + META_CARD_COL_4 + META_CARD_COL_5;
 
 const STATUS_CONFIG = {
   rascunho: { label: 'Rascunho', color: 'bg-amber-500/20 text-amber-700 border-amber-300', icon: AlertTriangle },
@@ -356,49 +346,24 @@ export function MetaPrecoTab({ onBack }: Props) {
   const StIcon = stCfg.icon;
   const mesLabel = MESES_COLS.find(m => m.key === mes)?.label || mes;
   const mesAnoAnteriorLabel = `${MESES_SHORT.find(m => m.key === mes)?.label || mes}/${Number(ano) - 1}`;
-  const summaryMetrics = [
-    {
-      label: 'Cabeças',
-      value: totals.cabecas,
-      formatValue: (value: number) => formatNum(value, 0),
-      baseJan: compJan?.cabecas ?? 0,
-      baseAnoAnterior: compAnoAnt?.cabecas ?? 0,
-      formatBase: (value: number) => formatNum(value, 0),
-    },
-    {
-      label: 'Peso médio',
-      value: totals.pesoMedio,
-      formatValue: (value: number) => `${formatNum(value, 2)} kg`,
-      baseJan: compJan?.pesoMedio ?? 0,
-      baseAnoAnterior: compAnoAnt?.pesoMedio ?? 0,
-      formatBase: (value: number) => `${formatNum(value, 2)} kg`,
-    },
-    {
-      label: 'R$/@ médio',
-      value: totals.precoArroba,
-      formatValue: (value: number) => formatMoeda(value),
-      baseJan: compJan?.precoArroba ?? 0,
-      baseAnoAnterior: compAnoAnt?.precoArroba ?? 0,
-      formatBase: (value: number) => formatMoeda(value),
-    },
-    {
-      label: 'R$/cab',
-      value: totals.valorCabeca,
-      formatValue: (value: number) => formatMoeda(value),
-      baseJan: compJan?.valorCabeca ?? 0,
-      baseAnoAnterior: compAnoAnt?.valorCabeca ?? 0,
-      formatBase: (value: number) => formatMoeda(value),
-    },
-    {
-      label: '@s estoque',
-      value: totals.totalArrobas,
-      formatValue: (value: number) => formatNum(value, 2),
-      baseJan: compJan?.totalArrobas ?? 0,
-      baseAnoAnterior: compAnoAnt?.totalArrobas ?? 0,
-      formatBase: (value: number) => formatNum(value, 2),
-    },
-  ];
-  const metaSummaryRows = `auto repeat(${summaryMetrics.length}, ${META_CARD_ROW_HEIGHT}px)`;
+
+  // Variações — mesma lógica do ValorRebanhoTab
+  const calcVar = (atual: number, base: number | undefined): number | null => {
+    if (!base || base <= 0 || !atual || atual <= 0) return null;
+    return ((atual - base) / Math.abs(base)) * 100;
+  };
+  const uVarValorIniAno = calcVar(totals.valor, compJan?.valor);
+  const uVarValorAnoAnt = calcVar(totals.valor, compAnoAnt?.valor);
+  const uVarCabIniAno = calcVar(totals.cabecas, compJan?.cabecas);
+  const uVarCabAnoAnt = calcVar(totals.cabecas, compAnoAnt?.cabecas);
+  const uVarPesoIniAno = calcVar(totals.pesoMedio, compJan?.pesoMedio);
+  const uVarPesoAnoAnt = calcVar(totals.pesoMedio, compAnoAnt?.pesoMedio);
+  const uVarArrobaIniAno = calcVar(totals.precoArroba, compJan?.precoArroba);
+  const uVarArrobaAnoAnt = calcVar(totals.precoArroba, compAnoAnt?.precoArroba);
+  const uVarCabValIniAno = calcVar(totals.valorCabeca, compJan?.valorCabeca);
+  const uVarCabValAnoAnt = calcVar(totals.valorCabeca, compAnoAnt?.valorCabeca);
+  const uVarArrobasEstIniAno = calcVar(totals.totalArrobas, compJan?.totalArrobas);
+  const uVarArrobasEstAnoAnt = calcVar(totals.totalArrobas, compAnoAnt?.totalArrobas);
 
   const getMesButtonClass = (mesVal: string) => {
     const key = `${ano}-${mesVal}`;
@@ -607,98 +572,49 @@ export function MetaPrecoTab({ onBack }: Props) {
             </div>
           </div>
 
-          {/* Summary card — compact horizontal executive layout */}
-          <div className="min-w-[280px] flex-1 space-y-1">
-            <div className="overflow-x-auto">
-              <Card className="w-max max-w-none bg-orange-500/5 border-orange-500/20">
-                <CardContent className="p-0">
-                  <div
-                    className="grid"
-                    style={{
-                      gridTemplateColumns: META_CARD_GRID,
-                      gridTemplateRows: metaSummaryRows,
-                      width: META_CARD_TOTAL_WIDTH,
-                      alignItems: 'start',
-                    }}
-                  >
-                    <div className="px-2 py-1 border-b border-orange-200/40 text-[8px] font-semibold uppercase tracking-wider text-orange-600 whitespace-nowrap">
+          <div className="min-w-[200px] flex-1 space-y-1.5">
+            <Card className="bg-orange-500/5 border-orange-500/20">
+              <CardContent className="p-2.5">
+                <div className="flex gap-3">
+                  <div className="shrink-0">
+                    <p className="text-[9px] text-orange-600 font-medium uppercase tracking-wider">
                       Valor do Rebanho META — {mesLabel}/{ano}
+                    </p>
+                    <p className="text-xl font-extrabold text-foreground leading-tight mt-0.5">
+                      {totals.valor > 0 ? formatMoeda(totals.valor) : '—'}
+                    </p>
+                    <div className="flex flex-col gap-0 mt-0.5">
+                      <MetaVariacaoBadge valor={uVarValorIniAno} label="vs ini. ano" showLabel />
+                      <MetaVariacaoBadge valor={uVarValorAnoAnt} label="vs 1 ano" showLabel />
                     </div>
-                    <div className="px-2 py-1 border-b border-orange-200/40 text-[8px] font-semibold text-foreground text-center whitespace-nowrap">
-                      Indicador
-                    </div>
-                    <div className="px-2 py-1 border-b border-orange-200/40 text-[8px] font-semibold text-foreground text-center whitespace-nowrap">
-                      Valor
-                    </div>
-                    <div className="px-2 py-1 border-b border-orange-200/40 text-[8px] font-semibold text-foreground text-center whitespace-nowrap">
-                      vs Inic. ano
-                    </div>
-                    <div className="px-2 py-1 border-b border-orange-200/40 text-[8px] font-semibold text-foreground text-center whitespace-nowrap">
-                      vs 1 ano
-                    </div>
-
-                    <div
-                      className="px-2 pt-2 pb-1 border-r border-orange-200/40"
-                      style={{
-                        gridColumn: '1',
-                        gridRow: `2 / ${summaryMetrics.length + 2}`,
-                        alignSelf: 'start',
-                      }}
-                    >
-                      <p className="text-[22px] font-extrabold text-foreground leading-none tabular-nums">
-                        {totals.valor > 0 ? formatMoeda(totals.valor) : '—'}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1 text-[11px]">
-                        <CompBadge meta={totals.valor} base={compJan?.valor ?? 0} tooltip={compJan?.valor ? `Jan: ${formatMoeda(compJan.valor)}` : undefined} />
-                        <CompBadge meta={totals.valor} base={compAnoAnt?.valor ?? 0} tooltip={compAnoAnt?.valor ? `${mesAnoAnteriorLabel}: ${formatMoeda(compAnoAnt.valor)}` : undefined} />
-                      </div>
-                    </div>
-
-                    {summaryMetrics.map((metric, index) => {
-                      const gridRow = index + 2;
-                      const rowBorderClass = index < summaryMetrics.length - 1 ? 'border-b border-orange-200/30' : '';
-
-                      return (
-                        <React.Fragment key={metric.label}>
-                          <div
-                            className={`px-2 text-[13px] leading-none text-foreground self-center whitespace-nowrap ${rowBorderClass}`}
-                            style={{ gridColumn: '2', gridRow }}
-                          >
-                            {metric.label}
-                          </div>
-                          <div
-                            className={`px-2 text-[13px] leading-none font-medium text-foreground text-right tabular-nums self-center whitespace-nowrap ${rowBorderClass}`}
-                            style={{ gridColumn: '3', gridRow }}
-                          >
-                            {metric.value > 0 ? metric.formatValue(metric.value) : '—'}
-                          </div>
-                          <div
-                            className={`px-2 text-[13px] leading-none text-right tabular-nums self-center whitespace-nowrap ${rowBorderClass}`}
-                            style={{ gridColumn: '4', gridRow }}
-                          >
-                            <CompBadge
-                              meta={metric.value}
-                              base={metric.baseJan}
-                              tooltip={metric.baseJan ? `Jan: ${metric.formatBase(metric.baseJan)}` : undefined}
-                            />
-                          </div>
-                          <div
-                            className={`px-2 text-[13px] leading-none text-right tabular-nums self-center whitespace-nowrap ${rowBorderClass}`}
-                            style={{ gridColumn: '5', gridRow }}
-                          >
-                            <CompBadge
-                              meta={metric.value}
-                              base={metric.baseAnoAnterior}
-                              tooltip={metric.baseAnoAnterior ? `${mesAnoAnteriorLabel}: ${metric.formatBase(metric.baseAnoAnterior)}` : undefined}
-                            />
-                          </div>
-                        </React.Fragment>
-                      );
-                    })}
                   </div>
-                </CardContent>
-              </Card>
-            </div>
+
+                  <div className="flex-1 min-w-0 text-[10px] ml-7">
+                    <div className="grid grid-cols-[auto_70px_56px_56px] gap-x-2 items-center">
+                      <span className="text-[8px] text-muted-foreground font-medium">Indicador</span>
+                      <span className="text-[8px] text-muted-foreground font-medium text-right">Valor</span>
+                      <span className="text-[8px] text-muted-foreground font-medium text-right">vs ini. ano</span>
+                      <span className="text-[8px] text-muted-foreground font-medium text-right">vs 1 ano</span>
+
+                      {[
+                        { label: 'Cabeças', value: totals.cabecas > 0 ? formatNum(totals.cabecas, 0) : '—', varIni: uVarCabIniAno, varAno: uVarCabAnoAnt },
+                        { label: 'Peso médio', value: totals.pesoMedio > 0 ? `${formatNum(totals.pesoMedio, 2)} kg` : '—', varIni: uVarPesoIniAno, varAno: uVarPesoAnoAnt },
+                        { label: 'R$/@ médio', value: totals.precoArroba > 0 ? formatMoeda(totals.precoArroba) : '—', varIni: uVarArrobaIniAno, varAno: uVarArrobaAnoAnt },
+                        { label: 'R$/cab', value: totals.valorCabeca > 0 ? formatMoeda(totals.valorCabeca) : '—', varIni: uVarCabValIniAno, varAno: uVarCabValAnoAnt },
+                        { label: '@s estoque', value: totals.totalArrobas > 0 ? formatNum(totals.totalArrobas, 2) : '—', varIni: uVarArrobasEstIniAno, varAno: uVarArrobasEstAnoAnt },
+                      ].map(ind => (
+                        <React.Fragment key={ind.label}>
+                          <span className="text-muted-foreground text-[9px] truncate">{ind.label}</span>
+                          <span className="text-right font-semibold text-foreground tabular-nums">{ind.value}</span>
+                          <span className="text-right"><MetaVariacaoBadge valor={ind.varIni} label="" /></span>
+                          <span className="text-right"><MetaVariacaoBadge valor={ind.varAno} label="" /></span>
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Mini charts — same structure as Valor do Rebanho */}
             <div className="flex gap-3">
@@ -714,30 +630,25 @@ export function MetaPrecoTab({ onBack }: Props) {
   );
 }
 
-/* ---------- Comparison badge ---------- */
-function CompBadge({ meta, base, tooltip }: { meta: number; base: number; tooltip?: string }) {
-  if (!base || base <= 0 || !meta || meta <= 0) {
-    return <span className="text-[8px] text-muted-foreground tabular-nums text-center">—</span>;
-  }
-  const pct = ((meta - base) / base) * 100;
-  const isPositive = pct > 0;
-  const isZero = Math.abs(pct) < 0.05;
-  const colorClass = isZero
+/* ---------- VariacaoBadge — replica exata do ValorRebanhoTab ---------- */
+function MetaVariacaoBadge({ valor, label, showLabel }: { valor: number | null; label: string; showLabel?: boolean }) {
+  if (valor === null) return null;
+  const isPositive = valor > 0;
+  const isNeutral = Math.abs(valor) < 0.1;
+  const Icon = isNeutral ? Minus : isPositive ? TrendingUp : TrendingDown;
+  const color = isNeutral
     ? 'text-muted-foreground'
     : isPositive
       ? 'text-emerald-600 dark:text-emerald-400'
-      : 'text-red-500 dark:text-red-400';
-  const label = `${isPositive ? '+' : ''}${formatNum(pct, 1)}%`;
+      : 'text-destructive';
 
-  if (tooltip) {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className={`text-[8px] font-medium tabular-nums text-center cursor-help ${colorClass}`}>{label}</span>
-        </TooltipTrigger>
-        <TooltipContent className="text-[10px]">{tooltip}</TooltipContent>
-      </Tooltip>
-    );
-  }
-  return <span className={`text-[8px] font-medium tabular-nums text-center ${colorClass}`}>{label}</span>;
+  const formattedVal = Math.abs(valor).toFixed(1).replace('.', ',');
+
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-[8px] font-semibold tabular-nums ${color}`}>
+      <Icon className="h-2.5 w-2.5" />
+      {formattedVal}%
+      {showLabel && <span className="font-normal text-muted-foreground ml-0.5">{label}</span>}
+    </span>
+  );
 }
