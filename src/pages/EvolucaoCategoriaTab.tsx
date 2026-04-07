@@ -400,7 +400,7 @@ export function EvolucaoCategoriaTab({ lancamentos, saldosIniciais, initialAno, 
         <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
           {([
             { value: 'realizado' as const, label: 'Realizado' },
-            { value: 'previsto' as const, label: 'Previsto' },
+            { value: 'meta' as const, label: 'Meta' },
           ]).map(opt => (
             <button
               key={opt.value}
