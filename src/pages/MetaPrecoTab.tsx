@@ -58,7 +58,13 @@ const MESES_SHORT = [
 const CHART_LABELS = ['I', 'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
 
 /* Fixed grid widths for the META summary card — easy to tweak */
-const META_CARD_GRID = '310px 140px 140px 140px 140px';
+const META_CARD_COL_1 = 330;
+const META_CARD_COL_2 = 160;
+const META_CARD_COL_3 = 150;
+const META_CARD_COL_4 = 140;
+const META_CARD_COL_5 = 140;
+const META_CARD_GRID = `${META_CARD_COL_1}px ${META_CARD_COL_2}px ${META_CARD_COL_3}px ${META_CARD_COL_4}px ${META_CARD_COL_5}px`;
+const META_METRICS_GRID = `${META_CARD_COL_2}px ${META_CARD_COL_3}px ${META_CARD_COL_4}px ${META_CARD_COL_5}px`;
 
 const STATUS_CONFIG = {
   rascunho: { label: 'Rascunho', color: 'bg-amber-500/20 text-amber-700 border-amber-300', icon: AlertTriangle },
@@ -558,20 +564,17 @@ export function MetaPrecoTab({ onBack }: Props) {
           {/* Summary card — compact horizontal executive layout */}
           <div className="min-w-[280px] flex-1 space-y-1">
             <Card className="bg-orange-500/5 border-orange-500/20">
-              <CardContent className="px-2 py-1.5">
-                {/* Header row */}
-                <div className="flex items-baseline border-b border-orange-200/40 pb-0.5 mb-1" style={{ display: 'grid', gridTemplateColumns: META_CARD_GRID }}>
-                  <span className="text-[8px] text-orange-600 font-semibold uppercase tracking-wider truncate">Valor do Rebanho META — {mesLabel}/{ano}</span>
-                  <span className="text-[7px] text-muted-foreground font-semibold text-left">Indicador</span>
-                  <span className="text-[7px] text-muted-foreground font-semibold text-right">Valor</span>
-                  <span className="text-[7px] text-muted-foreground font-semibold text-right">vs Inic. ano</span>
-                  <span className="text-[7px] text-muted-foreground font-semibold text-right">vs 1 ano</span>
-                </div>
+              <CardContent className="p-0">
+                <div style={{ display: 'inline-grid', gridTemplateColumns: META_CARD_GRID }}>
+                  {/* Row 0 — header */}
+                  <span className="text-[8px] text-orange-600 font-semibold uppercase tracking-wider truncate px-2 py-[3px] border-b border-orange-200/40">Valor do Rebanho META — {mesLabel}/{ano}</span>
+                  <span className="text-[7px] text-muted-foreground font-semibold text-left px-1 py-[3px] border-b border-orange-200/40">Indicador</span>
+                  <span className="text-[7px] text-muted-foreground font-semibold text-right px-1 py-[3px] border-b border-orange-200/40">Valor</span>
+                  <span className="text-[7px] text-muted-foreground font-semibold text-right px-1 py-[3px] border-b border-orange-200/40">vs Inic. ano</span>
+                  <span className="text-[7px] text-muted-foreground font-semibold text-right px-1 py-[3px] border-b border-orange-200/40">vs 1 ano</span>
 
-                {/* Content: left value + right metrics table */}
-                <div style={{ display: 'grid', gridTemplateColumns: META_CARD_GRID, gap: '0 4px', alignItems: 'start' }}>
-                  {/* Left block — value + percentages, only occupies its natural height */}
-                  <div className="pr-2 border-r border-orange-200/40">
+                  {/* Row 1+ — Col 1: value block (spans 5 metric rows) */}
+                  <div className="px-2 py-1 border-r border-orange-200/40" style={{ gridRow: '2 / 7' }}>
                     <p className="text-base font-extrabold text-foreground leading-tight">
                       {totals.valor > 0 ? formatMoeda(totals.valor) : '—'}
                     </p>
@@ -581,23 +584,21 @@ export function MetaPrecoTab({ onBack }: Props) {
                     </div>
                   </div>
 
-                  {/* Right block — compact metrics table (4 cols × 5 rows) */}
-                  <div className="col-span-4" style={{ display: 'grid', gridTemplateColumns: '150px 140px 130px 130px', gap: '0 4px' }}>
-                    {[
-                      { label: 'Cabeças', val: totals.cabecas, fmt: (v: number) => formatNum(v, 0), baseJan: compJan?.cabecas, baseAA: compAnoAnt?.cabecas, fmtBase: (v: number) => formatNum(v, 0) },
-                      { label: 'Peso médio', val: totals.pesoMedio, fmt: (v: number) => `${formatNum(v, 2)} kg`, baseJan: compJan?.pesoMedio, baseAA: compAnoAnt?.pesoMedio, fmtBase: (v: number) => `${formatNum(v, 2)} kg` },
-                      { label: 'R$/@ médio', val: totals.precoArroba, fmt: (v: number) => formatMoeda(v), baseJan: compJan?.precoArroba, baseAA: compAnoAnt?.precoArroba, fmtBase: (v: number) => formatMoeda(v) },
-                      { label: 'R$/cab', val: totals.valorCabeca, fmt: (v: number) => formatMoeda(v), baseJan: compJan?.valorCabeca, baseAA: compAnoAnt?.valorCabeca, fmtBase: (v: number) => formatMoeda(v) },
-                      { label: '@s estoque', val: totals.totalArrobas, fmt: (v: number) => formatNum(v, 2), baseJan: compJan?.totalArrobas, baseAA: compAnoAnt?.totalArrobas, fmtBase: (v: number) => formatNum(v, 2) },
-                    ].map(ind => (
-                      <React.Fragment key={ind.label}>
-                        <span className="text-muted-foreground text-[8px] truncate text-left py-[1px]">{ind.label}</span>
-                        <span className="font-semibold text-foreground tabular-nums text-[9px] text-right py-[1px]">{ind.val > 0 ? ind.fmt(ind.val) : '—'}</span>
-                        <span className="text-right py-[1px]"><CompBadge meta={ind.val} base={ind.baseJan ?? 0} tooltip={ind.baseJan ? `Jan: ${ind.fmtBase(ind.baseJan)}` : undefined} /></span>
-                        <span className="text-right py-[1px]"><CompBadge meta={ind.val} base={ind.baseAA ?? 0} tooltip={ind.baseAA ? `${MESES_SHORT.find(m => m.key === mes)?.label}/${Number(ano) - 1}: ${ind.fmtBase(ind.baseAA)}` : undefined} /></span>
-                      </React.Fragment>
-                    ))}
-                  </div>
+                  {/* Metric rows — each row fills cols 2-5 */}
+                  {[
+                    { label: 'Cabeças', val: totals.cabecas, fmt: (v: number) => formatNum(v, 0), baseJan: compJan?.cabecas, baseAA: compAnoAnt?.cabecas, fmtBase: (v: number) => formatNum(v, 0) },
+                    { label: 'Peso médio', val: totals.pesoMedio, fmt: (v: number) => `${formatNum(v, 2)} kg`, baseJan: compJan?.pesoMedio, baseAA: compAnoAnt?.pesoMedio, fmtBase: (v: number) => `${formatNum(v, 2)} kg` },
+                    { label: 'R$/@ médio', val: totals.precoArroba, fmt: (v: number) => formatMoeda(v), baseJan: compJan?.precoArroba, baseAA: compAnoAnt?.precoArroba, fmtBase: (v: number) => formatMoeda(v) },
+                    { label: 'R$/cab', val: totals.valorCabeca, fmt: (v: number) => formatMoeda(v), baseJan: compJan?.valorCabeca, baseAA: compAnoAnt?.valorCabeca, fmtBase: (v: number) => formatMoeda(v) },
+                    { label: '@s estoque', val: totals.totalArrobas, fmt: (v: number) => formatNum(v, 2), baseJan: compJan?.totalArrobas, baseAA: compAnoAnt?.totalArrobas, fmtBase: (v: number) => formatNum(v, 2) },
+                  ].map(ind => (
+                    <React.Fragment key={ind.label}>
+                      <span className="text-muted-foreground text-[8px] truncate text-left px-1 py-[2px]">{ind.label}</span>
+                      <span className="font-semibold text-foreground tabular-nums text-[9px] text-right px-1 py-[2px]">{ind.val > 0 ? ind.fmt(ind.val) : '—'}</span>
+                      <span className="text-right px-1 py-[2px]"><CompBadge meta={ind.val} base={ind.baseJan ?? 0} tooltip={ind.baseJan ? `Jan: ${ind.fmtBase(ind.baseJan)}` : undefined} /></span>
+                      <span className="text-right px-1 py-[2px]"><CompBadge meta={ind.val} base={ind.baseAA ?? 0} tooltip={ind.baseAA ? `${MESES_SHORT.find(m => m.key === mes)?.label}/${Number(ano) - 1}: ${ind.fmtBase(ind.baseAA)}` : undefined} /></span>
+                    </React.Fragment>
+                  ))}
                 </div>
               </CardContent>
             </Card>
