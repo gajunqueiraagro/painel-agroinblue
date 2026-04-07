@@ -247,18 +247,32 @@ export function MetaPrecoTab({ onBack }: Props) {
 
   // ---------- Chart data (all 12 months) ----------
   const chartData = useMemo(() => {
-    if (!viewDataMeta) return { valor: [] as any[], arrobas: [] as any[], precoArroba: [] as any[] };
-
     const valorArr: { label: string; value: number | null }[] = [];
     const arrobasArr: { label: string; value: number | null }[] = [];
     const precoArr: { label: string; value: number | null }[] = [];
 
-    for (const m of MESES_SHORT) {
-      const mesNum = Number(m.key);
-      const rowsMes = viewDataMeta.filter(r => r.mes === mesNum);
+    // Point "I" — Realized January (início do ano)
+    const janRealized = viewDataRealizadoAno?.filter(r => r.mes === 1) ?? [];
+    if (janRealized.length > 0) {
+      const cabI = janRealized.reduce((s, r) => s + r.saldo_final, 0);
+      const pesoI = janRealized.reduce((s, r) => s + r.peso_total_final, 0);
+      const arrobasI = pesoI / 30;
+      valorArr.push({ label: 'I', value: valorRebJan > 0 ? valorRebJan : null });
+      arrobasArr.push({ label: 'I', value: cabI > 0 ? arrobasI : null });
+      precoArr.push({ label: 'I', value: valorRebJan > 0 && arrobasI > 0 ? valorRebJan / arrobasI : null });
+    } else {
+      valorArr.push({ label: 'I', value: null });
+      arrobasArr.push({ label: 'I', value: null });
+      precoArr.push({ label: 'I', value: null });
+    }
 
-      // Load prices for this month from precos hook (only current month has local state)
-      // For charts we use the saved precos for all months
+    // Points J–D from META
+    const chartMonthLabels = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+    for (let i = 0; i < MESES_SHORT.length; i++) {
+      const m = MESES_SHORT[i];
+      const mesNum = Number(m.key);
+      const rowsMes = viewDataMeta?.filter(r => r.mes === mesNum) ?? [];
+
       let totalValor = 0;
       let totalPesoKg = 0;
       let totalCab = 0;
@@ -268,16 +282,10 @@ export function MetaPrecoTab({ onBack }: Props) {
         const metaRow = rowsMes.find(r => r.categoria_codigo === codigo);
         const saldo = metaRow?.saldo_final ?? 0;
         const pesoMedio = metaRow?.peso_medio_final ?? 0;
-
-        // For current month use local state, for others we don't have saved prices easily
-        // We'll use local state only for current month
         let precoArroba = 0;
         if (m.key === mes) {
           precoArroba = precosLocal[codigo] ?? 0;
         }
-        // For other months we'd need to load from DB — charts will show current month only for now
-        // This is a simplified version; full implementation would load all months' prices
-
         if (precoArroba > 0) hasAnyPrice = true;
         const precoKg = precoArroba > 0 ? precoArroba / 30 : 0;
         totalValor += saldo * pesoMedio * precoKg;
@@ -286,14 +294,13 @@ export function MetaPrecoTab({ onBack }: Props) {
       });
 
       const totalArrobas = totalPesoKg / 30;
-
-      valorArr.push({ label: m.label, value: m.key === mes && hasAnyPrice ? totalValor : null });
-      arrobasArr.push({ label: m.label, value: totalCab > 0 ? totalArrobas : null });
-      precoArr.push({ label: m.label, value: m.key === mes && totalArrobas > 0 && hasAnyPrice ? totalValor / totalArrobas : null });
+      valorArr.push({ label: chartMonthLabels[i], value: m.key === mes && hasAnyPrice ? totalValor : null });
+      arrobasArr.push({ label: chartMonthLabels[i], value: totalCab > 0 ? totalArrobas : null });
+      precoArr.push({ label: chartMonthLabels[i], value: m.key === mes && totalArrobas > 0 && hasAnyPrice ? totalValor / totalArrobas : null });
     }
 
     return { valor: valorArr, arrobas: arrobasArr, precoArroba: precoArr };
-  }, [viewDataMeta, mes, precosLocal]);
+  }, [viewDataMeta, viewDataRealizadoAno, valorRebJan, mes, precosLocal]);
 
   const temPreenchimento = Object.values(precosLocal).some(v => v > 0);
   const todosPreenchidos = ORDEM_CATEGORIAS_FIXA.every(c => (precosLocal[c] ?? 0) > 0);
