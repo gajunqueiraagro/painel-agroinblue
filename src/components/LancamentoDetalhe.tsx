@@ -484,9 +484,18 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 </div>
               )}
 
+              {/* META lock banner */}
+              {metaLocked && (
+                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-2 py-1">
+                  <p className="text-[9px] text-amber-700 dark:text-amber-400 font-medium">
+                    🔒 Registro META — somente consultores podem editar ou excluir.
+                  </p>
+                </div>
+              )}
+
               {/* ── Ações ── */}
               <div className="flex gap-2 pt-0.5">
-                {!isTransferenciaEntrada && (
+                {!isTransferenciaEntrada && !metaLocked && (
                   <>
                     <Button variant="default" size="sm" className="flex-1 h-7 text-[10px] font-bold" onClick={handleEditClick}>
                       <Pencil className="h-3 w-3 mr-1" /> Editar
