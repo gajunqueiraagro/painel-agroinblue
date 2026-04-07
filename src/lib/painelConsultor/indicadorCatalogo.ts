@@ -103,6 +103,43 @@ const FONTE_VALOR_REB_REAL: FonteIndicador = {
   permite_fallback: false,
 };
 
+const FONTE_VALOR_REB_META_BASE: FonteIndicador = {
+  fonte_tipo: 'meta',
+  fonte_tabela: 'valor_rebanho_meta',
+  fonte_campo: 'valor_total',
+  regra_calculo: 'Leitura direta da base persistida do Valor do Rebanho META',
+  regra_prioridade: '1. valor_rebanho_meta com status validado/fechado; 2. vazio se não houver base oficial',
+  tela_origem: '/meta-preco',
+  tela_label: 'Valor do Rebanho META',
+  permite_fallback: false,
+  observacao: 'Fonte única oficial da META no Painel do Consultor, sem recálculo local',
+};
+
+const FONTE_VALOR_REB_META_INICIAL: FonteIndicador = {
+  ...FONTE_VALOR_REB_META_BASE,
+  fonte_campo: 'valor_total',
+  regra_calculo: 'Jan = Dez do ano anterior (META se existir, senão realizado); Fev+ = valor_total META do mês anterior',
+  regra_prioridade: '1. Dez/ano-1 em valor_rebanho_meta; 2. Dez/ano-1 realizado; 3. Fev+ valor_total META do mês anterior; 4. vazio se não houver base oficial',
+};
+
+const FONTE_VALOR_REB_META_FINAL: FonteIndicador = {
+  ...FONTE_VALOR_REB_META_BASE,
+  fonte_campo: 'valor_total',
+  regra_calculo: 'Leitura direta do valor total META persistido no mês corrente',
+};
+
+const FONTE_VALOR_CAB_META_FINAL: FonteIndicador = {
+  ...FONTE_VALOR_REB_META_BASE,
+  fonte_campo: 'valor_cabeca_medio',
+  regra_calculo: 'Leitura direta do valor/cab persistido no mês corrente',
+};
+
+const FONTE_VALOR_ARR_META_FINAL: FonteIndicador = {
+  ...FONTE_VALOR_REB_META_BASE,
+  fonte_campo: 'preco_arroba_medio',
+  regra_calculo: 'Leitura direta do valor/@ persistido no mês corrente',
+};
+
 // ─── Desempenho / Produção ───
 const FONTE_ZOOT_VIEW_REAL: FonteIndicador = {
   fonte_tipo: 'view_sql',
@@ -159,10 +196,10 @@ export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
   'peso_med_fin': { id: 'peso_med_fin', nome: 'Peso méd. final', aba: 'mensal', bloco: 'Peso', realizado: FONTE_PESO_REAL, previsto: FONTE_PESO_PREVISTO },
 
   // ─── Mensal > Valor do Rebanho ───
-  'valor_reb_ini': { id: 'valor_reb_ini', nome: 'Valor reb. inicial', aba: 'mensal', bloco: 'Valor do Rebanho', realizado: FONTE_VALOR_REB_REAL, previsto: SEM_PREVISTO },
-  'valor_reb_fin': { id: 'valor_reb_fin', nome: 'Valor reb. final', aba: 'mensal', bloco: 'Valor do Rebanho', realizado: FONTE_VALOR_REB_REAL, previsto: SEM_PREVISTO },
-  'valor_cab_fin': { id: 'valor_cab_fin', nome: 'Valor/cab final', aba: 'mensal', bloco: 'Valor do Rebanho', realizado: FONTE_VALOR_REB_REAL, previsto: SEM_PREVISTO },
-  'valor_arr_fin': { id: 'valor_arr_fin', nome: 'Valor/@ final', aba: 'mensal', bloco: 'Valor do Rebanho', realizado: FONTE_VALOR_REB_REAL, previsto: SEM_PREVISTO },
+  'valor_reb_ini': { id: 'valor_reb_ini', nome: 'Valor reb. inicial', aba: 'mensal', bloco: 'Valor do Rebanho', realizado: FONTE_VALOR_REB_REAL, previsto: FONTE_VALOR_REB_META_INICIAL },
+  'valor_reb_fin': { id: 'valor_reb_fin', nome: 'Valor reb. final', aba: 'mensal', bloco: 'Valor do Rebanho', realizado: FONTE_VALOR_REB_REAL, previsto: FONTE_VALOR_REB_META_FINAL },
+  'valor_cab_fin': { id: 'valor_cab_fin', nome: 'Valor/cab final', aba: 'mensal', bloco: 'Valor do Rebanho', realizado: FONTE_VALOR_REB_REAL, previsto: FONTE_VALOR_CAB_META_FINAL },
+  'valor_arr_fin': { id: 'valor_arr_fin', nome: 'Valor/@ final', aba: 'mensal', bloco: 'Valor do Rebanho', realizado: FONTE_VALOR_REB_REAL, previsto: FONTE_VALOR_ARR_META_FINAL },
 
   // ─── Médio > Desempenho ───
   'gmd': { id: 'gmd', nome: 'GMD (kg/cab/dia)', aba: 'medio', bloco: 'Desempenho', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
