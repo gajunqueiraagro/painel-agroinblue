@@ -51,7 +51,7 @@ export function useOfflineSync(fazendaId: string | undefined, onSyncComplete: ()
           if (error) throw error;
         } else if (item.action === 'update') {
           const { error } = await supabase.from('lancamentos')
-            .update(item.data)
+            .update(item.data as any)
             .eq('id', item.data.id);
           if (error) throw error;
         } else if (item.action === 'delete') {

@@ -139,7 +139,7 @@ export function useFechamentoExecutivo() {
     
     const { error } = await supabase
       .from('fechamento_executivo')
-      .update(updateData)
+      .update(updateData as any)
       .eq('id', id);
     if (error) { toast.error('Erro ao alterar status'); return false; }
     toast.success(novoStatus === 'fechado' ? 'Fechamento finalizado' : `Status: ${novoStatus}`);

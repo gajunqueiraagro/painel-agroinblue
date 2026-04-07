@@ -96,7 +96,7 @@ export function ImportMapaPastos({ open, onOpenChange, pastos, categorias, fazen
           if (first.lote) updates.lote_mes = first.lote;
           if (first.qualidade !== null) updates.qualidade_mes = first.qualidade;
           if (Object.keys(updates).length > 0) {
-            await supabase.from('fechamento_pastos').update(updates).eq('id', fechId);
+            await supabase.from('fechamento_pastos').update(updates as any).eq('id', fechId);
           }
         }
 
