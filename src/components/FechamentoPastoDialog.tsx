@@ -81,7 +81,7 @@ const CategoriaCard = React.memo(function CategoriaCard({
   }, [pesoMedioKg, pesoFocused]);
 
   return (
-    <div className="flex flex-col items-center gap-1" style={{ minWidth: '62px' }}>
+    <div className="flex flex-col items-center gap-1 min-w-0 w-full sm:w-auto" style={{ minWidth: 0 }}>
       <span className="text-[11px] font-semibold text-foreground whitespace-nowrap mb-0.5">{c.nome}</span>
       <div className="relative">
         <Input
@@ -102,7 +102,7 @@ const CategoriaCard = React.memo(function CategoriaCard({
             }
           }}
           disabled={disabled}
-          className="h-8 text-xs font-bold px-1.5 text-center tabular-nums w-[58px]"
+          className="h-8 text-xs font-bold px-1.5 text-center tabular-nums w-full sm:w-[58px]"
           placeholder="0"
         />
         {origemDado === 'copiado_mes_anterior' && (
@@ -134,7 +134,7 @@ const CategoriaCard = React.memo(function CategoriaCard({
           }
         }}
         disabled={disabled}
-        className="h-8 text-xs px-1.5 text-center tabular-nums w-[58px]"
+        className="h-8 text-xs px-1.5 text-center tabular-nums w-full sm:w-[58px]"
         placeholder="kg"
       />
     </div>
@@ -318,12 +318,12 @@ export function FechamentoPastoDialog({
   const renderGrupo = (label: string, cats: CategoriaRebanho[], colorAccent: string, tabBase: number) => (
     <div>
       <div className={`text-xs font-bold uppercase tracking-widest mb-2 ${colorAccent}`}>{label}</div>
-      <div className="flex items-start gap-4 pl-8">
-        <div className="flex flex-col pt-[22px] gap-1 shrink-0 w-[40px]">
-          <span className="text-[11px] font-bold text-muted-foreground h-8 flex items-center">Qtde</span>
-          <span className="text-[11px] font-bold text-muted-foreground h-8 flex items-center">Peso</span>
+      <div className="flex items-start gap-2 sm:gap-4 pl-2 sm:pl-8">
+        <div className="flex flex-col pt-[22px] gap-1 shrink-0 w-[34px] sm:w-[40px]">
+          <span className="text-[10px] sm:text-[11px] font-bold text-muted-foreground h-8 flex items-center">Qtde</span>
+          <span className="text-[10px] sm:text-[11px] font-bold text-muted-foreground h-8 flex items-center">Peso</span>
         </div>
-        <div className="flex gap-4 flex-wrap">
+        <div className="grid grid-cols-3 gap-x-2 gap-y-2 sm:flex sm:gap-4 sm:flex-wrap flex-1 min-w-0">
           {cats.map((c, idx) => {
             const item = getItem(c.id);
             return (
