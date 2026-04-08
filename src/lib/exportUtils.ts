@@ -256,7 +256,7 @@ function calcResumo(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], a
 }
 
 // ── EXCEL EXPORT ──
-export function exportToExcel(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: string, zootMensal?: ZootMensal[]) {
+export function exportToExcel(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: string, zootMensal?: ZootMensal[], zootCategorias?: ZootCategoriaMensal[]) {
   const resumo = calcResumo(lancamentos, saldosIniciais, ano, 'todos', zootMensal);
   const resumoData = [
     ['Resumo - ' + ano],
@@ -290,7 +290,7 @@ export function exportToExcel(lancamentos: Lancamento[], saldosIniciais: SaldoIn
   ];
 
   MESES_COLS.forEach(mes => {
-    const dados = calcEvolucaoCategoria(lancamentos, saldosIniciais, ano, mes.key);
+    const dados = calcEvolucaoCategoria(lancamentos, saldosIniciais, ano, mes.key, zootCategorias);
     const header = ['Categoria', 'Saldo Ini.', ...COLUNAS_EVOL.map(c => c.label), 'Saldo Fin.'];
     const rows: (string | number)[][] = [header];
     dados.forEach(d => rows.push([d.label, d.saldoInicioMes, ...d.movs, d.saldoFinal]));
