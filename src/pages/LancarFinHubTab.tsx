@@ -8,7 +8,7 @@ import { usePastos } from '@/hooks/usePastos';
 import { useFinanceiro, isDesembolsoProdutivo, type FinanceiroLancamento, type RateioADM } from '@/hooks/useFinanceiro';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { useArrobasGlobal } from '@/hooks/useArrobasGlobal';
-import { useZootCategoriaMensal, groupByMes } from '@/hooks/useZootCategoriaMensal';
+import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { KpiCard } from '@/components/indicadores/KpiCard';
@@ -84,8 +84,8 @@ export function LancarFinHubTab({ onTabChange, filtroGlobal, lancamentosPecuario
     lancamentosPecuarios, saldosIniciais, pastos, categorias,
   );
 
-  // FONTE OFICIAL: view zootécnica para médias mensais de rebanho
-  const { data: viewDataAnoFin } = useZootCategoriaMensal({ ano: anoNum, cenario: 'realizado' });
+  // FONTE OFICIAL: useRebanhoOficial para médias mensais de rebanho
+  const rebanhoOf = useRebanhoOficial({ ano: anoNum, cenario: 'realizado', global: isGlobal });
 
   const fazendaIdsReais = useMemo(
     () => fazendas.filter(f => f.id !== '__global__').map(f => f.id),
@@ -97,19 +97,17 @@ export function LancarFinHubTab({ onTabChange, filtroGlobal, lancamentosPecuario
     anoNum, localMes, fazendaIdsReais,
   );
 
-  // Cabeças médias (FONTE OFICIAL: vw_zoot_categoria_mensal)
+  // Cabeças médias (FONTE OFICIAL: useRebanhoOficial)
   const zooData = useMemo(() => {
-    const byMes = groupByMes(viewDataAnoFin || []);
-
     const saldoAnterior = zoo.gmdAberturaMes.estoqueInicialDetalhe.reduce((s, d) => s + d.cabecas, 0);
     const saldoFinalMes = zoo.saldoFinalMes;
     const cabMediaMes = (saldoAnterior > 0 || saldoFinalMes > 0) ? (saldoAnterior + saldoFinalMes) / 2 : null;
 
     const rebanhosMensais: { mes: number; media: number }[] = [];
     for (let m = 1; m <= localMes; m++) {
-      const catsM = byMes[m] || [];
-      const sFim = catsM.reduce((s, c) => s + c.saldo_final, 0);
-      const sInicio = catsM.reduce((s, c) => s + c.saldo_inicial, 0);
+      const faz = rebanhoOf.getFazendaMes(m);
+      const sInicio = faz?.cabecasInicio ?? 0;
+      const sFim = faz?.cabecasFinal ?? 0;
       rebanhosMensais.push({ mes: m, media: (sInicio + sFim) / 2 });
     }
 
@@ -122,7 +120,7 @@ export function LancarFinHubTab({ onTabChange, filtroGlobal, lancamentosPecuario
       : zoo.arrobasProduzidasAcumulado;
 
     return { cabMediaMes, cabMediaAcum, arrobasProduzidasAcum, rebanhosMensais };
-  }, [zoo, viewDataAnoFin, localMes, isGlobal, arrobasGlobal.somaArrobas]);
+  }, [zoo, rebanhoOf.loading, rebanhoOf.getFazendaMes, localMes, isGlobal, arrobasGlobal.somaArrobas]);
 
   // Financial indicators
   const ind = useMemo(() => {
