@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.reabrir_pilar_fechamento(uuid, text, text, text, uuid);
