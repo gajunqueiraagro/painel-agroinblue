@@ -712,9 +712,13 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
     cabIni[0] = dezRealizadoSnap.cabecas;
   }
 
+  // A view não incorpora produção biológica META no peso final.
+  // Corrigimos: pesoFinCorrigido = pesoFinRaw (balanço contábil) + prodBio (GMD meta)
+  const pesoFinCorrigido = pesoFinRaw.map((v, i) => v + prodBio[i]);
+
   // Snapshot validado de peso sobrescreve consolidação quando disponível
   const hasSnap = pesoSnap && pesoSnap.cabecas.some(v => v > 0);
-  const pesoFin = hasSnap ? pesoSnap!.cabecas.map((c, i) => c * (pesoSnap!.pesoMedio[i] || 0)) : pesoFinRaw;
+  const pesoFin = hasSnap ? pesoSnap!.cabecas.map((c, i) => c * (pesoSnap!.pesoMedio[i] || 0)) : pesoFinCorrigido;
   // Peso ini: Jan = Dez realizado validado; Fev+ = Meta final mês anterior
   const dezPesoKg = dezRealizadoSnap ? dezRealizadoSnap.arrobas * 30 : 0;
   const pesoIniJan = dezPesoKg > 0 ? dezPesoKg : pesoIniRaw[0];
@@ -723,7 +727,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   // Peso médio final = peso total final / SF (weighted across categories)
   const pesoMedFinRaw = Array.from({ length: 12 }, (_, i) => {
     const sf = cabFin[i];
-    return sf > 0 ? pesoFinRaw[i] / sf : 0;
+    return sf > 0 ? pesoFinCorrigido[i] / sf : 0;
   });
   const pesoMedFin = hasSnap ? pesoSnap!.pesoMedio : pesoMedFinRaw;
 
