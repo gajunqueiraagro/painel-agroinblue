@@ -703,7 +703,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                         </div>
                         {/* Cabeças */}
                         <div className="font-extrabold text-[13px] tabular-nums text-foreground leading-tight mt-0.5">
-                          {resumo.totalCabecas > 0 ? `${resumo.totalCabecas} cab` : '—'}
+                          {resumo.totalCabecas > 0 ? `${formatNum(resumo.totalCabecas, 0)} cab` : '—'}
                         </div>
                         {/* Peso médio */}
                         {resumo.pesoMedio && (
