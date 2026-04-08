@@ -1282,6 +1282,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       toast.error(metaBloqueio.primeiroBloqueio || 'Bloqueio detectado pelo painel inteligente META.');
       return;
     }
+    // ── META: bloqueio por evolução obrigatória pendente ──
+    if (isCenarioMeta && metaStepState?.evolucaoObrigatoria) {
+      toast.error('Finalize a evolução necessária para liberar o registro deste lançamento.');
+      return;
+    }
 
     if (isAbate) {
       if (!abateFornecedorId) { toast.error('Selecione o Frigorífico (Fornecedor) para continuar'); return; }
