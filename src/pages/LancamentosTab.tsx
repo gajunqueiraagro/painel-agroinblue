@@ -2673,11 +2673,45 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               destinoLabel={reclassState.destinoLabel}
               pesoMedioOrigem={reclassState.origemInfo?.pesoMedioKg ?? null}
               statusOp={reclassState.statusOp}
-              onRequestRegister={reclassState.handleSubmit}
+              onRequestRegister={editingReclassId ? async () => {
+                const isMeta = reclassState.statusOp === 'meta';
+                onEditar(editingReclassId, {
+                  data: reclassState.data,
+                  categoria: reclassState.categoriaOrigem,
+                  categoriaDestino: reclassState.categoriaDestino,
+                  quantidade: Number(reclassState.quantidade),
+                  pesoMedioKg: reclassState.pesoKg ? Number(reclassState.pesoKg) : undefined,
+                  pesoMedioArrobas: reclassState.pesoKg ? Number(reclassState.pesoKg) / 30 : undefined,
+                  statusOperacional: isMeta ? null : 'realizado',
+                });
+                toast.success('Reclassificação atualizada com sucesso.');
+                setEditingReclassId(null);
+                reclassState.setQuantidade('');
+                reclassState.setPesoKg('');
+                reclassState.setPesoAutoFilled(false);
+                if (onReturnFromEdit) onReturnFromEdit();
+              } : reclassState.handleSubmit}
               submitting={false}
               canRegister={!!(Number(reclassState.quantidade) > 0 && reclassState.categoriaOrigem !== reclassState.categoriaDestino)}
-              onBack={onBackToConciliacao}
+              onBack={editingReclassId ? undefined : onBackToConciliacao}
               backLabel={backLabel}
+              isEditing={!!editingReclassId}
+              onCancelEdit={() => {
+                setEditingReclassId(null);
+                reclassState.setQuantidade('');
+                reclassState.setPesoKg('');
+                reclassState.setPesoAutoFilled(false);
+                if (onReturnFromEdit) onReturnFromEdit();
+              }}
+              onDelete={editingReclassId ? () => {
+                onRemover(editingReclassId);
+                setEditingReclassId(null);
+                reclassState.setQuantidade('');
+                reclassState.setPesoKg('');
+                reclassState.setPesoAutoFilled(false);
+                toast.success('Reclassificação removida.');
+                if (onReturnFromEdit) onReturnFromEdit();
+              } : undefined}
             />
           </>
         ) : (
