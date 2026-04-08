@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { MetaLancamentoPanel, type EvolucaoSugestao } from '@/components/MetaLancamentoPanel';
+import { MetaLancamentoPanel, useMetaValidacaoBloqueios, type EvolucaoSugestao } from '@/components/MetaLancamentoPanel';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
@@ -306,6 +306,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   /** StatusOperacional efetivo para passar a componentes que não conhecem 'meta' */
   const effectiveStatusOp: StatusOperacional = isCenarioMeta ? 'programado' : statusOp as StatusOperacional;
   const isMeta = isCenarioMeta; // Meta usa estilo laranja
+
+  // ── Bloqueio META: mesma lógica do painel inteligente ──
+  const metaBloqueio = useMetaValidacaoBloqueios(
+    data ? Number(data.slice(0, 4)) : new Date().getFullYear(),
+    data ? Number(data.slice(5, 7)) : new Date().getMonth() + 1,
+    (categoria || '') as Categoria | '',
+    tipo,
+    Number(quantidade) || 0,
+    Number(pesoKg) || 0,
+    clienteAtual?.id,
+  );
   const isConfirmado = statusOp === 'programado';
   const isConciliado = statusOp === 'realizado';
   const isAbate = tipo === 'abate';
@@ -1261,6 +1272,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (!quantidade || Number(quantidade) <= 0) { toast.error('Informe a quantidade'); return; }
     if (!categoria) { toast.error('Selecione a categoria'); return; }
     if (!data) { toast.error('Informe a data'); return; }
+
+    // ── META: bloqueio via painel inteligente (mesma lógica exata) ──
+    if (isCenarioMeta && metaBloqueio.hasBloqueio) {
+      toast.error(metaBloqueio.primeiroBloqueio || 'Bloqueio detectado pelo painel inteligente META.');
+      return;
+    }
 
     if (isAbate) {
       if (!abateFornecedorId) { toast.error('Selecione o Frigorífico (Fornecedor) para continuar'); return; }
