@@ -228,15 +228,19 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
             <tr className="border-t-2 bg-primary/20">
               <td className="px-1.5 py-1 font-extrabold text-foreground sticky left-0 bg-primary/20">Saldo Final</td>
               {MESES_COLS.map((m, i) => {
-                const saldoFim = i < 11 ? dados.saldoInicioMes[MESES_COLS[i + 1].key] : dados.saldoFinalAno;
+                // Fonte oficial: view zootécnica. Fallback: cálculo por movimentações.
+                const z = zootByMes[m.key];
+                const saldoOficial = z?.cabecas_final;
+                const saldoMov = i < 11 ? dados.saldoInicioMes[MESES_COLS[i + 1].key] : dados.saldoFinalAno;
+                const saldoFim = saldoOficial ?? saldoMov;
                 return (
-                  <td key={m.key} className={`px-1 py-1 text-center font-extrabold text-foreground tabular-nums ${qb(m.key)}`}>
+                  <td key={m.key} className={`px-1 py-1 text-center font-extrabold text-foreground tabular-nums ${qb(m.key)}`} title={z ? `Fonte: ${z.fonte_oficial_mes}` : 'Fonte: movimentação'}>
                     {fmtNum(saldoFim)}
                   </td>
                 );
               })}
               <td className="px-1.5 py-1 text-center font-extrabold text-foreground tabular-nums bg-primary/20 border-l border-border/60">
-                {fmtNum(dados.saldoFinalAno)}
+                {fmtNum(zootByMes['12']?.cabecas_final ?? dados.saldoFinalAno)}
               </td>
             </tr>
 
