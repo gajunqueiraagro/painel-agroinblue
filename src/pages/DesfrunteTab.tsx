@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
+import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { parseISO, format } from 'date-fns';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -47,9 +48,12 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
   const anoAnterior = String(Number(anoFiltro) - 1);
   const mesLimite = Number(mesFiltro);
 
-  const saldoInicialAno = useMemo(() =>
-    saldosIniciais.filter(s => s.ano === Number(anoFiltro)).reduce((sum, s) => sum + s.quantidade, 0),
-    [saldosIniciais, anoFiltro]);
+  // FONTE OFICIAL: useRebanhoOficial para saldo inicial do ano
+  const rebanhoOf = useRebanhoOficial({ ano: Number(anoFiltro), cenario: 'realizado', global: isGlobal });
+  const saldoInicialAno = useMemo(() => {
+    const faz = rebanhoOf.getFazendaMes(1);
+    return faz?.cabecasInicio ?? saldosIniciais.filter(s => s.ano === Number(anoFiltro)).reduce((sum, s) => sum + s.quantidade, 0);
+  }, [rebanhoOf.loading, rebanhoOf.getFazendaMes, saldosIniciais, anoFiltro]);
 
   const arrobasInicioAno = useMemo(() =>
     calcArrobasIniciais(saldosIniciais, Number(anoFiltro)),
