@@ -988,7 +988,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     return `${ano}-${String(m).padStart(2, '0')}`;
   }, [ano, filtroGlobal?.mes]);
   const { status: statusPilares, refetch: refetchPilares } = useStatusPilares(fazendaId, mesAtualRef);
-  const { rawFazenda: zootMeta } = useRebanhoOficial({ ano: anoNum, cenario: 'meta' });
+  const { rawFazenda: zootMeta, rawCategorias: viewCategoriasMeta } = useRebanhoOficial({ ano: anoNum, cenario: 'meta' });
   const { clienteAtual } = useCliente();
   const { statusArray: snapshotStatusArray, isComprometido: isSnapshotComprometido, getStatusByMonth } = useSnapshotStatus(anoNum);
 
