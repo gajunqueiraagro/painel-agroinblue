@@ -2651,7 +2651,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
              {renderForm()}
             <div className="space-y-3">
               {/* META Intelligent Panel */}
-              {isCenarioMeta && aba !== 'historico' && (
+              {isCenarioMeta && (
                 <MetaLancamentoPanel
                   ano={data ? Number(data.slice(0, 4)) : new Date().getFullYear()}
                   mes={data ? Number(data.slice(5, 7)) : new Date().getMonth() + 1}
