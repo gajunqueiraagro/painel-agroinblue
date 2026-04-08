@@ -66,6 +66,8 @@ export interface CategoriaDetalhe {
   pesoMedioFinal: number | null;
   pesoEntradasExternas: number;
   pesoSaidasExternas: number;
+  pesoEvolCatEntrada: number;
+  pesoEvolCatSaida: number;
   gmd: number | null;
   diasMes: number;
   producaoBiologica: number;
@@ -383,6 +385,8 @@ export function useRebanhoOficial({ ano, cenario, global = false }: UseRebanhoOf
         pesoMedioFinal: c.peso_medio_final,
         pesoEntradasExternas: c.peso_entradas_externas,
         pesoSaidasExternas: c.peso_saidas_externas,
+        pesoEvolCatEntrada: c.peso_evol_cat_entrada,
+        pesoEvolCatSaida: c.peso_evol_cat_saida,
         gmd: c.gmd,
         diasMes: c.dias_mes,
         producaoBiologica: c.producao_biologica,
