@@ -248,6 +248,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
    const [vendaDialogOpen, setVendaDialogOpen] = useState(false);
    const [transferenciaDetalhes, setTransferenciaDetalhes] = useState<TransferenciaDetalhes | null>(null);
    const [transferenciaDialogOpen, setTransferenciaDialogOpen] = useState(false);
+  const [evolucaoDialogOpen, setEvolucaoDialogOpen] = useState(false);
+  const [evolucaoSugestao, setEvolucaoSugestao] = useState<EvolucaoSugestao | null>(null);
 
   const [motivoMorte, setMotivoMorte] = useState('');
   const [motivoMorteCustom, setMotivoMorteCustom] = useState('');
