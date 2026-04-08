@@ -42,7 +42,8 @@ function getCategoriaLabel(codigo: string): string {
 export function EvolucaoAssistidaDialog({ open, onOpenChange, sugestao }: Props) {
   if (!sugestao) return null;
 
-  const { categoriaAtual, categoriaAnterior, pesoMedioAnterior, pesoEvolucao, elegivel, saldoAnterior } = sugestao;
+  const { categoriaAtual, categoriaAnterior, pesoMedioAnterior, pesoEvolucao, elegivel, saldoAnterior, natureza } = sugestao;
+  const isObrigatoria = natureza === 'obrigatoria';
   const progressPct = pesoEvolucao > 0 ? Math.min((pesoMedioAnterior / pesoEvolucao) * 100, 100) : 0;
 
   return (
@@ -51,10 +52,12 @@ export function EvolucaoAssistidaDialog({ open, onOpenChange, sugestao }: Props)
         <DialogHeader>
           <DialogTitle className="text-[15px] flex items-center gap-2">
             <Scale className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-            Evolução Assistida de Categoria
+            {isObrigatoria ? 'Evolução Necessária' : 'Evolução Assistida de Categoria'}
           </DialogTitle>
           <DialogDescription className="text-[11px]">
-            Categoria anterior elegível para alimentar o lançamento atual. Nenhuma movimentação será gravada automaticamente.
+            {isObrigatoria
+              ? 'Categoria anterior elegível para alimentar este lançamento. A evolução é necessária para sustentar a operação.'
+              : 'Categoria anterior elegível para evolução. Sugestão consultiva — nenhuma movimentação será gravada automaticamente.'}
           </DialogDescription>
         </DialogHeader>
 
