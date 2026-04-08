@@ -91,6 +91,19 @@ const normalizeTipoUso = (tipoUso?: string) => {
   return tipoUso.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 };
 
+/** Tipos de uso que NÃO são pecuários — não devem entrar na conciliação operacional */
+const TIPOS_USO_NAO_PECUARIO = new Set([
+  'reforma_pecuaria', 'agricultura', 'app', 'reserva_legal', 'benfeitorias', 'vedado',
+]);
+
+/** Retorna true se o tipo de uso efetivo do pasto (mensal ou cadastro) é pecuário */
+function isPastoPecuario(pasto: Pasto, fechamento: FechamentoPasto | null): boolean {
+  const tipoMes = fechamento?.tipo_uso_mes;
+  const tipoEfetivo = normalizeTipoUso(tipoMes || pasto.tipo_uso);
+  if (!tipoEfetivo) return true; // sem tipo = assume pecuário
+  return !TIPOS_USO_NAO_PECUARIO.has(tipoEfetivo);
+}
+
 /* ── GMD color ── */
 function gmdColor(gmd: number | null): string {
   if (gmd == null) return 'text-muted-foreground';
@@ -193,6 +206,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   /* ── Status de conciliação por pasto ── */
   const getPastoStatus = useCallback((pasto: Pasto): PastoStatusConcil => {
     const fech = getFechamento(pasto.id);
+    // Pasto com uso mensal não-pecuário: conciliado automaticamente
+    if (!isPastoPecuario(pasto, fech)) return fech?.status === 'fechado' ? 'fechado' : 'conciliado';
     if (!fech) return 'nao_iniciado';
     if (fech.status === 'fechado') return 'fechado';
     const items = itensMap.get(fech.id) || [];
@@ -249,9 +264,10 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     return map;
   }, [viewDataForConcil, mesNum]);
 
-  // Operational fechamentos (pastos ativos only)
+  // Operational fechamentos: only pecuário pastos
   const operationalFechamentos = useMemo(
     () => pastosAtivos
+      .filter(pasto => isPastoPecuario(pasto, getFechamento(pasto.id)))
       .map(pasto => getFechamento(pasto.id))
       .filter((fech): fech is FechamentoPasto => Boolean(fech)),
     [pastosAtivos, getFechamento]
