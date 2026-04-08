@@ -972,6 +972,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const { status: statusPilares, refetch: refetchPilares } = useStatusPilares(fazendaId, mesAtualRef);
   const { rawFazenda: zootMeta } = useRebanhoOficial({ ano: anoNum, cenario: 'meta' });
   const { clienteAtual } = useCliente();
+  const { statusArray: snapshotStatusArray, isComprometido: isSnapshotComprometido, getStatusByMonth } = useSnapshotStatus(anoNum);
 
   // Leitura oficial do Valor do Rebanho META validado (tabela valor_rebanho_meta_validada)
   const [valorRebanhoMetaMes, setValorRebanhoMetaMes] = useState<number[]>(Array(12).fill(0));
