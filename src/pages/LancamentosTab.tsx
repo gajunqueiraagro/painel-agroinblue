@@ -2675,16 +2675,19 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               statusOp={reclassState.statusOp}
               onRequestRegister={editingReclassId ? async () => {
                 const isMeta = reclassState.statusOp === 'meta';
-                await onEditar(editingReclassId, {
+                const payload = {
                   data: reclassState.data,
                   categoria: reclassState.categoriaOrigem,
                   categoriaDestino: reclassState.categoriaDestino,
                   quantidade: Number(reclassState.quantidade),
                   pesoMedioKg: reclassState.pesoKg ? Number(reclassState.pesoKg) : null,
                   pesoMedioArrobas: reclassState.pesoKg ? Number(reclassState.pesoKg) / 30 : null,
-                  cenario: isMeta ? 'meta' : 'realizado',
-                  statusOperacional: isMeta ? 'previsto' : 'realizado',
-                });
+                  cenario: isMeta ? 'meta' as const : 'realizado' as const,
+                  statusOperacional: isMeta ? 'previsto' as const : 'realizado' as const,
+                };
+                console.log('[RECLASS-EDIT] reclassState.pesoKg raw:', JSON.stringify(reclassState.pesoKg));
+                console.log('[RECLASS-EDIT] payload enviado:', JSON.stringify(payload));
+                await onEditar(editingReclassId, payload);
                 toast.success('Reclassificação atualizada com sucesso.');
                 setEditingReclassId(null);
                 reclassState.setQuantidade('');
