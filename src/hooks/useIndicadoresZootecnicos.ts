@@ -17,7 +17,6 @@ import { useMemo, useState, useEffect, useCallback } from 'react';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import type { Pasto } from '@/hooks/usePastos';
 import {
-  calcPesoMedioPonderado,
   calcUA,
   calcUAHa,
   calcAreaProdutivaPecuaria,
