@@ -19,7 +19,7 @@ import {
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { useArrobasGlobal } from '@/hooks/useArrobasGlobal';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
+import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import type { Pasto, CategoriaRebanho } from '@/hooks/usePastos';
 
@@ -51,26 +51,37 @@ const datePagtoAnoMes = (l: FinanceiroLancamento): string | null => {
   return l.data_pagamento.substring(0, 7);
 };
 
-/** Cabeças médias por mês */
+/**
+ * @deprecated Use useCabMediasMensaisOficial em vez disso.
+ * Mantido temporariamente para compatibilidade — NÃO USAR em código novo.
+ */
 export function calcCabMediasMensais(
-  saldosIniciais: SaldoInicial[],
-  lancamentosPecuarios: Lancamento[],
-  ano: number,
-  ateMes: number,
+  _saldosIniciais: SaldoInicial[],
+  _lancamentosPecuarios: Lancamento[],
+  _ano: number,
+  _ateMes: number,
 ): { mes: number; media: number }[] {
-  const saldoInicialAno = saldosIniciais
-    .filter(s => s.ano === ano)
-    .reduce((sum, s) => sum + s.quantidade, 0);
+  console.warn('[DEPRECADO] calcCabMediasMensais chamado — migrar para useRebanhoOficial');
+  return [];
+}
 
-  const result: { mes: number; media: number }[] = [];
-  for (let m = 1; m <= ateMes; m++) {
-    const saldoInicio = m === 1
-      ? saldoInicialAno
-      : Array.from(calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, ano, m - 1).values()).reduce((s, v) => s + v, 0);
-    const saldoFim = Array.from(calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, ano, m).values()).reduce((s, v) => s + v, 0);
-    result.push({ mes: m, media: (saldoInicio + saldoFim) / 2 });
-  }
-  return result;
+/**
+ * Hook oficial: cabeças médias mensais via useRebanhoOficial.
+ * FONTE ÚNICA — substitui calcCabMediasMensais.
+ */
+export function useCabMediasMensaisOficial(ano: number, ateMes: number, isGlobal = false) {
+  const rebanho = useRebanhoOficial({ ano, cenario: 'realizado', global: isGlobal });
+  return useMemo(() => {
+    if (rebanho.loading) return [];
+    const result: { mes: number; media: number }[] = [];
+    for (let m = 1; m <= ateMes; m++) {
+      const faz = rebanho.getFazendaMes(m);
+      const cabIni = faz?.cabecasInicio ?? 0;
+      const cabFin = faz?.cabecasFinal ?? 0;
+      result.push({ mes: m, media: (cabIni + cabFin) / 2 });
+    }
+    return result;
+  }, [rebanho.loading, rebanho.getFazendaMes, ateMes]);
 }
 
 // ---------------------------------------------------------------------------
