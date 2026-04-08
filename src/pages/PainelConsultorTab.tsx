@@ -27,7 +27,8 @@ import { DivergenciaP1Dialog } from '@/components/DivergenciaP1Dialog';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import { usePastos } from '@/hooks/usePastos';
-import { useRebanhoOficial, indexByMes, type ZootMensal, totalizarPorMes as totalizarViewPorMes } from '@/hooks/useRebanhoOficial';
+import { useRebanhoOficial, indexByMes, type ZootMensal, type ZootCategoriaMensal, totalizarPorMes as totalizarViewPorMes } from '@/hooks/useRebanhoOficial';
+import { CATEGORIAS } from '@/types/cattle';
 import { formatPainel, type PainelFormatType } from '@/lib/calculos/formatters';
 import {
   calcAreaProdutivaPecuaria,
